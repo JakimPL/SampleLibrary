@@ -10,6 +10,7 @@ dependencies = [
     "duckdb>=1.4",
     "numpy>=2.1",
     "pydantic>=2.13.4",
+    "pytz>=2025.2",
     "soundfile>=0.14",
     "tqdm>=4.67",
     "trackmod",
@@ -64,6 +65,7 @@ extend-exclude = "trackmod"
 profile = "black"
 line_length = 120
 known_first_party = ["samplecore", "sampleextract", "samplecloud", "sampleserver"]
+known_third_party = ["trackmod"]
 skip = ["trackmod"]
 
 [tool.pytest.ini_options]
@@ -105,6 +107,7 @@ disable = [
     "too-few-public-methods",
     "too-many-instance-attributes",
     "too-many-public-methods",
+    "too-many-locals",
 ]
 
 [tool.pylint.format]
