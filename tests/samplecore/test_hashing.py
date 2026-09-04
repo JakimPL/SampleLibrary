@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from trackmod.core.samples.depth import BitDepth
 
-from samplecore.hashing import compute_sample_hash
+from samplecore.hashing import compute_module_hash, compute_sample_hash
 from samplecore.models.channels import ChannelLayout
 
 MONO = ChannelLayout.MONO
@@ -59,3 +59,16 @@ def test_a_declared_frame_count_mismatch_changes_the_hash_via_domain_separation(
     frames_five = compute_sample_hash(depth=BitDepth.SIXTEEN, channels=MONO, frames=5, pcm=pcm)
 
     assert frames_four != frames_five
+
+
+def test_hashing_the_same_module_bytes_twice_gives_the_same_hash() -> None:
+    data = b"a fabricated module file, its shape irrelevant to the hash"
+
+    assert compute_module_hash(data) == compute_module_hash(data)
+
+
+def test_a_changed_module_byte_changes_the_hash() -> None:
+    original = b"a fabricated module file"
+    changed = b"a fabricated module fila"
+
+    assert compute_module_hash(original) != compute_module_hash(changed)

@@ -25,3 +25,12 @@ def compute_sample_hash(*, depth: BitDepth, channels: ChannelLayout, frames: int
     payload = quantise(pcm, depth).astype(f"<i{depth.bytes_per_frame}").tobytes()
     header = f"{HASH_DOMAIN}:{depth.value}:{channels.value}:{frames}\0".encode("ascii")
     return hashlib.sha256(header + payload).hexdigest()
+
+
+def compute_module_hash(data: bytes) -> str:
+    """The content-addressed identity of a tracker module file, from its raw bytes.
+
+    A module file's bytes are their own unambiguous identity, with no shape or depth ambiguity to
+    guard against the way a sample's decoded waveform has, so this hashes the raw bytes directly.
+    """
+    return hashlib.sha256(data).hexdigest()

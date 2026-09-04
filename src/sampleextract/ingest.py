@@ -1,0 +1,127 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+import duckdb
+from trackmod.core.instruments.transfer import held
+from trackmod.core.instruments.unit import InstrumentUnit
+from trackmod.core.samples.sample import Sample as TrackModSample
+from trackmod.core.songs.song import Song
+
+from samplecore.hashing import compute_sample_hash
+from samplecore.models.channels import ChannelLayout
+from samplecore.models.module import Module
+from samplecore.models.sample_properties import SampleOccurrence
+from samplecore.models.tracker import TrackerFormat
+from samplecore.storage import audio_store
+from samplecore.storage.repositories.module import DuckDBModuleRepository
+from samplecore.storage.repositories.sample import DuckDBSampleRepository, SampleRepository
+from samplecore.storage.repositories.sample_properties import (
+    DuckDBSamplePropertiesRepository,
+    SamplePropertiesRepository,
+)
+from sampleextract.rendering import render_properties, render_sample_pcm
+
+
+@dataclass(frozen=True)
+class _IngestContext:
+    """What every sample occurrence in one module's ingest shares, bundled so it travels as one value."""
+
+    sample_repository: SampleRepository
+    properties_repository: SamplePropertiesRepository
+    library_root: Path
+    tracker: TrackerFormat
+    module_hash: str
+
+
+# Every keyword argument below is an independent fact about the module being ingested, with no
+# natural subgrouping short of a wrapper this function would be the only caller of.
+# pylint: disable-next=too-many-arguments
+def ingest_module(
+    connection: duckdb.DuckDBPyConnection,
+    library_root: Path,
+    *,
+    module_hash: str,
+    tracker: TrackerFormat,
+    filename: str,
+    file_size: int,
+    song: Song,
+    ingested_at: datetime,
+) -> Module:
+    """Persist one module and every sample it reaches, as a single all-or-nothing transaction.
+
+    The caller is responsible for confirming this module is not already known before calling --
+    this always inserts, and a second call for the same hash raises on the table's own UNIQUE
+    constraint rather than silently doing nothing. Idempotent re-runs are ``run_extraction``'s
+    concern, not this function's.
+    """
+    module_repository = DuckDBModuleRepository(connection)
+    context = _IngestContext(
+        sample_repository=DuckDBSampleRepository(connection),
+        properties_repository=DuckDBSamplePropertiesRepository(connection),
+        library_root=library_root,
+        tracker=tracker,
+        module_hash=module_hash,
+    )
+
+    connection.begin()
+    committed = False
+    try:
+        module = Module(
+            hash=module_hash,
+            id=module_repository.next_id(),
+            filename=filename,
+            tracker=tracker,
+            title=song.name,
+            channel_count=song.channels,
+            pattern_count=len(song.patterns),
+            instrument_count=len(song.instruments),
+            sample_count=len(song.samples),
+            file_size=file_size,
+            ingested_at=ingested_at,
+        )
+        module_repository.insert(module)
+        for instrument_index, unit in enumerate(held(song)):
+            _ingest_instrument_unit(context, instrument_index=instrument_index, unit=unit)
+
+        connection.commit()
+        committed = True
+        return module
+    finally:
+        if not committed:
+            connection.rollback()
+
+
+def _ingest_instrument_unit(context: _IngestContext, *, instrument_index: int, unit: InstrumentUnit) -> None:
+    for sample_slot, trackmod_sample in enumerate(unit.samples):
+        if trackmod_sample.frames == 0:
+            continue  # a placeholder slot with no content has no hash to store it under
+
+        _ingest_sample_occurrence(
+            context, instrument_index=instrument_index, sample_slot=sample_slot, trackmod_sample=trackmod_sample
+        )
+
+
+def _ingest_sample_occurrence(
+    context: _IngestContext, *, instrument_index: int, sample_slot: int, trackmod_sample: TrackModSample
+) -> None:
+    sample_hash = compute_sample_hash(
+        depth=trackmod_sample.depth,
+        channels=ChannelLayout(trackmod_sample.channels),
+        frames=trackmod_sample.frames,
+        pcm=trackmod_sample.pcm,
+    )
+    sample_pcm = render_sample_pcm(sample_hash, trackmod_sample)
+    context.sample_repository.upsert(sample_pcm.sample)
+    audio_store.write(context.library_root, sample_pcm)
+
+    occurrence = SampleOccurrence(
+        module_hash=context.module_hash, instrument_index=instrument_index, sample_slot=sample_slot
+    )
+    context.properties_repository.upsert(
+        render_properties(
+            tracker=context.tracker, sample_hash=sample_hash, occurrence=occurrence, trackmod_sample=trackmod_sample
+        )
+    )

@@ -75,8 +75,8 @@ class ITSampleProperties(SampleProperties):
     """The occurrence fields Impulse Tracker stores beside the shared ones.
 
     ``global_volume`` is IT's own per-sample gain multiplier; FastTracker 2 has no equivalent
-    slot, so it is not part of the shared base. ``filename`` and ``vibrato`` stay unset until
-    TrackMod's IT sample parser is extended to expose them.
+    slot, so it is not part of the shared base. ``filename`` and ``vibrato`` are this format's own
+    DOS filename and sample-level auto-vibrato.
     """
 
     tracker: Literal[TrackerFormat.IT] = TrackerFormat.IT
