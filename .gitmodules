@@ -1,0 +1,3 @@
+[submodule "trackmod"]
+	path = trackmod
+	url = https://github.com/JakimPL/TrackMod.git

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[oc]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+wheels/
+*.egg-info
+.venv/
+
+# Local configuration -- never commit real local paths
+config.toml
+
+# Regenerable data: never commit
+*.duckdb
+*.duckdb.wal
+embeddings/
+*.parquet
+*.npz
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Editors/OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

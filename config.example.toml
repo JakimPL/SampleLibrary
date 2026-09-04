@@ -1,0 +1,14 @@
+# Copy this file to config.toml (gitignored) and fill in your own local paths below.
+# Paths are read by pathlib.Path, so either forward slashes or your platform's native
+# separator work: "/home/you/modules", "M:/Muzyka/Moduly", "C:\\Users\\you\\Modules".
+
+[library]
+# Directory containing your tracker module collection, scanned recursively for .xm/.it files.
+module_source_directory = "/path/to/your/module/collection"
+
+# Directory where extracted sample audio and the DuckDB catalog are stored.
+library_root = "/path/to/your/sample/library"
+
+# Optional overrides -- otherwise derived from library_root.
+# database_path = "/path/to/your/sample/library/samplelibrary.duckdb"
+# cloud_artifact_directory = "/path/to/your/sample/library/embeddings"
