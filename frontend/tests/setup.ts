@@ -39,3 +39,18 @@ class ResizeObserverStub implements ResizeObserver {
 }
 
 vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+
+// jsdom never computes real layout, so every element's offsetWidth/offsetHeight reads 0. The
+// virtualized list panels measure their scroll container this way on mount, before the
+// ResizeObserver stub above could ever report a real size, so a fixed nonzero measurement is
+// stubbed globally here rather than only where a test happens to touch a virtualized table.
+const STUBBED_ELEMENT_EXTENT_PX = 600;
+
+Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+    configurable: true,
+    get: () => STUBBED_ELEMENT_EXTENT_PX,
+});
+Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get: () => STUBBED_ELEMENT_EXTENT_PX,
+});
