@@ -45,6 +45,21 @@ describe("ModuleListPage", () => {
         expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/abc");
     });
 
+    it("links a module with an empty title through the [untitled] placeholder", async () => {
+        listModules.mockResolvedValue({
+            items: [{ hash: "abc", id: 1, title: "", filename: "song.xm", tracker: "xm", sample_count: 3 }],
+            total: 1,
+            limit: 50,
+            offset: 0,
+        });
+
+        renderPage();
+
+        await waitFor(() => {
+            expect(screen.getByRole("link", { name: "[untitled]" })).toHaveAttribute("href", "/modules/abc");
+        });
+    });
+
     it("shows an error notice when the request fails", async () => {
         listModules.mockRejectedValue(new Error("network down"));
 

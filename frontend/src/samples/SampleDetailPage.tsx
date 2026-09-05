@@ -2,7 +2,9 @@ import type { ReactElement } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { ErrorNotice } from "../shared/ErrorNotice";
+import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { Loading } from "../shared/Loading";
+import { OptionalLabel } from "../shared/OptionalLabel";
 import { useSampleDetail } from "./useSampleDetail";
 
 const CONFIDENCE_DECIMAL_PLACES = 2;
@@ -46,7 +48,9 @@ export function SampleDetailPage(): ReactElement {
                         <tr
                             key={`${occurrence.occurrence.module_hash}-${String(occurrence.occurrence.instrument_index)}-${String(occurrence.occurrence.sample_slot)}`}
                         >
-                            <td>{occurrence.name}</td>
+                            <td>
+                                <OptionalLabel value={occurrence.name} placeholder={UNNAMED_SAMPLE_LABEL} />
+                            </td>
                             <td>
                                 <Link to={`/modules/${occurrence.occurrence.module_hash}`}>
                                     {occurrence.occurrence.module_hash}

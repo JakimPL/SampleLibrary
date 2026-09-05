@@ -2,7 +2,9 @@ import type { ReactElement } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { ErrorNotice } from "../shared/ErrorNotice";
+import { UNNAMED_SAMPLE_LABEL, UNTITLED_MODULE_LABEL } from "../shared/labels";
 import { Loading } from "../shared/Loading";
+import { OptionalLabel } from "../shared/OptionalLabel";
 import { useModule } from "./useModule";
 
 export function ModuleDetailPage(): ReactElement {
@@ -19,7 +21,9 @@ export function ModuleDetailPage(): ReactElement {
     const module = state.data;
     return (
         <section>
-            <h1>{module.title}</h1>
+            <h1>
+                <OptionalLabel value={module.title} placeholder={UNTITLED_MODULE_LABEL} />
+            </h1>
             <dl>
                 <dt>Filename</dt>
                 <dd>{module.filename}</dd>
@@ -48,7 +52,9 @@ export function ModuleDetailPage(): ReactElement {
                             key={`${String(occurrence.occurrence.instrument_index)}-${String(occurrence.occurrence.sample_slot)}`}
                         >
                             <td>
-                                <Link to={`/samples/${occurrence.sample_hash}`}>{occurrence.name}</Link>
+                                <Link to={`/samples/${occurrence.sample_hash}`}>
+                                    <OptionalLabel value={occurrence.name} placeholder={UNNAMED_SAMPLE_LABEL} />
+                                </Link>
                             </td>
                             <td>{occurrence.occurrence.instrument_index}</td>
                             <td>{occurrence.occurrence.sample_slot}</td>

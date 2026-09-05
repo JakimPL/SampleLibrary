@@ -55,6 +55,38 @@ describe("ModuleDetailPage", () => {
         expect(screen.getByRole("link", { name: "lead" })).toHaveAttribute("href", "/samples/sample-1");
     });
 
+    it("falls back to placeholders for an untitled module and an unnamed sample occurrence", async () => {
+        getModule.mockResolvedValue({
+            hash: "abc",
+            id: 1,
+            title: "",
+            filename: "song.xm",
+            tracker: "xm",
+            channel_count: 4,
+            pattern_count: 2,
+            instrument_count: 1,
+            sample_count: 1,
+            occurrences: [
+                {
+                    sample_hash: "sample-1",
+                    occurrence: { module_hash: "abc", instrument_index: 0, sample_slot: 0 },
+                    name: "",
+                    rate: 8363,
+                    volume: 64,
+                    tracker: "xm",
+                    tuning: { relative_note: 0, finetune: 0 },
+                },
+            ],
+        });
+
+        renderPage();
+
+        await waitFor(() => {
+            expect(screen.getByRole("heading", { name: "[untitled]" })).toBeInTheDocument();
+        });
+        expect(screen.getByRole("link", { name: "[unnamed]" })).toHaveAttribute("href", "/samples/sample-1");
+    });
+
     it("shows an error notice when the module cannot be found", async () => {
         getModule.mockRejectedValue(new Error("no module catalogued with hash 'abc'"));
 

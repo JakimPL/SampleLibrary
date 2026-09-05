@@ -63,6 +63,33 @@ describe("SampleDetailPage", () => {
         expect(screen.getByRole("link", { name: "sample-2" })).toHaveAttribute("href", "/samples/sample-2");
     });
 
+    it("shows the [unnamed] placeholder for an occurrence with an empty name", async () => {
+        getSample.mockResolvedValue({
+            hash: "sample-1",
+            depth: 16,
+            channels: 1,
+            frames: 4096,
+            occurrences: [
+                {
+                    sample_hash: "sample-1",
+                    occurrence: { module_hash: "module-1", instrument_index: 0, sample_slot: 0 },
+                    name: "",
+                    rate: 8363,
+                    volume: 64,
+                    tracker: "xm",
+                    tuning: { relative_note: 0, finetune: 0 },
+                },
+            ],
+        });
+        getSampleRelations.mockResolvedValue([]);
+
+        renderPage();
+
+        await waitFor(() => {
+            expect(screen.getByText("[unnamed]")).toBeInTheDocument();
+        });
+    });
+
     it("shows an error notice when the sample cannot be found", async () => {
         getSample.mockRejectedValue(new Error("no sample catalogued with hash 'sample-1'"));
         getSampleRelations.mockRejectedValue(new Error("no sample catalogued with hash 'sample-1'"));

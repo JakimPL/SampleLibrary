@@ -4,7 +4,9 @@ import { Link } from "react-router-dom";
 
 import type { TrackerFormat } from "../api/modules";
 import { ErrorNotice } from "../shared/ErrorNotice";
+import { UNTITLED_MODULE_LABEL } from "../shared/labels";
 import { Loading } from "../shared/Loading";
+import { OptionalLabel } from "../shared/OptionalLabel";
 import { useModuleList } from "./useModuleList";
 
 const PAGE_SIZE = 50;
@@ -48,7 +50,9 @@ export function ModuleListPage(): ReactElement {
                             {state.data.items.map((module) => (
                                 <tr key={module.hash}>
                                     <td>
-                                        <Link to={`/modules/${module.hash}`}>{module.title}</Link>
+                                        <Link to={`/modules/${module.hash}`}>
+                                            <OptionalLabel value={module.title} placeholder={UNTITLED_MODULE_LABEL} />
+                                        </Link>
                                     </td>
                                     <td>{module.filename}</td>
                                     <td>{module.tracker}</td>
