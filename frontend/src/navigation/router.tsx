@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
+import { CloudPage } from "../cloud/CloudPage";
 import { ModuleDetailPage } from "../modules/ModuleDetailPage";
 import { ModuleListPage } from "../modules/ModuleListPage";
 import { SampleDetailPage } from "../samples/SampleDetailPage";
@@ -16,6 +17,7 @@ export const router = createBrowserRouter([
             { path: "modules/:moduleHash", element: <ModuleDetailPage /> },
             { path: "samples/:sampleHash", element: <SampleDetailPage /> },
             { path: "stats", element: <StatsPage /> },
+            { path: "cloud", element: <CloudPage /> },
         ],
     },
 ]);

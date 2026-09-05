@@ -10,6 +10,7 @@ export default defineConfig({
             "/modules": BACKEND_DEV_URL,
             "/samples": BACKEND_DEV_URL,
             "/stats": BACKEND_DEV_URL,
+            "/cloud": BACKEND_DEV_URL,
         },
     },
     test: {

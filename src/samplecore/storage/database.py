@@ -104,6 +104,14 @@ _SCHEMA_STATEMENTS: Final[tuple[str, ...]] = (
         UNIQUE (subject_hash, reference_hash, relation_type, method)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS sample_cloud_coordinates (
+        sample_hash  VARCHAR(64) PRIMARY KEY REFERENCES sample(hash),
+        x            DOUBLE NOT NULL,
+        y            DOUBLE NOT NULL,
+        computed_at  TIMESTAMPTZ NOT NULL
+    )
+    """,
 )
 
 

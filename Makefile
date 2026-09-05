@@ -34,6 +34,10 @@ extract:
 equivalence:
 	uv run sampleequivalence
 
+.PHONY: embed
+embed:
+	uv run samplecloud
+
 .PHONY: serve
 serve:
 	uv run uvicorn sampleserver.main:app --reload

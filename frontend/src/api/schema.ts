@@ -113,6 +113,26 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/cloud": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Cloud
+         * @description Every sample's position in the library's 2D embedding space, as of the latest embedding run.
+         */
+        readonly get: operations["get_cloud_cloud_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -310,6 +330,27 @@ export interface components {
             readonly relation_type: components["schemas"]["RelationType"];
             /** Relation Count */
             readonly relation_count: number;
+        };
+        /**
+         * SampleCloudCoordinate
+         * @description Where one Sample sits in the library's 2D embedding space, as of one embedding run.
+         *
+         *     A full embedding run recomputes every sample's position at once -- UMAP has no natural
+         *     per-point incremental update -- so a later run's coordinate for a given hash entirely replaces
+         *     an earlier one, rather than the two ever coexisting.
+         */
+        readonly SampleCloudCoordinate: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            /** X */
+            readonly x: number;
+            /** Y */
+            readonly y: number;
+            /**
+             * Computed At
+             * Format: date-time
+             */
+            readonly computed_at: string;
         };
         /**
          * SampleDetail
@@ -614,6 +655,26 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["LibraryStats"];
+                };
+            };
+        };
+    };
+    readonly get_cloud_cloud_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["SampleCloudCoordinate"][];
                 };
             };
         };

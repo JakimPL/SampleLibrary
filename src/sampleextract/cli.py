@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import sys
 
+from samplecore.cli_support import load_config_or_exit
 from samplecore.storage.database import connect
-from sampleextract.cli_support import load_config_or_exit
 from sampleextract.run import run_extraction
 
 

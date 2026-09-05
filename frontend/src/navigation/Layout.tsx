@@ -8,6 +8,7 @@ export function Layout(): ReactElement {
                 <nav>
                     <NavLink to="/modules">Modules</NavLink>
                     <NavLink to="/stats">Stats</NavLink>
+                    <NavLink to="/cloud">Cloud</NavLink>
                 </nav>
             </header>
             <main>

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
-from sampleserver.routers import modules, samples, stats
+from sampleserver.routers import cloud, modules, samples, stats
 
 
 def create_app(database_path: Path) -> FastAPI:
@@ -20,4 +20,5 @@ def create_app(database_path: Path) -> FastAPI:
     application.include_router(modules.router)
     application.include_router(samples.router)
     application.include_router(stats.router)
+    application.include_router(cloud.router)
     return application
