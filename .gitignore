@@ -28,6 +28,7 @@ embeddings/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/openapi.json
 
 # Editors/OS
 .vscode/

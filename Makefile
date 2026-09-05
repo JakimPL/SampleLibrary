@@ -2,6 +2,7 @@
 install:
 	uv sync --all-extras --all-groups
 	uv run pre-commit install --hook-type pre-commit --hook-type pre-push
+	$(MAKE) frontend-install
 
 .PHONY: format
 format:
@@ -23,7 +24,7 @@ coverage:
 	uv run pytest --cov --cov-report=term-missing
 
 .PHONY: check
-check: format lint test
+check: format lint test frontend-check
 
 .PHONY: extract
 extract:
@@ -36,3 +37,27 @@ equivalence:
 .PHONY: serve
 serve:
 	uv run uvicorn sampleserver.main:app --reload
+
+.PHONY: openapi
+openapi:
+	uv run sampleserver-schema > frontend/openapi.json
+
+.PHONY: frontend-types
+frontend-types: openapi
+	cd frontend && npm run types
+
+.PHONY: frontend-install
+frontend-install:
+	cd frontend && npm install
+
+.PHONY: frontend-dev
+frontend-dev:
+	cd frontend && npm run dev
+
+.PHONY: frontend-build
+frontend-build:
+	cd frontend && npm run build
+
+.PHONY: frontend-check
+frontend-check:
+	cd frontend && npm run typecheck && npm run lint && npm run format:check && npm test

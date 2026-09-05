@@ -25,6 +25,7 @@ cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9"]
 sampleextract = "sampleextract.cli:main"
 sampleequivalence = "sampleextract.equivalence.cli:main"
 samplecloud = "samplecloud.cli:main"
+sampleserver-schema = "sampleserver.openapi_export:main"
 
 [tool.uv.sources]
 trackmod = { path = "trackmod", editable = true }

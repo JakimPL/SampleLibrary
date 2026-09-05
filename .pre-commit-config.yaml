@@ -27,6 +27,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: prettier
+        name: prettier
+        entry: bash -c 'cd frontend && npm run format:check'
+        language: system
+        files: ^frontend/
+
       - id: mypy
         name: mypy
         entry: uv run mypy
@@ -59,5 +65,21 @@ repos:
         entry: make test
         language: system
         types: [python]
+        stages: [pre-push]
+        pass_filenames: false
+
+      - id: frontend-lint
+        name: frontend-lint
+        entry: bash -c 'cd frontend && npm run lint'
+        language: system
+        files: ^frontend/
+        stages: [pre-push]
+        pass_filenames: false
+
+      - id: vitest
+        name: vitest
+        entry: bash -c 'cd frontend && npm test'
+        language: system
+        files: ^frontend/
         stages: [pre-push]
         pass_filenames: false

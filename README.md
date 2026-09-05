@@ -30,6 +30,13 @@ The extraction pipeline, embedding pipeline, and web application are introduced 
 see `docs/architecture.md` for the current package layout and `Makefile` for the available
 commands (`make extract`, `make embed`, `make serve`, and so on) as each phase lands.
 
+### Frontend
+
+`make install` also installs the frontend's npm dependencies. With the API running (`make
+serve`), start the frontend in a separate terminal with `make frontend-dev` and browse
+`http://localhost:5173`. `make frontend-build` produces a production build; `make frontend-check`
+runs its typecheck, lint, format, and test suite.
+
 ## Development
 
 Read `docs/guidelines.md` before making changes. `make format`, `make lint`, and `make test` (or

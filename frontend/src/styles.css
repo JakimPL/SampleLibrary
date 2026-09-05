@@ -1,0 +1,31 @@
+:root {
+    color-scheme: light dark;
+    font-family: system-ui, sans-serif;
+}
+
+body {
+    margin: 0;
+    padding: 1rem;
+}
+
+nav {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+th,
+td {
+    border: 1px solid currentcolor;
+    padding: 0.25rem 0.5rem;
+    text-align: left;
+}
+
+.error-notice {
+    color: #b00020;
+}
