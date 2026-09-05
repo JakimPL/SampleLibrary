@@ -12,10 +12,10 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 | Package | Owns | Depends on |
 |---|---|---|
-| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`), the DuckDB schema and connection helpers, the content-addressable audio store, sample hashing, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `duckdb`, `numpy`, `pydantic`, `soundfile` |
-| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the DuckDB catalog, computing cached waveform-preview thumbnails (inline at ingest, and via a standalone backfill pass), and the equivalence-class detection pass. | `samplecore`, `trackmod`, `tqdm` |
-| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol), UMAP dimensionality reduction, and persistence of feature vectors (Parquet) and coordinates (DuckDB). Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
-| `sampleserver` | The FastAPI read API serving the catalog, cross-references, equivalence classes, stats, and cloud coordinates to the frontend. Opens its DuckDB connection read-only, so a bug in a route handler cannot corrupt the library. | `samplecore`, `fastapi`, `uvicorn` (the `server` extra) |
+| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`), the DuckDB schema and connection helpers, the content-addressable audio store, sample hashing, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `duckdb`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
+| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the DuckDB catalog, computing cached waveform-preview thumbnails (inline at ingest, and via a standalone backfill pass), and the equivalence-class detection pass. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
+| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol), UMAP dimensionality reduction, and persistence of feature vectors (Parquet) and coordinates (DuckDB). Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
+| `sampleserver` | The FastAPI read API serving the catalog, cross-references, equivalence classes, stats, and cloud coordinates to the frontend. Opens its DuckDB connection read-only, so a bug in a route handler cannot corrupt the library. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
 
 ## Boundaries the import-linter contracts enforce
 
@@ -29,7 +29,8 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 ## Persistence
 
 DuckDB is the single authoritative store for all catalog metadata (`Module`, `Sample`,
-`SampleProperties`, `SampleRelation`, `sample_cloud_coordinates`, and `sample_thumbnail`). The
+`SampleProperties` together with its per-tracker `xm_sample_properties`/`it_sample_properties`
+tables, `SampleRelation`, `sample_cloud_coordinates`, and `sample_thumbnail`). The
 filesystem content-addressable store — `{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file
 per unique `Sample` — is the single authoritative store for audio bytes. Neither is a cache of the
 other, except that `Sample` rows could in principle be rebuilt by rehashing the store; that is a
@@ -42,6 +43,10 @@ gitignored `config.toml` via `samplecore.config.load_config`, never hardcoded in
 ## Extending to new tracker formats
 
 `sampleextract`'s format dispatch is a small registry (module suffix → loader function), not
-branching logic, specifically so that adding MOD and S3M later is additive: a new `trackmod`
-tracker package plus two registry entries, with no structural change to the catalog schema, the
-content store, the API, or the frontend.
+branching logic, so adding MOD and S3M later starts from a new `trackmod` tracker package plus two
+registry entries. Each format also has its own tracker-specific properties table
+(`xm_sample_properties`, `it_sample_properties`) and a member of the `TrackerFormat` enum, both
+schema-level and reachable through `module.tracker`'s `CheckConstraint`; adding a format extends
+these the same way XM and IT already do, and updates the frontend's tracker-selection controls to
+match. The content store and the API's read shape stay as they are: content addressing and the
+served response models are already format-agnostic.

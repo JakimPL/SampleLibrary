@@ -155,18 +155,11 @@ def get_sample_relations(
 
 
 def _modules_by_hash(connection: Connection, properties: tuple[TrackerSampleProperties, ...]) -> dict[str, Module]:
-    repository = DuckDBModuleRepository(connection)
-    modules_by_hash: dict[str, Module] = {}
-    for item in properties:
-        module_hash = item.occurrence.module_hash
-        if module_hash in modules_by_hash:
-            continue
-
-        module = repository.get(module_hash)
-        if module is None:
+    hashes = sorted({item.occurrence.module_hash for item in properties})
+    modules_by_hash = DuckDBModuleRepository(connection).get_many(hashes)
+    for module_hash in hashes:
+        if module_hash not in modules_by_hash:
             raise ValueError(f"sample occurrence references module {module_hash!r}, which is not catalogued")
-
-        modules_by_hash[module_hash] = module
 
     return modules_by_hash
 

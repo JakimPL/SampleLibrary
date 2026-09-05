@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, model_validator
 
 from samplecore.models.base import FROZEN
-from samplecore.models.scalars import SampleHash
+from samplecore.models.scalars import BucketCount, SampleHash
 
 
 class SampleThumbnail(BaseModel):
@@ -19,7 +19,7 @@ class SampleThumbnail(BaseModel):
     model_config = FROZEN
 
     sample_hash: SampleHash
-    bucket_count: int
+    bucket_count: BucketCount
     minimums: tuple[float, ...]
     maximums: tuple[float, ...]
 

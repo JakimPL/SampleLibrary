@@ -74,6 +74,20 @@ def test_list_page_filters_by_tracker(connection: duckdb.DuckDBPyConnection) -> 
     assert repository.list_page(limit=10, offset=0, tracker=TrackerFormat.XM) == (first, third)
 
 
+def test_get_many_returns_only_the_requested_hashes_that_exist(connection: duckdb.DuckDBPyConnection) -> None:
+    repository = DuckDBModuleRepository(connection)
+    first, _, third = _insert_three_modules(repository)
+
+    result = repository.get_many([first.hash, format(9, "064x")])
+
+    assert result == {first.hash: first}
+    assert third.hash not in result
+
+
+def test_get_many_with_no_hashes_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
+    assert DuckDBModuleRepository(connection).get_many([]) == {}
+
+
 def test_count_matches_the_number_of_stored_modules(connection: duckdb.DuckDBPyConnection) -> None:
     repository = DuckDBModuleRepository(connection)
     _insert_three_modules(repository)

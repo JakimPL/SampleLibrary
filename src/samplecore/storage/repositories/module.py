@@ -16,6 +16,8 @@ class ModuleRepository(Protocol):
 
     def get(self, hash_: str) -> Module | None: ...
 
+    def get_many(self, hashes: list[str]) -> dict[str, Module]: ...
+
     def next_id(self) -> int: ...
 
     def insert(self, module_: Module) -> None: ...
@@ -39,6 +41,14 @@ class DuckDBModuleRepository:
     def get(self, hash_: str) -> Module | None:
         row = self._connection.execute(select(module).where(module.c.hash == hash_)).fetchone()
         return _row_to_module(row) if row is not None else None
+
+    def get_many(self, hashes: list[str]) -> dict[str, Module]:
+        if not hashes:
+            return {}
+
+        statement = select(module).where(module.c.hash.in_(hashes))
+        rows = self._connection.execute(statement).fetchall()
+        return {row.hash: _row_to_module(row) for row in rows}
 
     def next_id(self) -> int:
         return self._connection.execute(select(module_id_sequence.next_value())).scalar_one()

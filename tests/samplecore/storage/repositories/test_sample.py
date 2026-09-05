@@ -145,6 +145,18 @@ def test_list_page_resolves_a_cached_thumbnail(connection: duckdb.DuckDBPyConnec
     assert [peak.maximum for peak in page[0].thumbnail] == [0.5, 1.0]
 
 
+def test_get_many_returns_only_the_requested_hashes_that_exist(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    result = DuckDBSampleRepository(connection).get_many([stored_sample.hash, "f" * 64])
+
+    assert result == {stored_sample.hash: stored_sample}
+
+
+def test_get_many_with_no_hashes_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
+    assert DuckDBSampleRepository(connection).get_many([]) == {}
+
+
 def test_count_reflects_every_stored_sample(
     connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:

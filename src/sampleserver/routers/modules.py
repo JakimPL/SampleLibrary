@@ -87,13 +87,13 @@ def get_module(module_hash: str, connection: Connection = Depends(get_connection
 def _samples_by_hash(
     connection: Connection, properties: tuple[TrackerSampleProperties, ...]
 ) -> dict[str, ModuleOccurrenceSample]:
-    sample_repository = DuckDBSampleRepository(connection)
     hashes = sorted({item.sample_hash for item in properties})
+    samples = DuckDBSampleRepository(connection).get_many(hashes)
     thumbnails_by_hash = DuckDBSampleThumbnailRepository(connection).get_many(hashes)
 
     samples_by_hash: dict[str, ModuleOccurrenceSample] = {}
     for sample_hash in hashes:
-        sample = sample_repository.get(sample_hash)
+        sample = samples.get(sample_hash)
         if sample is None:
             raise ValueError(f"module occurrence references sample {sample_hash!r}, which is not catalogued")
 

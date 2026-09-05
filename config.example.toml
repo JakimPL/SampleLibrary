@@ -12,3 +12,6 @@ library_root = "/path/to/your/sample/library"
 # Optional overrides -- otherwise derived from library_root.
 # database_path = "/path/to/your/sample/library/samplelibrary.duckdb"
 # cloud_artifact_directory = "/path/to/your/sample/library/embeddings"
+
+# Samples shorter than this many frames are skipped at ingest time. Defaults to 512.
+# minimum_sample_frames = 512

@@ -20,6 +20,8 @@ class SampleRepository(Protocol):
 
     def get(self, hash_: str) -> Sample | None: ...
 
+    def get_many(self, hashes: list[str]) -> dict[str, Sample]: ...
+
     def upsert(self, sample_: Sample) -> None: ...
 
     def list_all(self) -> tuple[Sample, ...]: ...
@@ -42,6 +44,14 @@ class DuckDBSampleRepository:
     def get(self, hash_: str) -> Sample | None:
         row = self._connection.execute(select(sample).where(sample.c.hash == hash_)).fetchone()
         return _row_to_sample(row) if row is not None else None
+
+    def get_many(self, hashes: list[str]) -> dict[str, Sample]:
+        if not hashes:
+            return {}
+
+        statement = select(sample).where(sample.c.hash.in_(hashes))
+        rows = self._connection.execute(statement).fetchall()
+        return {row.hash: _row_to_sample(row) for row in rows}
 
     def upsert(self, sample_: Sample) -> None:
         statement = insert(sample).values(
