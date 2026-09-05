@@ -24,3 +24,11 @@ coverage:
 
 .PHONY: check
 check: format lint test
+
+.PHONY: extract
+extract:
+	uv run sampleextract
+
+.PHONY: equivalence
+equivalence:
+	uv run sampleequivalence

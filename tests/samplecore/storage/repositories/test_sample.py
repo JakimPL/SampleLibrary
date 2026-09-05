@@ -33,3 +33,19 @@ def test_upserting_the_same_sample_twice_does_not_raise(
     repository.upsert(sample)
 
     assert repository.get(sample_hash_a) == sample
+
+
+def test_list_all_on_an_empty_catalog_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
+    assert DuckDBSampleRepository(connection).list_all() == ()
+
+
+def test_list_all_returns_every_stored_sample(
+    connection: duckdb.DuckDBPyConnection, sample_hash_a: str, sample_hash_b: str
+) -> None:
+    repository = DuckDBSampleRepository(connection)
+    first = Sample(hash=sample_hash_a, depth=BitDepth.EIGHT, channels=ChannelLayout.MONO, frames=4)
+    second = Sample(hash=sample_hash_b, depth=BitDepth.SIXTEEN, channels=ChannelLayout.STEREO, frames=16)
+    repository.upsert(first)
+    repository.upsert(second)
+
+    assert set(repository.list_all()) == {first, second}

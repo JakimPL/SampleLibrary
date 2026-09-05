@@ -73,3 +73,18 @@ def test_get_on_an_unknown_id_returns_none(connection: duckdb.DuckDBPyConnection
 def test_a_partially_populated_review_is_rejected_as_inconsistent() -> None:
     with pytest.raises(ValueError, match="set together"):
         _review_from_row(True, None, "jakim")
+
+
+def test_list_all_on_an_empty_table_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
+    assert DuckDBSampleRelationRepository(connection).list_all() == ()
+
+
+def test_list_all_returns_every_stored_relation(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    repository = DuckDBSampleRelationRepository(connection)
+    relation = _relation(repository.next_id(), stored_sample.hash, stored_sample_b.hash)
+
+    repository.upsert(relation)
+
+    assert repository.list_all() == (relation,)

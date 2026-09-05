@@ -23,6 +23,8 @@ class SampleRelationRepository(Protocol):
 
     def review(self, relation_id: int, review: RelationReview) -> None: ...
 
+    def list_all(self) -> tuple[SampleRelation, ...]: ...
+
 
 class DuckDBSampleRelationRepository:
     """A SampleRelationRepository backed by the catalog's ``sample_relation`` table.
@@ -80,6 +82,10 @@ class DuckDBSampleRelationRepository:
             f"SELECT {_SELECT_COLUMNS} FROM sample_relation WHERE id = ?", [relation_id]
         ).fetchone()
         return _row_to_relation(row) if row is not None else None
+
+    def list_all(self) -> tuple[SampleRelation, ...]:
+        rows = self._connection.execute(f"SELECT {_SELECT_COLUMNS} FROM sample_relation").fetchall()
+        return tuple(_row_to_relation(row) for row in rows)
 
 
 def _row_to_relation(row: tuple[Any, ...]) -> SampleRelation:

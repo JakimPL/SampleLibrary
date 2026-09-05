@@ -2,19 +2,14 @@ from __future__ import annotations
 
 import sys
 
-from samplecore.config import ConfigurationError, load_config
 from samplecore.storage.database import connect
+from sampleextract.cli_support import load_config_or_exit
 from sampleextract.run import run_extraction
 
 
 def main() -> None:
     """Run one extraction pass over the configured module source directory and report the result."""
-    try:
-        config = load_config()
-    except ConfigurationError as error:
-        print(f"Configuration error: {error}", file=sys.stderr)
-        sys.exit(1)
-
+    config = load_config_or_exit()
     config.library_root.mkdir(parents=True, exist_ok=True)
     connection = connect(config.resolved_database_path)
     try:

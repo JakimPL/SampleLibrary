@@ -16,6 +16,8 @@ class SampleRepository(Protocol):
 
     def upsert(self, sample: Sample) -> None: ...
 
+    def list_all(self) -> tuple[Sample, ...]: ...
+
 
 class DuckDBSampleRepository:
     """A SampleRepository backed by the catalog's ``sample`` table.
@@ -42,6 +44,10 @@ class DuckDBSampleRepository:
             """,
             [sample.hash, sample.depth.value, sample.channels.value, sample.frames],
         )
+
+    def list_all(self) -> tuple[Sample, ...]:
+        rows = self._connection.execute("SELECT hash, depth, channels, frames FROM sample").fetchall()
+        return tuple(_row_to_sample(row) for row in rows)
 
 
 def _row_to_sample(row: tuple[Any, ...]) -> Sample:
