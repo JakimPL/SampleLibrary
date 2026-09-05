@@ -16,6 +16,7 @@ from trackmod.core.samples.sample import Sample as TrackModSample
 from trackmod.core.songs.order import OrderList
 from trackmod.core.songs.playback import Playback
 from trackmod.core.songs.song import Song
+from trackmod.core.voices.voices import InstrumentVoices
 from trackmod.limits.compliance import Compliance
 from trackmod.trackers.it.module import ITModule
 from trackmod.trackers.xm.module import XMModule
@@ -90,8 +91,7 @@ def _single_instrument_song(sample: TrackModSample) -> Song:
         channels=1,
         patterns=(Pattern.empty(rows=1, channels=1),),
         order=OrderList(entries=(0,)),
-        instruments=(instrument,),
-        samples=(sample,),
+        voices=InstrumentVoices(instruments=(instrument,), samples=(sample,)),
         playback=Playback(speed=6, tempo=125),
     )
 
@@ -105,8 +105,7 @@ def _multi_instrument_song(name: str, samples: tuple[TrackModSample, ...]) -> So
         channels=len(samples),
         patterns=(Pattern.empty(rows=1, channels=len(samples)),),
         order=OrderList(entries=(0,)),
-        instruments=instruments,
-        samples=samples,
+        voices=InstrumentVoices(instruments=instruments, samples=samples),
         playback=Playback(speed=6, tempo=125),
     )
 

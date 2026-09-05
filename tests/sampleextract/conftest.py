@@ -14,6 +14,7 @@ from trackmod.core.samples.sample import Sample
 from trackmod.core.songs.order import OrderList
 from trackmod.core.songs.playback import Playback
 from trackmod.core.songs.song import Song
+from trackmod.core.voices.voices import InstrumentVoices
 from trackmod.limits.compliance import Compliance
 from trackmod.trackers.it.module import ITModule
 from trackmod.trackers.xm.module import XMModule
@@ -36,8 +37,7 @@ def _build_song(*, samples: tuple[Sample, ...], instruments: tuple[Instrument, .
         channels=1,
         patterns=(Pattern.empty(rows=1, channels=1),),
         order=OrderList(entries=(0,)),
-        instruments=instruments,
-        samples=samples,
+        voices=InstrumentVoices(instruments=instruments, samples=samples),
         playback=Playback(speed=6, tempo=125),
     )
 

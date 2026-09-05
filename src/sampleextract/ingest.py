@@ -11,6 +11,8 @@ from trackmod.core.instruments.transfer import held
 from trackmod.core.instruments.unit import InstrumentUnit
 from trackmod.core.samples.sample import Sample as TrackModSample
 from trackmod.core.songs.song import Song
+from trackmod.core.voices.convert import raised
+from trackmod.core.voices.voices import InstrumentVoices
 
 from samplecore.hashing import compute_sample_hash
 from samplecore.models.channels import ChannelLayout
@@ -80,6 +82,13 @@ def ingest_module(
         minimum_sample_frames=minimum_sample_frames,
     )
 
+    # Impulse Tracker can store either voice table (its header states the choice); FastTracker 2
+    # always writes InstrumentVoices. Raising a SampleVoices table to InstrumentVoices -- one
+    # synthetic instrument per sample, each routing every key to its own sample at that key's own
+    # pitch -- lets every occurrence recorded below carry the same (instrument_index, sample_slot)
+    # addressing regardless of which table the source module used.
+    voices = song.voices if isinstance(song.voices, InstrumentVoices) else raised(song.voices)
+
     with start_batch(connection):
         module = Module(
             hash=module_hash,
@@ -89,13 +98,13 @@ def ingest_module(
             title=song.name,
             channel_count=song.channels,
             pattern_count=len(song.patterns),
-            instrument_count=len(song.instruments),
-            sample_count=len(song.samples),
+            instrument_count=len(voices.instruments),
+            sample_count=len(voices.samples),
             file_size=file_size,
             ingested_at=ingested_at,
         )
         module_repository.insert(module)
-        for instrument_index, unit in enumerate(held(song)):
+        for instrument_index, unit in enumerate(held(voices)):
             _ingest_instrument_unit(context, instrument_index=instrument_index, unit=unit)
 
     return module
