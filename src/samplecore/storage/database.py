@@ -184,6 +184,15 @@ sample_cloud_coordinates = Table(
     Column("computed_at", DateTime(timezone=True), nullable=False),
 )
 
+module_cloud_coordinates = Table(
+    "module_cloud_coordinates",
+    metadata,
+    Column("module_hash", String(64), ForeignKey("module.hash"), primary_key=True),
+    Column("x", Double, nullable=False),
+    Column("y", Double, nullable=False),
+    Column("computed_at", DateTime(timezone=True), nullable=False),
+)
+
 sample_thumbnail = Table(
     "sample_thumbnail",
     metadata,

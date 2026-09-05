@@ -5,8 +5,8 @@ from typing import Protocol
 from sqlalchemy import Connection, Row, select
 from sqlalchemy.dialects.postgresql import insert
 
-from samplecore.models.cloud import SampleCloudCoordinate
-from samplecore.storage.database import sample_cloud_coordinates
+from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
+from samplecore.storage.database import module_cloud_coordinates, sample_cloud_coordinates
 
 
 class CloudCoordinateRepository(Protocol):
@@ -50,3 +50,45 @@ class DuckDBCloudCoordinateRepository:
 def _row_to_coordinate(row: Row[tuple[str, float, float, object]]) -> SampleCloudCoordinate:
     """Reconstruct a SampleCloudCoordinate from a Core row, addressed by its own column names."""
     return SampleCloudCoordinate(sample_hash=row.sample_hash, x=row.x, y=row.y, computed_at=row.computed_at)
+
+
+class ModuleCloudCoordinateRepository(Protocol):
+    """Persistence for where each Module sits in the library's 2D embedding space."""
+
+    def upsert(self, coordinate: ModuleCloudCoordinate) -> None: ...
+
+    def list_all(self) -> tuple[ModuleCloudCoordinate, ...]: ...
+
+
+class DuckDBModuleCloudCoordinateRepository:
+    """A ModuleCloudCoordinateRepository backed by the catalog's ``module_cloud_coordinates`` table.
+
+    Mirrors DuckDBCloudCoordinateRepository's replace-outright upsert: a position comes from a
+    whole embedding run's fit, placeholder or genuine, so the latest run's value always wins.
+    """
+
+    def __init__(self, connection: Connection) -> None:
+        self._connection = connection
+
+    def upsert(self, coordinate: ModuleCloudCoordinate) -> None:
+        statement = insert(module_cloud_coordinates).values(
+            module_hash=coordinate.module_hash, x=coordinate.x, y=coordinate.y, computed_at=coordinate.computed_at
+        )
+        statement = statement.on_conflict_do_update(
+            index_elements=[module_cloud_coordinates.c.module_hash],
+            set_={
+                "x": statement.excluded.x,
+                "y": statement.excluded.y,
+                "computed_at": statement.excluded.computed_at,
+            },
+        )
+        self._connection.execute(statement)
+
+    def list_all(self) -> tuple[ModuleCloudCoordinate, ...]:
+        rows = self._connection.execute(select(module_cloud_coordinates)).fetchall()
+        return tuple(_row_to_module_coordinate(row) for row in rows)
+
+
+def _row_to_module_coordinate(row: Row[tuple[str, float, float, object]]) -> ModuleCloudCoordinate:
+    """Reconstruct a ModuleCloudCoordinate from a Core row, addressed by its own column names."""
+    return ModuleCloudCoordinate(module_hash=row.module_hash, x=row.x, y=row.y, computed_at=row.computed_at)

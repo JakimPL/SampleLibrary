@@ -42,6 +42,10 @@ thumbnails:
 embed:
 	uv run samplecloud
 
+.PHONY: embed-modules-placeholder
+embed-modules-placeholder:
+	uv run samplecloud-modules-placeholder
+
 .PHONY: dev-library
 dev-library:
 	uv run python scripts/build_dev_library.py

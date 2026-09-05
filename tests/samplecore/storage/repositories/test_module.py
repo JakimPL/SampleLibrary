@@ -59,6 +59,17 @@ def _insert_three_modules(repository: DuckDBModuleRepository) -> tuple[Module, M
     return xm_module, it_module, another_xm_module
 
 
+def test_list_all_on_an_empty_catalog_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
+    assert DuckDBModuleRepository(connection).list_all() == ()
+
+
+def test_list_all_returns_every_stored_module(connection: duckdb.DuckDBPyConnection) -> None:
+    repository = DuckDBModuleRepository(connection)
+    first, second, third = _insert_three_modules(repository)
+
+    assert set(repository.list_all()) == {first, second, third}
+
+
 def test_list_page_orders_by_id_and_respects_limit_and_offset(connection: duckdb.DuckDBPyConnection) -> None:
     repository = DuckDBModuleRepository(connection)
     first, second, third = _insert_three_modules(repository)

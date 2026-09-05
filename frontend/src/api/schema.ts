@@ -202,6 +202,29 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/cloud/modules": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Module Cloud
+         * @description Every module's placeholder position in the library's 2D embedding space.
+         *
+         *     Placeholder until a spectral-distance-based per-module embedding replaces it -- see
+         *     `samplecloud.placeholder_modules`.
+         */
+        readonly get: operations["get_module_cloud_cloud_modules_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -326,6 +349,28 @@ export interface components {
              * Format: date-time
              */
             readonly ingested_at: string;
+        };
+        /**
+         * ModuleCloudCoordinate
+         * @description Where one Module sits in the library's 2D embedding space, as of one embedding run.
+         *
+         *     Today's positions come from `samplecloud.placeholder_modules`, seeded from a module's own hash
+         *     rather than a genuine similarity fit -- standing in until a spectral-distance metric makes a
+         *     real per-module embedding possible. A later run's coordinate for a given hash entirely replaces
+         *     an earlier one, mirroring SampleCloudCoordinate's own replacement semantics.
+         */
+        readonly ModuleCloudCoordinate: {
+            /** Module Hash */
+            readonly module_hash: string;
+            /** X */
+            readonly x: number;
+            /** Y */
+            readonly y: number;
+            /**
+             * Computed At
+             * Format: date-time
+             */
+            readonly computed_at: string;
         };
         /**
          * ModuleDetail
@@ -950,6 +995,26 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": readonly components["schemas"]["SampleCloudCoordinate"][];
+                };
+            };
+        };
+    };
+    readonly get_module_cloud_cloud_modules_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["ModuleCloudCoordinate"][];
                 };
             };
         };

@@ -22,6 +22,8 @@ class ModuleRepository(Protocol):
 
     def insert(self, module_: Module) -> None: ...
 
+    def list_all(self) -> tuple[Module, ...]: ...
+
     def list_page(self, *, limit: int, offset: int, tracker: TrackerFormat | None = None) -> tuple[Module, ...]: ...
 
     def count(self, *, tracker: TrackerFormat | None = None) -> int: ...
@@ -69,6 +71,10 @@ class DuckDBModuleRepository:
                 ingested_at=module_.ingested_at,
             )
         )
+
+    def list_all(self) -> tuple[Module, ...]:
+        rows = self._connection.execute(select(module)).fetchall()
+        return tuple(_row_to_module(row) for row in rows)
 
     def list_page(self, *, limit: int, offset: int, tracker: TrackerFormat | None = None) -> tuple[Module, ...]:
         statement = select(module).order_by(module.c.id).limit(limit).offset(offset)

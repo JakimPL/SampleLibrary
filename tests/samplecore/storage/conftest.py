@@ -59,3 +59,24 @@ def stored_module(connection: Connection, module_hash_a: str) -> Module:
     repository.insert(module)
     connection.commit()
     return module
+
+
+@pytest.fixture
+def stored_module_b(connection: Connection, module_hash_b: str) -> Module:
+    repository = DuckDBModuleRepository(connection)
+    module = Module(
+        hash=module_hash_b,
+        id=repository.next_id(),
+        filename="song2.it",
+        tracker=TrackerFormat.IT,
+        title="untitled 2",
+        channel_count=4,
+        pattern_count=1,
+        instrument_count=1,
+        sample_count=1,
+        file_size=1024,
+        ingested_at=datetime.now(UTC),
+    )
+    repository.insert(module)
+    connection.commit()
+    return module
