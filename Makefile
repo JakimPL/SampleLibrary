@@ -34,6 +34,10 @@ extract:
 equivalence:
 	uv run sampleequivalence
 
+.PHONY: thumbnails
+thumbnails:
+	uv run samplethumbnail
+
 .PHONY: embed
 embed:
 	uv run samplecloud

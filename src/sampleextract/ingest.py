@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.core.instruments.transfer import held
 from trackmod.core.instruments.unit import InstrumentUnit
@@ -14,6 +16,7 @@ from samplecore.hashing import compute_sample_hash
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
 from samplecore.models.sample_properties import SampleOccurrence
+from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
@@ -23,6 +26,8 @@ from samplecore.storage.repositories.sample_properties import (
     DuckDBSamplePropertiesRepository,
     SamplePropertiesRepository,
 )
+from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository, SampleThumbnailRepository
+from samplecore.waveform import DEFAULT_THUMBNAIL_BUCKET_COUNT, compute_waveform_peaks
 from sampleextract.rendering import render_properties, render_sample_pcm
 
 
@@ -32,9 +37,11 @@ class _IngestContext:
 
     sample_repository: SampleRepository
     properties_repository: SamplePropertiesRepository
+    thumbnail_repository: SampleThumbnailRepository
     library_root: Path
     tracker: TrackerFormat
     module_hash: str
+    minimum_sample_frames: int
 
 
 # Every keyword argument below is an independent fact about the module being ingested, with no
@@ -50,21 +57,27 @@ def ingest_module(
     file_size: int,
     song: Song,
     ingested_at: datetime,
+    minimum_sample_frames: int,
 ) -> Module:
     """Persist one module and every sample it reaches, as a single all-or-nothing transaction.
 
     The caller is responsible for confirming this module is not already known before calling --
     this always inserts, and a second call for the same hash raises on the table's own UNIQUE
     constraint rather than silently doing nothing. Idempotent re-runs are ``run_extraction``'s
-    concern, not this function's.
+    concern, not this function's. A sample occurrence shorter than ``minimum_sample_frames`` is
+    never catalogued at all -- too short to hold the kind of recorded audio this library's
+    equivalence detection and browsing are built around, the same reasoning that already excludes
+    an empty placeholder slot.
     """
     module_repository = DuckDBModuleRepository(connection)
     context = _IngestContext(
         sample_repository=DuckDBSampleRepository(connection),
         properties_repository=DuckDBSamplePropertiesRepository(connection),
+        thumbnail_repository=DuckDBSampleThumbnailRepository(connection),
         library_root=library_root,
         tracker=tracker,
         module_hash=module_hash,
+        minimum_sample_frames=minimum_sample_frames,
     )
 
     with start_batch(connection):
@@ -90,8 +103,8 @@ def ingest_module(
 
 def _ingest_instrument_unit(context: _IngestContext, *, instrument_index: int, unit: InstrumentUnit) -> None:
     for sample_slot, trackmod_sample in enumerate(unit.samples):
-        if trackmod_sample.frames == 0:
-            continue  # a placeholder slot with no content has no hash to store it under
+        if trackmod_sample.frames < context.minimum_sample_frames:
+            continue  # a placeholder slot or a too-short sample has nothing worth cataloguing
 
         _ingest_sample_occurrence(
             context, instrument_index=instrument_index, sample_slot=sample_slot, trackmod_sample=trackmod_sample
@@ -110,6 +123,7 @@ def _ingest_sample_occurrence(
     sample_pcm = render_sample_pcm(sample_hash, trackmod_sample)
     context.sample_repository.upsert(sample_pcm.sample)
     audio_store.write(context.library_root, sample_pcm)
+    _upsert_thumbnail(context.thumbnail_repository, sample_hash, sample_pcm.pcm)
 
     occurrence = SampleOccurrence(
         module_hash=context.module_hash, instrument_index=instrument_index, sample_slot=sample_slot
@@ -117,5 +131,17 @@ def _ingest_sample_occurrence(
     context.properties_repository.upsert(
         render_properties(
             tracker=context.tracker, sample_hash=sample_hash, occurrence=occurrence, trackmod_sample=trackmod_sample
+        )
+    )
+
+
+def _upsert_thumbnail(repository: SampleThumbnailRepository, sample_hash: str, pcm: NDArray[np.float64]) -> None:
+    peaks = compute_waveform_peaks(pcm, bucket_count=DEFAULT_THUMBNAIL_BUCKET_COUNT)
+    repository.upsert(
+        SampleThumbnail(
+            sample_hash=sample_hash,
+            bucket_count=len(peaks),
+            minimums=tuple(peak.minimum for peak in peaks),
+            maximums=tuple(peak.maximum for peak in peaks),
         )
     )

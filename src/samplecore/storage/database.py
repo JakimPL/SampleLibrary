@@ -23,6 +23,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import URL, RootTransaction
 from sqlalchemy.pool import NullPool
+from sqlalchemy.types import ARRAY
 
 from samplecore.storage.types import TinyInt, UBigInt, UInteger, USmallInt, UTinyInt
 
@@ -178,6 +179,16 @@ sample_cloud_coordinates = Table(
     Column("x", Double, nullable=False),
     Column("y", Double, nullable=False),
     Column("computed_at", DateTime(timezone=True), nullable=False),
+)
+
+sample_thumbnail = Table(
+    "sample_thumbnail",
+    metadata,
+    Column("sample_hash", String(64), ForeignKey("sample.hash"), primary_key=True),
+    Column("bucket_count", UTinyInt, nullable=False),
+    Column("minimums", ARRAY(Double), nullable=False),
+    Column("maximums", ARRAY(Double), nullable=False),
+    CheckConstraint("bucket_count > 0", name="sample_thumbnail_bucket_count_check"),
 )
 
 

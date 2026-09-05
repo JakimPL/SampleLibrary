@@ -13,7 +13,7 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 | Package | Owns | Depends on |
 |---|---|---|
 | `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`), the DuckDB schema and connection helpers, the content-addressable audio store, sample hashing, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `duckdb`, `numpy`, `pydantic`, `soundfile` |
-| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the DuckDB catalog, and the equivalence-class detection pass. | `samplecore`, `trackmod`, `tqdm` |
+| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the DuckDB catalog, computing cached waveform-preview thumbnails (inline at ingest, and via a standalone backfill pass), and the equivalence-class detection pass. | `samplecore`, `trackmod`, `tqdm` |
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol), UMAP dimensionality reduction, and persistence of feature vectors (Parquet) and coordinates (DuckDB). Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
 | `sampleserver` | The FastAPI read API serving the catalog, cross-references, equivalence classes, stats, and cloud coordinates to the frontend. Opens its DuckDB connection read-only, so a bug in a route handler cannot corrupt the library. | `samplecore`, `fastapi`, `uvicorn` (the `server` extra) |
 
@@ -29,10 +29,10 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 ## Persistence
 
 DuckDB is the single authoritative store for all catalog metadata (`Module`, `Sample`,
-`SampleProperties`, `SampleRelation`, and later `sample_cloud_coordinates`). The filesystem
-content-addressable store — `{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file per unique
-`Sample` — is the single authoritative store for audio bytes. Neither is a cache of the other,
-except that `Sample` rows could in principle be rebuilt by rehashing the store; that is a
+`SampleProperties`, `SampleRelation`, `sample_cloud_coordinates`, and `sample_thumbnail`). The
+filesystem content-addressable store — `{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file
+per unique `Sample` — is the single authoritative store for audio bytes. Neither is a cache of the
+other, except that `Sample` rows could in principle be rebuilt by rehashing the store; that is a
 recoverability property, not a substitute for backing up the `.duckdb` file itself.
 
 Local, machine-specific paths (the module source directory, the library root) are read from a

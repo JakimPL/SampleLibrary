@@ -38,13 +38,23 @@ describe("ModuleDetailPage", () => {
             ingested_at: "2026-01-01T00:00:00Z",
             occurrences: [
                 {
-                    sample_hash: "sample-1",
-                    occurrence: { module_hash: "abc", instrument_index: 0, sample_slot: 0 },
-                    name: "lead",
-                    rate: 8363,
-                    volume: 64,
-                    tracker: "xm",
-                    tuning: { relative_note: 0, finetune: 0 },
+                    properties: {
+                        sample_hash: "sample-1",
+                        occurrence: { module_hash: "abc", instrument_index: 0, sample_slot: 0 },
+                        name: "lead",
+                        rate: 8363,
+                        volume: 64,
+                        tracker: "xm",
+                        tuning: { relative_note: 0, finetune: 0 },
+                    },
+                    sample: {
+                        hash: "sample-1",
+                        depth: 16,
+                        channels: 1,
+                        frames: 4096,
+                        size_bytes: 8192,
+                        thumbnail: null,
+                    },
                 },
             ],
         });
@@ -56,6 +66,8 @@ describe("ModuleDetailPage", () => {
         });
         expect(screen.getByRole("link", { name: "lead" })).toHaveAttribute("href", "/samples/sample-1");
         expect(screen.getByText("4.0 KiB")).toBeInTheDocument();
+        expect(screen.getByText("8.0 KiB")).toBeInTheDocument();
+        expect(screen.getByText("16-bit")).toBeInTheDocument();
     });
 
     it("falls back to placeholders for an untitled module and an unnamed sample occurrence", async () => {
@@ -73,13 +85,23 @@ describe("ModuleDetailPage", () => {
             ingested_at: "2026-01-01T00:00:00Z",
             occurrences: [
                 {
-                    sample_hash: "sample-1",
-                    occurrence: { module_hash: "abc", instrument_index: 0, sample_slot: 0 },
-                    name: "",
-                    rate: 8363,
-                    volume: 64,
-                    tracker: "xm",
-                    tuning: { relative_note: 0, finetune: 0 },
+                    properties: {
+                        sample_hash: "sample-1",
+                        occurrence: { module_hash: "abc", instrument_index: 0, sample_slot: 0 },
+                        name: "",
+                        rate: 8363,
+                        volume: 64,
+                        tracker: "xm",
+                        tuning: { relative_note: 0, finetune: 0 },
+                    },
+                    sample: {
+                        hash: "sample-1",
+                        depth: 16,
+                        channels: 1,
+                        frames: 4096,
+                        size_bytes: 8192,
+                        thumbnail: null,
+                    },
                 },
             ],
         });

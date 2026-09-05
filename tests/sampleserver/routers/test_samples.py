@@ -15,12 +15,14 @@ from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
+from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import DuckDBModuleRepository
 from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository
 from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
+from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository
 
 SAMPLE_HASH_A = "a" * 64
 SAMPLE_HASH_B = "b" * 64
@@ -93,6 +95,32 @@ def test_list_samples_ranks_by_occurrence_count(client: TestClient, connection: 
     assert [item["hash"] for item in body["items"]] == [frequent.hash, rare.hash]
     assert body["items"][0]["occurrence_count"] == 2
     assert body["items"][0]["display_name"] == "kick"
+
+
+def test_list_samples_includes_a_cached_thumbnail(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    DuckDBSampleThumbnailRepository(connection).upsert(
+        SampleThumbnail(sample_hash=sample.hash, bucket_count=2, minimums=(-1.0, -0.5), maximums=(0.5, 1.0))
+    )
+
+    response = client.get("/samples")
+
+    body = response.json()
+    assert body["items"][0]["thumbnail"] == [
+        {"minimum": -1.0, "maximum": 0.5},
+        {"minimum": -0.5, "maximum": 1.0},
+    ]
+
+
+def test_list_samples_leaves_thumbnail_null_when_not_yet_cached(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    _insert_sample(connection, SAMPLE_HASH_A)
+
+    response = client.get("/samples")
+
+    body = response.json()
+    assert body["items"][0]["thumbnail"] is None
 
 
 def test_list_samples_respects_limit_and_offset(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:

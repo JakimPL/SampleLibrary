@@ -62,7 +62,7 @@ def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionS
             continue
 
         try:
-            ingested.append(_ingest_one(connection, config.library_root, path=path, data=data, module_hash=module_hash))
+            ingested.append(_ingest_one(connection, config, path=path, data=data, module_hash=module_hash))
         except _RECOVERABLE_PARSE_ERRORS as error:
             failures.append(ExtractionFailure(path=path, reason=str(error)))
 
@@ -71,16 +71,17 @@ def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionS
     )
 
 
-def _ingest_one(connection: Connection, library_root: Path, *, path: Path, data: bytes, module_hash: str) -> Module:
+def _ingest_one(connection: Connection, config: LibraryConfig, *, path: Path, data: bytes, module_hash: str) -> Module:
     tracker = FORMAT_LOADERS[path.suffix.lower()]
     song = parse_module(data, tracker=tracker)
     return ingest_module(
         connection,
-        library_root,
+        config.library_root,
         module_hash=module_hash,
         tracker=tracker,
         filename=path.name,
         file_size=len(data),
         song=song,
         ingested_at=datetime.now(UTC),
+        minimum_sample_frames=config.minimum_sample_frames,
     )

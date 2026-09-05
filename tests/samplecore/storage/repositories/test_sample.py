@@ -8,8 +8,10 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
+from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.storage.repositories.sample import DuckDBSampleRepository
 from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
+from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository
 
 
 def _add_occurrence(
@@ -121,6 +123,26 @@ def test_list_page_resolves_size_bytes_from_the_sample_itself(
     page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
 
     assert page[0].size_bytes == stored_sample.stored_bytes
+
+
+def test_list_page_leaves_thumbnail_none_for_a_sample_not_yet_thumbnailed(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample
+) -> None:
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+
+    assert page[0].thumbnail is None
+
+
+def test_list_page_resolves_a_cached_thumbnail(connection: duckdb.DuckDBPyConnection, stored_sample: Sample) -> None:
+    DuckDBSampleThumbnailRepository(connection).upsert(
+        SampleThumbnail(sample_hash=stored_sample.hash, bucket_count=2, minimums=(-1.0, -0.5), maximums=(0.5, 1.0))
+    )
+
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+
+    assert page[0].thumbnail is not None
+    assert [peak.minimum for peak in page[0].thumbnail] == [-1.0, -0.5]
+    assert [peak.maximum for peak in page[0].thumbnail] == [0.5, 1.0]
 
 
 def test_count_reflects_every_stored_sample(

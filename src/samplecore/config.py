@@ -11,6 +11,7 @@ DEFAULT_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
 DEFAULT_DATABASE_FILENAME: Final[str] = "samplelibrary.duckdb"
 DEFAULT_CLOUD_ARTIFACT_DIRECTORY_NAME: Final[str] = "embeddings"
+DEFAULT_MINIMUM_SAMPLE_FRAMES: Final[int] = 512
 
 
 class ConfigurationError(Exception):
@@ -32,6 +33,7 @@ class LibraryConfig(BaseModel):
     library_root: Path
     database_path: Path | None = None
     cloud_artifact_directory: Path | None = None
+    minimum_sample_frames: int = DEFAULT_MINIMUM_SAMPLE_FRAMES
 
     @property
     def resolved_database_path(self) -> Path:

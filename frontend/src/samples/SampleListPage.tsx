@@ -8,6 +8,7 @@ import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { Loading } from "../shared/Loading";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { CATEGORY_PLACEHOLDER } from "./category";
+import { Thumbnail } from "./Thumbnail";
 import { useSampleList } from "./useSampleList";
 
 const PAGE_SIZE = 50;
@@ -30,6 +31,7 @@ export function SampleListPage(): ReactElement {
             <table>
                 <thead>
                     <tr>
+                        <th>Waveform</th>
                         <th>Name</th>
                         <th>Category</th>
                         <th>Size</th>
@@ -39,6 +41,9 @@ export function SampleListPage(): ReactElement {
                 <tbody>
                     {items.map((sample) => (
                         <tr key={sample.hash}>
+                            <td>
+                                <Thumbnail sampleHash={sample.hash} peaks={sample.thumbnail} />
+                            </td>
                             <td>
                                 <Link to={`/samples/${sample.hash}`}>
                                     <OptionalLabel value={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} />

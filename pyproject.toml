@@ -26,6 +26,7 @@ cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9"]
 [project.scripts]
 sampleextract = "sampleextract.cli:main"
 sampleequivalence = "sampleextract.equivalence.cli:main"
+samplethumbnail = "sampleextract.thumbnail_cli:main"
 samplecloud = "samplecloud.cli:main"
 sampleserver-schema = "sampleserver.openapi_export:main"
 

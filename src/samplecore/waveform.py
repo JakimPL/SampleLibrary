@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from samplecore.models.base import FROZEN
 
 DEFAULT_WAVEFORM_BUCKET_COUNT: Final[int] = 200
+DEFAULT_THUMBNAIL_BUCKET_COUNT: Final[int] = 32
 
 
 class WaveformPeak(BaseModel):

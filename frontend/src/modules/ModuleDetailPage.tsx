@@ -1,6 +1,8 @@
 import type { ReactElement } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { formatLoop } from "../samples/occurrenceFormat";
+import { Thumbnail } from "../samples/Thumbnail";
 import { ErrorNotice } from "../shared/ErrorNotice";
 import { formatBytes } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL, UNTITLED_MODULE_LABEL } from "../shared/labels";
@@ -47,25 +49,42 @@ export function ModuleDetailPage(): ReactElement {
             <table>
                 <thead>
                     <tr>
+                        <th>Waveform</th>
                         <th>Name</th>
                         <th>Instrument</th>
                         <th>Slot</th>
                         <th>Rate</th>
+                        <th>Volume</th>
+                        <th>Panning</th>
+                        <th>Loop</th>
+                        <th>Size</th>
+                        <th>Depth</th>
                     </tr>
                 </thead>
                 <tbody>
                     {module.occurrences.map((occurrence) => (
                         <tr
-                            key={`${String(occurrence.occurrence.instrument_index)}-${String(occurrence.occurrence.sample_slot)}`}
+                            key={`${String(occurrence.properties.occurrence.instrument_index)}-${String(occurrence.properties.occurrence.sample_slot)}`}
                         >
                             <td>
-                                <Link to={`/samples/${occurrence.sample_hash}`}>
-                                    <OptionalLabel value={occurrence.name} placeholder={UNNAMED_SAMPLE_LABEL} />
+                                <Thumbnail sampleHash={occurrence.sample.hash} peaks={occurrence.sample.thumbnail} />
+                            </td>
+                            <td>
+                                <Link to={`/samples/${occurrence.sample.hash}`}>
+                                    <OptionalLabel
+                                        value={occurrence.properties.name}
+                                        placeholder={UNNAMED_SAMPLE_LABEL}
+                                    />
                                 </Link>
                             </td>
-                            <td>{occurrence.occurrence.instrument_index}</td>
-                            <td>{occurrence.occurrence.sample_slot}</td>
-                            <td>{occurrence.rate}</td>
+                            <td>{occurrence.properties.occurrence.instrument_index}</td>
+                            <td>{occurrence.properties.occurrence.sample_slot}</td>
+                            <td>{occurrence.properties.rate}</td>
+                            <td>{occurrence.properties.volume}</td>
+                            <td>{occurrence.properties.panning ?? "—"}</td>
+                            <td>{formatLoop(occurrence.properties.loop)}</td>
+                            <td>{formatBytes(occurrence.sample.size_bytes)}</td>
+                            <td>{occurrence.sample.depth}-bit</td>
                         </tr>
                     ))}
                 </tbody>

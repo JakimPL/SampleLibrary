@@ -9,8 +9,10 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSummary
+from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.naming import choose_dominant_name
 from samplecore.storage.database import sample, sample_properties
+from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository, peaks_from_thumbnail
 
 
 class SampleRepository(Protocol):
@@ -82,8 +84,13 @@ class DuckDBSampleRepository:
             .offset(offset)
         )
         rows = self._connection.execute(statement).fetchall()
-        names_by_hash = self._names_by_sample_hash([row.hash for row in rows])
-        return tuple(_row_to_sample_summary(row, names_by_hash.get(row.hash, ())) for row in rows)
+        hashes = [row.hash for row in rows]
+        names_by_hash = self._names_by_sample_hash(hashes)
+        thumbnails_by_hash = DuckDBSampleThumbnailRepository(self._connection).get_many(hashes)
+        return tuple(
+            _row_to_sample_summary(row, names_by_hash.get(row.hash, ()), thumbnails_by_hash.get(row.hash))
+            for row in rows
+        )
 
     def count(self) -> int:
         # pylint: disable-next=not-callable
@@ -108,8 +115,8 @@ def _row_to_sample(row: Row[Any]) -> Sample:
     return Sample(hash=row.hash, depth=BitDepth(row.depth), channels=ChannelLayout(row.channels), frames=row.frames)
 
 
-def _row_to_sample_summary(row: Row[Any], names: tuple[str, ...]) -> SampleSummary:
-    """Reconstruct a SampleSummary from a Core row plus its occurrences' raw names."""
+def _row_to_sample_summary(row: Row[Any], names: tuple[str, ...], thumbnail: SampleThumbnail | None) -> SampleSummary:
+    """Reconstruct a SampleSummary from a Core row plus its occurrences' raw names and cached thumbnail."""
     sample_ = _row_to_sample(row)
     return SampleSummary(
         hash=sample_.hash,
@@ -119,4 +126,5 @@ def _row_to_sample_summary(row: Row[Any], names: tuple[str, ...]) -> SampleSumma
         occurrence_count=row.occurrence_count,
         display_name=choose_dominant_name(names),
         size_bytes=sample_.stored_bytes,
+        thumbnail=peaks_from_thumbnail(thumbnail),
     )

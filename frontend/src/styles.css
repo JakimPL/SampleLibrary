@@ -29,3 +29,15 @@ td {
 .error-notice {
     color: #b00020;
 }
+
+.thumbnail-button {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+}
+
+.thumbnail-button[aria-pressed="true"] {
+    outline: 2px solid currentcolor;
+}

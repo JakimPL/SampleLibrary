@@ -40,6 +40,10 @@ describe("SampleListPage", () => {
                     occurrence_count: 3,
                     display_name: "kick",
                     size_bytes: 8192,
+                    thumbnail: [
+                        { minimum: -1.0, maximum: 0.5 },
+                        { minimum: -0.5, maximum: 1.0 },
+                    ],
                 },
             ],
             total: 1,
@@ -54,6 +58,7 @@ describe("SampleListPage", () => {
         });
         expect(screen.getByText("3")).toBeInTheDocument();
         expect(screen.getByText("8.0 KiB")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Play sample preview" })).toBeInTheDocument();
     });
 
     it("links a sample with an empty display name through the [unnamed] placeholder", async () => {
@@ -67,6 +72,7 @@ describe("SampleListPage", () => {
                     occurrence_count: 0,
                     display_name: "",
                     size_bytes: 0,
+                    thumbnail: null,
                 },
             ],
             total: 1,

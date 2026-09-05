@@ -6,6 +6,7 @@ from trackmod.core.samples.depth import BitDepth
 from samplecore.models.base import FROZEN
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.scalars import Count, Frames, SampleHash
+from samplecore.waveform import WaveformPeak
 
 
 class Sample(BaseModel):
@@ -39,8 +40,10 @@ class SampleSummary(Sample):
     occurrence names via `samplecore.naming.choose_dominant_name`. ``size_bytes`` re-exposes
     ``Sample.stored_bytes`` under its own name: a Pydantic field cannot share a name with an
     inherited plain property without the property silently winning on attribute access.
+    ``thumbnail`` is ``None`` for a sample whose cached waveform preview has not been computed yet.
     """
 
     occurrence_count: Count
     display_name: str
     size_bytes: Count
+    thumbnail: tuple[WaveformPeak, ...] | None

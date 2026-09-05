@@ -357,7 +357,36 @@ export interface components {
              */
             readonly ingested_at: string;
             /** Occurrences */
-            readonly occurrences: readonly (components["schemas"]["XMSampleProperties"] | components["schemas"]["ITSampleProperties"])[];
+            readonly occurrences: readonly components["schemas"]["ModuleOccurrenceDetail"][];
+        };
+        /**
+         * ModuleOccurrenceDetail
+         * @description One sample occurrence a module declares, together with the Sample content it points at.
+         */
+        readonly ModuleOccurrenceDetail: {
+            /** Properties */
+            readonly properties: components["schemas"]["XMSampleProperties"] | components["schemas"]["ITSampleProperties"];
+            readonly sample: components["schemas"]["ModuleOccurrenceSample"];
+        };
+        /**
+         * ModuleOccurrenceSample
+         * @description The resolved Sample content one module occurrence points at, alongside its cached thumbnail.
+         *
+         *     ``size_bytes`` re-exposes ``Sample.stored_bytes`` under its own name, the same rename
+         *     ``SampleSummary`` already uses: a Pydantic field cannot share a name with an inherited plain
+         *     property without the property silently winning on attribute access.
+         */
+        readonly ModuleOccurrenceSample: {
+            /** Hash */
+            readonly hash: string;
+            readonly depth: components["schemas"]["BitDepth"];
+            readonly channels: components["schemas"]["ChannelLayout"];
+            /** Frames */
+            readonly frames: number;
+            /** Size Bytes */
+            readonly size_bytes: number;
+            /** Thumbnail */
+            readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
         };
         /** Page[Module] */
         readonly Page_Module_: {
@@ -533,6 +562,7 @@ export interface components {
          *     occurrence names via `samplecore.naming.choose_dominant_name`. ``size_bytes`` re-exposes
          *     ``Sample.stored_bytes`` under its own name: a Pydantic field cannot share a name with an
          *     inherited plain property without the property silently winning on attribute access.
+         *     ``thumbnail`` is ``None`` for a sample whose cached waveform preview has not been computed yet.
          */
         readonly SampleSummary: {
             /** Hash */
@@ -547,6 +577,8 @@ export interface components {
             readonly display_name: string;
             /** Size Bytes */
             readonly size_bytes: number;
+            /** Thumbnail */
+            readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
         };
         /**
          * TrackerFormat
