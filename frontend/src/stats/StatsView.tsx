@@ -1,27 +1,15 @@
 import type { ReactElement } from "react";
 
-import { getStats } from "../api/stats";
-import { ErrorNotice } from "../shared/ErrorNotice";
+import type { LibraryStats } from "../api/stats";
 import { formatBytes } from "../shared/format";
-import { Loading } from "../shared/Loading";
-import { useFetch } from "../shared/useFetch";
 
-const NO_DEPENDENCIES: readonly unknown[] = [];
+interface StatsViewProps {
+    readonly stats: LibraryStats;
+}
 
-export function StatsPage(): ReactElement {
-    const state = useFetch(getStats, NO_DEPENDENCIES);
-
-    if (state.status === "loading") {
-        return <Loading />;
-    }
-    if (state.status === "error") {
-        return <ErrorNotice message={state.message} />;
-    }
-
-    const stats = state.data;
+export function StatsView({ stats }: StatsViewProps): ReactElement {
     return (
         <section>
-            <h1>Library stats</h1>
             <dl>
                 <dt>Modules</dt>
                 <dd>{stats.module_count}</dd>
@@ -32,7 +20,7 @@ export function StatsPage(): ReactElement {
                 <dt>Stored audio</dt>
                 <dd>{formatBytes(stats.total_stored_bytes)}</dd>
             </dl>
-            <h2>Modules by tracker</h2>
+            <h3>Modules by tracker</h3>
             <ul>
                 {stats.modules_by_tracker.map((entry) => (
                     <li key={entry.tracker}>
@@ -40,7 +28,7 @@ export function StatsPage(): ReactElement {
                     </li>
                 ))}
             </ul>
-            <h2>Relations by type</h2>
+            <h3>Relations by type</h3>
             <ul>
                 {stats.relations_by_type.map((entry) => (
                     <li key={entry.relation_type}>

@@ -2,32 +2,33 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import type * as CloudApi from "../../src/api/cloud";
-import { CloudPage } from "../../src/cloud/CloudPage";
+import type * as CloudApi from "../../../src/api/cloud";
+import { CloudPanel } from "../../../src/workspace/panels/CloudPanel";
+import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
 const { getCloud } = vi.hoisted(() => ({ getCloud: vi.fn() }));
 
-vi.mock("../../src/api/cloud", async () => {
-    const actual = await vi.importActual<typeof CloudApi>("../../src/api/cloud");
+vi.mock("../../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
     return { ...actual, getCloud };
 });
 
-function renderPage(): ReturnType<typeof render> {
+function renderPanel(): ReturnType<typeof render> {
     return render(
-        <MemoryRouter initialEntries={["/cloud"]}>
+        <MemoryRouter initialEntries={["/"]}>
             <Routes>
-                <Route path="/cloud" element={<CloudPage />} />
-                <Route path="/samples/:sampleHash" element={<p>sample detail page</p>} />
+                <Route path="/" element={<CloudPanel />} />
+                <Route path="/samples/:sampleHash" element={<p>sample route</p>} />
             </Routes>
         </MemoryRouter>,
     );
 }
 
-describe("CloudPage", () => {
+describe("CloudPanel", () => {
     it("shows a loading state before the points arrive", () => {
         getCloud.mockReturnValue(new Promise(() => undefined));
 
-        renderPage();
+        renderPanel();
 
         expect(screen.getByText("Loading…")).toBeInTheDocument();
     });
@@ -35,7 +36,7 @@ describe("CloudPage", () => {
     it("renders a canvas once the points have loaded", async () => {
         getCloud.mockResolvedValue([{ sample_hash: "a".repeat(64), x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
 
-        renderPage();
+        renderPanel();
 
         await waitFor(() => {
             expect(document.querySelector("canvas")).toBeInTheDocument();
@@ -45,17 +46,17 @@ describe("CloudPage", () => {
     it("shows an error notice when the request fails", async () => {
         getCloud.mockRejectedValue(new Error("service unavailable"));
 
-        renderPage();
+        renderPanel();
 
         await waitFor(() => {
             expect(screen.getByRole("alert")).toHaveTextContent("service unavailable");
         });
     });
 
-    it("navigates to the nearest sample when the canvas is clicked close to it", async () => {
+    it("highlights the nearest sample in the shared selection store on a click", async () => {
         const sampleHash = "b".repeat(64);
         getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
-        renderPage();
+        renderPanel();
         const canvas = await waitFor(() => {
             const element = document.querySelector("canvas");
             if (element === null) {
@@ -66,8 +67,23 @@ describe("CloudPage", () => {
 
         fireEvent.click(canvas, { offsetX: 0, offsetY: 0 });
 
-        await waitFor(() => {
-            expect(screen.getByText("sample detail page")).toBeInTheDocument();
+        expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: sampleHash });
+    });
+
+    it("navigates to the nearest sample on a double-click", async () => {
+        const sampleHash = "c".repeat(64);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        renderPanel();
+        const canvas = await waitFor(() => {
+            const element = document.querySelector("canvas");
+            if (element === null) {
+                throw new Error("canvas not found");
+            }
+            return element;
         });
+
+        fireEvent.doubleClick(canvas, { offsetX: 0, offsetY: 0 });
+
+        expect(await screen.findByText("sample route")).toBeInTheDocument();
     });
 });
