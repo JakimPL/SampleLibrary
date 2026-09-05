@@ -157,3 +157,31 @@ def test_a_failure_partway_through_leaves_nothing_committed(
         detect_equivalences(connection, tmp_path)
 
     assert DuckDBSampleRelationRepository(connection).list_all() == ()
+
+
+def test_detect_equivalences_finds_a_pair_differing_only_by_a_trimmed_silent_tail(
+    connection: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    """A pair whose only difference is a genuinely-silent trailing tail shares depth, so it must not
+    be misreported as a bit-depth variant -- it is classified as an amplification variant instead,
+    the closer of the two labels available, carrying a recovered gain of 1.0.
+    """
+    content = np.full((1600, 1), 0.5)
+    with_silent_tail = np.pad(content, ((0, 50), (0, 0)))
+
+    without_tail = _store_sample(connection, tmp_path, hash_seed=11, depth=BitDepth.SIXTEEN, pcm=content)
+    with_tail = _store_sample(connection, tmp_path, hash_seed=12, depth=BitDepth.SIXTEEN, pcm=with_silent_tail)
+
+    summary = detect_equivalences(connection, tmp_path)
+
+    assert summary.amplification_relations == 1
+    assert summary.bit_depth_relations == 0
+    relations = DuckDBSampleRelationRepository(connection).list_all()
+    relation = next(
+        relation
+        for relation in relations
+        if {relation.subject_hash, relation.reference_hash} == {without_tail.hash, with_tail.hash}
+    )
+    assert relation.relation_type == RelationType.AMPLIFICATION_VARIANT
+    assert relation.evidence["depth_changed"] == 0.0
+    assert relation.evidence["gain"] == pytest.approx(1.0)

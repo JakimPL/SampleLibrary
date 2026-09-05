@@ -16,6 +16,17 @@ MINIMUM_GAIN: Final[float] = 0.1
 MAXIMUM_GAIN: Final[float] = 10.0
 GAIN_UNITY_TOLERANCE: Final[float] = 0.05
 
+# One 8-bit quantisation step: the smallest amplitude even the library's lowest stored fidelity can
+# represent, so content at or below it is indistinguishable from silence regardless of a sample's
+# own depth.
+TRAILING_SILENCE_THRESHOLD: Final[float] = 1.0 / BitDepth.EIGHT.scale
+
+# How far two independently trailing-trimmed waveforms' lengths may still disagree and be treated as
+# the same content -- tight, since candidate generation's own MAX_TRAILING_TRIM_FRAMES already
+# absorbed the real silent-tail difference; this only absorbs noise in exactly where each waveform's
+# own trim boundary landed.
+MAX_TRIM_MISMATCH_FRAMES: Final[int] = 32
+
 MAX_RESAMPLE_DENOMINATOR: Final[int] = 200
 MAX_TRIM_LAG_FRAMES: Final[int] = 64
 MAX_COMPARISON_FRAMES: Final[int] = 20_000
@@ -48,28 +59,39 @@ def _gain_variant_ceiling(depth: BitDepth) -> float:
 def score_gain_variant(
     waveform_a: NDArray[np.float64], waveform_b: NDArray[np.float64], *, depth_a: BitDepth, depth_b: BitDepth
 ) -> RelationScore | None:
-    """How closely two equal-shape waveforms match once the best-fitting global gain is compensated for.
+    """How closely two waveforms match once trailing-length disagreement and the best-fitting global
+    gain are compensated for.
 
     Fitting a gain by least squares before comparing, rather than comparing raw waveforms directly,
     is what lets this scorer recognise a pair related by amplitude alone, by bit depth alone, or by
     both at once -- a depth change alone fits a gain near 1.0, and the confidence and evidence are
-    identical either way. The ceiling compares against ``min(depth_a, depth_b)``, the lower-fidelity
-    side's noise floor, since that dominates the residual regardless of which side it is on.
+    identical either way. Trimming both to their common length before fitting is what lets it
+    recognise a pair whose trailing-silence trim (``samplecore.waveform.trim_trailing_silence``)
+    landed a few frames apart, without needing them to be pre-aligned by the caller. The ceiling
+    compares against ``min(depth_a, depth_b)``, the lower-fidelity side's noise floor, since that
+    dominates the residual regardless of which side it is on.
 
     Returns:
-        None: when ``waveform_a`` is silent, leaving the gain undefined, or when the best-fitting
-            gain falls outside ``[MINIMUM_GAIN, MAXIMUM_GAIN]`` in magnitude, indicating a candidate
-            pair whose fit is numerically degenerate rather than a real match.
+        None: when the two waveforms' lengths disagree by more than ``MAX_TRIM_MISMATCH_FRAMES``,
+            when the shared-length ``waveform_a`` is silent, leaving the gain undefined, or when the
+            best-fitting gain falls outside ``[MINIMUM_GAIN, MAXIMUM_GAIN]`` in magnitude -- each
+            indicating a candidate pair whose fit is degenerate rather than a real match.
     """
-    reference_energy = float(np.sum(waveform_a**2))
+    if abs(waveform_a.shape[0] - waveform_b.shape[0]) > MAX_TRIM_MISMATCH_FRAMES:
+        return None
+
+    common_length = min(waveform_a.shape[0], waveform_b.shape[0])
+    trimmed_a, trimmed_b = waveform_a[:common_length], waveform_b[:common_length]
+
+    reference_energy = float(np.sum(trimmed_a**2))
     if reference_energy == 0.0:
         return None
 
-    gain = float(np.sum(waveform_a * waveform_b) / reference_energy)
+    gain = float(np.sum(trimmed_a * trimmed_b) / reference_energy)
     if not MINIMUM_GAIN <= abs(gain) <= MAXIMUM_GAIN:
         return None
 
-    residual = waveform_b - gain * waveform_a
+    residual = trimmed_b - gain * trimmed_a
     rms_error = float(np.sqrt(np.mean(residual**2)))
     ceiling = _gain_variant_ceiling(min(depth_a, depth_b))
     confidence = max(0.0, 1.0 - rms_error / ceiling)

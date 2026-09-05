@@ -7,6 +7,7 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from sampleextract.equivalence.candidates import (
     MAX_RESAMPLE_RATIO,
+    MAX_TRAILING_TRIM_FRAMES,
     MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON,
     gain_variant_candidate_pairs,
     resampled_candidate_pairs,
@@ -36,9 +37,16 @@ def test_gain_variant_candidates_includes_a_pair_with_matching_depth() -> None:
     assert gain_variant_candidate_pairs((first, second)) == ((first, second),)
 
 
-def test_gain_variant_candidates_excludes_a_pair_with_different_frames() -> None:
+def test_gain_variant_candidates_includes_a_pair_within_the_trailing_trim_tolerance() -> None:
     first = _sample(1, depth=BitDepth.EIGHT, channels=ChannelLayout.MONO, frames=100)
-    second = _sample(2, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=200)
+    second = _sample(2, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=100 + MAX_TRAILING_TRIM_FRAMES)
+
+    assert gain_variant_candidate_pairs((first, second)) == ((first, second),)
+
+
+def test_gain_variant_candidates_excludes_a_pair_beyond_the_trailing_trim_tolerance() -> None:
+    first = _sample(1, depth=BitDepth.EIGHT, channels=ChannelLayout.MONO, frames=100)
+    second = _sample(2, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=100 + MAX_TRAILING_TRIM_FRAMES + 1)
 
     assert gain_variant_candidate_pairs((first, second)) == ()
 

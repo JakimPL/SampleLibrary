@@ -9,6 +9,7 @@ from trackmod.core.samples.depth import BitDepth
 
 from sampleextract.equivalence.scoring import (
     GAIN_VARIANT_MINIMUM_CONFIDENCE,
+    MAX_TRIM_MISMATCH_FRAMES,
     MAXIMUM_GAIN,
     RESAMPLED_MINIMUM_CONFIDENCE,
     score_gain_variant,
@@ -88,6 +89,28 @@ def test_score_gain_variant_returns_none_for_an_implausible_gain() -> None:
     extreme = waveform * (MAXIMUM_GAIN * 2.0)
 
     score = score_gain_variant(waveform, extreme, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.SIXTEEN)
+
+    assert score is None
+
+
+def test_score_gain_variant_matches_a_pair_whose_trimmed_lengths_differ_slightly() -> None:
+    waveform = _tonal_waveform(2000)
+    with_extra_trailing_frames = np.pad(waveform, ((0, MAX_TRIM_MISMATCH_FRAMES), (0, 0)))
+
+    score = score_gain_variant(waveform, with_extra_trailing_frames, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.SIXTEEN)
+
+    assert score is not None
+    assert score.confidence > GAIN_VARIANT_MINIMUM_CONFIDENCE
+    assert score.evidence["gain"] == pytest.approx(1.0)
+
+
+def test_score_gain_variant_returns_none_when_lengths_differ_beyond_the_mismatch_tolerance() -> None:
+    waveform = _tonal_waveform(2000)
+    with_far_more_trailing_frames = np.pad(waveform, ((0, MAX_TRIM_MISMATCH_FRAMES + 1), (0, 0)))
+
+    score = score_gain_variant(
+        waveform, with_far_more_trailing_frames, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.SIXTEEN
+    )
 
     assert score is None
 

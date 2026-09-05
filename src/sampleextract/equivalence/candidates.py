@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from itertools import combinations
 from math import sqrt
 from typing import Final
 
@@ -17,21 +15,32 @@ MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON: Final[int] = 64
 MAX_RESAMPLE_RATIO: Final[float] = 8.0
 MINIMUM_FINGERPRINT_COSINE_SIMILARITY: Final[float] = 0.95
 
+# A generous but bounded tolerance on a trimmed silent tail's length, at a candidate-generation
+# level cheap enough to run on stored frame counts alone -- 4410 frames covers up to half a second
+# of trailing silence at a typical tracker sample rate. The scorer re-checks the actually-trimmed
+# waveforms' lengths against a much tighter bound once it has read them.
+MAX_TRAILING_TRIM_FRAMES: Final[int] = 4410
+
 
 def gain_variant_candidate_pairs(samples: Sequence[Sample]) -> tuple[tuple[Sample, Sample], ...]:
     """Every pair of catalogued samples that could be the same content at a different gain, depth, or both.
 
-    Two samples can only be related this way when they share the same channel layout and frame
-    count -- neither an amplitude change nor a depth conversion resamples -- and every such pair is
-    a genuine candidate: matching on channels, frames, and depth too would already have collapsed
-    onto one Sample by content hash, so any two distinct Samples sharing channels and frames differ
-    in gain, depth, or both.
+    Two samples can only be related this way when they share the same channel layout and a frame
+    count within MAX_TRAILING_TRIM_FRAMES of each other -- neither an amplitude change nor a depth
+    conversion resamples, so only a trimmed silent tail can explain a difference in stored length.
+    Sorting each channel-layout group by frame count and sweeping it lets the search stop as soon as
+    a later sample's frame count leaves the tolerance, rather than comparing every pair outright.
     """
-    groups: dict[tuple[ChannelLayout, int], list[Sample]] = defaultdict(list)
-    for sample in samples:
-        groups[(sample.channels, sample.frames)].append(sample)
+    candidate_pairs: list[tuple[Sample, Sample]] = []
+    for channels in (ChannelLayout.MONO, ChannelLayout.STEREO):
+        group = sorted((sample for sample in samples if sample.channels is channels), key=lambda sample: sample.frames)
+        for first_index, first in enumerate(group):
+            for second in group[first_index + 1 :]:
+                if second.frames - first.frames > MAX_TRAILING_TRIM_FRAMES:
+                    break
+                candidate_pairs.append((first, second))
 
-    return tuple((first, second) for group in groups.values() for first, second in combinations(group, 2))
+    return tuple(candidate_pairs)
 
 
 def resampled_candidate_pairs(

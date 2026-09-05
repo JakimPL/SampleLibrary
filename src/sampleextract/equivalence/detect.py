@@ -16,12 +16,14 @@ from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository, SampleRelationRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository, SampleRepository
+from samplecore.waveform import trim_trailing_silence
 from sampleextract.equivalence.candidates import gain_variant_candidate_pairs, resampled_candidate_pairs
 from sampleextract.equivalence.fingerprint import compute_fingerprint
 from sampleextract.equivalence.scoring import (
     GAIN_UNITY_TOLERANCE,
     GAIN_VARIANT_MINIMUM_CONFIDENCE,
     RESAMPLED_MINIMUM_CONFIDENCE,
+    TRAILING_SILENCE_THRESHOLD,
     RelationScore,
     score_gain_variant,
     score_resampled_variant,
@@ -44,14 +46,19 @@ class EquivalenceSummary:
 
 @dataclass
 class _WaveformCache:
-    """Reads a Sample's waveform from the audio store once, however many candidate pairs it joins."""
+    """Reads a Sample's trailing-silence-trimmed waveform once, however many candidate pairs it joins.
+
+    Trimming here, rather than in each scorer, means every detector -- and the fingerprinting pass
+    candidate generation shares with the resampled detector -- compares the same trimmed content.
+    """
 
     library_root: Path
     _waveforms: dict[str, NDArray[np.float64]] = field(default_factory=dict)
 
     def get(self, sample: Sample) -> NDArray[np.float64]:
         if sample.hash not in self._waveforms:
-            self._waveforms[sample.hash] = audio_store.read(self.library_root, sample).pcm
+            pcm = audio_store.read(self.library_root, sample).pcm
+            self._waveforms[sample.hash] = trim_trailing_silence(pcm, threshold=TRAILING_SILENCE_THRESHOLD)
         return self._waveforms[sample.hash]
 
 
@@ -100,13 +107,17 @@ def detect_equivalences(
 def _detect_gain_variants(
     relation_repository: SampleRelationRepository, samples: tuple[Sample, ...], waveforms: _WaveformCache
 ) -> tuple[int, int]:
-    """Detect and record every gain-compensated match, classified by how far its gain sits from 1.0.
+    """Detect and record every gain-compensated match, classified by whether depth changed with no
+    audible gain change, or by anything else a gain-compensated match can mean.
 
-    A single scorer and candidate space cover both bit-depth and amplification variants (see
-    scoring.py's ``score_gain_variant``); the fitted gain is the only fact that tells the two apart,
-    including a pair that changed both depth and gain at once, which is classified as an
-    amplification variant carrying its own depth-changed evidence, mirroring how a resampled variant
-    already records its own.
+    A single scorer and candidate space cover both kinds of match (see scoring.py's
+    ``score_gain_variant``); depth is the fact that decides between them, not gain alone, since gain
+    landing near 1.0 no longer implies depth changed once trailing-silence-trimmed pairs of equal
+    depth are candidates too. A pair changing both depth and gain at once, and a pair whose only
+    difference is a trimmed silent tail, are both classified as amplification variants -- the former
+    carrying its own depth-changed evidence, mirroring how a resampled variant already records its
+    own; the latter is a loose fit for that label, but a closer one than misreporting a depth change
+    that never happened.
     """
     bit_depth_relations = 0
     amplification_relations = 0
@@ -117,11 +128,12 @@ def _detect_gain_variants(
         if score is None or score.confidence < GAIN_VARIANT_MINIMUM_CONFIDENCE:
             continue
 
-        if abs(score.evidence["gain"] - 1.0) <= GAIN_UNITY_TOLERANCE:
+        depth_changed = pair[0].depth is not pair[1].depth
+        if depth_changed and abs(score.evidence["gain"] - 1.0) <= GAIN_UNITY_TOLERANCE:
             _record_relation(relation_repository, pair, RelationType.BIT_DEPTH_VARIANT, BIT_DEPTH_METHOD, score)
             bit_depth_relations += 1
         else:
-            evidence = {**score.evidence, "depth_changed": 1.0 if pair[0].depth is not pair[1].depth else 0.0}
+            evidence = {**score.evidence, "depth_changed": 1.0 if depth_changed else 0.0}
             _record_relation(
                 relation_repository,
                 pair,
