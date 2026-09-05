@@ -81,17 +81,28 @@ export function CloudView({
         }
     }
 
+    if (points.length === 0) {
+        return (
+            <div className="cloud-empty">
+                <h4>No cloud coordinates yet</h4>
+                <p>Run the embedding pipeline to populate this view with sample positions.</p>
+            </div>
+        );
+    }
+
     return (
-        <TransformWrapper>
-            <TransformComponent>
-                <canvas
-                    ref={canvasRef}
-                    width={CANVAS_SIZE}
-                    height={CANVAS_SIZE}
-                    onClick={handleClick}
-                    onDoubleClick={handleDoubleClick}
-                />
-            </TransformComponent>
-        </TransformWrapper>
+        <div className="cloud-wrap">
+            <TransformWrapper>
+                <TransformComponent>
+                    <canvas
+                        ref={canvasRef}
+                        width={CANVAS_SIZE}
+                        height={CANVAS_SIZE}
+                        onClick={handleClick}
+                        onDoubleClick={handleDoubleClick}
+                    />
+                </TransformComponent>
+            </TransformWrapper>
+        </div>
     );
 }

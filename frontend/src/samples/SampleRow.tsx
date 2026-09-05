@@ -29,14 +29,14 @@ export function SampleRow({ sample }: SampleRowProps): ReactElement {
             <td>
                 <Thumbnail sampleHash={sample.hash} peaks={sample.thumbnail} />
             </td>
-            <td>
-                <Link to={href}>
+            <td className="cell-name">
+                <Link to={href} className="cell-primary">
                     <OptionalLabel value={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} />
                 </Link>
             </td>
-            <td>{CATEGORY_PLACEHOLDER}</td>
-            <td>{formatBytes(sample.size_bytes)}</td>
-            <td>{sample.occurrence_count}</td>
+            <td className="cell-muted">{CATEGORY_PLACEHOLDER}</td>
+            <td className="cell-muted mono">{formatBytes(sample.size_bytes)}</td>
+            <td className="cell-muted mono">{sample.occurrence_count}</td>
         </tr>
     );
 }

@@ -31,19 +31,19 @@ export function ModuleSampleRow({ occurrence }: ModuleSampleRowProps): ReactElem
             <td>
                 <Thumbnail sampleHash={occurrence.sample.hash} peaks={occurrence.sample.thumbnail} />
             </td>
-            <td>
-                <Link to={href}>
+            <td className="cell-name">
+                <Link to={href} className="cell-primary">
                     <OptionalLabel value={occurrence.properties.name} placeholder={UNNAMED_SAMPLE_LABEL} />
                 </Link>
             </td>
-            <td>{occurrence.properties.occurrence.instrument_index}</td>
-            <td>{occurrence.properties.occurrence.sample_slot}</td>
-            <td>{occurrence.properties.rate}</td>
-            <td>{occurrence.properties.volume}</td>
-            <td>{occurrence.properties.panning ?? "—"}</td>
-            <td>{formatLoop(occurrence.properties.loop)}</td>
-            <td>{formatBytes(occurrence.sample.size_bytes)}</td>
-            <td>{occurrence.sample.depth}-bit</td>
+            <td className="cell-muted mono">{occurrence.properties.occurrence.instrument_index}</td>
+            <td className="cell-muted mono">{occurrence.properties.occurrence.sample_slot}</td>
+            <td className="mono">{occurrence.properties.rate}</td>
+            <td className="cell-muted mono">{occurrence.properties.volume}</td>
+            <td className="cell-muted mono">{occurrence.properties.panning ?? "—"}</td>
+            <td className="cell-muted">{formatLoop(occurrence.properties.loop)}</td>
+            <td className="cell-muted mono">{formatBytes(occurrence.sample.size_bytes)}</td>
+            <td className="cell-muted mono">{occurrence.sample.depth}-bit</td>
         </tr>
     );
 }

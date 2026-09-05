@@ -26,20 +26,22 @@ export function SampleOccurrenceRow({ occurrence }: SampleOccurrenceRowProps): R
             onClick={onClick}
             onDoubleClick={onDoubleClick}
         >
-            <td>
-                <Link to={href}>
+            <td className="cell-name">
+                <Link to={href} className="cell-primary">
                     <OptionalLabel value={occurrence.module.title} placeholder={UNTITLED_MODULE_LABEL} />
                 </Link>{" "}
-                ({occurrence.module.filename})
+                <span className="cell-muted">({occurrence.module.filename})</span>
             </td>
-            <td>{occurrence.properties.tracker}</td>
             <td>
+                <span className={`badge badge-${occurrence.properties.tracker}`}>{occurrence.properties.tracker}</span>
+            </td>
+            <td className="cell-muted">
                 <OptionalLabel value={occurrence.properties.name} placeholder={UNNAMED_SAMPLE_LABEL} />
             </td>
-            <td>{occurrence.properties.rate}</td>
-            <td>{occurrence.properties.volume}</td>
-            <td>{occurrence.properties.panning ?? "—"}</td>
-            <td>{formatLoop(occurrence.properties.loop)}</td>
+            <td className="mono">{occurrence.properties.rate}</td>
+            <td className="cell-muted mono">{occurrence.properties.volume}</td>
+            <td className="cell-muted mono">{occurrence.properties.panning ?? "—"}</td>
+            <td className="cell-muted">{formatLoop(occurrence.properties.loop)}</td>
         </tr>
     );
 }

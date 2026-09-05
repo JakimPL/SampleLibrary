@@ -1,6 +1,81 @@
 :root {
     color-scheme: light dark;
-    font-family: system-ui, sans-serif;
+
+    --surface-0: #f4f5f7;
+    --surface-1: #fff;
+    --surface-2: #e9ebf0;
+    --surface-3: #dde0e7;
+    --border: #d7dae1;
+    --border-strong: #b9bec9;
+    --text-primary: #1b1f26;
+    --text-muted: #5b6270;
+    --text-faint: #8890a0;
+    --accent: #a8690f;
+    --accent-strong: #8a560c;
+    --accent-soft: rgb(168 105 15 / 14%);
+    --accent-ink: #fff8ea;
+    --good: #227a4e;
+    --good-soft: rgb(34 122 78 / 14%);
+    --warn: #a85d14;
+    --warn-soft: rgb(168 93 20 / 14%);
+    --critical: #b5392a;
+    --critical-soft: rgb(181 57 42 / 14%);
+    --shadow: 0 8px 24px rgb(20 23 28 / 14%);
+    --wave-fill: #b9bec9;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --surface-0: #14171c;
+        --surface-1: #1b1f26;
+        --surface-2: #232a35;
+        --surface-3: #2c3441;
+        --border: #2e3440;
+        --border-strong: #3d4553;
+        --text-primary: #ece8de;
+        --text-muted: #8b92a3;
+        --text-faint: #5e6472;
+        --accent: #e0a845;
+        --accent-strong: #f2c265;
+        --accent-soft: rgb(224 168 69 / 16%);
+        --accent-ink: #241b04;
+        --good: #5fbf8f;
+        --good-soft: rgb(95 191 143 / 16%);
+        --warn: #d98b3e;
+        --warn-soft: rgb(217 139 62 / 16%);
+        --critical: #e2685a;
+        --critical-soft: rgb(226 104 90 / 16%);
+        --shadow: 0 12px 32px rgb(0 0 0 / 45%);
+        --wave-fill: #4a5364;
+    }
+}
+
+:root[data-theme="dark"] {
+    --surface-0: #14171c;
+    --surface-1: #1b1f26;
+    --surface-2: #232a35;
+    --surface-3: #2c3441;
+    --border: #2e3440;
+    --border-strong: #3d4553;
+    --text-primary: #ece8de;
+    --text-muted: #8b92a3;
+    --text-faint: #5e6472;
+    --accent: #e0a845;
+    --accent-strong: #f2c265;
+    --accent-soft: rgb(224 168 69 / 16%);
+    --accent-ink: #241b04;
+    --good: #5fbf8f;
+    --good-soft: rgb(95 191 143 / 16%);
+    --warn: #d98b3e;
+    --warn-soft: rgb(217 139 62 / 16%);
+    --critical: #e2685a;
+    --critical-soft: rgb(226 104 90 / 16%);
+    --shadow: 0 12px 32px rgb(0 0 0 / 45%);
+    --wave-fill: #4a5364;
+}
+
+* {
+    box-sizing: border-box;
 }
 
 html,
@@ -11,32 +86,299 @@ body,
 
 body {
     margin: 0;
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-family:
+        "Public Sans",
+        -apple-system,
+        "Segoe UI",
+        sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+    background: var(--accent-soft);
+}
+
+button,
+input,
+select {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.mono {
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
 }
 
 .workspace-shell {
     height: 100%;
 }
 
-nav {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
+/* Maps our own surface/accent tokens onto dockview's theme variables. Selector specificity
+   (two classes on the shell's own root element) outranks dockview.css's single-class theme
+   rule regardless of stylesheet load order, so these overrides always win. */
+.workspace-shell.dockview-theme-abyss {
+    --dv-group-view-background-color: var(--surface-1);
+    --dv-tabs-and-actions-container-background-color: var(--surface-2);
+    --dv-tabs-and-actions-container-height: 30px;
+    --dv-activegroup-visiblepanel-tab-background-color: var(--surface-1);
+    --dv-activegroup-visiblepanel-tab-color: var(--text-primary);
+    --dv-activegroup-hiddenpanel-tab-background-color: var(--surface-2);
+    --dv-activegroup-hiddenpanel-tab-color: var(--text-muted);
+    --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-2);
+    --dv-inactivegroup-visiblepanel-tab-color: var(--text-muted);
+    --dv-inactivegroup-hiddenpanel-tab-background-color: var(--surface-2);
+    --dv-inactivegroup-hiddenpanel-tab-color: var(--text-faint);
+    --dv-tab-divider-color: var(--border);
+    --dv-separator-border: var(--border);
+    --dv-paneview-header-border-color: var(--border);
+    --dv-icon-hover-background-color: var(--surface-3);
+    --dv-active-sash-color: var(--accent);
+    --dv-drag-over-background-color: var(--accent-soft);
+    --dv-edge-dock-indicator-color: var(--accent);
+    --dv-floating-border: 1px solid var(--border-strong);
+    --dv-floating-box-shadow: var(--shadow);
+    --dv-context-menu-background-color: var(--surface-1);
+    --dv-context-menu-color: var(--text-primary);
 }
 
-table {
-    border-collapse: collapse;
+.workspace-shell .dv-default-tab-content {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.dv-react-part {
+    height: 100%;
+    overflow: auto;
+    box-sizing: border-box;
+    background: var(--surface-1);
+    color: var(--text-primary);
+}
+
+p.loading,
+p.error-notice,
+p.no-selection {
+    padding: 30px 16px;
+    margin: 0;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 12px;
+}
+
+p.error-notice {
+    color: var(--critical);
+}
+
+/* ---------- Tables ---------- */
+
+table.data,
+table.mini {
     width: 100%;
+    border-collapse: collapse;
 }
 
-th,
-td {
-    border: 1px solid currentcolor;
-    padding: 0.25rem 0.5rem;
+table.data thead {
+    position: sticky;
+    top: 0;
+    background: var(--surface-1);
+    z-index: 2;
+}
+
+table.data th,
+table.mini th {
     text-align: left;
+    font-family: "JetBrains Mono", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
 }
 
-.error-notice {
-    color: #b00020;
+table.data th {
+    font-size: 10px;
+    padding: 6px 8px;
+}
+
+table.mini th {
+    font-size: 9.5px;
+    padding: 4px 6px;
+}
+
+table.data td,
+table.mini td {
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+table.data td {
+    padding: 5px 8px;
+    white-space: nowrap;
+}
+
+table.mini td {
+    padding: 4px 6px;
+    font-size: 11.5px;
+}
+
+table.data tbody tr,
+table.mini tbody tr {
+    cursor: pointer;
+}
+
+table.data tbody tr:hover,
+table.mini tbody tr:hover {
+    background: var(--surface-2);
+}
+
+tr.is-highlighted {
+    background: var(--accent-soft);
+}
+
+tr.is-focused {
+    background: var(--accent-soft);
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.cell-name {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cell-primary {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.cell-muted {
+    color: var(--text-muted);
+}
+
+/* ---------- Badges ---------- */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1.6;
+}
+
+.badge-xm {
+    background: var(--good-soft);
+    color: var(--good);
+}
+
+.badge-it {
+    background: var(--warn-soft);
+    color: var(--warn);
+}
+
+/* Class names below echo the backend's RelationType/TrackerFormat enum values verbatim (snake_case
+   is their contract, not ours), so selector-class-pattern is disabled per selector rather than
+   introducing a translation layer just to satisfy kebab-case. */
+/* stylelint-disable-next-line selector-class-pattern */
+.badge-bit_depth_variant {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+.badge-resampled_variant {
+    background: var(--good-soft);
+    color: var(--good);
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+.badge-amplification_variant {
+    background: var(--critical-soft);
+    color: var(--critical);
+}
+
+/* ---------- Pagination ---------- */
+
+nav[aria-label="pagination"] {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--border);
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+
+nav[aria-label="pagination"] button {
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-primary);
+    border-radius: 5px;
+    height: 24px;
+    padding: 0 10px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+nav[aria-label="pagination"] button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+nav[aria-label="pagination"] button:hover:not(:disabled) {
+    background: var(--surface-3);
+}
+
+nav[aria-label="pagination"] span {
+    font-family: "JetBrains Mono", monospace;
+    font-variant-numeric: tabular-nums;
+}
+
+.panel-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-1);
+}
+
+.panel-filter label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+
+.panel-filter select {
+    border: 1px solid var(--border);
+    background: var(--surface-0);
+    border-radius: 5px;
+    height: 24px;
+    padding: 0 6px;
 }
 
 .thumbnail-button {
@@ -44,30 +386,247 @@ td {
     border: none;
     padding: 0;
     cursor: pointer;
-    color: inherit;
+    color: var(--text-faint);
 }
 
 .thumbnail-button[aria-pressed="true"] {
-    outline: 2px solid currentcolor;
+    outline: 2px solid var(--accent);
 }
 
-.dv-react-part {
-    padding: 0.5rem;
-    overflow: auto;
+/* ---------- Cloud panel ---------- */
+
+.cloud-wrap {
+    position: absolute;
+    inset: 0;
+}
+
+.cloud-wrap canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
     height: 100%;
-    box-sizing: border-box;
+    color: var(--text-primary);
 }
 
-.no-selection {
-    font-style: italic;
-    opacity: 0.7;
+.cloud-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+    padding: 20px;
 }
 
-tr.is-highlighted {
-    outline: 2px solid currentcolor;
-    outline-offset: -2px;
+.cloud-empty h4 {
+    margin: 0;
+    font-size: 13px;
 }
 
-tr.is-focused td:first-child {
-    box-shadow: inset 3px 0 0 currentcolor;
+.cloud-empty p {
+    margin: 0;
+    max-width: 280px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* ---------- Waveform panel ---------- */
+
+.wave-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.wave-empty {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-faint);
+    font-size: 12px;
+}
+
+.wave-canvas-wrap {
+    flex: 1 1 auto;
+    position: relative;
+    min-height: 60px;
+    overflow: auto hidden;
+}
+
+.wave-canvas-wrap canvas {
+    display: block;
+    height: 100%;
+    color: var(--wave-fill);
+}
+
+.transport {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
+    flex-wrap: wrap;
+}
+
+.play-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+}
+
+.play-btn:hover {
+    background: var(--accent-strong);
+}
+
+.transport .time {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.transport select {
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    border-radius: 5px;
+    height: 24px;
+    padding: 0 6px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+}
+
+.transport .rate-info {
+    font-size: 10.5px;
+    color: var(--text-faint);
+    white-space: nowrap;
+}
+
+/* ---------- Detail panels ---------- */
+
+.detail-scroll {
+    padding: 10px 12px;
+}
+
+.kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+    margin: 0 0 14px;
+}
+
+.kv dt {
+    color: var(--text-faint);
+    font-size: 11px;
+    font-family: "JetBrains Mono", monospace;
+}
+
+.kv dd {
+    margin: 0;
+    font-size: 12px;
+}
+
+.detail-section {
+    margin-bottom: 16px;
+}
+
+.detail-section h3 {
+    margin: 0 0 6px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+    font-weight: 700;
+}
+
+.placeholder-box {
+    border: 1px dashed var(--border-strong);
+    border-radius: 8px;
+    padding: 12px;
+    color: var(--text-faint);
+    font-size: 11.5px;
+    background: var(--surface-2);
+}
+
+.placeholder-box strong {
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 3px;
+    font-weight: 600;
+}
+
+/* ---------- Stats panel ---------- */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    padding: 12px;
+}
+
+.stat-tile {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.stat-tile .big {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.stat-tile .label {
+    font-size: 10.5px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+}
+
+.chart-card {
+    grid-column: span 2;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.chart-card h3 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: "JetBrains Mono", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.chart-card ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+}
+
+.chart-card li {
+    padding: 3px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.chart-card li:last-child {
+    border-bottom: none;
 }

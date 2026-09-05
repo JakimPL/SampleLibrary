@@ -46,5 +46,7 @@ export function WorkspaceShell(): ReactElement {
         restoreOrBuildLayout(event.api);
     }
 
-    return <DockviewReact className="workspace-shell" components={components} onReady={handleReady} />;
+    return (
+        <DockviewReact className="workspace-shell dockview-theme-abyss" components={components} onReady={handleReady} />
+    );
 }

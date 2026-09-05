@@ -14,7 +14,7 @@ interface SamplesTableProps {
 export function SamplesTable({ samples, total, offset, limit, onOffsetChange }: SamplesTableProps): ReactElement {
     return (
         <>
-            <table>
+            <table className="data">
                 <thead>
                     <tr>
                         <th>Waveform</th>

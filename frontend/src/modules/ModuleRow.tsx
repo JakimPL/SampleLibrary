@@ -24,15 +24,17 @@ export function ModuleRow({ module }: ModuleRowProps): ReactElement {
             onClick={onClick}
             onDoubleClick={onDoubleClick}
         >
-            <td>
-                <Link to={href}>
+            <td className="cell-name">
+                <Link to={href} className="cell-primary">
                     <OptionalLabel value={module.title} placeholder={UNTITLED_MODULE_LABEL} />
                 </Link>
             </td>
-            <td>{module.filename}</td>
-            <td>{module.tracker}</td>
-            <td>{module.sample_count}</td>
-            <td>{formatBytes(module.file_size)}</td>
+            <td className="cell-muted">{module.filename}</td>
+            <td>
+                <span className={`badge badge-${module.tracker}`}>{module.tracker}</span>
+            </td>
+            <td className="cell-muted mono">{module.sample_count}</td>
+            <td className="cell-muted mono">{formatBytes(module.file_size)}</td>
         </tr>
     );
 }

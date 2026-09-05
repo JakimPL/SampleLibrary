@@ -29,15 +29,17 @@ export function ModulesTable({
 
     return (
         <>
-            <label>
-                Tracker
-                <select value={tracker ?? ""} onChange={handleTrackerChange}>
-                    <option value="">All</option>
-                    <option value="xm">XM</option>
-                    <option value="it">IT</option>
-                </select>
-            </label>
-            <table>
+            <div className="panel-filter">
+                <label>
+                    Tracker
+                    <select value={tracker ?? ""} onChange={handleTrackerChange}>
+                        <option value="">All</option>
+                        <option value="xm">XM</option>
+                        <option value="it">IT</option>
+                    </select>
+                </label>
+            </div>
+            <table className="data">
                 <thead>
                     <tr>
                         <th>Title</th>

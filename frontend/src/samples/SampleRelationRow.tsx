@@ -33,13 +33,17 @@ export function SampleRelationRow({ relation, subjectHash }: SampleRelationRowPr
             onClick={onClick}
             onDoubleClick={onDoubleClick}
         >
-            <td>
-                <Link to={href}>{otherHash}</Link>
+            <td className="cell-name">
+                <Link to={href} className="cell-primary mono">
+                    {otherHash}
+                </Link>
             </td>
-            <td>{relation.relation_type}</td>
-            <td>{relation.confidence.toFixed(CONFIDENCE_DECIMAL_PLACES)}</td>
-            <td>{relation.method}</td>
-            <td>{describeReviewStatus(relation.review)}</td>
+            <td>
+                <span className={`badge badge-${relation.relation_type}`}>{relation.relation_type}</span>
+            </td>
+            <td className="mono">{relation.confidence.toFixed(CONFIDENCE_DECIMAL_PLACES)}</td>
+            <td className="cell-muted">{relation.method}</td>
+            <td className="cell-muted">{describeReviewStatus(relation.review)}</td>
         </tr>
     );
 }
