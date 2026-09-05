@@ -3,9 +3,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-import duckdb
 import numpy as np
 from numpy.typing import NDArray
+from sqlalchemy import Column, MetaData, String, Table, create_engine, func, insert, select, text
+from sqlalchemy.types import ARRAY, Double
+
+_metadata = MetaData()
+_features = Table("features", _metadata, Column("sample_hash", String), Column("feature_vector", ARRAY(Double)))
 
 
 def read_features(path: Path) -> dict[str, NDArray[np.float64]]:
@@ -17,9 +21,11 @@ def read_features(path: Path) -> dict[str, NDArray[np.float64]]:
     if not path.is_file():
         return {}
 
-    with duckdb.connect(":memory:") as connection:
-        rows = connection.execute("SELECT sample_hash, feature_vector FROM read_parquet(?)", [str(path)]).fetchall()
-    return {sample_hash: np.array(feature_vector, dtype=np.float64) for sample_hash, feature_vector in rows}
+    with create_engine("duckdb:///:memory:").connect() as connection:
+        table = func.read_parquet(str(path)).table_valued("sample_hash", "feature_vector")
+        rows = connection.execute(select(table.c.sample_hash, table.c.feature_vector)).fetchall()
+
+    return {row.sample_hash: np.array(row.feature_vector, dtype=np.float64) for row in rows}
 
 
 def write_features(path: Path, features: Mapping[str, NDArray[np.float64]]) -> None:
@@ -30,11 +36,17 @@ def write_features(path: Path, features: Mapping[str, NDArray[np.float64]]) -> N
     read paths -- this module only ever writes a complete, self-consistent snapshot.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with duckdb.connect(":memory:") as connection:
-        connection.execute("CREATE TABLE features (sample_hash VARCHAR, feature_vector DOUBLE[])")
+    with create_engine("duckdb:///:memory:").connect() as connection:
+        _metadata.create_all(connection)
         if features:
-            connection.executemany(
-                "INSERT INTO features VALUES (?, ?)",
-                [(sample_hash, vector.tolist()) for sample_hash, vector in features.items()],
+            connection.execute(
+                insert(_features),
+                [
+                    {"sample_hash": sample_hash, "feature_vector": vector.tolist()}
+                    for sample_hash, vector in features.items()
+                ],
             )
-        connection.execute("COPY features TO ? (FORMAT PARQUET)", [str(path)])
+        # DuckDB's COPY ... TO ... (FORMAT PARQUET) is a vendor-specific bulk-export command with
+        # no relational-algebra equivalent for Core to build, so it stays a narrow, parameterized
+        # text() fragment rather than forcing a construct that does not exist.
+        connection.execute(text("COPY features TO :path (FORMAT PARQUET)"), {"path": str(path)})

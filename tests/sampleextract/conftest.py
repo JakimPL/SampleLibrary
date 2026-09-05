@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from pathlib import Path
 
-import duckdb
 import numpy as np
 import pytest
 from numpy.typing import NDArray
+from sqlalchemy import Connection
 from trackmod.core.instruments.instrument import Instrument
 from trackmod.core.instruments.keymap import pitched_keymap
 from trackmod.core.patterns.grid import Pattern
@@ -17,7 +18,7 @@ from trackmod.limits.compliance import Compliance
 from trackmod.trackers.it.module import ITModule
 from trackmod.trackers.xm.module import XMModule
 
-from samplecore.storage.database import create_schema
+from samplecore.storage.database import connect
 
 SAMPLE_RATE = 44100
 
@@ -68,8 +69,7 @@ def it_module_bytes() -> bytes:
 
 
 @pytest.fixture
-def connection() -> Iterator[duckdb.DuckDBPyConnection]:
-    open_connection = duckdb.connect(":memory:")
-    create_schema(open_connection)
+def connection() -> Iterator[Connection]:
+    open_connection = connect(Path(":memory:"))
     yield open_connection
     open_connection.close()

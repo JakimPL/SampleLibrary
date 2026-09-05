@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-import duckdb
+from sqlalchemy import Connection
 from tqdm import tqdm
 
 from samplecore.config import LibraryConfig
@@ -42,7 +42,7 @@ class ExtractionSummary:
     failures: tuple[ExtractionFailure, ...]
 
 
-def run_extraction(config: LibraryConfig, connection: duckdb.DuckDBPyConnection) -> ExtractionSummary:
+def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionSummary:
     """Discover every readable module under the configured source directory and ingest each once.
 
     A module already known by its hash is skipped before it is parsed, so a repeat run over an
@@ -71,9 +71,7 @@ def run_extraction(config: LibraryConfig, connection: duckdb.DuckDBPyConnection)
     )
 
 
-def _ingest_one(
-    connection: duckdb.DuckDBPyConnection, library_root: Path, *, path: Path, data: bytes, module_hash: str
-) -> Module:
+def _ingest_one(connection: Connection, library_root: Path, *, path: Path, data: bytes, module_hash: str) -> Module:
     tracker = FORMAT_LOADERS[path.suffix.lower()]
     song = parse_module(data, tracker=tracker)
     return ingest_module(

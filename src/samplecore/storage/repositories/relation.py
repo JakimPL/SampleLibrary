@@ -4,14 +4,11 @@ import json
 from datetime import datetime
 from typing import Any, Protocol
 
-import duckdb
+from sqlalchemy import Connection, Row, or_, select
+from sqlalchemy.dialects.postgresql import insert
 
 from samplecore.models.relation import RelationReview, RelationType, SampleRelation
-
-_SELECT_COLUMNS = (
-    "id, subject_hash, reference_hash, relation_type, method, confidence, evidence, "
-    "detected_at, reviewed_confirmed, reviewed_at, reviewed_by"
-)
+from samplecore.storage.database import sample_relation, sample_relation_id_sequence
 
 
 class SampleRelationRepository(Protocol):
@@ -22,6 +19,8 @@ class SampleRelationRepository(Protocol):
     def upsert(self, relation: SampleRelation) -> None: ...
 
     def review(self, relation_id: int, review: RelationReview) -> None: ...
+
+    def get(self, relation_id: int) -> SampleRelation | None: ...
 
     def list_all(self) -> tuple[SampleRelation, ...]: ...
 
@@ -36,92 +35,77 @@ class DuckDBSampleRelationRepository:
     chooses to represent that type in the Python API.
     """
 
-    def __init__(self, connection: duckdb.DuckDBPyConnection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self._connection = connection
 
     def next_id(self) -> int:
-        row = self._connection.execute("SELECT nextval('sample_relation_id_seq')").fetchone()
-        assert row is not None
-        return int(row[0])
+        return self._connection.execute(select(sample_relation_id_sequence.next_value())).scalar_one()
 
     def upsert(self, relation: SampleRelation) -> None:
         review = relation.review
-        self._connection.execute(
-            """
-            INSERT INTO sample_relation (
-                id, subject_hash, reference_hash, relation_type, method, confidence, evidence,
-                detected_at, reviewed_confirmed, reviewed_at, reviewed_by
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (subject_hash, reference_hash, relation_type, method) DO UPDATE SET
-                confidence = EXCLUDED.confidence,
-                evidence = EXCLUDED.evidence,
-                detected_at = EXCLUDED.detected_at
-            """,
-            [
-                relation.id,
-                relation.subject_hash,
-                relation.reference_hash,
-                relation.relation_type.value,
-                relation.method,
-                relation.confidence,
-                json.dumps(relation.evidence),
-                relation.detected_at,
-                review.confirmed if review is not None else None,
-                review.reviewed_at if review is not None else None,
-                review.reviewed_by if review is not None else None,
-            ],
+        statement = insert(sample_relation).values(
+            id=relation.id,
+            subject_hash=relation.subject_hash,
+            reference_hash=relation.reference_hash,
+            relation_type=relation.relation_type.value,
+            method=relation.method,
+            confidence=relation.confidence,
+            evidence=json.dumps(relation.evidence),
+            detected_at=relation.detected_at,
+            reviewed_confirmed=review.confirmed if review is not None else None,
+            reviewed_at=review.reviewed_at if review is not None else None,
+            reviewed_by=review.reviewed_by if review is not None else None,
         )
+        statement = statement.on_conflict_do_update(
+            index_elements=[
+                sample_relation.c.subject_hash,
+                sample_relation.c.reference_hash,
+                sample_relation.c.relation_type,
+                sample_relation.c.method,
+            ],
+            set_={
+                "confidence": statement.excluded.confidence,
+                "evidence": statement.excluded.evidence,
+                "detected_at": statement.excluded.detected_at,
+            },
+        )
+        self._connection.execute(statement)
 
     def review(self, relation_id: int, review: RelationReview) -> None:
         self._connection.execute(
-            "UPDATE sample_relation SET reviewed_confirmed = ?, reviewed_at = ?, reviewed_by = ? WHERE id = ?",
-            [review.confirmed, review.reviewed_at, review.reviewed_by, relation_id],
+            sample_relation.update()
+            .where(sample_relation.c.id == relation_id)
+            .values(reviewed_confirmed=review.confirmed, reviewed_at=review.reviewed_at, reviewed_by=review.reviewed_by)
         )
 
     def get(self, relation_id: int) -> SampleRelation | None:
-        row = self._connection.execute(
-            f"SELECT {_SELECT_COLUMNS} FROM sample_relation WHERE id = ?", [relation_id]
-        ).fetchone()
+        row = self._connection.execute(select(sample_relation).where(sample_relation.c.id == relation_id)).fetchone()
         return _row_to_relation(row) if row is not None else None
 
     def list_all(self) -> tuple[SampleRelation, ...]:
-        rows = self._connection.execute(f"SELECT {_SELECT_COLUMNS} FROM sample_relation").fetchall()
+        rows = self._connection.execute(select(sample_relation)).fetchall()
         return tuple(_row_to_relation(row) for row in rows)
 
     def list_for_sample(self, sample_hash: str) -> tuple[SampleRelation, ...]:
-        rows = self._connection.execute(
-            f"SELECT {_SELECT_COLUMNS} FROM sample_relation WHERE subject_hash = ? OR reference_hash = ?",
-            [sample_hash, sample_hash],
-        ).fetchall()
+        statement = select(sample_relation).where(
+            or_(sample_relation.c.subject_hash == sample_hash, sample_relation.c.reference_hash == sample_hash)
+        )
+        rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_relation(row) for row in rows)
 
 
-def _row_to_relation(row: tuple[Any, ...]) -> SampleRelation:
-    """Reconstruct a SampleRelation from a raw DuckDB row, an untyped boundary whose column order is fixed above."""
-    (
-        id_,
-        subject_hash,
-        reference_hash,
-        relation_type,
-        method,
-        confidence,
-        evidence,
-        detected_at,
-        reviewed_confirmed,
-        reviewed_at,
-        reviewed_by,
-    ) = row
-    review = _review_from_row(reviewed_confirmed, reviewed_at, reviewed_by)
+def _row_to_relation(row: Row[Any]) -> SampleRelation:
+    """Reconstruct a SampleRelation from a Core row, addressed by its own column names."""
+    review = _review_from_row(row.reviewed_confirmed, row.reviewed_at, row.reviewed_by)
     return SampleRelation(
-        id=id_,
-        subject_hash=subject_hash,
-        reference_hash=reference_hash,
-        relation_type=RelationType(relation_type),
-        method=method,
-        confidence=confidence,
-        evidence=json.loads(evidence),
-        detected_at=detected_at,
+        id=row.id,
+        subject_hash=row.subject_hash,
+        reference_hash=row.reference_hash,
+        relation_type=RelationType(row.relation_type),
+        method=row.method,
+        confidence=row.confidence,
+        evidence=json.loads(row.evidence),
+        detected_at=row.detected_at,
         review=review,
     )
 

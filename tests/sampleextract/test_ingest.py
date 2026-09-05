@@ -4,9 +4,10 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-import duckdb
 import numpy as np
 import pytest
+from sqlalchemy import Connection, func, select
+from sqlalchemy.exc import IntegrityError
 from trackmod.core.instruments.instrument import Instrument
 from trackmod.core.instruments.keymap import pitched_keymap
 from trackmod.core.samples.sample import Sample as TrackModSample
@@ -14,6 +15,7 @@ from trackmod.core.songs.song import Song
 
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
+from samplecore.storage.database import sample_properties
 from samplecore.storage.repositories.module import DuckDBModuleRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository
 from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
@@ -39,9 +41,7 @@ def _two_instrument_song(builder: SongBuilder) -> Song:
     return builder(samples, instruments)
 
 
-def _ingest_two_instrument_song(
-    connection: duckdb.DuckDBPyConnection, library_root: Path, song_builder: SongBuilder
-) -> None:
+def _ingest_two_instrument_song(connection: Connection, library_root: Path, song_builder: SongBuilder) -> None:
     ingest_module(
         connection,
         library_root,
@@ -55,7 +55,7 @@ def _ingest_two_instrument_song(
 
 
 def test_ingest_module_returns_the_module_it_persisted(
-    connection: duckdb.DuckDBPyConnection, tmp_path: Path, song_builder: SongBuilder
+    connection: Connection, tmp_path: Path, song_builder: SongBuilder
 ) -> None:
     module = ingest_module(
         connection,
@@ -74,7 +74,7 @@ def test_ingest_module_returns_the_module_it_persisted(
 
 
 def test_ingest_module_only_stores_occurrences_a_keymap_reaches(
-    connection: duckdb.DuckDBPyConnection, tmp_path: Path, song_builder: SongBuilder
+    connection: Connection, tmp_path: Path, song_builder: SongBuilder
 ) -> None:
     _ingest_two_instrument_song(connection, tmp_path, song_builder)
 
@@ -86,7 +86,7 @@ def test_ingest_module_only_stores_occurrences_a_keymap_reaches(
 
 
 def test_ingest_module_writes_audio_a_stored_sample_can_be_read_back(
-    connection: duckdb.DuckDBPyConnection, tmp_path: Path, song_builder: SongBuilder
+    connection: Connection, tmp_path: Path, song_builder: SongBuilder
 ) -> None:
     _ingest_two_instrument_song(connection, tmp_path, song_builder)
 
@@ -100,16 +100,16 @@ def test_ingest_module_writes_audio_a_stored_sample_can_be_read_back(
 
 
 def test_ingest_module_a_second_time_for_the_same_hash_raises(
-    connection: duckdb.DuckDBPyConnection, tmp_path: Path, song_builder: SongBuilder
+    connection: Connection, tmp_path: Path, song_builder: SongBuilder
 ) -> None:
     _ingest_two_instrument_song(connection, tmp_path, song_builder)
 
-    with pytest.raises(duckdb.Error):
+    with pytest.raises(IntegrityError):
         _ingest_two_instrument_song(connection, tmp_path, song_builder)
 
 
 def test_ingest_module_skips_a_reachable_placeholder_sample_with_no_frames(
-    connection: duckdb.DuckDBPyConnection, tmp_path: Path, song_builder: SongBuilder
+    connection: Connection, tmp_path: Path, song_builder: SongBuilder
 ) -> None:
     samples = (TrackModSample(name="placeholder", pcm=np.zeros(0), rate=SAMPLE_RATE),)
     instruments = (Instrument(name="empty", keymap=pitched_keymap(sample=0)),)
@@ -129,7 +129,7 @@ def test_ingest_module_skips_a_reachable_placeholder_sample_with_no_frames(
 
 
 def test_a_failure_partway_through_leaves_nothing_committed(
-    connection: duckdb.DuckDBPyConnection, tmp_path: Path, song_builder: SongBuilder, monkeypatch: pytest.MonkeyPatch
+    connection: Connection, tmp_path: Path, song_builder: SongBuilder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def _failing_write(*_: object, **__: object) -> None:
         raise OSError("simulated disk failure")
@@ -140,4 +140,4 @@ def test_a_failure_partway_through_leaves_nothing_committed(
         _ingest_two_instrument_song(connection, tmp_path, song_builder)
 
     assert DuckDBModuleRepository(connection).get(MODULE_HASH) is None
-    assert connection.execute("SELECT count(*) FROM sample_properties").fetchone() == (0,)
+    assert connection.execute(select(func.count()).select_from(sample_properties)).scalar_one() == 0

@@ -5,14 +5,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-import duckdb
 import numpy as np
 from numpy.typing import NDArray
+from sqlalchemy import Connection
 from tqdm import tqdm
 
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
 from samplecore.storage import audio_store
+from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository, SampleRelationRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository, SampleRepository
 from sampleextract.equivalence.candidates import bit_depth_candidate_pairs, resampled_candidate_pairs
@@ -52,7 +53,7 @@ class _WaveformCache:
 
 
 def detect_equivalences(
-    connection: duckdb.DuckDBPyConnection, library_root: Path, *, sample_limit: int | None = None
+    connection: Connection, library_root: Path, *, sample_limit: int | None = None
 ) -> EquivalenceSummary:
     """Find and persist every equivalence-class link the current catalog's samples support.
 
@@ -76,9 +77,7 @@ def detect_equivalences(
         samples = samples[:sample_limit]
     waveforms = _WaveformCache(library_root)
 
-    connection.begin()
-    committed = False
-    try:
+    with start_batch(connection):
         bit_depth_relations = _detect_bit_depth_variants(relation_repository, samples, waveforms)
 
         fingerprints = {
@@ -87,16 +86,11 @@ def detect_equivalences(
         }
         resampled_relations = _detect_resampled_variants(relation_repository, samples, fingerprints, waveforms)
 
-        connection.commit()
-        committed = True
-        return EquivalenceSummary(
-            samples_considered=len(samples),
-            bit_depth_relations=bit_depth_relations,
-            resampled_relations=resampled_relations,
-        )
-    finally:
-        if not committed:
-            connection.rollback()
+    return EquivalenceSummary(
+        samples_considered=len(samples),
+        bit_depth_relations=bit_depth_relations,
+        resampled_relations=resampled_relations,
+    )
 
 
 def _detect_bit_depth_variants(

@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-import duckdb
 from fastapi import Request
+from sqlalchemy import Connection
+
+from samplecore.storage.database import connect
 
 
 def get_library_root(request: Request) -> Path:
@@ -12,7 +14,7 @@ def get_library_root(request: Request) -> Path:
     return Path(request.app.state.library_root)
 
 
-def get_connection(request: Request) -> Iterator[duckdb.DuckDBPyConnection]:
+def get_connection(request: Request) -> Iterator[Connection]:
     """A fresh read-only connection to the app's configured catalog, closed after the request.
 
     DuckDB's read-only mode is built for concurrent readers, while a single connection is not
@@ -20,7 +22,7 @@ def get_connection(request: Request) -> Iterator[duckdb.DuckDBPyConnection]:
     opening one per request sidesteps that entirely, at a cost negligible next to an HTTP round
     trip at this project's personal-library scale.
     """
-    connection = duckdb.connect(str(request.app.state.database_path), read_only=True)
+    connection = connect(Path(request.app.state.database_path), read_only=True)
     try:
         yield connection
     finally:

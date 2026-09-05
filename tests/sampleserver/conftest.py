@@ -3,25 +3,24 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-import duckdb
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Connection
 
-from samplecore.storage.database import create_schema
+from samplecore.storage.database import connect
 from sampleserver.app import create_app
 from sampleserver.dependencies import get_connection
 
 
 @pytest.fixture
-def connection() -> Iterator[duckdb.DuckDBPyConnection]:
-    open_connection = duckdb.connect(":memory:")
-    create_schema(open_connection)
+def connection() -> Iterator[Connection]:
+    open_connection = connect(Path(":memory:"))
     yield open_connection
     open_connection.close()
 
 
 @pytest.fixture
-def client(connection: duckdb.DuckDBPyConnection, tmp_path: Path) -> Iterator[TestClient]:
+def client(connection: Connection, tmp_path: Path) -> Iterator[TestClient]:
     """A TestClient for an app whose database dependency is overridden to the seeded connection.
 
     `create_app`'s own database path is never actually opened once the dependency is overridden,
@@ -30,7 +29,7 @@ def client(connection: duckdb.DuckDBPyConnection, tmp_path: Path) -> Iterator[Te
     """
     application = create_app(Path("unused.duckdb"), tmp_path)
 
-    def override_get_connection() -> Iterator[duckdb.DuckDBPyConnection]:
+    def override_get_connection() -> Iterator[Connection]:
         yield connection
 
     application.dependency_overrides[get_connection] = override_get_connection

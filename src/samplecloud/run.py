@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import duckdb
+from sqlalchemy import Connection
 
 from samplecloud.backends import FeatureExtractor
 from samplecloud.features import FeatureExtractionSummary, extract_features
@@ -20,7 +20,7 @@ class EmbeddingSummary:
 
 def run_embedding(
     config: LibraryConfig,
-    connection: duckdb.DuckDBPyConnection,
+    connection: Connection,
     feature_extractor: FeatureExtractor,
     *,
     sample_limit: int | None = None,

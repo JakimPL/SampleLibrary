@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated
 
-import duckdb
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import Connection
 
 from samplecore.models.base import FROZEN
 from samplecore.models.module import Module
@@ -61,7 +61,7 @@ class SampleDetail(Sample):
 def list_samples(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)] = DEFAULT_PAGE_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
-    connection: duckdb.DuckDBPyConnection = Depends(get_connection),
+    connection: Connection = Depends(get_connection),
 ) -> Page[SampleSummary]:
     """A page of catalogued samples, ranked by how many module occurrences reference each one.
 
@@ -75,7 +75,7 @@ def list_samples(
 
 
 @router.get("/{sample_hash}")
-def get_sample(sample_hash: str, connection: duckdb.DuckDBPyConnection = Depends(get_connection)) -> SampleDetail:
+def get_sample(sample_hash: str, connection: Connection = Depends(get_connection)) -> SampleDetail:
     """One sample's own fields plus every module occurrence that references it.
 
     Raises:
@@ -106,7 +106,7 @@ def get_sample(sample_hash: str, connection: duckdb.DuckDBPyConnection = Depends
 @router.get("/{sample_hash}/audio")
 def get_sample_audio(
     sample_hash: str,
-    connection: duckdb.DuckDBPyConnection = Depends(get_connection),
+    connection: Connection = Depends(get_connection),
     library_root: Path = Depends(get_library_root),
 ) -> FileResponse:
     """The sample's own canonical audio, as stored in the content-addressable store.
@@ -123,7 +123,7 @@ def get_sample_audio(
 @router.get("/{sample_hash}/waveform")
 def get_sample_waveform(
     sample_hash: str,
-    connection: duckdb.DuckDBPyConnection = Depends(get_connection),
+    connection: Connection = Depends(get_connection),
     library_root: Path = Depends(get_library_root),
 ) -> tuple[WaveformPeak, ...]:
     """A compact amplitude-envelope preview of the sample's own waveform.
@@ -141,7 +141,7 @@ def get_sample_waveform(
 
 @router.get("/{sample_hash}/relations")
 def get_sample_relations(
-    sample_hash: str, connection: duckdb.DuckDBPyConnection = Depends(get_connection)
+    sample_hash: str, connection: Connection = Depends(get_connection)
 ) -> tuple[SampleRelation, ...]:
     """Every equivalence-class link this sample participates in, on either side of the pair.
 
@@ -154,9 +154,7 @@ def get_sample_relations(
     return DuckDBSampleRelationRepository(connection).list_for_sample(sample_hash)
 
 
-def _modules_by_hash(
-    connection: duckdb.DuckDBPyConnection, properties: tuple[TrackerSampleProperties, ...]
-) -> dict[str, Module]:
+def _modules_by_hash(connection: Connection, properties: tuple[TrackerSampleProperties, ...]) -> dict[str, Module]:
     repository = DuckDBModuleRepository(connection)
     modules_by_hash: dict[str, Module] = {}
     for item in properties:

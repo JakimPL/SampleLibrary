@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
-import duckdb
+from sqlalchemy import Connection, Row, Select, func, select
 
 from samplecore.models.module import Module
 from samplecore.models.tracker import TrackerFormat
+from samplecore.storage.database import module, module_id_sequence
 
-_SELECT_COLUMNS = (
-    "hash, id, filename, tracker, title, channel_count, pattern_count, "
-    "instrument_count, sample_count, file_size, ingested_at"
-)
+_SelectT = TypeVar("_SelectT", bound=Select[Any])
 
 
 class ModuleRepository(Protocol):
@@ -20,7 +18,7 @@ class ModuleRepository(Protocol):
 
     def next_id(self) -> int: ...
 
-    def insert(self, module: Module) -> None: ...
+    def insert(self, module_: Module) -> None: ...
 
     def list_page(self, *, limit: int, offset: int, tracker: TrackerFormat | None = None) -> tuple[Module, ...]: ...
 
@@ -35,88 +33,66 @@ class DuckDBModuleRepository:
     already hold one by the time it builds a complete ``Module`` to insert.
     """
 
-    def __init__(self, connection: duckdb.DuckDBPyConnection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self._connection = connection
 
     def get(self, hash_: str) -> Module | None:
-        row = self._connection.execute(f"SELECT {_SELECT_COLUMNS} FROM module WHERE hash = ?", [hash_]).fetchone()
+        row = self._connection.execute(select(module).where(module.c.hash == hash_)).fetchone()
         return _row_to_module(row) if row is not None else None
 
     def next_id(self) -> int:
-        row = self._connection.execute("SELECT nextval('module_id_seq')").fetchone()
-        assert row is not None
-        return int(row[0])
+        return self._connection.execute(select(module_id_sequence.next_value())).scalar_one()
 
-    def insert(self, module: Module) -> None:
+    def insert(self, module_: Module) -> None:
         self._connection.execute(
-            """
-            INSERT INTO module
-                (id, hash, filename, tracker, title, channel_count, pattern_count,
-                 instrument_count, sample_count, file_size, ingested_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                module.id,
-                module.hash,
-                module.filename,
-                module.tracker.value,
-                module.title,
-                module.channel_count,
-                module.pattern_count,
-                module.instrument_count,
-                module.sample_count,
-                module.file_size,
-                module.ingested_at,
-            ],
+            module.insert().values(
+                id=module_.id,
+                hash=module_.hash,
+                filename=module_.filename,
+                tracker=module_.tracker.value,
+                title=module_.title,
+                channel_count=module_.channel_count,
+                pattern_count=module_.pattern_count,
+                instrument_count=module_.instrument_count,
+                sample_count=module_.sample_count,
+                file_size=module_.file_size,
+                ingested_at=module_.ingested_at,
+            )
         )
 
     def list_page(self, *, limit: int, offset: int, tracker: TrackerFormat | None = None) -> tuple[Module, ...]:
-        clause, parameters = _tracker_filter(tracker)
-        rows = self._connection.execute(
-            f"SELECT {_SELECT_COLUMNS} FROM module{clause} ORDER BY id LIMIT ? OFFSET ?",
-            [*parameters, limit, offset],
-        ).fetchall()
+        statement = select(module).order_by(module.c.id).limit(limit).offset(offset)
+        statement = _with_tracker_filter(statement, tracker)
+        rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_module(row) for row in rows)
 
     def count(self, *, tracker: TrackerFormat | None = None) -> int:
-        clause, parameters = _tracker_filter(tracker)
-        row = self._connection.execute(f"SELECT count(*) FROM module{clause}", parameters).fetchone()
-        assert row is not None
-        return int(row[0])
+        # func.count() is SQLAlchemy's dynamically-generated SQL COUNT(*), invisible to pylint's static analysis.
+        # pylint: disable-next=not-callable
+        statement = select(func.count()).select_from(module)
+        statement = _with_tracker_filter(statement, tracker)
+        return self._connection.execute(statement).scalar_one()
 
 
-def _tracker_filter(tracker: TrackerFormat | None) -> tuple[str, list[str]]:
+def _with_tracker_filter(statement: _SelectT, tracker: TrackerFormat | None) -> _SelectT:
     if tracker is None:
-        return "", []
+        return statement
 
-    return " WHERE tracker = ?", [tracker.value]
+    return statement.where(module.c.tracker == tracker.value)
 
 
-def _row_to_module(row: tuple[Any, ...]) -> Module:
-    """Reconstruct a Module from a raw DuckDB row, an untyped boundary whose column order is fixed above."""
-    (
-        hash_,
-        id_,
-        filename,
-        tracker,
-        title,
-        channel_count,
-        pattern_count,
-        instrument_count,
-        sample_count,
-        file_size,
-        ingested_at,
-    ) = row
+def _row_to_module(row: Row[Any]) -> Module:
+    """Reconstruct a Module from a Core row, addressed by its own column names."""
     return Module(
-        hash=hash_,
-        id=id_,
-        filename=filename,
-        tracker=TrackerFormat(tracker),
-        title=title,
-        channel_count=channel_count,
-        pattern_count=pattern_count,
-        instrument_count=instrument_count,
-        sample_count=sample_count,
-        file_size=file_size,
-        ingested_at=ingested_at,
+        hash=row.hash,
+        id=row.id,
+        filename=row.filename,
+        tracker=TrackerFormat(row.tracker),
+        title=row.title,
+        channel_count=row.channel_count,
+        pattern_count=row.pattern_count,
+        instrument_count=row.instrument_count,
+        sample_count=row.sample_count,
+        file_size=row.file_size,
+        ingested_at=row.ingested_at,
     )

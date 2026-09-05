@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import duckdb
+from sqlalchemy import Connection
 from tqdm import tqdm
 
 from samplecloud.backends import FeatureExtractor
@@ -22,7 +22,7 @@ class FeatureExtractionSummary:
 
 
 def extract_features(
-    connection: duckdb.DuckDBPyConnection,
+    connection: Connection,
     library_root: Path,
     feature_store_path: Path,
     feature_extractor: FeatureExtractor,

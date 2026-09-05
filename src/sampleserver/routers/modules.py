@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Annotated
 
-import duckdb
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import Connection
 
 from samplecore.models.module import Module
 from samplecore.models.sample_properties import TrackerSampleProperties
@@ -27,7 +27,7 @@ def list_modules(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)] = DEFAULT_PAGE_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
     tracker: TrackerFormat | None = None,
-    connection: duckdb.DuckDBPyConnection = Depends(get_connection),
+    connection: Connection = Depends(get_connection),
 ) -> Page[Module]:
     """A page of catalogued modules, optionally filtered by tracker format."""
     repository = DuckDBModuleRepository(connection)
@@ -37,7 +37,7 @@ def list_modules(
 
 
 @router.get("/{module_hash}")
-def get_module(module_hash: str, connection: duckdb.DuckDBPyConnection = Depends(get_connection)) -> ModuleDetail:
+def get_module(module_hash: str, connection: Connection = Depends(get_connection)) -> ModuleDetail:
     """One module's own fields plus every sample occurrence it declares.
 
     Raises:

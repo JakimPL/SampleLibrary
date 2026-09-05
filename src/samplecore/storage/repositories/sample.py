@@ -3,12 +3,14 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Protocol
 
-import duckdb
+from sqlalchemy import Connection, Row, func, select
+from sqlalchemy.dialects.postgresql import insert
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSummary
 from samplecore.naming import choose_dominant_name
+from samplecore.storage.database import sample, sample_properties
 
 
 class SampleRepository(Protocol):
@@ -16,7 +18,7 @@ class SampleRepository(Protocol):
 
     def get(self, hash_: str) -> Sample | None: ...
 
-    def upsert(self, sample: Sample) -> None: ...
+    def upsert(self, sample_: Sample) -> None: ...
 
     def list_all(self) -> tuple[Sample, ...]: ...
 
@@ -32,27 +34,22 @@ class DuckDBSampleRepository:
     its own hash, so a second call for a hash already on file can only ever repeat the same row.
     """
 
-    def __init__(self, connection: duckdb.DuckDBPyConnection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self._connection = connection
 
     def get(self, hash_: str) -> Sample | None:
-        row = self._connection.execute(
-            "SELECT hash, depth, channels, frames FROM sample WHERE hash = ?", [hash_]
-        ).fetchone()
+        row = self._connection.execute(select(sample).where(sample.c.hash == hash_)).fetchone()
         return _row_to_sample(row) if row is not None else None
 
-    def upsert(self, sample: Sample) -> None:
-        self._connection.execute(
-            """
-            INSERT INTO sample (hash, depth, channels, frames)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT (hash) DO NOTHING
-            """,
-            [sample.hash, sample.depth.value, sample.channels.value, sample.frames],
+    def upsert(self, sample_: Sample) -> None:
+        statement = insert(sample).values(
+            hash=sample_.hash, depth=sample_.depth.value, channels=sample_.channels.value, frames=sample_.frames
         )
+        statement = statement.on_conflict_do_nothing(index_elements=[sample.c.hash])
+        self._connection.execute(statement)
 
     def list_all(self) -> tuple[Sample, ...]:
-        rows = self._connection.execute("SELECT hash, depth, channels, frames FROM sample").fetchall()
+        rows = self._connection.execute(select(sample)).fetchall()
         return tuple(_row_to_sample(row) for row in rows)
 
     def list_page(self, *, limit: int, offset: int) -> tuple[SampleSummary, ...]:
@@ -61,60 +58,65 @@ class DuckDBSampleRepository:
         Ranking by equivalence class -- one row per group of near-duplicate variants -- is a
         distinct future method, not a hidden mode of this one.
         """
-        rows = self._connection.execute(
-            """
-            SELECT sample.hash, sample.depth, sample.channels, sample.frames,
-                   coalesce(occurrence_counts.occurrence_count, 0) AS occurrence_count
-            FROM sample
-            LEFT JOIN (
-                SELECT sample_hash, count(*) AS occurrence_count
-                FROM sample_properties
-                GROUP BY sample_hash
-            ) occurrence_counts ON occurrence_counts.sample_hash = sample.hash
-            ORDER BY occurrence_count DESC, sample.hash ASC
-            LIMIT ? OFFSET ?
-            """,
-            [limit, offset],
-        ).fetchall()
-        names_by_hash = self._names_by_sample_hash([row[0] for row in rows])
-        return tuple(_row_to_sample_summary(row, names_by_hash.get(row[0], ())) for row in rows)
+        # func.count()/func.coalesce() are SQLAlchemy's dynamically-generated SQL functions, invisible
+        # to pylint's static analysis -- both false positives below are this same proxy limitation.
+        occurrence_counts = (
+            # pylint: disable-next=not-callable
+            select(sample_properties.c.sample_hash, func.count().label("occurrence_count"))
+            .group_by(sample_properties.c.sample_hash)
+            .subquery()
+        )
+        # pylint: disable-next=assignment-from-no-return
+        occurrence_count = func.coalesce(occurrence_counts.c.occurrence_count, 0)
+        statement = (
+            select(
+                sample.c.hash,
+                sample.c.depth,
+                sample.c.channels,
+                sample.c.frames,
+                occurrence_count.label("occurrence_count"),
+            )
+            .select_from(sample.outerjoin(occurrence_counts, occurrence_counts.c.sample_hash == sample.c.hash))
+            .order_by(occurrence_count.desc(), sample.c.hash.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = self._connection.execute(statement).fetchall()
+        names_by_hash = self._names_by_sample_hash([row.hash for row in rows])
+        return tuple(_row_to_sample_summary(row, names_by_hash.get(row.hash, ())) for row in rows)
 
     def count(self) -> int:
-        row = self._connection.execute("SELECT count(*) FROM sample").fetchone()
-        assert row is not None
-        return int(row[0])
+        # pylint: disable-next=not-callable
+        return self._connection.execute(select(func.count()).select_from(sample)).scalar_one()
 
     def _names_by_sample_hash(self, hashes: list[str]) -> dict[str, tuple[str, ...]]:
         names_by_hash: dict[str, list[str]] = defaultdict(list)
         if not hashes:
             return {}
 
-        placeholders = ", ".join("?" for _ in hashes)
-        rows = self._connection.execute(
-            f"SELECT sample_hash, name FROM sample_properties WHERE sample_hash IN ({placeholders})", hashes
-        ).fetchall()
-        for sample_hash, name in rows:
-            names_by_hash[sample_hash].append(name)
+        statement = select(sample_properties.c.sample_hash, sample_properties.c.name).where(
+            sample_properties.c.sample_hash.in_(hashes)
+        )
+        for row in self._connection.execute(statement).fetchall():
+            names_by_hash[row.sample_hash].append(row.name)
 
         return {hash_: tuple(names) for hash_, names in names_by_hash.items()}
 
 
-def _row_to_sample(row: tuple[Any, ...]) -> Sample:
-    """Reconstruct a Sample from a raw DuckDB row, an untyped boundary whose column order is fixed above."""
-    hash_, depth, channels, frames = row
-    return Sample(hash=hash_, depth=BitDepth(depth), channels=ChannelLayout(channels), frames=frames)
+def _row_to_sample(row: Row[Any]) -> Sample:
+    """Reconstruct a Sample from a Core row, addressed by its own column names."""
+    return Sample(hash=row.hash, depth=BitDepth(row.depth), channels=ChannelLayout(row.channels), frames=row.frames)
 
 
-def _row_to_sample_summary(row: tuple[Any, ...], names: tuple[str, ...]) -> SampleSummary:
-    """Reconstruct a SampleSummary from a raw DuckDB row plus its occurrences' raw names."""
-    hash_, depth, channels, frames, occurrence_count = row
-    sample = Sample(hash=hash_, depth=BitDepth(depth), channels=ChannelLayout(channels), frames=frames)
+def _row_to_sample_summary(row: Row[Any], names: tuple[str, ...]) -> SampleSummary:
+    """Reconstruct a SampleSummary from a Core row plus its occurrences' raw names."""
+    sample_ = _row_to_sample(row)
     return SampleSummary(
-        hash=sample.hash,
-        depth=sample.depth,
-        channels=sample.channels,
-        frames=sample.frames,
-        occurrence_count=occurrence_count,
+        hash=sample_.hash,
+        depth=sample_.depth,
+        channels=sample_.channels,
+        frames=sample_.frames,
+        occurrence_count=row.occurrence_count,
         display_name=choose_dominant_name(names),
-        size_bytes=sample.stored_bytes,
+        size_bytes=sample_.stored_bytes,
     )

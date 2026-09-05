@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-import duckdb
+from sqlalchemy import Connection
 from trackmod.core.instruments.transfer import held
 from trackmod.core.instruments.unit import InstrumentUnit
 from trackmod.core.samples.sample import Sample as TrackModSample
@@ -16,6 +16,7 @@ from samplecore.models.module import Module
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
+from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.module import DuckDBModuleRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository, SampleRepository
 from samplecore.storage.repositories.sample_properties import (
@@ -40,7 +41,7 @@ class _IngestContext:
 # natural subgrouping short of a wrapper this function would be the only caller of.
 # pylint: disable-next=too-many-arguments
 def ingest_module(
-    connection: duckdb.DuckDBPyConnection,
+    connection: Connection,
     library_root: Path,
     *,
     module_hash: str,
@@ -66,9 +67,7 @@ def ingest_module(
         module_hash=module_hash,
     )
 
-    connection.begin()
-    committed = False
-    try:
+    with start_batch(connection):
         module = Module(
             hash=module_hash,
             id=module_repository.next_id(),
@@ -86,12 +85,7 @@ def ingest_module(
         for instrument_index, unit in enumerate(held(song)):
             _ingest_instrument_unit(context, instrument_index=instrument_index, unit=unit)
 
-        connection.commit()
-        committed = True
-        return module
-    finally:
-        if not committed:
-            connection.rollback()
+    return module
 
 
 def _ingest_instrument_unit(context: _IngestContext, *, instrument_index: int, unit: InstrumentUnit) -> None:

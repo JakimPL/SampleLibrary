@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-import duckdb
+from sqlalchemy import ColumnElement, Connection, Row, select
+from sqlalchemy.dialects.postgresql import insert
 from trackmod.core.samples.loop import Loop, LoopMode
 from trackmod.trackers.xm.tuning import Tuning
 
@@ -13,57 +14,34 @@ from samplecore.models.sample_properties import (
     Vibrato,
     XMSampleProperties,
 )
+from samplecore.storage.database import it_sample_properties, module, sample_properties, xm_sample_properties
 
-_BASE_COLUMNS = ", ".join(
-    (
-        "sp.instrument_index",
-        "sp.sample_slot",
-        "sp.sample_hash",
-        "sp.name",
-        "sp.rate",
-        "sp.volume",
-        "sp.panning",
-        "sp.loop_begin",
-        "sp.loop_end",
-        "sp.loop_mode",
-    )
+_BASE_COLUMNS = (
+    sample_properties.c.instrument_index,
+    sample_properties.c.sample_slot,
+    sample_properties.c.sample_hash,
+    sample_properties.c.name,
+    sample_properties.c.rate,
+    sample_properties.c.volume,
+    sample_properties.c.panning,
+    sample_properties.c.loop_begin,
+    sample_properties.c.loop_end,
+    sample_properties.c.loop_mode,
 )
 
-_SELECT_XM = f"""
-    SELECT {_BASE_COLUMNS}, xm.relative_note, xm.finetune, m.hash
-    FROM sample_properties sp
-    JOIN xm_sample_properties xm USING (module_id, instrument_index, sample_slot)
-    JOIN module m ON m.id = sp.module_id
-    WHERE m.hash = ?
-"""
+_XM_JOIN = sample_properties.join(
+    xm_sample_properties,
+    (xm_sample_properties.c.module_id == sample_properties.c.module_id)
+    & (xm_sample_properties.c.instrument_index == sample_properties.c.instrument_index)
+    & (xm_sample_properties.c.sample_slot == sample_properties.c.sample_slot),
+).join(module, module.c.id == sample_properties.c.module_id)
 
-_SELECT_IT = f"""
-    SELECT {_BASE_COLUMNS},
-        it.global_volume, it.sustain_begin, it.sustain_end, it.sustain_mode,
-        it.filename, it.vibrato_speed, it.vibrato_depth, it.vibrato_rate, it.vibrato_waveform, m.hash
-    FROM sample_properties sp
-    JOIN it_sample_properties it USING (module_id, instrument_index, sample_slot)
-    JOIN module m ON m.id = sp.module_id
-    WHERE m.hash = ?
-"""
-
-_SELECT_XM_FOR_SAMPLE = f"""
-    SELECT {_BASE_COLUMNS}, xm.relative_note, xm.finetune, m.hash
-    FROM sample_properties sp
-    JOIN xm_sample_properties xm USING (module_id, instrument_index, sample_slot)
-    JOIN module m ON m.id = sp.module_id
-    WHERE sp.sample_hash = ?
-"""
-
-_SELECT_IT_FOR_SAMPLE = f"""
-    SELECT {_BASE_COLUMNS},
-        it.global_volume, it.sustain_begin, it.sustain_end, it.sustain_mode,
-        it.filename, it.vibrato_speed, it.vibrato_depth, it.vibrato_rate, it.vibrato_waveform, m.hash
-    FROM sample_properties sp
-    JOIN it_sample_properties it USING (module_id, instrument_index, sample_slot)
-    JOIN module m ON m.id = sp.module_id
-    WHERE sp.sample_hash = ?
-"""
+_IT_JOIN = sample_properties.join(
+    it_sample_properties,
+    (it_sample_properties.c.module_id == sample_properties.c.module_id)
+    & (it_sample_properties.c.instrument_index == sample_properties.c.instrument_index)
+    & (it_sample_properties.c.sample_slot == sample_properties.c.sample_slot),
+).join(module, module.c.id == sample_properties.c.module_id)
 
 
 class SamplePropertiesRepository(Protocol):
@@ -81,7 +59,7 @@ class DuckDBSamplePropertiesRepository:
     tracker-specific child table, joined back together on read by the ``tracker`` discriminator.
     """
 
-    def __init__(self, connection: duckdb.DuckDBPyConnection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self._connection = connection
 
     def upsert(self, properties: TrackerSampleProperties) -> None:
@@ -94,14 +72,36 @@ class DuckDBSamplePropertiesRepository:
                 self._insert_it(module_id, properties)
 
     def list_for_module(self, module_hash: str) -> tuple[TrackerSampleProperties, ...]:
-        return self._list_by(_SELECT_XM, _SELECT_IT, module_hash)
+        return self._list_by(module.c.hash == module_hash)
 
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]:
-        return self._list_by(_SELECT_XM_FOR_SAMPLE, _SELECT_IT_FOR_SAMPLE, sample_hash)
+        return self._list_by(sample_properties.c.sample_hash == sample_hash)
 
-    def _list_by(self, xm_query: str, it_query: str, parameter: str) -> tuple[TrackerSampleProperties, ...]:
-        xm_rows = self._connection.execute(xm_query, [parameter]).fetchall()
-        it_rows = self._connection.execute(it_query, [parameter]).fetchall()
+    def _list_by(self, condition: ColumnElement[bool]) -> tuple[TrackerSampleProperties, ...]:
+        xm_statement = (
+            select(*_BASE_COLUMNS, xm_sample_properties.c.relative_note, xm_sample_properties.c.finetune, module.c.hash)
+            .select_from(_XM_JOIN)
+            .where(condition)
+        )
+        it_statement = (
+            select(
+                *_BASE_COLUMNS,
+                it_sample_properties.c.global_volume,
+                it_sample_properties.c.sustain_begin,
+                it_sample_properties.c.sustain_end,
+                it_sample_properties.c.sustain_mode,
+                it_sample_properties.c.filename,
+                it_sample_properties.c.vibrato_speed,
+                it_sample_properties.c.vibrato_depth,
+                it_sample_properties.c.vibrato_rate,
+                it_sample_properties.c.vibrato_waveform,
+                module.c.hash,
+            )
+            .select_from(_IT_JOIN)
+            .where(condition)
+        )
+        xm_rows = self._connection.execute(xm_statement).fetchall()
+        it_rows = self._connection.execute(it_statement).fetchall()
         properties = [_row_to_xm_properties(row) for row in xm_rows] + [_row_to_it_properties(row) for row in it_rows]
         return tuple(
             sorted(
@@ -115,82 +115,79 @@ class DuckDBSamplePropertiesRepository:
         )
 
     def _module_id(self, module_hash: str) -> int:
-        row = self._connection.execute("SELECT id FROM module WHERE hash = ?", [module_hash]).fetchone()
+        row = self._connection.execute(select(module.c.id).where(module.c.hash == module_hash)).fetchone()
         if row is None:
             raise ValueError(f"no module ingested with hash {module_hash}")
 
-        return int(row[0])
+        return int(row.id)
 
     def _insert_base(self, module_id: int, properties: TrackerSampleProperties) -> None:
         loop = properties.loop
-        self._connection.execute(
-            """
-            INSERT INTO sample_properties
-                (module_id, instrument_index, sample_slot, sample_hash, tracker, name, rate, volume, panning,
-                 loop_begin, loop_end, loop_mode)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (module_id, instrument_index, sample_slot) DO NOTHING
-            """,
-            [
-                module_id,
-                properties.occurrence.instrument_index,
-                properties.occurrence.sample_slot,
-                properties.sample_hash,
-                properties.tracker.value,
-                properties.name,
-                properties.rate,
-                properties.volume,
-                properties.panning,
-                loop.begin if loop is not None else None,
-                loop.end if loop is not None else None,
-                loop.mode.value if loop is not None else None,
-            ],
+        statement = insert(sample_properties).values(
+            module_id=module_id,
+            instrument_index=properties.occurrence.instrument_index,
+            sample_slot=properties.occurrence.sample_slot,
+            sample_hash=properties.sample_hash,
+            tracker=properties.tracker.value,
+            name=properties.name,
+            rate=properties.rate,
+            volume=properties.volume,
+            panning=properties.panning,
+            loop_begin=loop.begin if loop is not None else None,
+            loop_end=loop.end if loop is not None else None,
+            loop_mode=loop.mode.value if loop is not None else None,
         )
+        statement = statement.on_conflict_do_nothing(
+            index_elements=[
+                sample_properties.c.module_id,
+                sample_properties.c.instrument_index,
+                sample_properties.c.sample_slot,
+            ]
+        )
+        self._connection.execute(statement)
 
     def _insert_xm(self, module_id: int, properties: XMSampleProperties) -> None:
-        self._connection.execute(
-            """
-            INSERT INTO xm_sample_properties (module_id, instrument_index, sample_slot, relative_note, finetune)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT (module_id, instrument_index, sample_slot) DO NOTHING
-            """,
-            [
-                module_id,
-                properties.occurrence.instrument_index,
-                properties.occurrence.sample_slot,
-                properties.tuning.relative_note,
-                properties.tuning.finetune,
-            ],
+        statement = insert(xm_sample_properties).values(
+            module_id=module_id,
+            instrument_index=properties.occurrence.instrument_index,
+            sample_slot=properties.occurrence.sample_slot,
+            relative_note=properties.tuning.relative_note,
+            finetune=properties.tuning.finetune,
         )
+        statement = statement.on_conflict_do_nothing(
+            index_elements=[
+                xm_sample_properties.c.module_id,
+                xm_sample_properties.c.instrument_index,
+                xm_sample_properties.c.sample_slot,
+            ]
+        )
+        self._connection.execute(statement)
 
     def _insert_it(self, module_id: int, properties: ITSampleProperties) -> None:
         sustain_loop = properties.sustain_loop
         vibrato = properties.vibrato
-        self._connection.execute(
-            """
-            INSERT INTO it_sample_properties (
-                module_id, instrument_index, sample_slot, global_volume,
-                sustain_begin, sustain_end, sustain_mode,
-                filename, vibrato_speed, vibrato_depth, vibrato_rate, vibrato_waveform
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (module_id, instrument_index, sample_slot) DO NOTHING
-            """,
-            [
-                module_id,
-                properties.occurrence.instrument_index,
-                properties.occurrence.sample_slot,
-                properties.global_volume,
-                sustain_loop.begin if sustain_loop is not None else None,
-                sustain_loop.end if sustain_loop is not None else None,
-                sustain_loop.mode.value if sustain_loop is not None else None,
-                properties.filename,
-                vibrato.speed if vibrato is not None else None,
-                vibrato.depth if vibrato is not None else None,
-                vibrato.rate if vibrato is not None else None,
-                vibrato.waveform if vibrato is not None else None,
-            ],
+        statement = insert(it_sample_properties).values(
+            module_id=module_id,
+            instrument_index=properties.occurrence.instrument_index,
+            sample_slot=properties.occurrence.sample_slot,
+            global_volume=properties.global_volume,
+            sustain_begin=sustain_loop.begin if sustain_loop is not None else None,
+            sustain_end=sustain_loop.end if sustain_loop is not None else None,
+            sustain_mode=sustain_loop.mode.value if sustain_loop is not None else None,
+            filename=properties.filename,
+            vibrato_speed=vibrato.speed if vibrato is not None else None,
+            vibrato_depth=vibrato.depth if vibrato is not None else None,
+            vibrato_rate=vibrato.rate if vibrato is not None else None,
+            vibrato_waveform=vibrato.waveform if vibrato is not None else None,
         )
+        statement = statement.on_conflict_do_nothing(
+            index_elements=[
+                it_sample_properties.c.module_id,
+                it_sample_properties.c.instrument_index,
+                it_sample_properties.c.sample_slot,
+            ]
+        )
+        self._connection.execute(statement)
 
 
 def _loop_from_row(begin: int | None, end: int | None, mode: str | None) -> Loop | None:
@@ -211,73 +208,36 @@ def _vibrato_from_row(speed: int | None, depth: int | None, rate: int | None, wa
     return Vibrato(speed=speed, depth=depth, rate=rate, waveform=waveform)
 
 
-def _row_to_xm_properties(row: tuple[Any, ...]) -> XMSampleProperties:
-    """Reconstruct an XMSampleProperties from a raw DuckDB row matching ``_SELECT_XM``'s column order."""
-    (
-        instrument_index,
-        sample_slot,
-        sample_hash,
-        name,
-        rate,
-        volume,
-        panning,
-        loop_begin,
-        loop_end,
-        loop_mode,
-        relative_note,
-        finetune,
-        module_hash,
-    ) = row
+def _row_to_xm_properties(row: Row[Any]) -> XMSampleProperties:
+    """Reconstruct an XMSampleProperties from a Core row, addressed by its own column names."""
     return XMSampleProperties(
-        sample_hash=sample_hash,
+        sample_hash=row.sample_hash,
         occurrence=SampleOccurrence(
-            module_hash=module_hash, instrument_index=instrument_index, sample_slot=sample_slot
+            module_hash=row.hash, instrument_index=row.instrument_index, sample_slot=row.sample_slot
         ),
-        name=name,
-        rate=rate,
-        volume=volume,
-        panning=panning,
-        loop=_loop_from_row(loop_begin, loop_end, loop_mode),
-        tuning=Tuning(relative_note=relative_note, finetune=finetune),
+        name=row.name,
+        rate=row.rate,
+        volume=row.volume,
+        panning=row.panning,
+        loop=_loop_from_row(row.loop_begin, row.loop_end, row.loop_mode),
+        tuning=Tuning(relative_note=row.relative_note, finetune=row.finetune),
     )
 
 
-def _row_to_it_properties(row: tuple[Any, ...]) -> ITSampleProperties:
-    """Reconstruct an ITSampleProperties from a raw DuckDB row matching ``_SELECT_IT``'s column order."""
-    (
-        instrument_index,
-        sample_slot,
-        sample_hash,
-        name,
-        rate,
-        volume,
-        panning,
-        loop_begin,
-        loop_end,
-        loop_mode,
-        global_volume,
-        sustain_begin,
-        sustain_end,
-        sustain_mode,
-        filename,
-        vibrato_speed,
-        vibrato_depth,
-        vibrato_rate,
-        vibrato_waveform,
-        module_hash,
-    ) = row
+def _row_to_it_properties(row: Row[Any]) -> ITSampleProperties:
+    """Reconstruct an ITSampleProperties from a Core row, addressed by its own column names."""
     return ITSampleProperties(
-        sample_hash=sample_hash,
+        sample_hash=row.sample_hash,
         occurrence=SampleOccurrence(
-            module_hash=module_hash, instrument_index=instrument_index, sample_slot=sample_slot
+            module_hash=row.hash, instrument_index=row.instrument_index, sample_slot=row.sample_slot
         ),
-        name=name,
-        rate=rate,
-        volume=volume,
-        panning=panning,
-        loop=_loop_from_row(loop_begin, loop_end, loop_mode),
-        global_volume=global_volume,
-        sustain_loop=_loop_from_row(sustain_begin, sustain_end, sustain_mode),
-        filename=filename,
-        vibrato=_vibrato_from_row(vibrato_speed, vibrato_depth, vibrato_rate, vibrato_waveform),
+        name=row.name,
+        rate=row.rate,
+        volume=row.volume,
+        panning=row.panning,
+        loop=_loop_from_row(row.loop_begin, row.loop_end, row.loop_mode),
+        global_volume=row.global_volume,
+        sustain_loop=_loop_from_row(row.sustain_begin, row.sustain_end, row.sustain_mode),
+        filename=row.filename,
+        vibrato=_vibrato_from_row(row.vibrato_speed, row.vibrato_depth, row.vibrato_rate, row.vibrato_waveform),
     )

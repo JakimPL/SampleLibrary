@@ -5,13 +5,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-import duckdb
 import numpy as np
 import umap
 from sklearn.preprocessing import StandardScaler
+from sqlalchemy import Connection
 
 from samplecloud.feature_store import read_features
 from samplecore.models.cloud import SampleCloudCoordinate
+from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.cloud import CloudCoordinateRepository, DuckDBCloudCoordinateRepository
 
 DEFAULT_N_NEIGHBORS: Final[int] = 15
@@ -26,7 +27,7 @@ class CloudSummary:
     samples_reduced: int
 
 
-def reduce_and_persist_coordinates(connection: duckdb.DuckDBPyConnection, feature_store_path: Path) -> CloudSummary:
+def reduce_and_persist_coordinates(connection: Connection, feature_store_path: Path) -> CloudSummary:
     """Fit UMAP over every currently-extracted feature vector and persist a 2D coordinate each.
 
     A full recompute every run, rather than placing only new points into an already-fitted model,
@@ -48,17 +49,10 @@ def reduce_and_persist_coordinates(connection: duckdb.DuckDBPyConnection, featur
 
     coordinate_repository: CloudCoordinateRepository = DuckDBCloudCoordinateRepository(connection)
     computed_at = datetime.now(UTC)
-    connection.begin()
-    committed = False
-    try:
+    with start_batch(connection):
         for sample_hash, (x, y) in zip(sample_hashes, coordinates, strict=True):
             coordinate_repository.upsert(
                 SampleCloudCoordinate(sample_hash=sample_hash, x=float(x), y=float(y), computed_at=computed_at)
             )
-        connection.commit()
-        committed = True
-    finally:
-        if not committed:
-            connection.rollback()
 
     return CloudSummary(samples_reduced=len(sample_hashes))

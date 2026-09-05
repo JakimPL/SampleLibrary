@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Protocol
 
-import duckdb
+from sqlalchemy import Connection, Row, select
+from sqlalchemy.dialects.postgresql import insert
 
 from samplecore.models.cloud import SampleCloudCoordinate
+from samplecore.storage.database import sample_cloud_coordinates
 
 
 class CloudCoordinateRepository(Protocol):
@@ -23,30 +25,28 @@ class DuckDBCloudCoordinateRepository:
     runs, so the latest run's value always wins.
     """
 
-    def __init__(self, connection: duckdb.DuckDBPyConnection) -> None:
+    def __init__(self, connection: Connection) -> None:
         self._connection = connection
 
     def upsert(self, coordinate: SampleCloudCoordinate) -> None:
-        self._connection.execute(
-            """
-            INSERT INTO sample_cloud_coordinates (sample_hash, x, y, computed_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT (sample_hash) DO UPDATE SET
-                x = EXCLUDED.x,
-                y = EXCLUDED.y,
-                computed_at = EXCLUDED.computed_at
-            """,
-            [coordinate.sample_hash, coordinate.x, coordinate.y, coordinate.computed_at],
+        statement = insert(sample_cloud_coordinates).values(
+            sample_hash=coordinate.sample_hash, x=coordinate.x, y=coordinate.y, computed_at=coordinate.computed_at
         )
+        statement = statement.on_conflict_do_update(
+            index_elements=[sample_cloud_coordinates.c.sample_hash],
+            set_={
+                "x": statement.excluded.x,
+                "y": statement.excluded.y,
+                "computed_at": statement.excluded.computed_at,
+            },
+        )
+        self._connection.execute(statement)
 
     def list_all(self) -> tuple[SampleCloudCoordinate, ...]:
-        rows = self._connection.execute(
-            "SELECT sample_hash, x, y, computed_at FROM sample_cloud_coordinates"
-        ).fetchall()
+        rows = self._connection.execute(select(sample_cloud_coordinates)).fetchall()
         return tuple(_row_to_coordinate(row) for row in rows)
 
 
-def _row_to_coordinate(row: tuple[Any, ...]) -> SampleCloudCoordinate:
-    """Reconstruct a SampleCloudCoordinate from a raw DuckDB row, an untyped boundary whose column order is fixed above."""
-    sample_hash, x, y, computed_at = row
-    return SampleCloudCoordinate(sample_hash=sample_hash, x=x, y=y, computed_at=computed_at)
+def _row_to_coordinate(row: Row[tuple[str, float, float, object]]) -> SampleCloudCoordinate:
+    """Reconstruct a SampleCloudCoordinate from a Core row, addressed by its own column names."""
+    return SampleCloudCoordinate(sample_hash=row.sample_hash, x=row.x, y=row.y, computed_at=row.computed_at)
