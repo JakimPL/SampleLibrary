@@ -18,24 +18,20 @@ MAX_RESAMPLE_RATIO: Final[float] = 8.0
 MINIMUM_FINGERPRINT_COSINE_SIMILARITY: Final[float] = 0.95
 
 
-def bit_depth_candidate_pairs(samples: Sequence[Sample]) -> tuple[tuple[Sample, Sample], ...]:
-    """Every pair of catalogued samples that could be the same content stored at two bit depths.
+def gain_variant_candidate_pairs(samples: Sequence[Sample]) -> tuple[tuple[Sample, Sample], ...]:
+    """Every pair of catalogued samples that could be the same content at a different gain, depth, or both.
 
-    Two samples can only be bit-depth variants of each other when they share the same channel
-    layout and frame count -- depth conversion never resamples -- and differ in depth, since
-    matching depth too, with matching frames and channels, would already have collapsed onto one
-    Sample by content hash.
+    Two samples can only be related this way when they share the same channel layout and frame
+    count -- neither an amplitude change nor a depth conversion resamples -- and every such pair is
+    a genuine candidate: matching on channels, frames, and depth too would already have collapsed
+    onto one Sample by content hash, so any two distinct Samples sharing channels and frames differ
+    in gain, depth, or both.
     """
     groups: dict[tuple[ChannelLayout, int], list[Sample]] = defaultdict(list)
     for sample in samples:
         groups[(sample.channels, sample.frames)].append(sample)
 
-    return tuple(
-        (first, second)
-        for group in groups.values()
-        for first, second in combinations(group, 2)
-        if first.depth is not second.depth
-    )
+    return tuple((first, second) for group in groups.values() for first, second in combinations(group, 2))
 
 
 def resampled_candidate_pairs(

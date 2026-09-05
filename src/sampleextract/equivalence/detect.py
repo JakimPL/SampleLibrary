@@ -16,17 +16,19 @@ from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository, SampleRelationRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository, SampleRepository
-from sampleextract.equivalence.candidates import bit_depth_candidate_pairs, resampled_candidate_pairs
+from sampleextract.equivalence.candidates import gain_variant_candidate_pairs, resampled_candidate_pairs
 from sampleextract.equivalence.fingerprint import compute_fingerprint
 from sampleextract.equivalence.scoring import (
-    BIT_DEPTH_MINIMUM_CONFIDENCE,
+    GAIN_UNITY_TOLERANCE,
+    GAIN_VARIANT_MINIMUM_CONFIDENCE,
     RESAMPLED_MINIMUM_CONFIDENCE,
     RelationScore,
-    score_bit_depth_variant,
+    score_gain_variant,
     score_resampled_variant,
 )
 
-BIT_DEPTH_METHOD: Final[str] = "bit_depth_variant/mse_v1"
+BIT_DEPTH_METHOD: Final[str] = "bit_depth_variant/gain_lstsq_v1"
+AMPLIFICATION_METHOD: Final[str] = "amplification_variant/gain_lstsq_v1"
 RESAMPLED_METHOD: Final[str] = "resampled_variant/xcorr_v1"
 
 
@@ -36,6 +38,7 @@ class EquivalenceSummary:
 
     samples_considered: int
     bit_depth_relations: int
+    amplification_relations: int
     resampled_relations: int
 
 
@@ -78,7 +81,7 @@ def detect_equivalences(
     waveforms = _WaveformCache(library_root)
 
     with start_batch(connection):
-        bit_depth_relations = _detect_bit_depth_variants(relation_repository, samples, waveforms)
+        bit_depth_relations, amplification_relations = _detect_gain_variants(relation_repository, samples, waveforms)
 
         fingerprints = {
             sample.hash: compute_fingerprint(waveforms.get(sample))
@@ -89,21 +92,46 @@ def detect_equivalences(
     return EquivalenceSummary(
         samples_considered=len(samples),
         bit_depth_relations=bit_depth_relations,
+        amplification_relations=amplification_relations,
         resampled_relations=resampled_relations,
     )
 
 
-def _detect_bit_depth_variants(
+def _detect_gain_variants(
     relation_repository: SampleRelationRepository, samples: tuple[Sample, ...], waveforms: _WaveformCache
-) -> int:
-    relations_recorded = 0
-    for pair in tqdm(bit_depth_candidate_pairs(samples), desc="Bit-depth variants"):
-        score = score_bit_depth_variant(waveforms.get(pair[0]), waveforms.get(pair[1]))
-        if score.confidence >= BIT_DEPTH_MINIMUM_CONFIDENCE:
-            _record_relation(relation_repository, pair, RelationType.BIT_DEPTH_VARIANT, BIT_DEPTH_METHOD, score)
-            relations_recorded += 1
+) -> tuple[int, int]:
+    """Detect and record every gain-compensated match, classified by how far its gain sits from 1.0.
 
-    return relations_recorded
+    A single scorer and candidate space cover both bit-depth and amplification variants (see
+    scoring.py's ``score_gain_variant``); the fitted gain is the only fact that tells the two apart,
+    including a pair that changed both depth and gain at once, which is classified as an
+    amplification variant carrying its own depth-changed evidence, mirroring how a resampled variant
+    already records its own.
+    """
+    bit_depth_relations = 0
+    amplification_relations = 0
+    for pair in tqdm(gain_variant_candidate_pairs(samples), desc="Gain variants"):
+        score = score_gain_variant(
+            waveforms.get(pair[0]), waveforms.get(pair[1]), depth_a=pair[0].depth, depth_b=pair[1].depth
+        )
+        if score is None or score.confidence < GAIN_VARIANT_MINIMUM_CONFIDENCE:
+            continue
+
+        if abs(score.evidence["gain"] - 1.0) <= GAIN_UNITY_TOLERANCE:
+            _record_relation(relation_repository, pair, RelationType.BIT_DEPTH_VARIANT, BIT_DEPTH_METHOD, score)
+            bit_depth_relations += 1
+        else:
+            evidence = {**score.evidence, "depth_changed": 1.0 if pair[0].depth is not pair[1].depth else 0.0}
+            _record_relation(
+                relation_repository,
+                pair,
+                RelationType.AMPLIFICATION_VARIANT,
+                AMPLIFICATION_METHOD,
+                RelationScore(confidence=score.confidence, evidence=evidence),
+            )
+            amplification_relations += 1
+
+    return bit_depth_relations, amplification_relations
 
 
 def _detect_resampled_variants(

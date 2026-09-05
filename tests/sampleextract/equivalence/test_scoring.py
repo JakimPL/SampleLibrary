@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
 from trackmod.binary.pcm.quantise import dequantise, quantise
 from trackmod.core.samples.depth import BitDepth
 
 from sampleextract.equivalence.scoring import (
-    BIT_DEPTH_MINIMUM_CONFIDENCE,
+    GAIN_VARIANT_MINIMUM_CONFIDENCE,
+    MAXIMUM_GAIN,
     RESAMPLED_MINIMUM_CONFIDENCE,
-    score_bit_depth_variant,
+    score_gain_variant,
     score_resampled_variant,
 )
 
@@ -29,22 +31,65 @@ def _tonal_waveform(frames: int, *, sample_rate: int = SAMPLE_RATE) -> NDArray[n
     return waveform.reshape(-1, 1)
 
 
-def test_score_bit_depth_variant_scores_a_true_quantisation_pair_highly() -> None:
+def test_score_gain_variant_scores_a_true_quantisation_pair_highly() -> None:
     waveform = _tonal_waveform(2000)
     eight_bit_roundtrip = dequantise(quantise(waveform, BitDepth.EIGHT), BitDepth.EIGHT)
 
-    score = score_bit_depth_variant(waveform, eight_bit_roundtrip)
+    score = score_gain_variant(waveform, eight_bit_roundtrip, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.EIGHT)
 
-    assert score.confidence > BIT_DEPTH_MINIMUM_CONFIDENCE
+    assert score is not None
+    assert score.confidence > GAIN_VARIANT_MINIMUM_CONFIDENCE
+    assert score.evidence["gain"] == pytest.approx(1.0, abs=0.01)
 
 
-def test_score_bit_depth_variant_scores_two_independent_waveforms_at_zero() -> None:
+def test_score_gain_variant_scores_a_true_amplification_pair_highly() -> None:
+    waveform = _tonal_waveform(2000)
+    louder = waveform * 2.0
+
+    score = score_gain_variant(waveform, louder, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.SIXTEEN)
+
+    assert score is not None
+    assert score.confidence > GAIN_VARIANT_MINIMUM_CONFIDENCE
+    assert score.evidence["gain"] == pytest.approx(2.0)
+
+
+def test_score_gain_variant_scores_a_compound_depth_and_gain_pair_highly() -> None:
+    waveform = _tonal_waveform(2000)
+    quieter_and_requantised = dequantise(quantise(waveform * 0.5, BitDepth.EIGHT), BitDepth.EIGHT)
+
+    score = score_gain_variant(waveform, quieter_and_requantised, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.EIGHT)
+
+    assert score is not None
+    assert score.confidence > GAIN_VARIANT_MINIMUM_CONFIDENCE
+    assert score.evidence["gain"] == pytest.approx(0.5, abs=0.01)
+
+
+def test_score_gain_variant_does_not_match_two_independent_waveforms() -> None:
+    """An uncorrelated pair's least-squares gain is noise around zero, as likely to land outside
+    the plausible range (a None verdict) as inside it at confidence 0.0 -- either is a non-match.
+    """
     first = _tonal_waveform(2000)
     second = np.random.default_rng(1).uniform(-1.0, 1.0, (2000, 1))
 
-    score = score_bit_depth_variant(first, second)
+    score = score_gain_variant(first, second, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.SIXTEEN)
 
-    assert score.confidence == 0.0
+    assert score is None or score.confidence == 0.0
+
+
+def test_score_gain_variant_returns_none_for_a_silent_reference() -> None:
+    silence = np.zeros((2000, 1))
+    tone = _tonal_waveform(2000)
+
+    assert score_gain_variant(silence, tone, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.SIXTEEN) is None
+
+
+def test_score_gain_variant_returns_none_for_an_implausible_gain() -> None:
+    waveform = _tonal_waveform(2000)
+    extreme = waveform * (MAXIMUM_GAIN * 2.0)
+
+    score = score_gain_variant(waveform, extreme, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.SIXTEEN)
+
+    assert score is None
 
 
 def test_score_resampled_variant_scores_a_true_resample_pair_highly() -> None:
@@ -56,6 +101,19 @@ def test_score_resampled_variant_scores_a_true_resample_pair_highly() -> None:
     assert score is not None
     assert score.confidence > RESAMPLED_MINIMUM_CONFIDENCE
     assert score.evidence["resample_ratio"] == 2.0
+    assert score.evidence["gain"] == pytest.approx(1.0, abs=0.05)
+
+
+def test_score_resampled_variant_recovers_the_gain_of_a_compound_resample_and_amplitude_pair() -> None:
+    original = _tonal_waveform(4410)
+    louder_original = original * 1.5
+    resampled = resample_poly(original, up=22050, down=44100, axis=0)
+
+    score = score_resampled_variant(louder_original, resampled)
+
+    assert score is not None
+    assert score.confidence > RESAMPLED_MINIMUM_CONFIDENCE
+    assert score.evidence["gain"] == pytest.approx(1.5, abs=0.05)
 
 
 def test_score_resampled_variant_tolerates_a_trimmed_lead_in() -> None:

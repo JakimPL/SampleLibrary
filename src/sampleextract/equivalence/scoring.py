@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from math import sqrt
 from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
+from trackmod.core.samples.depth import BitDepth
 
-BIT_DEPTH_RMS_ERROR_CEILING: Final[float] = 0.02
-BIT_DEPTH_MINIMUM_CONFIDENCE: Final[float] = 0.5
+GAIN_VARIANT_RMS_ERROR_CEILING: Final[float] = 0.02
+GAIN_VARIANT_MINIMUM_CONFIDENCE: Final[float] = 0.5
+MINIMUM_GAIN: Final[float] = 0.1
+MAXIMUM_GAIN: Final[float] = 10.0
+GAIN_UNITY_TOLERANCE: Final[float] = 0.05
 
 MAX_RESAMPLE_DENOMINATOR: Final[int] = 200
 MAX_TRIM_LAG_FRAMES: Final[int] = 64
@@ -25,29 +30,64 @@ class RelationScore:
     evidence: dict[str, float]
 
 
-def score_bit_depth_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray[np.float64]) -> RelationScore:
-    """How closely two equal-shape waveforms match, evidenced against 8-bit quantisation noise.
+def _quantisation_rms_noise(depth: BitDepth) -> float:
+    """The theoretical root-mean-square noise a uniform quantiser at ``depth`` adds to full-scale content."""
+    return 1.0 / (depth.scale * sqrt(12.0))
 
-    The ceiling is set to roughly eight times a full-scale 8-bit uniform quantiser's own
-    theoretical root-mean-square noise (about 0.0023), giving headroom for rounding-convention
-    differences between two independent quantisations of the same source while staying far below
-    the error two genuinely different waveforms would show.
+
+def _gain_variant_ceiling(depth: BitDepth) -> float:
+    """The residual-error ceiling for a gain-compensated match at ``depth``.
+
+    Scales ``GAIN_VARIANT_RMS_ERROR_CEILING`` -- set for the 8-bit case, at roughly eight times that
+    depth's own theoretical quantisation noise -- by the ratio between ``depth``'s theoretical noise
+    and 8-bit's, so the same headroom applies regardless of which depth a candidate pair shares.
     """
-    difference = waveform_a - waveform_b
-    rms_error = float(np.sqrt(np.mean(difference**2)))
-    confidence = max(0.0, 1.0 - rms_error / BIT_DEPTH_RMS_ERROR_CEILING)
+    return GAIN_VARIANT_RMS_ERROR_CEILING * _quantisation_rms_noise(depth) / _quantisation_rms_noise(BitDepth.EIGHT)
+
+
+def score_gain_variant(
+    waveform_a: NDArray[np.float64], waveform_b: NDArray[np.float64], *, depth_a: BitDepth, depth_b: BitDepth
+) -> RelationScore | None:
+    """How closely two equal-shape waveforms match once the best-fitting global gain is compensated for.
+
+    Fitting a gain by least squares before comparing, rather than comparing raw waveforms directly,
+    is what lets this scorer recognise a pair related by amplitude alone, by bit depth alone, or by
+    both at once -- a depth change alone fits a gain near 1.0, and the confidence and evidence are
+    identical either way. The ceiling compares against ``min(depth_a, depth_b)``, the lower-fidelity
+    side's noise floor, since that dominates the residual regardless of which side it is on.
+
+    Returns:
+        None: when ``waveform_a`` is silent, leaving the gain undefined, or when the best-fitting
+            gain falls outside ``[MINIMUM_GAIN, MAXIMUM_GAIN]`` in magnitude, indicating a candidate
+            pair whose fit is numerically degenerate rather than a real match.
+    """
+    reference_energy = float(np.sum(waveform_a**2))
+    if reference_energy == 0.0:
+        return None
+
+    gain = float(np.sum(waveform_a * waveform_b) / reference_energy)
+    if not MINIMUM_GAIN <= abs(gain) <= MAXIMUM_GAIN:
+        return None
+
+    residual = waveform_b - gain * waveform_a
+    rms_error = float(np.sqrt(np.mean(residual**2)))
+    ceiling = _gain_variant_ceiling(min(depth_a, depth_b))
+    confidence = max(0.0, 1.0 - rms_error / ceiling)
     return RelationScore(
         confidence=confidence,
-        evidence={"rms_error": rms_error, "max_abs_error": float(np.max(np.abs(difference)))},
+        evidence={"gain": gain, "rms_error": rms_error, "max_abs_error": float(np.max(np.abs(residual)))},
     )
 
 
 def score_resampled_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray[np.float64]) -> RelationScore | None:
     """How closely a shorter waveform, resampled up and best-aligned, matches a longer one.
 
-    Returns None when every offset in the search window leaves one of the compared windows
-    silent (zero variance), since Pearson correlation is undefined there rather than
-    meaningfully zero.
+    Pearson correlation is exactly invariant to a positive gain applied to either waveform (it is
+    computed on mean-centred, self-normalised signals), so this already recognises a pair related by
+    resampling and amplitude at once without any gain compensation of its own; the best-fitting gain
+    is still recovered and reported in ``evidence``, purely as corroborating detail. Returns None
+    when every offset in the search window leaves one of the compared windows silent (zero
+    variance), since Pearson correlation is undefined there rather than meaningfully zero.
     """
     short, long_ = (waveform_a, waveform_b) if waveform_a.shape[0] <= waveform_b.shape[0] else (waveform_b, waveform_a)
     ratio = Fraction(long_.shape[0], short.shape[0]).limit_denominator(MAX_RESAMPLE_DENOMINATOR)
@@ -66,13 +106,16 @@ def score_resampled_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray
     if aligned is None:
         return None
 
-    correlation, lag_frames = aligned
+    gain = float(
+        np.sum(aligned.windowed_resampled * aligned.windowed_reference) / np.sum(aligned.windowed_resampled**2)
+    )
     return RelationScore(
-        confidence=max(0.0, correlation),
+        confidence=max(0.0, aligned.correlation),
         evidence={
-            "correlation": correlation,
+            "correlation": aligned.correlation,
             "resample_ratio": long_.shape[0] / short.shape[0],
-            "lag_frames": float(lag_frames),
+            "lag_frames": float(aligned.lag_frames),
+            "gain": gain,
         },
     )
 
@@ -91,41 +134,60 @@ def _match_length(waveform: NDArray[np.float64], target_frames: int) -> NDArray[
     return np.pad(waveform, ((0, target_frames - waveform.shape[0]), (0, 0)))
 
 
-def _best_aligned_correlation(
-    resampled: NDArray[np.float64], reference: NDArray[np.float64], *, max_lag: int
-) -> tuple[float, int] | None:
-    """The highest Pearson correlation between the two waveforms across a bounded lag search.
+def _aligned_windows(
+    resampled: NDArray[np.float64], reference: NDArray[np.float64], *, lag: int
+) -> tuple[NDArray[np.float64], NDArray[np.float64]] | None:
+    """The overlapping windows of two equal-length waveforms once `reference` is shifted by `lag`.
 
     A positive lag skips that many frames from the start of `reference` to line it up with
     `resampled`'s own unshifted start -- the case where `reference` carries extra lead-in
-    `resampled` does not; a negative lag is the opposite case. Searching a small window around
-    zero absorbs the handful of frames of trim difference two independent exports of the same
-    content commonly carry, without needing either one already aligned to the other.
+    `resampled` does not; a negative lag is the opposite case. Returns None when the requested lag
+    leaves no overlap at all -- checked explicitly here rather than trusting the frame count to
+    always exceed the lag.
     """
     frame_count = resampled.shape[0]
-    best_correlation: float | None = None
-    best_lag = 0
+    overlap = frame_count - abs(lag)
+    if overlap <= 0:
+        return None
+
+    if lag >= 0:
+        return resampled[:overlap], reference[lag : lag + overlap]
+
+    return resampled[-lag : -lag + overlap], reference[:overlap]
+
+
+@dataclass(frozen=True)
+class _Alignment:
+    """The best lag found between two waveforms, and the overlapping windows it lines up."""
+
+    correlation: float
+    lag_frames: int
+    windowed_resampled: NDArray[np.float64]
+    windowed_reference: NDArray[np.float64]
+
+
+def _best_aligned_correlation(
+    resampled: NDArray[np.float64], reference: NDArray[np.float64], *, max_lag: int
+) -> _Alignment | None:
+    """The highest Pearson correlation between the two waveforms across a bounded lag search.
+
+    Searching a small window around zero absorbs the handful of frames of trim difference two
+    independent exports of the same content commonly carry, without needing either one already
+    aligned to the other.
+    """
+    best: _Alignment | None = None
     for lag in range(-max_lag, max_lag + 1):
-        # A slice stop computed as frame_count - lag (or frame_count + lag) would, if negative,
-        # index from the array's end rather than yield the intended empty window -- checked
-        # explicitly here rather than trusting frame_count to always exceed max_lag.
-        overlap = frame_count - abs(lag)
-        if overlap <= 0:
+        windows = _aligned_windows(resampled, reference, lag=lag)
+        if windows is None:
             continue
 
-        if lag >= 0:
-            windowed_resampled = resampled[:overlap]
-            windowed_reference = reference[lag : lag + overlap]
-        else:
-            windowed_resampled = resampled[-lag : -lag + overlap]
-            windowed_reference = reference[:overlap]
+        correlation = _pearson_correlation(*windows)
+        if correlation is not None and (best is None or correlation > best.correlation):
+            best = _Alignment(
+                correlation=correlation, lag_frames=lag, windowed_resampled=windows[0], windowed_reference=windows[1]
+            )
 
-        correlation = _pearson_correlation(windowed_resampled, windowed_reference)
-        if correlation is not None and (best_correlation is None or correlation > best_correlation):
-            best_correlation = correlation
-            best_lag = lag
-
-    return (best_correlation, best_lag) if best_correlation is not None else None
+    return best
 
 
 def _pearson_correlation(first: NDArray[np.float64], second: NDArray[np.float64]) -> float | None:

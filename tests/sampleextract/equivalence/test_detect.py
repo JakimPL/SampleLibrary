@@ -47,10 +47,13 @@ def _store_sample(
     return sample
 
 
-def _seed_catalog(connection: duckdb.DuckDBPyConnection, library_root: Path) -> tuple[Sample, Sample, Sample, Sample]:
-    """A catalog holding one genuine bit-depth-variant pair, one genuine resampled-variant pair,
-    and unrelated content sharing frame counts with each, so both detectors have a real reject
-    case alongside the pair they are meant to find.
+def _seed_catalog(
+    connection: duckdb.DuckDBPyConnection, library_root: Path
+) -> tuple[Sample, Sample, Sample, Sample, Sample]:
+    """A catalog holding one genuine bit-depth-variant pair, one genuine amplification-variant pair
+    that also changes depth (the compound case a gain-insensitive scorer would miss), one genuine
+    resampled-variant pair, and unrelated content sharing frame counts with each, so every detector
+    has a real reject case alongside the pair it is meant to find.
     """
     original_16_pcm = _tonal_waveform(2500)
     quantised_8_pcm = dequantise(quantise(original_16_pcm, BitDepth.EIGHT), BitDepth.EIGHT)
@@ -60,6 +63,9 @@ def _seed_catalog(connection: duckdb.DuckDBPyConnection, library_root: Path) -> 
     resampled_22k_pcm = resample_poly(original_44k_pcm, up=22050, down=44100, axis=0)
     unrelated_resampled_pcm = np.random.default_rng(202).uniform(-1.0, 1.0, (2205, 1))
 
+    louder_original_pcm = _tonal_waveform(1600)
+    quieter_and_requantised_pcm = dequantise(quantise(louder_original_pcm * 0.25, BitDepth.EIGHT), BitDepth.EIGHT)
+
     original_16 = _store_sample(connection, library_root, hash_seed=1, depth=BitDepth.SIXTEEN, pcm=original_16_pcm)
     quantised_8 = _store_sample(connection, library_root, hash_seed=2, depth=BitDepth.EIGHT, pcm=quantised_8_pcm)
     _store_sample(connection, library_root, hash_seed=3, depth=BitDepth.EIGHT, pcm=unrelated_bit_depth_pcm)
@@ -68,30 +74,44 @@ def _seed_catalog(connection: duckdb.DuckDBPyConnection, library_root: Path) -> 
     resampled_22k = _store_sample(connection, library_root, hash_seed=5, depth=BitDepth.SIXTEEN, pcm=resampled_22k_pcm)
     _store_sample(connection, library_root, hash_seed=6, depth=BitDepth.SIXTEEN, pcm=unrelated_resampled_pcm)
 
-    return original_16, quantised_8, original_44k, resampled_22k
+    louder_original = _store_sample(
+        connection, library_root, hash_seed=7, depth=BitDepth.SIXTEEN, pcm=louder_original_pcm
+    )
+    quieter_and_requantised = _store_sample(
+        connection, library_root, hash_seed=8, depth=BitDepth.EIGHT, pcm=quieter_and_requantised_pcm
+    )
+
+    return original_16, quantised_8, original_44k, resampled_22k, louder_original
 
 
 def test_detect_equivalences_records_exactly_the_genuine_pairs(
     connection: duckdb.DuckDBPyConnection, tmp_path: Path
 ) -> None:
-    original_16, quantised_8, original_44k, resampled_22k = _seed_catalog(connection, tmp_path)
+    original_16, quantised_8, original_44k, resampled_22k, louder_original = _seed_catalog(connection, tmp_path)
 
     summary = detect_equivalences(connection, tmp_path)
 
     relations = DuckDBSampleRelationRepository(connection).list_all()
-    assert summary.samples_considered == 6
+    assert summary.samples_considered == 8
     assert summary.bit_depth_relations == 1
+    assert summary.amplification_relations == 1
     assert summary.resampled_relations == 1
-    assert len(relations) == 2
+    assert len(relations) == 3
 
     found_pairs = {frozenset((relation.subject_hash, relation.reference_hash)) for relation in relations}
     assert frozenset((original_16.hash, quantised_8.hash)) in found_pairs
     assert frozenset((original_44k.hash, resampled_22k.hash)) in found_pairs
 
     relation_by_type = {relation.relation_type: relation for relation in relations}
-    assert relation_by_type[RelationType.BIT_DEPTH_VARIANT].method == "bit_depth_variant/mse_v1"
+    assert relation_by_type[RelationType.BIT_DEPTH_VARIANT].method == "bit_depth_variant/gain_lstsq_v1"
     assert relation_by_type[RelationType.RESAMPLED_VARIANT].method == "resampled_variant/xcorr_v1"
     assert relation_by_type[RelationType.RESAMPLED_VARIANT].evidence["depth_changed"] == 0.0
+
+    amplification_relation = relation_by_type[RelationType.AMPLIFICATION_VARIANT]
+    assert amplification_relation.method == "amplification_variant/gain_lstsq_v1"
+    assert amplification_relation.evidence["depth_changed"] == 1.0
+    assert amplification_relation.evidence["gain"] == pytest.approx(0.25, abs=0.01)
+    assert louder_original.hash in (amplification_relation.subject_hash, amplification_relation.reference_hash)
 
 
 def test_a_second_run_leaves_the_same_relations_in_place(connection: duckdb.DuckDBPyConnection, tmp_path: Path) -> None:
@@ -100,7 +120,7 @@ def test_a_second_run_leaves_the_same_relations_in_place(connection: duckdb.Duck
 
     detect_equivalences(connection, tmp_path)
 
-    assert len(DuckDBSampleRelationRepository(connection).list_all()) == 2
+    assert len(DuckDBSampleRelationRepository(connection).list_all()) == 3
 
 
 def test_sample_limit_restricts_the_considered_sample_count(
@@ -118,7 +138,9 @@ def test_sample_limit_of_zero_finds_nothing(connection: duckdb.DuckDBPyConnectio
 
     summary = detect_equivalences(connection, tmp_path, sample_limit=0)
 
-    assert summary == EquivalenceSummary(samples_considered=0, bit_depth_relations=0, resampled_relations=0)
+    assert summary == EquivalenceSummary(
+        samples_considered=0, bit_depth_relations=0, amplification_relations=0, resampled_relations=0
+    )
 
 
 def test_a_failure_partway_through_leaves_nothing_committed(

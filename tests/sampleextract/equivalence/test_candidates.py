@@ -8,7 +8,7 @@ from samplecore.models.sample import Sample
 from sampleextract.equivalence.candidates import (
     MAX_RESAMPLE_RATIO,
     MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON,
-    bit_depth_candidate_pairs,
+    gain_variant_candidate_pairs,
     resampled_candidate_pairs,
 )
 
@@ -22,32 +22,32 @@ def _sample(seed: int, *, depth: BitDepth, channels: ChannelLayout, frames: int)
     return Sample(hash=format(seed, "064x"), depth=depth, channels=channels, frames=frames)
 
 
-def test_bit_depth_candidates_pairs_matching_channels_and_frames_at_different_depth() -> None:
+def test_gain_variant_candidates_pairs_matching_channels_and_frames_at_different_depth() -> None:
     eight_bit = _sample(1, depth=BitDepth.EIGHT, channels=ChannelLayout.MONO, frames=100)
     sixteen_bit = _sample(2, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=100)
 
-    assert bit_depth_candidate_pairs((eight_bit, sixteen_bit)) == ((eight_bit, sixteen_bit),)
+    assert gain_variant_candidate_pairs((eight_bit, sixteen_bit)) == ((eight_bit, sixteen_bit),)
 
 
-def test_bit_depth_candidates_excludes_a_pair_with_matching_depth() -> None:
+def test_gain_variant_candidates_includes_a_pair_with_matching_depth() -> None:
     first = _sample(1, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=100)
     second = _sample(2, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=100)
 
-    assert bit_depth_candidate_pairs((first, second)) == ()
+    assert gain_variant_candidate_pairs((first, second)) == ((first, second),)
 
 
-def test_bit_depth_candidates_excludes_a_pair_with_different_frames() -> None:
+def test_gain_variant_candidates_excludes_a_pair_with_different_frames() -> None:
     first = _sample(1, depth=BitDepth.EIGHT, channels=ChannelLayout.MONO, frames=100)
     second = _sample(2, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=200)
 
-    assert bit_depth_candidate_pairs((first, second)) == ()
+    assert gain_variant_candidate_pairs((first, second)) == ()
 
 
-def test_bit_depth_candidates_excludes_a_pair_with_different_channels() -> None:
+def test_gain_variant_candidates_excludes_a_pair_with_different_channels() -> None:
     first = _sample(1, depth=BitDepth.EIGHT, channels=ChannelLayout.MONO, frames=100)
     second = _sample(2, depth=BitDepth.SIXTEEN, channels=ChannelLayout.STEREO, frames=100)
 
-    assert bit_depth_candidate_pairs((first, second)) == ()
+    assert gain_variant_candidate_pairs((first, second)) == ()
 
 
 def test_resampled_candidates_pairs_similar_fingerprints_within_the_ratio_bound() -> None:

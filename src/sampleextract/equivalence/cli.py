@@ -19,12 +19,16 @@ def main(argv: list[str] | None = None) -> None:
 
     print(
         f"Considered {summary.samples_considered} samples: "
-        f"{summary.bit_depth_relations} bit-depth variants, {summary.resampled_relations} resampled variants."
+        f"{summary.bit_depth_relations} bit-depth variants, "
+        f"{summary.amplification_relations} amplification variants, "
+        f"{summary.resampled_relations} resampled variants."
     )
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Detect bit-depth and resampled equivalence classes in the catalog.")
+    parser = argparse.ArgumentParser(
+        description="Detect bit-depth, amplification, and resampled equivalence classes in the catalog."
+    )
     parser.add_argument(
         "--limit",
         type=int,

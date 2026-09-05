@@ -160,7 +160,10 @@ sample_relation = Table(
     Column("reviewed_confirmed", Boolean, nullable=True),
     Column("reviewed_at", DateTime(timezone=True), nullable=True),
     Column("reviewed_by", String, nullable=True),
-    CheckConstraint("relation_type IN ('bit_depth_variant', 'resampled_variant')", name="sample_relation_type_check"),
+    CheckConstraint(
+        "relation_type IN ('bit_depth_variant', 'resampled_variant', 'amplification_variant')",
+        name="sample_relation_type_check",
+    ),
     CheckConstraint("confidence BETWEEN 0.0 AND 1.0", name="sample_relation_confidence_check"),
     CheckConstraint("subject_hash < reference_hash", name="sample_relation_hash_order_check"),
     CheckConstraint(

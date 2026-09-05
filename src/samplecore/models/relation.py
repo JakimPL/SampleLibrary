@@ -16,6 +16,7 @@ class RelationType(StrEnum):
 
     BIT_DEPTH_VARIANT = "bit_depth_variant"
     RESAMPLED_VARIANT = "resampled_variant"
+    AMPLIFICATION_VARIANT = "amplification_variant"
 
 
 class RelationReview(BaseModel):
