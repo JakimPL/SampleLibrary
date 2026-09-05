@@ -1,108 +1,143 @@
-import type { MouseEvent, ReactElement } from "react";
-import { useEffect, useMemo, useRef } from "react";
-import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
+import type { ReactElement } from "react";
+import { useEffect, useRef } from "react";
+import createScatterplot from "regl-scatterplot";
 
-import type { CloudPoint } from "../api/cloud";
-import { findNearestPoint, type NormalizedPoint, normalizePoints } from "./geometry";
+import type { EntityRef } from "../workspace/selectionStore";
+import { type CloudEntityPoint, normalizePoints } from "./geometry";
 
-const CANVAS_SIZE = 800;
-const POINT_RADIUS = 3;
-const HIGHLIGHT_RADIUS = 6;
-const HIT_TEST_RADIUS = 0.02;
-// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- 2π reads clearer as a literal multiplication than a precomputed constant
-const FULL_CIRCLE_RADIANS = 2 * Math.PI;
+type Scatterplot = ReturnType<typeof createScatterplot>;
+
+const POINT_SIZE = 4;
+const POINT_SIZE_SELECTED = 9;
+const POINT_COLOR_PROPERTY = "--text-primary";
+const POINT_COLOR_FALLBACK = "#1b1f26";
+const SELECTED_COLOR_PROPERTY = "--accent";
+const SELECTED_COLOR_FALLBACK = "#a8690f";
+const BACKGROUND_COLOR_PROPERTY = "--surface-0";
+const BACKGROUND_COLOR_FALLBACK = "#f4f5f7";
 
 interface CloudViewProps {
-    readonly points: readonly CloudPoint[];
-    readonly highlightedSampleHash: string | null;
-    readonly onSelect: (sampleHash: string) => void;
-    readonly onFocus: (sampleHash: string) => void;
+    readonly points: readonly CloudEntityPoint[];
+    readonly highlighted: EntityRef | null;
+    readonly onSelect: (entity: EntityRef) => void;
+    readonly onFocus: (entity: EntityRef) => void;
 }
 
-function drawPoint(context: CanvasRenderingContext2D, point: NormalizedPoint, radius: number): void {
-    context.beginPath();
-    context.arc(point.x * CANVAS_SIZE, point.y * CANVAS_SIZE, radius, 0, FULL_CIRCLE_RADIANS);
-    context.fill();
+function readThemeColor(propertyName: string, fallback: string): string {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(propertyName).trim();
+    return value === "" ? fallback : value;
 }
 
-export function CloudView({
-    points: rawPoints,
-    highlightedSampleHash,
-    onSelect,
-    onFocus,
-}: CloudViewProps): ReactElement {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const points = useMemo(() => normalizePoints(rawPoints), [rawPoints]);
+function sameEntity(a: EntityRef, b: EntityRef): boolean {
+    return a.kind === b.kind && a.hash === b.hash;
+}
+
+/**
+ * Renders sample or module positions as a WebGL scatterplot, generic over which kind of entity
+ * each point names -- the same component and picking contract serves both the Samples and Modules
+ * cloud tabs. Owns regl-scatterplot as this codebase's one file touching that library's own API,
+ * mirroring how `useWaveformPlayer.ts` owns wavesurfer.js's.
+ *
+ * A single click selects the point under the cursor through regl-scatterplot's own hit-testing.
+ * regl-scatterplot's own double-click behaviour only deselects, so this view disables it
+ * (`deselectOnDblClick: false`) and focuses the hovered point on a native double-click instead,
+ * looked up through the library's continuous `pointOver`/`pointOut` hover tracking.
+ */
+export function CloudView({ points: rawPoints, highlighted, onSelect, onFocus }: CloudViewProps): ReactElement {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const scatterplotRef = useRef<Scatterplot | null>(null);
+    const pointsRef = useRef<readonly CloudEntityPoint[]>([]);
+    const hoveredIndexRef = useRef<number | null>(null);
+    const onSelectRef = useRef(onSelect);
+    const onFocusRef = useRef(onFocus);
+    onSelectRef.current = onSelect;
+    onFocusRef.current = onFocus;
+
+    const points = normalizePoints(rawPoints);
+    pointsRef.current = points;
 
     useEffect(() => {
-        const context = canvasRef.current?.getContext("2d");
-        if (!context) {
+        const container = containerRef.current;
+        if (container === null) {
+            return undefined;
+        }
+
+        const canvas = document.createElement("canvas");
+        container.append(canvas);
+
+        const scatterplot = createScatterplot({
+            canvas,
+            pointColor: readThemeColor(POINT_COLOR_PROPERTY, POINT_COLOR_FALLBACK),
+            pointColorActive: readThemeColor(SELECTED_COLOR_PROPERTY, SELECTED_COLOR_FALLBACK),
+            backgroundColor: readThemeColor(BACKGROUND_COLOR_PROPERTY, BACKGROUND_COLOR_FALLBACK),
+            pointSize: POINT_SIZE,
+            pointSizeSelected: POINT_SIZE_SELECTED,
+            deselectOnDblClick: false,
+        });
+        scatterplotRef.current = scatterplot;
+
+        const selectSubscription = scatterplot.subscribe("select", ({ points: selectedIndices }) => {
+            const index = selectedIndices[0];
+            const entity = index === undefined ? undefined : pointsRef.current[index]?.ref;
+            if (entity !== undefined) {
+                onSelectRef.current(entity);
+            }
+        });
+        const pointOverSubscription = scatterplot.subscribe("pointOver", (index) => {
+            hoveredIndexRef.current = index;
+        });
+        const pointOutSubscription = scatterplot.subscribe("pointOut", () => {
+            hoveredIndexRef.current = null;
+        });
+
+        function handleDoubleClick(): void {
+            const index = hoveredIndexRef.current;
+            const entity = index === null ? undefined : pointsRef.current[index]?.ref;
+            if (entity !== undefined) {
+                onFocusRef.current(entity);
+            }
+        }
+
+        canvas.addEventListener("dblclick", handleDoubleClick);
+
+        return (): void => {
+            canvas.removeEventListener("dblclick", handleDoubleClick);
+            scatterplot.unsubscribe(selectSubscription);
+            scatterplot.unsubscribe(pointOverSubscription);
+            scatterplot.unsubscribe(pointOutSubscription);
+            scatterplot.destroy();
+            scatterplotRef.current = null;
+            canvas.remove();
+        };
+        // Created once per mount; point and highlight updates flow through the effect below rather
+        // than recreating the whole WebGL context.
+    }, []);
+
+    useEffect(() => {
+        const scatterplot = scatterplotRef.current;
+        if (scatterplot === null) {
             return;
         }
 
-        context.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-        context.fillStyle = "currentColor";
-        for (const point of points) {
-            drawPoint(context, point, POINT_RADIUS);
+        void scatterplot.draw(points.map((point) => [point.x, point.y]));
+        const highlightedIndex =
+            highlighted === null ? -1 : points.findIndex((point) => sameEntity(point.ref, highlighted));
+        if (highlightedIndex >= 0) {
+            scatterplot.select([highlightedIndex], { preventEvent: true });
+        } else {
+            scatterplot.deselect({ preventEvent: true });
         }
-
-        const highlighted = points.find((point) => point.sampleHash === highlightedSampleHash);
-        if (highlighted) {
-            context.strokeStyle = "currentColor";
-            context.lineWidth = 2;
-            context.beginPath();
-            context.arc(
-                highlighted.x * CANVAS_SIZE,
-                highlighted.y * CANVAS_SIZE,
-                HIGHLIGHT_RADIUS,
-                0,
-                FULL_CIRCLE_RADIANS,
-            );
-            context.stroke();
-        }
-    }, [points, highlightedSampleHash]);
-
-    function hitTest(event: MouseEvent<HTMLCanvasElement>): NormalizedPoint | null {
-        const target = { x: event.nativeEvent.offsetX / CANVAS_SIZE, y: event.nativeEvent.offsetY / CANVAS_SIZE };
-        return findNearestPoint(points, target, HIT_TEST_RADIUS);
-    }
-
-    function handleClick(event: MouseEvent<HTMLCanvasElement>): void {
-        const nearest = hitTest(event);
-        if (nearest !== null) {
-            onSelect(nearest.sampleHash);
-        }
-    }
-
-    function handleDoubleClick(event: MouseEvent<HTMLCanvasElement>): void {
-        const nearest = hitTest(event);
-        if (nearest !== null) {
-            onFocus(nearest.sampleHash);
-        }
-    }
-
-    if (points.length === 0) {
-        return (
-            <div className="cloud-empty">
-                <h4>No cloud coordinates yet</h4>
-                <p>Run the embedding pipeline to populate this view with sample positions.</p>
-            </div>
-        );
-    }
+    }, [points, highlighted]);
 
     return (
         <div className="cloud-wrap">
-            <TransformWrapper>
-                <TransformComponent>
-                    <canvas
-                        ref={canvasRef}
-                        width={CANVAS_SIZE}
-                        height={CANVAS_SIZE}
-                        onClick={handleClick}
-                        onDoubleClick={handleDoubleClick}
-                    />
-                </TransformComponent>
-            </TransformWrapper>
+            <div className="cloud-canvas" ref={containerRef} />
+            {points.length === 0 && (
+                <div className="cloud-empty">
+                    <h4>No cloud coordinates yet</h4>
+                    <p>Run the embedding pipeline to populate this view with positions.</p>
+                </div>
+            )}
         </div>
     );
 }

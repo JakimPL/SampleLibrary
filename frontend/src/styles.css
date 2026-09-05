@@ -394,6 +394,23 @@ tr.is-focused {
     white-space: nowrap;
 }
 
+.panel-filter button {
+    border: 1px solid var(--border);
+    background: var(--surface-0);
+    border-radius: 5px;
+    height: 24px;
+    padding: 0 10px;
+    font-size: 11.5px;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.panel-filter button[aria-pressed="true"] {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
 .thumbnail-button {
     background: none;
     border: none;
@@ -413,12 +430,25 @@ tr.is-focused {
     inset: 0;
 }
 
-.cloud-wrap canvas {
+.cloud-canvas {
     position: absolute;
     inset: 0;
+}
+
+.cloud-canvas canvas {
+    display: block;
     width: 100%;
     height: 100%;
-    color: var(--text-primary);
+}
+
+.cloud-caption {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 6px 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-1);
 }
 
 .cloud-empty {
@@ -431,6 +461,7 @@ tr.is-focused {
     gap: 8px;
     text-align: center;
     padding: 20px;
+    background: var(--surface-0);
 }
 
 .cloud-empty h4 {

@@ -1,17 +1,23 @@
-import type { CloudPoint } from "../api/cloud";
+import type { EntityRef } from "../workspace/selectionStore";
 
-export interface Point {
+export interface CloudEntityPoint {
+    readonly ref: EntityRef;
     readonly x: number;
     readonly y: number;
 }
 
-export interface NormalizedPoint extends Point {
-    readonly sampleHash: string;
-}
-
+const NORMALIZED_MIN = -1;
+const NORMALIZED_MAX = 1;
+const NORMALIZED_SPAN = NORMALIZED_MAX - NORMALIZED_MIN;
 const FALLBACK_RANGE = 1;
 
-export function normalizePoints(points: readonly CloudPoint[]): readonly NormalizedPoint[] {
+/**
+ * Maps a set of points' bounding box onto regl-scatterplot's own [-1, 1] coordinate space.
+ *
+ * A shared coordinate range across every render keeps the plot centred and fully visible
+ * regardless of the arbitrary scale a UMAP fit or a placeholder embedding happens to produce.
+ */
+export function normalizePoints(points: readonly CloudEntityPoint[]): readonly CloudEntityPoint[] {
     if (points.length === 0) {
         return [];
     }
@@ -26,26 +32,8 @@ export function normalizePoints(points: readonly CloudPoint[]): readonly Normali
     const rangeY = maxY - minY || FALLBACK_RANGE;
 
     return points.map((point) => ({
-        sampleHash: point.sample_hash,
-        x: (point.x - minX) / rangeX,
-        y: (point.y - minY) / rangeY,
+        ref: point.ref,
+        x: NORMALIZED_MIN + ((point.x - minX) / rangeX) * NORMALIZED_SPAN,
+        y: NORMALIZED_MIN + ((point.y - minY) / rangeY) * NORMALIZED_SPAN,
     }));
-}
-
-export function findNearestPoint(
-    points: readonly NormalizedPoint[],
-    target: Point,
-    maxDistance: number,
-): NormalizedPoint | null {
-    let nearest: NormalizedPoint | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    for (const point of points) {
-        const distance = Math.hypot(point.x - target.x, point.y - target.y);
-        if (distance < nearestDistance) {
-            nearestDistance = distance;
-            nearest = point;
-        }
-    }
-
-    return nearest !== null && nearestDistance <= maxDistance ? nearest : null;
 }
