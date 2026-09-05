@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import duckdb
 import pytest
 from trackmod.core.samples.loop import Loop, LoopMode
@@ -13,6 +15,8 @@ from samplecore.models.sample_properties import (
     Vibrato,
     XMSampleProperties,
 )
+from samplecore.models.tracker import TrackerFormat
+from samplecore.storage.repositories.module import DuckDBModuleRepository
 from samplecore.storage.repositories.sample_properties import (
     DuckDBSamplePropertiesRepository,
     _loop_from_row,
@@ -122,3 +126,37 @@ def test_a_partially_populated_loop_is_rejected_as_inconsistent() -> None:
 def test_a_partially_populated_vibrato_is_rejected_as_inconsistent() -> None:
     with pytest.raises(ValueError, match="set together"):
         _vibrato_from_row(1, 2, None, 0)
+
+
+def test_list_for_sample_finds_occurrences_across_different_modules(
+    connection: duckdb.DuckDBPyConnection, stored_module: Module, stored_sample: Sample
+) -> None:
+    other_module_repository = DuckDBModuleRepository(connection)
+    other_module = Module(
+        hash=format(99, "064x"),
+        id=other_module_repository.next_id(),
+        filename="other.xm",
+        tracker=TrackerFormat.XM,
+        title="other",
+        channel_count=4,
+        pattern_count=1,
+        instrument_count=1,
+        sample_count=1,
+        file_size=1024,
+        ingested_at=datetime.now(UTC),
+    )
+    other_module_repository.insert(other_module)
+
+    repository = DuckDBSamplePropertiesRepository(connection)
+    first_occurrence = _xm_properties(stored_module.hash, stored_sample.hash, sample_slot=0)
+    second_occurrence = _it_properties(other_module.hash, stored_sample.hash, sample_slot=0)
+    repository.upsert(first_occurrence)
+    repository.upsert(second_occurrence)
+
+    assert set(repository.list_for_sample(stored_sample.hash)) == {first_occurrence, second_occurrence}
+
+
+def test_list_for_sample_finds_nothing_for_an_unreferenced_sample(
+    connection: duckdb.DuckDBPyConnection, sample_hash_b: str
+) -> None:
+    assert DuckDBSamplePropertiesRepository(connection).list_for_sample(sample_hash_b) == ()

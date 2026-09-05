@@ -88,3 +88,21 @@ def test_list_all_returns_every_stored_relation(
     repository.upsert(relation)
 
     assert repository.list_all() == (relation,)
+
+
+def test_list_for_sample_finds_a_relation_by_either_subject_or_reference_hash(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    repository = DuckDBSampleRelationRepository(connection)
+    relation = _relation(repository.next_id(), stored_sample.hash, stored_sample_b.hash)
+
+    repository.upsert(relation)
+
+    assert repository.list_for_sample(stored_sample.hash) == (relation,)
+    assert repository.list_for_sample(stored_sample_b.hash) == (relation,)
+
+
+def test_list_for_sample_finds_nothing_for_an_unrelated_sample(
+    connection: duckdb.DuckDBPyConnection, sample_hash_a: str
+) -> None:
+    assert DuckDBSampleRelationRepository(connection).list_for_sample(sample_hash_a) == ()

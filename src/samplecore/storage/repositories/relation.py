@@ -25,6 +25,8 @@ class SampleRelationRepository(Protocol):
 
     def list_all(self) -> tuple[SampleRelation, ...]: ...
 
+    def list_for_sample(self, sample_hash: str) -> tuple[SampleRelation, ...]: ...
+
 
 class DuckDBSampleRelationRepository:
     """A SampleRelationRepository backed by the catalog's ``sample_relation`` table.
@@ -85,6 +87,13 @@ class DuckDBSampleRelationRepository:
 
     def list_all(self) -> tuple[SampleRelation, ...]:
         rows = self._connection.execute(f"SELECT {_SELECT_COLUMNS} FROM sample_relation").fetchall()
+        return tuple(_row_to_relation(row) for row in rows)
+
+    def list_for_sample(self, sample_hash: str) -> tuple[SampleRelation, ...]:
+        rows = self._connection.execute(
+            f"SELECT {_SELECT_COLUMNS} FROM sample_relation WHERE subject_hash = ? OR reference_hash = ?",
+            [sample_hash, sample_hash],
+        ).fetchall()
         return tuple(_row_to_relation(row) for row in rows)
 
 

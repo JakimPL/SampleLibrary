@@ -22,6 +22,10 @@ class ModuleRepository(Protocol):
 
     def insert(self, module: Module) -> None: ...
 
+    def list_page(self, *, limit: int, offset: int, tracker: TrackerFormat | None = None) -> tuple[Module, ...]: ...
+
+    def count(self, *, tracker: TrackerFormat | None = None) -> int: ...
+
 
 class DuckDBModuleRepository:
     """A ModuleRepository backed by the catalog's ``module`` table.
@@ -65,6 +69,27 @@ class DuckDBModuleRepository:
                 module.ingested_at,
             ],
         )
+
+    def list_page(self, *, limit: int, offset: int, tracker: TrackerFormat | None = None) -> tuple[Module, ...]:
+        clause, parameters = _tracker_filter(tracker)
+        rows = self._connection.execute(
+            f"SELECT {_SELECT_COLUMNS} FROM module{clause} ORDER BY id LIMIT ? OFFSET ?",
+            [*parameters, limit, offset],
+        ).fetchall()
+        return tuple(_row_to_module(row) for row in rows)
+
+    def count(self, *, tracker: TrackerFormat | None = None) -> int:
+        clause, parameters = _tracker_filter(tracker)
+        row = self._connection.execute(f"SELECT count(*) FROM module{clause}", parameters).fetchone()
+        assert row is not None
+        return int(row[0])
+
+
+def _tracker_filter(tracker: TrackerFormat | None) -> tuple[str, list[str]]:
+    if tracker is None:
+        return "", []
+
+    return " WHERE tracker = ?", [tracker.value]
 
 
 def _row_to_module(row: tuple[Any, ...]) -> Module:

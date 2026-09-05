@@ -47,6 +47,24 @@ _SELECT_IT = f"""
     WHERE m.hash = ?
 """
 
+_SELECT_XM_FOR_SAMPLE = f"""
+    SELECT {_BASE_COLUMNS}, xm.relative_note, xm.finetune, m.hash
+    FROM sample_properties sp
+    JOIN xm_sample_properties xm USING (module_id, instrument_index, sample_slot)
+    JOIN module m ON m.id = sp.module_id
+    WHERE sp.sample_hash = ?
+"""
+
+_SELECT_IT_FOR_SAMPLE = f"""
+    SELECT {_BASE_COLUMNS},
+        it.global_volume, it.sustain_begin, it.sustain_end, it.sustain_mode,
+        it.filename, it.vibrato_speed, it.vibrato_depth, it.vibrato_rate, it.vibrato_waveform, m.hash
+    FROM sample_properties sp
+    JOIN it_sample_properties it USING (module_id, instrument_index, sample_slot)
+    JOIN module m ON m.id = sp.module_id
+    WHERE sp.sample_hash = ?
+"""
+
 
 class SamplePropertiesRepository(Protocol):
     """Persistence for tracker-specific occurrence properties, one row per (module, instrument, slot)."""
@@ -54,6 +72,8 @@ class SamplePropertiesRepository(Protocol):
     def upsert(self, properties: TrackerSampleProperties) -> None: ...
 
     def list_for_module(self, module_hash: str) -> tuple[TrackerSampleProperties, ...]: ...
+
+    def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]: ...
 
 
 class DuckDBSamplePropertiesRepository:
@@ -74,11 +94,24 @@ class DuckDBSamplePropertiesRepository:
                 self._insert_it(module_id, properties)
 
     def list_for_module(self, module_hash: str) -> tuple[TrackerSampleProperties, ...]:
-        xm_rows = self._connection.execute(_SELECT_XM, [module_hash]).fetchall()
-        it_rows = self._connection.execute(_SELECT_IT, [module_hash]).fetchall()
+        return self._list_by(_SELECT_XM, _SELECT_IT, module_hash)
+
+    def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]:
+        return self._list_by(_SELECT_XM_FOR_SAMPLE, _SELECT_IT_FOR_SAMPLE, sample_hash)
+
+    def _list_by(self, xm_query: str, it_query: str, parameter: str) -> tuple[TrackerSampleProperties, ...]:
+        xm_rows = self._connection.execute(xm_query, [parameter]).fetchall()
+        it_rows = self._connection.execute(it_query, [parameter]).fetchall()
         properties = [_row_to_xm_properties(row) for row in xm_rows] + [_row_to_it_properties(row) for row in it_rows]
         return tuple(
-            sorted(properties, key=lambda item: (item.occurrence.instrument_index, item.occurrence.sample_slot))
+            sorted(
+                properties,
+                key=lambda item: (
+                    item.occurrence.module_hash,
+                    item.occurrence.instrument_index,
+                    item.occurrence.sample_slot,
+                ),
+            )
         )
 
     def _module_id(self, module_hash: str) -> int:

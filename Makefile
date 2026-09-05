@@ -32,3 +32,7 @@ extract:
 .PHONY: equivalence
 equivalence:
 	uv run sampleequivalence
+
+.PHONY: serve
+serve:
+	uv run uvicorn sampleserver.main:app --reload
