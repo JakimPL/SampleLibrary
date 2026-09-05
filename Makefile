@@ -6,13 +6,13 @@ install:
 
 .PHONY: format
 format:
-	uv run isort src tests
-	uv run black src tests
+	uv run isort src tests scripts
+	uv run black src tests scripts
 
 .PHONY: lint
 lint:
 	uv run mypy
-	uv run pylint src
+	uv run pylint src scripts
 	uv run lint-imports
 
 .PHONY: test
@@ -41,6 +41,22 @@ thumbnails:
 .PHONY: embed
 embed:
 	uv run samplecloud
+
+.PHONY: dev-library
+dev-library:
+	uv run python scripts/build_dev_library.py
+
+.PHONY: dev-extract
+dev-extract: dev-library
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run sampleextract
+
+.PHONY: dev-equivalence
+dev-equivalence:
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run sampleequivalence
+
+.PHONY: dev-reset
+dev-reset:
+	rm -rf dev-library
 
 .PHONY: serve
 serve:

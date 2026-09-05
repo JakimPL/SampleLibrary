@@ -87,7 +87,7 @@ fail_under = 90
 
 [tool.mypy]
 python_version = "3.12"
-files = ["src"]
+files = ["src", "scripts"]
 exclude = ["tests"]
 disallow_subclassing_any = true
 ignore_missing_imports = true

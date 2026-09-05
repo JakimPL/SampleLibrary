@@ -20,6 +20,9 @@ config.toml
 # Marimo's own per-session run cache
 notebooks/__marimo__/
 
+# Generated dev fixture corpus: scripts/build_dev_library.py regenerates it on demand
+dev-library/
+
 # Regenerable data: never commit
 *.duckdb
 *.duckdb.wal
