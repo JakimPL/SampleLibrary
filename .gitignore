@@ -17,6 +17,9 @@ wheels/
 # Local configuration -- never commit real local paths
 config.toml
 
+# Marimo's own per-session run cache
+notebooks/__marimo__/
+
 # Regenerable data: never commit
 *.duckdb
 *.duckdb.wal
