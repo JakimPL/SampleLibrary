@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBytes } from "../../src/shared/format";
+import { formatBytes, formatDuration } from "../../src/shared/format";
 
 describe("formatBytes", () => {
     it("formats zero bytes", () => {
@@ -17,5 +17,15 @@ describe("formatBytes", () => {
 
     it("formats a byte count spanning multiple unit steps", () => {
         expect(formatBytes(1024 * 1024 * 5)).toBe("5.0 MiB");
+    });
+});
+
+describe("formatDuration", () => {
+    it("formats seconds with two decimal places", () => {
+        expect(formatDuration(1.5)).toBe("1.50 s");
+    });
+
+    it("formats a sub-second duration", () => {
+        expect(formatDuration(0.023)).toBe("0.02 s");
     });
 });

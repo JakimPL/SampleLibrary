@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import duckdb
+import numpy as np
 from fastapi.testclient import TestClient
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
@@ -11,8 +13,10 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
+from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
+from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import DuckDBModuleRepository
 from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository
@@ -22,20 +26,22 @@ SAMPLE_HASH_A = "a" * 64
 SAMPLE_HASH_B = "b" * 64
 
 
-def _insert_sample(connection: duckdb.DuckDBPyConnection, sample_hash: str) -> Sample:
-    sample = Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
+def _insert_sample(connection: duckdb.DuckDBPyConnection, sample_hash: str, *, frames: int = 8) -> Sample:
+    sample = Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=frames)
     DuckDBSampleRepository(connection).upsert(sample)
     return sample
 
 
-def _insert_module(connection: duckdb.DuckDBPyConnection) -> Module:
+def _insert_module(
+    connection: duckdb.DuckDBPyConnection, *, filename: str = "song.xm", title: str = "a song"
+) -> Module:
     repository = DuckDBModuleRepository(connection)
     module = Module(
         hash="c" * 64,
         id=repository.next_id(),
-        filename="song.xm",
+        filename=filename,
         tracker=TrackerFormat.XM,
-        title="a song",
+        title=title,
         channel_count=4,
         pattern_count=1,
         instrument_count=1,
@@ -47,31 +53,154 @@ def _insert_module(connection: duckdb.DuckDBPyConnection) -> Module:
     return module
 
 
-def test_get_sample_returns_detail_with_occurrences(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
-    sample = _insert_sample(connection, SAMPLE_HASH_A)
-    module = _insert_module(connection)
+def _add_occurrence(
+    connection: duckdb.DuckDBPyConnection, *, sample: Sample, module: Module, slot: int = 0, name: str = "lead"
+) -> None:
     DuckDBSamplePropertiesRepository(connection).upsert(
         XMSampleProperties(
             sample_hash=sample.hash,
-            occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=0),
-            name="lead",
+            occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=slot),
+            name=name,
             rate=8363,
             volume=64,
             tuning=Tuning(relative_note=0, finetune=0),
         )
     )
 
+
+def test_list_samples_returns_a_page(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+    first = _insert_sample(connection, SAMPLE_HASH_A)
+    second = _insert_sample(connection, SAMPLE_HASH_B)
+
+    response = client.get("/samples")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert {item["hash"] for item in body["items"]} == {first.hash, second.hash}
+
+
+def test_list_samples_ranks_by_occurrence_count(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+    frequent = _insert_sample(connection, SAMPLE_HASH_A)
+    rare = _insert_sample(connection, SAMPLE_HASH_B)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=frequent, module=module, slot=0, name="kick")
+    _add_occurrence(connection, sample=frequent, module=module, slot=1, name="kick")
+
+    response = client.get("/samples")
+
+    body = response.json()
+    assert [item["hash"] for item in body["items"]] == [frequent.hash, rare.hash]
+    assert body["items"][0]["occurrence_count"] == 2
+    assert body["items"][0]["display_name"] == "kick"
+
+
+def test_list_samples_respects_limit_and_offset(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+    _insert_sample(connection, SAMPLE_HASH_A)
+    _insert_sample(connection, SAMPLE_HASH_B)
+
+    response = client.get("/samples", params={"limit": 1, "offset": 1})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["limit"] == 1
+    assert body["offset"] == 1
+
+
+def test_get_sample_returns_detail_with_occurrences_and_module_context(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    module = _insert_module(connection, filename="song.xm", title="a song")
+    _add_occurrence(connection, sample=sample, module=module, name="lead")
+
     response = client.get(f"/samples/{sample.hash}")
 
     assert response.status_code == 200
     body = response.json()
     assert body["hash"] == sample.hash
+    assert body["display_name"] == "lead"
     assert len(body["occurrences"]) == 1
-    assert body["occurrences"][0]["name"] == "lead"
+    occurrence = body["occurrences"][0]
+    assert occurrence["properties"]["name"] == "lead"
+    assert occurrence["module"] == {
+        "hash": module.hash,
+        "filename": "song.xm",
+        "title": "a song",
+        "tracker": "xm",
+    }
+
+
+def test_get_sample_resolves_a_shared_module_only_once_across_occurrences(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=sample, module=module, slot=0, name="lead")
+    _add_occurrence(connection, sample=sample, module=module, slot=1, name="lead")
+
+    response = client.get(f"/samples/{sample.hash}")
+
+    body = response.json()
+    assert len(body["occurrences"]) == 2
+    assert {occurrence["module"]["hash"] for occurrence in body["occurrences"]} == {module.hash}
+
+
+def test_get_sample_reports_size_and_duration(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A, frames=audio_store.NOMINAL_WAV_RATE)
+
+    response = client.get(f"/samples/{sample.hash}")
+
+    body = response.json()
+    assert body["size_bytes"] == sample.stored_bytes
+    assert body["duration_seconds"] == 1.0
 
 
 def test_get_sample_404s_for_an_unknown_hash(client: TestClient) -> None:
     response = client.get(f"/samples/{'f' * 64}")
+
+    assert response.status_code == 404
+
+
+def test_get_sample_audio_serves_the_stored_wav_file(
+    client: TestClient, connection: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    sample = Sample(hash=SAMPLE_HASH_A, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=4)
+    DuckDBSampleRepository(connection).upsert(sample)
+    pcm = np.zeros((4, 1), dtype=np.float64)
+    audio_store.write(tmp_path, SamplePCM(sample=sample, pcm=pcm))
+
+    response = client.get(f"/samples/{sample.hash}/audio")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/wav"
+
+
+def test_get_sample_audio_404s_for_an_unknown_hash(client: TestClient) -> None:
+    response = client.get(f"/samples/{'f' * 64}/audio")
+
+    assert response.status_code == 404
+
+
+def test_get_sample_waveform_returns_peaks(
+    client: TestClient, connection: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    sample = Sample(hash=SAMPLE_HASH_A, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=4)
+    DuckDBSampleRepository(connection).upsert(sample)
+    pcm = np.array([[0.5], [-0.5], [0.25], [-0.25]], dtype=np.float64)
+    audio_store.write(tmp_path, SamplePCM(sample=sample, pcm=pcm))
+
+    response = client.get(f"/samples/{sample.hash}/waveform")
+
+    assert response.status_code == 200
+    peaks = response.json()
+    assert len(peaks) == 4
+    assert all({"minimum", "maximum"} == set(peak) for peak in peaks)
+
+
+def test_get_sample_waveform_404s_for_an_unknown_hash(client: TestClient) -> None:
+    response = client.get(f"/samples/{'f' * 64}/waveform")
 
     assert response.status_code == 404
 

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from sampleserver.routers import cloud, modules, samples, stats
 
 
-def create_app(database_path: Path) -> FastAPI:
+def create_app(database_path: Path, library_root: Path) -> FastAPI:
     """Build the read-only FastAPI app serving the catalog at the given database path.
 
     A pure factory, deliberately without any module-level instance built from real
@@ -17,6 +17,7 @@ def create_app(database_path: Path) -> FastAPI:
     """
     application = FastAPI(title="SampleLibrary", description="Read-only access to the sample catalog.")
     application.state.database_path = database_path
+    application.state.library_root = library_root
     application.include_router(modules.router)
     application.include_router(samples.router)
     application.include_router(stats.router)

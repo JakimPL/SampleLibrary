@@ -15,7 +15,7 @@ def test_get_connection_opens_a_real_read_only_connection_to_the_configured_data
     database_path = tmp_path / "test.duckdb"
     connect(database_path).close()
 
-    application = create_app(database_path)
+    application = create_app(database_path, tmp_path)
     with TestClient(application) as client:
         response = client.get("/stats")
 

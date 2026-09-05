@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { ErrorNotice } from "../shared/ErrorNotice";
+import { formatBytes } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL, UNTITLED_MODULE_LABEL } from "../shared/labels";
 import { Loading } from "../shared/Loading";
 import { OptionalLabel } from "../shared/OptionalLabel";
@@ -35,6 +36,12 @@ export function ModuleDetailPage(): ReactElement {
                 <dd>{module.pattern_count}</dd>
                 <dt>Instruments</dt>
                 <dd>{module.instrument_count}</dd>
+                <dt>Samples</dt>
+                <dd>{module.sample_count}</dd>
+                <dt>File Size</dt>
+                <dd>{formatBytes(module.file_size)}</dd>
+                <dt>Ingested At</dt>
+                <dd>{new Date(module.ingested_at).toLocaleString()}</dd>
             </dl>
             <h2>Samples</h2>
             <table>

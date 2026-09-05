@@ -7,6 +7,7 @@ export function Layout(): ReactElement {
             <header>
                 <nav>
                     <NavLink to="/modules">Modules</NavLink>
+                    <NavLink to="/samples">Samples</NavLink>
                     <NavLink to="/stats">Stats</NavLink>
                     <NavLink to="/cloud">Cloud</NavLink>
                 </nav>

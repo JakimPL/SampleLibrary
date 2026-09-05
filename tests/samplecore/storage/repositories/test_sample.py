@@ -2,10 +2,29 @@ from __future__ import annotations
 
 import duckdb
 from trackmod.core.samples.depth import BitDepth
+from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.models.channels import ChannelLayout
+from samplecore.models.module import Module
 from samplecore.models.sample import Sample
+from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.storage.repositories.sample import DuckDBSampleRepository
+from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
+
+
+def _add_occurrence(
+    connection: duckdb.DuckDBPyConnection, *, sample: Sample, module: Module, slot: int, name: str
+) -> None:
+    DuckDBSamplePropertiesRepository(connection).upsert(
+        XMSampleProperties(
+            sample_hash=sample.hash,
+            occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=slot),
+            name=name,
+            rate=8363,
+            volume=64,
+            tuning=Tuning(relative_note=0, finetune=0),
+        )
+    )
 
 
 def test_a_stored_sample_round_trips_through_get(connection: duckdb.DuckDBPyConnection, sample_hash_a: str) -> None:
@@ -49,3 +68,62 @@ def test_list_all_returns_every_stored_sample(
     repository.upsert(second)
 
     assert set(repository.list_all()) == {first, second}
+
+
+def test_list_page_on_an_empty_catalog_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
+    assert DuckDBSampleRepository(connection).list_page(limit=50, offset=0) == ()
+
+
+def test_list_page_ranks_by_occurrence_count_descending(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample, stored_module: Module
+) -> None:
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick")
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=1, name="kick")
+
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+
+    assert [summary.hash for summary in page] == [stored_sample.hash, stored_sample_b.hash]
+    assert page[0].occurrence_count == 2
+    assert page[1].occurrence_count == 0
+
+
+def test_list_page_breaks_a_tied_occurrence_count_by_hash(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+
+    assert [summary.hash for summary in page] == sorted([stored_sample.hash, stored_sample_b.hash])
+
+
+def test_list_page_respects_limit_and_offset(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    page = DuckDBSampleRepository(connection).list_page(limit=1, offset=1)
+
+    assert len(page) == 1
+    assert page[0].hash == sorted([stored_sample.hash, stored_sample_b.hash])[1]
+
+
+def test_list_page_resolves_the_dominant_occurrence_name(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_module: Module
+) -> None:
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick")
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=1, name="KICK")
+
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+
+    assert page[0].display_name == "kick"
+
+
+def test_list_page_resolves_size_bytes_from_the_sample_itself(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample
+) -> None:
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+
+    assert page[0].size_bytes == stored_sample.stored_bytes
+
+
+def test_count_reflects_every_stored_sample(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    assert DuckDBSampleRepository(connection).count() == 2

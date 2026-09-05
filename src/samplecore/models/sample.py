@@ -5,7 +5,7 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.base import FROZEN
 from samplecore.models.channels import ChannelLayout
-from samplecore.models.scalars import Frames, SampleHash
+from samplecore.models.scalars import Count, Frames, SampleHash
 
 
 class Sample(BaseModel):
@@ -28,3 +28,19 @@ class Sample(BaseModel):
     def stored_bytes(self) -> int:
         """How many bytes this sample's canonical PCM payload occupies, at its own depth."""
         return self.frames * self.channels * self.depth.bytes_per_frame
+
+
+class SampleSummary(Sample):
+    """One row of a paginated, occurrence-ranked samples listing.
+
+    Ranks samples by identity -- one row per exact content hash -- rather than by equivalence
+    class; grouping near-duplicate variants into one row is a distinct future ranking mode, not a
+    hidden variant of this one. `display_name` resolves the sample's, possibly conflicting,
+    occurrence names via `samplecore.naming.choose_dominant_name`. ``size_bytes`` re-exposes
+    ``Sample.stored_bytes`` under its own name: a Pydantic field cannot share a name with an
+    inherited plain property without the property silently winning on attribute access.
+    """
+
+    occurrence_count: Count
+    display_name: str
+    size_bytes: Count

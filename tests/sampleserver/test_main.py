@@ -20,3 +20,4 @@ def test_main_builds_the_app_from_the_configured_database_path(tmp_path: Path, m
     importlib.reload(main_module)
 
     assert main_module.app.state.database_path == tmp_path / DEFAULT_DATABASE_FILENAME
+    assert main_module.app.state.library_root == tmp_path

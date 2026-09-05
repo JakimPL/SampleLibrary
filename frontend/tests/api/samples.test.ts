@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getSample, getSampleRelations } from "../../src/api/samples";
+import { getSample, getSampleRelations, getSampleWaveform, listSamples, sampleAudioUrl } from "../../src/api/samples";
 
 function stubFetchReturning(payload: unknown): ReturnType<typeof vi.fn> {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(payload) });
@@ -10,6 +10,16 @@ function stubFetchReturning(payload: unknown): ReturnType<typeof vi.fn> {
 
 afterEach(() => {
     vi.unstubAllGlobals();
+});
+
+describe("listSamples", () => {
+    it("builds a query string from limit and offset", async () => {
+        const fetchMock = stubFetchReturning({ items: [], total: 0, limit: 50, offset: 0 });
+
+        await listSamples({ limit: 50, offset: 0 });
+
+        expect(fetchMock).toHaveBeenCalledWith("/samples?limit=50&offset=0");
+    });
 });
 
 describe("getSample", () => {
@@ -29,5 +39,21 @@ describe("getSampleRelations", () => {
         await getSampleRelations("abc");
 
         expect(fetchMock).toHaveBeenCalledWith("/samples/abc/relations");
+    });
+});
+
+describe("getSampleWaveform", () => {
+    it("requests the sample's waveform peaks", async () => {
+        const fetchMock = stubFetchReturning([]);
+
+        await getSampleWaveform("abc");
+
+        expect(fetchMock).toHaveBeenCalledWith("/samples/abc/waveform");
+    });
+});
+
+describe("sampleAudioUrl", () => {
+    it("builds the audio URL without fetching anything", () => {
+        expect(sampleAudioUrl("abc")).toBe("/samples/abc/audio");
     });
 });

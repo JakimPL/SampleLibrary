@@ -47,6 +47,29 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/samples": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List Samples
+         * @description A page of catalogued samples, ranked by how many module occurrences reference each one.
+         *
+         *     Ranks by sample identity: one row per exact content hash. Ranking by equivalence class --
+         *     grouping near-duplicate variants into one row -- is a planned future mode, not available yet.
+         */
+        readonly get: operations["list_samples_samples_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/samples/{sample_hash}": {
         readonly parameters: {
             readonly query?: never;
@@ -62,6 +85,52 @@ export interface paths {
          *         HTTPException: 404 when no sample is catalogued under this hash.
          */
         readonly get: operations["get_sample_samples__sample_hash__get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/samples/{sample_hash}/audio": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Sample Audio
+         * @description The sample's own canonical audio, as stored in the content-addressable store.
+         *
+         *     Raises:
+         *         HTTPException: 404 when no sample is catalogued under this hash.
+         */
+        readonly get: operations["get_sample_audio_samples__sample_hash__audio_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/samples/{sample_hash}/waveform": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Sample Waveform
+         * @description A compact amplitude-envelope preview of the sample's own waveform.
+         *
+         *     Raises:
+         *         HTTPException: 404 when no sample is catalogued under this hash.
+         */
+        readonly get: operations["get_sample_waveform_samples__sample_hash__waveform_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -301,6 +370,17 @@ export interface components {
             /** Offset */
             readonly offset: number;
         };
+        /** Page[SampleSummary] */
+        readonly Page_SampleSummary_: {
+            /** Items */
+            readonly items: readonly components["schemas"]["SampleSummary"][];
+            /** Total */
+            readonly total: number;
+            /** Limit */
+            readonly limit: number;
+            /** Offset */
+            readonly offset: number;
+        };
         /**
          * RelationReview
          * @description A curator's verdict on an automatically proposed SampleRelation, once one has been made.
@@ -354,7 +434,7 @@ export interface components {
         };
         /**
          * SampleDetail
-         * @description A sample together with every occurrence, across the whole catalog, that references it.
+         * @description A sample together with every module occurrence that references it.
          */
         readonly SampleDetail: {
             /** Hash */
@@ -364,7 +444,13 @@ export interface components {
             /** Frames */
             readonly frames: number;
             /** Occurrences */
-            readonly occurrences: readonly (components["schemas"]["XMSampleProperties"] | components["schemas"]["ITSampleProperties"])[];
+            readonly occurrences: readonly components["schemas"]["SampleOccurrenceDetail"][];
+            /** Size Bytes */
+            readonly size_bytes: number;
+            /** Display Name */
+            readonly display_name: string;
+            /** Duration Seconds */
+            readonly duration_seconds: number;
         };
         /**
          * SampleOccurrence
@@ -381,6 +467,28 @@ export interface components {
             readonly instrument_index: number;
             /** Sample Slot */
             readonly sample_slot: number;
+        };
+        /**
+         * SampleOccurrenceDetail
+         * @description One module occurrence of a sample, together with the module it belongs to.
+         */
+        readonly SampleOccurrenceDetail: {
+            /** Properties */
+            readonly properties: components["schemas"]["XMSampleProperties"] | components["schemas"]["ITSampleProperties"];
+            readonly module: components["schemas"]["SampleOccurrenceModule"];
+        };
+        /**
+         * SampleOccurrenceModule
+         * @description The module context a sample occurrence belongs to, resolved for display alongside it.
+         */
+        readonly SampleOccurrenceModule: {
+            /** Hash */
+            readonly hash: string;
+            /** Filename */
+            readonly filename: string;
+            /** Title */
+            readonly title: string;
+            readonly tracker: components["schemas"]["TrackerFormat"];
         };
         /**
          * SampleRelation
@@ -414,6 +522,31 @@ export interface components {
              */
             readonly detected_at: string;
             readonly review?: components["schemas"]["RelationReview"] | null;
+        };
+        /**
+         * SampleSummary
+         * @description One row of a paginated, occurrence-ranked samples listing.
+         *
+         *     Ranks samples by identity -- one row per exact content hash -- rather than by equivalence
+         *     class; grouping near-duplicate variants into one row is a distinct future ranking mode, not a
+         *     hidden variant of this one. `display_name` resolves the sample's, possibly conflicting,
+         *     occurrence names via `samplecore.naming.choose_dominant_name`. ``size_bytes`` re-exposes
+         *     ``Sample.stored_bytes`` under its own name: a Pydantic field cannot share a name with an
+         *     inherited plain property without the property silently winning on attribute access.
+         */
+        readonly SampleSummary: {
+            /** Hash */
+            readonly hash: string;
+            readonly depth: components["schemas"]["BitDepth"];
+            readonly channels: components["schemas"]["ChannelLayout"];
+            /** Frames */
+            readonly frames: number;
+            /** Occurrence Count */
+            readonly occurrence_count: number;
+            /** Display Name */
+            readonly display_name: string;
+            /** Size Bytes */
+            readonly size_bytes: number;
         };
         /**
          * TrackerFormat
@@ -475,6 +608,16 @@ export interface components {
             readonly rate: number;
             /** Waveform */
             readonly waveform: number;
+        };
+        /**
+         * WaveformPeak
+         * @description One bucket's amplitude envelope in a compact waveform preview.
+         */
+        readonly WaveformPeak: {
+            /** Minimum */
+            readonly minimum: number;
+            /** Maximum */
+            readonly maximum: number;
         };
         /**
          * XMSampleProperties
@@ -577,6 +720,38 @@ export interface operations {
             };
         };
     };
+    readonly list_samples_samples_get: {
+        readonly parameters: {
+            readonly query?: {
+                readonly limit?: number;
+                readonly offset?: number;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Page_SampleSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     readonly get_sample_samples__sample_hash__get: {
         readonly parameters: {
             readonly query?: never;
@@ -595,6 +770,68 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["SampleDetail"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly get_sample_audio_samples__sample_hash__audio_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly get_sample_waveform_samples__sample_hash__waveform_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["WaveformPeak"][];
                 };
             };
             /** @description Validation Error */

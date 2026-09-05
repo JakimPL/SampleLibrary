@@ -1,6 +1,7 @@
 const BYTE_UNITS: readonly string[] = ["B", "KiB", "MiB", "GiB", "TiB"];
 const BYTES_PER_UNIT_STEP = 1024;
 const DECIMAL_PLACES = 1;
+const DURATION_DECIMAL_PLACES = 2;
 
 export function formatBytes(bytes: number): string {
     if (bytes === 0) {
@@ -17,4 +18,8 @@ export function formatBytes(bytes: number): string {
     const unit = BYTE_UNITS[unitIndex] ?? "B";
     const precision = unitIndex === 0 ? 0 : DECIMAL_PLACES;
     return `${value.toFixed(precision)} ${unit}`;
+}
+
+export function formatDuration(seconds: number): string {
+    return `${seconds.toFixed(DURATION_DECIMAL_PLACES)} s`;
 }

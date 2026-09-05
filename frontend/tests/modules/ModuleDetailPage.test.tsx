@@ -34,6 +34,8 @@ describe("ModuleDetailPage", () => {
             pattern_count: 2,
             instrument_count: 1,
             sample_count: 1,
+            file_size: 4096,
+            ingested_at: "2026-01-01T00:00:00Z",
             occurrences: [
                 {
                     sample_hash: "sample-1",
@@ -53,6 +55,7 @@ describe("ModuleDetailPage", () => {
             expect(screen.getByRole("heading", { name: "A Song" })).toBeInTheDocument();
         });
         expect(screen.getByRole("link", { name: "lead" })).toHaveAttribute("href", "/samples/sample-1");
+        expect(screen.getByText("4.0 KiB")).toBeInTheDocument();
     });
 
     it("falls back to placeholders for an untitled module and an unnamed sample occurrence", async () => {
@@ -66,6 +69,8 @@ describe("ModuleDetailPage", () => {
             pattern_count: 2,
             instrument_count: 1,
             sample_count: 1,
+            file_size: 0,
+            ingested_at: "2026-01-01T00:00:00Z",
             occurrences: [
                 {
                     sample_hash: "sample-1",

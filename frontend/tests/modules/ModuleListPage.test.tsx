@@ -31,7 +31,17 @@ describe("ModuleListPage", () => {
 
     it("renders the fetched modules once loaded", async () => {
         listModules.mockResolvedValue({
-            items: [{ hash: "abc", id: 1, title: "A Song", filename: "song.xm", tracker: "xm", sample_count: 3 }],
+            items: [
+                {
+                    hash: "abc",
+                    id: 1,
+                    title: "A Song",
+                    filename: "song.xm",
+                    tracker: "xm",
+                    sample_count: 3,
+                    file_size: 2048,
+                },
+            ],
             total: 1,
             limit: 50,
             offset: 0,
@@ -43,11 +53,14 @@ describe("ModuleListPage", () => {
             expect(screen.getByText("A Song")).toBeInTheDocument();
         });
         expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/abc");
+        expect(screen.getByText("2.0 KiB")).toBeInTheDocument();
     });
 
     it("links a module with an empty title through the [untitled] placeholder", async () => {
         listModules.mockResolvedValue({
-            items: [{ hash: "abc", id: 1, title: "", filename: "song.xm", tracker: "xm", sample_count: 3 }],
+            items: [
+                { hash: "abc", id: 1, title: "", filename: "song.xm", tracker: "xm", sample_count: 3, file_size: 0 },
+            ],
             total: 1,
             limit: 50,
             offset: 0,

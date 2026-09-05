@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import type { TrackerFormat } from "../api/modules";
 import { ErrorNotice } from "../shared/ErrorNotice";
+import { formatBytes } from "../shared/format";
 import { UNTITLED_MODULE_LABEL } from "../shared/labels";
 import { Loading } from "../shared/Loading";
 import { OptionalLabel } from "../shared/OptionalLabel";
@@ -44,6 +45,7 @@ export function ModuleListPage(): ReactElement {
                                 <th>Filename</th>
                                 <th>Tracker</th>
                                 <th>Samples</th>
+                                <th>Size</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -57,6 +59,7 @@ export function ModuleListPage(): ReactElement {
                                     <td>{module.filename}</td>
                                     <td>{module.tracker}</td>
                                     <td>{module.sample_count}</td>
+                                    <td>{formatBytes(module.file_size)}</td>
                                 </tr>
                             ))}
                         </tbody>
