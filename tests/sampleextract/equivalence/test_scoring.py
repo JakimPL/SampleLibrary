@@ -139,6 +139,24 @@ def test_score_resampled_variant_recovers_the_gain_of_a_compound_resample_and_am
     assert score.evidence["gain"] == pytest.approx(1.5, abs=0.05)
 
 
+def test_score_resampled_variant_clamps_confidence_to_one_despite_floating_point_overshoot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A near-perfect match's raw Pearson correlation can round to fractionally above 1.0 -- this
+    must never reach a RelationScore, since SampleRelation.confidence rejects anything past 1.0.
+    """
+    monkeypatch.setattr(
+        "sampleextract.equivalence.scoring._pearson_correlation", lambda first, second: 1.0000000000000002
+    )
+    original = _tonal_waveform(4410)
+    resampled = resample_poly(original, up=22050, down=44100, axis=0)
+
+    score = score_resampled_variant(original, resampled)
+
+    assert score is not None
+    assert score.confidence == 1.0
+
+
 def test_score_resampled_variant_tolerates_a_trimmed_lead_in() -> None:
     original = _tonal_waveform(44100)
     resampled = resample_poly(original, up=22050, down=44100, axis=0)

@@ -4,14 +4,14 @@ import argparse
 
 from samplecloud.backends.librosa_backend import LibrosaFeatureExtractor
 from samplecloud.run import run_embedding
-from samplecore.cli_support import load_config_or_exit
+from samplecore.cli_support import bootstrap_cli
 from samplecore.storage.database import connect
 
 
 def main(argv: list[str] | None = None) -> None:
     """Run one embedding pass over the catalog and report the result."""
     arguments = _parse_arguments(argv)
-    config = load_config_or_exit()
+    config = bootstrap_cli()
     connection = connect(config.resolved_database_path)
     try:
         summary = run_embedding(config, connection, LibrosaFeatureExtractor(), sample_limit=arguments.limit)

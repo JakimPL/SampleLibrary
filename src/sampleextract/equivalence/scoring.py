@@ -109,7 +109,9 @@ def score_resampled_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray
     resampling and amplitude at once without any gain compensation of its own; the best-fitting gain
     is still recovered and reported in ``evidence``, purely as corroborating detail. Returns None
     when every offset in the search window leaves one of the compared windows silent (zero
-    variance), since Pearson correlation is undefined there rather than meaningfully zero.
+    variance), since Pearson correlation is undefined there rather than meaningfully zero. Clamped to
+    at most 1.0, since floating-point rounding on a near-perfect match can otherwise put the raw
+    correlation a fraction above its mathematical ceiling.
     """
     short, long_ = (waveform_a, waveform_b) if waveform_a.shape[0] <= waveform_b.shape[0] else (waveform_b, waveform_a)
     ratio = Fraction(long_.shape[0], short.shape[0]).limit_denominator(MAX_RESAMPLE_DENOMINATOR)
@@ -132,7 +134,7 @@ def score_resampled_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray
         np.sum(aligned.windowed_resampled * aligned.windowed_reference) / np.sum(aligned.windowed_resampled**2)
     )
     return RelationScore(
-        confidence=max(0.0, aligned.correlation),
+        confidence=min(1.0, max(0.0, aligned.correlation)),
         evidence={
             "correlation": aligned.correlation,
             "resample_ratio": long_.shape[0] / short.shape[0],

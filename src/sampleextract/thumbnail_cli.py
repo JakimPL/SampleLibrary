@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from samplecore.cli_support import load_config_or_exit
+from samplecore.cli_support import bootstrap_cli
 from samplecore.storage.database import connect
 from sampleextract.thumbnail import compute_missing_thumbnails
 
@@ -10,7 +10,7 @@ from sampleextract.thumbnail import compute_missing_thumbnails
 def main(argv: list[str] | None = None) -> None:
     """Run one thumbnail backfill pass over the catalog and report the result."""
     arguments = _parse_arguments(argv)
-    config = load_config_or_exit()
+    config = bootstrap_cli()
     connection = connect(config.resolved_database_path)
     try:
         summary = compute_missing_thumbnails(connection, config.library_root, force=arguments.force)
