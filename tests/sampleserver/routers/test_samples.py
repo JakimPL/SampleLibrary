@@ -56,14 +56,20 @@ def _insert_module(
 
 
 def _add_occurrence(
-    connection: duckdb.DuckDBPyConnection, *, sample: Sample, module: Module, slot: int = 0, name: str = "lead"
+    connection: duckdb.DuckDBPyConnection,
+    *,
+    sample: Sample,
+    module: Module,
+    slot: int = 0,
+    name: str = "lead",
+    rate: int = 8363,
 ) -> None:
     DuckDBSamplePropertiesRepository(connection).upsert(
         XMSampleProperties(
             sample_hash=sample.hash,
             occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=slot),
             name=name,
-            rate=8363,
+            rate=rate,
             volume=64,
             tuning=Tuning(relative_note=0, finetune=0),
         )
@@ -95,6 +101,32 @@ def test_list_samples_ranks_by_occurrence_count(client: TestClient, connection: 
     assert [item["hash"] for item in body["items"]] == [frequent.hash, rare.hash]
     assert body["items"][0]["occurrence_count"] == 2
     assert body["items"][0]["display_name"] == "kick"
+
+
+def test_list_samples_resolves_the_dominant_occurrence_rate(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=sample, module=module, slot=0, name="kick", rate=8363)
+    _add_occurrence(connection, sample=sample, module=module, slot=1, name="kick", rate=8363)
+    _add_occurrence(connection, sample=sample, module=module, slot=2, name="kick", rate=22050)
+
+    response = client.get("/samples")
+
+    body = response.json()
+    assert body["items"][0]["dominant_rate_hz"] == 8363
+
+
+def test_list_samples_leaves_dominant_rate_null_for_a_sample_with_no_occurrences(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    _insert_sample(connection, SAMPLE_HASH_A)
+
+    response = client.get("/samples")
+
+    body = response.json()
+    assert body["items"][0]["dominant_rate_hz"] is None
 
 
 def test_list_samples_includes_a_cached_thumbnail(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
@@ -158,6 +190,21 @@ def test_get_sample_returns_detail_with_occurrences_and_module_context(
         "title": "a song",
         "tracker": "xm",
     }
+
+
+def test_get_sample_resolves_the_dominant_occurrence_rate(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=sample, module=module, slot=0, name="lead", rate=8363)
+    _add_occurrence(connection, sample=sample, module=module, slot=1, name="lead", rate=22050)
+    _add_occurrence(connection, sample=sample, module=module, slot=2, name="lead", rate=22050)
+
+    response = client.get(f"/samples/{sample.hash}")
+
+    body = response.json()
+    assert body["dominant_rate_hz"] == 22050
 
 
 def test_get_sample_resolves_a_shared_module_only_once_across_occurrences(

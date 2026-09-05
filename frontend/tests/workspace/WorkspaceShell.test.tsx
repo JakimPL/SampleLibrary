@@ -32,6 +32,7 @@ describe("WorkspaceShell", () => {
         expect(screen.getByText("Modules")).toBeInTheDocument();
         expect(screen.getByText("Samples")).toBeInTheDocument();
         expect(screen.getByText("Cloud")).toBeInTheDocument();
+        expect(screen.getByText("Waveform")).toBeInTheDocument();
         expect(screen.getByText("Module Detail")).toBeInTheDocument();
         expect(screen.getByText("Sample Detail")).toBeInTheDocument();
         expect(screen.getByText("Stats")).toBeInTheDocument();

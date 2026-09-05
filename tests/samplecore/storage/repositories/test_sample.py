@@ -15,14 +15,14 @@ from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepos
 
 
 def _add_occurrence(
-    connection: duckdb.DuckDBPyConnection, *, sample: Sample, module: Module, slot: int, name: str
+    connection: duckdb.DuckDBPyConnection, *, sample: Sample, module: Module, slot: int, name: str, rate: int = 8363
 ) -> None:
     DuckDBSamplePropertiesRepository(connection).upsert(
         XMSampleProperties(
             sample_hash=sample.hash,
             occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=slot),
             name=name,
-            rate=8363,
+            rate=rate,
             volume=64,
             tuning=Tuning(relative_note=0, finetune=0),
         )
@@ -115,6 +115,26 @@ def test_list_page_resolves_the_dominant_occurrence_name(
     page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
 
     assert page[0].display_name == "kick"
+
+
+def test_list_page_resolves_the_dominant_occurrence_rate(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_module: Module
+) -> None:
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick", rate=8363)
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=1, name="kick", rate=8363)
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=2, name="kick", rate=22050)
+
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+
+    assert page[0].dominant_rate_hz == 8363
+
+
+def test_list_page_leaves_dominant_rate_none_for_a_sample_with_no_occurrences(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample
+) -> None:
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+
+    assert page[0].dominant_rate_hz is None
 
 
 def test_list_page_resolves_size_bytes_from_the_sample_itself(

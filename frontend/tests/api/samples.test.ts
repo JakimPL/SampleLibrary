@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getSample, getSampleRelations, getSampleWaveform, listSamples, sampleAudioUrl } from "../../src/api/samples";
+import { getSample, getSampleRelations, listSamples, sampleAudioUrl } from "../../src/api/samples";
 
 function stubFetchReturning(payload: unknown): ReturnType<typeof vi.fn> {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(payload) });
@@ -39,16 +39,6 @@ describe("getSampleRelations", () => {
         await getSampleRelations("abc");
 
         expect(fetchMock).toHaveBeenCalledWith("/samples/abc/relations");
-    });
-});
-
-describe("getSampleWaveform", () => {
-    it("requests the sample's waveform peaks", async () => {
-        const fetchMock = stubFetchReturning([]);
-
-        await getSampleWaveform("abc");
-
-        expect(fetchMock).toHaveBeenCalledWith("/samples/abc/waveform");
     });
 });
 

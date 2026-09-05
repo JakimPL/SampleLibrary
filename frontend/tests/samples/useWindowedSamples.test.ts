@@ -22,6 +22,7 @@ function buildSample(id: number): SampleSummary {
         display_name: `sample-${String(id)}`,
         size_bytes: 8192,
         thumbnail: null,
+        dominant_rate_hz: null,
     };
 }
 

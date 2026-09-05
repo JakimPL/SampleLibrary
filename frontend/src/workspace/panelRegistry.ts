@@ -6,8 +6,10 @@ import { ModulesListPanel } from "./panels/ModulesListPanel";
 import { SampleDetailPanel } from "./panels/SampleDetailPanel";
 import { SamplesListPanel } from "./panels/SamplesListPanel";
 import { StatsPanel } from "./panels/StatsPanel";
+import { WaveformPanel } from "./panels/WaveformPanel";
 
-export type PanelId = "modules-list" | "samples-list" | "cloud" | "module-detail" | "sample-detail" | "stats";
+export type PanelId =
+    "modules-list" | "samples-list" | "cloud" | "waveform" | "module-detail" | "sample-detail" | "stats";
 
 export interface PanelDefinition {
     readonly id: PanelId;
@@ -23,6 +25,7 @@ export const PANEL_REGISTRY: Readonly<Record<PanelId, PanelDefinition>> = {
     "modules-list": { id: "modules-list", title: "Modules", component: ModulesListPanel },
     "samples-list": { id: "samples-list", title: "Samples", component: SamplesListPanel },
     cloud: { id: "cloud", title: "Cloud", component: CloudPanel },
+    waveform: { id: "waveform", title: "Waveform", component: WaveformPanel },
     "module-detail": { id: "module-detail", title: "Module Detail", component: ModuleDetailPanel },
     "sample-detail": { id: "sample-detail", title: "Sample Detail", component: SampleDetailPanel },
     stats: { id: "stats", title: "Stats", component: StatsPanel },

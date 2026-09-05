@@ -6,11 +6,12 @@ from typing import Any, Protocol
 from sqlalchemy import Connection, Row, func, select
 from sqlalchemy.dialects.postgresql import insert
 from trackmod.core.samples.depth import BitDepth
+from trackmod.schema.scalars import Rate
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSummary
 from samplecore.models.thumbnail import SampleThumbnail
-from samplecore.naming import choose_dominant_name
+from samplecore.naming import choose_dominant_name, choose_dominant_rate
 from samplecore.storage.database import sample, sample_properties
 from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository, peaks_from_thumbnail
 
@@ -95,10 +96,12 @@ class DuckDBSampleRepository:
         )
         rows = self._connection.execute(statement).fetchall()
         hashes = [row.hash for row in rows]
-        names_by_hash = self._names_by_sample_hash(hashes)
+        names_by_hash, rates_by_hash = self._names_and_rates_by_sample_hash(hashes)
         thumbnails_by_hash = DuckDBSampleThumbnailRepository(self._connection).get_many(hashes)
         return tuple(
-            _row_to_sample_summary(row, names_by_hash.get(row.hash, ()), thumbnails_by_hash.get(row.hash))
+            _row_to_sample_summary(
+                row, names_by_hash.get(row.hash, ()), rates_by_hash.get(row.hash, ()), thumbnails_by_hash.get(row.hash)
+            )
             for row in rows
         )
 
@@ -106,18 +109,26 @@ class DuckDBSampleRepository:
         # pylint: disable-next=not-callable
         return self._connection.execute(select(func.count()).select_from(sample)).scalar_one()
 
-    def _names_by_sample_hash(self, hashes: list[str]) -> dict[str, tuple[str, ...]]:
+    def _names_and_rates_by_sample_hash(
+        self, hashes: list[str]
+    ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]:
+        """Every occurrence's raw name and rate for each given sample hash, in one batched query."""
         names_by_hash: dict[str, list[str]] = defaultdict(list)
+        rates_by_hash: dict[str, list[Rate]] = defaultdict(list)
         if not hashes:
-            return {}
+            return {}, {}
 
-        statement = select(sample_properties.c.sample_hash, sample_properties.c.name).where(
+        statement = select(sample_properties.c.sample_hash, sample_properties.c.name, sample_properties.c.rate).where(
             sample_properties.c.sample_hash.in_(hashes)
         )
         for row in self._connection.execute(statement).fetchall():
             names_by_hash[row.sample_hash].append(row.name)
+            rates_by_hash[row.sample_hash].append(row.rate)
 
-        return {hash_: tuple(names) for hash_, names in names_by_hash.items()}
+        return (
+            {hash_: tuple(names) for hash_, names in names_by_hash.items()},
+            {hash_: tuple(rates) for hash_, rates in rates_by_hash.items()},
+        )
 
 
 def _row_to_sample(row: Row[Any]) -> Sample:
@@ -125,8 +136,10 @@ def _row_to_sample(row: Row[Any]) -> Sample:
     return Sample(hash=row.hash, depth=BitDepth(row.depth), channels=ChannelLayout(row.channels), frames=row.frames)
 
 
-def _row_to_sample_summary(row: Row[Any], names: tuple[str, ...], thumbnail: SampleThumbnail | None) -> SampleSummary:
-    """Reconstruct a SampleSummary from a Core row plus its occurrences' raw names and cached thumbnail."""
+def _row_to_sample_summary(
+    row: Row[Any], names: tuple[str, ...], rates: tuple[Rate, ...], thumbnail: SampleThumbnail | None
+) -> SampleSummary:
+    """Reconstruct a SampleSummary from a Core row plus its occurrences' raw names/rates and thumbnail."""
     sample_ = _row_to_sample(row)
     return SampleSummary(
         hash=sample_.hash,
@@ -137,4 +150,5 @@ def _row_to_sample_summary(row: Row[Any], names: tuple[str, ...], thumbnail: Sam
         display_name=choose_dominant_name(names),
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),
+        dominant_rate_hz=choose_dominant_rate(rates),
     )

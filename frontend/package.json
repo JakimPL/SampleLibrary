@@ -22,6 +22,7 @@
         "react-dom": "^19.0.0",
         "react-router-dom": "^7.1.0",
         "react-zoom-pan-pinch": "^4.2.0",
+        "wavesurfer.js": "^7.12.11",
         "zustand": "^5.0.15"
     },
     "devDependencies": {

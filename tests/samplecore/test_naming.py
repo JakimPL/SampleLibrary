@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from samplecore.naming import choose_dominant_name, sanitize_sample_name
+from samplecore.naming import choose_dominant_name, choose_dominant_rate, sanitize_sample_name
 
 
 @dataclass
@@ -42,3 +42,16 @@ def test_choose_dominant_name_ignores_names_that_sanitize_to_empty() -> None:
 
 def test_choose_dominant_name_on_no_usable_names_returns_empty() -> None:
     assert choose_dominant_name(["", "   ", "###"]) == ""
+
+
+def test_choose_dominant_rate_picks_the_most_common_rate() -> None:
+    assert choose_dominant_rate([8363, 8363, 22050]) == 8363
+
+
+def test_choose_dominant_rate_breaks_a_tie_by_ascending_value() -> None:
+    assert choose_dominant_rate([22050, 8363]) == 8363
+    assert choose_dominant_rate([8363, 22050]) == 8363
+
+
+def test_choose_dominant_rate_on_no_occurrences_returns_none() -> None:
+    assert choose_dominant_rate([]) is None

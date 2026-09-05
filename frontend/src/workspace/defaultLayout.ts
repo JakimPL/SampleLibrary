@@ -3,14 +3,14 @@ import type { DockviewApi } from "dockview-react";
 import { PANEL_REGISTRY } from "./panelRegistry";
 
 /**
- * The shell's first-run arrangement: Modules, Cloud, and Samples across the top; Module Detail
- * and a tabbed Sample Detail/Stats group underneath each side column. The Cloud column stays
- * full-height until a Waveform panel exists to split it -- there is nothing to place there yet.
+ * The shell's first-run arrangement: Modules, Cloud, and Samples across the top; Module Detail,
+ * a Waveform strip, and a tabbed Sample Detail/Stats group underneath each column in turn.
  */
 export function buildDefaultLayout(api: DockviewApi): void {
     const modulesList = PANEL_REGISTRY["modules-list"];
     const cloud = PANEL_REGISTRY.cloud;
     const samplesList = PANEL_REGISTRY["samples-list"];
+    const waveform = PANEL_REGISTRY.waveform;
     const moduleDetail = PANEL_REGISTRY["module-detail"];
     const sampleDetail = PANEL_REGISTRY["sample-detail"];
     const stats = PANEL_REGISTRY.stats;
@@ -27,6 +27,12 @@ export function buildDefaultLayout(api: DockviewApi): void {
         component: samplesList.id,
         title: samplesList.title,
         position: { direction: "right", referencePanel: cloud.id },
+    });
+    api.addPanel({
+        id: waveform.id,
+        component: waveform.id,
+        title: waveform.title,
+        position: { direction: "below", referencePanel: cloud.id },
     });
     api.addPanel({
         id: moduleDetail.id,

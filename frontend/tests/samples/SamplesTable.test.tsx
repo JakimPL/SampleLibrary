@@ -12,6 +12,7 @@ function buildSample(overrides: Pick<SampleSummary, "hash" | "display_name" | "o
         frames: 4096,
         size_bytes: 8192,
         thumbnail: null,
+        dominant_rate_hz: null,
         ...overrides,
     };
 }

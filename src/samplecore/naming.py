@@ -3,10 +3,25 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Iterable
-from typing import Final
+from typing import Final, TypeVar
+
+from trackmod.schema.scalars import Rate
 
 _SANITIZED_NAME_PATTERN: Final = re.compile(r"[^a-z0-9 _-]")
 _WHITESPACE_PATTERN: Final = re.compile(r"\s+")
+
+_Candidate = TypeVar("_Candidate", str, int)
+
+
+def _choose_by_frequency(candidates: Iterable[_Candidate]) -> _Candidate | None:
+    """Pick the most frequent value, breaking a tie by ascending order. `None` for no candidates."""
+    counts = Counter(candidates)
+    if not counts:
+        return None
+
+    highest_count = max(counts.values())
+    most_frequent = sorted(candidate for candidate, count in counts.items() if count == highest_count)
+    return most_frequent[0]
 
 
 def sanitize_sample_name(name: str) -> str:
@@ -30,10 +45,14 @@ def choose_dominant_name(names: Iterable[str]) -> str:
     """
     sanitized_names = [sanitize_sample_name(name) for name in names]
     non_empty_names = [name for name in sanitized_names if name != ""]
-    if not non_empty_names:
-        return ""
+    return _choose_by_frequency(non_empty_names) or ""
 
-    counts = Counter(non_empty_names)
-    highest_count = max(counts.values())
-    candidates = sorted(name for name, count in counts.items() if count == highest_count)
-    return candidates[0]
+
+def choose_dominant_rate(rates: Iterable[Rate]) -> Rate | None:
+    """Resolve one canonical playback rate out of a sample's, possibly conflicting, occurrence rates.
+
+    Mirrors `choose_dominant_name`'s rule: the most frequent rate wins, tied cases broken by
+    ascending numeric order. `None` for a sample with no occurrences -- `Rate` is `gt=0`, so no
+    rate value works as a sentinel for "unknown".
+    """
+    return _choose_by_frequency(rates)

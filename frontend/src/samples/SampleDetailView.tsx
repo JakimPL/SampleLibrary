@@ -1,21 +1,19 @@
 import type { ReactElement } from "react";
 
-import type { SampleDetail, SampleRelation, WaveformPeak } from "../api/samples";
+import type { SampleDetail, SampleRelation } from "../api/samples";
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { CATEGORY_PLACEHOLDER } from "./category";
 import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { SampleRelationRow } from "./SampleRelationRow";
-import { Waveform } from "./Waveform";
 
 interface SampleDetailViewProps {
     readonly sample: SampleDetail;
     readonly relations: readonly SampleRelation[];
-    readonly waveform: readonly WaveformPeak[];
 }
 
-export function SampleDetailView({ sample, relations, waveform }: SampleDetailViewProps): ReactElement {
+export function SampleDetailView({ sample, relations }: SampleDetailViewProps): ReactElement {
     return (
         <section className="detail-scroll">
             <h2>
@@ -38,10 +36,6 @@ export function SampleDetailView({ sample, relations, waveform }: SampleDetailVi
                 <dt>Occurrences</dt>
                 <dd className="mono">{sample.occurrences.length}</dd>
             </dl>
-            <div className="detail-section">
-                <h3>Waveform</h3>
-                <Waveform sampleHash={sample.hash} peaks={waveform} />
-            </div>
             <div className="detail-section">
                 <h3>Occurrences</h3>
                 <table className="mini">

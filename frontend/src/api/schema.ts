@@ -430,7 +430,7 @@ export interface components {
          * @description The kind of near-duplicate link two distinct Samples can be proposed to share.
          * @enum {string}
          */
-        readonly RelationType: "bit_depth_variant" | "resampled_variant";
+        readonly RelationType: "bit_depth_variant" | "resampled_variant" | "amplification_variant";
         /**
          * RelationTypeCount
          * @description How many detected equivalence-class links belong to one relation type.
@@ -478,6 +478,8 @@ export interface components {
             readonly size_bytes: number;
             /** Display Name */
             readonly display_name: string;
+            /** Dominant Rate Hz */
+            readonly dominant_rate_hz: number | null;
             /** Duration Seconds */
             readonly duration_seconds: number;
         };
@@ -563,6 +565,8 @@ export interface components {
          *     ``Sample.stored_bytes`` under its own name: a Pydantic field cannot share a name with an
          *     inherited plain property without the property silently winning on attribute access.
          *     ``thumbnail`` is ``None`` for a sample whose cached waveform preview has not been computed yet.
+         *     ``dominant_rate_hz`` resolves the sample's, possibly conflicting, occurrence rates via
+         *     `samplecore.naming.choose_dominant_rate`, and is ``None`` under that same no-occurrences case.
          */
         readonly SampleSummary: {
             /** Hash */
@@ -579,6 +583,8 @@ export interface components {
             readonly size_bytes: number;
             /** Thumbnail */
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
+            /** Dominant Rate Hz */
+            readonly dominant_rate_hz: number | null;
         };
         /**
          * TrackerFormat

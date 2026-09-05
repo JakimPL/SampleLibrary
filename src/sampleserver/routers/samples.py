@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import Connection
+from trackmod.schema.scalars import Rate
 
 from samplecore.models.base import FROZEN
 from samplecore.models.module import Module
@@ -15,7 +16,7 @@ from samplecore.models.sample import Sample, SampleSummary
 from samplecore.models.sample_properties import TrackerSampleProperties
 from samplecore.models.scalars import Count, ModuleHash
 from samplecore.models.tracker import TrackerFormat
-from samplecore.naming import choose_dominant_name
+from samplecore.naming import choose_dominant_name, choose_dominant_rate
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import DuckDBModuleRepository
 from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
@@ -54,6 +55,7 @@ class SampleDetail(Sample):
     occurrences: tuple[SampleOccurrenceDetail, ...]
     size_bytes: Count
     display_name: str
+    dominant_rate_hz: Rate | None
     duration_seconds: float
 
 
@@ -99,6 +101,7 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
         occurrences=occurrences,
         size_bytes=sample.stored_bytes,
         display_name=choose_dominant_name(item.name for item in properties),
+        dominant_rate_hz=choose_dominant_rate(item.rate for item in properties),
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
     )
 

@@ -20,8 +20,8 @@ function FocusedSampleDetail({ sampleHash }: FocusedSampleDetailProps): ReactEle
         return <ErrorNotice message={state.message} />;
     }
 
-    const { sample, relations, waveform } = state.data;
-    return <SampleDetailView sample={sample} relations={relations} waveform={waveform} />;
+    const { sample, relations } = state.data;
+    return <SampleDetailView sample={sample} relations={relations} />;
 }
 
 export function SampleDetailPanel(): ReactElement {

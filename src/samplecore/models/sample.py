@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 from trackmod.core.samples.depth import BitDepth
+from trackmod.schema.scalars import Rate
 
 from samplecore.models.base import FROZEN
 from samplecore.models.channels import ChannelLayout
@@ -41,9 +42,12 @@ class SampleSummary(Sample):
     ``Sample.stored_bytes`` under its own name: a Pydantic field cannot share a name with an
     inherited plain property without the property silently winning on attribute access.
     ``thumbnail`` is ``None`` for a sample whose cached waveform preview has not been computed yet.
+    ``dominant_rate_hz`` resolves the sample's, possibly conflicting, occurrence rates via
+    `samplecore.naming.choose_dominant_rate`, and is ``None`` under that same no-occurrences case.
     """
 
     occurrence_count: Count
     display_name: str
     size_bytes: Count
     thumbnail: tuple[WaveformPeak, ...] | None
+    dominant_rate_hz: Rate | None

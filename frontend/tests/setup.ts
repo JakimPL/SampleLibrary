@@ -3,6 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+import { clearRequestCache } from "../src/shared/requestCache";
 import { INITIAL_SELECTION_STATE, useSelectionStore } from "../src/workspace/selectionStore";
 
 afterEach(() => {
@@ -13,6 +14,12 @@ afterEach(() => {
 // reset unconditionally here rather than relying on each test file to remember a unique fixture.
 afterEach(() => {
     useSelectionStore.setState(INITIAL_SELECTION_STATE);
+});
+
+// requestCache is likewise a module-level singleton; without a reset, a cache key reused across
+// test files would silently seed a later test's fetch with an earlier test's cached result.
+afterEach(() => {
+    clearRequestCache();
 });
 
 // jsdom has no real canvas renderer; components must already treat a null 2D context as normal

@@ -6,15 +6,14 @@ import type * as SamplesApi from "../../../src/api/samples";
 import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { getSample, getSampleRelations, getSampleWaveform } = vi.hoisted(() => ({
+const { getSample, getSampleRelations } = vi.hoisted(() => ({
     getSample: vi.fn(),
     getSampleRelations: vi.fn(),
-    getSampleWaveform: vi.fn(),
 }));
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations, getSampleWaveform };
+    return { ...actual, getSample, getSampleRelations };
 });
 
 function renderPanel(): ReturnType<typeof render> {
@@ -37,6 +36,7 @@ const SAMPLE_DETAIL = {
     display_name: "kick",
     size_bytes: 8192,
     duration_seconds: 0.09,
+    dominant_rate_hz: 8363,
     occurrences: [
         {
             properties: {
@@ -63,7 +63,6 @@ describe("SampleDetailPanel", () => {
     it("shows the focused sample's detail once loaded", async () => {
         getSample.mockResolvedValue(SAMPLE_DETAIL);
         getSampleRelations.mockResolvedValue([]);
-        getSampleWaveform.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         renderPanel();
@@ -77,7 +76,6 @@ describe("SampleDetailPanel", () => {
     it("shows an error notice when the sample cannot be found", async () => {
         getSample.mockRejectedValue(new Error("no sample catalogued with hash 'abc'"));
         getSampleRelations.mockResolvedValue([]);
-        getSampleWaveform.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         renderPanel();
@@ -90,7 +88,6 @@ describe("SampleDetailPanel", () => {
     it("highlights an occurrence's module row on a plain click and navigates to it on a double-click", async () => {
         getSample.mockResolvedValue(SAMPLE_DETAIL);
         getSampleRelations.mockResolvedValue([]);
-        getSampleWaveform.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
         renderPanel();
         const row = await waitFor(() => screen.getByRole("row", { name: /A Song/ }));
