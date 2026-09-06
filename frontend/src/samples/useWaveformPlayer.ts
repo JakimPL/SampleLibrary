@@ -9,11 +9,11 @@ import { playbackRateFor } from "./nominalRate";
 const MIN_PIXELS_PER_SECOND = 100;
 const CURSOR_WIDTH_PX = 2;
 
-// Caps how tall the waveform is allowed to grow relative to its container's width: OpenMPT's own
-// sample view reads as a wide film-strip, never more than a fraction as tall as it is wide. A
-// container narrower or taller than this ratio allows just gets a shorter waveform, centered in
-// the remaining space, rather than one stretched into an unnaturally tall shape.
-const MIN_WAVEFORM_WIDTH_TO_HEIGHT_RATIO = 6;
+// Caps how tall the waveform is allowed to grow relative to its container's width -- a safety net
+// for a narrow, portrait-oriented panel, not a target shape: a typical wide panel is meant to use
+// most of its available height, only a container narrower than this ratio actually gets capped
+// short of its full height, centered in the remaining space rather than stretched taller still.
+const MIN_WAVEFORM_WIDTH_TO_HEIGHT_RATIO = 2;
 const MIN_WAVEFORM_HEIGHT_PX = 32;
 
 const WAVE_COLOR_PROPERTY = "--wave-fill";

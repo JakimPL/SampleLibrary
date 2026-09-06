@@ -82,8 +82,17 @@ interface RenderOverrides {
     readonly onCompare?: (entity: EntityRef) => void;
 }
 
-function renderCloudView(overrides: RenderOverrides = {}): ReturnType<typeof render> {
-    return render(
+// CloudView awaits the fake scatterplot's `draw` promise (mirroring the real library, which
+// throws from `getScreenPosition` until a first draw resolves) before selecting or deselecting,
+// so every render or rerender needs one microtask flush before its result is observable.
+async function flushDraw(): Promise<void> {
+    await act(async () => {
+        await Promise.resolve();
+    });
+}
+
+async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnType<typeof render>> {
+    const result = render(
         <CloudView
             points={overrides.points ?? []}
             highlighted={overrides.highlighted ?? null}
@@ -94,6 +103,8 @@ function renderCloudView(overrides: RenderOverrides = {}): ReturnType<typeof ren
             onCompare={overrides.onCompare ?? vi.fn()}
         />,
     );
+    await flushDraw();
+    return result;
 }
 
 const SAMPLE_REF: EntityRef = { kind: "sample", hash: "a".repeat(64) };
@@ -105,31 +116,31 @@ beforeEach(() => {
 });
 
 describe("CloudView", () => {
-    it("shows an honest empty state when there are no cloud coordinates yet", () => {
-        renderCloudView();
+    it("shows an honest empty state when there are no cloud coordinates yet", async () => {
+        await renderCloudView();
 
         expect(screen.getByText("No cloud coordinates yet")).toBeInTheDocument();
     });
 
-    it("draws every given point through the scatterplot", () => {
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
+    it("draws every given point through the scatterplot", async () => {
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
 
         const drawnPoints = latestInstance().draw.mock.calls[0]?.[0] as unknown[];
         expect(drawnPoints).toHaveLength(1);
     });
 
-    it("reports the entity behind a point the library reports as clicked", () => {
+    it("reports the entity behind a point the library reports as clicked", async () => {
         const onSelect = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onSelect });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onSelect });
 
         latestInstance().emit("select", { points: [0] });
 
         expect(onSelect).toHaveBeenCalledWith(SAMPLE_REF);
     });
 
-    it("focuses the currently hovered entity on a native double-click", () => {
+    it("focuses the currently hovered entity on a native double-click", async () => {
         const onFocus = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onFocus });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onFocus });
         latestInstance().emit("pointOver", 0);
 
         fireEvent.dblClick(latestCanvas());
@@ -137,27 +148,27 @@ describe("CloudView", () => {
         expect(onFocus).toHaveBeenCalledWith(SAMPLE_REF);
     });
 
-    it("does not focus anything on a double-click while the cursor is over no point", () => {
+    it("does not focus anything on a double-click while the cursor is over no point", async () => {
         const onFocus = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onFocus });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onFocus });
 
         fireEvent.dblClick(latestCanvas());
 
         expect(onFocus).not.toHaveBeenCalled();
     });
 
-    it("clears the highlight on a click that misses every point", () => {
+    it("clears the highlight on a click that misses every point", async () => {
         const onClear = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
 
         fireEvent.click(latestCanvas());
 
         expect(onClear).toHaveBeenCalled();
     });
 
-    it("reports a Shift-clicked point as a comparison target", () => {
+    it("reports a Shift-clicked point as a comparison target", async () => {
         const onCompare = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onCompare });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onCompare });
         latestInstance().emit("pointOver", 0);
 
         fireEvent.click(latestCanvas(), { shiftKey: true });
@@ -165,9 +176,9 @@ describe("CloudView", () => {
         expect(onCompare).toHaveBeenCalledWith(SAMPLE_REF);
     });
 
-    it("does not report a comparison target on a plain click", () => {
+    it("does not report a comparison target on a plain click", async () => {
         const onCompare = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onCompare });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onCompare });
         latestInstance().emit("pointOver", 0);
 
         fireEvent.click(latestCanvas());
@@ -175,9 +186,9 @@ describe("CloudView", () => {
         expect(onCompare).not.toHaveBeenCalled();
     });
 
-    it("does not clear the highlight on a click over a point", () => {
+    it("does not clear the highlight on a click over a point", async () => {
         const onClear = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
         latestInstance().emit("pointOver", 0);
 
         fireEvent.click(latestCanvas());
@@ -185,29 +196,54 @@ describe("CloudView", () => {
         expect(onClear).not.toHaveBeenCalled();
     });
 
-    it("clears the highlight when the library reports its own deselect (e.g. Escape)", () => {
+    it("clears the highlight when the library reports its own deselect (e.g. Escape)", async () => {
         const onClear = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
 
         latestInstance().emit("deselect");
 
         expect(onClear).toHaveBeenCalled();
     });
 
-    it("selects the highlighted point within the scatterplot itself", () => {
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
+    it("selects the highlighted point within the scatterplot itself", async () => {
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
 
         expect(latestInstance().select).toHaveBeenCalledWith([0], { preventEvent: true });
     });
 
-    it("deselects when the current highlight matches nothing on this view", () => {
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: MODULE_REF });
+    // Regression test for a real crash: regl-scatterplot throws "Points have not been drawn" from
+    // `getScreenPosition` (and a caller reading it right after `select`) until a first `draw` call
+    // resolves. Calling `select` synchronously, right after firing `draw` without awaiting it,
+    // reproduced this reliably on a fresh mount -- reopening the Cloud panel while a sample was
+    // already highlighted crashed the whole app with exactly this error.
+    it("waits for the scatterplot's draw to resolve before selecting the highlighted point", async () => {
+        render(
+            <CloudView
+                points={[point(SAMPLE_REF, 0, 0)]}
+                highlighted={SAMPLE_REF}
+                onSelect={vi.fn()}
+                onFocus={vi.fn()}
+                onClear={vi.fn()}
+                onHover={vi.fn()}
+                onCompare={vi.fn()}
+            />,
+        );
+
+        expect(latestInstance().select).not.toHaveBeenCalled();
+
+        await flushDraw();
+
+        expect(latestInstance().select).toHaveBeenCalledWith([0], { preventEvent: true });
+    });
+
+    it("deselects when the current highlight matches nothing on this view", async () => {
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: MODULE_REF });
 
         expect(latestInstance().deselect).toHaveBeenCalledWith({ preventEvent: true });
     });
 
-    it("destroys the scatterplot instance when the component unmounts", () => {
-        const { unmount } = renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
+    it("destroys the scatterplot instance when the component unmounts", async () => {
+        const { unmount } = await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
         const instance = latestInstance();
 
         unmount();
@@ -215,18 +251,18 @@ describe("CloudView", () => {
         expect(instance.destroy).toHaveBeenCalled();
     });
 
-    it("reports the hovered entity and its screen position", () => {
+    it("reports the hovered entity and its screen position", async () => {
         const onHover = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onHover });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onHover });
 
         latestInstance().emit("pointOver", 0);
 
         expect(onHover).toHaveBeenCalledWith(SAMPLE_REF, [10, 20]);
     });
 
-    it("reports no hover once the cursor leaves the point", () => {
+    it("reports no hover once the cursor leaves the point", async () => {
         const onHover = vi.fn();
-        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onHover });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onHover });
         latestInstance().emit("pointOver", 0);
 
         latestInstance().emit("pointOut");
@@ -234,14 +270,14 @@ describe("CloudView", () => {
         expect(onHover).toHaveBeenLastCalledWith(null, null);
     });
 
-    it("shows a sonar ping at a newly highlighted point", () => {
-        const { container } = renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
+    it("shows a sonar ping at a newly highlighted point", async () => {
+        const { container } = await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
 
         expect(container.querySelector(".cloud-ping")).toBeInTheDocument();
     });
 
-    it("does not re-ping when the same highlight persists across a re-render", () => {
-        const { container, rerender } = renderCloudView({
+    it("does not re-ping when the same highlight persists across a re-render", async () => {
+        const { container, rerender } = await renderCloudView({
             points: [point(SAMPLE_REF, 0, 0)],
             highlighted: SAMPLE_REF,
         });
@@ -258,12 +294,13 @@ describe("CloudView", () => {
                 onCompare={vi.fn()}
             />,
         );
+        await flushDraw();
 
         expect(container.querySelector(".cloud-ping")).toBe(firstPing);
     });
 
-    it("does not re-ping when a value-equal but differently-referenced highlight is passed in", () => {
-        const { container, rerender } = renderCloudView({
+    it("does not re-ping when a value-equal but differently-referenced highlight is passed in", async () => {
+        const { container, rerender } = await renderCloudView({
             points: [point(SAMPLE_REF, 0, 0)],
             highlighted: SAMPLE_REF,
         });
@@ -280,12 +317,13 @@ describe("CloudView", () => {
                 onCompare={vi.fn()}
             />,
         );
+        await flushDraw();
 
         expect(container.querySelector(".cloud-ping")).toBe(firstPing);
     });
 
-    it("keeps the ping pinned to its point through a pan or zoom", () => {
-        const { container } = renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
+    it("keeps the ping pinned to its point through a pan or zoom", async () => {
+        const { container } = await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
         const ping = container.querySelector<HTMLElement>(".cloud-ping");
         if (ping === null) {
             throw new Error("ping not found");
@@ -301,8 +339,8 @@ describe("CloudView", () => {
         expect(ping.style.top).toBe("340px");
     });
 
-    it("creates the scatterplot with theme-driven point, active-point, and background colors", () => {
-        renderCloudView();
+    it("creates the scatterplot with theme-driven point, active-point, and background colors", async () => {
+        await renderCloudView();
 
         const options = createScatterplotMock.mock.calls[0]?.[0] as {
             pointColor?: string;
@@ -314,8 +352,8 @@ describe("CloudView", () => {
         expect(options.backgroundColor).toBeTruthy();
     });
 
-    it("re-applies colors through set when the theme preference changes", () => {
-        renderCloudView();
+    it("re-applies colors through set when the theme preference changes", async () => {
+        await renderCloudView();
         const instance = latestInstance();
         instance.set.mockClear();
 

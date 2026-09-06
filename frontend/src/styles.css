@@ -983,20 +983,37 @@ tr.is-focused {
     letter-spacing: normal;
 }
 
+/* OpenMPT's own list-view header row reads as plain black text at the same size as the rows below
+   it, not a smaller, separately-colored caption -- only the sort arrow marks a sorted column, per
+   the rule below. Row/header separator lines go with it: this theme's tables already drop grid
+   lines between rows (further down), and a native list view has none between header and body
+   either. */
 :root[data-theme="openmpt"] table.data th,
 :root[data-theme="openmpt"] table.mini th {
     font-weight: 400;
+    color: var(--text-primary);
+    border-bottom: none;
+}
+
+:root[data-theme="openmpt"] table.data th {
+    font-size: 13px;
+}
+
+:root[data-theme="openmpt"] table.mini th {
+    font-size: 11.5px;
 }
 
 /* A sorted column in a native Windows list view still marks itself with just the sort arrow --
    the header label itself never recolors, unlike this app's own accent-tinted default. */
 :root[data-theme="openmpt"] table.data th.sorted {
-    color: var(--text-faint);
+    color: var(--text-primary);
 }
 
-/* A sample or module's name is plain, unweighted text in OpenMPT's own list views. */
+/* A sample or module's name reads a little larger than the rest of its row in OpenMPT's own list
+   views, the one deliberate size step in an otherwise plain, unweighted table. */
 :root[data-theme="openmpt"] .cell-primary {
     font-weight: 400;
+    font-size: 14px;
 }
 
 /* A dockview panel's own content pane reads as OpenMPT's gray document background; a table is the
@@ -1025,6 +1042,15 @@ tr.is-focused {
 
 :root[data-theme="openmpt"] tr.is-focused td,
 :root[data-theme="openmpt"] tr.is-focused .cell-primary,
-:root[data-theme="openmpt"] tr.is-focused .cell-muted {
+:root[data-theme="openmpt"] tr.is-focused .cell-muted,
+:root[data-theme="openmpt"] tr.is-focused .entity-hash {
     color: var(--accent-ink);
+}
+
+/* A badge's own background is a light, mostly-transparent tint (readable against this theme's
+   white table rows) that all but disappears against a focused row's solid blue fill; a thin white
+   outline keeps it legible without needing a separate color per badge variant. */
+:root[data-theme="openmpt"] tr.is-focused .badge {
+    outline: 1px solid var(--accent-ink);
+    outline-offset: -1px;
 }

@@ -117,7 +117,7 @@ export function SamplesTable({
                             onGroupByEquivalenceChange(event.target.checked);
                         }}
                     />
-                    Acoustic identity
+                    Group similar
                 </label>
                 <span className="cell-muted mono">
                     {samples.length} of {total} loaded

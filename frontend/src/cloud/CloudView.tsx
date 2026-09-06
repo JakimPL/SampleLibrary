@@ -73,14 +73,25 @@ function sameHighlight(a: EntityRef | null, b: EntityRef | null): boolean {
 /**
  * Draws the current points and applies whichever one (if any) is highlighted -- shared by the
  * mount effect, which needs this once right after a shape-driven recreation, and the effect that
- * tracks `points`/`highlighted` changes on an already-created scatterplot.
+ * tracks `points`/`highlighted` changes on an already-created scatterplot. Awaits `draw` before
+ * touching selection: regl-scatterplot throws "Points have not been drawn" from `getScreenPosition`
+ * (and a caller reading it right after `select` hits the same unset state) if it's called before a
+ * first `draw` resolves, which a fresh scatterplot -- still compiling its WebGL shaders -- does not
+ * do synchronously the way an already-drawn one redrawing existing points effectively does.
+ * `isCancelled` reports true once the effect that started this call has been cleaned up (its
+ * scatterplot destroyed, e.g. by an unmount racing the pending draw), so its result goes unused.
  */
-function applyPoints(
+async function applyPoints(
     scatterplot: Scatterplot,
     points: readonly CloudEntityPoint[],
     highlighted: EntityRef | null,
-): number {
-    void scatterplot.draw(points.map((point) => [point.x, point.y]));
+    isCancelled: () => boolean,
+): Promise<number> {
+    await scatterplot.draw(points.map((point) => [point.x, point.y]));
+    if (isCancelled()) {
+        return -1;
+    }
+
     const highlightedIndex =
         highlighted === null ? -1 : points.findIndex((point) => sameEntity(point.ref, highlighted));
     if (highlightedIndex >= 0) {
@@ -128,6 +139,10 @@ export function CloudView({
 }: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
+    // Tracks whether the current scatterplot's first `draw` has resolved -- `getScreenPosition`
+    // throws until it has, so the hover and ping-repositioning subscriptions check this before
+    // calling it rather than risk that throw crashing an unrelated passive-effect commit.
+    const pointsDrawnRef = useRef(false);
     const pointsRef = useRef<readonly CloudEntityPoint[]>([]);
     const hoveredIndexRef = useRef<number | null>(null);
     const previousHighlightedRef = useRef<EntityRef | null>(null);
@@ -171,7 +186,13 @@ export function CloudView({
             renderPointsAsSquares,
         });
         scatterplotRef.current = scatterplot;
-        applyPoints(scatterplot, pointsRef.current, highlighted);
+        pointsDrawnRef.current = false;
+        let cancelled = false;
+        void applyPoints(scatterplot, pointsRef.current, highlighted, () => cancelled).then(() => {
+            if (!cancelled) {
+                pointsDrawnRef.current = true;
+            }
+        });
 
         const selectSubscription = scatterplot.subscribe("select", ({ points: selectedIndices }) => {
             const index = selectedIndices[0];
@@ -183,7 +204,7 @@ export function CloudView({
         const pointOverSubscription = scatterplot.subscribe("pointOver", (index) => {
             hoveredIndexRef.current = index;
             const entity = pointsRef.current[index]?.ref;
-            const position = scatterplot.getScreenPosition(index);
+            const position = pointsDrawnRef.current ? scatterplot.getScreenPosition(index) : undefined;
             if (entity !== undefined && position !== undefined) {
                 onHoverRef.current(entity, position);
             }
@@ -197,7 +218,7 @@ export function CloudView({
         });
         const viewSubscription = scatterplot.subscribe("view", () => {
             const activePing = pingRef.current;
-            if (activePing === null) {
+            if (activePing === null || !pointsDrawnRef.current) {
                 return;
             }
             const position = scatterplot.getScreenPosition(activePing.pointIndex);
@@ -232,6 +253,7 @@ export function CloudView({
         canvas.addEventListener("dblclick", handleDoubleClick);
 
         return (): void => {
+            cancelled = true;
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("dblclick", handleDoubleClick);
             scatterplot.unsubscribe(selectSubscription);
@@ -254,18 +276,32 @@ export function CloudView({
     useEffect(() => {
         const scatterplot = scatterplotRef.current;
         if (scatterplot === null) {
-            return;
+            return undefined;
         }
 
-        const highlightedIndex = applyPoints(scatterplot, points, highlighted);
-        if (highlightedIndex >= 0 && !sameHighlight(highlighted, previousHighlightedRef.current)) {
-            const position = scatterplot.getScreenPosition(highlightedIndex);
-            if (position !== undefined) {
-                pingCounterRef.current += 1;
-                setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
+        // Cancelled if a newer call to this effect (points or highlighted changing again before
+        // this draw resolves) supersedes this one -- otherwise a slow, stale draw could still land
+        // its ping, or overwrite `previousHighlightedRef` with an already-outdated value, after a
+        // newer run already has.
+        let cancelled = false;
+        void applyPoints(scatterplot, points, highlighted, () => cancelled).then((highlightedIndex) => {
+            if (cancelled) {
+                return;
             }
-        }
-        previousHighlightedRef.current = highlighted;
+
+            pointsDrawnRef.current = true;
+            if (highlightedIndex >= 0 && !sameHighlight(highlighted, previousHighlightedRef.current)) {
+                const position = scatterplot.getScreenPosition(highlightedIndex);
+                if (position !== undefined) {
+                    pingCounterRef.current += 1;
+                    setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
+                }
+            }
+            previousHighlightedRef.current = highlighted;
+        });
+        return (): void => {
+            cancelled = true;
+        };
     }, [points, highlighted]);
 
     useEffect(() => {

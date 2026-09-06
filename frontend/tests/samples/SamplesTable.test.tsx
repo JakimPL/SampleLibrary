@@ -131,11 +131,11 @@ describe("SamplesTable", () => {
         expect(screen.queryByText("a")).not.toBeInTheDocument();
     });
 
-    it("calls back with the new value when the acoustic identity toggle is changed", () => {
+    it("calls back with the new value when the group-similar toggle is changed", () => {
         const onGroupByEquivalenceChange = vi.fn();
         renderTable({ groupByEquivalence: false, onGroupByEquivalenceChange });
 
-        fireEvent.click(screen.getByLabelText("Acoustic identity"));
+        fireEvent.click(screen.getByLabelText("Group similar"));
 
         expect(onGroupByEquivalenceChange).toHaveBeenCalledWith(true);
     });
