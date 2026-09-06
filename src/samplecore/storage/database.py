@@ -207,6 +207,14 @@ module_cloud_coordinates = Table(
     Column("computed_at", DateTime(timezone=True), nullable=False),
 )
 
+sample_spectral_feature = Table(
+    "sample_spectral_feature",
+    metadata,
+    Column("sample_hash", String(64), ForeignKey("sample.hash"), primary_key=True),
+    Column("vector", String, nullable=False),
+    Column("computed_at", DateTime(timezone=True), nullable=False),
+)
+
 sample_thumbnail = Table(
     "sample_thumbnail",
     metadata,

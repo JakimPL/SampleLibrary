@@ -164,6 +164,53 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/samples/{sample_hash}/distance/{other_hash}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Sample Distance
+         * @description The Euclidean distance between two samples' persisted, standardized spectral feature vectors.
+         *
+         *     Raises:
+         *         HTTPException: 404 when either sample has no persisted spectral feature vector yet -- not
+         *             yet embedded, or embedded before this metric existed.
+         */
+        readonly get: operations["get_sample_distance_samples__sample_hash__distance__other_hash__get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/samples/{sample_hash}/similar": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Similar Samples
+         * @description The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
+         *
+         *     Raises:
+         *         HTTPException: 404 when this sample has no persisted spectral feature vector yet.
+         */
+        readonly get: operations["get_similar_samples_samples__sample_hash__similar_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/stats": {
         readonly parameters: {
             readonly query?: never;
@@ -589,6 +636,18 @@ export interface components {
             readonly duration_seconds: number;
         };
         /**
+         * SampleDistance
+         * @description The spectral distance between two samples' persisted, standardized feature vectors.
+         */
+        readonly SampleDistance: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            /** Other Hash */
+            readonly other_hash: string;
+            /** Distance */
+            readonly distance: number;
+        };
+        /**
          * SampleOccurrence
          * @description Which one slot, in which one module, a SampleProperties row describes.
          *
@@ -698,6 +757,16 @@ export interface components {
             readonly equivalence_class_hash: string | null;
             /** Equivalence Member Count */
             readonly equivalence_member_count: number;
+        };
+        /**
+         * SimilarSample
+         * @description One neighbor in a sample's spectral-distance nearest-neighbor listing.
+         */
+        readonly SimilarSample: {
+            /** Hash */
+            readonly hash: string;
+            /** Distance */
+            readonly distance: number;
         };
         /**
          * TrackerFormat
@@ -1015,6 +1084,71 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": readonly components["schemas"]["SampleRelation"][];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly get_sample_distance_samples__sample_hash__distance__other_hash__get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+                readonly other_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["SampleDistance"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly get_similar_samples_samples__sample_hash__similar_get: {
+        readonly parameters: {
+            readonly query?: {
+                readonly limit?: number;
+            };
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["SimilarSample"][];
                 };
             };
             /** @description Validation Error */

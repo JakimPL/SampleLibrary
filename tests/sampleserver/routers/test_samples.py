@@ -15,6 +15,7 @@ from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
+from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
@@ -22,6 +23,7 @@ from samplecore.storage.repositories.module import DuckDBModuleRepository
 from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository
 from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
+from samplecore.storage.repositories.spectral import DuckDBSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository
 
 SAMPLE_HASH_A = "a" * 64
@@ -403,5 +405,96 @@ def test_get_sample_relations_returns_the_equivalence_class(
 
 def test_get_sample_relations_404s_for_an_unknown_hash(client: TestClient) -> None:
     response = client.get(f"/samples/{'f' * 64}/relations")
+
+    assert response.status_code == 404
+
+
+def test_get_sample_distance_computes_the_euclidean_distance_between_two_vectors(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    first = _insert_sample(connection, SAMPLE_HASH_A)
+    second = _insert_sample(connection, SAMPLE_HASH_B)
+    feature_repository = DuckDBSampleSpectralFeatureRepository(connection)
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=first.hash, vector=(0.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=second.hash, vector=(3.0, 4.0), computed_at=datetime.now(UTC))
+    )
+
+    response = client.get(f"/samples/{first.hash}/distance/{second.hash}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sample_hash"] == first.hash
+    assert body["other_hash"] == second.hash
+    assert body["distance"] == 5.0
+
+
+def test_get_sample_distance_404s_when_either_sample_has_no_vector(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    first = _insert_sample(connection, SAMPLE_HASH_A)
+    second = _insert_sample(connection, SAMPLE_HASH_B)
+    DuckDBSampleSpectralFeatureRepository(connection).upsert(
+        SampleSpectralFeature(sample_hash=first.hash, vector=(0.0, 0.0), computed_at=datetime.now(UTC))
+    )
+
+    response = client.get(f"/samples/{first.hash}/distance/{second.hash}")
+
+    assert response.status_code == 404
+
+
+def test_get_similar_samples_orders_neighbors_by_ascending_distance(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    target = _insert_sample(connection, SAMPLE_HASH_A)
+    near = _insert_sample(connection, SAMPLE_HASH_B)
+    far = _insert_sample(connection, "c" * 64)
+    feature_repository = DuckDBSampleSpectralFeatureRepository(connection)
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=target.hash, vector=(0.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=near.hash, vector=(1.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=far.hash, vector=(5.0, 0.0), computed_at=datetime.now(UTC))
+    )
+
+    response = client.get(f"/samples/{target.hash}/similar")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["hash"] for item in body] == [near.hash, far.hash]
+
+
+def test_get_similar_samples_respects_the_limit(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+    target = _insert_sample(connection, SAMPLE_HASH_A)
+    near = _insert_sample(connection, SAMPLE_HASH_B)
+    far = _insert_sample(connection, "c" * 64)
+    feature_repository = DuckDBSampleSpectralFeatureRepository(connection)
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=target.hash, vector=(0.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=near.hash, vector=(1.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=far.hash, vector=(5.0, 0.0), computed_at=datetime.now(UTC))
+    )
+
+    response = client.get(f"/samples/{target.hash}/similar", params={"limit": 1})
+
+    body = response.json()
+    assert [item["hash"] for item in body] == [near.hash]
+
+
+def test_get_similar_samples_404s_when_the_target_has_no_vector(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    _insert_sample(connection, SAMPLE_HASH_A)
+
+    response = client.get(f"/samples/{SAMPLE_HASH_A}/similar")
 
     assert response.status_code == 404

@@ -12,10 +12,10 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 | Package | Owns | Depends on |
 |---|---|---|
-| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`), the DuckDB schema and connection helpers, the content-addressable audio store, sample hashing, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `duckdb`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
+| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `EquivalenceClass`, `SampleSpectralFeature`), the DuckDB schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `duckdb`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
 | `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the DuckDB catalog, computing cached waveform-preview thumbnails (inline at ingest, and via a standalone backfill pass), and the equivalence-class detection pass. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
-| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol), UMAP dimensionality reduction, and persistence of feature vectors (Parquet) and coordinates (DuckDB). Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
-| `sampleserver` | The FastAPI read API serving the catalog, cross-references, equivalence classes, stats, and cloud coordinates to the frontend. Opens its DuckDB connection read-only, so a bug in a route handler cannot corrupt the library. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
+| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol), UMAP dimensionality reduction (explicit Euclidean metric), persistence of raw feature vectors (Parquet), and persistence of each sample's standardized vector and 2D coordinate (DuckDB) -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
+| `sampleserver` | The FastAPI read API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend. Opens its DuckDB connection read-only, so a bug in a route handler cannot corrupt the library. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
 
 ## Boundaries the import-linter contracts enforce
 
@@ -29,12 +29,16 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 ## Persistence
 
 DuckDB is the single authoritative store for all catalog metadata (`Module`, `Sample`,
-`SampleProperties` together with its per-tracker `xm_sample_properties`/`it_sample_properties`
-tables, `SampleRelation`, `sample_cloud_coordinates`, and `sample_thumbnail`). The
-filesystem content-addressable store — `{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file
-per unique `Sample` — is the single authoritative store for audio bytes. Neither is a cache of the
-other, except that `Sample` rows could in principle be rebuilt by rehashing the store; that is a
-recoverability property, not a substitute for backing up the `.duckdb` file itself.
+`SampleProperties` together with its per-tracker `xm_sample_properties`/`it_sample_properties`/
+`s3m_sample_properties` tables (MOD carries no properties beyond the shared base, so it has no
+table of its own), `SampleRelation`, `sample_cloud_coordinates`, `module_cloud_coordinates`,
+`sample_spectral_feature`, and `sample_thumbnail`). Equivalence classes are not a stored table:
+`samplecore.equivalence_classes` derives them on request from `SampleRelation` rows, since the
+relation graph stays small even at real-catalog scale. The filesystem content-addressable store —
+`{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file per unique `Sample` — is the single
+authoritative store for audio bytes. Neither is a cache of the other, except that `Sample` rows
+could in principle be rebuilt by rehashing the store; that is a recoverability property, not a
+substitute for backing up the `.duckdb` file itself.
 
 Local, machine-specific paths (the module source directory, the library root) are read from a
 gitignored `config.toml` via `samplecore.config.load_config`, never hardcoded into source.

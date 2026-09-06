@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -15,19 +15,24 @@ from samplecore.models.module import Module
 from samplecore.models.relation import SampleRelation
 from samplecore.models.sample import Sample, SampleSummary
 from samplecore.models.sample_properties import TrackerSampleProperties
-from samplecore.models.scalars import Count, ModuleHash
+from samplecore.models.scalars import Count, ModuleHash, SampleHash
 from samplecore.models.tracker import TrackerFormat
 from samplecore.naming import choose_dominant_name, choose_dominant_rate
+from samplecore.spectral_distance import euclidean_distance, nearest_neighbors
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import DuckDBModuleRepository
 from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository
 from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
+from samplecore.storage.repositories.spectral import DuckDBSampleSpectralFeatureRepository
 from samplecore.waveform import DEFAULT_WAVEFORM_BUCKET_COUNT, WaveformPeak, compute_waveform_peaks
 from sampleserver.dependencies import get_connection, get_library_root
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
 
 router = APIRouter(prefix="/samples", tags=["samples"])
+
+DEFAULT_SIMILAR_SAMPLES_LIMIT: Final[int] = 10
+MAX_SIMILAR_SAMPLES_LIMIT: Final[int] = 50
 
 
 class SampleOccurrenceModule(BaseModel):
@@ -48,6 +53,25 @@ class SampleOccurrenceDetail(BaseModel):
 
     properties: TrackerSampleProperties
     module: SampleOccurrenceModule
+
+
+class SampleDistance(BaseModel):
+    """The spectral distance between two samples' persisted, standardized feature vectors."""
+
+    model_config = FROZEN
+
+    sample_hash: SampleHash
+    other_hash: SampleHash
+    distance: float
+
+
+class SimilarSample(BaseModel):
+    """One neighbor in a sample's spectral-distance nearest-neighbor listing."""
+
+    model_config = FROZEN
+
+    hash: SampleHash
+    distance: float
 
 
 class SampleDetail(Sample):
@@ -197,6 +221,47 @@ def get_sample_relations(
         raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
 
     return DuckDBSampleRelationRepository(connection).list_for_sample(sample_hash)
+
+
+@router.get("/{sample_hash}/distance/{other_hash}")
+def get_sample_distance(
+    sample_hash: str, other_hash: str, connection: Connection = Depends(get_connection)
+) -> SampleDistance:
+    """The Euclidean distance between two samples' persisted, standardized spectral feature vectors.
+
+    Raises:
+        HTTPException: 404 when either sample has no persisted spectral feature vector yet -- not
+            yet embedded, or embedded before this metric existed.
+    """
+    repository = DuckDBSampleSpectralFeatureRepository(connection)
+    subject = repository.get(sample_hash)
+    reference = repository.get(other_hash)
+    if subject is None or reference is None:
+        raise HTTPException(status_code=404, detail="one or both samples have no spectral feature vector yet")
+
+    return SampleDistance(
+        sample_hash=sample_hash, other_hash=other_hash, distance=euclidean_distance(subject.vector, reference.vector)
+    )
+
+
+@router.get("/{sample_hash}/similar")
+def get_similar_samples(
+    sample_hash: str,
+    limit: Annotated[int, Query(ge=1, le=MAX_SIMILAR_SAMPLES_LIMIT)] = DEFAULT_SIMILAR_SAMPLES_LIMIT,
+    connection: Connection = Depends(get_connection),
+) -> tuple[SimilarSample, ...]:
+    """The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
+
+    Raises:
+        HTTPException: 404 when this sample has no persisted spectral feature vector yet.
+    """
+    features = DuckDBSampleSpectralFeatureRepository(connection).list_all()
+    vectors_by_hash = {feature.sample_hash: feature.vector for feature in features}
+    if sample_hash not in vectors_by_hash:
+        raise HTTPException(status_code=404, detail=f"sample {sample_hash!r} has no spectral feature vector yet")
+
+    neighbors = nearest_neighbors(sample_hash, vectors_by_hash, limit=limit)
+    return tuple(SimilarSample(hash=neighbor_hash, distance=distance) for neighbor_hash, distance in neighbors)
 
 
 def _modules_by_hash(connection: Connection, properties: tuple[TrackerSampleProperties, ...]) -> dict[str, Module]:

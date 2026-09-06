@@ -14,6 +14,7 @@ from samplecore.models.cloud import SampleCloudCoordinate
 from samplecore.models.sample import Sample
 from samplecore.storage.repositories.cloud import DuckDBCloudCoordinateRepository
 from samplecore.storage.repositories.sample import DuckDBSampleRepository
+from samplecore.storage.repositories.spectral import DuckDBSampleSpectralFeatureRepository
 
 FEATURE_VECTOR_COUNT = 6
 FEATURE_DIMENSIONS = 4
@@ -41,6 +42,18 @@ def test_reduce_persists_one_coordinate_per_feature_vector(
 
     assert summary == CloudSummary(samples_reduced=FEATURE_VECTOR_COUNT)
     assert len(DuckDBCloudCoordinateRepository(connection).list_all()) == FEATURE_VECTOR_COUNT
+
+
+def test_reduce_also_persists_a_standardized_feature_vector_per_sample(
+    connection: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    store_path = _seed_samples_and_features(connection, tmp_path)
+
+    reduce_and_persist_coordinates(connection, store_path)
+
+    features = DuckDBSampleSpectralFeatureRepository(connection).list_all()
+    assert len(features) == FEATURE_VECTOR_COUNT
+    assert all(len(feature.vector) == FEATURE_DIMENSIONS for feature in features)
 
 
 def test_fewer_than_two_feature_vectors_is_a_no_op(connection: duckdb.DuckDBPyConnection, tmp_path: Path) -> None:
@@ -73,6 +86,7 @@ def test_a_failure_partway_through_leaves_nothing_committed(
         reduce_and_persist_coordinates(connection, store_path)
 
     assert DuckDBCloudCoordinateRepository(connection).list_all() == ()
+    assert DuckDBSampleSpectralFeatureRepository(connection).list_all() == ()
 
 
 def test_a_second_run_replaces_rather_than_duplicates_coordinates(
@@ -84,3 +98,4 @@ def test_a_second_run_replaces_rather_than_duplicates_coordinates(
     reduce_and_persist_coordinates(connection, store_path)
 
     assert len(DuckDBCloudCoordinateRepository(connection).list_all()) == FEATURE_VECTOR_COUNT
+    assert len(DuckDBSampleSpectralFeatureRepository(connection).list_all()) == FEATURE_VECTOR_COUNT

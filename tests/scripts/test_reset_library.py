@@ -10,11 +10,13 @@ from sqlalchemy import Connection, func, select
 from samplecore.hashing import compute_module_hash
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.module import Module
+from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.database import connect, metadata
 from samplecore.storage.repositories.cloud import DuckDBCloudCoordinateRepository, DuckDBModuleCloudCoordinateRepository
 from samplecore.storage.repositories.module import DuckDBModuleRepository
+from samplecore.storage.repositories.spectral import DuckDBSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
@@ -80,6 +82,9 @@ def _populated_library(tmp_path: Path) -> tuple[Connection, Path]:
     )
     DuckDBModuleCloudCoordinateRepository(connection).upsert(
         ModuleCloudCoordinate(module_hash=first_module.hash, x=0.3, y=0.4, computed_at=now)
+    )
+    DuckDBSampleSpectralFeatureRepository(connection).upsert(
+        SampleSpectralFeature(sample_hash=first_sample_hash, vector=(0.1, 0.2, 0.3), computed_at=now)
     )
     connection.commit()
 
