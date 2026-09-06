@@ -18,6 +18,8 @@ const SELECTED_COLOR_PROPERTY = "--cloud-point-selected";
 const SELECTED_COLOR_FALLBACK = "#a8690f";
 const BACKGROUND_COLOR_PROPERTY = "--cloud-bg";
 const BACKGROUND_COLOR_FALLBACK = "#f4f5f7";
+const POINT_SHAPE_PROPERTY = "--cloud-point-shape";
+const SQUARE_POINT_SHAPE_VALUE = "square";
 
 interface CloudColors {
     readonly pointColor: string;
@@ -31,6 +33,13 @@ function readCloudColors(): CloudColors {
         pointColorActive: readThemeColor(SELECTED_COLOR_PROPERTY, SELECTED_COLOR_FALLBACK),
         backgroundColor: readThemeColor(BACKGROUND_COLOR_PROPERTY, BACKGROUND_COLOR_FALLBACK),
     };
+}
+
+// regl-scatterplot compiles its point shape into the WebGL shader at creation and has no setter
+// for it afterwards (unlike color, which `.set()` updates live), so picking up a live theme switch
+// between circle and square points means recreating the whole scatterplot rather than restyling it.
+function readRenderPointsAsSquares(): boolean {
+    return readThemeColor(POINT_SHAPE_PROPERTY, "") === SQUARE_POINT_SHAPE_VALUE;
 }
 
 // Kept in step with the ring animations' own total duration in styles.css (two staggered 1400ms
@@ -62,6 +71,27 @@ function sameHighlight(a: EntityRef | null, b: EntityRef | null): boolean {
 }
 
 /**
+ * Draws the current points and applies whichever one (if any) is highlighted -- shared by the
+ * mount effect, which needs this once right after a shape-driven recreation, and the effect that
+ * tracks `points`/`highlighted` changes on an already-created scatterplot.
+ */
+function applyPoints(
+    scatterplot: Scatterplot,
+    points: readonly CloudEntityPoint[],
+    highlighted: EntityRef | null,
+): number {
+    void scatterplot.draw(points.map((point) => [point.x, point.y]));
+    const highlightedIndex =
+        highlighted === null ? -1 : points.findIndex((point) => sameEntity(point.ref, highlighted));
+    if (highlightedIndex >= 0) {
+        scatterplot.select([highlightedIndex], { preventEvent: true });
+    } else {
+        scatterplot.deselect({ preventEvent: true });
+    }
+    return highlightedIndex;
+}
+
+/**
  * Renders sample or module positions as a WebGL scatterplot, generic over which kind of entity
  * each point names -- the same component and picking contract serves both the Samples and Modules
  * cloud tabs. Owns regl-scatterplot as this codebase's one file touching that library's own API,
@@ -82,7 +112,10 @@ function sameHighlight(a: EntityRef | null, b: EntityRef | null): boolean {
  * -- the library has no way to suppress its own hit-testing from our own listener. Point, active-point,
  * and background colors are read from the theme's CSS custom properties at creation, and re-applied
  * through the library's own `set` whenever `useThemeSignal` reports the resolved theme could have
- * changed, mirroring how `useWaveformPlayer.ts` keeps wavesurfer's own canvas in step.
+ * changed, mirroring how `useWaveformPlayer.ts` keeps wavesurfer's own canvas in step. Point shape
+ * (circle or square) is read the same way, but the library compiles it into the WebGL shader at
+ * creation with no live setter, so a theme switch that flips it recreates the whole scatterplot
+ * instead -- the one visual this view cannot just restyle in place.
  */
 export function CloudView({
     points: rawPoints,
@@ -118,6 +151,7 @@ export function CloudView({
     pointsRef.current = points;
 
     const themeSignal = useThemeSignal();
+    const renderPointsAsSquares = readRenderPointsAsSquares();
 
     useEffect(() => {
         const container = containerRef.current;
@@ -134,8 +168,10 @@ export function CloudView({
             pointSize: POINT_SIZE,
             pointSizeSelected: POINT_SIZE_SELECTED,
             deselectOnDblClick: false,
+            renderPointsAsSquares,
         });
         scatterplotRef.current = scatterplot;
+        applyPoints(scatterplot, pointsRef.current, highlighted);
 
         const selectSubscription = scatterplot.subscribe("select", ({ points: selectedIndices }) => {
             const index = selectedIndices[0];
@@ -207,9 +243,13 @@ export function CloudView({
             scatterplotRef.current = null;
             canvas.remove();
         };
-        // Created once per mount; point and highlight updates flow through the effect below rather
-        // than recreating the whole WebGL context.
-    }, []);
+        // Recreated only when the point shape flips (see readRenderPointsAsSquares above); point and
+        // highlight updates otherwise flow through the effect below rather than recreating the whole
+        // WebGL context.
+        // highlighted is deliberately left out: this effect only needs its value at the moment of
+        // (re)creation, and reading it fresh here would otherwise force a recreation on every select.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [renderPointsAsSquares]);
 
     useEffect(() => {
         const scatterplot = scatterplotRef.current;
@@ -217,20 +257,13 @@ export function CloudView({
             return;
         }
 
-        void scatterplot.draw(points.map((point) => [point.x, point.y]));
-        const highlightedIndex =
-            highlighted === null ? -1 : points.findIndex((point) => sameEntity(point.ref, highlighted));
-        if (highlightedIndex >= 0) {
-            scatterplot.select([highlightedIndex], { preventEvent: true });
-            if (!sameHighlight(highlighted, previousHighlightedRef.current)) {
-                const position = scatterplot.getScreenPosition(highlightedIndex);
-                if (position !== undefined) {
-                    pingCounterRef.current += 1;
-                    setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
-                }
+        const highlightedIndex = applyPoints(scatterplot, points, highlighted);
+        if (highlightedIndex >= 0 && !sameHighlight(highlighted, previousHighlightedRef.current)) {
+            const position = scatterplot.getScreenPosition(highlightedIndex);
+            if (position !== undefined) {
+                pingCounterRef.current += 1;
+                setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
             }
-        } else {
-            scatterplot.deselect({ preventEvent: true });
         }
         previousHighlightedRef.current = highlighted;
     }, [points, highlighted]);

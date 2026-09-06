@@ -7,7 +7,7 @@ import { useParams } from "react-router-dom";
 
 import { ThemeMenu } from "../theme/ThemeMenu";
 import { AddPanelMenu } from "./AddPanelMenu";
-import { restoreOrBuildLayout } from "./dockviewPersistence";
+import { resetLayout, restoreOrBuildLayout } from "./dockviewPersistence";
 import { PANEL_REGISTRY } from "./panelRegistry";
 import { useSelectionStore } from "./selectionStore";
 
@@ -50,10 +50,19 @@ export function WorkspaceShell(): ReactElement {
         setApi(event.api);
     }
 
+    function handleResetLayout(): void {
+        if (api !== null) {
+            resetLayout(api);
+        }
+    }
+
     return (
         <div className="workspace-root">
             <div className="workspace-toolbar">
                 <AddPanelMenu api={api} />
+                <button type="button" className="reset-layout-button" onClick={handleResetLayout}>
+                    Reset layout
+                </button>
                 <ThemeMenu />
             </div>
             <DockviewReact

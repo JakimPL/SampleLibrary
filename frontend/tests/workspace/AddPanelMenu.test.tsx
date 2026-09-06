@@ -74,13 +74,32 @@ describe("AddPanelMenu", () => {
         expect(screen.queryByRole("button", { name: "Modules" })).not.toBeInTheDocument();
     });
 
-    it("adds the chosen panel back through the dockview api", () => {
+    it("adds the chosen panel back at its registered placement when the reference is open", () => {
         const api = fakeApi(OPEN_EXCEPT_STATS);
         render(<AddPanelMenu api={api as unknown as DockviewApi} />);
 
         fireEvent.click(screen.getByRole("button", { name: "Stats" }));
 
-        expect(api.addPanel).toHaveBeenCalledWith({ id: "stats", component: "stats", title: "Stats" });
+        expect(api.addPanel).toHaveBeenCalledWith({
+            id: "stats",
+            component: "stats",
+            title: "Stats",
+            position: { direction: "within", referencePanel: "sample-detail" },
+        });
+    });
+
+    it("falls back to no preferred placement when the reference panel is also closed", () => {
+        const api = fakeApi(ALL_PANEL_IDS.filter((id) => id !== "stats" && id !== "sample-detail"));
+        render(<AddPanelMenu api={api as unknown as DockviewApi} />);
+
+        fireEvent.click(screen.getByRole("button", { name: "Stats" }));
+
+        expect(api.addPanel).toHaveBeenCalledWith({
+            id: "stats",
+            component: "stats",
+            title: "Stats",
+            position: undefined,
+        });
     });
 
     it("drops a panel from the menu once the layout reports it open", async () => {

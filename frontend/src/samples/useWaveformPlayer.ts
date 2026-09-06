@@ -6,8 +6,15 @@ import { readThemeColor } from "../theme/readThemeColor";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import { playbackRateFor } from "./nominalRate";
 
-const WAVEFORM_HEIGHT_PX = 96;
 const MIN_PIXELS_PER_SECOND = 100;
+const CURSOR_WIDTH_PX = 2;
+
+// Caps how tall the waveform is allowed to grow relative to its container's width: OpenMPT's own
+// sample view reads as a wide film-strip, never more than a fraction as tall as it is wide. A
+// container narrower or taller than this ratio allows just gets a shorter waveform, centered in
+// the remaining space, rather than one stretched into an unnaturally tall shape.
+const MIN_WAVEFORM_WIDTH_TO_HEIGHT_RATIO = 6;
+const MIN_WAVEFORM_HEIGHT_PX = 32;
 
 const WAVE_COLOR_PROPERTY = "--wave-fill";
 const WAVE_COLOR_FALLBACK = "#b9bec9";
@@ -42,6 +49,11 @@ function readWaveformColors(): WaveformColors {
     };
 }
 
+function waveformHeightFor(containerWidthPx: number, containerHeightPx: number): number {
+    const maxHeightForAspectRatio = containerWidthPx / MIN_WAVEFORM_WIDTH_TO_HEIGHT_RATIO;
+    return Math.max(MIN_WAVEFORM_HEIGHT_PX, Math.min(containerHeightPx, maxHeightForAspectRatio));
+}
+
 /**
  * Wraps one wavesurfer.js instance scoped to a single sample's audio -- the only file in this
  * codebase touching wavesurfer's own API. Decoding the real audio via Web Audio, rather than
@@ -51,6 +63,9 @@ function readWaveformColors(): WaveformColors {
  * are read from the theme's CSS custom properties at creation, and re-applied through wavesurfer's
  * own `setOptions` whenever `useThemeSignal` reports the resolved theme could have changed, since
  * a canvas-backed visual cannot pick up a `var()` change on its own the way a styled element does.
+ * The rendered height is likewise recomputed and re-applied on every container resize: wavesurfer's
+ * own resize handling only reacts to a change in *width* unless `height` is literally the string
+ * `"auto"`, which would fill the container's full height with no aspect-ratio cap.
  */
 export function useWaveformPlayer(audioUrl: string, initialRateHz: number): WaveformPlayer {
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -72,10 +87,12 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         setCurrentTimeSeconds(0);
         setDurationSeconds(0);
 
+        const initialSize = container.getBoundingClientRect();
         const waveSurfer = WaveSurfer.create({
             container,
             url: audioUrl,
-            height: WAVEFORM_HEIGHT_PX,
+            height: waveformHeightFor(initialSize.width, initialSize.height),
+            cursorWidth: CURSOR_WIDTH_PX,
             minPxPerSec: MIN_PIXELS_PER_SECOND,
             normalize: true,
             autoScroll: true,
@@ -84,6 +101,21 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         });
         waveSurfer.setPlaybackRate(playbackRateFor(initialRateHz), false);
         waveSurferRef.current = waveSurfer;
+
+        let lastAppliedHeightPx = waveformHeightFor(initialSize.width, initialSize.height);
+        const resizeObserver = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (entry === undefined) {
+                return;
+            }
+
+            const nextHeightPx = waveformHeightFor(entry.contentRect.width, entry.contentRect.height);
+            if (nextHeightPx !== lastAppliedHeightPx) {
+                lastAppliedHeightPx = nextHeightPx;
+                waveSurfer.setOptions({ height: nextHeightPx });
+            }
+        });
+        resizeObserver.observe(container);
 
         waveSurfer.on("ready", (duration) => {
             setIsReady(true);
@@ -103,6 +135,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         });
 
         return (): void => {
+            resizeObserver.disconnect();
             waveSurfer.destroy();
             waveSurferRef.current = null;
         };

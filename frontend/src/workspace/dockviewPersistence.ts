@@ -42,3 +42,21 @@ export function restoreOrBuildLayout(api: DockviewApi): void {
         saveLayout(api);
     });
 }
+
+/**
+ * Discards whatever arrangement got saved -- however it got scrambled -- and rebuilds the shell's
+ * first-run default in its place.
+ */
+export function resetLayout(api: DockviewApi): void {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+    } catch {
+        // localStorage can be unavailable (private browsing, a full quota) -- the in-memory rebuild
+        // below still succeeds even though this run won't remember it past a reload.
+    }
+
+    for (const panel of [...api.panels]) {
+        api.removePanel(panel);
+    }
+    buildDefaultLayout(api);
+}

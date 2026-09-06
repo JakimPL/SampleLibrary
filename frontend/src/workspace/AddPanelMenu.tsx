@@ -23,7 +23,9 @@ function openPanelIds(api: DockviewApi): ReadonlySet<PanelId> {
 
 /**
  * Lets a panel closed via its own tab's close button be reopened, reading `PANEL_REGISTRY`
- * generically -- a newly registered panel becomes addable here with no change to this file.
+ * generically -- a newly registered panel becomes addable here with no change to this file. A
+ * reopened panel returns to its registered `placement` when that placement's reference panel is
+ * still open, the same rule `buildDefaultLayout` uses for the shell's first-run arrangement.
  * Renders nothing once every registered panel is already open, and nothing before the shell's
  * dockview instance is ready.
  */
@@ -55,7 +57,19 @@ export function AddPanelMenu({ api }: AddPanelMenuProps): ReactElement | null {
 
     function handleAdd(panelId: PanelId): void {
         const definition = PANEL_REGISTRY[panelId];
-        api?.addPanel({ id: definition.id, component: definition.id, title: definition.title });
+        // Placing a re-added panel relative to its reference only makes sense while that reference
+        // is actually open -- otherwise this falls back to dockview's own default placement, same
+        // as if this panel had no preferred placement at all.
+        const placement =
+            definition.placement !== null && openIds.has(definition.placement.referencePanel)
+                ? definition.placement
+                : null;
+        api?.addPanel({
+            id: definition.id,
+            component: definition.id,
+            title: definition.title,
+            ...(placement !== null ? { position: placement } : {}),
+        });
     }
 
     return (

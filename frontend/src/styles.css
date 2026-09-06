@@ -28,6 +28,7 @@
     --cloud-bg: var(--surface-0);
     --cloud-point: var(--text-primary);
     --cloud-point-selected: var(--accent);
+    --cloud-point-shape: circle;
     --cloud-ping-color: var(--accent);
     --mini-waveform-color: var(--text-faint);
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
@@ -115,12 +116,13 @@
     --wave-cursor: #c0c0c0;
     --wave-progress: var(--wave-fill);
     --cloud-bg: #000;
-    --cloud-point: #f00;
-    --cloud-point-selected: var(--accent);
+    --cloud-point: #fff;
+    --cloud-point-selected: var(--wave-fill);
+    --cloud-point-shape: square;
     --cloud-ping-color: #ff0;
     --mini-waveform-color: var(--wave-fill);
     --font-body: "Segoe UI", "Tahoma", sans-serif;
-    --font-mono: "Courier New", monospace;
+    --font-mono: var(--font-body);
 }
 
 * {
@@ -197,6 +199,18 @@ select:focus-visible,
 }
 
 .add-panel-menu button {
+    border: 1px solid var(--border);
+    background: var(--surface-0);
+    border-radius: 5px;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 11.5px;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+.reset-layout-button {
+    margin-left: 10px;
     border: 1px solid var(--border);
     background: var(--surface-0);
     border-radius: 5px;
@@ -547,9 +561,14 @@ tr.is-focused {
     inset: 0;
 }
 
+/* regl-scatterplot always clears its WebGL canvas to fully transparent -- its own `backgroundColor`
+   option only feeds internal contrast math (e.g. picking a readable point outline), it never
+   actually paints anything. This element's own background is what viewers actually see through
+   that transparent canvas. */
 .cloud-canvas {
     position: absolute;
     inset: 0;
+    background: var(--cloud-bg);
 }
 
 .cloud-canvas canvas {
@@ -695,12 +714,22 @@ tr.is-focused {
     position: relative;
     min-height: 60px;
     overflow: auto hidden;
+    display: flex;
+    align-items: center;
     background: var(--wave-bg);
+}
+
+/* wavesurfer.js appends its own host element here as a plain, unstyled div; as a block-level
+   element it would naturally fill this container's width on its own, but turning this wrap into a
+   flex container (to center a shorter-than-full-height waveform) makes that child a flex item
+   instead, which shrinks to fit its content by default -- collapsing the whole waveform down to a
+   sliver on the left. Forcing its width back to 100% restores the fill without giving up centering. */
+.wave-canvas-wrap > div {
+    width: 100%;
 }
 
 .wave-canvas-wrap canvas {
     display: block;
-    height: 100%;
     color: var(--wave-fill);
 }
 
@@ -903,7 +932,8 @@ tr.is-focused {
 
 /* Flat 1px borders with a slight corner radius, matching real OpenMPT's modern common controls --
    the round transport play button and the borderless thumbnail toggle keep their own dedicated
-   shapes and are excluded from this sweep. */
+   shapes and are excluded from this sweep. Inputs and selects get an explicit white fill: they read
+   as documents floating on the theme's gray chrome, not chrome themselves. */
 :root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button),
 :root[data-theme="openmpt"] input,
 :root[data-theme="openmpt"] select {
@@ -911,14 +941,27 @@ tr.is-focused {
     border: 1px solid var(--border);
 }
 
+:root[data-theme="openmpt"] input,
+:root[data-theme="openmpt"] select {
+    background: var(--surface-1);
+}
+
 :root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button):active {
     background-color: var(--surface-3);
 }
 
-/* OpenMPT's own chrome text (tab names, table headers, field labels) is plain sans-serif in
-   normal case; this app's shared chrome styling otherwise reaches for an uppercase monospace
-   treatment, so this theme opts these labels back out of it. */
-:root[data-theme="openmpt"] .workspace-shell .dv-default-tab-content,
+/* Windows' own common controls tint a field's border blue on hover, and again (more strongly) once
+   it holds focus -- not only via the generic focus-visible ring every theme already gets below. */
+:root[data-theme="openmpt"] input:hover,
+:root[data-theme="openmpt"] select:hover,
+:root[data-theme="openmpt"] input:focus,
+:root[data-theme="openmpt"] select:focus {
+    border-color: var(--accent);
+}
+
+/* OpenMPT's own chrome text (table headers, field labels) is plain sans-serif in normal case; this
+   app's shared chrome styling otherwise reaches for an uppercase monospace treatment, so this theme
+   opts these labels back out of it. */
 :root[data-theme="openmpt"] table.data th,
 :root[data-theme="openmpt"] table.mini th,
 :root[data-theme="openmpt"] .detail-section h3,
@@ -927,4 +970,61 @@ tr.is-focused {
     font-family: var(--font-body);
     text-transform: none;
     letter-spacing: normal;
+}
+
+/* The dockview tab label and the data table's own column headers have a direct OpenMPT counterpart
+   (the document tab strip, the sample list's header row) -- both render there in a regular, not
+   bold, weight, at a size closer to the surrounding body text than this app's own compact default. */
+:root[data-theme="openmpt"] .workspace-shell .dv-default-tab-content {
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+:root[data-theme="openmpt"] table.data th,
+:root[data-theme="openmpt"] table.mini th {
+    font-weight: 400;
+}
+
+/* A sorted column in a native Windows list view still marks itself with just the sort arrow --
+   the header label itself never recolors, unlike this app's own accent-tinted default. */
+:root[data-theme="openmpt"] table.data th.sorted {
+    color: var(--text-faint);
+}
+
+/* A sample or module's name is plain, unweighted text in OpenMPT's own list views. */
+:root[data-theme="openmpt"] .cell-primary {
+    font-weight: 400;
+}
+
+/* A dockview panel's own content pane reads as OpenMPT's gray document background; a table is the
+   one content type OpenMPT renders as a white document floating on top of it. */
+:root[data-theme="openmpt"] .dv-react-part,
+:root[data-theme="openmpt"] .panel-filter {
+    background: var(--surface-2);
+}
+
+:root[data-theme="openmpt"] table.data,
+:root[data-theme="openmpt"] table.mini {
+    background: var(--surface-1);
+}
+
+/* OpenMPT's list views carry no cell or row grid lines at all -- only the solid selection fill
+   marks a row apart from its neighbors. */
+:root[data-theme="openmpt"] table.data td,
+:root[data-theme="openmpt"] table.mini td {
+    border-bottom: none;
+}
+
+:root[data-theme="openmpt"] tr.is-focused {
+    background: var(--accent);
+    box-shadow: none;
+}
+
+:root[data-theme="openmpt"] tr.is-focused td,
+:root[data-theme="openmpt"] tr.is-focused .cell-primary,
+:root[data-theme="openmpt"] tr.is-focused .cell-muted {
+    color: var(--accent-ink);
 }
