@@ -97,6 +97,7 @@ export function SampleDetailView({ sample, relations, similar }: SampleDetailVie
                     <table className="mini">
                         <thead>
                             <tr>
+                                <th>Play</th>
                                 <th>Sample</th>
                                 <th>Distance</th>
                             </tr>

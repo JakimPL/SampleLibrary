@@ -5,6 +5,7 @@ import type { SimilarSample } from "../api/samples";
 import { classNames } from "../shared/classNames";
 import { shortHash } from "../shared/format";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
+import { PlayButton } from "./PlayButton";
 
 const DISTANCE_DECIMAL_PLACES = 3;
 
@@ -24,6 +25,9 @@ export function SimilarSampleRow({ similar }: SimilarSampleRowProps): ReactEleme
             onClickCapture={onClick}
             onDoubleClick={onDoubleClick}
         >
+            <td>
+                <PlayButton sampleHash={similar.hash}>▶</PlayButton>
+            </td>
             <td className="cell-name">
                 <Link to={href} className="cell-primary mono">
                     {shortHash(similar.hash)}
