@@ -3,43 +3,55 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as CloudApi from "../../../src/api/cloud";
+import type * as ModulesApi from "../../../src/api/modules";
+import type * as SamplesApi from "../../../src/api/samples";
 import { CloudPanel } from "../../../src/workspace/panels/CloudPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { instances, createScatterplotMock, getCloud, getModuleCloud } = vi.hoisted(() => {
-    class FakeScatterplot {
-        readonly draw = vi.fn().mockResolvedValue(undefined);
-        readonly select = vi.fn();
-        readonly deselect = vi.fn();
-        readonly destroy = vi.fn();
-        private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
+const { instances, createScatterplotMock, getCloud, getModuleCloud, getSample, getSampleWaveform, getModule } =
+    vi.hoisted(() => {
+        class FakeScatterplot {
+            readonly draw = vi.fn().mockResolvedValue(undefined);
+            readonly select = vi.fn();
+            readonly deselect = vi.fn();
+            readonly destroy = vi.fn();
+            readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
+            private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 
-        subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
-            const handlers = this.listeners.get(event) ?? [];
-            handlers.push(handler);
-            this.listeners.set(event, handlers);
-            return { event, handler };
-        }
+            subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
+                const handlers = this.listeners.get(event) ?? [];
+                handlers.push(handler);
+                this.listeners.set(event, handlers);
+                return { event, handler };
+            }
 
-        unsubscribe(): void {
-            // subscriptions are torn down together with the instance in these tests
-        }
+            unsubscribe(): void {
+                // subscriptions are torn down together with the instance in these tests
+            }
 
-        emit(event: string, payload?: unknown): void {
-            for (const handler of this.listeners.get(event) ?? []) {
-                handler(payload);
+            emit(event: string, payload?: unknown): void {
+                for (const handler of this.listeners.get(event) ?? []) {
+                    handler(payload);
+                }
             }
         }
-    }
 
-    const instances: FakeScatterplot[] = [];
-    const createScatterplotMock = vi.fn(() => {
-        const instance = new FakeScatterplot();
-        instances.push(instance);
-        return instance;
+        const instances: FakeScatterplot[] = [];
+        const createScatterplotMock = vi.fn(() => {
+            const instance = new FakeScatterplot();
+            instances.push(instance);
+            return instance;
+        });
+        return {
+            instances,
+            createScatterplotMock,
+            getCloud: vi.fn(),
+            getModuleCloud: vi.fn(),
+            getSample: vi.fn(),
+            getSampleWaveform: vi.fn(),
+            getModule: vi.fn(),
+        };
     });
-    return { instances, createScatterplotMock, getCloud: vi.fn(), getModuleCloud: vi.fn() };
-});
 
 vi.mock("regl-scatterplot", () => ({
     default: createScatterplotMock,
@@ -48,6 +60,16 @@ vi.mock("regl-scatterplot", () => ({
 vi.mock("../../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
     return { ...actual, getCloud, getModuleCloud };
+});
+
+vi.mock("../../../src/api/samples", async () => {
+    const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
+    return { ...actual, getSample, getSampleWaveform };
+});
+
+vi.mock("../../../src/api/modules", async () => {
+    const actual = await vi.importActual<typeof ModulesApi>("../../../src/api/modules");
+    return { ...actual, getModule };
 });
 
 function latestInstance(): (typeof instances)[number] {
@@ -143,6 +165,9 @@ describe("CloudPanel", () => {
         const sampleHash = "c".repeat(64);
         getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
         getModuleCloud.mockResolvedValue([]);
+        // The hover tooltip fetches a sample preview as soon as pointOver fires below.
+        getSample.mockReturnValue(new Promise(() => undefined));
+        getSampleWaveform.mockReturnValue(new Promise(() => undefined));
         renderPanel();
         await waitFor(() => {
             expect(document.querySelector("canvas")).toBeInTheDocument();
@@ -176,6 +201,8 @@ describe("CloudPanel", () => {
         getModuleCloud.mockResolvedValue([
             { module_hash: moduleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" },
         ]);
+        // The hover tooltip fetches module detail as soon as pointOver fires below.
+        getModule.mockReturnValue(new Promise(() => undefined));
         renderPanel();
         fireEvent.click(screen.getByRole("button", { name: "Modules" }));
         await waitFor(() => {
@@ -186,5 +213,62 @@ describe("CloudPanel", () => {
         fireEvent.dblClick(latestCanvas());
 
         expect(await screen.findByText("module route")).toBeInTheDocument();
+    });
+
+    it("shows a hover tooltip with the sample's name and hash", async () => {
+        const sampleHash = "1".repeat(64);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        getModuleCloud.mockResolvedValue([]);
+        getSample.mockResolvedValue({
+            hash: sampleHash,
+            depth: 16,
+            channels: 1,
+            frames: 4096,
+            occurrences: [],
+            size_bytes: 8192,
+            display_name: "kick",
+            dominant_rate_hz: 8363,
+            duration_seconds: 0.09,
+        });
+        getSampleWaveform.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas")).toBeInTheDocument();
+        });
+
+        latestInstance().emit("pointOver", 0);
+
+        expect(await screen.findByText("kick")).toBeInTheDocument();
+        expect(screen.getByText(sampleHash.slice(0, 8))).toBeInTheDocument();
+    });
+
+    it("hides the hover tooltip once the cursor leaves the point", async () => {
+        const sampleHash = "2".repeat(64);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        getModuleCloud.mockResolvedValue([]);
+        getSample.mockResolvedValue({
+            hash: sampleHash,
+            depth: 16,
+            channels: 1,
+            frames: 4096,
+            occurrences: [],
+            size_bytes: 8192,
+            display_name: "snare",
+            dominant_rate_hz: 8363,
+            duration_seconds: 0.09,
+        });
+        getSampleWaveform.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas")).toBeInTheDocument();
+        });
+        latestInstance().emit("pointOver", 0);
+        await screen.findByText("snare");
+
+        latestInstance().emit("pointOut");
+
+        await waitFor(() => {
+            expect(screen.queryByText("snare")).not.toBeInTheDocument();
+        });
     });
 });

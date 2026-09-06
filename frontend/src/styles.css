@@ -516,6 +516,80 @@ tr.is-focused {
     font-size: 12px;
 }
 
+.cloud-hover-tooltip {
+    position: absolute;
+    z-index: 1;
+    transform: translate(14px, -110%);
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    padding: 6px 8px;
+}
+
+.cloud-hover-name {
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.cloud-hover-hash {
+    font-size: 10.5px;
+    color: var(--text-faint);
+}
+
+.cloud-hover-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cloud-ping {
+    position: absolute;
+    z-index: 1;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+.cloud-ping-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    animation: cloud-ping-expand 900ms ease-out forwards;
+}
+
+.cloud-ping-ring-delayed {
+    animation-delay: 220ms;
+}
+
+@keyframes cloud-ping-expand {
+    from {
+        transform: scale(0.4);
+        opacity: 0.9;
+    }
+
+    to {
+        transform: scale(3.4);
+        opacity: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cloud-ping-ring {
+        animation: none;
+        opacity: 0;
+    }
+}
+
 /* ---------- Waveform panel ---------- */
 
 .wave-panel {

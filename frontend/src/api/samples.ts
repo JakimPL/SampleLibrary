@@ -25,6 +25,10 @@ export async function getSampleRelations(sampleHash: string): Promise<readonly S
     return requestJson<readonly SampleRelation[]>(`/samples/${sampleHash}/relations`);
 }
 
+export async function getSampleWaveform(sampleHash: string): Promise<readonly WaveformPeak[]> {
+    return requestJson<readonly WaveformPeak[]>(`/samples/${sampleHash}/waveform`);
+}
+
 export function sampleAudioUrl(sampleHash: string): string {
     return `/samples/${sampleHash}/audio`;
 }

@@ -1,11 +1,12 @@
 import type { ReactElement } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import createScatterplot from "regl-scatterplot";
 
 import type { EntityRef } from "../workspace/selectionStore";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
 
 type Scatterplot = ReturnType<typeof createScatterplot>;
+type ScreenPosition = readonly [number, number];
 
 const POINT_SIZE = 4;
 const POINT_SIZE_SELECTED = 9;
@@ -16,12 +17,22 @@ const SELECTED_COLOR_FALLBACK = "#a8690f";
 const BACKGROUND_COLOR_PROPERTY = "--surface-0";
 const BACKGROUND_COLOR_FALLBACK = "#f4f5f7";
 
+// Kept in step with the ring animations' own total duration in styles.css (two staggered 900ms
+// rings, the second delayed by 220ms) so the marker element is dropped only once both have faded.
+const PING_LIFETIME_MS = 1200;
+
 interface CloudViewProps {
     readonly points: readonly CloudEntityPoint[];
     readonly highlighted: EntityRef | null;
     readonly onSelect: (entity: EntityRef) => void;
     readonly onFocus: (entity: EntityRef) => void;
     readonly onClear: () => void;
+    readonly onHover: (entity: EntityRef | null, screenPosition: ScreenPosition | null) => void;
+}
+
+interface Ping {
+    readonly key: number;
+    readonly position: ScreenPosition;
 }
 
 function readThemeColor(propertyName: string, fallback: string): string {
@@ -44,8 +55,11 @@ function sameEntity(a: EntityRef, b: EntityRef): boolean {
  * double-click behaviour only deselects, so this view disables it (`deselectOnDblClick: false`)
  * and focuses the hovered point on a native double-click instead, looked up through the library's
  * continuous `pointOver`/`pointOut` hover tracking -- the same tracking a miss-click reads to tell
- * a hit from empty space. Pressing Escape while the canvas has focus clears the highlight too,
- * through the library's own built-in `deselect` behaviour.
+ * a hit from empty space, and that `onHover` reports upward for a caller-rendered detail popup.
+ * Pressing Escape while the canvas has focus clears the highlight too, through the library's own
+ * built-in `deselect` behaviour. Whenever `highlighted` changes to a point present in this view (a
+ * click elsewhere in the shell just located a sample or module here), a brief sonar-style ping
+ * marks its screen position so the point is easy to find even in a dense or panned cloud.
  */
 export function CloudView({
     points: rawPoints,
@@ -53,17 +67,24 @@ export function CloudView({
     onSelect,
     onFocus,
     onClear,
+    onHover,
 }: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
     const pointsRef = useRef<readonly CloudEntityPoint[]>([]);
     const hoveredIndexRef = useRef<number | null>(null);
+    const previousHighlightedRef = useRef<EntityRef | null>(null);
+    const pingCounterRef = useRef(0);
     const onSelectRef = useRef(onSelect);
     const onFocusRef = useRef(onFocus);
     const onClearRef = useRef(onClear);
+    const onHoverRef = useRef(onHover);
     onSelectRef.current = onSelect;
     onFocusRef.current = onFocus;
     onClearRef.current = onClear;
+    onHoverRef.current = onHover;
+
+    const [ping, setPing] = useState<Ping | null>(null);
 
     const points = normalizePoints(rawPoints);
     pointsRef.current = points;
@@ -97,9 +118,15 @@ export function CloudView({
         });
         const pointOverSubscription = scatterplot.subscribe("pointOver", (index) => {
             hoveredIndexRef.current = index;
+            const entity = pointsRef.current[index]?.ref;
+            const position = scatterplot.getScreenPosition(index);
+            if (entity !== undefined && position !== undefined) {
+                onHoverRef.current(entity, position);
+            }
         });
         const pointOutSubscription = scatterplot.subscribe("pointOut", () => {
             hoveredIndexRef.current = null;
+            onHoverRef.current(null, null);
         });
         const deselectSubscription = scatterplot.subscribe("deselect", () => {
             onClearRef.current();
@@ -148,14 +175,41 @@ export function CloudView({
             highlighted === null ? -1 : points.findIndex((point) => sameEntity(point.ref, highlighted));
         if (highlightedIndex >= 0) {
             scatterplot.select([highlightedIndex], { preventEvent: true });
+            if (highlighted !== previousHighlightedRef.current) {
+                const position = scatterplot.getScreenPosition(highlightedIndex);
+                if (position !== undefined) {
+                    pingCounterRef.current += 1;
+                    setPing({ key: pingCounterRef.current, position });
+                }
+            }
         } else {
             scatterplot.deselect({ preventEvent: true });
         }
+        previousHighlightedRef.current = highlighted;
     }, [points, highlighted]);
+
+    useEffect(() => {
+        if (ping === null) {
+            return undefined;
+        }
+
+        const timeout = setTimeout(() => {
+            setPing(null);
+        }, PING_LIFETIME_MS);
+        return (): void => {
+            clearTimeout(timeout);
+        };
+    }, [ping]);
 
     return (
         <div className="cloud-wrap">
             <div className="cloud-canvas" ref={containerRef} />
+            {ping !== null && (
+                <span key={ping.key} className="cloud-ping" style={{ left: ping.position[0], top: ping.position[1] }}>
+                    <span className="cloud-ping-ring" />
+                    <span className="cloud-ping-ring cloud-ping-ring-delayed" />
+                </span>
+            )}
             {points.length === 0 && (
                 <div className="cloud-empty">
                     <h4>No cloud coordinates yet</h4>

@@ -1,4 +1,4 @@
-import { type ReactElement, useState } from "react";
+import { type ReactElement, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { CloudPoint, ModuleCloudPoint } from "../../api/cloud";
@@ -11,8 +11,15 @@ import type { FetchState } from "../../shared/fetchState";
 import { Loading } from "../../shared/Loading";
 import { type EntityRef, useSelectionStore } from "../selectionStore";
 import { entityRoute } from "../useEntityRowInteractions";
+import { CloudHoverTooltip } from "./CloudHoverTooltip";
 
 type CloudTab = "samples" | "modules";
+
+interface HoveredPoint {
+    readonly entity: EntityRef;
+    readonly x: number;
+    readonly y: number;
+}
 
 const MODULE_TAB_CAPTION = "Preliminary layout — real positions await a spectral-distance embedding.";
 
@@ -52,11 +59,16 @@ function useActiveCloudPoints(tab: CloudTab): FetchState<readonly CloudEntityPoi
 
 export function CloudPanel(): ReactElement {
     const [tab, setTab] = useState<CloudTab>("samples");
+    const [hovered, setHovered] = useState<HoveredPoint | null>(null);
     const state = useActiveCloudPoints(tab);
     const navigate = useNavigate();
     const highlighted = useSelectionStore((selection) => selection.highlighted);
     const highlightEntity = useSelectionStore((selection) => selection.highlightEntity);
     const clearHighlight = useSelectionStore((selection) => selection.clearHighlight);
+
+    useEffect(() => {
+        setHovered(null);
+    }, [tab]);
 
     function handleSelect(entity: EntityRef): void {
         highlightEntity(entity);
@@ -64,6 +76,12 @@ export function CloudPanel(): ReactElement {
 
     function handleFocus(entity: EntityRef): void {
         void navigate(entityRoute(entity));
+    }
+
+    function handleHover(entity: EntityRef | null, screenPosition: readonly [number, number] | null): void {
+        setHovered(
+            entity !== null && screenPosition !== null ? { entity, x: screenPosition[0], y: screenPosition[1] } : null,
+        );
     }
 
     return (
@@ -93,13 +111,17 @@ export function CloudPanel(): ReactElement {
                 {state.status === "loading" && <Loading />}
                 {state.status === "error" && <ErrorNotice message={state.message} />}
                 {state.status === "success" && (
-                    <CloudView
-                        points={state.data}
-                        highlighted={highlighted}
-                        onSelect={handleSelect}
-                        onFocus={handleFocus}
-                        onClear={clearHighlight}
-                    />
+                    <>
+                        <CloudView
+                            points={state.data}
+                            highlighted={highlighted}
+                            onSelect={handleSelect}
+                            onFocus={handleFocus}
+                            onClear={clearHighlight}
+                            onHover={handleHover}
+                        />
+                        {hovered !== null && <CloudHoverTooltip entity={hovered.entity} x={hovered.x} y={hovered.y} />}
+                    </>
                 )}
             </div>
         </div>

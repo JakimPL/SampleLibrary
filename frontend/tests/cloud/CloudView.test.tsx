@@ -11,6 +11,7 @@ const { instances, createScatterplotMock } = vi.hoisted(() => {
         readonly select = vi.fn();
         readonly deselect = vi.fn();
         readonly destroy = vi.fn();
+        readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
         private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 
         subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
@@ -70,6 +71,7 @@ interface RenderOverrides {
     readonly onSelect?: (entity: EntityRef) => void;
     readonly onFocus?: (entity: EntityRef) => void;
     readonly onClear?: () => void;
+    readonly onHover?: (entity: EntityRef | null, screenPosition: readonly [number, number] | null) => void;
 }
 
 function renderCloudView(overrides: RenderOverrides = {}): ReturnType<typeof render> {
@@ -80,6 +82,7 @@ function renderCloudView(overrides: RenderOverrides = {}): ReturnType<typeof ren
             onSelect={overrides.onSelect ?? vi.fn()}
             onFocus={overrides.onFocus ?? vi.fn()}
             onClear={overrides.onClear ?? vi.fn()}
+            onHover={overrides.onHover ?? vi.fn()}
         />,
     );
 }
@@ -181,5 +184,51 @@ describe("CloudView", () => {
         unmount();
 
         expect(instance.destroy).toHaveBeenCalled();
+    });
+
+    it("reports the hovered entity and its screen position", () => {
+        const onHover = vi.fn();
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onHover });
+
+        latestInstance().emit("pointOver", 0);
+
+        expect(onHover).toHaveBeenCalledWith(SAMPLE_REF, [10, 20]);
+    });
+
+    it("reports no hover once the cursor leaves the point", () => {
+        const onHover = vi.fn();
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onHover });
+        latestInstance().emit("pointOver", 0);
+
+        latestInstance().emit("pointOut");
+
+        expect(onHover).toHaveBeenLastCalledWith(null, null);
+    });
+
+    it("shows a sonar ping at a newly highlighted point", () => {
+        const { container } = renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
+
+        expect(container.querySelector(".cloud-ping")).toBeInTheDocument();
+    });
+
+    it("does not re-ping when the same highlight persists across a re-render", () => {
+        const { container, rerender } = renderCloudView({
+            points: [point(SAMPLE_REF, 0, 0)],
+            highlighted: SAMPLE_REF,
+        });
+        const firstPing = container.querySelector(".cloud-ping");
+
+        rerender(
+            <CloudView
+                points={[point(SAMPLE_REF, 0, 0)]}
+                highlighted={SAMPLE_REF}
+                onSelect={vi.fn()}
+                onFocus={vi.fn()}
+                onClear={vi.fn()}
+                onHover={vi.fn()}
+            />,
+        );
+
+        expect(container.querySelector(".cloud-ping")).toBe(firstPing);
     });
 });
