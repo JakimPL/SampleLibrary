@@ -35,8 +35,14 @@ describe("StatsPanel", () => {
         await waitFor(() => {
             expect(screen.getByText("2")).toBeInTheDocument();
         });
-        expect(screen.getByText("xm: 2")).toBeInTheDocument();
-        expect(screen.getByText("resampled_variant: 1")).toBeInTheDocument();
+        // recharts' ResponsiveContainer measures its container in its own effect, one render pass
+        // after the stats first land, so its axis labels need a second wait rather than appearing
+        // synchronously alongside the plain stat tiles above. The "tspan" selector excludes
+        // recharts' own hidden off-screen span it uses to measure label width.
+        await waitFor(() => {
+            expect(screen.getByText("xm", { selector: "tspan" })).toBeInTheDocument();
+        });
+        expect(screen.getByText("resampled_variant", { selector: "tspan" })).toBeInTheDocument();
     });
 
     it("shows an error notice when the request fails", async () => {

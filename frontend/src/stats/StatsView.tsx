@@ -1,7 +1,10 @@
 import type { ReactElement } from "react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import type { LibraryStats } from "../api/stats";
 import { formatBytes } from "../shared/format";
+
+const CHART_HEIGHT_PX = 200;
 
 interface StatsViewProps {
     readonly stats: LibraryStats;
@@ -28,23 +31,27 @@ export function StatsView({ stats }: StatsViewProps): ReactElement {
             </div>
             <div className="chart-card">
                 <h3>Modules by tracker</h3>
-                <ul>
-                    {stats.modules_by_tracker.map((entry) => (
-                        <li key={entry.tracker}>
-                            {entry.tracker}: {entry.module_count}
-                        </li>
-                    ))}
-                </ul>
+                <ResponsiveContainer width="100%" height={CHART_HEIGHT_PX}>
+                    <BarChart data={[...stats.modules_by_tracker]}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis dataKey="tracker" stroke="var(--text-muted)" />
+                        <YAxis allowDecimals={false} stroke="var(--text-muted)" />
+                        <Tooltip />
+                        <Bar dataKey="module_count" name="Modules" fill="var(--accent)" />
+                    </BarChart>
+                </ResponsiveContainer>
             </div>
             <div className="chart-card">
                 <h3>Relations by type</h3>
-                <ul>
-                    {stats.relations_by_type.map((entry) => (
-                        <li key={entry.relation_type}>
-                            {entry.relation_type}: {entry.relation_count}
-                        </li>
-                    ))}
-                </ul>
+                <ResponsiveContainer width="100%" height={CHART_HEIGHT_PX}>
+                    <BarChart data={[...stats.relations_by_type]}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis dataKey="relation_type" stroke="var(--text-muted)" />
+                        <YAxis allowDecimals={false} stroke="var(--text-muted)" />
+                        <Tooltip />
+                        <Bar dataKey="relation_count" name="Relations" fill="var(--good)" />
+                    </BarChart>
+                </ResponsiveContainer>
             </div>
         </section>
     );

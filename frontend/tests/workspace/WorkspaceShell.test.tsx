@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -64,6 +64,20 @@ describe("WorkspaceShell", () => {
 
         await waitFor(() => {
             expect(useSelectionStore.getState().focusedModuleHash).toBe("abc");
+        });
+    });
+
+    it("lets a closed panel be reopened through the Add panel menu", async () => {
+        renderShellAt("/");
+        expect(panelTabTitles()).toContain("Stats");
+
+        fireEvent.click(screen.getByRole("button", { name: "Close Stats" }));
+        expect(panelTabTitles()).not.toContain("Stats");
+
+        fireEvent.click(await screen.findByRole("button", { name: "Stats" }));
+
+        await waitFor(() => {
+            expect(panelTabTitles()).toContain("Stats");
         });
     });
 });

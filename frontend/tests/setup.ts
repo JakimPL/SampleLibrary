@@ -22,6 +22,13 @@ afterEach(() => {
     clearRequestCache();
 });
 
+// jsdom's localStorage persists across tests in the same file; without clearing it, a test that
+// exercises the shell's own layout persistence (closing/reopening a panel) would leak a saved
+// layout into every test that mounts WorkspaceShell afterwards.
+afterEach(() => {
+    localStorage.clear();
+});
+
 // jsdom has no real canvas renderer; components must already treat a null 2D context as normal
 // (see CloudView), so tests exercise that path directly instead of jsdom's own noisy warning.
 vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
@@ -60,4 +67,20 @@ Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
 Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
     get: () => STUBBED_ELEMENT_EXTENT_PX,
+});
+
+// jsdom's getBoundingClientRect always reads an all-zero rect. recharts' ResponsiveContainer reads
+// it once synchronously on mount to size its chart, before its ResizeObserver-driven updates could
+// ever take over (the stub above is a no-op), so a real chart panel would otherwise measure zero
+// and render nothing.
+vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    width: STUBBED_ELEMENT_EXTENT_PX,
+    height: STUBBED_ELEMENT_EXTENT_PX,
+    top: 0,
+    right: STUBBED_ELEMENT_EXTENT_PX,
+    bottom: STUBBED_ELEMENT_EXTENT_PX,
+    left: 0,
+    toJSON: () => ({}),
 });
