@@ -5,6 +5,8 @@ export type SampleDetail = components["schemas"]["SampleDetail"];
 export type SampleSummary = components["schemas"]["SampleSummary"];
 export type SamplePage = components["schemas"]["Page_SampleSummary_"];
 export type SampleRelation = components["schemas"]["SampleRelation"];
+export type SampleDistance = components["schemas"]["SampleDistance"];
+export type SimilarSample = components["schemas"]["SimilarSample"];
 export type WaveformPeak = components["schemas"]["WaveformPeak"];
 
 export interface ListSamplesParams {
@@ -28,6 +30,14 @@ export async function getSample(sampleHash: string): Promise<SampleDetail> {
 
 export async function getSampleRelations(sampleHash: string): Promise<readonly SampleRelation[]> {
     return requestJson<readonly SampleRelation[]>(`/samples/${sampleHash}/relations`);
+}
+
+export async function getSampleDistance(sampleHash: string, otherHash: string): Promise<SampleDistance> {
+    return requestJson<SampleDistance>(`/samples/${sampleHash}/distance/${otherHash}`);
+}
+
+export async function getSimilarSamples(sampleHash: string): Promise<readonly SimilarSample[]> {
+    return requestJson<readonly SimilarSample[]>(`/samples/${sampleHash}/similar`);
 }
 
 export async function getSampleWaveform(sampleHash: string): Promise<readonly WaveformPeak[]> {

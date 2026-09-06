@@ -1,25 +1,29 @@
 import type { ReactElement } from "react";
 
-import type { SampleDetail, SampleRelation } from "../api/samples";
+import type { SampleDetail, SampleRelation, SimilarSample } from "../api/samples";
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
+import { SpectralDistanceReadout } from "../workspace/panels/SpectralDistanceReadout";
 import { CATEGORY_PLACEHOLDER } from "./category";
 import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { SampleRelationRow } from "./SampleRelationRow";
+import { SimilarSampleRow } from "./SimilarSampleRow";
 
 interface SampleDetailViewProps {
     readonly sample: SampleDetail;
     readonly relations: readonly SampleRelation[];
+    readonly similar: readonly SimilarSample[];
 }
 
-export function SampleDetailView({ sample, relations }: SampleDetailViewProps): ReactElement {
+export function SampleDetailView({ sample, relations, similar }: SampleDetailViewProps): ReactElement {
     return (
         <section className="detail-scroll">
             <h2>
                 <OptionalLabel value={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} />
             </h2>
             <p className="hash mono cell-muted">{sample.hash}</p>
+            <SpectralDistanceReadout />
             <dl className="kv">
                 <dt>Category</dt>
                 <dd>{CATEGORY_PLACEHOLDER}</dd>
@@ -85,9 +89,25 @@ export function SampleDetailView({ sample, relations }: SampleDetailViewProps): 
             </div>
             <div className="detail-section">
                 <h3>Similar Samples</h3>
-                <p className="placeholder-box">
-                    Awaits a similarity metric, planned alongside the spectral-distance work.
-                </p>
+                {similar.length === 0 ? (
+                    <p className="placeholder-box">
+                        No spectral neighbors yet — run the embedding pipeline to populate this.
+                    </p>
+                ) : (
+                    <table className="mini">
+                        <thead>
+                            <tr>
+                                <th>Sample</th>
+                                <th>Distance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {similar.map((neighbor) => (
+                                <SimilarSampleRow key={neighbor.hash} similar={neighbor} />
+                            ))}
+                        </tbody>
+                    </table>
+                )}
             </div>
             <div className="detail-section">
                 <h3>Frequently Co-occurs With</h3>

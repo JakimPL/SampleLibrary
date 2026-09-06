@@ -2,18 +2,21 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import { ApiError } from "../../../src/api/client";
 import type * as SamplesApi from "../../../src/api/samples";
 import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { getSample, getSampleRelations } = vi.hoisted(() => ({
+const { getSample, getSampleRelations, getSimilarSamples, getSampleDistance } = vi.hoisted(() => ({
     getSample: vi.fn(),
     getSampleRelations: vi.fn(),
+    getSimilarSamples: vi.fn(),
+    getSampleDistance: vi.fn(),
 }));
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations };
+    return { ...actual, getSample, getSampleRelations, getSimilarSamples, getSampleDistance };
 });
 
 function renderPanel(): ReturnType<typeof render> {
@@ -63,6 +66,7 @@ describe("SampleDetailPanel", () => {
     it("shows the focused sample's detail once loaded", async () => {
         getSample.mockResolvedValue(SAMPLE_DETAIL);
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         renderPanel();
@@ -73,6 +77,29 @@ describe("SampleDetailPanel", () => {
         expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/module-1");
         expect(screen.getByRole("heading", { name: "Similar Samples" })).toBeInTheDocument();
         expect(screen.getByRole("heading", { name: "Frequently Co-occurs With" })).toBeInTheDocument();
+    });
+
+    it("renders the sample's spectral neighbors once they are loaded", async () => {
+        getSample.mockResolvedValue(SAMPLE_DETAIL);
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([{ hash: "d".repeat(64), distance: 1.5 }]);
+        useSelectionStore.getState().focusSample("abc");
+
+        renderPanel();
+
+        expect(await screen.findByText("dddddddd")).toBeInTheDocument();
+        expect(screen.getByText("1.500")).toBeInTheDocument();
+    });
+
+    it("shows an honest empty state when the sample has no spectral neighbors yet", async () => {
+        getSample.mockResolvedValue(SAMPLE_DETAIL);
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockRejectedValue(new ApiError(404, "not found"));
+        useSelectionStore.getState().focusSample("abc");
+
+        renderPanel();
+
+        expect(await screen.findByText(/No spectral neighbors yet/)).toBeInTheDocument();
     });
 
     it("shows an error notice when the sample cannot be found", async () => {
@@ -87,9 +114,28 @@ describe("SampleDetailPanel", () => {
         });
     });
 
+    it("shows the spectral distance to a comparison sample and clears it on request", async () => {
+        getSample.mockResolvedValue(SAMPLE_DETAIL);
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+        getSampleDistance.mockResolvedValue({ sample_hash: "abc", other_hash: "def", distance: 2.5 });
+        useSelectionStore.getState().focusSample("abc");
+        useSelectionStore.getState().setComparisonSample("def");
+
+        renderPanel();
+
+        expect(await screen.findByText("distance 2.500")).toBeInTheDocument();
+        expect(getSampleDistance).toHaveBeenCalledWith("abc", "def");
+
+        fireEvent.click(screen.getByRole("button", { name: "Clear comparison" }));
+
+        expect(useSelectionStore.getState().comparisonSampleHash).toBeNull();
+    });
+
     it("highlights an occurrence's module row on a plain click and navigates to it on a double-click", async () => {
         getSample.mockResolvedValue(SAMPLE_DETAIL);
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
         renderPanel();
         const row = await waitFor(() => screen.getByRole("row", { name: /A Song/ }));

@@ -7,7 +7,7 @@ import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPan
 import { WaveformPanel } from "../../../src/workspace/panels/WaveformPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { instances, createMock, getSample, getSampleRelations } = vi.hoisted(() => {
+const { instances, createMock, getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => {
     class FakeWaveSurfer {
         readonly play = vi.fn().mockResolvedValue(undefined);
         readonly pause = vi.fn();
@@ -24,7 +24,7 @@ const { instances, createMock, getSample, getSampleRelations } = vi.hoisted(() =
         instances.push(instance);
         return instance;
     });
-    return { instances, createMock, getSample: vi.fn(), getSampleRelations: vi.fn() };
+    return { instances, createMock, getSample: vi.fn(), getSampleRelations: vi.fn(), getSimilarSamples: vi.fn() };
 });
 
 vi.mock("wavesurfer.js", () => ({
@@ -33,7 +33,7 @@ vi.mock("wavesurfer.js", () => ({
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations };
+    return { ...actual, getSample, getSampleRelations, getSimilarSamples };
 });
 
 function latestInstance(): (typeof instances)[number] {
@@ -79,6 +79,7 @@ describe("WaveformPanel", () => {
     it("plays the focused sample at its dominant rate by default", async () => {
         getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: 22050, rates: [8363, 22050, 22050] }));
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         render(<WaveformPanel />);
@@ -92,6 +93,7 @@ describe("WaveformPanel", () => {
     it("lets the user switch to a different occurrence's rate", async () => {
         getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: 22050, rates: [8363, 22050] }));
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
         render(<WaveformPanel />);
         await waitFor(() => {
@@ -106,6 +108,7 @@ describe("WaveformPanel", () => {
     it("shows an honest empty state for a sample with no occurrences", async () => {
         getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: null, rates: [] }));
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         render(<WaveformPanel />);
@@ -118,6 +121,7 @@ describe("WaveformPanel", () => {
     it("shares one request with SampleDetailPanel for the same focused sample", async () => {
         getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: 8363, rates: [8363] }));
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         render(

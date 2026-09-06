@@ -65,6 +65,7 @@ export function CloudPanel(): ReactElement {
     const highlighted = useSelectionStore((selection) => selection.highlighted);
     const highlightEntity = useSelectionStore((selection) => selection.highlightEntity);
     const clearHighlight = useSelectionStore((selection) => selection.clearHighlight);
+    const setComparisonSample = useSelectionStore((selection) => selection.setComparisonSample);
 
     useEffect(() => {
         setHovered(null);
@@ -76,6 +77,12 @@ export function CloudPanel(): ReactElement {
 
     function handleFocus(entity: EntityRef): void {
         void navigate(entityRoute(entity));
+    }
+
+    function handleCompare(entity: EntityRef): void {
+        if (entity.kind === "sample") {
+            setComparisonSample(entity.hash);
+        }
     }
 
     function handleHover(entity: EntityRef | null, screenPosition: readonly [number, number] | null): void {
@@ -119,6 +126,7 @@ export function CloudPanel(): ReactElement {
                             onFocus={handleFocus}
                             onClear={clearHighlight}
                             onHover={handleHover}
+                            onCompare={handleCompare}
                         />
                         {hovered !== null && <CloudHoverTooltip entity={hovered.entity} x={hovered.x} y={hovered.y} />}
                     </>

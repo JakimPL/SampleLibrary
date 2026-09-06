@@ -11,6 +11,7 @@ interface SelectionState {
     readonly highlighted: EntityRef | null;
     readonly focusedSampleHash: string | null;
     readonly focusedModuleHash: string | null;
+    readonly comparisonSampleHash: string | null;
 }
 
 interface SelectionActions {
@@ -18,12 +19,15 @@ interface SelectionActions {
     readonly clearHighlight: () => void;
     readonly focusSample: (sampleHash: string) => void;
     readonly focusModule: (moduleHash: string) => void;
+    readonly setComparisonSample: (sampleHash: string) => void;
+    readonly clearComparisonSample: () => void;
 }
 
 export const INITIAL_SELECTION_STATE: SelectionState = {
     highlighted: null,
     focusedSampleHash: null,
     focusedModuleHash: null,
+    comparisonSampleHash: null,
 };
 
 /**
@@ -35,6 +39,9 @@ export const INITIAL_SELECTION_STATE: SelectionState = {
  * is a single tagged reference because only one ring or row highlight is shown across the whole
  * shell at a time, and it can be either kind. Focusing an entity also highlights it, so "focus
  * implies highlight" is enforced in exactly one place per kind rather than at every call site.
+ * `comparisonSampleHash` is a second, independent sample slot a Shift-click sets, read by
+ * `SpectralDistanceReadout` alongside `focusedSampleHash` -- comparing a second sample must never
+ * steal the shell-wide highlight or focus ring from the first.
  */
 export const useSelectionStore = create<SelectionState & SelectionActions>((set) => ({
     ...INITIAL_SELECTION_STATE,
@@ -49,5 +56,11 @@ export const useSelectionStore = create<SelectionState & SelectionActions>((set)
     },
     focusModule: (moduleHash) => {
         set({ focusedModuleHash: moduleHash, highlighted: { kind: "module", hash: moduleHash } });
+    },
+    setComparisonSample: (sampleHash) => {
+        set({ comparisonSampleHash: sampleHash });
+    },
+    clearComparisonSample: () => {
+        set({ comparisonSampleHash: null });
     },
 }));

@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getSample, getSampleRelations, listSamples, sampleAudioUrl } from "../../src/api/samples";
+import {
+    getSample,
+    getSampleDistance,
+    getSampleRelations,
+    getSimilarSamples,
+    listSamples,
+    sampleAudioUrl,
+} from "../../src/api/samples";
 
 function stubFetchReturning(payload: unknown): ReturnType<typeof vi.fn> {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(payload) });
@@ -47,6 +54,26 @@ describe("getSampleRelations", () => {
         await getSampleRelations("abc");
 
         expect(fetchMock).toHaveBeenCalledWith("/samples/abc/relations");
+    });
+});
+
+describe("getSampleDistance", () => {
+    it("requests the distance between two samples", async () => {
+        const fetchMock = stubFetchReturning({ sample_hash: "abc", other_hash: "def", distance: 1.5 });
+
+        await getSampleDistance("abc", "def");
+
+        expect(fetchMock).toHaveBeenCalledWith("/samples/abc/distance/def");
+    });
+});
+
+describe("getSimilarSamples", () => {
+    it("requests the sample's spectral neighbors", async () => {
+        const fetchMock = stubFetchReturning([]);
+
+        await getSimilarSamples("abc");
+
+        expect(fetchMock).toHaveBeenCalledWith("/samples/abc/similar");
     });
 });
 

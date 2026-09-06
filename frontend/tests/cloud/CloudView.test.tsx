@@ -72,6 +72,7 @@ interface RenderOverrides {
     readonly onFocus?: (entity: EntityRef) => void;
     readonly onClear?: () => void;
     readonly onHover?: (entity: EntityRef | null, screenPosition: readonly [number, number] | null) => void;
+    readonly onCompare?: (entity: EntityRef) => void;
 }
 
 function renderCloudView(overrides: RenderOverrides = {}): ReturnType<typeof render> {
@@ -83,6 +84,7 @@ function renderCloudView(overrides: RenderOverrides = {}): ReturnType<typeof ren
             onFocus={overrides.onFocus ?? vi.fn()}
             onClear={overrides.onClear ?? vi.fn()}
             onHover={overrides.onHover ?? vi.fn()}
+            onCompare={overrides.onCompare ?? vi.fn()}
         />,
     );
 }
@@ -144,6 +146,26 @@ describe("CloudView", () => {
         fireEvent.click(latestCanvas());
 
         expect(onClear).toHaveBeenCalled();
+    });
+
+    it("reports a Shift-clicked point as a comparison target", () => {
+        const onCompare = vi.fn();
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onCompare });
+        latestInstance().emit("pointOver", 0);
+
+        fireEvent.click(latestCanvas(), { shiftKey: true });
+
+        expect(onCompare).toHaveBeenCalledWith(SAMPLE_REF);
+    });
+
+    it("does not report a comparison target on a plain click", () => {
+        const onCompare = vi.fn();
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onCompare });
+        latestInstance().emit("pointOver", 0);
+
+        fireEvent.click(latestCanvas());
+
+        expect(onCompare).not.toHaveBeenCalled();
     });
 
     it("does not clear the highlight on a click over a point", () => {
@@ -226,6 +248,7 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
+                onCompare={vi.fn()}
             />,
         );
 
@@ -247,6 +270,7 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
+                onCompare={vi.fn()}
             />,
         );
 

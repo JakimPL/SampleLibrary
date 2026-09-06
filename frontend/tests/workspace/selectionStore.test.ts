@@ -51,4 +51,26 @@ describe("selectionStore", () => {
         expect(state.focusedSampleHash).toBe("sample-a");
         expect(state.highlighted).toEqual({ kind: "module", hash: "module-a" });
     });
+
+    it("setComparisonSample sets the comparison sample without touching the highlight or focus", () => {
+        useSelectionStore.getState().focusSample("sample-a");
+
+        useSelectionStore.getState().setComparisonSample("sample-b");
+
+        const state = useSelectionStore.getState();
+        expect(state.comparisonSampleHash).toBe("sample-b");
+        expect(state.focusedSampleHash).toBe("sample-a");
+        expect(state.highlighted).toEqual({ kind: "sample", hash: "sample-a" });
+    });
+
+    it("clearComparisonSample removes the comparison sample without touching the highlight or focus", () => {
+        useSelectionStore.getState().focusSample("sample-a");
+        useSelectionStore.getState().setComparisonSample("sample-b");
+
+        useSelectionStore.getState().clearComparisonSample();
+
+        const state = useSelectionStore.getState();
+        expect(state.comparisonSampleHash).toBeNull();
+        expect(state.focusedSampleHash).toBe("sample-a");
+    });
 });

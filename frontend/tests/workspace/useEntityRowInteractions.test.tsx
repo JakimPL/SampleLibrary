@@ -23,7 +23,9 @@ interface FakeMouseEvent {
     readonly preventDefault: ReturnType<typeof vi.fn>;
 }
 
-function fakeMouseEvent(overrides: Partial<Record<"button" | "ctrlKey", number | boolean>> = {}): FakeMouseEvent {
+function fakeMouseEvent(
+    overrides: Partial<Record<"button" | "ctrlKey" | "shiftKey", number | boolean>> = {},
+): FakeMouseEvent {
     const preventDefault = vi.fn();
     const event = {
         button: 0,
@@ -66,6 +68,31 @@ describe("useEntityRowInteractions", () => {
 
         expect(preventDefault).not.toHaveBeenCalled();
         expect(useSelectionStore.getState().highlighted).toBeNull();
+    });
+
+    it("a Shift-click on a sample sets it as the comparison target and prevents the default navigation", () => {
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
+        const { event, preventDefault } = fakeMouseEvent({ shiftKey: true });
+
+        act(() => {
+            result.current.onClick(event);
+        });
+
+        expect(preventDefault).toHaveBeenCalled();
+        expect(useSelectionStore.getState().comparisonSampleHash).toBe("abc");
+        expect(useSelectionStore.getState().highlighted).toBeNull();
+    });
+
+    it("a Shift-click on a module does nothing, since modules have no comparison concept", () => {
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
+        const { event, preventDefault } = fakeMouseEvent({ shiftKey: true });
+
+        act(() => {
+            result.current.onClick(event);
+        });
+
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(useSelectionStore.getState().comparisonSampleHash).toBeNull();
     });
 
     it("a double-click navigates to the entity's own route", async () => {

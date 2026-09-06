@@ -28,6 +28,7 @@ interface CloudViewProps {
     readonly onFocus: (entity: EntityRef) => void;
     readonly onClear: () => void;
     readonly onHover: (entity: EntityRef | null, screenPosition: ScreenPosition | null) => void;
+    readonly onCompare: (entity: EntityRef) => void;
 }
 
 interface Ping {
@@ -65,7 +66,9 @@ function sameHighlight(a: EntityRef | null, b: EntityRef | null): boolean {
  * built-in `deselect` behaviour. Whenever `highlighted` changes to a point present in this view (a
  * click elsewhere in the shell just located a sample or module here), a brief sonar-style ping
  * marks its screen position -- tracking the library's own `view` event so the ping stays pinned to
- * the point through any pan or zoom while it plays, rather than drifting off it.
+ * the point through any pan or zoom while it plays, rather than drifting off it. A Shift-click over
+ * a point reports it through `onCompare` alongside regl-scatterplot's own unavoidable normal select
+ * -- the library has no way to suppress its own hit-testing from our own listener.
  */
 export function CloudView({
     points: rawPoints,
@@ -74,6 +77,7 @@ export function CloudView({
     onFocus,
     onClear,
     onHover,
+    onCompare,
 }: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
@@ -86,10 +90,12 @@ export function CloudView({
     const onFocusRef = useRef(onFocus);
     const onClearRef = useRef(onClear);
     const onHoverRef = useRef(onHover);
+    const onCompareRef = useRef(onCompare);
     onSelectRef.current = onSelect;
     onFocusRef.current = onFocus;
     onClearRef.current = onClear;
     onHoverRef.current = onHover;
+    onCompareRef.current = onCompare;
 
     const [ping, setPing] = useState<Ping | null>(null);
     pingRef.current = ping;
@@ -150,9 +156,17 @@ export function CloudView({
             }
         });
 
-        function handleClick(): void {
-            if (hoveredIndexRef.current === null) {
+        function handleClick(event: MouseEvent): void {
+            const index = hoveredIndexRef.current;
+            if (index === null) {
                 onClearRef.current();
+                return;
+            }
+            if (event.shiftKey) {
+                const entity = pointsRef.current[index]?.ref;
+                if (entity !== undefined) {
+                    onCompareRef.current(entity);
+                }
             }
         }
 
