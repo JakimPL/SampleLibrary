@@ -11,7 +11,7 @@ const MIN_PIXELS_PER_SECOND = 100;
 
 const WAVE_COLOR_PROPERTY = "--wave-fill";
 const WAVE_COLOR_FALLBACK = "#b9bec9";
-const PROGRESS_COLOR_PROPERTY = "--accent";
+const PROGRESS_COLOR_PROPERTY = "--wave-progress";
 const PROGRESS_COLOR_FALLBACK = "#a8690f";
 const CURSOR_COLOR_PROPERTY = "--wave-cursor";
 const CURSOR_COLOR_FALLBACK = "#a8690f";

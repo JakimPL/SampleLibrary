@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { useEffect, useRef } from "react";
 
 import type { WaveformPeak } from "../api/samples";
+import { useThemeSignal } from "../theme/useThemeSignal";
 import { useAudioPreview } from "./useAudioPreview";
 import { layoutWaveformBars } from "./waveformLayout";
 
@@ -17,6 +18,7 @@ interface ThumbnailProps {
 export function Thumbnail({ sampleHash, peaks }: ThumbnailProps): ReactElement {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const { play, playingHash } = useAudioPreview();
+    const themeSignal = useThemeSignal();
 
     useEffect(() => {
         const context = canvasRef.current?.getContext("2d");
@@ -25,11 +27,13 @@ export function Thumbnail({ sampleHash, peaks }: ThumbnailProps): ReactElement {
         }
 
         context.clearRect(0, 0, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+        // "currentColor" resolves against the canvas element's own computed `color` at fill time,
+        // so re-running this on a theme change repaints the bars without reading the token by hand.
         context.fillStyle = "currentColor";
         for (const bar of layoutWaveformBars(peaks, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT)) {
             context.fillRect(bar.x, bar.yTop, bar.width, bar.yBottom - bar.yTop);
         }
-    }, [peaks]);
+    }, [peaks, themeSignal.preference, themeSignal.systemVersion]);
 
     if (!peaks) {
         return <span aria-hidden="true">{NO_THUMBNAIL_LABEL}</span>;

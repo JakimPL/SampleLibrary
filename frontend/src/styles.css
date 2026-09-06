@@ -24,6 +24,7 @@
     --wave-fill: #b9bec9;
     --wave-bg: var(--surface-1);
     --wave-cursor: var(--accent);
+    --wave-progress: var(--accent);
     --cloud-bg: var(--surface-0);
     --cloud-point: var(--text-primary);
     --cloud-point-selected: var(--accent);
@@ -82,22 +83,24 @@
     --wave-fill: #4a5364;
 }
 
-/* Styled after the Open ModPlug Tracker: native Win32 gray/white chrome around black,
-   custom-drawn data canvases -- see the waveform and cloud panel sections below for how
-   their wave and cloud tokens consume this block's canvas-specific overrides. */
+/* Palette sampled from a real OpenMPT 1.32 window on Windows 11, not the classic Win98 3D-bevel
+   look: modern flat common controls (light neutral gray chrome, white content, Windows' own
+   Fluent accent blue for selection) around the black, red-on-black sample/data canvases -- see the
+   waveform and cloud panel sections below for how their wave and cloud tokens consume this block's
+   canvas-specific overrides. */
 :root[data-theme="openmpt"] {
-    --surface-0: #c0c0c0;
+    --surface-0: #f0f0f0;
     --surface-1: #fff;
-    --surface-2: #c0c0c0;
-    --surface-3: #dfdfdf;
-    --border: #808080;
-    --border-strong: #000;
+    --surface-2: #f0f0f0;
+    --surface-3: #e4e4e4;
+    --border: #c8c8c8;
+    --border-strong: #8a8a8a;
     --text-primary: #000;
     --text-muted: #404040;
     --text-faint: #808080;
-    --accent: #000080;
-    --accent-strong: #1084d0;
-    --accent-soft: rgb(0 0 128 / 16%);
+    --accent: #0078d4;
+    --accent-strong: #106ebe;
+    --accent-soft: rgb(0 120 212 / 16%);
     --accent-ink: #fff;
     --good: #008000;
     --good-soft: rgb(0 128 0 / 16%);
@@ -105,15 +108,16 @@
     --warn-soft: rgb(255 128 0 / 16%);
     --critical: #f00;
     --critical-soft: rgb(255 0 0 / 16%);
-    --shadow: 2px 2px 0 rgb(0 0 0 / 45%);
+    --shadow: 0 2px 6px rgb(0 0 0 / 25%);
     --wave-fill: #f00;
     --wave-bg: #000;
-    --wave-cursor: #ff0;
+    --wave-cursor: #c0c0c0;
+    --wave-progress: var(--wave-fill);
     --cloud-bg: #000;
     --cloud-point: #f00;
-    --cloud-point-selected: #000080;
+    --cloud-point-selected: var(--accent);
     --cloud-ping-color: #ff0;
-    --font-body: "MS Sans Serif", "Tahoma", sans-serif;
+    --font-body: "Segoe UI", "Tahoma", sans-serif;
     --font-mono: "Courier New", monospace;
 }
 
@@ -608,6 +612,10 @@ tr.is-focused {
     white-space: nowrap;
 }
 
+.cloud-hover-waveform {
+    color: var(--text-faint);
+}
+
 .entity-hash {
     display: flex;
     align-items: center;
@@ -894,34 +902,37 @@ tr.is-focused {
     border-bottom: none;
 }
 
-/* ---------- OpenMPT (Win98) chrome ---------- */
+/* ---------- OpenMPT chrome ---------- */
 
-/* The round transport play button and the borderless thumbnail toggle keep their own dedicated
-   shapes -- this sweep is for the square chrome controls (dropdowns, filter/menu buttons). */
+/* Flat 1px borders with a slight corner radius, matching real OpenMPT's modern common controls --
+   the round transport play button and the borderless thumbnail toggle keep their own dedicated
+   shapes and are excluded from this sweep. */
 :root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button),
 :root[data-theme="openmpt"] input,
 :root[data-theme="openmpt"] select {
-    border-radius: 0;
-    border-width: 2px;
-    border-style: solid;
-    border-color: var(--surface-1) var(--border-strong) var(--border-strong) var(--surface-1);
+    border-radius: 2px;
+    border: 1px solid var(--border);
 }
 
-:root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button):active,
-:root[data-theme="openmpt"] input:active,
-:root[data-theme="openmpt"] select:active {
-    border-color: var(--border-strong) var(--surface-1) var(--surface-1) var(--border-strong);
+:root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button):active {
+    background-color: var(--surface-3);
 }
 
-:root[data-theme="openmpt"] .dv-tab {
-    border-width: 1px;
-    border-style: solid;
-    border-color: var(--surface-1) var(--border-strong) var(--border-strong) var(--surface-1);
+/* OpenMPT's own chrome text (tab names, table headers, field labels) is plain sans-serif in
+   normal case; this app's shared chrome styling otherwise reaches for an uppercase monospace
+   treatment, so this theme opts these labels back out of it. */
+:root[data-theme="openmpt"] .workspace-shell .dv-default-tab-content,
+:root[data-theme="openmpt"] table.data th,
+:root[data-theme="openmpt"] table.mini th,
+:root[data-theme="openmpt"] .detail-section h3,
+:root[data-theme="openmpt"] .chart-card h3,
+:root[data-theme="openmpt"] .kv dt {
+    font-family: var(--font-body);
+    text-transform: none;
+    letter-spacing: normal;
 }
 
-/* dockview scrolls the tab strip's own overflow, which rules out the usual negative-margin
-   overlap trick for merging the active tab into the panel below -- coloring its own bottom
-   border to match that panel's background is what stays reliable regardless of scroll state. */
-:root[data-theme="openmpt"] .dv-tab.dv-active-tab {
-    border-bottom-color: var(--surface-1);
+:root[data-theme="openmpt"] .thumbnail-button,
+:root[data-theme="openmpt"] .cloud-hover-waveform {
+    color: var(--wave-fill);
 }
