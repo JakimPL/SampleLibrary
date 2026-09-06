@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    ColumnElement,
     Connection,
     DateTime,
     Double,
@@ -19,13 +21,43 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
+    and_,
+    column,
     create_engine,
 )
 from sqlalchemy.engine import URL, RootTransaction
 from sqlalchemy.pool import NullPool
 from sqlalchemy.types import ARRAY
+from trackmod.core.samples.depth import BitDepth
+from trackmod.core.samples.loop import LoopMode
 
+from samplecore.models.channels import ChannelLayout
+from samplecore.models.relation import RelationType
+from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.types import TinyInt, UBigInt, UInteger, USmallInt, UTinyInt
+
+# Each CHECK constraint below that enumerates a closed set of values is derived from the same enum
+# the rest of the codebase already treats as that set's single source of truth, so a member added
+# there is enforced here automatically rather than needing a second, easily-forgotten edit -- the
+# schema can still never alter an already-existing table's constraint (see repair_schema.py), but
+# this at least keeps a *new* table's constraint from drifting out of sync with its own enum.
+_BIT_DEPTH_VALUES: Final[tuple[int, ...]] = tuple(depth.value for depth in BitDepth)
+_CHANNEL_LAYOUT_VALUES: Final[tuple[int, ...]] = tuple(layout.value for layout in ChannelLayout)
+_TRACKER_FORMAT_VALUES: Final[tuple[str, ...]] = tuple(tracker.value for tracker in TrackerFormat)
+_LOOP_MODE_VALUES: Final[tuple[str, ...]] = tuple(mode.value for mode in LoopMode)
+_RELATION_TYPE_VALUES: Final[tuple[str, ...]] = tuple(relation_type.value for relation_type in RelationType)
+
+
+def _all_null_together(first_column_name: str, *other_column_names: str) -> ColumnElement[bool]:
+    """A CHECK expression requiring a group of columns to be either all NULL or all filled in.
+
+    Every other column's nullability is compared against the first's; boolean equality is
+    transitive, so this enforces the same all-or-none constraint as comparing each consecutive
+    pair, without needing that specific chain to read the intent off the expression.
+    """
+    first_is_null = column(first_column_name).is_(None)
+    return and_(*(first_is_null == column(name).is_(None) for name in other_column_names))
+
 
 metadata = MetaData()
 
@@ -39,9 +71,9 @@ sample = Table(
     Column("depth", UTinyInt, nullable=False),
     Column("channels", UTinyInt, nullable=False),
     Column("frames", UInteger, nullable=False),
-    CheckConstraint("depth IN (8, 16)", name="sample_depth_check"),
-    CheckConstraint("channels IN (1, 2)", name="sample_channels_check"),
-    CheckConstraint("frames > 0", name="sample_frames_check"),
+    CheckConstraint(column("depth").in_(_BIT_DEPTH_VALUES), name="sample_depth_check"),
+    CheckConstraint(column("channels").in_(_CHANNEL_LAYOUT_VALUES), name="sample_channels_check"),
+    CheckConstraint(column("frames") > 0, name="sample_frames_check"),
 )
 
 module = Table(
@@ -58,8 +90,10 @@ module = Table(
     Column("sample_count", USmallInt, nullable=False),
     Column("file_size", UBigInt, nullable=False),
     Column("ingested_at", DateTime(timezone=True), nullable=False),
-    CheckConstraint(r"filename NOT LIKE '%/%' AND filename NOT LIKE '%\%'", name="module_filename_check"),
-    CheckConstraint("tracker IN ('xm', 'it', 'mod', 's3m')", name="module_tracker_check"),
+    CheckConstraint(
+        column("filename").not_like("%/%") & column("filename").not_like(r"%\%"), name="module_filename_check"
+    ),
+    CheckConstraint(column("tracker").in_(_TRACKER_FORMAT_VALUES), name="module_tracker_check"),
 )
 
 sample_properties = Table(
@@ -78,14 +112,13 @@ sample_properties = Table(
     Column("loop_end", UInteger, nullable=True),
     Column("loop_mode", String, nullable=True),
     PrimaryKeyConstraint("module_id", "instrument_index", "sample_slot"),
-    CheckConstraint("tracker IN ('xm', 'it', 'mod', 's3m')", name="sample_properties_tracker_check"),
-    CheckConstraint("rate > 0", name="sample_properties_rate_check"),
-    CheckConstraint("volume <= 64", name="sample_properties_volume_check"),
-    CheckConstraint("panning <= 255", name="sample_properties_panning_check"),
-    CheckConstraint("loop_mode IN ('forward', 'ping_pong')", name="sample_properties_loop_mode_check"),
+    CheckConstraint(column("tracker").in_(_TRACKER_FORMAT_VALUES), name="sample_properties_tracker_check"),
+    CheckConstraint(column("rate") > 0, name="sample_properties_rate_check"),
+    CheckConstraint(column("volume") <= 64, name="sample_properties_volume_check"),
+    CheckConstraint(column("panning") <= 255, name="sample_properties_panning_check"),
+    CheckConstraint(column("loop_mode").in_(_LOOP_MODE_VALUES), name="sample_properties_loop_mode_check"),
     CheckConstraint(
-        "(loop_begin IS NULL) = (loop_end IS NULL) AND (loop_begin IS NULL) = (loop_mode IS NULL)",
-        name="sample_properties_loop_conull_check",
+        _all_null_together("loop_begin", "loop_end", "loop_mode"), name="sample_properties_loop_conull_check"
     ),
 )
 
@@ -124,18 +157,14 @@ it_sample_properties = Table(
         ["module_id", "instrument_index", "sample_slot"],
         ["sample_properties.module_id", "sample_properties.instrument_index", "sample_properties.sample_slot"],
     ),
-    CheckConstraint("global_volume <= 64", name="it_sample_properties_global_volume_check"),
-    CheckConstraint("sustain_mode IN ('forward', 'ping_pong')", name="it_sample_properties_sustain_mode_check"),
+    CheckConstraint(column("global_volume") <= 64, name="it_sample_properties_global_volume_check"),
+    CheckConstraint(column("sustain_mode").in_(_LOOP_MODE_VALUES), name="it_sample_properties_sustain_mode_check"),
     CheckConstraint(
-        "(sustain_begin IS NULL) = (sustain_end IS NULL) AND (sustain_begin IS NULL) = (sustain_mode IS NULL)",
+        _all_null_together("sustain_begin", "sustain_end", "sustain_mode"),
         name="it_sample_properties_sustain_conull_check",
     ),
     CheckConstraint(
-        """
-        (vibrato_speed IS NULL) = (vibrato_depth IS NULL) AND
-        (vibrato_speed IS NULL) = (vibrato_rate IS NULL) AND
-        (vibrato_speed IS NULL) = (vibrato_waveform IS NULL)
-        """,
+        _all_null_together("vibrato_speed", "vibrato_depth", "vibrato_rate", "vibrato_waveform"),
         name="it_sample_properties_vibrato_conull_check",
     ),
 )
@@ -174,14 +203,11 @@ sample_relation = Table(
     Column("reviewed_confirmed", Boolean, nullable=True),
     Column("reviewed_at", DateTime(timezone=True), nullable=True),
     Column("reviewed_by", String, nullable=True),
+    CheckConstraint(column("relation_type").in_(_RELATION_TYPE_VALUES), name="sample_relation_type_check"),
+    CheckConstraint(column("confidence").between(0.0, 1.0), name="sample_relation_confidence_check"),
+    CheckConstraint(column("subject_hash") < column("reference_hash"), name="sample_relation_hash_order_check"),
     CheckConstraint(
-        "relation_type IN ('bit_depth_variant', 'resampled_variant', 'amplification_variant')",
-        name="sample_relation_type_check",
-    ),
-    CheckConstraint("confidence BETWEEN 0.0 AND 1.0", name="sample_relation_confidence_check"),
-    CheckConstraint("subject_hash < reference_hash", name="sample_relation_hash_order_check"),
-    CheckConstraint(
-        "(reviewed_confirmed IS NULL) = (reviewed_at IS NULL) AND (reviewed_at IS NULL) = (reviewed_by IS NULL)",
+        _all_null_together("reviewed_confirmed", "reviewed_at", "reviewed_by"),
         name="sample_relation_review_conull_check",
     ),
     UniqueConstraint(
@@ -222,7 +248,7 @@ sample_thumbnail = Table(
     Column("bucket_count", UTinyInt, nullable=False),
     Column("minimums", ARRAY(Double), nullable=False),
     Column("maximums", ARRAY(Double), nullable=False),
-    CheckConstraint("bucket_count > 0", name="sample_thumbnail_bucket_count_check"),
+    CheckConstraint(column("bucket_count") > 0, name="sample_thumbnail_bucket_count_check"),
 )
 
 
