@@ -58,8 +58,10 @@ export interface paths {
          * List Samples
          * @description A page of catalogued samples, ranked by how many module occurrences reference each one.
          *
-         *     Ranks by sample identity: one row per exact content hash. Ranking by equivalence class --
-         *     grouping near-duplicate variants into one row -- is a planned future mode, not available yet.
+         *     Ranks by sample identity: one row per exact content hash. Every row still carries its
+         *     equivalence class, when it has one; ``group_by_equivalence`` additionally collapses same-page
+         *     rows that share a class into one representative, leaving the page's own size and offset
+         *     meaning unchanged -- a class split across two pages collapses only on the page it appears on.
          */
         readonly get: operations["list_samples_samples_get"];
         readonly put?: never;
@@ -670,6 +672,10 @@ export interface components {
          *     ``thumbnail`` is ``None`` for a sample whose cached waveform preview has not been computed yet.
          *     ``dominant_rate_hz`` resolves the sample's, possibly conflicting, occurrence rates via
          *     `samplecore.naming.choose_dominant_rate`, and is ``None`` under that same no-occurrences case.
+         *     ``equivalence_class_hash`` identifies the group of near-duplicate variants this sample belongs
+         *     to, resolved from the whole catalog's relation graph, and is ``None`` for a sample with no
+         *     detected relation. ``equivalence_member_count`` is that class's total size (1 for a sample
+         *     with no class), independent of how many of its members are present on this page.
          */
         readonly SampleSummary: {
             /** Hash */
@@ -688,6 +694,10 @@ export interface components {
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
             /** Dominant Rate Hz */
             readonly dominant_rate_hz: number | null;
+            /** Equivalence Class Hash */
+            readonly equivalence_class_hash: string | null;
+            /** Equivalence Member Count */
+            readonly equivalence_member_count: number;
         };
         /**
          * TrackerFormat
@@ -866,6 +876,7 @@ export interface operations {
             readonly query?: {
                 readonly limit?: number;
                 readonly offset?: number;
+                readonly group_by_equivalence?: boolean;
             };
             readonly header?: never;
             readonly path?: never;

@@ -23,6 +23,8 @@ function buildSample(id: number): SampleSummary {
         size_bytes: 8192,
         thumbnail: null,
         dominant_rate_hz: null,
+        equivalence_class_hash: null,
+        equivalence_member_count: 1,
     };
 }
 

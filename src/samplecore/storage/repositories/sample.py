@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
+from samplecore.equivalence_classes import EquivalenceClass
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSummary
 from samplecore.models.thumbnail import SampleThumbnail
@@ -27,7 +28,9 @@ class SampleRepository(Protocol):
 
     def list_all(self) -> tuple[Sample, ...]: ...
 
-    def list_page(self, *, limit: int, offset: int) -> tuple[SampleSummary, ...]: ...
+    def list_page(
+        self, *, limit: int, offset: int, class_by_hash: dict[str, EquivalenceClass]
+    ) -> tuple[SampleSummary, ...]: ...
 
     def count(self) -> int: ...
 
@@ -65,11 +68,15 @@ class DuckDBSampleRepository:
         rows = self._connection.execute(select(sample)).fetchall()
         return tuple(_row_to_sample(row) for row in rows)
 
-    def list_page(self, *, limit: int, offset: int) -> tuple[SampleSummary, ...]:
+    def list_page(
+        self, *, limit: int, offset: int, class_by_hash: dict[str, EquivalenceClass]
+    ) -> tuple[SampleSummary, ...]:
         """A page of samples ranked by identity: one row per exact content hash, most-occurring first.
 
-        Ranking by equivalence class -- one row per group of near-duplicate variants -- is a
-        distinct future method, not a hidden mode of this one.
+        ``class_by_hash`` supplies each row's equivalence class, when it has one, so that the
+        badge it renders reflects the whole catalog's relation graph rather than only this page.
+        Collapsing same-page rows that share a class into one representative is the caller's own
+        concern, not this method's -- it always returns one row per hash.
         """
         # func.count()/func.coalesce() are SQLAlchemy's dynamically-generated SQL functions, invisible
         # to pylint's static analysis -- both false positives below are this same proxy limitation.
@@ -100,7 +107,11 @@ class DuckDBSampleRepository:
         thumbnails_by_hash = DuckDBSampleThumbnailRepository(self._connection).get_many(hashes)
         return tuple(
             _row_to_sample_summary(
-                row, names_by_hash.get(row.hash, ()), rates_by_hash.get(row.hash, ()), thumbnails_by_hash.get(row.hash)
+                row,
+                names_by_hash.get(row.hash, ()),
+                rates_by_hash.get(row.hash, ()),
+                thumbnails_by_hash.get(row.hash),
+                class_by_hash.get(row.hash),
             )
             for row in rows
         )
@@ -137,9 +148,13 @@ def _row_to_sample(row: Row[Any]) -> Sample:
 
 
 def _row_to_sample_summary(
-    row: Row[Any], names: tuple[str, ...], rates: tuple[Rate, ...], thumbnail: SampleThumbnail | None
+    row: Row[Any],
+    names: tuple[str, ...],
+    rates: tuple[Rate, ...],
+    thumbnail: SampleThumbnail | None,
+    equivalence_class: EquivalenceClass | None,
 ) -> SampleSummary:
-    """Reconstruct a SampleSummary from a Core row plus its occurrences' raw names/rates and thumbnail."""
+    """Reconstruct a SampleSummary from a Core row plus its occurrences' raw names/rates, thumbnail, and class."""
     sample_ = _row_to_sample(row)
     return SampleSummary(
         hash=sample_.hash,
@@ -151,4 +166,6 @@ def _row_to_sample_summary(
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),
         dominant_rate_hz=choose_dominant_rate(rates),
+        equivalence_class_hash=equivalence_class.class_hash if equivalence_class is not None else None,
+        equivalence_member_count=len(equivalence_class.member_hashes) if equivalence_class is not None else 1,
     )

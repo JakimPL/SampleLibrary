@@ -11,6 +11,7 @@ from trackmod.core.samples.depth import BitDepth
 from samplecore.models.channels import ChannelLayout
 
 HASH_DOMAIN: Final[str] = "sample-library:sample:v1"
+EQUIVALENCE_CLASS_HASH_DOMAIN: Final[str] = "sample-library:equivalence-class:v1"
 
 
 def compute_sample_hash(*, depth: BitDepth, channels: ChannelLayout, frames: int, pcm: NDArray[np.float64]) -> str:
@@ -34,3 +35,15 @@ def compute_module_hash(data: bytes) -> str:
     guard against the way a sample's decoded waveform has, so this hashes the raw bytes directly.
     """
     return hashlib.sha256(data).hexdigest()
+
+
+def compute_equivalence_class_hash(member_hashes: tuple[str, ...]) -> str:
+    """The content-addressed identity of an equivalence class, from its members' own hashes.
+
+    Sorting the member hashes before hashing means the same group of samples always resolves to
+    the same class hash, regardless of which order the relations that discovered it were found or
+    traversed in.
+    """
+    header = f"{EQUIVALENCE_CLASS_HASH_DOMAIN}\0".encode("ascii")
+    payload = "\0".join(sorted(member_hashes)).encode("ascii")
+    return hashlib.sha256(header + payload).hexdigest()

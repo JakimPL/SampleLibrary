@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
+from samplecore.equivalence_classes import classes_by_member_hash, compute_equivalence_classes
 from samplecore.models.base import FROZEN
 from samplecore.models.module import Module
 from samplecore.models.relation import SampleRelation
@@ -63,17 +64,58 @@ class SampleDetail(Sample):
 def list_samples(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)] = DEFAULT_PAGE_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
+    group_by_equivalence: bool = False,
     connection: Connection = Depends(get_connection),
 ) -> Page[SampleSummary]:
     """A page of catalogued samples, ranked by how many module occurrences reference each one.
 
-    Ranks by sample identity: one row per exact content hash. Ranking by equivalence class --
-    grouping near-duplicate variants into one row -- is a planned future mode, not available yet.
+    Ranks by sample identity: one row per exact content hash. Every row still carries its
+    equivalence class, when it has one; ``group_by_equivalence`` additionally collapses same-page
+    rows that share a class into one representative, leaving the page's own size and offset
+    meaning unchanged -- a class split across two pages collapses only on the page it appears on.
     """
+    relations = DuckDBSampleRelationRepository(connection).list_all()
+    class_by_hash = classes_by_member_hash(compute_equivalence_classes(relations))
+
     repository = DuckDBSampleRepository(connection)
-    items = repository.list_page(limit=limit, offset=offset)
+    items = repository.list_page(limit=limit, offset=offset, class_by_hash=class_by_hash)
     total = repository.count()
+    if group_by_equivalence:
+        items = _collapse_by_equivalence(items)
+
     return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+def _collapse_by_equivalence(items: tuple[SampleSummary, ...]) -> tuple[SampleSummary, ...]:
+    """Collapse same-page rows sharing an equivalence class into one representative each.
+
+    The representative is the member with the highest occurrence count, ties broken by ascending
+    hash; every other member of that class on this page is dropped from the result. A row with no
+    class passes through unchanged. Each representative keeps its own ``equivalence_member_count``,
+    which already reflects the class's whole-catalog size, not merely how many members are visible
+    on this page.
+    """
+    representative_index_by_class: dict[str, int] = {}
+    collapsed: list[SampleSummary] = []
+    for item in items:
+        if item.equivalence_class_hash is None:
+            collapsed.append(item)
+            continue
+
+        index = representative_index_by_class.get(item.equivalence_class_hash)
+        if index is None:
+            representative_index_by_class[item.equivalence_class_hash] = len(collapsed)
+            collapsed.append(item)
+            continue
+
+        current = collapsed[index]
+        is_better = item.occurrence_count > current.occurrence_count or (
+            item.occurrence_count == current.occurrence_count and item.hash < current.hash
+        )
+        if is_better:
+            collapsed[index] = item
+
+    return tuple(collapsed)
 
 
 @router.get("/{sample_hash}")

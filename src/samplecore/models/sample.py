@@ -44,6 +44,10 @@ class SampleSummary(Sample):
     ``thumbnail`` is ``None`` for a sample whose cached waveform preview has not been computed yet.
     ``dominant_rate_hz`` resolves the sample's, possibly conflicting, occurrence rates via
     `samplecore.naming.choose_dominant_rate`, and is ``None`` under that same no-occurrences case.
+    ``equivalence_class_hash`` identifies the group of near-duplicate variants this sample belongs
+    to, resolved from the whole catalog's relation graph, and is ``None`` for a sample with no
+    detected relation. ``equivalence_member_count`` is that class's total size (1 for a sample
+    with no class), independent of how many of its members are present on this page.
     """
 
     occurrence_count: Count
@@ -51,3 +55,5 @@ class SampleSummary(Sample):
     size_bytes: Count
     thumbnail: tuple[WaveformPeak, ...] | None
     dominant_rate_hz: Rate | None
+    equivalence_class_hash: str | None
+    equivalence_member_count: Count

@@ -4,6 +4,7 @@ import duckdb
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
+from samplecore.equivalence_classes import EquivalenceClass
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
@@ -73,7 +74,7 @@ def test_list_all_returns_every_stored_sample(
 
 
 def test_list_page_on_an_empty_catalog_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
-    assert DuckDBSampleRepository(connection).list_page(limit=50, offset=0) == ()
+    assert DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}) == ()
 
 
 def test_list_page_ranks_by_occurrence_count_descending(
@@ -82,7 +83,7 @@ def test_list_page_ranks_by_occurrence_count_descending(
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick")
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=1, name="kick")
 
-    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
 
     assert [summary.hash for summary in page] == [stored_sample.hash, stored_sample_b.hash]
     assert page[0].occurrence_count == 2
@@ -92,7 +93,7 @@ def test_list_page_ranks_by_occurrence_count_descending(
 def test_list_page_breaks_a_tied_occurrence_count_by_hash(
     connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
 
     assert [summary.hash for summary in page] == sorted([stored_sample.hash, stored_sample_b.hash])
 
@@ -100,7 +101,7 @@ def test_list_page_breaks_a_tied_occurrence_count_by_hash(
 def test_list_page_respects_limit_and_offset(
     connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    page = DuckDBSampleRepository(connection).list_page(limit=1, offset=1)
+    page = DuckDBSampleRepository(connection).list_page(limit=1, offset=1, class_by_hash={})
 
     assert len(page) == 1
     assert page[0].hash == sorted([stored_sample.hash, stored_sample_b.hash])[1]
@@ -112,7 +113,7 @@ def test_list_page_resolves_the_dominant_occurrence_name(
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick")
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=1, name="KICK")
 
-    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
 
     assert page[0].display_name == "kick"
 
@@ -124,7 +125,7 @@ def test_list_page_resolves_the_dominant_occurrence_rate(
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=1, name="kick", rate=8363)
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=2, name="kick", rate=22050)
 
-    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
 
     assert page[0].dominant_rate_hz == 8363
 
@@ -132,7 +133,7 @@ def test_list_page_resolves_the_dominant_occurrence_rate(
 def test_list_page_leaves_dominant_rate_none_for_a_sample_with_no_occurrences(
     connection: duckdb.DuckDBPyConnection, stored_sample: Sample
 ) -> None:
-    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
 
     assert page[0].dominant_rate_hz is None
 
@@ -140,7 +141,7 @@ def test_list_page_leaves_dominant_rate_none_for_a_sample_with_no_occurrences(
 def test_list_page_resolves_size_bytes_from_the_sample_itself(
     connection: duckdb.DuckDBPyConnection, stored_sample: Sample
 ) -> None:
-    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
 
     assert page[0].size_bytes == stored_sample.stored_bytes
 
@@ -148,7 +149,7 @@ def test_list_page_resolves_size_bytes_from_the_sample_itself(
 def test_list_page_leaves_thumbnail_none_for_a_sample_not_yet_thumbnailed(
     connection: duckdb.DuckDBPyConnection, stored_sample: Sample
 ) -> None:
-    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
 
     assert page[0].thumbnail is None
 
@@ -158,11 +159,36 @@ def test_list_page_resolves_a_cached_thumbnail(connection: duckdb.DuckDBPyConnec
         SampleThumbnail(sample_hash=stored_sample.hash, bucket_count=2, minimums=(-1.0, -0.5), maximums=(0.5, 1.0))
     )
 
-    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0)
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
 
     assert page[0].thumbnail is not None
     assert [peak.minimum for peak in page[0].thumbnail] == [-1.0, -0.5]
     assert [peak.maximum for peak in page[0].thumbnail] == [0.5, 1.0]
+
+
+def test_list_page_leaves_equivalence_fields_at_their_standalone_default(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample
+) -> None:
+    page = DuckDBSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+
+    assert page[0].equivalence_class_hash is None
+    assert page[0].equivalence_member_count == 1
+
+
+def test_list_page_resolves_a_sample_s_equivalence_class(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    equivalence_class = EquivalenceClass(class_hash="c" * 64, member_hashes=(stored_sample.hash, stored_sample_b.hash))
+
+    page = DuckDBSampleRepository(connection).list_page(
+        limit=50, offset=0, class_by_hash={stored_sample.hash: equivalence_class}
+    )
+
+    by_hash = {summary.hash: summary for summary in page}
+    assert by_hash[stored_sample.hash].equivalence_class_hash == equivalence_class.class_hash
+    assert by_hash[stored_sample.hash].equivalence_member_count == 2
+    assert by_hash[stored_sample_b.hash].equivalence_class_hash is None
+    assert by_hash[stored_sample_b.hash].equivalence_member_count == 1
 
 
 def test_get_many_returns_only_the_requested_hashes_that_exist(

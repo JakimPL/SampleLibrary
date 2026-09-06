@@ -168,6 +168,100 @@ def test_list_samples_respects_limit_and_offset(client: TestClient, connection: 
     assert body["offset"] == 1
 
 
+def test_list_samples_leaves_equivalence_fields_at_their_standalone_default(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    _insert_sample(connection, SAMPLE_HASH_A)
+
+    response = client.get("/samples")
+
+    body = response.json()
+    assert body["items"][0]["equivalence_class_hash"] is None
+    assert body["items"][0]["equivalence_member_count"] == 1
+
+
+def test_list_samples_resolves_an_equivalence_class_from_a_relation(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    first = _insert_sample(connection, SAMPLE_HASH_A)
+    second = _insert_sample(connection, SAMPLE_HASH_B)
+    relation_repository = DuckDBSampleRelationRepository(connection)
+    relation_repository.upsert(
+        SampleRelation(
+            id=relation_repository.next_id(),
+            subject_hash=first.hash,
+            reference_hash=second.hash,
+            relation_type=RelationType.BIT_DEPTH_VARIANT,
+            method="bit_depth_variant/mse_v1",
+            confidence=0.9,
+            evidence={"max_abs_error": 0.001},
+            detected_at=datetime.now(UTC),
+        )
+    )
+
+    response = client.get("/samples")
+
+    body = response.json()
+    by_hash = {item["hash"]: item for item in body["items"]}
+    assert by_hash[first.hash]["equivalence_class_hash"] == by_hash[second.hash]["equivalence_class_hash"]
+    assert by_hash[first.hash]["equivalence_member_count"] == 2
+    assert by_hash[second.hash]["equivalence_member_count"] == 2
+
+
+def test_list_samples_group_by_equivalence_collapses_the_class_into_one_representative(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    frequent = _insert_sample(connection, SAMPLE_HASH_A)
+    rare = _insert_sample(connection, SAMPLE_HASH_B)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=frequent, module=module, slot=0, name="kick")
+    relation_repository = DuckDBSampleRelationRepository(connection)
+    relation_repository.upsert(
+        SampleRelation(
+            id=relation_repository.next_id(),
+            subject_hash=frequent.hash,
+            reference_hash=rare.hash,
+            relation_type=RelationType.BIT_DEPTH_VARIANT,
+            method="bit_depth_variant/mse_v1",
+            confidence=0.9,
+            evidence={"max_abs_error": 0.001},
+            detected_at=datetime.now(UTC),
+        )
+    )
+
+    response = client.get("/samples", params={"group_by_equivalence": True})
+
+    body = response.json()
+    assert body["total"] == 2
+    assert len(body["items"]) == 1
+    assert body["items"][0]["hash"] == frequent.hash
+    assert body["items"][0]["equivalence_member_count"] == 2
+
+
+def test_list_samples_group_by_equivalence_defaults_to_ungrouped(
+    client: TestClient, connection: duckdb.DuckDBPyConnection
+) -> None:
+    first = _insert_sample(connection, SAMPLE_HASH_A)
+    second = _insert_sample(connection, SAMPLE_HASH_B)
+    relation_repository = DuckDBSampleRelationRepository(connection)
+    relation_repository.upsert(
+        SampleRelation(
+            id=relation_repository.next_id(),
+            subject_hash=first.hash,
+            reference_hash=second.hash,
+            relation_type=RelationType.BIT_DEPTH_VARIANT,
+            method="bit_depth_variant/mse_v1",
+            confidence=0.9,
+            evidence={"max_abs_error": 0.001},
+            detected_at=datetime.now(UTC),
+        )
+    )
+
+    response = client.get("/samples")
+
+    assert len(response.json()["items"]) == 2
+
+
 def test_get_sample_returns_detail_with_occurrences_and_module_context(
     client: TestClient, connection: duckdb.DuckDBPyConnection
 ) -> None:
