@@ -13,12 +13,13 @@ from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 
 NOMINAL_WAV_RATE: Final[int] = 44100
+OBJECTS_DIRECTORY_NAME: Final[str] = "objects"
 _UNSIGNED_EIGHT_BIT_OFFSET: Final[int] = 128
 
 
 def object_path(library_root: Path, sample_hash: str) -> Path:
     """Where a Sample's audio lives under the content-addressable store, sharded by hash prefix."""
-    return library_root / "objects" / sample_hash[:2] / f"{sample_hash}.wav"
+    return library_root / OBJECTS_DIRECTORY_NAME / sample_hash[:2] / f"{sample_hash}.wav"
 
 
 def write(library_root: Path, sample_pcm: SamplePCM) -> Path:

@@ -46,6 +46,18 @@ embed:
 embed-modules-placeholder:
 	uv run samplecloud-modules-placeholder
 
+# Destructive: empties the configured library's catalog and content store. Prints what it would
+# do and changes nothing unless invoked as `make reset-library CONFIRM=1`.
+.PHONY: reset-library
+reset-library:
+	uv run python scripts/reset_library.py $(if $(CONFIRM),--confirm,)
+
+# The full pipeline in one command, in the order a rebuild needs: extraction before equivalence
+# detection and embedding both depend on it, embedding's own coordinates are independent of
+# equivalence detection's relations but placed after it here just to keep one linear read order.
+.PHONY: rebuild-library
+rebuild-library: extract equivalence embed embed-modules-placeholder
+
 .PHONY: dev-library
 dev-library:
 	uv run python scripts/build_dev_library.py

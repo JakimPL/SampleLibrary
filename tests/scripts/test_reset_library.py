@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+import importlib.util
+import types
+from datetime import UTC, datetime
+from pathlib import Path
+
+from sqlalchemy import Connection, func, select
+
+from samplecore.hashing import compute_module_hash
+from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
+from samplecore.models.module import Module
+from samplecore.models.thumbnail import SampleThumbnail
+from samplecore.models.tracker import TrackerFormat
+from samplecore.storage.database import connect, metadata
+from samplecore.storage.repositories.cloud import DuckDBCloudCoordinateRepository, DuckDBModuleCloudCoordinateRepository
+from samplecore.storage.repositories.module import DuckDBModuleRepository
+from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository
+from sampleextract.discovery import FORMAT_LOADERS
+from sampleextract.equivalence.detect import detect_equivalences
+from sampleextract.ingest import ingest_module
+from sampleextract.parsing import parse_module
+
+_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "reset_library.py"
+_BUILD_DEV_LIBRARY_PATH = Path(__file__).resolve().parents[2] / "scripts" / "build_dev_library.py"
+
+
+def _load_script(path: Path, name: str) -> types.ModuleType:
+    """Imports a script by file path -- it lives outside every installed package, by design."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+reset_library = _load_script(_SCRIPT_PATH, "reset_library")
+build_dev_library = _load_script(_BUILD_DEV_LIBRARY_PATH, "build_dev_library")
+
+
+def _ingest_all(connection: Connection, library_root: Path, modules_directory: Path) -> None:
+    for path in sorted(modules_directory.iterdir()):
+        data = path.read_bytes()
+        song = parse_module(data, tracker=FORMAT_LOADERS[path.suffix.lower()])
+        ingest_module(
+            connection,
+            library_root,
+            module_hash=compute_module_hash(data),
+            tracker=FORMAT_LOADERS[path.suffix.lower()],
+            filename=path.name,
+            file_size=len(data),
+            song=song,
+            ingested_at=datetime.now(UTC),
+            minimum_sample_frames=512,
+        )
+
+
+def _populated_library(tmp_path: Path) -> tuple[Connection, Path]:
+    """A throwaway catalog with at least one row in every table and at least one stored object --
+    every table the schema declares, not only the ones a plain extraction pass happens to touch.
+    """
+    build_dev_library.build_dev_library(tmp_path)
+    library_root = tmp_path / "catalog"
+    connection = connect(library_root / "samplelibrary.duckdb")
+    _ingest_all(connection, library_root, tmp_path / "modules")
+    connection.commit()
+    detect_equivalences(connection, library_root)
+    connection.commit()
+
+    first_module = DuckDBModuleRepository(connection).list_all()[0]
+    sample_hashes = [row.hash for row in connection.execute(select(metadata.tables["sample"].c.hash)).fetchall()]
+    first_sample_hash = sample_hashes[0]
+
+    now = datetime.now(UTC)
+    DuckDBSampleThumbnailRepository(connection).upsert(
+        SampleThumbnail(sample_hash=first_sample_hash, bucket_count=2, minimums=(-1.0, -0.5), maximums=(0.5, 1.0))
+    )
+    DuckDBCloudCoordinateRepository(connection).upsert(
+        SampleCloudCoordinate(sample_hash=first_sample_hash, x=0.1, y=0.2, computed_at=now)
+    )
+    DuckDBModuleCloudCoordinateRepository(connection).upsert(
+        ModuleCloudCoordinate(module_hash=first_module.hash, x=0.3, y=0.4, computed_at=now)
+    )
+    connection.commit()
+
+    return connection, library_root
+
+
+def _row_counts(connection: Connection) -> dict[str, int]:
+    return {
+        table.name: connection.execute(select(func.count()).select_from(table)).scalar_one()
+        for table in metadata.sorted_tables
+    }
+
+
+def test_reset_library_empties_every_table_and_the_content_store(tmp_path: Path) -> None:
+    connection, library_root = _populated_library(tmp_path)
+    before = _row_counts(connection)
+    assert all(count > 0 for count in before.values()), f"fixture left an empty table: {before}"
+    objects_directory = library_root / "objects"
+    assert any(objects_directory.rglob("*.wav"))
+
+    reset_library.reset_library(connection, library_root)
+    connection.commit()
+
+    after = _row_counts(connection)
+    assert all(count == 0 for count in after.values()), f"reset left rows behind: {after}"
+    assert objects_directory.is_dir()
+    assert list(objects_directory.iterdir()) == []
+
+
+def test_reset_library_leaves_the_schema_usable_afterward(tmp_path: Path) -> None:
+    connection, library_root = _populated_library(tmp_path)
+
+    reset_library.reset_library(connection, library_root)
+    connection.commit()
+
+    module_repository = DuckDBModuleRepository(connection)
+    module_repository.insert(
+        Module(
+            hash=format(1, "064x"),
+            id=module_repository.next_id(),
+            filename="fresh.it",
+            tracker=TrackerFormat.IT,
+            title="fresh",
+            channel_count=4,
+            pattern_count=1,
+            instrument_count=1,
+            sample_count=1,
+            file_size=1024,
+            ingested_at=datetime.now(UTC),
+        )
+    )
+    connection.commit()
+
+    assert connection.execute(select(func.count()).select_from(metadata.tables["module"])).scalar_one() == 1
+
+
+def test_confirm_flag_defaults_to_false() -> None:
+    arguments = reset_library._parse_arguments([])
+
+    assert arguments.confirm is False
+
+
+def test_confirm_flag_can_be_set() -> None:
+    arguments = reset_library._parse_arguments(["--confirm"])
+
+    assert arguments.confirm is True
+
+
+def test_main_without_confirm_changes_nothing(tmp_path: Path) -> None:
+    connection, library_root = _populated_library(tmp_path)
+    before = _row_counts(connection)
+    connection.close()
+
+    reset_library.main([])
+
+    after_connection = connect(library_root / "samplelibrary.duckdb")
+    after = _row_counts(after_connection)
+    after_connection.close()
+    assert after == before
