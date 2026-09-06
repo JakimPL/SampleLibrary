@@ -37,7 +37,7 @@ describe("useWindowedSamples", () => {
             offset: 0,
         });
 
-        const { result } = renderHook(() => useWindowedSamples());
+        const { result } = renderHook(() => useWindowedSamples(false));
 
         await waitFor(() => {
             expect(result.current.status).toBe("ready");
@@ -45,7 +45,7 @@ describe("useWindowedSamples", () => {
         expect(result.current.items).toHaveLength(2);
         expect(result.current.total).toBe(50);
         expect(result.current.hasMore).toBe(true);
-        expect(listSamples).toHaveBeenCalledWith({ limit: WINDOW_PAGE_LIMIT, offset: 0 });
+        expect(listSamples).toHaveBeenCalledWith({ limit: WINDOW_PAGE_LIMIT, offset: 0, groupByEquivalence: false });
     });
 
     it("appends the next window when loadMore is called", async () => {
@@ -62,7 +62,7 @@ describe("useWindowedSamples", () => {
             offset: 1,
         });
 
-        const { result } = renderHook(() => useWindowedSamples());
+        const { result } = renderHook(() => useWindowedSamples(false));
         await waitFor(() => {
             expect(result.current.status).toBe("ready");
         });
@@ -75,7 +75,7 @@ describe("useWindowedSamples", () => {
             expect(result.current.items).toHaveLength(2);
         });
         expect(result.current.hasMore).toBe(false);
-        expect(listSamples).toHaveBeenCalledWith({ limit: WINDOW_PAGE_LIMIT, offset: 1 });
+        expect(listSamples).toHaveBeenCalledWith({ limit: WINDOW_PAGE_LIMIT, offset: 1, groupByEquivalence: false });
     });
 
     it("does not request another window once everything is loaded", async () => {
@@ -86,7 +86,7 @@ describe("useWindowedSamples", () => {
             offset: 0,
         });
 
-        const { result } = renderHook(() => useWindowedSamples());
+        const { result } = renderHook(() => useWindowedSamples(false));
         await waitFor(() => {
             expect(result.current.hasMore).toBe(false);
         });
@@ -98,10 +98,42 @@ describe("useWindowedSamples", () => {
         expect(listSamples).toHaveBeenCalledTimes(1);
     });
 
+    it("restarts the window from the first page when groupByEquivalence changes", async () => {
+        listSamples.mockResolvedValueOnce({
+            items: [buildSample(1)],
+            total: 2,
+            limit: WINDOW_PAGE_LIMIT,
+            offset: 0,
+        });
+        const { result, rerender } = renderHook(({ groupByEquivalence }) => useWindowedSamples(groupByEquivalence), {
+            initialProps: { groupByEquivalence: false },
+        });
+        await waitFor(() => {
+            expect(result.current.status).toBe("ready");
+        });
+
+        listSamples.mockResolvedValueOnce({
+            items: [buildSample(2)],
+            total: 1,
+            limit: WINDOW_PAGE_LIMIT,
+            offset: 0,
+        });
+        rerender({ groupByEquivalence: true });
+
+        await waitFor(() => {
+            expect(result.current.items).toEqual([buildSample(2)]);
+        });
+        expect(listSamples).toHaveBeenLastCalledWith({
+            limit: WINDOW_PAGE_LIMIT,
+            offset: 0,
+            groupByEquivalence: true,
+        });
+    });
+
     it("surfaces an error when the initial window fails to load", async () => {
         listSamples.mockRejectedValue(new Error("network down"));
 
-        const { result } = renderHook(() => useWindowedSamples());
+        const { result } = renderHook(() => useWindowedSamples(false));
 
         await waitFor(() => {
             expect(result.current.status).toBe("error");

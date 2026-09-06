@@ -23,9 +23,11 @@ export interface WindowedSamples {
  * continuously-scrollable list over the full catalog without holding every sample's thumbnail in
  * memory at once. Sorting and filtering downstream apply only to the samples already loaded --
  * `hasMore`/`total` let the table show an honest "N of {total} loaded" indicator rather than
- * implying a complete, correctly-ordered view.
+ * implying a complete, correctly-ordered view. Toggling `groupByEquivalence` restarts the window
+ * from the first page: a class split across two already-loaded windows would otherwise collapse
+ * only partially, silently misreporting which rows share an identity.
  */
-export function useWindowedSamples(): WindowedSamples {
+export function useWindowedSamples(groupByEquivalence: boolean): WindowedSamples {
     const [items, setItems] = useState<readonly SampleSummary[]>([]);
     const [total, setTotal] = useState(0);
     const [status, setStatus] = useState<WindowedSamples["status"]>("loading");
@@ -36,7 +38,8 @@ export function useWindowedSamples(): WindowedSamples {
     useEffect(() => {
         let active = true;
         setStatus("loading");
-        listSamples({ limit: WINDOW_PAGE_LIMIT, offset: 0 })
+        setItems([]);
+        listSamples({ limit: WINDOW_PAGE_LIMIT, offset: 0, groupByEquivalence })
             .then((page) => {
                 if (!active) {
                     return;
@@ -55,7 +58,7 @@ export function useWindowedSamples(): WindowedSamples {
         return (): void => {
             active = false;
         };
-    }, []);
+    }, [groupByEquivalence]);
 
     const hasMore = status === "ready" && items.length < total;
 
@@ -65,7 +68,7 @@ export function useWindowedSamples(): WindowedSamples {
         }
         loadingMoreRef.current = true;
         setIsLoadingMore(true);
-        listSamples({ limit: WINDOW_PAGE_LIMIT, offset: items.length })
+        listSamples({ limit: WINDOW_PAGE_LIMIT, offset: items.length, groupByEquivalence })
             .then((page) => {
                 setItems((current) => [...current, ...page.items]);
                 setTotal(page.total);
@@ -78,7 +81,7 @@ export function useWindowedSamples(): WindowedSamples {
                 loadingMoreRef.current = false;
                 setIsLoadingMore(false);
             });
-    }, [hasMore, items.length]);
+    }, [hasMore, items.length, groupByEquivalence]);
 
     return { status, items, total, message, isLoadingMore, hasMore, loadMore };
 }

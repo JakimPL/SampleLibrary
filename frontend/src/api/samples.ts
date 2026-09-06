@@ -10,10 +10,15 @@ export type WaveformPeak = components["schemas"]["WaveformPeak"];
 export interface ListSamplesParams {
     readonly limit: number;
     readonly offset: number;
+    readonly groupByEquivalence: boolean;
 }
 
 export async function listSamples(params: ListSamplesParams): Promise<SamplePage> {
-    const query = new URLSearchParams({ limit: String(params.limit), offset: String(params.offset) });
+    const query = new URLSearchParams({
+        limit: String(params.limit),
+        offset: String(params.offset),
+        group_by_equivalence: String(params.groupByEquivalence),
+    });
     return requestJson<SamplePage>(`/samples?${query.toString()}`);
 }
 

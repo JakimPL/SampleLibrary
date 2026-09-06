@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 
 import { useSampleDetail } from "../../samples/useSampleDetail";
-import { WaveformPlayer } from "../../samples/WaveformPlayer";
+import { type RateOption, WaveformPlayer } from "../../samples/WaveformPlayer";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
@@ -11,8 +11,15 @@ interface FocusedWaveformProps {
     readonly sampleHash: string;
 }
 
-function dedupedSortedRates(rates: readonly number[]): number[] {
-    return Array.from(new Set(rates)).sort((first, second) => first - second);
+function rateOptionsByOccurrenceCount(rates: readonly number[]): RateOption[] {
+    const occurrenceCountByRate = new Map<number, number>();
+    for (const rate of rates) {
+        occurrenceCountByRate.set(rate, (occurrenceCountByRate.get(rate) ?? 0) + 1);
+    }
+
+    return Array.from(occurrenceCountByRate, ([rateHz, occurrenceCount]) => ({ rateHz, occurrenceCount })).sort(
+        (first, second) => first.rateHz - second.rateHz,
+    );
 }
 
 function FocusedWaveform({ sampleHash }: FocusedWaveformProps): ReactElement {
@@ -31,14 +38,19 @@ function FocusedWaveform({ sampleHash }: FocusedWaveformProps): ReactElement {
     }
 
     const { sample } = state.data;
-    const rateOptions = dedupedSortedRates(sample.occurrences.map((occurrence) => occurrence.properties.rate));
+    const rateOptions = rateOptionsByOccurrenceCount(
+        sample.occurrences.map((occurrence) => occurrence.properties.rate),
+    );
     const [firstRateOption] = rateOptions;
     if (firstRateOption === undefined) {
         return <p className="no-selection">This sample has no occurrences to play at a real tracker rate.</p>;
     }
 
-    const defaultRateHz = sample.dominant_rate_hz ?? firstRateOption;
-    const rateHz = selectedRateHz !== null && rateOptions.includes(selectedRateHz) ? selectedRateHz : defaultRateHz;
+    const defaultRateHz = sample.dominant_rate_hz ?? firstRateOption.rateHz;
+    const rateHz =
+        selectedRateHz !== null && rateOptions.some((option) => option.rateHz === selectedRateHz)
+            ? selectedRateHz
+            : defaultRateHz;
 
     return (
         <WaveformPlayer

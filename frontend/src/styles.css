@@ -314,13 +314,20 @@ tr.is-focused {
 
 .cell-name {
     max-width: 220px;
+}
+
+.cell-name-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .cell-primary {
     color: var(--text-primary);
     font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .cell-muted {
@@ -361,6 +368,11 @@ tr.is-focused {
 .badge-s3m {
     background: var(--critical-soft);
     color: var(--critical);
+}
+
+.badge-equivalence {
+    background: var(--accent-soft);
+    color: var(--accent);
 }
 
 /* Class names below echo the backend's RelationType/TrackerFormat enum values verbatim (snake_case
@@ -546,7 +558,10 @@ tr.is-focused {
     white-space: nowrap;
 }
 
-.cloud-hover-hash {
+.entity-hash {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 10.5px;
     color: var(--text-faint);
 }
@@ -679,10 +694,13 @@ tr.is-focused {
     font-size: 11px;
 }
 
-.transport .rate-info {
+.wave-caption {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 4px 10px 8px;
     font-size: 10.5px;
     color: var(--text-faint);
-    white-space: nowrap;
+    background: var(--surface-2);
 }
 
 /* ---------- Detail panels ---------- */

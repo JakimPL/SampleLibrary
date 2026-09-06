@@ -15,7 +15,7 @@ import type { Module, TrackerFormat } from "../api/modules";
 import { UNTITLED_MODULE_LABEL } from "../shared/labels";
 import { ModuleRow } from "./ModuleRow";
 
-const ROW_HEIGHT_PX = 28;
+const ROW_HEIGHT_PX = 44;
 const OVERSCAN_ROWS = 12;
 const INITIAL_VIEWPORT_HEIGHT_PX = 480;
 

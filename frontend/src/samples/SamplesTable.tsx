@@ -15,7 +15,7 @@ import type { SampleSummary } from "../api/samples";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { SampleRow } from "./SampleRow";
 
-const ROW_HEIGHT_PX = 28;
+const ROW_HEIGHT_PX = 44;
 const OVERSCAN_ROWS = 12;
 const INITIAL_VIEWPORT_HEIGHT_PX = 480;
 
@@ -47,6 +47,8 @@ interface SamplesTableProps {
     readonly isLoadingMore: boolean;
     readonly onLoadMore: () => void;
     readonly loadMoreError: string | null;
+    readonly groupByEquivalence: boolean;
+    readonly onGroupByEquivalenceChange: (groupByEquivalence: boolean) => void;
 }
 
 export function SamplesTable({
@@ -56,6 +58,8 @@ export function SamplesTable({
     isLoadingMore,
     onLoadMore,
     loadMoreError,
+    groupByEquivalence,
+    onGroupByEquivalenceChange,
 }: SamplesTableProps): ReactElement {
     const [globalFilter, setGlobalFilter] = useState("");
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -105,6 +109,16 @@ export function SamplesTable({
                         setGlobalFilter(event.target.value);
                     }}
                 />
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={groupByEquivalence}
+                        onChange={(event) => {
+                            onGroupByEquivalenceChange(event.target.checked);
+                        }}
+                    />
+                    Acoustic identity
+                </label>
                 <span className="cell-muted mono">
                     {samples.length} of {total} loaded
                     {isLoadingMore && hasMore ? " · loading…" : ""}

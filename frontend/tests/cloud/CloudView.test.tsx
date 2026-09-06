@@ -232,6 +232,27 @@ describe("CloudView", () => {
         expect(container.querySelector(".cloud-ping")).toBe(firstPing);
     });
 
+    it("does not re-ping when a value-equal but differently-referenced highlight is passed in", () => {
+        const { container, rerender } = renderCloudView({
+            points: [point(SAMPLE_REF, 0, 0)],
+            highlighted: SAMPLE_REF,
+        });
+        const firstPing = container.querySelector(".cloud-ping");
+
+        rerender(
+            <CloudView
+                points={[point(SAMPLE_REF, 0, 0)]}
+                highlighted={{ kind: SAMPLE_REF.kind, hash: SAMPLE_REF.hash }}
+                onSelect={vi.fn()}
+                onFocus={vi.fn()}
+                onClear={vi.fn()}
+                onHover={vi.fn()}
+            />,
+        );
+
+        expect(container.querySelector(".cloud-ping")).toBe(firstPing);
+    });
+
     it("keeps the ping pinned to its point through a pan or zoom", () => {
         const { container } = renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
         const ping = container.querySelector<HTMLElement>(".cloud-ping");

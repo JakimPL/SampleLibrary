@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { SampleSummary } from "../../src/api/samples";
 import { SamplesTable } from "../../src/samples/SamplesTable";
 
-function buildSample(overrides: Pick<SampleSummary, "hash" | "display_name" | "occurrence_count">): SampleSummary {
+function buildSample(
+    overrides: Pick<SampleSummary, "hash" | "display_name" | "occurrence_count"> &
+        Partial<Pick<SampleSummary, "equivalence_class_hash" | "equivalence_member_count">>,
+): SampleSummary {
     return {
         depth: 16,
         channels: 1,
@@ -31,6 +34,8 @@ function renderTable(
         readonly total: number;
         readonly hasMore: boolean;
         readonly onLoadMore: () => void;
+        readonly groupByEquivalence: boolean;
+        readonly onGroupByEquivalenceChange: (groupByEquivalence: boolean) => void;
     }> = {},
 ): ReturnType<typeof render> {
     return render(
@@ -42,13 +47,15 @@ function renderTable(
                 isLoadingMore={false}
                 onLoadMore={overrides.onLoadMore ?? vi.fn()}
                 loadMoreError={null}
+                groupByEquivalence={overrides.groupByEquivalence ?? false}
+                onGroupByEquivalenceChange={overrides.onGroupByEquivalenceChange ?? vi.fn()}
             />
         </MemoryRouter>,
     );
 }
 
 function nameOrder(): string[] {
-    return screen.getAllByRole("link").map((link) => link.textContent);
+    return screen.getAllByRole("link").map((link) => link.querySelector(".cell-primary")?.textContent ?? "");
 }
 
 describe("SamplesTable", () => {
@@ -96,6 +103,41 @@ describe("SamplesTable", () => {
         renderTable({ onLoadMore, hasMore: true });
 
         expect(onLoadMore).toHaveBeenCalled();
+    });
+
+    it("shows each sample's own short hash beneath its name", () => {
+        renderTable();
+
+        expect(screen.getByText("a")).toBeInTheDocument();
+        expect(screen.getByText("b")).toBeInTheDocument();
+    });
+
+    it("shows the equivalence class hash and a member-count badge for a grouped representative", () => {
+        renderTable({
+            samples: [
+                buildSample({
+                    hash: "a",
+                    display_name: "kick",
+                    occurrence_count: 3,
+                    equivalence_class_hash: "class-hash",
+                    equivalence_member_count: 3,
+                }),
+                buildSample({ hash: "b", display_name: "snare", occurrence_count: 1 }),
+            ],
+        });
+
+        expect(screen.getByText("class-ha")).toBeInTheDocument();
+        expect(screen.getByText("×3")).toBeInTheDocument();
+        expect(screen.queryByText("a")).not.toBeInTheDocument();
+    });
+
+    it("calls back with the new value when the acoustic identity toggle is changed", () => {
+        const onGroupByEquivalenceChange = vi.fn();
+        renderTable({ groupByEquivalence: false, onGroupByEquivalenceChange });
+
+        fireEvent.click(screen.getByLabelText("Acoustic identity"));
+
+        expect(onGroupByEquivalenceChange).toHaveBeenCalledWith(true);
     });
 
     it("requests the next window once scrolled near the end of the loaded rows", () => {

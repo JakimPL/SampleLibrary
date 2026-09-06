@@ -16,9 +16,17 @@ describe("listSamples", () => {
     it("builds a query string from limit and offset", async () => {
         const fetchMock = stubFetchReturning({ items: [], total: 0, limit: 50, offset: 0 });
 
-        await listSamples({ limit: 50, offset: 0 });
+        await listSamples({ limit: 50, offset: 0, groupByEquivalence: false });
 
-        expect(fetchMock).toHaveBeenCalledWith("/samples?limit=50&offset=0");
+        expect(fetchMock).toHaveBeenCalledWith("/samples?limit=50&offset=0&group_by_equivalence=false");
+    });
+
+    it("passes the equivalence grouping flag through to the query string", async () => {
+        const fetchMock = stubFetchReturning({ items: [], total: 0, limit: 50, offset: 0 });
+
+        await listSamples({ limit: 50, offset: 0, groupByEquivalence: true });
+
+        expect(fetchMock).toHaveBeenCalledWith("/samples?limit=50&offset=0&group_by_equivalence=true");
     });
 });
 

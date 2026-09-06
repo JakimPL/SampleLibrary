@@ -55,7 +55,7 @@ function SampleHoverTooltip({ hash, x, y }: EntityTooltipProps): ReactElement | 
             <div className="cloud-hover-name">
                 <OptionalLabel value={state.data.displayName} placeholder={UNNAMED_SAMPLE_LABEL} />
             </div>
-            <div className="cloud-hover-hash mono">{shortHash(hash)}</div>
+            <div className="entity-hash mono">{shortHash(hash)}</div>
             <MiniWaveform peaks={state.data.peaks} />
         </div>
     );
@@ -73,7 +73,7 @@ function ModuleHoverTooltip({ hash, x, y }: EntityTooltipProps): ReactElement | 
                 <OptionalLabel value={state.data.title} placeholder={UNTITLED_MODULE_LABEL} />
             </div>
             <div className="cloud-hover-meta">
-                <span className="cloud-hover-hash mono">{shortHash(hash)}</span>
+                <span className="entity-hash mono">{shortHash(hash)}</span>
                 <span className={`badge badge-${state.data.tracker}`}>{state.data.tracker}</span>
             </div>
         </div>

@@ -50,7 +50,14 @@ function latestInstance(): (typeof instances)[number] {
 
 describe("WaveformPlayer", () => {
     it("disables the play button until wavesurfer reports ready", () => {
-        render(<WaveformPlayer sampleHash="abc" rateHz={8363} rateOptions={[8363]} onRateChange={vi.fn()} />);
+        render(
+            <WaveformPlayer
+                sampleHash="abc"
+                rateHz={8363}
+                rateOptions={[{ rateHz: 8363, occurrenceCount: 1 }]}
+                onRateChange={vi.fn()}
+            />,
+        );
 
         expect(screen.getByRole("button")).toBeDisabled();
 
@@ -62,7 +69,14 @@ describe("WaveformPlayer", () => {
     });
 
     it("plays and shows the pause glyph once playing, toggling back on a second click", () => {
-        render(<WaveformPlayer sampleHash="abc" rateHz={8363} rateOptions={[8363]} onRateChange={vi.fn()} />);
+        render(
+            <WaveformPlayer
+                sampleHash="abc"
+                rateHz={8363}
+                rateOptions={[{ rateHz: 8363, occurrenceCount: 1 }]}
+                onRateChange={vi.fn()}
+            />,
+        );
         act(() => {
             latestInstance().emit("ready", 1.0);
         });
@@ -79,13 +93,48 @@ describe("WaveformPlayer", () => {
         expect(latestInstance().pause).toHaveBeenCalled();
     });
 
+    it("annotates each rate option with how many occurrences use it", () => {
+        render(
+            <WaveformPlayer
+                sampleHash="abc"
+                rateHz={8363}
+                rateOptions={[
+                    { rateHz: 8363, occurrenceCount: 1 },
+                    { rateHz: NOMINAL_WAV_RATE_HZ, occurrenceCount: 2 },
+                ]}
+                onRateChange={vi.fn()}
+            />,
+        );
+
+        expect(screen.getByRole("option", { name: "8363 Hz · used in 1 occurrence" })).toBeInTheDocument();
+        expect(
+            screen.getByRole("option", { name: `${String(NOMINAL_WAV_RATE_HZ)} Hz · used in 2 occurrences` }),
+        ).toBeInTheDocument();
+    });
+
+    it("explains why pitch tracks the selected rate", () => {
+        render(
+            <WaveformPlayer
+                sampleHash="abc"
+                rateHz={8363}
+                rateOptions={[{ rateHz: 8363, occurrenceCount: 1 }]}
+                onRateChange={vi.fn()}
+            />,
+        );
+
+        expect(screen.getByText(/no fixed rate of its own/)).toBeInTheDocument();
+    });
+
     it("applies a newly selected rate and reports it to the caller", () => {
         const onRateChange = vi.fn();
         render(
             <WaveformPlayer
                 sampleHash="abc"
                 rateHz={8363}
-                rateOptions={[8363, NOMINAL_WAV_RATE_HZ]}
+                rateOptions={[
+                    { rateHz: 8363, occurrenceCount: 1 },
+                    { rateHz: NOMINAL_WAV_RATE_HZ, occurrenceCount: 2 },
+                ]}
                 onRateChange={onRateChange}
             />,
         );

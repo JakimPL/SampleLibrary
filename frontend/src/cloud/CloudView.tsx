@@ -45,6 +45,10 @@ function sameEntity(a: EntityRef, b: EntityRef): boolean {
     return a.kind === b.kind && a.hash === b.hash;
 }
 
+function sameHighlight(a: EntityRef | null, b: EntityRef | null): boolean {
+    return a === null || b === null ? a === b : sameEntity(a, b);
+}
+
 /**
  * Renders sample or module positions as a WebGL scatterplot, generic over which kind of entity
  * each point names -- the same component and picking contract serves both the Samples and Modules
@@ -190,7 +194,7 @@ export function CloudView({
             highlighted === null ? -1 : points.findIndex((point) => sameEntity(point.ref, highlighted));
         if (highlightedIndex >= 0) {
             scatterplot.select([highlightedIndex], { preventEvent: true });
-            if (highlighted !== previousHighlightedRef.current) {
+            if (!sameHighlight(highlighted, previousHighlightedRef.current)) {
                 const position = scatterplot.getScreenPosition(highlightedIndex);
                 if (position !== undefined) {
                     pingCounterRef.current += 1;
