@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 
 import type { WaveformPeak } from "../../api/samples";
 import { useModule } from "../../modules/useModule";
+import { readMiniWaveformColor } from "../../samples/miniWaveformColor";
 import { useSampleHoverPreview } from "../../samples/useSampleHoverPreview";
 import { layoutWaveformBars } from "../../samples/waveformLayout";
 import { shortHash } from "../../shared/format";
@@ -37,22 +38,13 @@ function MiniWaveform({ peaks }: { readonly peaks: readonly WaveformPeak[] }): R
         }
 
         context.clearRect(0, 0, WAVEFORM_WIDTH_PX, WAVEFORM_HEIGHT_PX);
-        // "currentColor" resolves against the canvas element's own computed `color` at fill time,
-        // so re-running this on a theme change repaints the bars without reading the token by hand.
-        context.fillStyle = "currentColor";
+        context.fillStyle = readMiniWaveformColor();
         for (const bar of layoutWaveformBars(peaks, WAVEFORM_WIDTH_PX, WAVEFORM_HEIGHT_PX)) {
             context.fillRect(bar.x, bar.yTop, bar.width, bar.yBottom - bar.yTop);
         }
     }, [peaks, themeSignal.preference, themeSignal.systemVersion]);
 
-    return (
-        <canvas
-            ref={canvasRef}
-            width={WAVEFORM_WIDTH_PX}
-            height={WAVEFORM_HEIGHT_PX}
-            className="cloud-hover-waveform"
-        />
-    );
+    return <canvas ref={canvasRef} width={WAVEFORM_WIDTH_PX} height={WAVEFORM_HEIGHT_PX} />;
 }
 
 function SampleHoverTooltip({ hash, x, y }: EntityTooltipProps): ReactElement | null {

@@ -29,6 +29,7 @@
     --cloud-point: var(--text-primary);
     --cloud-point-selected: var(--accent);
     --cloud-ping-color: var(--accent);
+    --mini-waveform-color: var(--text-faint);
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
 }
@@ -117,6 +118,7 @@
     --cloud-point: #f00;
     --cloud-point-selected: var(--accent);
     --cloud-ping-color: #ff0;
+    --mini-waveform-color: var(--wave-fill);
     --font-body: "Segoe UI", "Tahoma", sans-serif;
     --font-mono: "Courier New", monospace;
 }
@@ -532,7 +534,6 @@ tr.is-focused {
     border: none;
     padding: 0;
     cursor: pointer;
-    color: var(--text-faint);
 }
 
 .thumbnail-button[aria-pressed="true"] {
@@ -610,10 +611,6 @@ tr.is-focused {
 .cloud-hover-name {
     font-size: 12px;
     white-space: nowrap;
-}
-
-.cloud-hover-waveform {
-    color: var(--text-faint);
 }
 
 .entity-hash {
@@ -930,9 +927,4 @@ tr.is-focused {
     font-family: var(--font-body);
     text-transform: none;
     letter-spacing: normal;
-}
-
-:root[data-theme="openmpt"] .thumbnail-button,
-:root[data-theme="openmpt"] .cloud-hover-waveform {
-    color: var(--wave-fill);
 }

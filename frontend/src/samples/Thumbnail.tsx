@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 
 import type { WaveformPeak } from "../api/samples";
 import { useThemeSignal } from "../theme/useThemeSignal";
+import { readMiniWaveformColor } from "./miniWaveformColor";
 import { useAudioPreview } from "./useAudioPreview";
 import { layoutWaveformBars } from "./waveformLayout";
 
@@ -27,9 +28,7 @@ export function Thumbnail({ sampleHash, peaks }: ThumbnailProps): ReactElement {
         }
 
         context.clearRect(0, 0, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
-        // "currentColor" resolves against the canvas element's own computed `color` at fill time,
-        // so re-running this on a theme change repaints the bars without reading the token by hand.
-        context.fillStyle = "currentColor";
+        context.fillStyle = readMiniWaveformColor();
         for (const bar of layoutWaveformBars(peaks, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT)) {
             context.fillRect(bar.x, bar.yTop, bar.width, bar.yBottom - bar.yTop);
         }
