@@ -15,6 +15,7 @@ from samplecore.models.cloud import SampleCloudCoordinate
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.cloud import CloudCoordinateRepository, DuckDBCloudCoordinateRepository
+from samplecore.storage.repositories.sample import DuckDBSampleRepository
 from samplecore.storage.repositories.spectral import (
     DuckDBSampleSpectralFeatureRepository,
     SampleSpectralFeatureRepository,
@@ -28,9 +29,16 @@ DISTANCE_METRIC: Final[str] = "euclidean"
 
 @dataclass(frozen=True)
 class CloudSummary:
-    """What one coordinate-reduction pass did, across every feature vector it considered."""
+    """What one coordinate-reduction pass did, across every feature vector it considered.
+
+    ``samples_orphaned`` counts feature-store entries for a sample hash no longer in the catalog --
+    left behind by a reset whose cache predates it, or by any other drift between the store and the
+    catalog -- skipped rather than reduced, since a coordinate can never reference a sample that no
+    longer exists.
+    """
 
     samples_reduced: int
+    samples_orphaned: int
 
 
 def reduce_and_persist_coordinates(connection: Connection, feature_store_path: Path) -> CloudSummary:
@@ -44,10 +52,21 @@ def reduce_and_persist_coordinates(connection: Connection, feature_store_path: P
     completely or not at all. Each sample's standardized feature vector -- the same one the
     projection below is fit from -- is persisted alongside its coordinate, so a named, reusable
     "spectral distance" between two samples is always the same metric this projection respects.
+
+    The feature store is a standalone cache, keyed only by sample hash, so it can outlive the
+    catalog row it was computed from -- a reset that clears the catalog but predates a fix to also
+    clear this cache, or any other drift between the two, would otherwise leave a stale entry that
+    a coordinate upsert can never satisfy, since ``sample_cloud_coordinates`` and
+    ``sample_spectral_feature`` both foreign-key to ``sample``. Filtering to hashes the catalog
+    still recognizes keeps every fit and every persisted row honestly scoped to the library as it
+    exists today.
     """
     features = read_features(feature_store_path)
+    catalogued_hashes = {sample_.hash for sample_ in DuckDBSampleRepository(connection).list_all()}
+    orphaned_hash_count = sum(1 for sample_hash in features if sample_hash not in catalogued_hashes)
+    features = {sample_hash: vector for sample_hash, vector in features.items() if sample_hash in catalogued_hashes}
     if len(features) < MINIMUM_SAMPLES_FOR_REDUCTION:
-        return CloudSummary(samples_reduced=0)
+        return CloudSummary(samples_reduced=0, samples_orphaned=orphaned_hash_count)
 
     sample_hashes = list(features.keys())
     feature_matrix = np.stack([features[sample_hash] for sample_hash in sample_hashes])
@@ -73,4 +92,4 @@ def reduce_and_persist_coordinates(connection: Connection, feature_store_path: P
                 )
             )
 
-    return CloudSummary(samples_reduced=len(sample_hashes))
+    return CloudSummary(samples_reduced=len(sample_hashes), samples_orphaned=orphaned_hash_count)

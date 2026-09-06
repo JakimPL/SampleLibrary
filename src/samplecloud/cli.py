@@ -18,11 +18,17 @@ def main(argv: list[str] | None = None) -> None:
     finally:
         connection.close()
 
-    print(
+    message = (
         f"Extracted features for {summary.extraction.newly_extracted} new samples "
         f"({summary.extraction.already_extracted} already known, {summary.extraction.catalogued} catalogued). "
         f"Reduced {summary.reduction.samples_reduced} samples to 2D coordinates."
     )
+    if summary.reduction.samples_orphaned:
+        message += (
+            f" Skipped {summary.reduction.samples_orphaned} cached feature vectors for samples no longer "
+            "in the catalog."
+        )
+    print(message)
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:

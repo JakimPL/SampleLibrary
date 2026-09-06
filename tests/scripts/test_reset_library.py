@@ -5,8 +5,11 @@ import types
 from datetime import UTC, datetime
 from pathlib import Path
 
+import numpy as np
 from sqlalchemy import Connection, func, select
 
+from samplecloud.feature_store import write_features
+from samplecore.config import DEFAULT_CLOUD_ARTIFACT_DIRECTORY_NAME
 from samplecore.hashing import compute_module_hash
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.module import Module
@@ -88,7 +91,16 @@ def _populated_library(tmp_path: Path) -> tuple[Connection, Path]:
     )
     connection.commit()
 
+    write_features(
+        _cloud_artifact_directory(library_root) / "features.parquet",
+        {first_sample_hash: np.array([0.1, 0.2, 0.3])},
+    )
+
     return connection, library_root
+
+
+def _cloud_artifact_directory(library_root: Path) -> Path:
+    return library_root / DEFAULT_CLOUD_ARTIFACT_DIRECTORY_NAME
 
 
 def _row_counts(connection: Connection) -> dict[str, int]:
@@ -104,20 +116,24 @@ def test_reset_library_empties_every_table_and_the_content_store(tmp_path: Path)
     assert all(count > 0 for count in before.values()), f"fixture left an empty table: {before}"
     objects_directory = library_root / "objects"
     assert any(objects_directory.rglob("*.wav"))
+    cloud_artifact_directory = _cloud_artifact_directory(library_root)
+    assert any(cloud_artifact_directory.iterdir())
 
-    reset_library.reset_library(connection, library_root)
+    reset_library.reset_library(connection, library_root, cloud_artifact_directory)
     connection.commit()
 
     after = _row_counts(connection)
     assert all(count == 0 for count in after.values()), f"reset left rows behind: {after}"
     assert objects_directory.is_dir()
     assert list(objects_directory.iterdir()) == []
+    assert cloud_artifact_directory.is_dir()
+    assert list(cloud_artifact_directory.iterdir()) == []
 
 
 def test_reset_library_leaves_the_schema_usable_afterward(tmp_path: Path) -> None:
     connection, library_root = _populated_library(tmp_path)
 
-    reset_library.reset_library(connection, library_root)
+    reset_library.reset_library(connection, library_root, _cloud_artifact_directory(library_root))
     connection.commit()
 
     module_repository = DuckDBModuleRepository(connection)

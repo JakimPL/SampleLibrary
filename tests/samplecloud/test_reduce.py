@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from trackmod.core.samples.depth import BitDepth
 
-from samplecloud.feature_store import write_features
+from samplecloud.feature_store import read_features, write_features
 from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import SampleCloudCoordinate
@@ -40,7 +40,7 @@ def test_reduce_persists_one_coordinate_per_feature_vector(
 
     summary = reduce_and_persist_coordinates(connection, store_path)
 
-    assert summary == CloudSummary(samples_reduced=FEATURE_VECTOR_COUNT)
+    assert summary == CloudSummary(samples_reduced=FEATURE_VECTOR_COUNT, samples_orphaned=0)
     assert len(DuckDBCloudCoordinateRepository(connection).list_all()) == FEATURE_VECTOR_COUNT
 
 
@@ -57,19 +57,23 @@ def test_reduce_also_persists_a_standardized_feature_vector_per_sample(
 
 
 def test_fewer_than_two_feature_vectors_is_a_no_op(connection: duckdb.DuckDBPyConnection, tmp_path: Path) -> None:
+    sample_hash = "a" * 64
+    DuckDBSampleRepository(connection).upsert(
+        Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=32)
+    )
     store_path = tmp_path / "features.parquet"
-    write_features(store_path, {"a" * 64: np.array([1.0, 2.0])})
+    write_features(store_path, {sample_hash: np.array([1.0, 2.0])})
 
     summary = reduce_and_persist_coordinates(connection, store_path)
 
-    assert summary == CloudSummary(samples_reduced=0)
+    assert summary == CloudSummary(samples_reduced=0, samples_orphaned=0)
     assert DuckDBCloudCoordinateRepository(connection).list_all() == ()
 
 
 def test_an_empty_feature_store_is_a_no_op(connection: duckdb.DuckDBPyConnection, tmp_path: Path) -> None:
     summary = reduce_and_persist_coordinates(connection, tmp_path / "does-not-exist.parquet")
 
-    assert summary == CloudSummary(samples_reduced=0)
+    assert summary == CloudSummary(samples_reduced=0, samples_orphaned=0)
 
 
 def _failing_upsert(self: DuckDBCloudCoordinateRepository, coordinate: SampleCloudCoordinate) -> None:
@@ -99,3 +103,21 @@ def test_a_second_run_replaces_rather_than_duplicates_coordinates(
 
     assert len(DuckDBCloudCoordinateRepository(connection).list_all()) == FEATURE_VECTOR_COUNT
     assert len(DuckDBSampleSpectralFeatureRepository(connection).list_all()) == FEATURE_VECTOR_COUNT
+
+
+def test_a_feature_store_entry_for_an_uncatalogued_sample_is_skipped_rather_than_upserted(
+    connection: duckdb.DuckDBPyConnection, tmp_path: Path
+) -> None:
+    store_path = _seed_samples_and_features(connection, tmp_path)
+    features = read_features(store_path)
+    orphan_hash = "f" * 64
+    write_features(
+        store_path, {**features, orphan_hash: np.random.default_rng(99).uniform(-1.0, 1.0, FEATURE_DIMENSIONS)}
+    )
+
+    summary = reduce_and_persist_coordinates(connection, store_path)
+
+    assert summary == CloudSummary(samples_reduced=FEATURE_VECTOR_COUNT, samples_orphaned=1)
+    coordinates = DuckDBCloudCoordinateRepository(connection).list_all()
+    assert len(coordinates) == FEATURE_VECTOR_COUNT
+    assert orphan_hash not in {coordinate.sample_hash for coordinate in coordinates}
