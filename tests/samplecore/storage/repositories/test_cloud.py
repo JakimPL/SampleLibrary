@@ -96,3 +96,49 @@ def test_module_list_all_returns_one_coordinate_per_module(
     repository.upsert(second)
 
     assert set(repository.list_all()) == {first, second}
+
+
+def test_replace_all_replaces_whatever_was_persisted_before(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    repository = DuckDBCloudCoordinateRepository(connection)
+    repository.upsert(_coordinate(stored_sample.hash))
+    replacement = _coordinate(stored_sample_b.hash)
+
+    repository.replace_all([replacement])
+
+    assert repository.list_all() == (replacement,)
+
+
+def test_replace_all_with_an_empty_sequence_clears_the_table(
+    connection: duckdb.DuckDBPyConnection, stored_sample: Sample
+) -> None:
+    repository = DuckDBCloudCoordinateRepository(connection)
+    repository.upsert(_coordinate(stored_sample.hash))
+
+    repository.replace_all([])
+
+    assert repository.list_all() == ()
+
+
+def test_module_replace_all_replaces_whatever_was_persisted_before(
+    connection: duckdb.DuckDBPyConnection, stored_module: Module, stored_module_b: Module
+) -> None:
+    repository = DuckDBModuleCloudCoordinateRepository(connection)
+    repository.upsert(_module_coordinate(stored_module.hash))
+    replacement = _module_coordinate(stored_module_b.hash)
+
+    repository.replace_all([replacement])
+
+    assert repository.list_all() == (replacement,)
+
+
+def test_module_replace_all_with_an_empty_sequence_clears_the_table(
+    connection: duckdb.DuckDBPyConnection, stored_module: Module
+) -> None:
+    repository = DuckDBModuleCloudCoordinateRepository(connection)
+    repository.upsert(_module_coordinate(stored_module.hash))
+
+    repository.replace_all([])
+
+    assert repository.list_all() == ()

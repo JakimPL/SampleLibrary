@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import csv
+import tempfile
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Final
 
@@ -24,6 +27,7 @@ from sqlalchemy import (
     and_,
     column,
     create_engine,
+    text,
 )
 from sqlalchemy.engine import URL, RootTransaction
 from sqlalchemy.pool import NullPool
@@ -287,3 +291,30 @@ def start_batch(connection: Connection) -> RootTransaction:
     """
     connection.commit()
     return connection.begin()
+
+
+def bulk_insert_csv(
+    connection: Connection, table: Table, column_names: Iterable[str], rows: Iterable[Iterable[object]]
+) -> None:
+    """Insert many rows into ``table`` by way of a temporary CSV file and DuckDB's own ``COPY``.
+
+    Measured directly against this project's own schema: DuckDB's Python client has no fast path
+    for inserting many parameterized rows through SQLAlchemy or its own driver -- ``executemany``,
+    one large multi-row ``VALUES`` statement, and DuckDB's own ``values()`` relation constructor
+    were all measured at the same few-milliseconds-per-row cost regardless of batch size, turning
+    tens of thousands of rows into minutes rather than the fraction of a second DuckDB's own
+    bulk-format readers take. Writing the same rows to a CSV file with the standard library's own
+    ``csv`` module, then letting ``COPY ... FROM`` read it back, avoids that per-row binding cost
+    entirely -- the same technique ``feature_store.py`` already uses for the Parquet side of this
+    same problem, and the reason a repository's own ``replace_all`` goes through this rather than a
+    loop of individual inserts.
+    """
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", newline="", delete=False, encoding="utf-8") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(column_names)
+        writer.writerows(rows)
+        csv_path = Path(csv_file.name)
+    try:
+        connection.execute(text(f"COPY \"{table.name}\" FROM :path (HEADER, DELIMITER ',')"), {"path": str(csv_path)})
+    finally:
+        csv_path.unlink(missing_ok=True)

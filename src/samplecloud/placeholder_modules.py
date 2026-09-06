@@ -59,8 +59,7 @@ def place_and_persist_coordinates(connection: Connection) -> PlaceholderEmbeddin
 
     coordinate_repository: ModuleCloudCoordinateRepository = DuckDBModuleCloudCoordinateRepository(connection)
     with start_batch(connection):
-        for coordinate in coordinates:
-            coordinate_repository.upsert(coordinate)
+        coordinate_repository.replace_all(coordinates)
 
     return PlaceholderEmbeddingSummary(modules_placed=len(coordinates))
 

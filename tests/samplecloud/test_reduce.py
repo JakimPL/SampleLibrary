@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import duckdb
@@ -76,7 +77,7 @@ def test_an_empty_feature_store_is_a_no_op(connection: duckdb.DuckDBPyConnection
     assert summary == CloudSummary(samples_reduced=0, samples_orphaned=0)
 
 
-def _failing_upsert(self: DuckDBCloudCoordinateRepository, coordinate: SampleCloudCoordinate) -> None:
+def _failing_replace_all(self: DuckDBCloudCoordinateRepository, coordinates: Sequence[SampleCloudCoordinate]) -> None:
     raise OSError("simulated failure")
 
 
@@ -84,7 +85,7 @@ def test_a_failure_partway_through_leaves_nothing_committed(
     connection: duckdb.DuckDBPyConnection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store_path = _seed_samples_and_features(connection, tmp_path)
-    monkeypatch.setattr(DuckDBCloudCoordinateRepository, "upsert", _failing_upsert)
+    monkeypatch.setattr(DuckDBCloudCoordinateRepository, "replace_all", _failing_replace_all)
 
     with pytest.raises(OSError):
         reduce_and_persist_coordinates(connection, store_path)

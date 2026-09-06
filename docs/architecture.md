@@ -44,6 +44,18 @@ Local, machine-specific paths (the module source directory, the library root) ar
 gitignored `config.toml` via `samplecore.config.load_config`, never hardcoded into source.
 `config.example.toml` documents the expected shape.
 
+A repository that recomputes a whole table's contents from scratch every run -- the cloud
+coordinate, module coordinate, and spectral feature repositories, whenever a fresh embedding pass
+replaces every row -- exposes `replace_all` alongside its per-row `upsert`: clear the table, then
+bulk-load every row through `samplecore.storage.database.bulk_insert_csv`, never a loop of
+individual upserts. Measured directly against this schema: DuckDB's Python client has no fast path
+for inserting many parameterized rows -- `executemany`, one large multi-row `VALUES` statement, and
+DuckDB's own `values()` relation constructor were all measured at the same few-milliseconds-per-row
+cost regardless of batch size, turning tens of thousands of rows into minutes. Writing the same rows
+to a temporary CSV file and letting DuckDB's own `COPY ... FROM` read it back avoids that per-row
+cost entirely -- the same technique `feature_store.py` already uses for the Parquet side of this
+same problem.
+
 ## Extending to new tracker formats
 
 `sampleextract`'s format dispatch is a small registry (module suffix → loader function), not

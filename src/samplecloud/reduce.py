@@ -10,7 +10,6 @@ import numpy as np
 import umap
 from sklearn.preprocessing import StandardScaler
 from sqlalchemy import Connection
-from tqdm import tqdm
 
 from samplecloud.feature_store import read_features
 from samplecore.models.cloud import SampleCloudCoordinate
@@ -87,18 +86,22 @@ def reduce_and_persist_coordinates(connection: Connection, feature_store_path: P
     coordinate_repository: CloudCoordinateRepository = DuckDBCloudCoordinateRepository(connection)
     spectral_feature_repository: SampleSpectralFeatureRepository = DuckDBSampleSpectralFeatureRepository(connection)
     computed_at = datetime.now(UTC)
+    new_coordinates: list[SampleCloudCoordinate] = []
+    new_features: list[SampleSpectralFeature] = []
+    for sample_hash, (x, y), vector in zip(sample_hashes, coordinates, standardized, strict=True):
+        new_coordinates.append(
+            SampleCloudCoordinate(sample_hash=sample_hash, x=float(x), y=float(y), computed_at=computed_at)
+        )
+        new_features.append(
+            SampleSpectralFeature(
+                sample_hash=sample_hash, vector=tuple(float(value) for value in vector), computed_at=computed_at
+            )
+        )
+
+    _logger.info("Persisting %d coordinates and spectral vectors...", len(sample_hashes))
     with start_batch(connection):
-        rows = zip(sample_hashes, coordinates, standardized, strict=True)
-        for sample_hash, (x, y), vector in tqdm(rows, desc="Persisting coordinates", total=len(sample_hashes)):
-            coordinate_repository.upsert(
-                SampleCloudCoordinate(sample_hash=sample_hash, x=float(x), y=float(y), computed_at=computed_at)
-            )
-            spectral_feature_repository.upsert(
-                SampleSpectralFeature(
-                    sample_hash=sample_hash,
-                    vector=tuple(float(value) for value in vector),
-                    computed_at=computed_at,
-                )
-            )
+        coordinate_repository.replace_all(new_coordinates)
+        spectral_feature_repository.replace_all(new_features)
+    _logger.info("Persisting complete.")
 
     return CloudSummary(samples_reduced=len(sample_hashes), samples_orphaned=orphaned_hash_count)

@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from typing import Any, Protocol
 
-from sqlalchemy import Connection, Row, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import Connection, Row, delete, select
+from sqlalchemy.dialects.postgresql import insert as upsert
 
 from samplecore.models.spectral import SampleSpectralFeature
-from samplecore.storage.database import sample_spectral_feature
+from samplecore.storage.database import bulk_insert_csv, sample_spectral_feature
 
 
 class SampleSpectralFeatureRepository(Protocol):
     """Persistence for each Sample's standardized spectral feature vector, as of one embedding run."""
 
     def upsert(self, feature: SampleSpectralFeature) -> None: ...
+
+    def replace_all(self, features: Sequence[SampleSpectralFeature]) -> None: ...
 
     def get(self, sample_hash: str) -> SampleSpectralFeature | None: ...
 
@@ -34,7 +37,7 @@ class DuckDBSampleSpectralFeatureRepository:
         self._connection = connection
 
     def upsert(self, feature: SampleSpectralFeature) -> None:
-        statement = insert(sample_spectral_feature).values(
+        statement = upsert(sample_spectral_feature).values(
             sample_hash=feature.sample_hash,
             vector=json.dumps(feature.vector),
             computed_at=feature.computed_at,
@@ -44,6 +47,24 @@ class DuckDBSampleSpectralFeatureRepository:
             set_={"vector": statement.excluded.vector, "computed_at": statement.excluded.computed_at},
         )
         self._connection.execute(statement)
+
+    def replace_all(self, features: Sequence[SampleSpectralFeature]) -> None:
+        """Replace every persisted vector with exactly the given set, in one bulk operation.
+
+        A full-recompute writer like ``reduce_and_persist_coordinates`` never needs conflict
+        resolution against a previous value -- every run replaces the whole table -- so clearing it
+        first and bulk-loading fresh (see ``bulk_insert_csv``) stands in for a conflict-checked
+        upsert per row, the difference between seconds and hours at this catalog's scale.
+        """
+        self._connection.execute(delete(sample_spectral_feature))
+        if not features:
+            return
+        bulk_insert_csv(
+            self._connection,
+            sample_spectral_feature,
+            ["sample_hash", "vector", "computed_at"],
+            ((feature.sample_hash, json.dumps(feature.vector), feature.computed_at) for feature in features),
+        )
 
     def get(self, sample_hash: str) -> SampleSpectralFeature | None:
         row = self._connection.execute(
