@@ -893,3 +893,35 @@ tr.is-focused {
 .chart-card li:last-child {
     border-bottom: none;
 }
+
+/* ---------- OpenMPT (Win98) chrome ---------- */
+
+/* The round transport play button and the borderless thumbnail toggle keep their own dedicated
+   shapes -- this sweep is for the square chrome controls (dropdowns, filter/menu buttons). */
+:root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button),
+:root[data-theme="openmpt"] input,
+:root[data-theme="openmpt"] select {
+    border-radius: 0;
+    border-width: 2px;
+    border-style: solid;
+    border-color: var(--surface-1) var(--border-strong) var(--border-strong) var(--surface-1);
+}
+
+:root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button):active,
+:root[data-theme="openmpt"] input:active,
+:root[data-theme="openmpt"] select:active {
+    border-color: var(--border-strong) var(--surface-1) var(--surface-1) var(--border-strong);
+}
+
+:root[data-theme="openmpt"] .dv-tab {
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--surface-1) var(--border-strong) var(--border-strong) var(--surface-1);
+}
+
+/* dockview scrolls the tab strip's own overflow, which rules out the usual negative-margin
+   overlap trick for merging the active tab into the panel below -- coloring its own bottom
+   border to match that panel's background is what stays reliable regardless of scroll state. */
+:root[data-theme="openmpt"] .dv-tab.dv-active-tab {
+    border-bottom-color: var(--surface-1);
+}
