@@ -9,6 +9,8 @@ from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import (
     ITSampleProperties,
+    MODSampleProperties,
+    S3MSampleProperties,
     SampleOccurrence,
     TrackerSampleProperties,
     Vibrato,
@@ -43,6 +45,10 @@ def render_properties(
             return _render_xm_properties(sample_hash, occurrence, trackmod_sample)
         case TrackerFormat.IT:
             return _render_it_properties(sample_hash, occurrence, trackmod_sample)
+        case TrackerFormat.MOD:
+            return _render_mod_properties(sample_hash, occurrence, trackmod_sample)
+        case TrackerFormat.S3M:
+            return _render_s3m_properties(sample_hash, occurrence, trackmod_sample)
 
 
 def _render_xm_properties(
@@ -75,6 +81,35 @@ def _render_it_properties(
         sustain_loop=trackmod_sample.sustain_loop,
         filename=trackmod_sample.filename,
         vibrato=_render_vibrato(trackmod_sample.vibrato),
+    )
+
+
+def _render_mod_properties(
+    sample_hash: str, occurrence: SampleOccurrence, trackmod_sample: TrackModSample
+) -> MODSampleProperties:
+    return MODSampleProperties(
+        sample_hash=sample_hash,
+        occurrence=occurrence,
+        name=trackmod_sample.name,
+        rate=trackmod_sample.rate,
+        volume=trackmod_sample.volume,
+        panning=trackmod_sample.panning,
+        loop=trackmod_sample.loop,
+    )
+
+
+def _render_s3m_properties(
+    sample_hash: str, occurrence: SampleOccurrence, trackmod_sample: TrackModSample
+) -> S3MSampleProperties:
+    return S3MSampleProperties(
+        sample_hash=sample_hash,
+        occurrence=occurrence,
+        name=trackmod_sample.name,
+        rate=trackmod_sample.rate,
+        volume=trackmod_sample.volume,
+        panning=trackmod_sample.panning,
+        loop=trackmod_sample.loop,
+        filename=trackmod_sample.filename,
     )
 
 

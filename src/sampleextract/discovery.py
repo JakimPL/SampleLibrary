@@ -8,6 +8,8 @@ from samplecore.models.tracker import TrackerFormat
 FORMAT_LOADERS: Final[dict[str, TrackerFormat]] = {
     ".xm": TrackerFormat.XM,
     ".it": TrackerFormat.IT,
+    ".mod": TrackerFormat.MOD,
+    ".s3m": TrackerFormat.S3M,
 }
 
 

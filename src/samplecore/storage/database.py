@@ -59,7 +59,7 @@ module = Table(
     Column("file_size", UBigInt, nullable=False),
     Column("ingested_at", DateTime(timezone=True), nullable=False),
     CheckConstraint(r"filename NOT LIKE '%/%' AND filename NOT LIKE '%\%'", name="module_filename_check"),
-    CheckConstraint("tracker IN ('xm', 'it')", name="module_tracker_check"),
+    CheckConstraint("tracker IN ('xm', 'it', 'mod', 's3m')", name="module_tracker_check"),
 )
 
 sample_properties = Table(
@@ -78,7 +78,7 @@ sample_properties = Table(
     Column("loop_end", UInteger, nullable=True),
     Column("loop_mode", String, nullable=True),
     PrimaryKeyConstraint("module_id", "instrument_index", "sample_slot"),
-    CheckConstraint("tracker IN ('xm', 'it')", name="sample_properties_tracker_check"),
+    CheckConstraint("tracker IN ('xm', 'it', 'mod', 's3m')", name="sample_properties_tracker_check"),
     CheckConstraint("rate > 0", name="sample_properties_rate_check"),
     CheckConstraint("volume <= 64", name="sample_properties_volume_check"),
     CheckConstraint("panning <= 255", name="sample_properties_panning_check"),
@@ -137,6 +137,20 @@ it_sample_properties = Table(
         (vibrato_speed IS NULL) = (vibrato_waveform IS NULL)
         """,
         name="it_sample_properties_vibrato_conull_check",
+    ),
+)
+
+s3m_sample_properties = Table(
+    "s3m_sample_properties",
+    metadata,
+    Column("module_id", Integer, nullable=False),
+    Column("instrument_index", USmallInt, nullable=False),
+    Column("sample_slot", USmallInt, nullable=False),
+    Column("filename", String, nullable=True),
+    PrimaryKeyConstraint("module_id", "instrument_index", "sample_slot"),
+    ForeignKeyConstraint(
+        ["module_id", "instrument_index", "sample_slot"],
+        ["sample_properties.module_id", "sample_properties.instrument_index", "sample_properties.sample_slot"],
     ),
 )
 

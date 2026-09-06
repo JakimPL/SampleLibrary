@@ -1,10 +1,9 @@
 # SampleLibrary
 
-A personal library and web application for tracker music samples, extracted from XM and IT
-modules (MOD and S3M planned). It deduplicates identical sample content by hash, groups
-near-duplicate samples into reviewable equivalence classes (bit-depth conversions, resampled
-variants), and lets you browse modules, samples, and their cross-references, including a visual
-"cloud" of the whole library.
+A personal library and web application for tracker music samples, extracted from XM, IT, MOD, and
+S3M modules. It deduplicates identical sample content by hash, groups near-duplicate samples into
+reviewable equivalence classes (bit-depth conversions, resampled variants), and lets you browse
+modules, samples, and their cross-references, including a visual "cloud" of the whole library.
 
 ## Requirements
 

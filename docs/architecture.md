@@ -43,10 +43,15 @@ gitignored `config.toml` via `samplecore.config.load_config`, never hardcoded in
 ## Extending to new tracker formats
 
 `sampleextract`'s format dispatch is a small registry (module suffix → loader function), not
-branching logic, so adding MOD and S3M later starts from a new `trackmod` tracker package plus two
-registry entries. Each format also has its own tracker-specific properties table
-(`xm_sample_properties`, `it_sample_properties`) and a member of the `TrackerFormat` enum, both
-schema-level and reachable through `module.tracker`'s `CheckConstraint`; adding a format extends
-these the same way XM and IT already do, and updates the frontend's tracker-selection controls to
-match. The content store and the API's read shape stay as they are: content addressing and the
-served response models are already format-agnostic.
+branching logic; MOD and S3M (added once `trackmod`'s own readers for both were already complete)
+extended it with two registry entries each. Each format gets a member of the `TrackerFormat` enum,
+both schema-level and reachable through `module.tracker`'s `CheckConstraint`, and a tracker-specific
+properties table for whatever it stores beyond the shared `sample_properties` base -- `xm_sample_properties`
+(tuning), `it_sample_properties` (global volume, sustain loop, filename, vibrato), and
+`s3m_sample_properties` (filename). MOD gets no properties table at all: TrackMod's MOD reader folds
+its finetune byte straight into the shared `rate` field and keeps no separate raw copy, and the
+format stores no per-sample panning, sustain loop, filename, or vibrato of its own, so
+`MODSampleProperties` carries nothing beyond the shared base -- a format's own subtype and
+discriminator tag are added regardless of whether it turns out to need a child table. The content
+store and the API's read shape stay as they are: content addressing and the served response models
+are already format-agnostic.

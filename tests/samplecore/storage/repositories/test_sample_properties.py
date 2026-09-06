@@ -11,6 +11,8 @@ from samplecore.models.module import Module
 from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import (
     ITSampleProperties,
+    MODSampleProperties,
+    S3MSampleProperties,
     SampleOccurrence,
     Vibrato,
     XMSampleProperties,
@@ -48,6 +50,57 @@ def _it_properties(module_hash: str, sample_hash: str, *, sample_slot: int) -> I
         filename="KICK.WAV",
         vibrato=Vibrato(speed=1, depth=2, rate=3, waveform=0),
     )
+
+
+def _mod_properties(module_hash: str, sample_hash: str, *, sample_slot: int) -> MODSampleProperties:
+    return MODSampleProperties(
+        sample_hash=sample_hash,
+        occurrence=SampleOccurrence(module_hash=module_hash, instrument_index=0, sample_slot=sample_slot),
+        name="chip",
+        rate=8363,
+        volume=64,
+    )
+
+
+def _s3m_properties(module_hash: str, sample_hash: str, *, sample_slot: int) -> S3MSampleProperties:
+    return S3MSampleProperties(
+        sample_hash=sample_hash,
+        occurrence=SampleOccurrence(module_hash=module_hash, instrument_index=0, sample_slot=sample_slot),
+        name="pluck",
+        rate=8363,
+        volume=64,
+        filename="PLUCK.S3I",
+    )
+
+
+def test_mod_properties_round_trip_through_list_for_module(
+    connection: duckdb.DuckDBPyConnection, stored_module: Module, stored_sample: Sample
+) -> None:
+    repository = DuckDBSamplePropertiesRepository(connection)
+    properties = _mod_properties(stored_module.hash, stored_sample.hash, sample_slot=0)
+
+    repository.upsert(properties)
+
+    assert repository.list_for_module(stored_module.hash) == (properties,)
+
+
+def test_s3m_properties_round_trip_with_filename_left_unset(
+    connection: duckdb.DuckDBPyConnection, stored_module: Module, stored_sample: Sample
+) -> None:
+    repository = DuckDBSamplePropertiesRepository(connection)
+    properties = S3MSampleProperties(
+        sample_hash=stored_sample.hash,
+        occurrence=SampleOccurrence(module_hash=stored_module.hash, instrument_index=0, sample_slot=0),
+        name="pluck",
+        rate=8363,
+        volume=64,
+    )
+
+    repository.upsert(properties)
+
+    round_tripped = repository.list_for_module(stored_module.hash)[0]
+    assert isinstance(round_tripped, S3MSampleProperties)
+    assert round_tripped.filename is None
 
 
 def test_xm_properties_round_trip_through_list_for_module(

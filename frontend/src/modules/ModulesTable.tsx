@@ -93,6 +93,8 @@ export function ModulesTable({ modules }: ModulesTableProps): ReactElement {
                         <option value="">All</option>
                         <option value="xm">XM</option>
                         <option value="it">IT</option>
+                        <option value="mod">MOD</option>
+                        <option value="s3m">S3M</option>
                     </select>
                 </label>
                 <span className="cell-muted mono">

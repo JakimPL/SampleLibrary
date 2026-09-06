@@ -16,12 +16,19 @@ from trackmod.core.samples.sample import Sample as TrackModSample
 from trackmod.core.songs.order import OrderList
 from trackmod.core.songs.playback import Playback
 from trackmod.core.songs.song import Song
-from trackmod.core.voices.voices import InstrumentVoices
+from trackmod.core.voices.voices import InstrumentVoices, SampleVoices
 from trackmod.limits.compliance import Compliance
 from trackmod.trackers.it.module import ITModule
+from trackmod.trackers.mod.module import MODModule
+from trackmod.trackers.s3m.module import S3MModule
 from trackmod.trackers.xm.module import XMModule
 
 SAMPLE_RATE: Final[int] = 44100
+# Amiga ProTracker's finetune-derived rates and its pattern length are both fixed, structural
+# bounds (unlike XM/IT's own, looser ones) -- 8363 Hz is the format's own untransposed C-3 rate,
+# and every pattern must hold exactly this many rows.
+MOD_SAMPLE_RATE: Final[int] = 8363
+SAMPLE_VOICES_PATTERN_ROWS: Final[int] = 64
 DEFAULT_OUTPUT_DIRECTORY: Final[Path] = Path("dev-library")
 MODULES_DIRECTORY_NAME: Final[str] = "modules"
 CATALOG_DIRECTORY_NAME: Final[str] = "catalog"
@@ -96,6 +103,21 @@ def _single_instrument_song(sample: TrackModSample) -> Song:
     )
 
 
+def _single_sample_song(sample: TrackModSample) -> Song:
+    """A one-sample song for a format whose cells name a sample directly, with no instrument
+    indirection (Amiga ProTracker, Scream Tracker 3) -- mirrors ``_single_instrument_song``'s shape
+    for the formats that route cells through an instrument instead.
+    """
+    return Song(
+        name=sample.name,
+        channels=1,
+        patterns=(Pattern.empty(rows=SAMPLE_VOICES_PATTERN_ROWS, channels=1),),
+        order=OrderList(entries=(0,)),
+        voices=SampleVoices(samples=(sample,)),
+        playback=Playback(speed=6, tempo=125),
+    )
+
+
 def _multi_instrument_song(name: str, samples: tuple[TrackModSample, ...]) -> Song:
     instruments = tuple(
         Instrument(name=sample.name, keymap=pitched_keymap(sample=index)) for index, sample in enumerate(samples)
@@ -118,9 +140,17 @@ def _it_bytes(song: Song) -> bytes:
     return ITModule.from_song(song, compliance=Compliance.EXTENDED).to_bytes()
 
 
+def _mod_bytes(song: Song) -> bytes:
+    return MODModule.from_song(song, compliance=Compliance.EXTENDED).to_bytes()
+
+
+def _s3m_bytes(song: Song) -> bytes:
+    return S3MModule.from_song(song, compliance=Compliance.EXTENDED).to_bytes()
+
+
 def _normal_modules() -> dict[str, bytes]:
-    """Two ordinary, unrelated modules -- one per tracker format -- for a browsable-feeling library
-    alongside the deliberately related pairs below.
+    """Four ordinary, unrelated modules -- one per supported tracker format -- for a
+    browsable-feeling library alongside the deliberately related pairs below.
     """
     xm_samples = (
         TrackModSample(name="lead", pcm=_tonal_waveform(3000, frequency=330.0, seed=1), rate=SAMPLE_RATE),
@@ -130,9 +160,15 @@ def _normal_modules() -> dict[str, bytes]:
         TrackModSample(name="pad", pcm=_tonal_waveform(4000, frequency=523.0, seed=3), rate=SAMPLE_RATE),
         TrackModSample(name="pluck", pcm=_tonal_waveform(1800, frequency=659.0, seed=4), rate=SAMPLE_RATE),
     )
+    mod_sample = TrackModSample(
+        name="chip", pcm=_tonal_waveform(2400, frequency=220.0, seed=11), rate=MOD_SAMPLE_RATE, depth=BitDepth.EIGHT
+    )
+    s3m_sample = TrackModSample(name="pluck_st3", pcm=_tonal_waveform(2000, frequency=392.0, seed=12), rate=SAMPLE_RATE)
     return {
         "normal_song.xm": _xm_bytes(_multi_instrument_song("normal_song_xm", xm_samples)),
         "normal_song.it": _it_bytes(_multi_instrument_song("normal_song_it", it_samples)),
+        "normal_song.mod": _mod_bytes(_single_sample_song(mod_sample)),
+        "normal_song.s3m": _s3m_bytes(_single_sample_song(s3m_sample)),
     }
 
 

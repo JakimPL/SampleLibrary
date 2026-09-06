@@ -353,6 +353,16 @@ tr.is-focused {
     color: var(--warn);
 }
 
+.badge-mod {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.badge-s3m {
+    background: var(--critical-soft);
+    color: var(--critical);
+}
+
 /* Class names below echo the backend's RelationType/TrackerFormat enum values verbatim (snake_case
    is their contract, not ours), so selector-class-pattern is disabled per selector rather than
    introducing a translation layer just to satisfy kebab-case. */

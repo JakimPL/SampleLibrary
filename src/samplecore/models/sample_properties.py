@@ -86,4 +86,32 @@ class ITSampleProperties(SampleProperties):
     vibrato: Vibrato | None = None
 
 
-TrackerSampleProperties = Annotated[XMSampleProperties | ITSampleProperties, Field(discriminator="tracker")]
+class MODSampleProperties(SampleProperties):
+    """The occurrence fields Amiga ProTracker stores beside the shared ones.
+
+    ProTracker's own finetune byte only ever feeds into ``rate`` above -- TrackMod's MOD reader
+    derives ``rate`` from it and keeps no separate raw copy, unlike FastTracker 2's ``tuning`` --
+    and it stores no per-sample panning, sustain loop, filename, or vibrato of its own. This format
+    carries nothing beyond the shared base; the subtype exists only so the discriminated union
+    below can still tell a MOD occurrence apart from every other format's.
+    """
+
+    tracker: Literal[TrackerFormat.MOD] = TrackerFormat.MOD
+
+
+class S3MSampleProperties(SampleProperties):
+    """The occurrence fields Scream Tracker 3 stores beside the shared ones.
+
+    ``filename`` is this format's own DOS filename, the one field Impulse Tracker's own
+    ``ITSampleProperties.filename`` inherited from this format's lineage. Scream Tracker 3 stores
+    no per-sample panning, sustain loop, or vibrato of its own.
+    """
+
+    tracker: Literal[TrackerFormat.S3M] = TrackerFormat.S3M
+    filename: str | None = None
+
+
+TrackerSampleProperties = Annotated[
+    XMSampleProperties | ITSampleProperties | MODSampleProperties | S3MSampleProperties,
+    Field(discriminator="tracker"),
+]

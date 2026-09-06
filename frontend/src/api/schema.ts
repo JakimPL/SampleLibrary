@@ -316,6 +316,35 @@ export interface components {
          */
         readonly LoopMode: "forward" | "ping_pong";
         /**
+         * MODSampleProperties
+         * @description The occurrence fields Amiga ProTracker stores beside the shared ones.
+         *
+         *     ProTracker's own finetune byte only ever feeds into ``rate`` above -- TrackMod's MOD reader
+         *     derives ``rate`` from it and keeps no separate raw copy, unlike FastTracker 2's ``tuning`` --
+         *     and it stores no per-sample panning, sustain loop, filename, or vibrato of its own. This format
+         *     carries nothing beyond the shared base; the subtype exists only so the discriminated union
+         *     below can still tell a MOD occurrence apart from every other format's.
+         */
+        readonly MODSampleProperties: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            readonly occurrence: components["schemas"]["SampleOccurrence"];
+            /** Name */
+            readonly name: string;
+            /** Rate */
+            readonly rate: number;
+            /** Volume */
+            readonly volume: number;
+            /** Panning */
+            readonly panning?: number | null;
+            readonly loop?: components["schemas"]["Loop"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly tracker: "mod";
+        };
+        /**
          * Module
          * @description A tracker module file's identity and the shape of the song it stores.
          *
@@ -410,7 +439,7 @@ export interface components {
          */
         readonly ModuleOccurrenceDetail: {
             /** Properties */
-            readonly properties: components["schemas"]["XMSampleProperties"] | components["schemas"]["ITSampleProperties"];
+            readonly properties: components["schemas"]["XMSampleProperties"] | components["schemas"]["ITSampleProperties"] | components["schemas"]["MODSampleProperties"] | components["schemas"]["S3MSampleProperties"];
             readonly sample: components["schemas"]["ModuleOccurrenceSample"];
         };
         /**
@@ -486,6 +515,35 @@ export interface components {
             readonly relation_count: number;
         };
         /**
+         * S3MSampleProperties
+         * @description The occurrence fields Scream Tracker 3 stores beside the shared ones.
+         *
+         *     ``filename`` is this format's own DOS filename, the one field Impulse Tracker's own
+         *     ``ITSampleProperties.filename`` inherited from this format's lineage. Scream Tracker 3 stores
+         *     no per-sample panning, sustain loop, or vibrato of its own.
+         */
+        readonly S3MSampleProperties: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            readonly occurrence: components["schemas"]["SampleOccurrence"];
+            /** Name */
+            readonly name: string;
+            /** Rate */
+            readonly rate: number;
+            /** Volume */
+            readonly volume: number;
+            /** Panning */
+            readonly panning?: number | null;
+            readonly loop?: components["schemas"]["Loop"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly tracker: "s3m";
+            /** Filename */
+            readonly filename?: string | null;
+        };
+        /**
          * SampleCloudCoordinate
          * @description Where one Sample sits in the library's 2D embedding space, as of one embedding run.
          *
@@ -550,7 +608,7 @@ export interface components {
          */
         readonly SampleOccurrenceDetail: {
             /** Properties */
-            readonly properties: components["schemas"]["XMSampleProperties"] | components["schemas"]["ITSampleProperties"];
+            readonly properties: components["schemas"]["XMSampleProperties"] | components["schemas"]["ITSampleProperties"] | components["schemas"]["MODSampleProperties"] | components["schemas"]["S3MSampleProperties"];
             readonly module: components["schemas"]["SampleOccurrenceModule"];
         };
         /**
@@ -636,7 +694,7 @@ export interface components {
          * @description Which tracker format a module or a sample occurrence belongs to.
          * @enum {string}
          */
-        readonly TrackerFormat: "xm" | "it";
+        readonly TrackerFormat: "xm" | "it" | "mod" | "s3m";
         /**
          * TrackerModuleCount
          * @description How many catalogued modules belong to one tracker format.
