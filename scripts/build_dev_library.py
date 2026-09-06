@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import shutil
 from pathlib import Path
-from typing import Final
+from typing import Callable, Final, NamedTuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -39,6 +39,20 @@ TOO_SHORT_SAMPLE_FRAMES: Final[int] = 100
 
 
 HARMONIC_COUNT: Final[int] = 5
+
+# The deliberate equivalence scenarios below total 13 modules; filler tops that up to this many, so
+# the frontend's list and cloud views have enough rows to browse without inflating the corpus a
+# rebuild has to ingest for routine local iteration.
+TARGET_MODULE_COUNT: Final[int] = 30
+# Unlike the scenarios above (kept deliberately tiny for fast equivalence-detection tests), filler
+# exists to be looked at -- two real seconds, so the waveform and thumbnail views have an actual
+# shape to render instead of the handful of pixels a sub-second clip would draw.
+FILLER_SAMPLE_FRAMES: Final[int] = SAMPLE_RATE * 2
+FILLER_BASE_FREQUENCY_HZ: Final[float] = 200.0
+FILLER_FREQUENCY_STEP_HZ: Final[float] = 37.0
+# Keeps filler seeds clear of the scenario builders' own 1-12 range below, so a filler waveform's
+# random harmonic weights (see _tonal_waveform) never coincidentally shadow a scenario's.
+FILLER_SEED_OFFSET: Final[int] = 100
 
 
 def _tonal_waveform(frame_count: int, *, frequency: float, seed: int) -> NDArray[np.float64]:
@@ -248,7 +262,52 @@ def _too_short_module() -> dict[str, bytes]:
     return {"too_short.xm": _xm_bytes(_single_instrument_song(too_short))}
 
 
-def _all_modules() -> dict[str, bytes]:
+class _FillerFormat(NamedTuple):
+    extension: str
+    rate: int
+    depth: BitDepth
+    build_song: Callable[[TrackModSample], Song]
+    to_bytes: Callable[[Song], bytes]
+
+
+# Amiga ProTracker and Scream Tracker 3 route a pattern cell straight to a sample (no instrument
+# indirection), and ProTracker's rate and pattern length are both format-fixed -- see
+# _single_sample_song and MOD_SAMPLE_RATE above -- so both take that song shape at that rate.
+_FILLER_FORMATS: Final[tuple[_FillerFormat, ...]] = (
+    _FillerFormat("xm", SAMPLE_RATE, BitDepth.SIXTEEN, _single_instrument_song, _xm_bytes),
+    _FillerFormat("it", SAMPLE_RATE, BitDepth.SIXTEEN, _single_instrument_song, _it_bytes),
+    _FillerFormat("mod", MOD_SAMPLE_RATE, BitDepth.EIGHT, _single_sample_song, _mod_bytes),
+    _FillerFormat("s3m", SAMPLE_RATE, BitDepth.SIXTEEN, _single_sample_song, _s3m_bytes),
+)
+
+
+def _filler_modules(count: int) -> dict[str, bytes]:
+    """``count`` further single-sample modules, cycling through every supported tracker format at
+    an increasing frequency and a fresh seed per module. Unlike the scenarios above, none of these
+    are related to each other or to a scenario module -- each gets its own random harmonic profile
+    (see ``_tonal_waveform``), which is what keeps a filler module out of every equivalence relation
+    the scenarios above are built to demonstrate.
+    """
+    modules: dict[str, bytes] = {}
+    for index in range(max(0, count)):
+        filler_format = _FILLER_FORMATS[index % len(_FILLER_FORMATS)]
+        name = f"filler_{index:02d}"
+        sample = TrackModSample(
+            name=name,
+            pcm=_tonal_waveform(
+                FILLER_SAMPLE_FRAMES,
+                frequency=FILLER_BASE_FREQUENCY_HZ + index * FILLER_FREQUENCY_STEP_HZ,
+                seed=FILLER_SEED_OFFSET + index,
+            ),
+            rate=filler_format.rate,
+            depth=filler_format.depth,
+        )
+        modules[f"{name}.{filler_format.extension}"] = filler_format.to_bytes(filler_format.build_song(sample))
+
+    return modules
+
+
+def _all_modules(target_module_count: int = TARGET_MODULE_COUNT) -> dict[str, bytes]:
     modules: dict[str, bytes] = {}
     for builder in (
         _normal_modules,
@@ -261,6 +320,7 @@ def _all_modules() -> dict[str, bytes]:
     ):
         modules.update(builder())
 
+    modules.update(_filler_modules(target_module_count - len(modules)))
     return modules
 
 
@@ -274,7 +334,7 @@ def _write_config(output_directory: Path, *, modules_directory: Path, catalog_di
     )
 
 
-def build_dev_library(output_directory: Path) -> tuple[Path, ...]:
+def build_dev_library(output_directory: Path, *, target_module_count: int = TARGET_MODULE_COUNT) -> tuple[Path, ...]:
     """(Re)generates the deterministic dev-module corpus and its own ready-to-use ``config.toml``.
 
     ``modules_directory`` is wiped and rewritten every call, so this stays safe to rerun whenever
@@ -289,7 +349,7 @@ def build_dev_library(output_directory: Path) -> tuple[Path, ...]:
     catalog_directory.mkdir(parents=True, exist_ok=True)
 
     written_paths: list[Path] = []
-    for filename, data in _all_modules().items():
+    for filename, data in _all_modules(target_module_count).items():
         path = modules_directory / filename
         path.write_bytes(data)
         written_paths.append(path)
@@ -306,12 +366,18 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--output", type=Path, default=DEFAULT_OUTPUT_DIRECTORY, help="Where to write the corpus and its config.toml."
     )
+    parser.add_argument(
+        "--target-module-count",
+        type=int,
+        default=TARGET_MODULE_COUNT,
+        help="Total module count to reach by topping up the deliberate scenarios with unrelated filler modules.",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
     arguments = _parse_arguments(argv)
-    written_paths = build_dev_library(arguments.output)
+    written_paths = build_dev_library(arguments.output, target_module_count=arguments.target_module_count)
     print(f"Wrote {len(written_paths)} modules and config.toml under {arguments.output.resolve()}")
 
 

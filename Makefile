@@ -65,21 +65,34 @@ repair-schema:
 .PHONY: rebuild-library
 rebuild-library: extract equivalence embed embed-modules-placeholder
 
-.PHONY: dev-library
-dev-library:
+.PHONY: library-dev
+library-dev:
 	uv run python scripts/build_dev_library.py
 
-.PHONY: dev-extract
-dev-extract: dev-library
+.PHONY: extract-dev
+extract-dev: library-dev
 	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run sampleextract
 
-.PHONY: dev-equivalence
-dev-equivalence:
+.PHONY: equivalence-dev
+equivalence-dev:
 	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run sampleequivalence
 
-.PHONY: dev-reset
-dev-reset:
+.PHONY: embed-dev
+embed-dev:
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run samplecloud
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run samplecloud-modules-placeholder
+
+.PHONY: thumbnails-dev
+thumbnails-dev:
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run samplethumbnail
+
+.PHONY: reset-dev
+reset-dev:
 	rm -rf dev-library
+
+.PHONY: serve-dev
+serve-dev:
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run uvicorn sampleserver.main:app --reload --port 8001
 
 .PHONY: serve
 serve:
