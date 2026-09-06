@@ -32,6 +32,15 @@ export function entityRoute(entity: EntityRef): string {
  * own route, which is what actually focuses it -- the shell's route-param effect is the one place
  * that dispatches a focus action, so a pasted URL and a double-click both focus an entity through
  * the identical mechanism.
+ *
+ * `onClick` must be attached as `onClickCapture` on the row, not `onClick`: every row wraps its
+ * name in its own `<Link>`, and a bubble-phase handler on the row runs only after that inner
+ * `<Link>`'s own bubble-phase handler already read `event.defaultPrevented` and navigated -- by
+ * then, calling `preventDefault` here is too late to stop it. Running in the capture phase puts
+ * this handler ahead of the `<Link>` on the event path, so a plain click's `preventDefault` lands
+ * before the `<Link>` ever sees the event, leaving navigation to the double-click handler alone as
+ * intended. Skipping this would fire an unintended navigation (and the focus it triggers) on every
+ * plain click, alongside the highlight this hook already dispatches for it.
  */
 export function useEntityRowInteractions(entity: EntityRef): EntityRowInteractions {
     const navigate = useNavigate();

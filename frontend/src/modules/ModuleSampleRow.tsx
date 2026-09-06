@@ -25,7 +25,7 @@ export function ModuleSampleRow({ occurrence }: ModuleSampleRowProps): ReactElem
     return (
         <tr
             className={classNames(isHighlighted && "is-highlighted", isFocused && "is-focused")}
-            onClick={onClick}
+            onClickCapture={onClick}
             onDoubleClick={onDoubleClick}
         >
             <td>

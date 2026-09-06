@@ -80,6 +80,7 @@ interface RenderOverrides {
     readonly onClear?: () => void;
     readonly onHover?: (entity: EntityRef | null, screenPosition: readonly [number, number] | null) => void;
     readonly onCompare?: (entity: EntityRef) => void;
+    readonly onActivate?: (entity: EntityRef) => void;
 }
 
 // CloudView awaits the fake scatterplot's `draw` promise (mirroring the real library, which
@@ -101,6 +102,7 @@ async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnT
             onClear={overrides.onClear ?? vi.fn()}
             onHover={overrides.onHover ?? vi.fn()}
             onCompare={overrides.onCompare ?? vi.fn()}
+            onActivate={overrides.onActivate ?? vi.fn()}
         />,
     );
     await flushDraw();
@@ -136,6 +138,41 @@ describe("CloudView", () => {
         latestInstance().emit("select", { points: [0] });
 
         expect(onSelect).toHaveBeenCalledWith(SAMPLE_REF);
+    });
+
+    it("reports a clicked point's entity through onActivate as well, for a caller to play it", async () => {
+        const onActivate = vi.fn();
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onActivate });
+
+        latestInstance().emit("select", { points: [0] });
+
+        expect(onActivate).toHaveBeenCalledWith(SAMPLE_REF);
+    });
+
+    // Regression guard for the ping this component's own click just selected: the user is already
+    // looking straight at a point they clicked, so the locate cue that a highlight arriving from
+    // elsewhere in the shell gets would only be redundant here.
+    it("does not ping a point selected by clicking it directly in this view", async () => {
+        const { container, rerender } = await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
+
+        latestInstance().emit("select", { points: [0] });
+        // Mirrors what actually happens after a real click: onSelect's entity becomes the shell's
+        // highlighted state, which flows back into this same view as its next `highlighted` prop.
+        rerender(
+            <CloudView
+                points={[point(SAMPLE_REF, 0, 0)]}
+                highlighted={SAMPLE_REF}
+                onSelect={vi.fn()}
+                onFocus={vi.fn()}
+                onClear={vi.fn()}
+                onHover={vi.fn()}
+                onCompare={vi.fn()}
+                onActivate={vi.fn()}
+            />,
+        );
+        await flushDraw();
+
+        expect(container.querySelector(".cloud-ping")).not.toBeInTheDocument();
     });
 
     it("focuses the currently hovered entity on a native double-click", async () => {
@@ -226,6 +263,7 @@ describe("CloudView", () => {
                 onClear={vi.fn()}
                 onHover={vi.fn()}
                 onCompare={vi.fn()}
+                onActivate={vi.fn()}
             />,
         );
 
@@ -234,6 +272,56 @@ describe("CloudView", () => {
         await flushDraw();
 
         expect(latestInstance().select).toHaveBeenCalledWith([0], { preventEvent: true });
+    });
+
+    // Regression test for a real, live-reproduced bug: regl-scatterplot rejects a `draw` call
+    // outright with "Ignoring draw call..." if it is asked to start again before the previous one
+    // has settled, and on this codebase's own reproduction the call that lost that race left the
+    // instance permanently unable to draw again. A single click highlighting an entity raced the
+    // shell's own route-focus effect writing the same highlight moments later, firing this exact
+    // burst of updates in practice; `drawSerialized` (see CloudView.tsx) is what queues them instead.
+    it("never starts a new draw before the previous one has settled, even under a burst of updates", async () => {
+        const { rerender } = await renderCloudView({
+            points: [point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)],
+        });
+        const instance = latestInstance();
+
+        let activeDraws = 0;
+        let maxConcurrentDraws = 0;
+        instance.draw.mockImplementation(() => {
+            activeDraws += 1;
+            maxConcurrentDraws = Math.max(maxConcurrentDraws, activeDraws);
+            return Promise.resolve().then(() => {
+                activeDraws -= 1;
+            });
+        });
+
+        function rerenderWithHighlight(highlighted: EntityRef): void {
+            rerender(
+                <CloudView
+                    points={[point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)]}
+                    highlighted={highlighted}
+                    onSelect={vi.fn()}
+                    onFocus={vi.fn()}
+                    onClear={vi.fn()}
+                    onHover={vi.fn()}
+                    onCompare={vi.fn()}
+                    onActivate={vi.fn()}
+                />,
+            );
+        }
+
+        // Three highlight changes fire in a row, none of them awaited -- the same burst a click's own
+        // highlight write and the shell's route-focus write for that same entity produced live.
+        rerenderWithHighlight(SAMPLE_REF);
+        rerenderWithHighlight(MODULE_REF);
+        rerenderWithHighlight(SAMPLE_REF);
+
+        await flushDraw();
+        await flushDraw();
+        await flushDraw();
+
+        expect(maxConcurrentDraws).toBeLessThanOrEqual(1);
     });
 
     it("deselects when the current highlight matches nothing on this view", async () => {
@@ -292,6 +380,7 @@ describe("CloudView", () => {
                 onClear={vi.fn()}
                 onHover={vi.fn()}
                 onCompare={vi.fn()}
+                onActivate={vi.fn()}
             />,
         );
         await flushDraw();
@@ -315,6 +404,7 @@ describe("CloudView", () => {
                 onClear={vi.fn()}
                 onHover={vi.fn()}
                 onCompare={vi.fn()}
+                onActivate={vi.fn()}
             />,
         );
         await flushDraw();

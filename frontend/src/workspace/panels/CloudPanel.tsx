@@ -1,4 +1,4 @@
-import { type ReactElement, useEffect, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { CloudPoint, ModuleCloudPoint } from "../../api/cloud";
@@ -6,6 +6,7 @@ import { CloudView } from "../../cloud/CloudView";
 import type { CloudEntityPoint } from "../../cloud/geometry";
 import { useCloud } from "../../cloud/useCloud";
 import { useModuleCloud } from "../../cloud/useModuleCloud";
+import { useAudioPreview } from "../../samples/useAudioPreview";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
 import { Loading } from "../../shared/Loading";
@@ -43,18 +44,34 @@ function modulePoints(coordinates: readonly ModuleCloudPoint[]): readonly CloudE
  * Both tabs' coordinates are fetched unconditionally, not only once their tab is first opened --
  * each payload is a handful of floats per entity, cheap enough that switching tabs never has to
  * wait on a request the other tab could have already finished.
+ *
+ * Each tab's points are memoized on its own fetch state, which `useFetch` only ever replaces once
+ * a request genuinely settles again -- otherwise `samplePoints`/`modulePoints` would map a fresh
+ * array (and fresh point objects) on every render of this panel, including ones unrelated to the
+ * coordinates themselves (a hover, the other tab's own fetch resolving). `CloudView` depends on
+ * referential stability here: it redraws its whole scatterplot whenever this array's identity
+ * changes, so an unstable identity redraws far more often than the data actually does.
  */
 function useActiveCloudPoints(tab: CloudTab): FetchState<readonly CloudEntityPoint[]> {
     const sampleState = useCloud();
     const moduleState = useModuleCloud();
 
-    if (tab === "samples") {
-        return sampleState.status === "success"
-            ? { status: "success", data: samplePoints(sampleState.data) }
-            : sampleState;
-    }
+    const samplePointsState = useMemo(
+        (): FetchState<readonly CloudEntityPoint[]> =>
+            sampleState.status === "success"
+                ? { status: "success", data: samplePoints(sampleState.data) }
+                : sampleState,
+        [sampleState],
+    );
+    const modulePointsState = useMemo(
+        (): FetchState<readonly CloudEntityPoint[]> =>
+            moduleState.status === "success"
+                ? { status: "success", data: modulePoints(moduleState.data) }
+                : moduleState,
+        [moduleState],
+    );
 
-    return moduleState.status === "success" ? { status: "success", data: modulePoints(moduleState.data) } : moduleState;
+    return tab === "samples" ? samplePointsState : modulePointsState;
 }
 
 export function CloudPanel(): ReactElement {
@@ -66,6 +83,7 @@ export function CloudPanel(): ReactElement {
     const highlightEntity = useSelectionStore((selection) => selection.highlightEntity);
     const clearHighlight = useSelectionStore((selection) => selection.clearHighlight);
     const setComparisonSample = useSelectionStore((selection) => selection.setComparisonSample);
+    const { play } = useAudioPreview();
 
     useEffect(() => {
         setHovered(null);
@@ -73,6 +91,16 @@ export function CloudPanel(): ReactElement {
 
     function handleSelect(entity: EntityRef): void {
         highlightEntity(entity);
+    }
+
+    // Clicking a point directly is treated as asking to hear it, the same way a Thumbnail's own
+    // play button would -- a module has no comparable single occurrence to play, so this is a
+    // sample-only interaction and a clicked module point highlights (via handleSelect above)
+    // without doing anything else.
+    function handleActivate(entity: EntityRef): void {
+        if (entity.kind === "sample") {
+            play(entity.hash);
+        }
     }
 
     function handleFocus(entity: EntityRef): void {
@@ -127,6 +155,7 @@ export function CloudPanel(): ReactElement {
                             onClear={clearHighlight}
                             onHover={handleHover}
                             onCompare={handleCompare}
+                            onActivate={handleActivate}
                         />
                         {hovered !== null && <CloudHoverTooltip entity={hovered.entity} x={hovered.x} y={hovered.y} />}
                     </>

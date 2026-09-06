@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import createScatterplot from "regl-scatterplot";
 
 import { readThemeColor } from "../theme/readThemeColor";
@@ -54,6 +54,7 @@ interface CloudViewProps {
     readonly onClear: () => void;
     readonly onHover: (entity: EntityRef | null, screenPosition: ScreenPosition | null) => void;
     readonly onCompare: (entity: EntityRef) => void;
+    readonly onActivate: (entity: EntityRef) => void;
 }
 
 interface Ping {
@@ -70,24 +71,72 @@ function sameHighlight(a: EntityRef | null, b: EntityRef | null): boolean {
     return a === null || b === null ? a === b : sameEntity(a, b);
 }
 
+interface DrawChain {
+    current: Promise<void>;
+}
+
+/**
+ * Runs `scatterplot.draw` through a per-instance chain rather than calling it directly, so a draw
+ * requested while a previous one is still in flight waits its turn instead of firing alongside it.
+ * regl-scatterplot has no queue of its own: a `draw` call made before the previous one settles
+ * rejects outright with "Ignoring draw call...", and on this codebase's own reproduction, the call
+ * that lost that race left the instance permanently unable to draw again (its `isDrawing` flag has
+ * no path back to `false` once the draw it belonged to is abandoned this way). `points`/`highlighted`
+ * can each change again before an in-progress draw resolves -- a second effect run superseding the
+ * first, or the mount effect's own initial draw overlapping an update that arrives just after -- so
+ * this chain is what keeps every such request queued rather than racing the live scatterplot.
+ */
+function drawSerialized(
+    scatterplot: Scatterplot,
+    chain: DrawChain,
+    points: readonly CloudEntityPoint[],
+): Promise<void> {
+    const positions: number[][] = points.map((point) => [point.x, point.y]);
+    const next = chain.current.then(
+        () => scatterplot.draw(positions),
+        () => scatterplot.draw(positions),
+    );
+    chain.current = next.then(
+        () => undefined,
+        () => undefined,
+    );
+    return next;
+}
+
 /**
  * Draws the current points and applies whichever one (if any) is highlighted -- shared by the
  * mount effect, which needs this once right after a shape-driven recreation, and the effect that
- * tracks `points`/`highlighted` changes on an already-created scatterplot. Awaits `draw` before
- * touching selection: regl-scatterplot throws "Points have not been drawn" from `getScreenPosition`
- * (and a caller reading it right after `select` hits the same unset state) if it's called before a
- * first `draw` resolves, which a fresh scatterplot -- still compiling its WebGL shaders -- does not
- * do synchronously the way an already-drawn one redrawing existing points effectively does.
- * `isCancelled` reports true once the effect that started this call has been cleaned up (its
- * scatterplot destroyed, e.g. by an unmount racing the pending draw), so its result goes unused.
+ * tracks `points`/`highlighted` changes on an already-created scatterplot. Awaits the (serialized)
+ * draw before touching selection: regl-scatterplot throws "Points have not been drawn" from
+ * `getScreenPosition` (and a caller reading it right after `select` hits the same unset state) if
+ * it's called before a first `draw` resolves, which a fresh scatterplot -- still compiling its
+ * WebGL shaders -- does not do synchronously the way an already-drawn one redrawing existing points
+ * effectively does. `isCancelled` reports true once the effect that started this call has been
+ * cleaned up (its scatterplot destroyed, e.g. by an unmount racing the pending draw), so its result
+ * goes unused.
+ *
+ * A queued draw can reach the front of `drawChain` only after its own effect's cleanup already
+ * destroyed the scatterplot -- an unmount racing a still-pending, serialized-behind-another draw --
+ * in which case regl-scatterplot rejects it outright rather than running. That rejection is exactly
+ * as moot as any other cancelled result, so it is treated the same way once `isCancelled` confirms
+ * it was expected; a draw failing for any other reason still surfaces, since nothing else here knows
+ * how to recover from it.
  */
 async function applyPoints(
     scatterplot: Scatterplot,
+    drawChain: DrawChain,
     points: readonly CloudEntityPoint[],
     highlighted: EntityRef | null,
     isCancelled: () => boolean,
 ): Promise<number> {
-    await scatterplot.draw(points.map((point) => [point.x, point.y]));
+    try {
+        await drawSerialized(scatterplot, drawChain, points);
+    } catch (error) {
+        if (isCancelled()) {
+            return -1;
+        }
+        throw error;
+    }
     if (isCancelled()) {
         return -1;
     }
@@ -118,9 +167,13 @@ async function applyPoints(
  * built-in `deselect` behaviour. Whenever `highlighted` changes to a point present in this view (a
  * click elsewhere in the shell just located a sample or module here), a brief sonar-style ping
  * marks its screen position -- tracking the library's own `view` event so the ping stays pinned to
- * the point through any pan or zoom while it plays, rather than drifting off it. A Shift-click over
- * a point reports it through `onCompare` alongside regl-scatterplot's own unavoidable normal select
- * -- the library has no way to suppress its own hit-testing from our own listener. Point, active-point,
+ * the point through any pan or zoom while it plays, rather than drifting off it. Selecting a point
+ * this way also reports it through `onActivate` (a sample tab's caller uses this to start playback),
+ * but skips its own ping for that one transition: the click that just selected it is already looking
+ * straight at it, so the locate cue is reserved for a highlight arriving from somewhere else in the
+ * shell. A Shift-click over a point reports it through `onCompare` alongside regl-scatterplot's own
+ * unavoidable normal select -- the library has no way to suppress its own hit-testing from our own
+ * listener, so `onActivate` fires for a Shift-click too. Point, active-point,
  * and background colors are read from the theme's CSS custom properties at creation, and re-applied
  * through the library's own `set` whenever `useThemeSignal` reports the resolved theme could have
  * changed, mirroring how `useWaveformPlayer.ts` keeps wavesurfer's own canvas in step. Point shape
@@ -136,9 +189,14 @@ export function CloudView({
     onClear,
     onHover,
     onCompare,
+    onActivate,
 }: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
+    // Serializes every `draw` call against the current scatterplot instance -- see `drawSerialized`.
+    // Reset on each (re)creation so a chain left over from a just-destroyed instance is abandoned
+    // rather than carried into the new one.
+    const drawChainRef = useRef<Promise<void>>(Promise.resolve());
     // Tracks whether the current scatterplot's first `draw` has resolved -- `getScreenPosition`
     // throws until it has, so the hover and ping-repositioning subscriptions check this before
     // calling it rather than risk that throw crashing an unrelated passive-effect commit.
@@ -153,16 +211,22 @@ export function CloudView({
     const onClearRef = useRef(onClear);
     const onHoverRef = useRef(onHover);
     const onCompareRef = useRef(onCompare);
+    const onActivateRef = useRef(onActivate);
     onSelectRef.current = onSelect;
     onFocusRef.current = onFocus;
     onClearRef.current = onClear;
     onHoverRef.current = onHover;
     onCompareRef.current = onCompare;
+    onActivateRef.current = onActivate;
 
     const [ping, setPing] = useState<Ping | null>(null);
     pingRef.current = ping;
 
-    const points = normalizePoints(rawPoints);
+    // Stable on `rawPoints` alone, not recomputed on every render, since it feeds the draw effect's
+    // dependency array below -- an identity that changed on every render (including ones this view
+    // causes itself, like a ping's own state update) would redraw the whole scatterplot far more
+    // often than `rawPoints` actually changes.
+    const points = useMemo(() => normalizePoints(rawPoints), [rawPoints]);
     pointsRef.current = points;
 
     const themeSignal = useThemeSignal();
@@ -187,8 +251,9 @@ export function CloudView({
         });
         scatterplotRef.current = scatterplot;
         pointsDrawnRef.current = false;
+        drawChainRef.current = Promise.resolve();
         let cancelled = false;
-        void applyPoints(scatterplot, pointsRef.current, highlighted, () => cancelled).then(() => {
+        void applyPoints(scatterplot, drawChainRef, pointsRef.current, highlighted, () => cancelled).then(() => {
             if (!cancelled) {
                 pointsDrawnRef.current = true;
             }
@@ -198,7 +263,12 @@ export function CloudView({
             const index = selectedIndices[0];
             const entity = index === undefined ? undefined : pointsRef.current[index]?.ref;
             if (entity !== undefined) {
+                // Recorded before `onSelect` even runs: `highlighted` catching up to this same
+                // entity is this click's own doing, not a locate request from elsewhere, so the
+                // points/highlighted effect's ping guard (comparing against this same ref) skips it.
+                previousHighlightedRef.current = entity;
                 onSelectRef.current(entity);
+                onActivateRef.current(entity);
             }
         });
         const pointOverSubscription = scatterplot.subscribe("pointOver", (index) => {
@@ -282,9 +352,11 @@ export function CloudView({
         // Cancelled if a newer call to this effect (points or highlighted changing again before
         // this draw resolves) supersedes this one -- otherwise a slow, stale draw could still land
         // its ping, or overwrite `previousHighlightedRef` with an already-outdated value, after a
-        // newer run already has.
+        // newer run already has. The draw itself still queues behind the mount effect's own initial
+        // draw (or any other run's) through `drawChainRef` regardless of this cancellation, since a
+        // cancelled run's `draw` call was already issued and the scatterplot has no way to retract it.
         let cancelled = false;
-        void applyPoints(scatterplot, points, highlighted, () => cancelled).then((highlightedIndex) => {
+        void applyPoints(scatterplot, drawChainRef, points, highlighted, () => cancelled).then((highlightedIndex) => {
             if (cancelled) {
                 return;
             }

@@ -21,7 +21,7 @@ export function SimilarSampleRow({ similar }: SimilarSampleRowProps): ReactEleme
     return (
         <tr
             className={classNames(isHighlighted && "is-highlighted", isFocused && "is-focused")}
-            onClick={onClick}
+            onClickCapture={onClick}
             onDoubleClick={onDoubleClick}
         >
             <td className="cell-name">

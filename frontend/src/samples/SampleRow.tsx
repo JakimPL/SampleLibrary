@@ -23,7 +23,7 @@ export function SampleRow({ sample }: SampleRowProps): ReactElement {
     return (
         <tr
             className={classNames(isHighlighted && "is-highlighted", isFocused && "is-focused")}
-            onClick={onClick}
+            onClickCapture={onClick}
             onDoubleClick={onDoubleClick}
         >
             <td>
