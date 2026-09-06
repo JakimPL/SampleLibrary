@@ -56,6 +56,7 @@ export function CloudPanel(): ReactElement {
     const navigate = useNavigate();
     const highlighted = useSelectionStore((selection) => selection.highlighted);
     const highlightEntity = useSelectionStore((selection) => selection.highlightEntity);
+    const clearHighlight = useSelectionStore((selection) => selection.clearHighlight);
 
     function handleSelect(entity: EntityRef): void {
         highlightEntity(entity);
@@ -97,6 +98,7 @@ export function CloudPanel(): ReactElement {
                         highlighted={highlighted}
                         onSelect={handleSelect}
                         onFocus={handleFocus}
+                        onClear={clearHighlight}
                     />
                 )}
             </div>

@@ -124,6 +124,21 @@ describe("CloudPanel", () => {
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: sampleHash });
     });
 
+    it("clears the shared highlight on a click that misses every point", async () => {
+        const sampleHash = "f".repeat(64);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        getModuleCloud.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas")).toBeInTheDocument();
+        });
+        useSelectionStore.getState().highlightEntity({ kind: "sample", hash: sampleHash });
+
+        fireEvent.click(latestCanvas());
+
+        expect(useSelectionStore.getState().highlighted).toBeNull();
+    });
+
     it("navigates to the double-clicked sample's route", async () => {
         const sampleHash = "c".repeat(64);
         getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);

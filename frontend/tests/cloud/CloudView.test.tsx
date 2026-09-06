@@ -64,6 +64,26 @@ function point(ref: EntityRef, x: number, y: number): CloudEntityPoint {
     return { ref, x, y };
 }
 
+interface RenderOverrides {
+    readonly points?: readonly CloudEntityPoint[];
+    readonly highlighted?: EntityRef | null;
+    readonly onSelect?: (entity: EntityRef) => void;
+    readonly onFocus?: (entity: EntityRef) => void;
+    readonly onClear?: () => void;
+}
+
+function renderCloudView(overrides: RenderOverrides = {}): ReturnType<typeof render> {
+    return render(
+        <CloudView
+            points={overrides.points ?? []}
+            highlighted={overrides.highlighted ?? null}
+            onSelect={overrides.onSelect ?? vi.fn()}
+            onFocus={overrides.onFocus ?? vi.fn()}
+            onClear={overrides.onClear ?? vi.fn()}
+        />,
+    );
+}
+
 const SAMPLE_REF: EntityRef = { kind: "sample", hash: "a".repeat(64) };
 const MODULE_REF: EntityRef = { kind: "module", hash: "b".repeat(64) };
 
@@ -74,15 +94,13 @@ beforeEach(() => {
 
 describe("CloudView", () => {
     it("shows an honest empty state when there are no cloud coordinates yet", () => {
-        render(<CloudView points={[]} highlighted={null} onSelect={vi.fn()} onFocus={vi.fn()} />);
+        renderCloudView();
 
         expect(screen.getByText("No cloud coordinates yet")).toBeInTheDocument();
     });
 
     it("draws every given point through the scatterplot", () => {
-        render(
-            <CloudView points={[point(SAMPLE_REF, 0, 0)]} highlighted={null} onSelect={vi.fn()} onFocus={vi.fn()} />,
-        );
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
 
         const drawnPoints = latestInstance().draw.mock.calls[0]?.[0] as unknown[];
         expect(drawnPoints).toHaveLength(1);
@@ -90,9 +108,7 @@ describe("CloudView", () => {
 
     it("reports the entity behind a point the library reports as clicked", () => {
         const onSelect = vi.fn();
-        render(
-            <CloudView points={[point(SAMPLE_REF, 0, 0)]} highlighted={null} onSelect={onSelect} onFocus={vi.fn()} />,
-        );
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onSelect });
 
         latestInstance().emit("select", { points: [0] });
 
@@ -101,9 +117,7 @@ describe("CloudView", () => {
 
     it("focuses the currently hovered entity on a native double-click", () => {
         const onFocus = vi.fn();
-        render(
-            <CloudView points={[point(SAMPLE_REF, 0, 0)]} highlighted={null} onSelect={vi.fn()} onFocus={onFocus} />,
-        );
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onFocus });
         latestInstance().emit("pointOver", 0);
 
         fireEvent.dblClick(latestCanvas());
@@ -113,45 +127,55 @@ describe("CloudView", () => {
 
     it("does not focus anything on a double-click while the cursor is over no point", () => {
         const onFocus = vi.fn();
-        render(
-            <CloudView points={[point(SAMPLE_REF, 0, 0)]} highlighted={null} onSelect={vi.fn()} onFocus={onFocus} />,
-        );
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onFocus });
 
         fireEvent.dblClick(latestCanvas());
 
         expect(onFocus).not.toHaveBeenCalled();
     });
 
+    it("clears the highlight on a click that misses every point", () => {
+        const onClear = vi.fn();
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
+
+        fireEvent.click(latestCanvas());
+
+        expect(onClear).toHaveBeenCalled();
+    });
+
+    it("does not clear the highlight on a click over a point", () => {
+        const onClear = vi.fn();
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
+        latestInstance().emit("pointOver", 0);
+
+        fireEvent.click(latestCanvas());
+
+        expect(onClear).not.toHaveBeenCalled();
+    });
+
+    it("clears the highlight when the library reports its own deselect (e.g. Escape)", () => {
+        const onClear = vi.fn();
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
+
+        latestInstance().emit("deselect");
+
+        expect(onClear).toHaveBeenCalled();
+    });
+
     it("selects the highlighted point within the scatterplot itself", () => {
-        render(
-            <CloudView
-                points={[point(SAMPLE_REF, 0, 0)]}
-                highlighted={SAMPLE_REF}
-                onSelect={vi.fn()}
-                onFocus={vi.fn()}
-            />,
-        );
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
 
         expect(latestInstance().select).toHaveBeenCalledWith([0], { preventEvent: true });
     });
 
     it("deselects when the current highlight matches nothing on this view", () => {
-        render(
-            <CloudView
-                points={[point(SAMPLE_REF, 0, 0)]}
-                highlighted={MODULE_REF}
-                onSelect={vi.fn()}
-                onFocus={vi.fn()}
-            />,
-        );
+        renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: MODULE_REF });
 
         expect(latestInstance().deselect).toHaveBeenCalledWith({ preventEvent: true });
     });
 
     it("destroys the scatterplot instance when the component unmounts", () => {
-        const { unmount } = render(
-            <CloudView points={[point(SAMPLE_REF, 0, 0)]} highlighted={null} onSelect={vi.fn()} onFocus={vi.fn()} />,
-        );
+        const { unmount } = renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
         const instance = latestInstance();
 
         unmount();

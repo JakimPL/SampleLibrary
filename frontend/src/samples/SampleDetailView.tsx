@@ -83,6 +83,16 @@ export function SampleDetailView({ sample, relations }: SampleDetailViewProps): 
                     </table>
                 )}
             </div>
+            <div className="detail-section">
+                <h3>Similar Samples</h3>
+                <p className="placeholder-box">
+                    Awaits a similarity metric, planned alongside the spectral-distance work.
+                </p>
+            </div>
+            <div className="detail-section">
+                <h3>Frequently Co-occurs With</h3>
+                <p className="placeholder-box">Awaits a co-occurrence analysis across the catalog.</p>
+            </div>
         </section>
     );
 }

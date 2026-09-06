@@ -71,6 +71,8 @@ describe("SampleDetailPanel", () => {
             expect(screen.getByRole("heading", { name: "kick" })).toBeInTheDocument();
         });
         expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/module-1");
+        expect(screen.getByRole("heading", { name: "Similar Samples" })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "Frequently Co-occurs With" })).toBeInTheDocument();
     });
 
     it("shows an error notice when the sample cannot be found", async () => {

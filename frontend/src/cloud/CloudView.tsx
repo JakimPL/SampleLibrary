@@ -21,6 +21,7 @@ interface CloudViewProps {
     readonly highlighted: EntityRef | null;
     readonly onSelect: (entity: EntityRef) => void;
     readonly onFocus: (entity: EntityRef) => void;
+    readonly onClear: () => void;
 }
 
 function readThemeColor(propertyName: string, fallback: string): string {
@@ -38,20 +39,31 @@ function sameEntity(a: EntityRef, b: EntityRef): boolean {
  * cloud tabs. Owns regl-scatterplot as this codebase's one file touching that library's own API,
  * mirroring how `useWaveformPlayer.ts` owns wavesurfer.js's.
  *
- * A single click selects the point under the cursor through regl-scatterplot's own hit-testing.
- * regl-scatterplot's own double-click behaviour only deselects, so this view disables it
- * (`deselectOnDblClick: false`) and focuses the hovered point on a native double-click instead,
- * looked up through the library's continuous `pointOver`/`pointOut` hover tracking.
+ * A single click selects the point under the cursor through regl-scatterplot's own hit-testing,
+ * and clears the shell-wide highlight when the click misses every point. regl-scatterplot's own
+ * double-click behaviour only deselects, so this view disables it (`deselectOnDblClick: false`)
+ * and focuses the hovered point on a native double-click instead, looked up through the library's
+ * continuous `pointOver`/`pointOut` hover tracking -- the same tracking a miss-click reads to tell
+ * a hit from empty space. Pressing Escape while the canvas has focus clears the highlight too,
+ * through the library's own built-in `deselect` behaviour.
  */
-export function CloudView({ points: rawPoints, highlighted, onSelect, onFocus }: CloudViewProps): ReactElement {
+export function CloudView({
+    points: rawPoints,
+    highlighted,
+    onSelect,
+    onFocus,
+    onClear,
+}: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
     const pointsRef = useRef<readonly CloudEntityPoint[]>([]);
     const hoveredIndexRef = useRef<number | null>(null);
     const onSelectRef = useRef(onSelect);
     const onFocusRef = useRef(onFocus);
+    const onClearRef = useRef(onClear);
     onSelectRef.current = onSelect;
     onFocusRef.current = onFocus;
+    onClearRef.current = onClear;
 
     const points = normalizePoints(rawPoints);
     pointsRef.current = points;
@@ -89,6 +101,15 @@ export function CloudView({ points: rawPoints, highlighted, onSelect, onFocus }:
         const pointOutSubscription = scatterplot.subscribe("pointOut", () => {
             hoveredIndexRef.current = null;
         });
+        const deselectSubscription = scatterplot.subscribe("deselect", () => {
+            onClearRef.current();
+        });
+
+        function handleClick(): void {
+            if (hoveredIndexRef.current === null) {
+                onClearRef.current();
+            }
+        }
 
         function handleDoubleClick(): void {
             const index = hoveredIndexRef.current;
@@ -98,13 +119,16 @@ export function CloudView({ points: rawPoints, highlighted, onSelect, onFocus }:
             }
         }
 
+        canvas.addEventListener("click", handleClick);
         canvas.addEventListener("dblclick", handleDoubleClick);
 
         return (): void => {
+            canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("dblclick", handleDoubleClick);
             scatterplot.unsubscribe(selectSubscription);
             scatterplot.unsubscribe(pointOverSubscription);
             scatterplot.unsubscribe(pointOutSubscription);
+            scatterplot.unsubscribe(deselectSubscription);
             scatterplot.destroy();
             scatterplotRef.current = null;
             canvas.remove();
