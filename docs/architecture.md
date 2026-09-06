@@ -56,6 +56,24 @@ to a temporary CSV file and letting DuckDB's own `COPY ... FROM` read it back av
 cost entirely -- the same technique `feature_store.py` already uses for the Parquet side of this
 same problem.
 
+## Sample cloud embeddings
+
+`samplecloud.backends.FeatureExtractor` is a protocol, not a fixed implementation: anything
+returning a fixed-length, finite vector for a waveform fits the pipeline, so the extraction method
+stays swappable as perceptual results call for a different approach. `LibrosaFeatureExtractor` is
+the current implementation, combining a whole-clip timbral summary (MFCC, spectral centroid and
+bandwidth, zero-crossing rate, RMS, each aggregated by mean and standard deviation across frames)
+with temporal features that keep a sound's shape over time visible in the vector: segment-wise
+means across early/mid/late thirds of the clip, a duration-normalized attack-time fraction from
+onset detection, and delta-MFCC statistics capturing how fast timbre moves. The projection and the
+persisted "spectral distance" both derive directly from this vector's length and composition, so
+changing it -- adding, removing, or reweighting a feature group -- changes what similarity means
+for the whole library and requires a full re-embed: clear the feature-store cache
+(`{cloud_artifact_directory}/features.parquet`) and rerun `samplecloud` so every sample's vector,
+UMAP coordinate, and persisted spectral feature reflect the new method consistently. Reusing an old
+cache against a changed extractor would silently mix two incompatible vector shapes in one
+projection.
+
 ## Extending to new tracker formats
 
 `sampleextract`'s format dispatch is a small registry (module suffix → loader function), not
