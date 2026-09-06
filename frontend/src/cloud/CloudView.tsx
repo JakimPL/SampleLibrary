@@ -17,9 +17,9 @@ const SELECTED_COLOR_FALLBACK = "#a8690f";
 const BACKGROUND_COLOR_PROPERTY = "--surface-0";
 const BACKGROUND_COLOR_FALLBACK = "#f4f5f7";
 
-// Kept in step with the ring animations' own total duration in styles.css (two staggered 900ms
-// rings, the second delayed by 220ms) so the marker element is dropped only once both have faded.
-const PING_LIFETIME_MS = 1200;
+// Kept in step with the ring animations' own total duration in styles.css (two staggered 1400ms
+// rings, the second delayed by 300ms) so the marker element is dropped only once both have faded.
+const PING_LIFETIME_MS = 1900;
 
 interface CloudViewProps {
     readonly points: readonly CloudEntityPoint[];
@@ -32,6 +32,7 @@ interface CloudViewProps {
 
 interface Ping {
     readonly key: number;
+    readonly pointIndex: number;
     readonly position: ScreenPosition;
 }
 
@@ -59,7 +60,8 @@ function sameEntity(a: EntityRef, b: EntityRef): boolean {
  * Pressing Escape while the canvas has focus clears the highlight too, through the library's own
  * built-in `deselect` behaviour. Whenever `highlighted` changes to a point present in this view (a
  * click elsewhere in the shell just located a sample or module here), a brief sonar-style ping
- * marks its screen position so the point is easy to find even in a dense or panned cloud.
+ * marks its screen position -- tracking the library's own `view` event so the ping stays pinned to
+ * the point through any pan or zoom while it plays, rather than drifting off it.
  */
 export function CloudView({
     points: rawPoints,
@@ -75,6 +77,7 @@ export function CloudView({
     const hoveredIndexRef = useRef<number | null>(null);
     const previousHighlightedRef = useRef<EntityRef | null>(null);
     const pingCounterRef = useRef(0);
+    const pingRef = useRef<Ping | null>(null);
     const onSelectRef = useRef(onSelect);
     const onFocusRef = useRef(onFocus);
     const onClearRef = useRef(onClear);
@@ -85,6 +88,7 @@ export function CloudView({
     onHoverRef.current = onHover;
 
     const [ping, setPing] = useState<Ping | null>(null);
+    pingRef.current = ping;
 
     const points = normalizePoints(rawPoints);
     pointsRef.current = points;
@@ -131,6 +135,16 @@ export function CloudView({
         const deselectSubscription = scatterplot.subscribe("deselect", () => {
             onClearRef.current();
         });
+        const viewSubscription = scatterplot.subscribe("view", () => {
+            const activePing = pingRef.current;
+            if (activePing === null) {
+                return;
+            }
+            const position = scatterplot.getScreenPosition(activePing.pointIndex);
+            if (position !== undefined) {
+                setPing({ ...activePing, position });
+            }
+        });
 
         function handleClick(): void {
             if (hoveredIndexRef.current === null) {
@@ -156,6 +170,7 @@ export function CloudView({
             scatterplot.unsubscribe(pointOverSubscription);
             scatterplot.unsubscribe(pointOutSubscription);
             scatterplot.unsubscribe(deselectSubscription);
+            scatterplot.unsubscribe(viewSubscription);
             scatterplot.destroy();
             scatterplotRef.current = null;
             canvas.remove();
@@ -179,7 +194,7 @@ export function CloudView({
                 const position = scatterplot.getScreenPosition(highlightedIndex);
                 if (position !== undefined) {
                     pingCounterRef.current += 1;
-                    setPing({ key: pingCounterRef.current, position });
+                    setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
                 }
             }
         } else {

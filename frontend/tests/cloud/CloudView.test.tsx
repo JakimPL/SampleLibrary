@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CloudView } from "../../src/cloud/CloudView";
@@ -230,5 +230,22 @@ describe("CloudView", () => {
         );
 
         expect(container.querySelector(".cloud-ping")).toBe(firstPing);
+    });
+
+    it("keeps the ping pinned to its point through a pan or zoom", () => {
+        const { container } = renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
+        const ping = container.querySelector<HTMLElement>(".cloud-ping");
+        if (ping === null) {
+            throw new Error("ping not found");
+        }
+        expect(ping.style.left).toBe("10px");
+
+        latestInstance().getScreenPosition.mockReturnValue([120, 340]);
+        act(() => {
+            latestInstance().emit("view");
+        });
+
+        expect(ping.style.left).toBe("120px");
+        expect(ping.style.top).toBe("340px");
     });
 });
