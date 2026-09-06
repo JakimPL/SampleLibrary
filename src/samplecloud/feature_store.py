@@ -33,9 +33,14 @@ def write_features(path: Path, features: Mapping[str, NDArray[np.float64]]) -> N
 
     Writing the whole store in one pass, rather than appending, keeps a rerun's merge logic (skip
     hashes already extracted, add the rest) explicit in the caller rather than split across two
-    read paths -- this module only ever writes a complete, self-consistent snapshot.
+    read paths -- this module only ever writes a complete, self-consistent snapshot. The snapshot
+    is written to a sibling temporary file first and moved into place afterward, so a run
+    interrupted mid-write leaves the previous, complete snapshot on disk rather than a truncated
+    file a later read would fail on -- this matters more now that a long extraction run checkpoints
+    here repeatedly rather than only once at the end.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.parent / f"{path.name}.tmp"
     with create_engine("duckdb:///:memory:").connect() as connection:
         _metadata.create_all(connection)
         if features:
@@ -49,4 +54,5 @@ def write_features(path: Path, features: Mapping[str, NDArray[np.float64]]) -> N
         # DuckDB's COPY ... TO ... (FORMAT PARQUET) is a vendor-specific bulk-export command with
         # no relational-algebra equivalent for Core to build, so it stays a narrow, parameterized
         # text() fragment rather than forcing a construct that does not exist.
-        connection.execute(text("COPY features TO :path (FORMAT PARQUET)"), {"path": str(path)})
+        connection.execute(text("COPY features TO :path (FORMAT PARQUET)"), {"path": str(temporary_path)})
+    temporary_path.replace(path)

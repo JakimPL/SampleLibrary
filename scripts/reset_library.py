@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import shutil
 from pathlib import Path
 
 from sqlalchemy import Connection
 
-from samplecore.cli_support import bootstrap_cli
+from samplecore.cli_support import bootstrap_cli, confirmed, open_catalog_connection
 from samplecore.storage.audio_store import OBJECTS_DIRECTORY_NAME
-from samplecore.storage.database import connect, metadata
+from samplecore.storage.database import metadata
+
+_logger = logging.getLogger(__name__)
 
 
 def reset_library(connection: Connection, library_root: Path, cloud_artifact_directory: Path) -> None:
@@ -27,9 +30,11 @@ def reset_library(connection: Connection, library_root: Path, cloud_artifact_dir
     fresh catalog no longer has.
     """
     for table in reversed(metadata.sorted_tables):
+        _logger.info("Emptying %s...", table.name)
         connection.execute(table.delete())
         connection.commit()
 
+    _logger.info("Recreating the content store and embedding cache...")
     _recreate_empty(library_root / OBJECTS_DIRECTORY_NAME)
     _recreate_empty(cloud_artifact_directory)
 
@@ -52,25 +57,21 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
-    arguments = _parse_arguments(argv)
-    if not arguments.confirm:
-        print(
-            "This would permanently delete every catalogued module, sample, relation, and cloud "
-            "coordinate, every stored audio object, and every cached embedding feature vector, for "
-            "the library named in your config.toml.\n"
-            "Nothing has been changed. Re-run with --confirm to actually do this."
-        )
+    if not confirmed(
+        argv,
+        _parse_arguments,
+        "This would permanently delete every catalogued module, sample, relation, and cloud "
+        "coordinate, every stored audio object, and every cached embedding feature vector, for "
+        "the library named in your config.toml.",
+    ):
         return
 
     config = bootstrap_cli()
-    print(f"Resetting the library at {config.library_root} (database: {config.resolved_database_path})...")
-    connection = connect(config.resolved_database_path)
-    try:
+    _logger.info("Resetting the library at %s (database: %s)...", config.library_root, config.resolved_database_path)
+    with open_catalog_connection(config.resolved_database_path) as connection:
         reset_library(connection, config.library_root, config.resolved_cloud_artifact_directory)
-    finally:
-        connection.close()
 
-    print("Done. The catalog and content store are empty; run extraction again to rebuild them.")
+    _logger.info("Done. The catalog and content store are empty; run extraction again to rebuild them.")
 
 
 if __name__ == "__main__":

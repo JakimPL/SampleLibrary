@@ -1,34 +1,35 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
 from samplecloud.backends.librosa_backend import LibrosaFeatureExtractor
 from samplecloud.run import run_embedding
-from samplecore.cli_support import bootstrap_cli
-from samplecore.storage.database import connect
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+
+_logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> None:
     """Run one embedding pass over the catalog and report the result."""
     arguments = _parse_arguments(argv)
     config = bootstrap_cli()
-    connection = connect(config.resolved_database_path)
-    try:
+    with open_catalog_connection(config.resolved_database_path) as connection:
         summary = run_embedding(config, connection, LibrosaFeatureExtractor(), sample_limit=arguments.limit)
-    finally:
-        connection.close()
 
-    message = (
-        f"Extracted features for {summary.extraction.newly_extracted} new samples "
-        f"({summary.extraction.already_extracted} already known, {summary.extraction.catalogued} catalogued). "
-        f"Reduced {summary.reduction.samples_reduced} samples to 2D coordinates."
+    _logger.info(
+        "Extracted features for %d new samples (%d already known, %d catalogued). "
+        "Reduced %d samples to 2D coordinates.",
+        summary.extraction.newly_extracted,
+        summary.extraction.already_extracted,
+        summary.extraction.catalogued,
+        summary.reduction.samples_reduced,
     )
     if summary.reduction.samples_orphaned:
-        message += (
-            f" Skipped {summary.reduction.samples_orphaned} cached feature vectors for samples no longer "
-            "in the catalog."
+        _logger.info(
+            "Skipped %d cached feature vectors for samples no longer in the catalog.",
+            summary.reduction.samples_orphaned,
         )
-    print(message)
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:

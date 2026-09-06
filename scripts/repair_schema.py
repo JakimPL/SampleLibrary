@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from typing import Final
 
 from sqlalchemy import Connection, text
 
-from samplecore.cli_support import bootstrap_cli
-from samplecore.storage.database import connect, create_schema, metadata
+from samplecore.cli_support import bootstrap_cli, confirmed, open_catalog_connection
+from samplecore.storage.database import create_schema, metadata
 
 _BACKUP_SUFFIX: Final[str] = "__schema_repair_backup"
+
+_logger = logging.getLogger(__name__)
 
 
 class SchemaRepairError(RuntimeError):
@@ -35,11 +38,13 @@ def repair_schema(connection: Connection) -> None:
     table_names = [table.name for table in metadata.sorted_tables]
     row_counts_before = {name: _row_count(connection, name) for name in table_names}
 
+    _logger.info("Backing up %d tables (%d rows total)...", len(table_names), sum(row_counts_before.values()))
     _backup_every_table(connection, table_names)
     _verify_row_counts(
         connection, {_backup_name(name): count for name, count in row_counts_before.items()}, step="backup"
     )
 
+    _logger.info("Dropping and recreating the schema...")
     for name in reversed(table_names):
         connection.execute(text(f'DROP TABLE "{name}"'))
     connection.commit()
@@ -47,9 +52,11 @@ def repair_schema(connection: Connection) -> None:
     create_schema(connection)
     connection.commit()
 
+    _logger.info("Reloading every table from its backup...")
     _reload_every_table(connection, table_names)
     _verify_row_counts(connection, row_counts_before, step="reload")
 
+    _logger.info("Removing backup tables...")
     _drop_every_backup(connection, table_names)
 
 
@@ -102,24 +109,21 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
-    arguments = _parse_arguments(argv)
-    if not arguments.confirm:
-        print(
-            "This would back up, drop, and recreate every table in the configured library's catalog, "
-            "then reload every row -- fixing any table stuck on a stale constraint from before a schema "
-            "change. Nothing has been changed. Re-run with --confirm to actually do this."
-        )
+    if not confirmed(
+        argv,
+        _parse_arguments,
+        "This would back up, drop, and recreate every table in the configured library's catalog, "
+        "then reload every row -- fixing any table stuck on a stale constraint from before a "
+        "schema change.",
+    ):
         return
 
     config = bootstrap_cli()
-    print(f"Repairing the schema at {config.resolved_database_path}...")
-    connection = connect(config.resolved_database_path)
-    try:
+    _logger.info("Repairing the schema at %s...", config.resolved_database_path)
+    with open_catalog_connection(config.resolved_database_path) as connection:
         repair_schema(connection)
-    finally:
-        connection.close()
 
-    print("Done. Every table now matches the current schema; every row survived.")
+    _logger.info("Done. Every table now matches the current schema; every row survived.")
 
 
 if __name__ == "__main__":

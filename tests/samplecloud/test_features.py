@@ -4,9 +4,11 @@ from pathlib import Path
 
 import duckdb
 import numpy as np
+import pytest
 from numpy.typing import NDArray
 from trackmod.core.samples.depth import BitDepth
 
+from samplecloud import features as features_module
 from samplecloud.feature_store import read_features
 from samplecloud.features import FeatureExtractionSummary, extract_features
 from samplecore.models.channels import ChannelLayout
@@ -73,3 +75,30 @@ def test_an_empty_catalog_extracts_nothing(connection: duckdb.DuckDBPyConnection
     summary = extract_features(connection, tmp_path, tmp_path / "features.parquet", _StubFeatureExtractor())
 
     assert summary == FeatureExtractionSummary(catalogued=0, already_extracted=0, newly_extracted=0)
+
+
+class _InterruptingFeatureExtractor:
+    """Fails on its third call, simulating a run stopped partway through extraction."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]:
+        self.calls += 1
+        if self.calls == 3:
+            raise OSError("simulated interruption")
+        return np.array([waveform.shape[0], waveform.mean()])
+
+
+def test_an_interruption_loses_at_most_one_checkpoint_of_work(
+    connection: duckdb.DuckDBPyConnection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(features_module, "FEATURE_STORE_CHECKPOINT_INTERVAL", 2)
+    for hash_seed in range(1, 6):
+        _store_sample(connection, tmp_path, hash_seed=hash_seed)
+    store_path = tmp_path / "features.parquet"
+
+    with pytest.raises(OSError, match="simulated interruption"):
+        extract_features(connection, tmp_path, store_path, _InterruptingFeatureExtractor())
+
+    assert len(read_features(store_path)) == 2

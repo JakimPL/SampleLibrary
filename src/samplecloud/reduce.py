@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,6 +10,7 @@ import numpy as np
 import umap
 from sklearn.preprocessing import StandardScaler
 from sqlalchemy import Connection
+from tqdm import tqdm
 
 from samplecloud.feature_store import read_features
 from samplecore.models.cloud import SampleCloudCoordinate
@@ -25,6 +27,8 @@ DEFAULT_N_NEIGHBORS: Final[int] = 15
 MINIMUM_SAMPLES_FOR_REDUCTION: Final[int] = 2
 RANDOM_SEED: Final[int] = 0
 DISTANCE_METRIC: Final[str] = "euclidean"
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,8 @@ def reduce_and_persist_coordinates(connection: Connection, feature_store_path: P
     catalogued_hashes = {sample_.hash for sample_ in DuckDBSampleRepository(connection).list_all()}
     orphaned_hash_count = sum(1 for sample_hash in features if sample_hash not in catalogued_hashes)
     features = {sample_hash: vector for sample_hash, vector in features.items() if sample_hash in catalogued_hashes}
+    if orphaned_hash_count:
+        _logger.info("Skipping %d cached feature vectors for samples no longer in the catalog.", orphaned_hash_count)
     if len(features) < MINIMUM_SAMPLES_FOR_REDUCTION:
         return CloudSummary(samples_reduced=0, samples_orphaned=orphaned_hash_count)
 
@@ -72,15 +78,18 @@ def reduce_and_persist_coordinates(connection: Connection, feature_store_path: P
     feature_matrix = np.stack([features[sample_hash] for sample_hash in sample_hashes])
     standardized = StandardScaler().fit_transform(feature_matrix)
     n_neighbors = min(DEFAULT_N_NEIGHBORS, len(sample_hashes) - 1)
-    coordinates = umap.UMAP(n_neighbors=n_neighbors, metric=DISTANCE_METRIC, random_state=RANDOM_SEED).fit_transform(
-        standardized
-    )
+    _logger.info("Fitting UMAP over %d feature vectors...", len(sample_hashes))
+    coordinates = umap.UMAP(
+        n_neighbors=n_neighbors, metric=DISTANCE_METRIC, random_state=RANDOM_SEED, verbose=True
+    ).fit_transform(standardized)
+    _logger.info("UMAP fit complete.")
 
     coordinate_repository: CloudCoordinateRepository = DuckDBCloudCoordinateRepository(connection)
     spectral_feature_repository: SampleSpectralFeatureRepository = DuckDBSampleSpectralFeatureRepository(connection)
     computed_at = datetime.now(UTC)
     with start_batch(connection):
-        for sample_hash, (x, y), vector in zip(sample_hashes, coordinates, standardized, strict=True):
+        rows = zip(sample_hashes, coordinates, standardized, strict=True)
+        for sample_hash, (x, y), vector in tqdm(rows, desc="Persisting coordinates", total=len(sample_hashes)):
             coordinate_repository.upsert(
                 SampleCloudCoordinate(sample_hash=sample_hash, x=float(x), y=float(y), computed_at=computed_at)
             )

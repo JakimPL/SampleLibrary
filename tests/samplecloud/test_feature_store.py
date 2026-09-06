@@ -36,3 +36,11 @@ def test_writing_replaces_the_previous_contents(tmp_path: Path) -> None:
     write_features(path, {SAMPLE_HASH_B: np.array([2.0])})
 
     assert read_features(path).keys() == {SAMPLE_HASH_B}
+
+
+def test_writing_does_not_leave_a_temporary_file_behind(tmp_path: Path) -> None:
+    path = tmp_path / "features.parquet"
+
+    write_features(path, {SAMPLE_HASH_A: np.array([1.0])})
+
+    assert list(tmp_path.iterdir()) == [path]

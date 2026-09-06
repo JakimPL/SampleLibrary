@@ -1,27 +1,27 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
-from samplecore.cli_support import bootstrap_cli
-from samplecore.storage.database import connect
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from sampleextract.equivalence.detect import detect_equivalences
+
+_logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> None:
     """Run one equivalence-detection pass over the catalog and report the result."""
     arguments = _parse_arguments(argv)
     config = bootstrap_cli()
-    connection = connect(config.resolved_database_path)
-    try:
+    with open_catalog_connection(config.resolved_database_path) as connection:
         summary = detect_equivalences(connection, config.library_root, sample_limit=arguments.limit)
-    finally:
-        connection.close()
 
-    print(
-        f"Considered {summary.samples_considered} samples: "
-        f"{summary.bit_depth_relations} bit-depth variants, "
-        f"{summary.amplification_relations} amplification variants, "
-        f"{summary.resampled_relations} resampled variants."
+    _logger.info(
+        "Considered %d samples: %d bit-depth variants, %d amplification variants, %d resampled variants.",
+        summary.samples_considered,
+        summary.bit_depth_relations,
+        summary.amplification_relations,
+        summary.resampled_relations,
     )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -7,14 +8,16 @@ from typing import Final
 
 from sqlalchemy import Connection
 
-from samplecore.cli_support import bootstrap_cli
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.models.cloud import ModuleCloudCoordinate
 from samplecore.models.module import Module
-from samplecore.storage.database import connect, start_batch
+from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.cloud import DuckDBModuleCloudCoordinateRepository, ModuleCloudCoordinateRepository
 from samplecore.storage.repositories.module import DuckDBModuleRepository
 
 PLACEHOLDER_COORDINATE_BOUND: Final[float] = 10.0
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -65,10 +68,7 @@ def place_and_persist_coordinates(connection: Connection) -> PlaceholderEmbeddin
 def main() -> None:
     """Place every catalogued module at a placeholder 2D coordinate and report the result."""
     config = bootstrap_cli()
-    connection = connect(config.resolved_database_path)
-    try:
+    with open_catalog_connection(config.resolved_database_path) as connection:
         summary = place_and_persist_coordinates(connection)
-    finally:
-        connection.close()
 
-    print(f"Placed {summary.modules_placed} module(s) at placeholder cloud coordinates.")
+    _logger.info("Placed %d module(s) at placeholder cloud coordinates.", summary.modules_placed)
