@@ -15,6 +15,7 @@ const { instances, createScatterplotMock, getCloud, getModuleCloud, getSample, g
             readonly select = vi.fn();
             readonly deselect = vi.fn();
             readonly destroy = vi.fn();
+            readonly set = vi.fn().mockResolvedValue(undefined);
             readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
             private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 

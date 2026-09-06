@@ -3,16 +3,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CloudView } from "../../src/cloud/CloudView";
 import type { CloudEntityPoint } from "../../src/cloud/geometry";
+import { useThemeStore } from "../../src/theme/themeStore";
 import type { EntityRef } from "../../src/workspace/selectionStore";
 
 const { instances, createScatterplotMock } = vi.hoisted(() => {
     class FakeScatterplot {
+        readonly options: unknown;
         readonly draw = vi.fn().mockResolvedValue(undefined);
         readonly select = vi.fn();
         readonly deselect = vi.fn();
         readonly destroy = vi.fn();
+        readonly set = vi.fn().mockResolvedValue(undefined);
         readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
         private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
+
+        constructor(options: unknown) {
+            this.options = options;
+        }
 
         subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
             const handlers = this.listeners.get(event) ?? [];
@@ -33,8 +40,8 @@ const { instances, createScatterplotMock } = vi.hoisted(() => {
     }
 
     const instances: FakeScatterplot[] = [];
-    const createScatterplotMock = vi.fn(() => {
-        const instance = new FakeScatterplot();
+    const createScatterplotMock = vi.fn((options: unknown) => {
+        const instance = new FakeScatterplot(options);
         instances.push(instance);
         return instance;
     });
@@ -292,5 +299,30 @@ describe("CloudView", () => {
 
         expect(ping.style.left).toBe("120px");
         expect(ping.style.top).toBe("340px");
+    });
+
+    it("creates the scatterplot with theme-driven point, active-point, and background colors", () => {
+        renderCloudView();
+
+        const options = createScatterplotMock.mock.calls[0]?.[0] as {
+            pointColor?: string;
+            pointColorActive?: string;
+            backgroundColor?: string;
+        };
+        expect(options.pointColor).toBeTruthy();
+        expect(options.pointColorActive).toBeTruthy();
+        expect(options.backgroundColor).toBeTruthy();
+    });
+
+    it("re-applies colors through set when the theme preference changes", () => {
+        renderCloudView();
+        const instance = latestInstance();
+        instance.set.mockClear();
+
+        act(() => {
+            useThemeStore.getState().setPreference("openmpt");
+        });
+
+        expect(instance.set).toHaveBeenCalled();
     });
 });

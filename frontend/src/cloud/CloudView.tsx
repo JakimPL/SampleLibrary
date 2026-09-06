@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import createScatterplot from "regl-scatterplot";
 
 import { readThemeColor } from "../theme/readThemeColor";
+import { useThemeSignal } from "../theme/useThemeSignal";
 import type { EntityRef } from "../workspace/selectionStore";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
 
@@ -11,12 +12,26 @@ type ScreenPosition = readonly [number, number];
 
 const POINT_SIZE = 4;
 const POINT_SIZE_SELECTED = 9;
-const POINT_COLOR_PROPERTY = "--text-primary";
+const POINT_COLOR_PROPERTY = "--cloud-point";
 const POINT_COLOR_FALLBACK = "#1b1f26";
-const SELECTED_COLOR_PROPERTY = "--accent";
+const SELECTED_COLOR_PROPERTY = "--cloud-point-selected";
 const SELECTED_COLOR_FALLBACK = "#a8690f";
-const BACKGROUND_COLOR_PROPERTY = "--surface-0";
+const BACKGROUND_COLOR_PROPERTY = "--cloud-bg";
 const BACKGROUND_COLOR_FALLBACK = "#f4f5f7";
+
+interface CloudColors {
+    readonly pointColor: string;
+    readonly pointColorActive: string;
+    readonly backgroundColor: string;
+}
+
+function readCloudColors(): CloudColors {
+    return {
+        pointColor: readThemeColor(POINT_COLOR_PROPERTY, POINT_COLOR_FALLBACK),
+        pointColorActive: readThemeColor(SELECTED_COLOR_PROPERTY, SELECTED_COLOR_FALLBACK),
+        backgroundColor: readThemeColor(BACKGROUND_COLOR_PROPERTY, BACKGROUND_COLOR_FALLBACK),
+    };
+}
 
 // Kept in step with the ring animations' own total duration in styles.css (two staggered 1400ms
 // rings, the second delayed by 300ms) so the marker element is dropped only once both have faded.
@@ -64,7 +79,10 @@ function sameHighlight(a: EntityRef | null, b: EntityRef | null): boolean {
  * marks its screen position -- tracking the library's own `view` event so the ping stays pinned to
  * the point through any pan or zoom while it plays, rather than drifting off it. A Shift-click over
  * a point reports it through `onCompare` alongside regl-scatterplot's own unavoidable normal select
- * -- the library has no way to suppress its own hit-testing from our own listener.
+ * -- the library has no way to suppress its own hit-testing from our own listener. Point, active-point,
+ * and background colors are read from the theme's CSS custom properties at creation, and re-applied
+ * through the library's own `set` whenever `useThemeSignal` reports the resolved theme could have
+ * changed, mirroring how `useWaveformPlayer.ts` keeps wavesurfer's own canvas in step.
  */
 export function CloudView({
     points: rawPoints,
@@ -99,6 +117,8 @@ export function CloudView({
     const points = normalizePoints(rawPoints);
     pointsRef.current = points;
 
+    const themeSignal = useThemeSignal();
+
     useEffect(() => {
         const container = containerRef.current;
         if (container === null) {
@@ -110,9 +130,7 @@ export function CloudView({
 
         const scatterplot = createScatterplot({
             canvas,
-            pointColor: readThemeColor(POINT_COLOR_PROPERTY, POINT_COLOR_FALLBACK),
-            pointColorActive: readThemeColor(SELECTED_COLOR_PROPERTY, SELECTED_COLOR_FALLBACK),
-            backgroundColor: readThemeColor(BACKGROUND_COLOR_PROPERTY, BACKGROUND_COLOR_FALLBACK),
+            ...readCloudColors(),
             pointSize: POINT_SIZE,
             pointSizeSelected: POINT_SIZE_SELECTED,
             deselectOnDblClick: false,
@@ -216,6 +234,11 @@ export function CloudView({
         }
         previousHighlightedRef.current = highlighted;
     }, [points, highlighted]);
+
+    useEffect(() => {
+        // Redundantly re-applies the colors the mount effect above just set on the first render.
+        void scatterplotRef.current?.set(readCloudColors());
+    }, [themeSignal.preference, themeSignal.systemVersion]);
 
     useEffect(() => {
         if (ping === null) {

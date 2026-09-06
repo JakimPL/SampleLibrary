@@ -112,8 +112,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
     }, [audioUrl]);
 
     useEffect(() => {
-        // Also fires once right after the mount effect above creates the instance with the same
-        // colors already applied; a harmless redundant re-application, not a second real repaint.
+        // Redundantly re-applies the colors the mount effect above just set on the first render.
         waveSurferRef.current?.setOptions(readWaveformColors());
     }, [themeSignal.preference, themeSignal.systemVersion]);
 
