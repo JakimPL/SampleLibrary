@@ -4,6 +4,8 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { clearRequestCache } from "../src/shared/requestCache";
+import { DEFAULT_THEME_PREFERENCE } from "../src/theme/themeOptions";
+import { useThemeStore } from "../src/theme/themeStore";
 import { INITIAL_SELECTION_STATE, useSelectionStore } from "../src/workspace/selectionStore";
 
 afterEach(() => {
@@ -14,6 +16,15 @@ afterEach(() => {
 // reset unconditionally here rather than relying on each test file to remember a unique fixture.
 afterEach(() => {
     useSelectionStore.setState(INITIAL_SELECTION_STATE);
+});
+
+// themeStore is likewise a module-level singleton, and every test that renders WorkspaceShell
+// touches it through ThemeMenu; reset both the store and the DOM attribute it drives directly
+// (not through setPreference) so this cleanup never re-writes the localStorage entry the hook
+// below is about to clear anyway.
+afterEach(() => {
+    useThemeStore.setState({ preference: DEFAULT_THEME_PREFERENCE });
+    delete document.documentElement.dataset.theme;
 });
 
 // requestCache is likewise a module-level singleton; without a reset, a cache key reused across

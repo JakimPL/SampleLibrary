@@ -67,6 +67,12 @@ describe("WorkspaceShell", () => {
         });
     });
 
+    it("renders the theme picker in the toolbar", () => {
+        renderShellAt("/");
+
+        expect(screen.getByLabelText("Theme")).toBeInTheDocument();
+    });
+
     it("lets a closed panel be reopened through the Add panel menu", async () => {
         renderShellAt("/");
         expect(panelTabTitles()).toContain("Stats");

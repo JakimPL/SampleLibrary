@@ -5,6 +5,7 @@ import type { FunctionComponent, ReactElement } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
+import { ThemeMenu } from "../theme/ThemeMenu";
 import { AddPanelMenu } from "./AddPanelMenu";
 import { restoreOrBuildLayout } from "./dockviewPersistence";
 import { PANEL_REGISTRY } from "./panelRegistry";
@@ -53,6 +54,7 @@ export function WorkspaceShell(): ReactElement {
         <div className="workspace-root">
             <div className="workspace-toolbar">
                 <AddPanelMenu api={api} />
+                <ThemeMenu />
             </div>
             <DockviewReact
                 className="workspace-shell dockview-theme-abyss"
