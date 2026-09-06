@@ -11,6 +11,7 @@ const { instances, createMock } = vi.hoisted(() => {
         readonly pause = vi.fn();
         readonly setTime = vi.fn();
         readonly setPlaybackRate = vi.fn();
+        readonly setOptions = vi.fn();
         readonly destroy = vi.fn();
 
         on(event: string, callback: (...args: unknown[]) => void): () => void {

@@ -13,6 +13,7 @@ const { instances, createMock, getSample, getSampleRelations, getSimilarSamples 
         readonly pause = vi.fn();
         readonly setTime = vi.fn();
         readonly setPlaybackRate = vi.fn();
+        readonly setOptions = vi.fn();
         readonly destroy = vi.fn();
         on(): () => void {
             return () => undefined;

@@ -65,6 +65,16 @@ class ResizeObserverStub implements ResizeObserver {
 
 vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 
+// jsdom does not implement matchMedia either, which useThemeSignal calls to notice a live OS
+// light/dark flip; a stub with working add/removeEventListener is enough, since no test here
+// evaluates a real media query against jsdom's viewport.
+vi.stubGlobal("matchMedia", (media: string) => ({
+    matches: false,
+    media,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+}));
+
 // jsdom never computes real layout, so every element's offsetWidth/offsetHeight reads 0. The
 // virtualized list panels measure their scroll container this way on mount, before the
 // ResizeObserver stub above could ever report a real size, so a fixed nonzero measurement is

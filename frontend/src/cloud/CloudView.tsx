@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 import createScatterplot from "regl-scatterplot";
 
+import { readThemeColor } from "../theme/readThemeColor";
 import type { EntityRef } from "../workspace/selectionStore";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
 
@@ -35,11 +36,6 @@ interface Ping {
     readonly key: number;
     readonly pointIndex: number;
     readonly position: ScreenPosition;
-}
-
-function readThemeColor(propertyName: string, fallback: string): string {
-    const value = getComputedStyle(document.documentElement).getPropertyValue(propertyName).trim();
-    return value === "" ? fallback : value;
 }
 
 function sameEntity(a: EntityRef, b: EntityRef): boolean {
