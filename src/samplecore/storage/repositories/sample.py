@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Protocol
+from typing import Any, Final, Protocol
 
 from sqlalchemy import Connection, Row, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -16,6 +16,11 @@ from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.naming import choose_dominant_name, choose_dominant_rate
 from samplecore.storage.database import sample, sample_properties
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
+
+# Postgres binds at most 65535 parameters to one statement, a limit of its own wire protocol rather
+# than a tunable setting. A whole-catalog lookup passes far more hashes than that, so queries taking
+# one parameter per hash run in chunks comfortably inside the ceiling.
+HASH_CHUNK_SIZE: Final[int] = 20_000
 
 
 class SampleRepository(Protocol):
@@ -128,18 +133,22 @@ class PostgresSampleRepository:
     def names_and_rates_by_hash(
         self, hashes: list[str]
     ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]:
-        """Every occurrence's raw name and rate for each given sample hash, in one batched query."""
+        """Every occurrence's raw name and rate for each given sample hash, in chunked queries.
+
+        Chunked by ``HASH_CHUNK_SIZE`` so a whole-catalog lookup stays within Postgres's own
+        parameter ceiling, which a library of this size passes.
+        """
         names_by_hash: dict[str, list[str]] = defaultdict(list)
         rates_by_hash: dict[str, list[Rate]] = defaultdict(list)
-        if not hashes:
-            return {}, {}
 
-        statement = select(sample_properties.c.sample_hash, sample_properties.c.name, sample_properties.c.rate).where(
-            sample_properties.c.sample_hash.in_(hashes)
-        )
-        for row in self._connection.execute(statement).fetchall():
-            names_by_hash[row.sample_hash].append(row.name)
-            rates_by_hash[row.sample_hash].append(row.rate)
+        for chunk_start in range(0, len(hashes), HASH_CHUNK_SIZE):
+            chunk = hashes[chunk_start : chunk_start + HASH_CHUNK_SIZE]
+            statement = select(
+                sample_properties.c.sample_hash, sample_properties.c.name, sample_properties.c.rate
+            ).where(sample_properties.c.sample_hash.in_(chunk))
+            for row in self._connection.execute(statement).fetchall():
+                names_by_hash[row.sample_hash].append(row.name)
+                rates_by_hash[row.sample_hash].append(row.rate)
 
         return (
             {hash_: tuple(names) for hash_, names in names_by_hash.items()},

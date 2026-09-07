@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
@@ -10,6 +11,7 @@ from samplecore.models.module import Module
 from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.thumbnail import SampleThumbnail
+from samplecore.storage.repositories import sample as sample_repository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
@@ -201,3 +203,32 @@ def test_count_reflects_every_stored_sample(
     connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
     assert PostgresSampleRepository(connection).count() == 2
+
+
+def test_names_and_rates_by_hash_covers_hashes_spanning_several_chunks(
+    connection: Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    stored_sample: Sample,
+    stored_sample_b: Sample,
+    stored_module: Module,
+) -> None:
+    """A lookup larger than one chunk still reports every hash it was asked about.
+
+    Postgres binds a limited number of parameters to one statement, which a whole-catalog lookup
+    exceeds, so the query runs in chunks; shrinking the chunk size exercises that split over a
+    catalog small enough to keep the test fast.
+    """
+    monkeypatch.setattr(sample_repository, "HASH_CHUNK_SIZE", 1)
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick", rate=8363)
+    _add_occurrence(connection, sample=stored_sample_b, module=stored_module, slot=1, name="snare", rate=16000)
+
+    names_by_hash, rates_by_hash = PostgresSampleRepository(connection).names_and_rates_by_hash(
+        [stored_sample.hash, stored_sample_b.hash]
+    )
+
+    assert names_by_hash == {stored_sample.hash: ("kick",), stored_sample_b.hash: ("snare",)}
+    assert rates_by_hash == {stored_sample.hash: (8363,), stored_sample_b.hash: (16000,)}
+
+
+def test_names_and_rates_by_hash_with_no_hashes_returns_nothing(connection: Connection) -> None:
+    assert PostgresSampleRepository(connection).names_and_rates_by_hash([]) == ({}, {})
