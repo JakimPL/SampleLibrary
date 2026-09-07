@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from samplecore.models.label import LabelSource, SampleLabel
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.curation import sample_label
-from samplecore.storage.repositories.sample import HASH_CHUNK_SIZE
+from samplecore.storage.database import HASH_CHUNK_SIZE
 
 _UPDATABLE_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "label",

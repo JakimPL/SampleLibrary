@@ -13,6 +13,7 @@ from samplecore.storage.repositories.cloud import (
     PostgresModuleCloudCoordinateRepository,
 )
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_label import PostgresSampleLabelRepository
 from sampleserver.dependencies import get_connection
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
@@ -25,9 +26,12 @@ class SampleCloudPoint(SampleCloudCoordinate):
     sample's own occurrence names together with the names of the instruments reaching it -- rather
     than stored alongside the coordinate itself. ``dominant_rate_hz`` travels with the point so
     clicking one plays it at a real tracker rate; it is ``None`` for a sample with no occurrences.
+    ``hand_label`` carries what a person decided this sample is, for a viewer inspecting a point;
+    the cloud keeps colouring by ``category``, whose fourteen roles hold a fixed hue each.
     """
 
     category: SampleCategory
+    hand_label: str | None
     dominant_rate_hz: Rate | None
 
 
@@ -39,6 +43,7 @@ def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleC
     hashes = [coordinate.sample_hash for coordinate in coordinates]
     names_by_hash, rates_by_hash = repository.names_and_rates_by_hash(hashes)
     instrument_names_by_hash = repository.instrument_names_by_hash(hashes)
+    label_by_hash = PostgresSampleLabelRepository(connection).labels_by_hash(hashes)
     return tuple(
         SampleCloudPoint(
             sample_hash=coordinate.sample_hash,
@@ -48,6 +53,7 @@ def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleC
             category=classify_sample_category(
                 names_by_hash.get(coordinate.sample_hash, ()) + instrument_names_by_hash.get(coordinate.sample_hash, ())
             ),
+            hand_label=label_by_hash.get(coordinate.sample_hash),
             dominant_rate_hz=choose_dominant_rate(rates_by_hash.get(coordinate.sample_hash, ())),
         )
         for coordinate in coordinates

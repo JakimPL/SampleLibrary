@@ -11,6 +11,7 @@ function buildSample(): SampleSummary {
         hash: "abc123",
         display_name: "kick",
         category: "kick",
+        hand_label: null,
         occurrence_count: 1,
         depth: 16,
         channels: 1,

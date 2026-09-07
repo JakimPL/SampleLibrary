@@ -7,7 +7,8 @@ import pytest
 from sqlalchemy import Connection, create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
-from samplecore.storage.database import connect, create_schema
+from samplecore.storage.curation import CURATION_SCHEMA
+from samplecore.storage.database import connect, connect_for_curation, create_schema
 
 EXPECTED_TABLES = frozenset(
     {"sample", "module", "sample_properties", "xm_sample_properties", "it_sample_properties", "sample_relation"}
@@ -66,3 +67,22 @@ def test_a_read_only_connection_never_creates_the_schema(fresh_database_url: str
         connection.close()
 
     assert tables == set()
+
+
+def test_hand_labels_get_a_schema_of_their_own(connection: Connection) -> None:
+    assert "sample_label" in set(inspect(connection).get_table_names(schema=CURATION_SCHEMA))
+
+
+def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alone(
+    fresh_database_url: str,
+) -> None:
+    """The served application owns the labels it records; the offline pipelines own the catalog."""
+    connection = connect_for_curation(fresh_database_url)
+    try:
+        catalog_tables = set(inspect(connection).get_table_names())
+        curation_tables = set(inspect(connection).get_table_names(schema=CURATION_SCHEMA))
+    finally:
+        connection.close()
+
+    assert catalog_tables == set()
+    assert curation_tables == {"sample_label"}

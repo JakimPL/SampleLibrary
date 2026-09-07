@@ -83,6 +83,9 @@ export interface paths {
          * Get Sample
          * @description One sample's own fields plus every module occurrence that references it.
          *
+         *     ``equivalence_member_count`` travels with the sample so a caller labelling it knows how many
+         *     near-duplicates the same choice would reach.
+         *
          *     Raises:
          *         HTTPException: 404 when no sample is catalogued under this hash.
          */
@@ -274,6 +277,64 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/curation/labels/{sample_hash}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Set Label
+         * @description Record what a person decided this sample is, optionally across its near-duplicates.
+         *
+         *     A scope of ``equivalence_class`` reaches every sample the detector groups with this one, which
+         *     is the same group the listing collapses under one row, and each member is written as its own
+         *     label so the group boundary moving later leaves those decisions intact. A sample with no
+         *     detected relation forms a group of one, so both scopes behave identically for it.
+         *
+         *     The catalog is read through the read-only connection and only the label is written, which keeps
+         *     the one write this application performs to the schema it owns.
+         *
+         *     Raises:
+         *         HTTPException: 404 when no sample is catalogued under this hash.
+         */
+        readonly put: operations["set_label_curation_labels__sample_hash__put"];
+        readonly post?: never;
+        /**
+         * Clear Label
+         * @description Take back a decision, over the same scope that could have made it.
+         *
+         *     Raises:
+         *         HTTPException: 404 when no sample is catalogued under this hash.
+         */
+        readonly delete: operations["clear_label_curation_labels__sample_hash__delete"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/curation/labels/vocabulary": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Label Vocabulary
+         * @description Every label already in use, most-used first, for offering a person their own wording back.
+         */
+        readonly get: operations["get_label_vocabulary_curation_labels_vocabulary_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -327,6 +388,31 @@ export interface components {
             /** Filename */
             readonly filename?: string | null;
             readonly vibrato?: components["schemas"]["Vibrato"] | null;
+        };
+        /**
+         * LabelRequest
+         * @description What a person decided a sample is, and how far that decision should reach.
+         */
+        readonly LabelRequest: {
+            /** Label */
+            readonly label: string;
+            readonly scope: components["schemas"]["LabelSource"];
+        };
+        /**
+         * LabelSource
+         * @description Whether a hand label was chosen for one sample or applied to a whole equivalence class.
+         * @enum {string}
+         */
+        readonly LabelSource: "sample" | "equivalence_class";
+        /**
+         * LabelsWritten
+         * @description Which samples a labelling reached, so a caller updates exactly the rows that changed.
+         */
+        readonly LabelsWritten: {
+            /** Label */
+            readonly label: string | null;
+            /** Sample Hashes */
+            readonly sample_hashes: readonly string[];
         };
         /**
          * LibraryStats
@@ -615,6 +701,8 @@ export interface components {
          *     sample's own occurrence names together with the names of the instruments reaching it -- rather
          *     than stored alongside the coordinate itself. ``dominant_rate_hz`` travels with the point so
          *     clicking one plays it at a real tracker rate; it is ``None`` for a sample with no occurrences.
+         *     ``hand_label`` carries what a person decided this sample is, for a viewer inspecting a point;
+         *     the cloud keeps colouring by ``category``, whose fourteen roles hold a fixed hue each.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -629,12 +717,17 @@ export interface components {
              */
             readonly computed_at: string;
             readonly category: components["schemas"]["SampleCategory"];
+            /** Hand Label */
+            readonly hand_label: string | null;
             /** Dominant Rate Hz */
             readonly dominant_rate_hz: number | null;
         };
         /**
          * SampleDetail
          * @description A sample together with every module occurrence that references it, and the notes it is played at.
+         *
+         *     ``hand_label`` is the category a person chose for this sample, and ``category`` beside it stays
+         *     the keyword table's guess, so a reader sees both what was decided and what was inferred.
          */
         readonly SampleDetail: {
             /** Hash */
@@ -650,12 +743,16 @@ export interface components {
             /** Display Name */
             readonly display_name: string;
             readonly category: components["schemas"]["SampleCategory"];
+            /** Hand Label */
+            readonly hand_label: string | null;
             /** Dominant Rate Hz */
             readonly dominant_rate_hz: number | null;
             /** Duration Seconds */
             readonly duration_seconds: number;
             /** Notes Played */
             readonly notes_played: readonly components["schemas"]["SampleNotePlayed"][];
+            /** Equivalence Member Count */
+            readonly equivalence_member_count: number;
         };
         /**
          * SampleDistance
@@ -779,7 +876,9 @@ export interface components {
          *     against the sample's own occurrence names together with the names of the instruments reaching it.
          *     ``dominant_note`` is the note the library plays this sample at most often, which with
          *     ``dominant_rate_hz`` gives the pitch a preview should sound at; it is ``None`` for a sample whose
-         *     modules have not had their patterns read, and for one no pattern plays.
+         *     modules have not had their patterns read, and for one no pattern plays. ``hand_label`` is the
+         *     category a person chose for this sample; where it is filled in it is what the sample is, and
+         *     ``category`` beside it stays the keyword table's own guess.
          */
         readonly SampleSummary: {
             /** Hash */
@@ -793,6 +892,8 @@ export interface components {
             /** Display Name */
             readonly display_name: string;
             readonly category: components["schemas"]["SampleCategory"];
+            /** Hand Label */
+            readonly hand_label: string | null;
             /** Size Bytes */
             readonly size_bytes: number;
             /** Thumbnail */
@@ -1270,6 +1371,94 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": readonly components["schemas"]["ModuleCloudCoordinate"][];
+                };
+            };
+        };
+    };
+    readonly set_label_curation_labels__sample_hash__put: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["LabelRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["LabelsWritten"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly clear_label_curation_labels__sample_hash__delete: {
+        readonly parameters: {
+            readonly query?: {
+                readonly scope?: components["schemas"]["LabelSource"];
+            };
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["LabelsWritten"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly get_label_vocabulary_curation_labels_vocabulary_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly string[];
                 };
             };
         };

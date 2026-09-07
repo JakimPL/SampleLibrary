@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Final, Protocol
+from typing import Any, Protocol
 
 from sqlalchemy import Connection, Row, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -15,14 +15,10 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSummary
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.naming import choose_dominant_name, choose_dominant_rate
-from samplecore.storage.database import module_instrument, sample, sample_properties
+from samplecore.storage.database import HASH_CHUNK_SIZE, module_instrument, sample, sample_properties
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
+from samplecore.storage.repositories.sample_label import PostgresSampleLabelRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
-
-# Postgres binds at most 65535 parameters to one statement, a limit of its own wire protocol rather
-# than a tunable setting. A whole-catalog lookup passes far more hashes than that, so queries taking
-# one parameter per hash run in chunks comfortably inside the ceiling.
-HASH_CHUNK_SIZE: Final[int] = 20_000
 
 
 class SampleRepository(Protocol):
@@ -121,6 +117,7 @@ class PostgresSampleRepository:
         instrument_names_by_hash = self.instrument_names_by_hash(hashes)
         dominant_note_by_hash = PostgresNoteEventRepository(self._connection).dominant_note_by_hash(hashes)
         thumbnails_by_hash = PostgresSampleThumbnailRepository(self._connection).get_many(hashes)
+        label_by_hash = PostgresSampleLabelRepository(self._connection).labels_by_hash(hashes)
         return tuple(
             _row_to_sample_summary(
                 row,
@@ -130,6 +127,7 @@ class PostgresSampleRepository:
                 dominant_note=dominant_note_by_hash.get(row.hash),
                 thumbnail=thumbnails_by_hash.get(row.hash),
                 equivalence_class=class_by_hash.get(row.hash),
+                hand_label=label_by_hash.get(row.hash),
             )
             for row in rows
         )
@@ -211,12 +209,14 @@ def _row_to_sample_summary(
     dominant_note: Note | None,
     thumbnail: SampleThumbnail | None,
     equivalence_class: EquivalenceClass | None,
+    hand_label: str | None,
 ) -> SampleSummary:
     """Reconstruct a SampleSummary from a Core row plus its occurrences' names/rates, thumbnail, and class.
 
     The display name is drawn from the sample's own occurrence names, keeping it the label a tracker
     shows, while the category reads the instrument names too, since a voice is often described where
-    the waveform it reaches is only numbered.
+    the waveform it reaches is only numbered. Both stay filled in beside ``hand_label``, so a reader
+    can see what a person decided next to what the keyword table guessed.
     """
     sample_ = _row_to_sample(row)
     return SampleSummary(
@@ -233,4 +233,5 @@ def _row_to_sample_summary(
         dominant_note=dominant_note,
         equivalence_class_hash=equivalence_class.class_hash if equivalence_class is not None else None,
         equivalence_member_count=len(equivalence_class.member_hashes) if equivalence_class is not None else 1,
+        hand_label=hand_label,
     )

@@ -56,6 +56,11 @@ _DUPLICATE_CHECK_VALUES: Final[tuple[int, ...]] = tuple(check.value for check in
 _DUPLICATE_ACTION_VALUES: Final[tuple[int, ...]] = tuple(action.value for action in DuplicateAction)
 _HIGHEST_NOTE: Final[int] = NOTE_COUNT - 1
 
+# Postgres binds at most 65535 parameters to one statement, a limit of its own wire protocol rather
+# than a tunable setting. A whole-catalog lookup passes far more hashes than that, so queries taking
+# one parameter per hash run in chunks comfortably inside the ceiling.
+HASH_CHUNK_SIZE: Final[int] = 20_000
+
 
 metadata = MetaData()
 

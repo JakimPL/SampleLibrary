@@ -28,10 +28,12 @@ from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_label import PostgresSampleLabelRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.waveform import DEFAULT_WAVEFORM_BUCKET_COUNT, WaveformPeak, compute_waveform_peaks
 from sampleserver.dependencies import get_connection, get_library_root
+from sampleserver.equivalence import equivalence_class_members
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
 
 router = APIRouter(prefix="/samples", tags=["samples"])
@@ -101,15 +103,21 @@ class SampleNotePlayed(BaseModel):
 
 
 class SampleDetail(Sample):
-    """A sample together with every module occurrence that references it, and the notes it is played at."""
+    """A sample together with every module occurrence that references it, and the notes it is played at.
+
+    ``hand_label`` is the category a person chose for this sample, and ``category`` beside it stays
+    the keyword table's guess, so a reader sees both what was decided and what was inferred.
+    """
 
     occurrences: tuple[SampleOccurrenceDetail, ...]
     size_bytes: Count
     display_name: str
     category: SampleCategory
+    hand_label: str | None
     dominant_rate_hz: Rate | None
     duration_seconds: float
     notes_played: tuple[SampleNotePlayed, ...]
+    equivalence_member_count: Count
 
 
 @router.get("")
@@ -174,6 +182,9 @@ def _collapse_by_equivalence(items: tuple[SampleSummary, ...]) -> tuple[SampleSu
 def get_sample(sample_hash: str, connection: Connection = Depends(get_connection)) -> SampleDetail:
     """One sample's own fields plus every module occurrence that references it.
 
+    ``equivalence_member_count`` travels with the sample so a caller labelling it knows how many
+    near-duplicates the same choice would reach.
+
     Raises:
         HTTPException: 404 when no sample is catalogued under this hash.
     """
@@ -181,6 +192,7 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
     if sample is None:
         raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
 
+    label = PostgresSampleLabelRepository(connection).get(sample_hash)
     properties = PostgresSamplePropertiesRepository(connection).list_for_sample(sample_hash)
     modules_by_hash = _modules_by_hash(connection, properties)
     occurrences = tuple(
@@ -204,9 +216,11 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
             tuple(item.name for item in properties)
             + PostgresSampleRepository(connection).instrument_names_by_hash([sample.hash]).get(sample.hash, ())
         ),
+        hand_label=label.label if label is not None else None,
         dominant_rate_hz=dominant_rate_hz,
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
         notes_played=notes_played,
+        equivalence_member_count=len(equivalence_class_members(connection, sample_hash)),
     )
 
 

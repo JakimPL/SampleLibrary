@@ -54,12 +54,15 @@ class SampleSummary(Sample):
     against the sample's own occurrence names together with the names of the instruments reaching it.
     ``dominant_note`` is the note the library plays this sample at most often, which with
     ``dominant_rate_hz`` gives the pitch a preview should sound at; it is ``None`` for a sample whose
-    modules have not had their patterns read, and for one no pattern plays.
+    modules have not had their patterns read, and for one no pattern plays. ``hand_label`` is the
+    category a person chose for this sample; where it is filled in it is what the sample is, and
+    ``category`` beside it stays the keyword table's own guess.
     """
 
     occurrence_count: Count
     display_name: str
     category: SampleCategory
+    hand_label: str | None
     size_bytes: Count
     thumbnail: tuple[WaveformPeak, ...] | None
     dominant_rate_hz: Rate | None
