@@ -9,7 +9,6 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecore.hashing import compute_module_hash
-from samplecore.storage.database import connect
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
 from sampleextract.ingest import ingest_module
@@ -67,17 +66,15 @@ def test_build_dev_library_regenerating_replaces_rather_than_accumulates_modules
     [("bit_depth_variant", 1), ("amplification_variant", 3), ("resampled_variant", 2)],
 )
 def test_the_generated_corpus_yields_exactly_the_intended_relations(
-    tmp_path: Path, relation_type: str, expected_count: int
+    connection: Connection, tmp_path: Path, relation_type: str, expected_count: int
 ) -> None:
     """A regression check on the corpus itself: every scenario must survive both candidate
     generation and scoring, and no two scenarios may coincidentally relate to each other.
     """
     build_dev_library.build_dev_library(tmp_path)
-    connection = connect(tmp_path / "catalog" / "samplelibrary.duckdb")
     _ingest_all(connection, tmp_path / "catalog", tmp_path / "modules")
 
     summary = detect_equivalences(connection, tmp_path / "catalog")
-    connection.close()
 
     counts = {
         "bit_depth_variant": summary.bit_depth_relations,

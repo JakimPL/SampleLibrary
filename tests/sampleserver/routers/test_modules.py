@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-import duckdb
 import numpy as np
 from fastapi.testclient import TestClient
+from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
@@ -16,13 +16,13 @@ from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
-from samplecore.storage.repositories.module import DuckDBModuleRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
-from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 
 
-def _insert_module(connection: duckdb.DuckDBPyConnection, seed: int, *, tracker: TrackerFormat) -> Module:
-    repository = DuckDBModuleRepository(connection)
+def _insert_module(connection: Connection, seed: int, *, tracker: TrackerFormat) -> Module:
+    repository = PostgresModuleRepository(connection)
     module = Module(
         hash=format(seed, "064x"),
         id=repository.next_id(),
@@ -40,7 +40,7 @@ def _insert_module(connection: duckdb.DuckDBPyConnection, seed: int, *, tracker:
     return module
 
 
-def test_list_modules_returns_a_page(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+def test_list_modules_returns_a_page(client: TestClient, connection: Connection) -> None:
     first = _insert_module(connection, 1, tracker=TrackerFormat.XM)
     second = _insert_module(connection, 2, tracker=TrackerFormat.IT)
 
@@ -52,7 +52,7 @@ def test_list_modules_returns_a_page(client: TestClient, connection: duckdb.Duck
     assert {item["hash"] for item in body["items"]} == {first.hash, second.hash}
 
 
-def test_list_modules_respects_limit_and_offset(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+def test_list_modules_respects_limit_and_offset(client: TestClient, connection: Connection) -> None:
     _insert_module(connection, 1, tracker=TrackerFormat.XM)
     _insert_module(connection, 2, tracker=TrackerFormat.XM)
 
@@ -65,7 +65,7 @@ def test_list_modules_respects_limit_and_offset(client: TestClient, connection: 
     assert body["offset"] == 1
 
 
-def test_list_modules_filters_by_tracker(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+def test_list_modules_filters_by_tracker(client: TestClient, connection: Connection) -> None:
     xm_module = _insert_module(connection, 1, tracker=TrackerFormat.XM)
     _insert_module(connection, 2, tracker=TrackerFormat.IT)
 
@@ -76,7 +76,7 @@ def test_list_modules_filters_by_tracker(client: TestClient, connection: duckdb.
     assert [item["hash"] for item in body["items"]] == [xm_module.hash]
 
 
-def test_get_module_returns_detail_with_occurrences(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
+def test_get_module_returns_detail_with_occurrences(client: TestClient, connection: Connection) -> None:
     module = _insert_module(connection, 1, tracker=TrackerFormat.XM)
 
     response = client.get(f"/modules/{module.hash}")
@@ -88,14 +88,14 @@ def test_get_module_returns_detail_with_occurrences(client: TestClient, connecti
 
 
 def test_get_module_resolves_each_occurrence_s_sample_content_and_thumbnail(
-    client: TestClient, connection: duckdb.DuckDBPyConnection, tmp_path: Path
+    client: TestClient, connection: Connection, tmp_path: Path
 ) -> None:
     module = _insert_module(connection, 1, tracker=TrackerFormat.XM)
     sample = Sample(hash="a" * 64, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=4)
-    DuckDBSampleRepository(connection).upsert(sample)
+    PostgresSampleRepository(connection).upsert(sample)
     pcm = np.array([[0.5], [-0.5], [0.25], [-0.25]], dtype=np.float64)
     audio_store.write(tmp_path, SamplePCM(sample=sample, pcm=pcm))
-    DuckDBSamplePropertiesRepository(connection).upsert(
+    PostgresSamplePropertiesRepository(connection).upsert(
         XMSampleProperties(
             sample_hash=sample.hash,
             occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=0),

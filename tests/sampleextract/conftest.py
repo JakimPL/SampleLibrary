@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
-from pathlib import Path
+from collections.abc import Callable
 
 import numpy as np
 import pytest
 from numpy.typing import NDArray
-from sqlalchemy import Connection
 from trackmod.core.instruments.instrument import Instrument
 from trackmod.core.instruments.keymap import pitched_keymap
 from trackmod.core.patterns.grid import Pattern
@@ -21,8 +19,6 @@ from trackmod.trackers.it.module import ITModule
 from trackmod.trackers.mod.module import MODModule
 from trackmod.trackers.s3m.module import S3MModule
 from trackmod.trackers.xm.module import XMModule
-
-from samplecore.storage.database import connect
 
 SAMPLE_RATE = 44100
 # Amiga ProTracker's finetune-derived rates and its pattern length are both fixed, structural
@@ -98,10 +94,3 @@ def mod_module_bytes() -> bytes:
 @pytest.fixture
 def s3m_module_bytes() -> bytes:
     return S3MModule.from_song(_one_sample_song("pluck", rate=SAMPLE_RATE), compliance=Compliance.EXTENDED).to_bytes()
-
-
-@pytest.fixture
-def connection() -> Iterator[Connection]:
-    open_connection = connect(Path(":memory:"))
-    yield open_connection
-    open_connection.close()

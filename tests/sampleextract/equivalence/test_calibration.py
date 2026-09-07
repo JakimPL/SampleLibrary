@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import duckdb
 import pytest
+from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
-from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
+from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
 from sampleextract.equivalence.calibration import (
     CalibrationTrial,
     gain_variant_calibration_trials,
@@ -93,14 +93,14 @@ def test_resampled_variant_calibration_trials_separate_compound_matches_from_unr
 
 
 def _insert_relation(
-    connection: duckdb.DuckDBPyConnection,
-    repository: DuckDBSampleRelationRepository,
+    connection: Connection,
+    repository: PostgresSampleRelationRepository,
     *,
     seed: int,
     relation_type: RelationType,
     confidence: float,
 ) -> SampleRelation:
-    sample_repository = DuckDBSampleRepository(connection)
+    sample_repository = PostgresSampleRepository(connection)
     subject_hash, reference_hash = format(seed, "064x"), format(seed + 1, "064x")
     for sample_hash in (subject_hash, reference_hash):
         sample_repository.upsert(
@@ -122,9 +122,9 @@ def _insert_relation(
 
 
 def test_most_marginal_relations_returns_the_least_confident_of_the_requested_type_first(
-    connection: duckdb.DuckDBPyConnection,
+    connection: Connection,
 ) -> None:
-    repository = DuckDBSampleRelationRepository(connection)
+    repository = PostgresSampleRelationRepository(connection)
     weakest = _insert_relation(
         connection, repository, seed=1, relation_type=RelationType.AMPLIFICATION_VARIANT, confidence=0.6
     )

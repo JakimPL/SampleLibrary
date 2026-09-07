@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import duckdb
 from fastapi.testclient import TestClient
+from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
@@ -13,20 +13,23 @@ from samplecore.models.module import Module
 from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
-from samplecore.storage.repositories.cloud import DuckDBCloudCoordinateRepository, DuckDBModuleCloudCoordinateRepository
-from samplecore.storage.repositories.module import DuckDBModuleRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
-from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
+from samplecore.storage.repositories.cloud import (
+    PostgresCloudCoordinateRepository,
+    PostgresModuleCloudCoordinateRepository,
+)
+from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 
 SAMPLE_HASH = "a" * 64
 MODULE_HASH = "c" * 64
 
 
-def test_get_cloud_returns_every_stored_coordinate(client: TestClient, connection: duckdb.DuckDBPyConnection) -> None:
-    DuckDBSampleRepository(connection).upsert(
+def test_get_cloud_returns_every_stored_coordinate(client: TestClient, connection: Connection) -> None:
+    PostgresSampleRepository(connection).upsert(
         Sample(hash=SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
     )
-    DuckDBCloudCoordinateRepository(connection).upsert(
+    PostgresCloudCoordinateRepository(connection).upsert(
         SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
     )
 
@@ -42,12 +45,12 @@ def test_get_cloud_returns_every_stored_coordinate(client: TestClient, connectio
 
 
 def test_get_cloud_resolves_each_point_s_category_from_its_occurrence_names(
-    client: TestClient, connection: duckdb.DuckDBPyConnection
+    client: TestClient, connection: Connection
 ) -> None:
-    DuckDBSampleRepository(connection).upsert(
+    PostgresSampleRepository(connection).upsert(
         Sample(hash=SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
     )
-    module_repository = DuckDBModuleRepository(connection)
+    module_repository = PostgresModuleRepository(connection)
     module = Module(
         hash=MODULE_HASH,
         id=module_repository.next_id(),
@@ -62,7 +65,7 @@ def test_get_cloud_resolves_each_point_s_category_from_its_occurrence_names(
         ingested_at=datetime.now(UTC),
     )
     module_repository.insert(module)
-    DuckDBSamplePropertiesRepository(connection).upsert(
+    PostgresSamplePropertiesRepository(connection).upsert(
         XMSampleProperties(
             sample_hash=SAMPLE_HASH,
             occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=0),
@@ -72,7 +75,7 @@ def test_get_cloud_resolves_each_point_s_category_from_its_occurrence_names(
             tuning=Tuning(relative_note=0, finetune=0),
         )
     )
-    DuckDBCloudCoordinateRepository(connection).upsert(
+    PostgresCloudCoordinateRepository(connection).upsert(
         SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
     )
 
@@ -89,10 +92,8 @@ def test_get_cloud_on_an_empty_catalog_returns_nothing(client: TestClient) -> No
     assert response.json() == []
 
 
-def test_get_module_cloud_returns_every_stored_coordinate(
-    client: TestClient, connection: duckdb.DuckDBPyConnection
-) -> None:
-    module_repository = DuckDBModuleRepository(connection)
+def test_get_module_cloud_returns_every_stored_coordinate(client: TestClient, connection: Connection) -> None:
+    module_repository = PostgresModuleRepository(connection)
     module_repository.insert(
         Module(
             hash=MODULE_HASH,
@@ -108,7 +109,7 @@ def test_get_module_cloud_returns_every_stored_coordinate(
             ingested_at=datetime.now(UTC),
         )
     )
-    DuckDBModuleCloudCoordinateRepository(connection).upsert(
+    PostgresModuleCloudCoordinateRepository(connection).upsert(
         ModuleCloudCoordinate(module_hash=MODULE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
     )
 

@@ -5,22 +5,25 @@ import types
 from datetime import UTC, datetime
 from pathlib import Path
 
-import numpy as np
 from sqlalchemy import Connection, func, select
 
-from samplecloud.feature_store import write_features
-from samplecore.config import DEFAULT_CLOUD_ARTIFACT_DIRECTORY_NAME
 from samplecore.hashing import compute_module_hash
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
+from samplecore.models.experiment import Experiment, SampleFeatureVector
 from samplecore.models.module import Module
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
-from samplecore.storage.database import connect, metadata
-from samplecore.storage.repositories.cloud import DuckDBCloudCoordinateRepository, DuckDBModuleCloudCoordinateRepository
-from samplecore.storage.repositories.module import DuckDBModuleRepository
-from samplecore.storage.repositories.spectral import DuckDBSampleSpectralFeatureRepository
-from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository
+from samplecore.storage.database import metadata
+from samplecore.storage.repositories.cloud import (
+    PostgresCloudCoordinateRepository,
+    PostgresModuleCloudCoordinateRepository,
+)
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
+from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
 from sampleextract.ingest import ingest_module
@@ -60,47 +63,51 @@ def _ingest_all(connection: Connection, library_root: Path, modules_directory: P
         )
 
 
-def _populated_library(tmp_path: Path) -> tuple[Connection, Path]:
-    """A throwaway catalog with at least one row in every table and at least one stored object --
-    every table the schema declares, not only the ones a plain extraction pass happens to touch.
+def _populate_library(connection: Connection, tmp_path: Path) -> Path:
+    """Seeds a throwaway catalog with at least one row in every table and at least one stored
+    object -- every table the schema declares, not only the ones a plain extraction pass happens to
+    touch. Returns the filesystem library root the content store was written under.
     """
     build_dev_library.build_dev_library(tmp_path)
     library_root = tmp_path / "catalog"
-    connection = connect(library_root / "samplelibrary.duckdb")
     _ingest_all(connection, library_root, tmp_path / "modules")
     connection.commit()
     detect_equivalences(connection, library_root)
     connection.commit()
 
-    first_module = DuckDBModuleRepository(connection).list_all()[0]
+    first_module = PostgresModuleRepository(connection).list_all()[0]
     sample_hashes = [row.hash for row in connection.execute(select(metadata.tables["sample"].c.hash)).fetchall()]
     first_sample_hash = sample_hashes[0]
 
     now = datetime.now(UTC)
-    DuckDBSampleThumbnailRepository(connection).upsert(
+    PostgresSampleThumbnailRepository(connection).upsert(
         SampleThumbnail(sample_hash=first_sample_hash, bucket_count=2, minimums=(-1.0, -0.5), maximums=(0.5, 1.0))
     )
-    DuckDBCloudCoordinateRepository(connection).upsert(
+    PostgresCloudCoordinateRepository(connection).upsert(
         SampleCloudCoordinate(sample_hash=first_sample_hash, x=0.1, y=0.2, computed_at=now)
     )
-    DuckDBModuleCloudCoordinateRepository(connection).upsert(
+    PostgresModuleCloudCoordinateRepository(connection).upsert(
         ModuleCloudCoordinate(module_hash=first_module.hash, x=0.3, y=0.4, computed_at=now)
     )
-    DuckDBSampleSpectralFeatureRepository(connection).upsert(
+    PostgresSampleSpectralFeatureRepository(connection).upsert(
         SampleSpectralFeature(sample_hash=first_sample_hash, vector=(0.1, 0.2, 0.3), computed_at=now)
+    )
+
+    experiment_repository = PostgresExperimentRepository(connection)
+    experiment_id = experiment_repository.next_id()
+    experiment_repository.insert(
+        Experiment(id=experiment_id, backend_name="librosa", params={}, created_at=now, label=None)
+    )
+    PostgresSampleFeatureVectorRepository(connection).insert_many(
+        [
+            SampleFeatureVector(
+                experiment_id=experiment_id, sample_hash=first_sample_hash, vector=(0.1, 0.2, 0.3), computed_at=now
+            )
+        ]
     )
     connection.commit()
 
-    write_features(
-        _cloud_artifact_directory(library_root) / "features.parquet",
-        {first_sample_hash: np.array([0.1, 0.2, 0.3])},
-    )
-
-    return connection, library_root
-
-
-def _cloud_artifact_directory(library_root: Path) -> Path:
-    return library_root / DEFAULT_CLOUD_ARTIFACT_DIRECTORY_NAME
+    return library_root
 
 
 def _row_counts(connection: Connection) -> dict[str, int]:
@@ -110,33 +117,29 @@ def _row_counts(connection: Connection) -> dict[str, int]:
     }
 
 
-def test_reset_library_empties_every_table_and_the_content_store(tmp_path: Path) -> None:
-    connection, library_root = _populated_library(tmp_path)
+def test_reset_library_empties_every_table_and_the_content_store(connection: Connection, tmp_path: Path) -> None:
+    library_root = _populate_library(connection, tmp_path)
     before = _row_counts(connection)
     assert all(count > 0 for count in before.values()), f"fixture left an empty table: {before}"
     objects_directory = library_root / "objects"
     assert any(objects_directory.rglob("*.wav"))
-    cloud_artifact_directory = _cloud_artifact_directory(library_root)
-    assert any(cloud_artifact_directory.iterdir())
 
-    reset_library.reset_library(connection, library_root, cloud_artifact_directory)
+    reset_library.reset_library(connection, library_root)
     connection.commit()
 
     after = _row_counts(connection)
     assert all(count == 0 for count in after.values()), f"reset left rows behind: {after}"
     assert objects_directory.is_dir()
     assert list(objects_directory.iterdir()) == []
-    assert cloud_artifact_directory.is_dir()
-    assert list(cloud_artifact_directory.iterdir()) == []
 
 
-def test_reset_library_leaves_the_schema_usable_afterward(tmp_path: Path) -> None:
-    connection, library_root = _populated_library(tmp_path)
+def test_reset_library_leaves_the_schema_usable_afterward(connection: Connection, tmp_path: Path) -> None:
+    library_root = _populate_library(connection, tmp_path)
 
-    reset_library.reset_library(connection, library_root, _cloud_artifact_directory(library_root))
+    reset_library.reset_library(connection, library_root)
     connection.commit()
 
-    module_repository = DuckDBModuleRepository(connection)
+    module_repository = PostgresModuleRepository(connection)
     module_repository.insert(
         Module(
             hash=format(1, "064x"),
@@ -169,14 +172,10 @@ def test_confirm_flag_can_be_set() -> None:
     assert arguments.confirm is True
 
 
-def test_main_without_confirm_changes_nothing(tmp_path: Path) -> None:
-    connection, library_root = _populated_library(tmp_path)
+def test_main_without_confirm_changes_nothing(connection: Connection, tmp_path: Path) -> None:
+    _populate_library(connection, tmp_path)
     before = _row_counts(connection)
-    connection.close()
 
     reset_library.main([])
 
-    after_connection = connect(library_root / "samplelibrary.duckdb")
-    after = _row_counts(after_connection)
-    after_connection.close()
-    assert after == before
+    assert _row_counts(connection) == before

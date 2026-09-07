@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import duckdb
+from sqlalchemy import Connection
 
 from samplecore.models.module import Module
 from samplecore.models.tracker import TrackerFormat
-from samplecore.storage.repositories.module import DuckDBModuleRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
 
 
 def _build_module(module_hash: str, module_id: int, *, tracker: TrackerFormat = TrackerFormat.XM) -> Module:
@@ -25,8 +25,8 @@ def _build_module(module_hash: str, module_id: int, *, tracker: TrackerFormat = 
     )
 
 
-def test_a_stored_module_round_trips_through_get(connection: duckdb.DuckDBPyConnection, module_hash_a: str) -> None:
-    repository = DuckDBModuleRepository(connection)
+def test_a_stored_module_round_trips_through_get(connection: Connection, module_hash_a: str) -> None:
+    repository = PostgresModuleRepository(connection)
     module = _build_module(module_hash_a, repository.next_id())
 
     repository.insert(module)
@@ -34,14 +34,14 @@ def test_a_stored_module_round_trips_through_get(connection: duckdb.DuckDBPyConn
     assert repository.get(module_hash_a) == module
 
 
-def test_get_on_an_unknown_hash_returns_none(connection: duckdb.DuckDBPyConnection, module_hash_a: str) -> None:
-    repository = DuckDBModuleRepository(connection)
+def test_get_on_an_unknown_hash_returns_none(connection: Connection, module_hash_a: str) -> None:
+    repository = PostgresModuleRepository(connection)
 
     assert repository.get(module_hash_a) is None
 
 
-def test_next_id_produces_increasing_values(connection: duckdb.DuckDBPyConnection) -> None:
-    repository = DuckDBModuleRepository(connection)
+def test_next_id_produces_increasing_values(connection: Connection) -> None:
+    repository = PostgresModuleRepository(connection)
 
     first_id = repository.next_id()
     second_id = repository.next_id()
@@ -49,7 +49,7 @@ def test_next_id_produces_increasing_values(connection: duckdb.DuckDBPyConnectio
     assert second_id > first_id
 
 
-def _insert_three_modules(repository: DuckDBModuleRepository) -> tuple[Module, Module, Module]:
+def _insert_three_modules(repository: PostgresModuleRepository) -> tuple[Module, Module, Module]:
     xm_module = _build_module(format(1, "064x"), repository.next_id(), tracker=TrackerFormat.XM)
     it_module = _build_module(format(2, "064x"), repository.next_id(), tracker=TrackerFormat.IT)
     another_xm_module = _build_module(format(3, "064x"), repository.next_id(), tracker=TrackerFormat.XM)
@@ -59,34 +59,34 @@ def _insert_three_modules(repository: DuckDBModuleRepository) -> tuple[Module, M
     return xm_module, it_module, another_xm_module
 
 
-def test_list_all_on_an_empty_catalog_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
-    assert DuckDBModuleRepository(connection).list_all() == ()
+def test_list_all_on_an_empty_catalog_returns_nothing(connection: Connection) -> None:
+    assert PostgresModuleRepository(connection).list_all() == ()
 
 
-def test_list_all_returns_every_stored_module(connection: duckdb.DuckDBPyConnection) -> None:
-    repository = DuckDBModuleRepository(connection)
+def test_list_all_returns_every_stored_module(connection: Connection) -> None:
+    repository = PostgresModuleRepository(connection)
     first, second, third = _insert_three_modules(repository)
 
     assert set(repository.list_all()) == {first, second, third}
 
 
-def test_list_page_orders_by_id_and_respects_limit_and_offset(connection: duckdb.DuckDBPyConnection) -> None:
-    repository = DuckDBModuleRepository(connection)
+def test_list_page_orders_by_id_and_respects_limit_and_offset(connection: Connection) -> None:
+    repository = PostgresModuleRepository(connection)
     first, second, third = _insert_three_modules(repository)
 
     assert repository.list_page(limit=2, offset=0) == (first, second)
     assert repository.list_page(limit=2, offset=2) == (third,)
 
 
-def test_list_page_filters_by_tracker(connection: duckdb.DuckDBPyConnection) -> None:
-    repository = DuckDBModuleRepository(connection)
+def test_list_page_filters_by_tracker(connection: Connection) -> None:
+    repository = PostgresModuleRepository(connection)
     first, _, third = _insert_three_modules(repository)
 
     assert repository.list_page(limit=10, offset=0, tracker=TrackerFormat.XM) == (first, third)
 
 
-def test_get_many_returns_only_the_requested_hashes_that_exist(connection: duckdb.DuckDBPyConnection) -> None:
-    repository = DuckDBModuleRepository(connection)
+def test_get_many_returns_only_the_requested_hashes_that_exist(connection: Connection) -> None:
+    repository = PostgresModuleRepository(connection)
     first, _, third = _insert_three_modules(repository)
 
     result = repository.get_many([first.hash, format(9, "064x")])
@@ -95,12 +95,12 @@ def test_get_many_returns_only_the_requested_hashes_that_exist(connection: duckd
     assert third.hash not in result
 
 
-def test_get_many_with_no_hashes_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
-    assert DuckDBModuleRepository(connection).get_many([]) == {}
+def test_get_many_with_no_hashes_returns_nothing(connection: Connection) -> None:
+    assert PostgresModuleRepository(connection).get_many([]) == {}
 
 
-def test_count_matches_the_number_of_stored_modules(connection: duckdb.DuckDBPyConnection) -> None:
-    repository = DuckDBModuleRepository(connection)
+def test_count_matches_the_number_of_stored_modules(connection: Connection) -> None:
+    repository = PostgresModuleRepository(connection)
     _insert_three_modules(repository)
 
     assert repository.count() == 3

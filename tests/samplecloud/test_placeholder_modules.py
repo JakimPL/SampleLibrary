@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import duckdb
+from sqlalchemy import Connection
 
 from samplecloud.placeholder_modules import (
     PlaceholderEmbeddingSummary,
@@ -11,8 +11,8 @@ from samplecloud.placeholder_modules import (
 )
 from samplecore.models.module import Module
 from samplecore.models.tracker import TrackerFormat
-from samplecore.storage.repositories.cloud import DuckDBModuleCloudCoordinateRepository
-from samplecore.storage.repositories.module import DuckDBModuleRepository
+from samplecore.storage.repositories.cloud import PostgresModuleCloudCoordinateRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
 
 MODULE_HASH_A = "a" * 64
 MODULE_HASH_B = "b" * 64
@@ -54,30 +54,30 @@ def test_distinct_modules_generally_land_at_distinct_points() -> None:
 
 
 def test_place_and_persist_coordinates_persists_one_coordinate_per_module(
-    connection: duckdb.DuckDBPyConnection,
+    connection: Connection,
 ) -> None:
-    module_repository = DuckDBModuleRepository(connection)
+    module_repository = PostgresModuleRepository(connection)
     module_repository.insert(_module(MODULE_HASH_A, module_repository.next_id()))
     module_repository.insert(_module(MODULE_HASH_B, module_repository.next_id()))
 
     summary = place_and_persist_coordinates(connection)
 
     assert summary == PlaceholderEmbeddingSummary(modules_placed=2)
-    assert len(DuckDBModuleCloudCoordinateRepository(connection).list_all()) == 2
+    assert len(PostgresModuleCloudCoordinateRepository(connection).list_all()) == 2
 
 
-def test_an_empty_catalog_is_a_no_op(connection: duckdb.DuckDBPyConnection) -> None:
+def test_an_empty_catalog_is_a_no_op(connection: Connection) -> None:
     summary = place_and_persist_coordinates(connection)
 
     assert summary == PlaceholderEmbeddingSummary(modules_placed=0)
-    assert DuckDBModuleCloudCoordinateRepository(connection).list_all() == ()
+    assert PostgresModuleCloudCoordinateRepository(connection).list_all() == ()
 
 
-def test_a_second_run_replaces_rather_than_duplicates_coordinates(connection: duckdb.DuckDBPyConnection) -> None:
-    module_repository = DuckDBModuleRepository(connection)
+def test_a_second_run_replaces_rather_than_duplicates_coordinates(connection: Connection) -> None:
+    module_repository = PostgresModuleRepository(connection)
     module_repository.insert(_module(MODULE_HASH_A, module_repository.next_id()))
 
     place_and_persist_coordinates(connection)
     place_and_persist_coordinates(connection)
 
-    assert len(DuckDBModuleCloudCoordinateRepository(connection).list_all()) == 1
+    assert len(PostgresModuleCloudCoordinateRepository(connection).list_all()) == 1

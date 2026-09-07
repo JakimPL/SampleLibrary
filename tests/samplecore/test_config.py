@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pydantic
 import pytest
 
 from samplecore.config import (
     CONFIG_PATH_ENVIRONMENT_VARIABLE,
+    DATABASE_URL_ENVIRONMENT_VARIABLE,
     DEFAULT_CONFIG_PATH,
     ConfigurationError,
     LibraryConfig,
@@ -25,32 +27,23 @@ def test_a_config_file_round_trips_through_load_config(tmp_path: Path) -> None:
     config_path.write_text(
         f"[library]\n"
         f'module_source_directory = "{module_source_directory.as_posix()}"\n'
-        f'library_root = "{library_root.as_posix()}"\n',
+        f'library_root = "{library_root.as_posix()}"\n'
+        f'database_url = "postgresql+psycopg://user:pass@host/db"\n',
         encoding="utf-8",
     )
 
     config = load_config(config_path)
 
-    assert config == LibraryConfig(module_source_directory=module_source_directory, library_root=library_root)
-
-
-def test_missing_optional_paths_are_derived_from_the_library_root(tmp_path: Path) -> None:
-    library_root = tmp_path / "library"
-    config = LibraryConfig(module_source_directory=tmp_path / "modules", library_root=library_root)
-
-    assert config.resolved_database_path == library_root / "samplelibrary.duckdb"
-    assert config.resolved_cloud_artifact_directory == library_root / "embeddings"
-
-
-def test_explicit_optional_paths_override_the_derived_defaults(tmp_path: Path) -> None:
-    database_path = tmp_path / "custom.duckdb"
-    config = LibraryConfig(
-        module_source_directory=tmp_path / "modules",
-        library_root=tmp_path / "library",
-        database_path=database_path,
+    assert config == LibraryConfig(
+        module_source_directory=module_source_directory,
+        library_root=library_root,
+        database_url="postgresql+psycopg://user:pass@host/db",
     )
 
-    assert config.resolved_database_path == database_path
+
+def test_database_url_is_required(tmp_path: Path) -> None:
+    with pytest.raises(pydantic.ValidationError):
+        LibraryConfig(module_source_directory=tmp_path / "modules", library_root=tmp_path / "library")
 
 
 def test_loading_a_missing_config_file_raises_a_configuration_error(tmp_path: Path) -> None:
@@ -67,14 +60,16 @@ def test_an_explicit_path_argument_takes_precedence_over_the_environment_variabl
     explicit_path.write_text(
         f"[library]\n"
         f'module_source_directory = "{module_source_directory.as_posix()}"\n'
-        f'library_root = "{library_root.as_posix()}"\n',
+        f'library_root = "{library_root.as_posix()}"\n'
+        f'database_url = "postgresql+psycopg://user:pass@host/db"\n',
         encoding="utf-8",
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "does-not-exist.toml"))
 
     config = load_config(explicit_path)
 
-    assert config == LibraryConfig(module_source_directory=module_source_directory, library_root=library_root)
+    assert config.module_source_directory == module_source_directory
+    assert config.library_root == library_root
 
 
 def test_the_environment_variable_is_used_when_no_explicit_path_is_given(
@@ -86,11 +81,31 @@ def test_the_environment_variable_is_used_when_no_explicit_path_is_given(
     environment_path.write_text(
         f"[library]\n"
         f'module_source_directory = "{module_source_directory.as_posix()}"\n'
-        f'library_root = "{library_root.as_posix()}"\n',
+        f'library_root = "{library_root.as_posix()}"\n'
+        f'database_url = "postgresql+psycopg://user:pass@host/db"\n',
         encoding="utf-8",
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(environment_path))
 
     config = load_config()
 
-    assert config == LibraryConfig(module_source_directory=module_source_directory, library_root=library_root)
+    assert config.module_source_directory == module_source_directory
+    assert config.library_root == library_root
+
+
+def test_database_url_environment_variable_overrides_the_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f"[library]\n"
+        f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        f'database_url = "postgresql+psycopg://from-config-file/db"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(DATABASE_URL_ENVIRONMENT_VARIABLE, "postgresql+psycopg://from-environment/db")
+
+    config = load_config(config_path)
+
+    assert config.database_url == "postgresql+psycopg://from-environment/db"

@@ -39,9 +39,9 @@ from samplecore.storage.types import TinyInt, UBigInt, UInteger, USmallInt, UTin
 
 # Each CHECK constraint below that enumerates a closed set of values is derived from the same enum
 # the rest of the codebase already treats as that set's single source of truth, so a member added
-# there is enforced here automatically rather than needing a second, easily-forgotten edit -- the
-# schema can still never alter an already-existing table's constraint (see repair_schema.py), but
-# this at least keeps a *new* table's constraint from drifting out of sync with its own enum.
+# there is enforced here automatically rather than needing a second, easily-forgotten edit. Postgres
+# supports `ALTER TABLE ... {ADD,DROP} CONSTRAINT` natively, so an already-existing table's own
+# constraint can still be brought up to date directly, unlike this metadata definition alone.
 _BIT_DEPTH_VALUES: Final[tuple[int, ...]] = tuple(depth.value for depth in BitDepth)
 _CHANNEL_LAYOUT_VALUES: Final[tuple[int, ...]] = tuple(layout.value for layout in ChannelLayout)
 _TRACKER_FORMAT_VALUES: Final[tuple[str, ...]] = tuple(tracker.value for tracker in TrackerFormat)
@@ -354,6 +354,10 @@ def bulk_insert(
     a file-path-based ``COPY``. SQLAlchemy's ``Connection`` has no ``COPY`` construct of its own, so
     reaching for the underlying ``psycopg`` connection directly is this function's whole purpose,
     not a workaround of one.
+
+    A constraint violation here raises a ``psycopg.Error`` subtype directly, not the
+    ``sqlalchemy.exc`` equivalent a normal ``connection.execute(...)`` call would -- this path never
+    goes through SQLAlchemy's own statement execution, so its exception-wrapping never applies.
     """
     quoted_columns = ", ".join(f'"{column_name}"' for column_name in column_names)
     psycopg_connection = cast(PsycopgConnection, connection.connection.dbapi_connection)

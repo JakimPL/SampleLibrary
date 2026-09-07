@@ -6,12 +6,13 @@
 # Directory containing your tracker module collection, scanned recursively for .xm/.it files.
 module_source_directory = "/path/to/your/module/collection"
 
-# Directory where extracted sample audio and the DuckDB catalog are stored.
+# Directory where extracted sample audio is stored.
 library_root = "/path/to/your/sample/library"
 
-# Optional overrides -- otherwise derived from library_root.
-# database_path = "/path/to/your/sample/library/samplelibrary.duckdb"
-# cloud_artifact_directory = "/path/to/your/sample/library/embeddings"
+# The catalog's Postgres connection URL. Can instead (or additionally, taking precedence) be
+# supplied via the SAMPLELIBRARY_DATABASE_URL environment variable, so credentials never need to
+# live in this file.
+database_url = "postgresql+psycopg://user:password@localhost:5432/samplelibrary"
 
 # Samples shorter than this many frames are skipped at ingest time. Defaults to 512.
 # minimum_sample_frames = 512

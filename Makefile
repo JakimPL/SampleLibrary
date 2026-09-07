@@ -52,12 +52,6 @@ embed-modules-placeholder:
 reset-library:
 	uv run python scripts/reset_library.py $(if $(CONFIRM),--confirm,)
 
-# Rebuilds every catalog table against today's schema, preserving every row -- needed only when a
-# table's constraint changed after the table already existed (create_schema never alters one that
-# already exists). Prints what it would do and changes nothing unless run as `make repair-schema CONFIRM=1`.
-.PHONY: repair-schema
-repair-schema:
-	uv run python scripts/repair_schema.py $(if $(CONFIRM),--confirm,)
 
 # The full pipeline in one command, in the order a rebuild needs: extraction before equivalence
 # detection and embedding both depend on it, embedding's own coordinates are independent of

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import duckdb
+from sqlalchemy import Connection
 from trackmod.core.samples.loop import Loop, LoopMode
 from trackmod.trackers.xm.tuning import Tuning
 
@@ -11,16 +11,16 @@ from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
-from samplecore.storage.repositories.module import DuckDBModuleRepository
-from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
-from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
+from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.stats import compute_library_stats
 
 
 def test_compute_library_stats_against_a_small_seeded_catalog(
-    connection: duckdb.DuckDBPyConnection, stored_module: Module, stored_sample: Sample, stored_sample_b: Sample
+    connection: Connection, stored_module: Module, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    xm_module_repository = DuckDBModuleRepository(connection)
+    xm_module_repository = PostgresModuleRepository(connection)
     xm_module = Module(
         hash=format(7, "064x"),
         id=xm_module_repository.next_id(),
@@ -36,7 +36,7 @@ def test_compute_library_stats_against_a_small_seeded_catalog(
     )
     xm_module_repository.insert(xm_module)
 
-    DuckDBSamplePropertiesRepository(connection).upsert(
+    PostgresSamplePropertiesRepository(connection).upsert(
         XMSampleProperties(
             sample_hash=stored_sample.hash,
             occurrence=SampleOccurrence(module_hash=xm_module.hash, instrument_index=0, sample_slot=0),
@@ -48,7 +48,7 @@ def test_compute_library_stats_against_a_small_seeded_catalog(
         )
     )
 
-    relation_repository = DuckDBSampleRelationRepository(connection)
+    relation_repository = PostgresSampleRelationRepository(connection)
     relation_repository.upsert(
         SampleRelation(
             id=relation_repository.next_id(),
@@ -77,7 +77,7 @@ def test_compute_library_stats_against_a_small_seeded_catalog(
     assert stats.total_stored_bytes == stored_sample.stored_bytes + stored_sample_b.stored_bytes
 
 
-def test_compute_library_stats_on_an_empty_catalog(connection: duckdb.DuckDBPyConnection) -> None:
+def test_compute_library_stats_on_an_empty_catalog(connection: Connection) -> None:
     stats = compute_library_stats(connection)
 
     assert stats.module_count == 0
