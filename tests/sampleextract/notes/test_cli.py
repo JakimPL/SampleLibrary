@@ -34,7 +34,7 @@ def test_main_reports_an_empty_corpus(
 
     main([])
 
-    assert "Discovered 0 modules" in capsys.readouterr().out
+    assert "Discovered 0 files" in capsys.readouterr().out
 
 
 def test_main_passes_over_a_file_the_catalog_never_ingested(
@@ -51,4 +51,4 @@ def test_main_passes_over_a_file_the_catalog_never_ingested(
 
     main([])
 
-    assert "Discovered 1 modules: 0 read" in capsys.readouterr().out
+    assert "Discovered 1 files: 0 module(s) read" in capsys.readouterr().out

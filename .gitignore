@@ -43,3 +43,4 @@ Thumbs.db
 
 # Local server log from a detached dev run
 .uvicorn.log
+.samplenotes.log

@@ -18,11 +18,12 @@ from sampleextract.parsing import RECOVERABLE_PARSE_ERRORS, ExtractionFailure, p
 
 @dataclass(frozen=True)
 class NoteExtractionSummary:
-    """What one note-extraction pass did, across every module it discovered."""
+    """What one note-extraction pass did, across every module file it discovered."""
 
     discovered: int
     read: int
     already_extracted: int
+    duplicate_files: int
     note_events: int
     failures: tuple[ExtractionFailure, ...]
 
@@ -31,16 +32,20 @@ def extract_missing_notes(config: LibraryConfig, connection: Connection, *, forc
     """Read the patterns of every catalogued module whose notes are not yet on file.
 
     A module is found by hashing the file and looking the hash up, the same way ingest recognises
-    one, so this holds wherever a collection keeps its files. Each module lands in a transaction of
-    its own, which is what lets an interrupted pass resume having lost at most the module it was
-    reading. ``force`` reads every module again, clearing what an earlier pass left behind first.
+    one, so this holds wherever a collection keeps its files. A catalog holds one module per content
+    hash while a collection may keep the same bytes under several paths, so every module this pass
+    reads is remembered as it goes and a later file naming it is counted as the duplicate it is.
+    Each module lands in a transaction of its own, which is what lets an interrupted pass resume
+    having lost at most the module it was reading. ``force`` reads every module again, clearing what
+    an earlier pass left behind first.
     """
     module_repository = PostgresModuleRepository(connection)
-    extracted_module_ids = PostgresModuleNoteExtractionRepository(connection).extracted_module_ids()
+    extracted_before = PostgresModuleNoteExtractionRepository(connection).extracted_module_ids()
     paths = discover_modules(config.module_source_directory)
     failures: list[ExtractionFailure] = []
+    read_module_ids: set[int] = set()
     note_events = 0
-    read = 0
+    duplicate_files = 0
     already_extracted = 0
     for path in tqdm(paths, desc="Reading module notes"):
         data = path.read_bytes()
@@ -48,7 +53,11 @@ def extract_missing_notes(config: LibraryConfig, connection: Connection, *, forc
         if module is None:
             continue  # a file the catalog does not hold, which this pass has nothing to attach to
 
-        if module.id in extracted_module_ids and not force:
+        if module.id in read_module_ids:
+            duplicate_files += 1
+            continue
+
+        if module.id in extracted_before and not force:
             already_extracted += 1
             continue
 
@@ -59,7 +68,7 @@ def extract_missing_notes(config: LibraryConfig, connection: Connection, *, forc
             continue
 
         with start_batch(connection):
-            if module.id in extracted_module_ids:
+            if module.id in extracted_before:
                 clear_module_notes(connection, module_id=module.id)
 
             note_events += persist_module_notes(
@@ -70,12 +79,13 @@ def extract_missing_notes(config: LibraryConfig, connection: Connection, *, forc
                 minimum_sample_frames=config.minimum_sample_frames,
             )
 
-        read += 1
+        read_module_ids.add(module.id)
 
     return NoteExtractionSummary(
         discovered=len(paths),
-        read=read,
+        read=len(read_module_ids),
         already_extracted=already_extracted,
+        duplicate_files=duplicate_files,
         note_events=note_events,
         failures=tuple(failures),
     )

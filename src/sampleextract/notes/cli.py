@@ -18,11 +18,13 @@ def main(argv: list[str] | None = None) -> None:
         summary = extract_missing_notes(config, connection, force=arguments.force)
 
     _logger.info(
-        "Discovered %d modules: %d read for %d note event(s), %d already extracted, %d failed.",
+        "Discovered %d files: %d module(s) read for %d note event(s), "
+        "%d already extracted, %d duplicate file(s), %d failed.",
         summary.discovered,
         summary.read,
         summary.note_events,
         summary.already_extracted,
+        summary.duplicate_files,
         len(summary.failures),
     )
     for failure in summary.failures:

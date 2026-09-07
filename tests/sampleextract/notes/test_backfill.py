@@ -49,6 +49,7 @@ def test_a_pass_reads_every_catalogued_module_whose_notes_are_missing(
     assert summary.discovered == 2
     assert summary.read == 2
     assert summary.already_extracted == 0
+    assert summary.duplicate_files == 0
     assert summary.note_events == 2
     assert summary.failures == ()
 
@@ -91,6 +92,32 @@ def test_a_pass_records_the_instrument_slots_each_module_numbers(
     instruments = PostgresModuleInstrumentRepository(connection).list_for_module(module.id)
 
     assert [instrument.name for instrument in instruments] == ["voice"]
+
+
+def test_the_same_module_kept_under_two_paths_is_read_once(
+    connection: Connection, catalogued_corpus: LibraryConfig, xm_module_bytes: bytes
+) -> None:
+    """A catalog holds one module per content hash, so a second copy of one names a module already read."""
+    (catalogued_corpus.module_source_directory / "copy-of-song.xm").write_bytes(xm_module_bytes)
+
+    summary = extract_missing_notes(catalogued_corpus, connection, force=False)
+
+    assert summary.discovered == 3
+    assert summary.read == 2
+    assert summary.duplicate_files == 1
+    assert summary.failures == ()
+
+
+def test_a_forced_pass_reads_a_duplicated_module_once_as_well(
+    connection: Connection, catalogued_corpus: LibraryConfig, xm_module_bytes: bytes
+) -> None:
+    (catalogued_corpus.module_source_directory / "copy-of-song.xm").write_bytes(xm_module_bytes)
+    extract_missing_notes(catalogued_corpus, connection, force=False)
+
+    summary = extract_missing_notes(catalogued_corpus, connection, force=True)
+
+    assert summary.read == 2
+    assert summary.duplicate_files == 1
 
 
 def test_a_file_the_catalog_never_ingested_is_passed_over(
