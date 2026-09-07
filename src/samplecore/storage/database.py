@@ -8,7 +8,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
-    ColumnElement,
     Connection,
     DateTime,
     Double,
@@ -23,7 +22,6 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
-    and_,
     column,
     create_engine,
 )
@@ -39,6 +37,8 @@ from trackmod.spec.pitch import NOTE_COUNT
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.relation import RelationType
 from samplecore.models.tracker import TrackerFormat
+from samplecore.storage.constraints import all_null_together, non_negative
+from samplecore.storage.curation import create_curation_schema
 from samplecore.storage.types import TinyInt, UBigInt, UInteger, USmallInt, UTinyInt
 
 # Each CHECK constraint below that enumerates a closed set of values is derived from the same enum
@@ -55,27 +55,6 @@ _NEW_NOTE_ACTION_VALUES: Final[tuple[int, ...]] = tuple(action.value for action 
 _DUPLICATE_CHECK_VALUES: Final[tuple[int, ...]] = tuple(check.value for check in DuplicateCheck)
 _DUPLICATE_ACTION_VALUES: Final[tuple[int, ...]] = tuple(action.value for action in DuplicateAction)
 _HIGHEST_NOTE: Final[int] = NOTE_COUNT - 1
-
-
-def _non_negative(column_name: str) -> ColumnElement[bool]:
-    """A CHECK expression requiring a column to never go negative.
-
-    DuckDB's own unsigned integer types (``UTINYINT``, ``USMALLINT``, ``UINTEGER``, ``UBIGINT``)
-    enforced this at the type level for free; Postgres has no unsigned integer type at all, so every
-    column that relied on that now needs it spelled out here instead.
-    """
-    return column(column_name) >= 0
-
-
-def _all_null_together(first_column_name: str, *other_column_names: str) -> ColumnElement[bool]:
-    """A CHECK expression requiring a group of columns to be either all NULL or all filled in.
-
-    Every other column's nullability is compared against the first's; boolean equality is
-    transitive, so this enforces the same all-or-none constraint as comparing each consecutive
-    pair, without needing that specific chain to read the intent off the expression.
-    """
-    first_is_null = column(first_column_name).is_(None)
-    return and_(*(first_is_null == column(name).is_(None) for name in other_column_names))
 
 
 metadata = MetaData()
@@ -114,11 +93,11 @@ module = Table(
         column("filename").not_like("%/%") & column("filename").not_like(r"%\%"), name="module_filename_check"
     ),
     CheckConstraint(column("tracker").in_(_TRACKER_FORMAT_VALUES), name="module_tracker_check"),
-    CheckConstraint(_non_negative("channel_count"), name="module_channel_count_check"),
-    CheckConstraint(_non_negative("pattern_count"), name="module_pattern_count_check"),
-    CheckConstraint(_non_negative("instrument_count"), name="module_instrument_count_check"),
-    CheckConstraint(_non_negative("sample_count"), name="module_sample_count_check"),
-    CheckConstraint(_non_negative("file_size"), name="module_file_size_check"),
+    CheckConstraint(non_negative("channel_count"), name="module_channel_count_check"),
+    CheckConstraint(non_negative("pattern_count"), name="module_pattern_count_check"),
+    CheckConstraint(non_negative("instrument_count"), name="module_instrument_count_check"),
+    CheckConstraint(non_negative("sample_count"), name="module_sample_count_check"),
+    CheckConstraint(non_negative("file_size"), name="module_file_size_check"),
 )
 
 sample_properties = Table(
@@ -143,12 +122,12 @@ sample_properties = Table(
     CheckConstraint(column("panning").between(0, 255), name="sample_properties_panning_check"),
     CheckConstraint(column("loop_mode").in_(_LOOP_MODE_VALUES), name="sample_properties_loop_mode_check"),
     CheckConstraint(
-        _all_null_together("loop_begin", "loop_end", "loop_mode"), name="sample_properties_loop_conull_check"
+        all_null_together("loop_begin", "loop_end", "loop_mode"), name="sample_properties_loop_conull_check"
     ),
-    CheckConstraint(_non_negative("instrument_index"), name="sample_properties_instrument_index_check"),
-    CheckConstraint(_non_negative("sample_slot"), name="sample_properties_sample_slot_check"),
-    CheckConstraint(_non_negative("loop_begin"), name="sample_properties_loop_begin_check"),
-    CheckConstraint(_non_negative("loop_end"), name="sample_properties_loop_end_check"),
+    CheckConstraint(non_negative("instrument_index"), name="sample_properties_instrument_index_check"),
+    CheckConstraint(non_negative("sample_slot"), name="sample_properties_sample_slot_check"),
+    CheckConstraint(non_negative("loop_begin"), name="sample_properties_loop_begin_check"),
+    CheckConstraint(non_negative("loop_end"), name="sample_properties_loop_end_check"),
 )
 
 xm_sample_properties = Table(
@@ -189,19 +168,19 @@ it_sample_properties = Table(
     CheckConstraint(column("global_volume").between(0, 64), name="it_sample_properties_global_volume_check"),
     CheckConstraint(column("sustain_mode").in_(_LOOP_MODE_VALUES), name="it_sample_properties_sustain_mode_check"),
     CheckConstraint(
-        _all_null_together("sustain_begin", "sustain_end", "sustain_mode"),
+        all_null_together("sustain_begin", "sustain_end", "sustain_mode"),
         name="it_sample_properties_sustain_conull_check",
     ),
     CheckConstraint(
-        _all_null_together("vibrato_speed", "vibrato_depth", "vibrato_rate", "vibrato_waveform"),
+        all_null_together("vibrato_speed", "vibrato_depth", "vibrato_rate", "vibrato_waveform"),
         name="it_sample_properties_vibrato_conull_check",
     ),
-    CheckConstraint(_non_negative("sustain_begin"), name="it_sample_properties_sustain_begin_check"),
-    CheckConstraint(_non_negative("sustain_end"), name="it_sample_properties_sustain_end_check"),
-    CheckConstraint(_non_negative("vibrato_speed"), name="it_sample_properties_vibrato_speed_check"),
-    CheckConstraint(_non_negative("vibrato_depth"), name="it_sample_properties_vibrato_depth_check"),
-    CheckConstraint(_non_negative("vibrato_rate"), name="it_sample_properties_vibrato_rate_check"),
-    CheckConstraint(_non_negative("vibrato_waveform"), name="it_sample_properties_vibrato_waveform_check"),
+    CheckConstraint(non_negative("sustain_begin"), name="it_sample_properties_sustain_begin_check"),
+    CheckConstraint(non_negative("sustain_end"), name="it_sample_properties_sustain_end_check"),
+    CheckConstraint(non_negative("vibrato_speed"), name="it_sample_properties_vibrato_speed_check"),
+    CheckConstraint(non_negative("vibrato_depth"), name="it_sample_properties_vibrato_depth_check"),
+    CheckConstraint(non_negative("vibrato_rate"), name="it_sample_properties_vibrato_rate_check"),
+    CheckConstraint(non_negative("vibrato_waveform"), name="it_sample_properties_vibrato_waveform_check"),
 )
 
 s3m_sample_properties = Table(
@@ -242,7 +221,7 @@ sample_relation = Table(
     CheckConstraint(column("confidence").between(0.0, 1.0), name="sample_relation_confidence_check"),
     CheckConstraint(column("subject_hash") < column("reference_hash"), name="sample_relation_hash_order_check"),
     CheckConstraint(
-        _all_null_together("reviewed_confirmed", "reviewed_at", "reviewed_by"),
+        all_null_together("reviewed_confirmed", "reviewed_at", "reviewed_by"),
         name="sample_relation_review_conull_check",
     ),
     UniqueConstraint(
@@ -333,8 +312,8 @@ module_instrument = Table(
     CheckConstraint(
         column("duplicate_action").in_(_DUPLICATE_ACTION_VALUES), name="module_instrument_duplicate_action_check"
     ),
-    CheckConstraint(_non_negative("instrument_index"), name="module_instrument_instrument_index_check"),
-    CheckConstraint(_non_negative("fadeout"), name="module_instrument_fadeout_check"),
+    CheckConstraint(non_negative("instrument_index"), name="module_instrument_instrument_index_check"),
+    CheckConstraint(non_negative("fadeout"), name="module_instrument_fadeout_check"),
 )
 
 note_event = Table(
@@ -368,11 +347,11 @@ note_event = Table(
         column("instrument_index").is_not(None) | column("sample_slot").is_(None),
         name="note_event_sample_slot_instrument_check",
     ),
-    CheckConstraint(_non_negative("pattern_index"), name="note_event_pattern_index_check"),
-    CheckConstraint(_non_negative("row_index"), name="note_event_row_index_check"),
-    CheckConstraint(_non_negative("channel_index"), name="note_event_channel_index_check"),
-    CheckConstraint(_non_negative("instrument_index"), name="note_event_instrument_index_check"),
-    CheckConstraint(_non_negative("sample_slot"), name="note_event_sample_slot_check"),
+    CheckConstraint(non_negative("pattern_index"), name="note_event_pattern_index_check"),
+    CheckConstraint(non_negative("row_index"), name="note_event_row_index_check"),
+    CheckConstraint(non_negative("channel_index"), name="note_event_channel_index_check"),
+    CheckConstraint(non_negative("instrument_index"), name="note_event_instrument_index_check"),
+    CheckConstraint(non_negative("sample_slot"), name="note_event_sample_slot_check"),
 )
 
 module_note_extraction = Table(
@@ -394,8 +373,7 @@ def connect(database_url: str, *, read_only: bool = False) -> Connection:
     returned to a pool) the moment the caller closes it -- the same one-connection-in, one-close-out
     lifecycle this catalog has always had.
     """
-    engine = create_engine(database_url, poolclass=NullPool)
-    connection = engine.connect()
+    connection = _open(database_url)
     if read_only:
         connection = connection.execution_options(postgresql_readonly=True)
     else:
@@ -405,9 +383,31 @@ def connect(database_url: str, *, read_only: bool = False) -> Connection:
     return connection
 
 
+def connect_for_curation(database_url: str) -> Connection:
+    """Open a writable connection for hand-curated work, preparing only the curation schema.
+
+    The served application reads the catalog read-only and writes nothing but a person's own
+    labels, so this prepares the one schema it owns and leaves bringing a catalog into existence to
+    the pipelines that build one. The caller owns the transaction and commits its own work.
+    """
+    connection = _open(database_url)
+    create_curation_schema(connection)
+    connection.commit()
+    return connection
+
+
+def _open(database_url: str) -> Connection:
+    return create_engine(database_url, poolclass=NullPool).connect()
+
+
 def create_schema(bind: Connection | Engine) -> None:
-    """Create every table and sequence the catalog needs, where it does not already exist."""
+    """Create every table and sequence the catalog needs, where it does not already exist.
+
+    The curation schema comes with it, so hand-curated work is readable wherever the catalog is,
+    while staying outside the metadata every rebuild and purge iterates.
+    """
     metadata.create_all(bind)
+    create_curation_schema(bind)
 
 
 def start_batch(connection: Connection) -> RootTransaction:

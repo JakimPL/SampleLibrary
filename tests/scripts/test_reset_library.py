@@ -10,7 +10,9 @@ from sqlalchemy import Connection, func, select
 from samplecore.hashing import compute_module_hash
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
+from samplecore.models.label import LabelSource, SampleLabel
 from samplecore.models.module import Module
+from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
@@ -22,6 +24,7 @@ from samplecore.storage.repositories.cloud import (
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.sample_label import PostgresSampleLabelRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 from sampleextract.discovery import FORMAT_LOADERS
@@ -131,6 +134,51 @@ def test_reset_library_empties_every_table_and_the_content_store(connection: Con
     assert all(count == 0 for count in after.values()), f"reset left rows behind: {after}"
     assert objects_directory.is_dir()
     assert list(objects_directory.iterdir()) == []
+
+
+def test_reset_library_leaves_hand_labels_untouched(connection: Connection, tmp_path: Path) -> None:
+    """Hand labels are the one thing in this library nobody can regenerate, so a purge leaves them.
+
+    They live on a metadata of their own, which is what puts them beyond the reach of the loop over
+    ``metadata.sorted_tables`` that empties everything else.
+    """
+    library_root = _populate_library(connection, tmp_path)
+    module = PostgresModuleRepository(connection).list_all()[0]
+    occurrence_row = connection.execute(
+        select(metadata.tables["sample_properties"]).where(
+            metadata.tables["sample_properties"].c.module_id == module.id
+        )
+    ).fetchone()
+    assert occurrence_row is not None
+
+    label_repository = PostgresSampleLabelRepository(connection)
+    label_repository.upsert_many(
+        (
+            SampleLabel(
+                sample_hash=occurrence_row.sample_hash,
+                label="warm pad",
+                occurrence=SampleOccurrence(
+                    module_hash=module.hash,
+                    instrument_index=occurrence_row.instrument_index,
+                    sample_slot=occurrence_row.sample_slot,
+                ),
+                module_filename=module.filename,
+                sample_name=occurrence_row.name,
+                source=LabelSource.SAMPLE,
+                labeled_at=datetime.now(UTC),
+            ),
+        )
+    )
+    connection.commit()
+
+    reset_library.reset_library(connection, library_root)
+    connection.commit()
+
+    assert all(count == 0 for count in _row_counts(connection).values())
+    surviving = label_repository.get(occurrence_row.sample_hash)
+    assert surviving is not None
+    assert surviving.label == "warm pad"
+    assert surviving.occurrence.module_hash == module.hash
 
 
 def test_reset_library_leaves_the_schema_usable_afterward(connection: Connection, tmp_path: Path) -> None:

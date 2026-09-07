@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import make_url
 
+from samplecore.storage.curation import curation_metadata
 from samplecore.storage.database import connect, metadata
 
 SERVER_URL_VARIABLE: Final[str] = "SAMPLELIBRARY_TEST_DATABASE_URL"
@@ -57,13 +58,17 @@ def connection(_database_url: str) -> Iterator[Connection]:
     gives each test the same "starts from nothing" guarantee -- rolling back first discards any
     transaction a failing test left open, so the cleanup deletes themselves always run against a
     clean transaction state.
+
+    The curation tables are named here deliberately, since they live on a metadata of their own that
+    ``reset_library`` has no reach into. A test wants them cleared between cases; a real library
+    wants them kept, and that difference is exactly what the separate metadata buys.
     """
     open_connection = connect(_database_url)
     try:
         yield open_connection
     finally:
         open_connection.rollback()
-        for table in reversed(metadata.sorted_tables):
+        for table in [*reversed(metadata.sorted_tables), *reversed(curation_metadata.sorted_tables)]:
             open_connection.execute(table.delete())
         open_connection.commit()
         open_connection.close()
