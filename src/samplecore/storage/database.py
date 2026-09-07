@@ -359,6 +359,13 @@ def bulk_insert(
     ``sqlalchemy.exc`` equivalent a normal ``connection.execute(...)`` call would -- this path never
     goes through SQLAlchemy's own statement execution, so its exception-wrapping never applies.
     """
+    # Reaching for the DBAPI connection leaves SQLAlchemy unaware that psycopg opened a transaction
+    # of its own, so a later `connection.rollback()` would pass without issuing one -- stranding the
+    # caller on a connection Postgres has already put into an aborted state, where every subsequent
+    # statement raises. Beginning the transaction through SQLAlchemy first keeps it in charge of it.
+    if connection.get_transaction() is None:
+        connection.begin()
+
     quoted_columns = ", ".join(f'"{column_name}"' for column_name in column_names)
     psycopg_connection = cast(PsycopgConnection, connection.connection.dbapi_connection)
     with psycopg_connection.cursor() as cursor:
