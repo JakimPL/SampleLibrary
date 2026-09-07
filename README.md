@@ -56,6 +56,19 @@ serve`), start the frontend in a separate terminal with `make frontend-dev` and 
 `http://localhost:5173`. `make frontend-build` produces a production build; `make frontend-check`
 runs its typecheck, lint, format, and test suite.
 
+### Labelling samples by hand
+
+Open a sample in the app and type what it actually is. The wording is yours to choose, and what
+you have already used is offered back as you type, so one vocabulary settles by habit. Where a
+sample has near-duplicates the same decision reaches all of them by default.
+
+These labels are the one thing here that nothing can rebuild, so they are kept apart from
+everything the pipelines generate: they live in their own `curation` schema, and `make
+reset-library` leaves them exactly where they are. `make labels-export` writes them all to
+`labels.jsonl` — keep a copy somewhere of your own — and `make labels-import` reads a file back,
+merging it into whatever is already there. Each label also remembers the module and slot its
+sample came from, so `make labels-relink` reattaches your work if a sample's hash ever changes.
+
 ## Development
 
 Read `docs/guidelines.md` before making changes. `make format`, `make lint`, and `make test` (or

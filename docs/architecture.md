@@ -12,10 +12,10 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 | Package | Owns | Depends on |
 |---|---|---|
-| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
-| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each), and the equivalence-class detection pass. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
+| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleLabel`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the anchoring rule that keeps a hand label attached to its sample, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
+| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each), the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors, UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
-| `sampleserver` | The FastAPI read API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend. Opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
+| `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own sample labels. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
 
 ## Boundaries the import-linter contracts enforce
 
@@ -66,6 +66,31 @@ holds. `module_instrument` records each voice slot the same numbering addresses,
 the waveforms its keys reach, so a sample stored as "smp03" is described only there.
 `module_note_extraction` records which modules have been read, so a module whose patterns press no
 keys still reads as finished and a resumed pass spares it a second parse.
+
+## Hand-curated work
+
+`curation.sample_label` holds the category a person chose for a sample, and it is the one thing in
+this library no pass can rebuild. It therefore sits on a `MetaData` of its own, in a Postgres schema
+of its own (`samplecore.storage.curation`), apart from the single `MetaData` every other table
+belongs to. Both places this project empties a database — `scripts/reset_library.py` and the test
+suite's own teardown — iterate `database.metadata.sorted_tables`, so a table registered on the
+curation metadata is beyond their reach by construction rather than by an exemption list somebody
+has to keep current. For the same reason it carries no foreign key into the catalog: one would
+either delete these rows along with the samples or block the purge outright. A test in
+`tests/scripts/test_reset_library.py` pins exactly that, seeding a label and asserting it survives a
+full reset.
+
+Because a sample's hash follows from how this project hashes audio, a label keyed on the hash alone
+would be lost the moment that changes. Every label therefore also records the module slot it was
+chosen from — module hash, filename, instrument index, sample slot, and the occurrence's name — and
+`samplelabels relink` reads those slots back to recover whatever sample sits there now. The label is
+stored per sample even when it was applied to a whole equivalence class at once, since a class is
+identified by a content hash over its members and gains a different identity the moment its
+membership changes; `source` records which gesture applied it, so a decision made about one sample
+stays distinguishable from one inherited from its near-duplicates.
+
+`samplelabels export` writes every label to JSONL as the copy that outlives the database, and
+`import` merges a file back without clearing anything.
 
 Local, machine-specific configuration (the module source directory, the library root, the catalog's
 connection URL) is read from a gitignored `config.toml` via `samplecore.config.load_config`, never
@@ -145,11 +170,16 @@ derives it at read time from the sample's own occurrence names, the same name da
 `samplecore.naming.choose_dominant_name` already reads to resolve `display_name`. Classification is
 one plain, ordered keyword table matched against each name with its separators stripped, deliberately
 a first-pass heuristic rather than a tuned classifier -- expect to retune the keyword table against
-how well it agrees with real listening. The frontend colors the sample cloud by category
+how well it agrees with real listening. A hand label wins wherever one exists (`SampleSummary.hand_label`,
+and the same field on the detail and cloud-point models): the guessed category travels beside it, so
+a reader sees both what a person decided and what the keyword table inferred, and `CategoryBadge` is
+the single place that rule is applied. The frontend colors the sample cloud by category
 (`regl-scatterplot`'s own categorical coloring, one fixed hue per `SampleCategory` declared as a CSS
 custom property per theme in `styles.css`) and shows the category as a badge everywhere a sample's
 name appears; the same color and label always travel together, since fourteen categories are too
-many to stay reliably distinguishable by hue alone for every viewer.
+many to stay reliably distinguishable by hue alone for every viewer. The cloud keeps colouring by
+the guessed category for that same reason: a hand label is free text, so it belongs to an unbounded
+set of hues, and it wears one style of its own in the badge instead.
 
 ## Extending to new tracker formats
 
