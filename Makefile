@@ -59,17 +59,10 @@ reset-library:
 .PHONY: rebuild-library
 rebuild-library: extract equivalence embed embed-modules-placeholder
 
-# A throwaway local Postgres for dev-library work, matching docker-compose.yml's own credentials.
-# Not persisted beyond the container's lifetime (--rm): dev-library is itself disposable, rebuilt
-# from scratch via `make library-dev` whenever it's needed, so its database doesn't need to survive
-# a restart either.
-DEV_DATABASE_URL := postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary
-
-.PHONY: postgres-dev
-postgres-dev:
-	docker run --rm -d --name samplelibrary-postgres-dev -p 5432:5432 \
-		-e POSTGRES_USER=samplelibrary -e POSTGRES_PASSWORD=samplelibrary -e POSTGRES_DB=samplelibrary \
-		postgres:17-alpine
+# dev-library keeps its own database on the same local Postgres server the real library uses, so a
+# rebuild of this disposable 30-module sandbox leaves the real catalog untouched. See README.md for
+# creating the role and the three databases this project expects.
+DEV_DATABASE_URL := postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev
 
 .PHONY: library-dev
 library-dev:

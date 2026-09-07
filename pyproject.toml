@@ -47,7 +47,6 @@ dev = [
     "import-linter>=2.5",
     "pre-commit==4.6.0",
     "marimo>=0.23",
-    "testcontainers[postgres]>=4.9",
 ]
 
 [build-system]
