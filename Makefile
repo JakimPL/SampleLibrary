@@ -38,6 +38,10 @@ equivalence:
 thumbnails:
 	uv run samplethumbnail
 
+.PHONY: notes
+notes:
+	uv run samplenotes
+
 .PHONY: embed
 embed:
 	uv run samplecloud
@@ -84,6 +88,10 @@ embed-dev:
 .PHONY: thumbnails-dev
 thumbnails-dev:
 	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplethumbnail
+
+.PHONY: notes-dev
+notes-dev:
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplenotes
 
 .PHONY: reset-dev
 reset-dev:

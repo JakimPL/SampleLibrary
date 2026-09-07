@@ -39,17 +39,18 @@ def _matching_key(name: str) -> str:
 
 
 def classify_sample_category(names: Iterable[str]) -> SampleCategory:
-    """Guess a sample's instrument category from its, possibly conflicting, occurrence names.
+    """Guess a sample's instrument category from every, possibly conflicting, name it goes by.
 
-    Checks each of a sample's occurrence names against `_CATEGORY_KEYWORDS`, in the table's own
-    fixed order, and returns the first category any name matches -- checking every occurrence name
-    (not just the single chosen display name) means a sample named differently across its module
-    occurrences still classifies correctly if any one of them carries a recognizable keyword. The
-    fixed order resolves ambiguous names deliberately: a "bassdrum" sample matches KICK before it
-    ever reaches BASS's own "bass" keyword, since KICK is checked first. A sample with no occurrence
-    name matching any keyword resolves to `SampleCategory.UNCATEGORIZED`. This is a plain keyword
-    table, easy to retune against how well it agrees with real listening -- a first-pass heuristic,
-    not a final classifier.
+    Checks each name against `_CATEGORY_KEYWORDS`, in the table's own fixed order, and returns the
+    first category any of them matches. Reading every name a sample carries -- each occurrence's own
+    name, and the name of every instrument slot that reaches it, rather than the single chosen
+    display name -- means a sample named differently across its modules still classifies from
+    whichever name carries a recognizable keyword, and a waveform stored as "smp03" still classifies
+    when the voice playing it is called "warm pad". The fixed order resolves ambiguous names
+    deliberately: a "bassdrum" sample matches KICK before it ever reaches BASS's own "bass" keyword,
+    since KICK is checked first. A sample whose names match no keyword resolves to
+    `SampleCategory.UNCATEGORIZED`. This is a plain keyword table, easy to retune against how well it
+    agrees with real listening -- a first-pass heuristic, not a final classifier.
     """
     matching_keys = [_matching_key(name) for name in names]
     for category, keywords in _CATEGORY_KEYWORDS:

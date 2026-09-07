@@ -14,7 +14,7 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSummary
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.naming import choose_dominant_name, choose_dominant_rate
-from samplecore.storage.database import sample, sample_properties
+from samplecore.storage.database import module_instrument, sample, sample_properties
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
 
 # Postgres binds at most 65535 parameters to one statement, a limit of its own wire protocol rather
@@ -43,6 +43,8 @@ class SampleRepository(Protocol):
     def names_and_rates_by_hash(
         self, hashes: list[str]
     ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]: ...
+
+    def instrument_names_by_hash(self, hashes: list[str]) -> dict[str, tuple[str, ...]]: ...
 
 
 class PostgresSampleRepository:
@@ -114,14 +116,16 @@ class PostgresSampleRepository:
         rows = self._connection.execute(statement).fetchall()
         hashes = [row.hash for row in rows]
         names_by_hash, rates_by_hash = self.names_and_rates_by_hash(hashes)
+        instrument_names_by_hash = self.instrument_names_by_hash(hashes)
         thumbnails_by_hash = PostgresSampleThumbnailRepository(self._connection).get_many(hashes)
         return tuple(
             _row_to_sample_summary(
                 row,
-                names_by_hash.get(row.hash, ()),
-                rates_by_hash.get(row.hash, ()),
-                thumbnails_by_hash.get(row.hash),
-                class_by_hash.get(row.hash),
+                names=names_by_hash.get(row.hash, ()),
+                instrument_names=instrument_names_by_hash.get(row.hash, ()),
+                rates=rates_by_hash.get(row.hash, ()),
+                thumbnail=thumbnails_by_hash.get(row.hash),
+                equivalence_class=class_by_hash.get(row.hash),
             )
             for row in rows
         )
@@ -155,20 +159,60 @@ class PostgresSampleRepository:
             {hash_: tuple(rates) for hash_, rates in rates_by_hash.items()},
         )
 
+    def instrument_names_by_hash(self, hashes: list[str]) -> dict[str, tuple[str, ...]]:
+        """The name of every instrument slot each given sample is reached through, in chunked queries.
+
+        A tracker names an instrument apart from the waveforms its keys reach, so these carry
+        description a sample's own name leaves out -- a waveform stored as "smp03" reached through an
+        instrument called "warm pad" says what it is only here. Chunked by ``HASH_CHUNK_SIZE``, the
+        same way occurrence names are, so a whole-catalog lookup stays inside Postgres's parameter
+        ceiling.
+        """
+        names_by_hash: dict[str, list[str]] = defaultdict(list)
+
+        for chunk_start in range(0, len(hashes), HASH_CHUNK_SIZE):
+            chunk = hashes[chunk_start : chunk_start + HASH_CHUNK_SIZE]
+            statement = (
+                select(sample_properties.c.sample_hash, module_instrument.c.name)
+                .select_from(
+                    sample_properties.join(
+                        module_instrument,
+                        (module_instrument.c.module_id == sample_properties.c.module_id)
+                        & (module_instrument.c.instrument_index == sample_properties.c.instrument_index),
+                    )
+                )
+                .where(sample_properties.c.sample_hash.in_(chunk))
+                .where(module_instrument.c.name != "")
+            )
+            for row in self._connection.execute(statement).fetchall():
+                names_by_hash[row.sample_hash].append(row.name)
+
+        return {hash_: tuple(names) for hash_, names in names_by_hash.items()}
+
 
 def _row_to_sample(row: Row[Any]) -> Sample:
     """Reconstruct a Sample from a Core row, addressed by its own column names."""
     return Sample(hash=row.hash, depth=BitDepth(row.depth), channels=ChannelLayout(row.channels), frames=row.frames)
 
 
+# Every keyword below is an independent lookup resolved for this one row, with no natural
+# subgrouping short of a wrapper this function would be the only caller of.
+# pylint: disable-next=too-many-arguments
 def _row_to_sample_summary(
     row: Row[Any],
+    *,
     names: tuple[str, ...],
+    instrument_names: tuple[str, ...],
     rates: tuple[Rate, ...],
     thumbnail: SampleThumbnail | None,
     equivalence_class: EquivalenceClass | None,
 ) -> SampleSummary:
-    """Reconstruct a SampleSummary from a Core row plus its occurrences' raw names/rates, thumbnail, and class."""
+    """Reconstruct a SampleSummary from a Core row plus its occurrences' names/rates, thumbnail, and class.
+
+    The display name is drawn from the sample's own occurrence names, keeping it the label a tracker
+    shows, while the category reads the instrument names too, since a voice is often described where
+    the waveform it reaches is only numbered.
+    """
     sample_ = _row_to_sample(row)
     return SampleSummary(
         hash=sample_.hash,
@@ -177,7 +221,7 @@ def _row_to_sample_summary(
         frames=sample_.frames,
         occurrence_count=row.occurrence_count,
         display_name=choose_dominant_name(names),
-        category=classify_sample_category(names),
+        category=classify_sample_category(names + instrument_names),
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),
         dominant_rate_hz=choose_dominant_rate(rates),

@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import struct
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
 
 from sqlalchemy import Connection
 from tqdm import tqdm
@@ -15,21 +13,7 @@ from samplecore.models.module import Module
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from sampleextract.discovery import FORMAT_LOADERS, discover_modules
 from sampleextract.ingest import ingest_module
-from sampleextract.parsing import parse_module
-
-_RECOVERABLE_PARSE_ERRORS: Final[tuple[type[Exception], ...]] = (ValueError, OSError, struct.error, IndexError)
-# ValueError: TrackMod's own documented parse failures (a bad tag, a malformed structure) and every
-#   pydantic ValidationError, which subclasses it. OSError: the file could not be read. struct.error and
-#   IndexError: raw struct/array bounds failures a sufficiently corrupt file can still trigger beneath
-#   TrackMod's own ValueError guards. Anything outside this set is treated as a bug, and crashes loudly.
-
-
-@dataclass(frozen=True)
-class ExtractionFailure:
-    """One module a run could not ingest, and why."""
-
-    path: Path
-    reason: str
+from sampleextract.parsing import RECOVERABLE_PARSE_ERRORS, ExtractionFailure, parse_module
 
 
 @dataclass(frozen=True)
@@ -63,7 +47,7 @@ def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionS
 
         try:
             ingested.append(_ingest_one(connection, config, path=path, data=data, module_hash=module_hash))
-        except _RECOVERABLE_PARSE_ERRORS as error:
+        except RECOVERABLE_PARSE_ERRORS as error:
             failures.append(ExtractionFailure(path=path, reason=str(error)))
 
     return ExtractionSummary(

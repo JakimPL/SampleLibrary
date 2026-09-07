@@ -10,6 +10,9 @@ from numpy.typing import NDArray
 from scipy.signal import resample_poly
 from trackmod.core.instruments.instrument import Instrument
 from trackmod.core.instruments.keymap import pitched_keymap
+from trackmod.core.notes.pitch import Note
+from trackmod.core.patterns.builder import PatternBuilder
+from trackmod.core.patterns.cell import Cell
 from trackmod.core.patterns.grid import Pattern
 from trackmod.core.samples.depth import BitDepth
 from trackmod.core.samples.sample import Sample as TrackModSample
@@ -53,6 +56,12 @@ FILLER_FREQUENCY_STEP_HZ: Final[float] = 37.0
 # Keeps filler seeds clear of the scenario builders' own 1-12 range below, so a filler waveform's
 # random harmonic weights (see _tonal_waveform) never coincidentally shadow a scenario's.
 FILLER_SEED_OFFSET: Final[int] = 100
+
+# Each generated song plays its voices over a short ascending run, one key per channel per row, so
+# the dev library carries note events for the extraction pass to read rather than silent grids.
+PLAYED_ROW_COUNT: Final[int] = 4
+LOWEST_PLAYED_NOTE: Final[Note] = Note(48)
+PLAYED_NOTE_STEP: Final[int] = 3
 
 
 def _tonal_waveform(frame_count: int, *, frequency: float, seed: int) -> NDArray[np.float64]:
@@ -105,12 +114,27 @@ def _resample_stable_waveform(frame_count: int, *, frequency: float) -> NDArray[
     )
 
 
+def _played_pattern(*, rows: int, channels: int) -> Pattern:
+    """A grid where every channel plays an ascending run over the first few rows.
+
+    Every voice the song numbers is heard, at several pitches each, which is what gives the dev
+    library the range of note events a real collection has.
+    """
+    builder = PatternBuilder(rows=rows, channels=channels)
+    for row in range(min(PLAYED_ROW_COUNT, rows)):
+        for channel in range(channels):
+            note = Note(LOWEST_PLAYED_NOTE.value + PLAYED_NOTE_STEP * row)
+            builder.place(row, channel, Cell(note=note, instrument=channel))
+
+    return builder.build()
+
+
 def _single_instrument_song(sample: TrackModSample) -> Song:
     instrument = Instrument(name=sample.name, keymap=pitched_keymap(sample=0))
     return Song(
         name=sample.name,
         channels=1,
-        patterns=(Pattern.empty(rows=1, channels=1),),
+        patterns=(_played_pattern(rows=PLAYED_ROW_COUNT, channels=1),),
         order=OrderList(entries=(0,)),
         voices=InstrumentVoices(instruments=(instrument,), samples=(sample,)),
         playback=Playback(speed=6, tempo=125),
@@ -125,7 +149,7 @@ def _single_sample_song(sample: TrackModSample) -> Song:
     return Song(
         name=sample.name,
         channels=1,
-        patterns=(Pattern.empty(rows=SAMPLE_VOICES_PATTERN_ROWS, channels=1),),
+        patterns=(_played_pattern(rows=SAMPLE_VOICES_PATTERN_ROWS, channels=1),),
         order=OrderList(entries=(0,)),
         voices=SampleVoices(samples=(sample,)),
         playback=Playback(speed=6, tempo=125),
@@ -139,7 +163,7 @@ def _multi_instrument_song(name: str, samples: tuple[TrackModSample, ...]) -> So
     return Song(
         name=name,
         channels=len(samples),
-        patterns=(Pattern.empty(rows=1, channels=len(samples)),),
+        patterns=(_played_pattern(rows=PLAYED_ROW_COUNT, channels=len(samples)),),
         order=OrderList(entries=(0,)),
         voices=InstrumentVoices(instruments=instruments, samples=samples),
         playback=Playback(speed=6, tempo=125),

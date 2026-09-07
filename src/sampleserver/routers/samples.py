@@ -170,7 +170,10 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
         occurrences=occurrences,
         size_bytes=sample.stored_bytes,
         display_name=choose_dominant_name(item.name for item in properties),
-        category=classify_sample_category(item.name for item in properties),
+        category=classify_sample_category(
+            tuple(item.name for item in properties)
+            + PostgresSampleRepository(connection).instrument_names_by_hash([sample.hash]).get(sample.hash, ())
+        ),
         dominant_rate_hz=choose_dominant_rate(item.rate for item in properties),
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
     )

@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import pytest
 from sqlalchemy import Connection
+from trackmod.core.instruments.behaviour import DuplicateAction, DuplicateCheck, NewNoteAction
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.equivalence_classes import EquivalenceClass
+from samplecore.models.category import SampleCategory
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
+from samplecore.models.module_instrument import ModuleInstrument
 from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.storage.repositories import sample as sample_repository
+from samplecore.storage.repositories.module_instrument import PostgresModuleInstrumentRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
@@ -232,3 +236,49 @@ def test_names_and_rates_by_hash_covers_hashes_spanning_several_chunks(
 
 def test_names_and_rates_by_hash_with_no_hashes_returns_nothing(connection: Connection) -> None:
     assert PostgresSampleRepository(connection).names_and_rates_by_hash([]) == ({}, {})
+
+
+def _add_instrument(connection: Connection, *, module: Module, instrument_index: int, name: str) -> None:
+    PostgresModuleInstrumentRepository(connection).insert_many(
+        [
+            ModuleInstrument(
+                module_id=module.id,
+                instrument_index=instrument_index,
+                name=name,
+                fadeout=0,
+                global_volume=128,
+                panning=None,
+                new_note_action=NewNoteAction.CUT,
+                duplicate_check=DuplicateCheck.OFF,
+                duplicate_action=DuplicateAction.CUT,
+            )
+        ]
+    )
+
+
+def test_instrument_names_by_hash_reports_the_voice_each_occurrence_is_reached_through(
+    connection: Connection, stored_sample: Sample, stored_module: Module
+) -> None:
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="smp03")
+    _add_instrument(connection, module=stored_module, instrument_index=0, name="warm pad")
+
+    names = PostgresSampleRepository(connection).instrument_names_by_hash([stored_sample.hash])
+
+    assert names == {stored_sample.hash: ("warm pad",)}
+
+
+def test_instrument_names_by_hash_with_no_hashes_returns_nothing(connection: Connection) -> None:
+    assert PostgresSampleRepository(connection).instrument_names_by_hash([]) == {}
+
+
+def test_a_sample_is_categorized_by_the_name_of_the_voice_that_plays_it(
+    connection: Connection, stored_sample: Sample, stored_module: Module
+) -> None:
+    """A waveform stored under a bare slot number is described only by the instrument reaching it."""
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="smp03")
+    _add_instrument(connection, module=stored_module, instrument_index=0, name="warm pad")
+
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+
+    assert page[0].display_name == "smp03"
+    assert page[0].category is SampleCategory.PAD

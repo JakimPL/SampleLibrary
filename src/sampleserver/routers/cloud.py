@@ -30,16 +30,19 @@ class SampleCloudPoint(SampleCloudCoordinate):
 def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleCloudPoint, ...]:
     """Every sample's position in the library's 2D embedding space, as of the latest embedding run."""
     coordinates = PostgresCloudCoordinateRepository(connection).list_all()
-    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash(
-        [coordinate.sample_hash for coordinate in coordinates]
-    )
+    repository = PostgresSampleRepository(connection)
+    hashes = [coordinate.sample_hash for coordinate in coordinates]
+    names_by_hash, _ = repository.names_and_rates_by_hash(hashes)
+    instrument_names_by_hash = repository.instrument_names_by_hash(hashes)
     return tuple(
         SampleCloudPoint(
             sample_hash=coordinate.sample_hash,
             x=coordinate.x,
             y=coordinate.y,
             computed_at=coordinate.computed_at,
-            category=classify_sample_category(names_by_hash.get(coordinate.sample_hash, ())),
+            category=classify_sample_category(
+                names_by_hash.get(coordinate.sample_hash, ()) + instrument_names_by_hash.get(coordinate.sample_hash, ())
+            ),
         )
         for coordinate in coordinates
     )

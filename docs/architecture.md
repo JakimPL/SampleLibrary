@@ -12,8 +12,8 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 | Package | Owns | Depends on |
 |---|---|---|
-| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
-| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails (inline at ingest, and via a standalone backfill pass), and the equivalence-class detection pass. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
+| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
+| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each), and the equivalence-class detection pass. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors, UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
 | `sampleserver` | The FastAPI read API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend. Opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
 
@@ -32,8 +32,8 @@ Postgres is the single authoritative store for all catalog metadata (`Module`, `
 `SampleProperties` together with its per-tracker `xm_sample_properties`/`it_sample_properties`/
 `s3m_sample_properties` tables (MOD carries no properties beyond the shared base, so it has no
 table of its own), `SampleRelation`, `Experiment`, `sample_feature_vector`,
-`sample_cloud_coordinates`, `module_cloud_coordinates`, `sample_spectral_feature`, and
-`sample_thumbnail`). Equivalence classes are not a stored table: `samplecore.equivalence_classes`
+`sample_cloud_coordinates`, `module_cloud_coordinates`, `sample_spectral_feature`,
+`sample_thumbnail`, `module_instrument`, `note_event`, and `module_note_extraction`). Equivalence classes are not a stored table: `samplecore.equivalence_classes`
 derives them on request from `SampleRelation` rows, since the relation graph stays small even at
 real-catalog scale. The filesystem content-addressable store —
 `{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file per unique `Sample` — is the single
@@ -48,6 +48,24 @@ table: two experiments extracting concurrently write disjoint rows, keyed by
 `module_cloud_coordinates`, and `sample_spectral_feature` stay singular and global -- they represent
 whichever experiment has been deliberately *promoted* (`samplecloud.reduce.reduce_and_persist_coordinates`,
 given an explicit `experiment_id`), not per-experiment scratch space.
+
+`note_event` holds one row per key a module's patterns press, keyed by its grid position
+`(module_id, pattern_index, row_index, channel_index)`. Beside the key a cell states, each row
+carries the note it actually sounds and the occurrence it reaches, which an instrument's keymap
+decides: a keymap routes a key onto a sample *and* the note that sample sounds at, so the key a
+composer wrote and the pitch a listener hears are separate values, and Impulse Tracker is the format
+that regularly makes them differ. Extraction consumes the keymap and records its outcome, which is
+what lets a reader reach the pitch a sample is heard at without holding a routing table of its own.
+The sounding rate follows from that note and the occurrence's own rate
+(`rate * 2 ** ((sounded_note - 60) / 12)`, tracker C-5 being the rate's reference key), so it is
+computed where it is needed. A key reaching a sample below `minimum_sample_frames` keeps its note and
+leaves its slot open, since the catalog holds no occurrence to name; a cell stating no instrument
+leaves both open, its routing being a fact about how the song is played rather than what the cell
+holds. `module_instrument` records each voice slot the same numbering addresses, and its names feed
+`classify_sample_category` alongside the occurrence names -- a tracker names an instrument apart from
+the waveforms its keys reach, so a sample stored as "smp03" is described only there.
+`module_note_extraction` records which modules have been read, so a module whose patterns press no
+keys still reads as finished and a resumed pass spares it a second parse.
 
 Local, machine-specific configuration (the module source directory, the library root, the catalog's
 connection URL) is read from a gitignored `config.toml` via `samplecore.config.load_config`, never

@@ -15,6 +15,7 @@ from sqlalchemy import (
     Engine,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     MetaData,
     PrimaryKeyConstraint,
@@ -29,8 +30,11 @@ from sqlalchemy import (
 from sqlalchemy.engine import RootTransaction
 from sqlalchemy.pool import NullPool
 from sqlalchemy.types import ARRAY
+from trackmod.core.instruments.behaviour import DuplicateAction, DuplicateCheck, NewNoteAction
 from trackmod.core.samples.depth import BitDepth
 from trackmod.core.samples.loop import LoopMode
+from trackmod.spec.levels import MAX_INSTRUMENT_VOLUME, MAX_PANNING, MIN_INSTRUMENT_VOLUME, MIN_PANNING
+from trackmod.spec.pitch import NOTE_COUNT
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.relation import RelationType
@@ -47,6 +51,10 @@ _CHANNEL_LAYOUT_VALUES: Final[tuple[int, ...]] = tuple(layout.value for layout i
 _TRACKER_FORMAT_VALUES: Final[tuple[str, ...]] = tuple(tracker.value for tracker in TrackerFormat)
 _LOOP_MODE_VALUES: Final[tuple[str, ...]] = tuple(mode.value for mode in LoopMode)
 _RELATION_TYPE_VALUES: Final[tuple[str, ...]] = tuple(relation_type.value for relation_type in RelationType)
+_NEW_NOTE_ACTION_VALUES: Final[tuple[int, ...]] = tuple(action.value for action in NewNoteAction)
+_DUPLICATE_CHECK_VALUES: Final[tuple[int, ...]] = tuple(check.value for check in DuplicateCheck)
+_DUPLICATE_ACTION_VALUES: Final[tuple[int, ...]] = tuple(action.value for action in DuplicateAction)
+_HIGHEST_NOTE: Final[int] = NOTE_COUNT - 1
 
 
 def _non_negative(column_name: str) -> ColumnElement[bool]:
@@ -296,6 +304,82 @@ sample_feature_vector = Table(
     Column("vector", ARRAY(Double), nullable=False),
     Column("computed_at", DateTime(timezone=True), nullable=False),
     PrimaryKeyConstraint("experiment_id", "sample_hash"),
+)
+
+module_instrument = Table(
+    "module_instrument",
+    metadata,
+    Column("module_id", Integer, ForeignKey("module.id"), nullable=False),
+    Column("instrument_index", USmallInt, nullable=False),
+    Column("name", String, nullable=False),
+    Column("fadeout", USmallInt, nullable=False),
+    Column("global_volume", UTinyInt, nullable=False),
+    Column("panning", UTinyInt, nullable=True),
+    Column("new_note_action", UTinyInt, nullable=False),
+    Column("duplicate_check", UTinyInt, nullable=False),
+    Column("duplicate_action", UTinyInt, nullable=False),
+    PrimaryKeyConstraint("module_id", "instrument_index"),
+    CheckConstraint(
+        column("global_volume").between(MIN_INSTRUMENT_VOLUME, MAX_INSTRUMENT_VOLUME),
+        name="module_instrument_global_volume_check",
+    ),
+    CheckConstraint(column("panning").between(MIN_PANNING, MAX_PANNING), name="module_instrument_panning_check"),
+    CheckConstraint(
+        column("new_note_action").in_(_NEW_NOTE_ACTION_VALUES), name="module_instrument_new_note_action_check"
+    ),
+    CheckConstraint(
+        column("duplicate_check").in_(_DUPLICATE_CHECK_VALUES), name="module_instrument_duplicate_check_check"
+    ),
+    CheckConstraint(
+        column("duplicate_action").in_(_DUPLICATE_ACTION_VALUES), name="module_instrument_duplicate_action_check"
+    ),
+    CheckConstraint(_non_negative("instrument_index"), name="module_instrument_instrument_index_check"),
+    CheckConstraint(_non_negative("fadeout"), name="module_instrument_fadeout_check"),
+)
+
+note_event = Table(
+    "note_event",
+    metadata,
+    Column("module_id", Integer, ForeignKey("module.id"), nullable=False),
+    Column("pattern_index", USmallInt, nullable=False),
+    Column("row_index", USmallInt, nullable=False),
+    Column("channel_index", USmallInt, nullable=False),
+    Column("note", UTinyInt, nullable=False),
+    Column("sounded_note", UTinyInt, nullable=True),
+    Column("instrument_index", USmallInt, nullable=True),
+    Column("sample_slot", USmallInt, nullable=True),
+    PrimaryKeyConstraint("module_id", "pattern_index", "row_index", "channel_index"),
+    # Postgres's default MATCH SIMPLE holds a composite foreign key satisfied as soon as one of its
+    # columns is NULL, which is what lets a key routed onto a sample below the ingest frame floor
+    # stay on file with an open slot while every filled slot is still checked against a real
+    # occurrence.
+    ForeignKeyConstraint(
+        ["module_id", "instrument_index", "sample_slot"],
+        ["sample_properties.module_id", "sample_properties.instrument_index", "sample_properties.sample_slot"],
+    ),
+    Index("note_event_occurrence_index", "module_id", "instrument_index", "sample_slot"),
+    CheckConstraint(column("note").between(0, _HIGHEST_NOTE), name="note_event_note_check"),
+    CheckConstraint(column("sounded_note").between(0, _HIGHEST_NOTE), name="note_event_sounded_note_check"),
+    CheckConstraint(
+        column("instrument_index").is_not(None) | column("sounded_note").is_(None),
+        name="note_event_sounded_note_instrument_check",
+    ),
+    CheckConstraint(
+        column("instrument_index").is_not(None) | column("sample_slot").is_(None),
+        name="note_event_sample_slot_instrument_check",
+    ),
+    CheckConstraint(_non_negative("pattern_index"), name="note_event_pattern_index_check"),
+    CheckConstraint(_non_negative("row_index"), name="note_event_row_index_check"),
+    CheckConstraint(_non_negative("channel_index"), name="note_event_channel_index_check"),
+    CheckConstraint(_non_negative("instrument_index"), name="note_event_instrument_index_check"),
+    CheckConstraint(_non_negative("sample_slot"), name="note_event_sample_slot_check"),
+)
+
+module_note_extraction = Table(
+    "module_note_extraction",
+    metadata,
+    Column("module_id", Integer, ForeignKey("module.id"), primary_key=True),
+    Column("extracted_at", DateTime(timezone=True), nullable=False),
 )
 
 
