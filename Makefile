@@ -59,26 +59,38 @@ reset-library:
 .PHONY: rebuild-library
 rebuild-library: extract equivalence embed embed-modules-placeholder
 
+# A throwaway local Postgres for dev-library work, matching docker-compose.yml's own credentials.
+# Not persisted beyond the container's lifetime (--rm): dev-library is itself disposable, rebuilt
+# from scratch via `make library-dev` whenever it's needed, so its database doesn't need to survive
+# a restart either.
+DEV_DATABASE_URL := postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary
+
+.PHONY: postgres-dev
+postgres-dev:
+	docker run --rm -d --name samplelibrary-postgres-dev -p 5432:5432 \
+		-e POSTGRES_USER=samplelibrary -e POSTGRES_PASSWORD=samplelibrary -e POSTGRES_DB=samplelibrary \
+		postgres:17-alpine
+
 .PHONY: library-dev
 library-dev:
 	uv run python scripts/build_dev_library.py
 
 .PHONY: extract-dev
 extract-dev: library-dev
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run sampleextract
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run sampleextract
 
 .PHONY: equivalence-dev
 equivalence-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run sampleequivalence
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run sampleequivalence
 
 .PHONY: embed-dev
 embed-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run samplecloud
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run samplecloud-modules-placeholder
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplecloud
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplecloud-modules-placeholder
 
 .PHONY: thumbnails-dev
 thumbnails-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run samplethumbnail
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplethumbnail
 
 .PHONY: reset-dev
 reset-dev:
@@ -86,7 +98,7 @@ reset-dev:
 
 .PHONY: serve-dev
 serve-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml uv run uvicorn sampleserver.main:app --reload --port 8001
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run uvicorn sampleserver.main:app --reload --port 8001
 
 .PHONY: serve
 serve:

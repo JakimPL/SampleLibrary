@@ -24,10 +24,6 @@ notebooks/__marimo__/
 dev-library/
 
 # Regenerable data: never commit
-*.duckdb
-*.duckdb.wal
-embeddings/
-*.parquet
 *.npz
 
 # Frontend

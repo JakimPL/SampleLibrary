@@ -1,7 +1,7 @@
 # Architecture & Ownership
 
 SampleLibrary turns a personal collection of tracker modules into a browsable, deduplicated
-sample library: a DuckDB catalog of modules, samples, and their tracker-specific properties; a
+sample library: a Postgres catalog of modules, samples, and their tracker-specific properties; a
 content-addressable store of extracted audio; detected equivalence classes between near-duplicate
 samples; and a web application for navigating and visualizing all of it. The project has two
 natures — an offline, batch-oriented extraction/analysis tool, and a served read-only web app —
@@ -12,10 +12,10 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 | Package | Owns | Depends on |
 |---|---|---|
-| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `EquivalenceClass`, `SampleSpectralFeature`), the DuckDB schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `duckdb`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
-| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the DuckDB catalog, computing cached waveform-preview thumbnails (inline at ingest, and via a standalone backfill pass), and the equivalence-class detection pass. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
-| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol), UMAP dimensionality reduction (explicit Euclidean metric), persistence of raw feature vectors (Parquet), and persistence of each sample's standardized vector and 2D coordinate (DuckDB) -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
-| `sampleserver` | The FastAPI read API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend. Opens its DuckDB connection read-only, so a bug in a route handler cannot corrupt the library. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
+| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
+| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails (inline at ingest, and via a standalone backfill pass), and the equivalence-class detection pass. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
+| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors, UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
+| `sampleserver` | The FastAPI read API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend. Opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
 
 ## Boundaries the import-linter contracts enforce
 
@@ -28,33 +28,43 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 ## Persistence
 
-DuckDB is the single authoritative store for all catalog metadata (`Module`, `Sample`,
+Postgres is the single authoritative store for all catalog metadata (`Module`, `Sample`,
 `SampleProperties` together with its per-tracker `xm_sample_properties`/`it_sample_properties`/
 `s3m_sample_properties` tables (MOD carries no properties beyond the shared base, so it has no
-table of its own), `SampleRelation`, `sample_cloud_coordinates`, `module_cloud_coordinates`,
-`sample_spectral_feature`, and `sample_thumbnail`). Equivalence classes are not a stored table:
-`samplecore.equivalence_classes` derives them on request from `SampleRelation` rows, since the
-relation graph stays small even at real-catalog scale. The filesystem content-addressable store —
+table of its own), `SampleRelation`, `Experiment`, `sample_feature_vector`,
+`sample_cloud_coordinates`, `module_cloud_coordinates`, `sample_spectral_feature`, and
+`sample_thumbnail`). Equivalence classes are not a stored table: `samplecore.equivalence_classes`
+derives them on request from `SampleRelation` rows, since the relation graph stays small even at
+real-catalog scale. The filesystem content-addressable store —
 `{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file per unique `Sample` — is the single
 authoritative store for audio bytes. Neither is a cache of the other, except that `Sample` rows
 could in principle be rebuilt by rehashing the store; that is a recoverability property, not a
-substitute for backing up the `.duckdb` file itself.
+substitute for backing up the catalog itself.
 
-Local, machine-specific paths (the module source directory, the library root) are read from a
-gitignored `config.toml` via `samplecore.config.load_config`, never hardcoded into source.
-`config.example.toml` documents the expected shape.
+`sample_feature_vector` holds one `FeatureExtractor` backend's raw output per sample, scoped to an
+`Experiment` row (its backend name, parameters, and a human label) rather than a single global
+table: two experiments extracting concurrently write disjoint rows, keyed by
+`(experiment_id, sample_hash)`, so neither can clobber the other's vectors. `sample_cloud_coordinates`,
+`module_cloud_coordinates`, and `sample_spectral_feature` stay singular and global -- they represent
+whichever experiment has been deliberately *promoted* (`samplecloud.reduce.reduce_and_persist_coordinates`,
+given an explicit `experiment_id`), not per-experiment scratch space.
+
+Local, machine-specific configuration (the module source directory, the library root, the catalog's
+connection URL) is read from a gitignored `config.toml` via `samplecore.config.load_config`, never
+hardcoded into source; the connection URL can also be supplied via the `SAMPLELIBRARY_DATABASE_URL`
+environment variable (taking precedence over the config file), so credentials need not live in a
+file at all. `config.example.toml` documents the expected shape.
 
 A repository that recomputes a whole table's contents from scratch every run -- the cloud
 coordinate, module coordinate, and spectral feature repositories, whenever a fresh embedding pass
 replaces every row -- exposes `replace_all` alongside its per-row `upsert`: clear the table, then
-bulk-load every row through `samplecore.storage.database.bulk_insert_csv`, never a loop of
-individual upserts. Measured directly against this schema: DuckDB's Python client has no fast path
-for inserting many parameterized rows -- `executemany`, one large multi-row `VALUES` statement, and
-DuckDB's own `values()` relation constructor were all measured at the same few-milliseconds-per-row
-cost regardless of batch size, turning tens of thousands of rows into minutes. Writing the same rows
-to a temporary CSV file and letting DuckDB's own `COPY ... FROM` read it back avoids that per-row
-cost entirely -- the same technique `feature_store.py` already uses for the Parquet side of this
-same problem.
+bulk-load every row through `samplecore.storage.database.bulk_insert`, never a loop of individual
+upserts. Parameterized per-row inserts (`executemany`, one large multi-row `VALUES` statement) were
+measured at the same few-milliseconds-per-row cost regardless of batch size under this project's
+previous engine, turning tens of thousands of rows into minutes; `bulk_insert` reaches past
+SQLAlchemy's `Connection` for the underlying `psycopg` connection and streams rows through
+Postgres's own `COPY ... FROM STDIN`, avoiding that per-row cost entirely without assuming the
+client and server share a filesystem the way a file-path-based `COPY` would.
 
 ## Deployment
 
@@ -63,29 +73,29 @@ same problem.
 app itself. The root `Dockerfile` builds a runtime image for `sampleserver` alone, installing only
 the `server` extra (`fastapi`, `uvicorn`) -- `sampleextract`/`samplecloud`'s own heavier
 dependencies (`librosa`, `umap-learn`, `scikit-learn`) never reach that image, mirroring the
-`sampleserver never imports the offline batch pipelines` import-linter contract above. The
-container runs multiple `uvicorn` worker processes (`--workers`, not `--reload`) rather than the
-single-process dev server `make serve` starts: each worker opens its own read-only DuckDB
-connection per request (`sampleserver.dependencies.get_connection`), which is exactly the
-concurrent-readers pattern DuckDB's read-only mode supports, so multiple people browsing the
-library through one deployed server works correctly with no shared state between workers. The
-library's data directory and a `config.toml` pointing at its in-container path are supplied at
-`docker run` time (a bind mount plus `SAMPLELIBRARY_CONFIG`), never baked into the image, mirroring
-`config.toml` never being committed to the repository.
+`sampleserver never imports the offline batch pipelines` import-linter contract above.
+`docker-compose.yml` adds a `postgres` service alongside it (a named volume for persistence) for
+local development; a real deployment points `database_url`/`SAMPLELIBRARY_DATABASE_URL` at whatever
+Postgres instance it actually runs against, container or otherwise. The container runs multiple
+`uvicorn` worker processes (`--workers`, not `--reload`) rather than the single-process dev server
+`make serve` starts: each worker opens its own read-only Postgres connection per request
+(`sampleserver.dependencies.get_connection`), which Postgres's own concurrent-connection handling
+supports natively, so multiple people browsing the library through one deployed server works
+correctly with no shared state between workers. The library's data directory and a `config.toml`
+pointing at its in-container path are supplied at `docker run` time (a bind mount plus
+`SAMPLELIBRARY_CONFIG`), never baked into the image, mirroring `config.toml` never being committed
+to the repository.
 
-DuckDB's own concurrency model is a single writer *or* multiple readers, not both against the same
-file at once: a database file already open for read-write excludes every other connection, read-only
-included, until the writer closes it -- confirmed directly against this project's own duckdb 1.5.5
-by holding one process's write transaction open and having a second, separate process try to open a
-genuine read-only connection to the same file concurrently, which failed immediately (an `IOException`
-reporting the file already open elsewhere, not a slow block) rather than reading alongside it. This
-was verified on Windows, the platform this project is developed on; DuckDB's documented concurrency
-model describes the same single-writer-process architecture generally, not as an OS-specific
-caveat, so the same exclusion is the safer assumption on any deployment platform absent a similar
-check run there. The operational consequence: a batch job (`sampleextract`, `sampleequivalence`,
-`samplethumbnail`, `samplecloud`) must never run while `sampleserver` is serving live traffic
-against the same catalog file -- run batch jobs during a maintenance window with the server stopped,
-or restart the server once a batch job completes, rather than expecting the two to overlap safely.
+Postgres supports genuine concurrent readers *and* writers against the same database, unlike this
+project's previous engine (DuckDB), which excluded every other connection -- read-only included --
+while one process held a write transaction open. A batch job (`sampleextract`, `sampleequivalence`,
+`samplethumbnail`, `samplecloud`) can now run alongside `sampleserver` serving live traffic without
+that exclusion; the operational concern that remains is a batch job's own resource footprint on the
+host machine (CPU contention, not lock contention -- still worth timing a heavy local run
+accordingly). `samplecloud` in particular writes into its own experiment
+(`sample_feature_vector`, scoped by `experiment_id`) and never touches `sample_cloud_coordinates`
+until `reduce_and_persist_coordinates`'s own explicit promotion step, so an in-progress extraction
+run has no visible effect on what the server or other experiments see until that promotion happens.
 
 ## Sample cloud embeddings
 
@@ -99,11 +109,12 @@ means across early/mid/late thirds of the clip, a duration-normalized attack-tim
 onset detection, and delta-MFCC statistics capturing how fast timbre moves. The projection and the
 persisted "spectral distance" both derive directly from this vector's length and composition, so
 changing it -- adding, removing, or reweighting a feature group -- changes what similarity means
-for the whole library and requires a full re-embed: clear the feature-store cache
-(`{cloud_artifact_directory}/features.parquet`) and rerun `samplecloud` so every sample's vector,
-UMAP coordinate, and persisted spectral feature reflect the new method consistently. Reusing an old
-cache against a changed extractor would silently mix two incompatible vector shapes in one
-projection.
+for the whole library. Because every extraction run is scoped to its own `Experiment`, this no
+longer risks mixing incompatible vector shapes the way a single shared cache once did: run the
+changed extractor as a new experiment (`samplecloud --backend <name>`), inspect and compare its
+result, and only promote it (`reduce_and_persist_coordinates` against that experiment's id) once
+satisfied -- the previously promoted experiment's `sample_cloud_coordinates` stay exactly as they
+were until that deliberate step.
 
 ## Sample categorization
 
