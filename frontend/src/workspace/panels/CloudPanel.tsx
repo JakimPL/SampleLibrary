@@ -6,7 +6,7 @@ import { CloudView } from "../../cloud/CloudView";
 import type { CloudEntityPoint } from "../../cloud/geometry";
 import { useCloud } from "../../cloud/useCloud";
 import { useModuleCloud } from "../../cloud/useModuleCloud";
-import { useAudioPreview } from "../../samples/useAudioPreview";
+import { pitchAtReferenceNote, useAudioPreview } from "../../samples/useAudioPreview";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
 import { Loading } from "../../shared/Loading";
@@ -30,6 +30,7 @@ function samplePoints(coordinates: readonly CloudPoint[]): readonly CloudEntityP
         x: coordinate.x,
         y: coordinate.y,
         category: coordinate.category,
+        ...(coordinate.dominant_rate_hz !== null && { dominantRateHz: coordinate.dominant_rate_hz }),
     }));
 }
 
@@ -85,6 +86,17 @@ export function CloudPanel(): ReactElement {
     const clearHighlight = useSelectionStore((selection) => selection.clearHighlight);
     const setComparisonSample = useSelectionStore((selection) => selection.setComparisonSample);
     const { play } = useAudioPreview();
+    const rateByHash = useMemo(() => {
+        const rates = new Map<string, number>();
+        if (state.status === "success") {
+            for (const point of state.data) {
+                if (point.dominantRateHz !== undefined) {
+                    rates.set(point.ref.hash, point.dominantRateHz);
+                }
+            }
+        }
+        return rates;
+    }, [state]);
 
     useEffect(() => {
         setHovered(null);
@@ -100,7 +112,7 @@ export function CloudPanel(): ReactElement {
     // without doing anything else.
     function handleActivate(entity: EntityRef): void {
         if (entity.kind === "sample") {
-            play(entity.hash);
+            play(entity.hash, pitchAtReferenceNote(rateByHash.get(entity.hash)));
         }
     }
 

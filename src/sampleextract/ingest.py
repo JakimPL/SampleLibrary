@@ -107,7 +107,6 @@ def ingest_module(
             song=song,
             module_id=module.id,
             extracted_at=ingested_at,
-            minimum_sample_frames=minimum_sample_frames,
         )
 
     return module

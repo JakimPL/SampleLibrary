@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import type { ModuleDetail } from "../api/modules";
 import { formatLoop } from "../samples/occurrenceFormat";
 import { Thumbnail } from "../samples/Thumbnail";
+import { pitchAtReferenceNote } from "../samples/useAudioPreview";
 import { classNames } from "../shared/classNames";
 import { formatBytes } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
@@ -29,7 +30,11 @@ export function ModuleSampleRow({ occurrence }: ModuleSampleRowProps): ReactElem
             onDoubleClick={onDoubleClick}
         >
             <td>
-                <Thumbnail sampleHash={occurrence.sample.hash} peaks={occurrence.sample.thumbnail} />
+                <Thumbnail
+                    sampleHash={occurrence.sample.hash}
+                    peaks={occurrence.sample.thumbnail}
+                    pitch={pitchAtReferenceNote(occurrence.properties.rate)}
+                />
             </td>
             <td className="cell-name">
                 <Link to={href} className="cell-primary">

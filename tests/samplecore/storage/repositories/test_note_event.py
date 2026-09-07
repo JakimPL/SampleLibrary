@@ -181,3 +181,42 @@ def test_note_usage_for_a_sample_no_pattern_plays_returns_nothing(
     connection: Connection, stored_sample: Sample, stored_occurrence: None
 ) -> None:
     assert PostgresNoteEventRepository(connection).note_usage_for_sample(stored_sample.hash) == ()
+
+
+def test_the_dominant_note_is_the_one_the_most_events_reach(
+    connection: Connection, stored_sample: Sample, stored_module: Module, stored_occurrence: None
+) -> None:
+    repository = PostgresNoteEventRepository(connection)
+    repository.insert_many(
+        [
+            _note_event(stored_module, row_index=0, sounded_note=PRESSED_NOTE),
+            _note_event(stored_module, row_index=1, sounded_note=SOUNDED_NOTE),
+            _note_event(stored_module, row_index=2, sounded_note=SOUNDED_NOTE),
+        ]
+    )
+
+    assert repository.dominant_note_by_hash([stored_sample.hash]) == {stored_sample.hash: SOUNDED_NOTE}
+
+
+def test_a_tied_dominant_note_resolves_to_the_lower_of_the_two(
+    connection: Connection, stored_sample: Sample, stored_module: Module, stored_occurrence: None
+) -> None:
+    repository = PostgresNoteEventRepository(connection)
+    repository.insert_many(
+        [
+            _note_event(stored_module, row_index=0, sounded_note=SOUNDED_NOTE),
+            _note_event(stored_module, row_index=1, sounded_note=PRESSED_NOTE),
+        ]
+    )
+
+    assert repository.dominant_note_by_hash([stored_sample.hash]) == {stored_sample.hash: PRESSED_NOTE}
+
+
+def test_dominant_note_leaves_out_a_sample_no_pattern_plays(
+    connection: Connection, stored_sample: Sample, stored_occurrence: None
+) -> None:
+    assert PostgresNoteEventRepository(connection).dominant_note_by_hash([stored_sample.hash]) == {}
+
+
+def test_dominant_note_with_no_hashes_returns_nothing(connection: Connection) -> None:
+    assert PostgresNoteEventRepository(connection).dominant_note_by_hash([]) == {}

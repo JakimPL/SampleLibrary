@@ -511,6 +511,15 @@ export interface components {
             /** Thumbnail */
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
         };
+        /**
+         * Note
+         * @description A playable key, counted in semitones above C-0.
+         *
+         *     Trackers number their keyboards from C-0, and the octave a tracker prints is one above the octave the
+         *     same pitch carries in MIDI: tracker C-5 is MIDI note 72. The stored number is the tracker numbering,
+         *     which Impulse Tracker writes directly and FastTracker 2 writes offset by one.
+         */
+        readonly Note: number;
         /** Page[Module] */
         readonly Page_Module_: {
             /** Items */
@@ -600,10 +609,12 @@ export interface components {
         readonly SampleCategory: "kick" | "snare" | "clap" | "hi_hat" | "cymbal" | "percussion" | "bass" | "lead" | "pad" | "pluck" | "vocal" | "fx" | "loop" | "uncategorized";
         /**
          * SampleCloudPoint
-         * @description A SampleCloudCoordinate together with its sample's derived category, for cloud coloring.
+         * @description A SampleCloudCoordinate together with what a viewer needs to colour and hear the point.
          *
          *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
-         *     sample's own occurrence names -- rather than stored alongside the coordinate itself.
+         *     sample's own occurrence names together with the names of the instruments reaching it -- rather
+         *     than stored alongside the coordinate itself. ``dominant_rate_hz`` travels with the point so
+         *     clicking one plays it at a real tracker rate; it is ``None`` for a sample with no occurrences.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -618,6 +629,8 @@ export interface components {
              */
             readonly computed_at: string;
             readonly category: components["schemas"]["SampleCategory"];
+            /** Dominant Rate Hz */
+            readonly dominant_rate_hz: number | null;
         };
         /**
          * SampleDetail
@@ -762,8 +775,11 @@ export interface components {
          *     to, resolved from the whole catalog's relation graph, and is ``None`` for a sample with no
          *     detected relation. ``equivalence_member_count`` is that class's total size (1 for a sample
          *     with no class), independent of how many of its members are present on this page. ``category``
-         *     resolves the same way ``display_name`` does, via `samplecore.categorization.classify_sample_category`
-         *     against the sample's own occurrence names.
+         *     resolves the same way ``display_name`` does, via `samplecore.categorization.classify_sample_category`,
+         *     against the sample's own occurrence names together with the names of the instruments reaching it.
+         *     ``dominant_note`` is the note the library plays this sample at most often, which with
+         *     ``dominant_rate_hz`` gives the pitch a preview should sound at; it is ``None`` for a sample whose
+         *     modules have not had their patterns read, and for one no pattern plays.
          */
         readonly SampleSummary: {
             /** Hash */
@@ -783,6 +799,7 @@ export interface components {
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
             /** Dominant Rate Hz */
             readonly dominant_rate_hz: number | null;
+            readonly dominant_note: components["schemas"]["Note"] | null;
             /** Equivalence Class Hash */
             readonly equivalence_class_hash: string | null;
             /** Equivalence Member Count */
@@ -791,12 +808,17 @@ export interface components {
         /**
          * SimilarSample
          * @description One neighbor in a sample's spectral-distance nearest-neighbor listing.
+         *
+         *     ``dominant_rate_hz`` travels with the neighbour so a listener hears it at a real tracker rate
+         *     rather than at the stored file's own header rate; it is ``None`` for a sample with no occurrences.
          */
         readonly SimilarSample: {
             /** Hash */
             readonly hash: string;
             /** Distance */
             readonly distance: number;
+            /** Dominant Rate Hz */
+            readonly dominant_rate_hz: number | null;
         };
         /**
          * TrackerFormat

@@ -76,7 +76,6 @@ def extract_missing_notes(config: LibraryConfig, connection: Connection, *, forc
                 song=song,
                 module_id=module.id,
                 extracted_at=datetime.now(UTC),
-                minimum_sample_frames=config.minimum_sample_frames,
             )
 
         read_module_ids.add(module.id)

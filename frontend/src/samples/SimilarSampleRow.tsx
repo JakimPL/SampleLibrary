@@ -6,6 +6,7 @@ import { classNames } from "../shared/classNames";
 import { shortHash } from "../shared/format";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
 import { PlayButton } from "./PlayButton";
+import { pitchAtReferenceNote } from "./useAudioPreview";
 
 const DISTANCE_DECIMAL_PLACES = 3;
 
@@ -26,7 +27,9 @@ export function SimilarSampleRow({ similar }: SimilarSampleRowProps): ReactEleme
             onDoubleClick={onDoubleClick}
         >
             <td>
-                <PlayButton sampleHash={similar.hash}>▶</PlayButton>
+                <PlayButton sampleHash={similar.hash} pitch={pitchAtReferenceNote(similar.dominant_rate_hz)}>
+                    ▶
+                </PlayButton>
             </td>
             <td className="cell-name">
                 <Link to={href} className="cell-primary mono">

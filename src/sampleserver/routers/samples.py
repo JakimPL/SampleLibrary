@@ -71,12 +71,17 @@ class SampleDistance(BaseModel):
 
 
 class SimilarSample(BaseModel):
-    """One neighbor in a sample's spectral-distance nearest-neighbor listing."""
+    """One neighbor in a sample's spectral-distance nearest-neighbor listing.
+
+    ``dominant_rate_hz`` travels with the neighbour so a listener hears it at a real tracker rate
+    rather than at the stored file's own header rate; it is ``None`` for a sample with no occurrences.
+    """
 
     model_config = FROZEN
 
     hash: SampleHash
     distance: float
+    dominant_rate_hz: Rate | None
 
 
 class SampleNotePlayed(BaseModel):
@@ -308,7 +313,17 @@ def get_similar_samples(
         raise HTTPException(status_code=404, detail=f"sample {sample_hash!r} has no spectral feature vector yet")
 
     neighbors = nearest_neighbors(sample_hash, vectors_by_hash, limit=limit)
-    return tuple(SimilarSample(hash=neighbor_hash, distance=distance) for neighbor_hash, distance in neighbors)
+    _, rates_by_hash = PostgresSampleRepository(connection).names_and_rates_by_hash(
+        [neighbor_hash for neighbor_hash, _ in neighbors]
+    )
+    return tuple(
+        SimilarSample(
+            hash=neighbor_hash,
+            distance=distance,
+            dominant_rate_hz=choose_dominant_rate(rates_by_hash.get(neighbor_hash, ())),
+        )
+        for neighbor_hash, distance in neighbors
+    )
 
 
 def _modules_by_hash(connection: Connection, properties: tuple[TrackerSampleProperties, ...]) -> dict[str, Module]:

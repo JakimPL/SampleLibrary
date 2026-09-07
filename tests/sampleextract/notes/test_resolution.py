@@ -19,9 +19,10 @@ from sampleextract.notes.resolution import resolve_module_instruments, resolve_n
 from sampleextract.parsing import parse_module
 
 MODULE_ID = 7
-MINIMUM_SAMPLE_FRAMES = 8
 PRESSED_KEY = Note(60)
 SILENT_ALTERNATIVE_KEY = Note(48)
+# Every slot the small songs below could name, so a test states only what it withholds.
+CATALOGUED_SLOTS = frozenset((instrument, slot) for instrument in range(4) for slot in range(4))
 
 
 @dataclass(frozen=True)
@@ -61,7 +62,7 @@ def test_every_format_resolves_its_one_note_to_the_first_occurrence(
 ) -> None:
     song = parse_module(request.getfixturevalue(case.fixture_name), tracker=case.tracker)
 
-    events = resolve_note_events(song, module_id=MODULE_ID, minimum_sample_frames=MINIMUM_SAMPLE_FRAMES)
+    events = resolve_note_events(song, module_id=MODULE_ID, catalogued_slots=CATALOGUED_SLOTS)
 
     assert len(events) == 1
     assert events[0].note == played_note
@@ -76,7 +77,7 @@ def test_an_impulse_tracker_keymap_resolves_a_key_to_the_note_it_sounds(
     """The resolved note is what the routing produces, which is a different value from the key pressed."""
     song = parse_module(transposing_it_module_bytes, tracker=TrackerFormat.IT)
 
-    events = resolve_note_events(song, module_id=MODULE_ID, minimum_sample_frames=MINIMUM_SAMPLE_FRAMES)
+    events = resolve_note_events(song, module_id=MODULE_ID, catalogued_slots=CATALOGUED_SLOTS)
 
     assert len(events) == 1
     assert events[0].note == routed_key
@@ -90,7 +91,7 @@ def test_a_cell_naming_no_instrument_leaves_its_routing_open() -> None:
         samples=(_sample(),), instruments=(Instrument(name="voice", keymap=pitched_keymap(sample=0)),), pattern=pattern
     )
 
-    events = resolve_note_events(song, module_id=MODULE_ID, minimum_sample_frames=MINIMUM_SAMPLE_FRAMES)
+    events = resolve_note_events(song, module_id=MODULE_ID, catalogued_slots=CATALOGUED_SLOTS)
 
     assert len(events) == 1
     assert events[0].note == PRESSED_KEY
@@ -99,16 +100,18 @@ def test_a_cell_naming_no_instrument_leaves_its_routing_open() -> None:
     assert events[0].sample_slot is None
 
 
-def test_a_key_reaching_a_sample_below_the_catalogued_floor_keeps_its_note_without_a_slot() -> None:
+def test_a_key_reaching_an_occurrence_the_catalog_lacks_keeps_its_note_without_a_slot() -> None:
+    """The catalog leaves out a slot it holds no occurrence for -- a too-short sample, say -- and a
+    key routed onto one still records the note it sounds."""
     pattern = PatternBuilder(rows=1, channels=1)
     pattern.place(0, 0, Cell(note=PRESSED_KEY, instrument=0))
     song = _song(
-        samples=(_sample(frames=MINIMUM_SAMPLE_FRAMES - 1),),
+        samples=(_sample(),),
         instruments=(Instrument(name="voice", keymap=pitched_keymap(sample=0)),),
         pattern=pattern,
     )
 
-    events = resolve_note_events(song, module_id=MODULE_ID, minimum_sample_frames=MINIMUM_SAMPLE_FRAMES)
+    events = resolve_note_events(song, module_id=MODULE_ID, catalogued_slots=frozenset())
 
     assert events[0].sounded_note == PRESSED_KEY
     assert events[0].sample_slot is None
@@ -120,7 +123,7 @@ def test_a_key_the_keymap_leaves_silent_resolves_to_neither_a_note_nor_a_slot() 
     keymap = routed_keymap({SILENT_ALTERNATIVE_KEY: KeyAssignment(sample=0, note=SILENT_ALTERNATIVE_KEY)})
     song = _song(samples=(_sample(),), instruments=(Instrument(name="voice", keymap=keymap),), pattern=pattern)
 
-    events = resolve_note_events(song, module_id=MODULE_ID, minimum_sample_frames=MINIMUM_SAMPLE_FRAMES)
+    events = resolve_note_events(song, module_id=MODULE_ID, catalogued_slots=CATALOGUED_SLOTS)
 
     assert events[0].sounded_note is None
     assert events[0].sample_slot is None
@@ -146,7 +149,7 @@ def test_a_slot_is_numbered_within_its_instrument_rather_than_by_the_song_s_samp
         pattern=pattern,
     )
 
-    events = resolve_note_events(song, module_id=MODULE_ID, minimum_sample_frames=MINIMUM_SAMPLE_FRAMES)
+    events = resolve_note_events(song, module_id=MODULE_ID, catalogued_slots=CATALOGUED_SLOTS)
 
     assert events[0].sample_slot == 1
 
@@ -159,7 +162,7 @@ def test_every_grid_position_holding_a_key_becomes_its_own_event() -> None:
         samples=(_sample(),), instruments=(Instrument(name="voice", keymap=pitched_keymap(sample=0)),), pattern=pattern
     )
 
-    events = resolve_note_events(song, module_id=MODULE_ID, minimum_sample_frames=MINIMUM_SAMPLE_FRAMES)
+    events = resolve_note_events(song, module_id=MODULE_ID, catalogued_slots=CATALOGUED_SLOTS)
 
     assert {(event.row_index, event.channel_index) for event in events} == {(0, 0), (3, 1)}
 
@@ -171,7 +174,7 @@ def test_a_pattern_holding_no_keys_yields_no_events() -> None:
         pattern=PatternBuilder(rows=4, channels=1),
     )
 
-    assert resolve_note_events(song, module_id=MODULE_ID, minimum_sample_frames=MINIMUM_SAMPLE_FRAMES) == ()
+    assert resolve_note_events(song, module_id=MODULE_ID, catalogued_slots=CATALOGUED_SLOTS) == ()
 
 
 def test_a_sample_addressed_module_still_reports_an_instrument_slot_per_sample(

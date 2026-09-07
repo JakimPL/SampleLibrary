@@ -8,7 +8,17 @@ import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
 import { CATEGORY_LABELS } from "./category";
+import { REFERENCE_NOTE } from "./nominalRate";
 import { Thumbnail } from "./Thumbnail";
+import type { PreviewPitch } from "./useAudioPreview";
+
+/** The pitch a listing row previews at: the rate this sample is mostly declared at, sounded at
+ * the note the library mostly plays it at. */
+function previewPitchFor(sample: SampleSummary): PreviewPitch | null {
+    return sample.dominant_rate_hz === null
+        ? null
+        : { rateHz: sample.dominant_rate_hz, soundedNote: sample.dominant_note ?? REFERENCE_NOTE };
+}
 
 interface SampleRowProps {
     readonly sample: SampleSummary;
@@ -27,7 +37,7 @@ export function SampleRow({ sample }: SampleRowProps): ReactElement {
             onDoubleClick={onDoubleClick}
         >
             <td>
-                <Thumbnail sampleHash={sample.hash} peaks={sample.thumbnail} />
+                <Thumbnail sampleHash={sample.hash} peaks={sample.thumbnail} pitch={previewPitchFor(sample)} />
             </td>
             <td className="cell-name">
                 <Link to={href} className="cell-name-stack">

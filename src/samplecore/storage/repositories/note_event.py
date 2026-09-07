@@ -34,6 +34,8 @@ class NoteEventRepository(Protocol):
 
     def note_usage_for_sample(self, sample_hash: str) -> tuple[SampleNoteUsage, ...]: ...
 
+    def dominant_note_by_hash(self, hashes: list[str]) -> dict[str, Note]: ...
+
 
 class PostgresNoteEventRepository:
     """A NoteEventRepository backed by the catalog's ``note_event`` table.
@@ -109,6 +111,44 @@ class PostgresNoteEventRepository:
         )
         rows = self._connection.execute(statement).fetchall()
         return tuple(SampleNoteUsage(sounded_note=Note(row.sounded_note), event_count=row.event_count) for row in rows)
+
+    def dominant_note_by_hash(self, hashes: list[str]) -> dict[str, Note]:
+        """The note each given sample is played at most often, ties going to the lower note.
+
+        This is the pitch a preview should open at: a sample's stored rate only says what it sounds
+        like at C-5, while the note says where the library actually puts it.
+        """
+        if not hashes:
+            return {}
+
+        # pylint: disable-next=not-callable
+        event_count = func.count().label("event_count")
+        ranking = (
+            select(
+                sample_properties.c.sample_hash,
+                note_event.c.sounded_note,
+                func.row_number()
+                .over(
+                    partition_by=sample_properties.c.sample_hash,
+                    order_by=(event_count.desc(), note_event.c.sounded_note.asc()),
+                )
+                .label("rank"),
+            )
+            .select_from(
+                note_event.join(
+                    sample_properties,
+                    (sample_properties.c.module_id == note_event.c.module_id)
+                    & (sample_properties.c.instrument_index == note_event.c.instrument_index)
+                    & (sample_properties.c.sample_slot == note_event.c.sample_slot),
+                )
+            )
+            .where(sample_properties.c.sample_hash.in_(hashes))
+            .group_by(sample_properties.c.sample_hash, note_event.c.sounded_note)
+            .subquery()
+        )
+        statement = select(ranking.c.sample_hash, ranking.c.sounded_note).where(ranking.c.rank == 1)
+        rows = self._connection.execute(statement).fetchall()
+        return {row.sample_hash: Note(row.sounded_note) for row in rows}
 
 
 def _row_to_note_event(row: Row[Any]) -> NoteEvent:

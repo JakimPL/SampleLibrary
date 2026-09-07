@@ -5,7 +5,11 @@ import { PlayButton } from "../../src/samples/PlayButton";
 
 describe("PlayButton", () => {
     it("renders its children inside a clickable button that plays the sample's audio", () => {
-        render(<PlayButton sampleHash="sample-play-button">▶</PlayButton>);
+        render(
+            <PlayButton pitch={null} sampleHash="sample-play-button">
+                ▶
+            </PlayButton>,
+        );
 
         const button = screen.getByRole("button", { name: "Play sample preview" });
         expect(button).toHaveTextContent("▶");
@@ -16,7 +20,11 @@ describe("PlayButton", () => {
     });
 
     it("is not pressed for a sample other than the one currently playing", () => {
-        render(<PlayButton sampleHash="sample-not-playing">▶</PlayButton>);
+        render(
+            <PlayButton pitch={null} sampleHash="sample-not-playing">
+                ▶
+            </PlayButton>,
+        );
 
         expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "false");
     });

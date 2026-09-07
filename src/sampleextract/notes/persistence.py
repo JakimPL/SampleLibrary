@@ -9,12 +9,11 @@ from samplecore.models.note_extraction import ModuleNoteExtraction
 from samplecore.storage.repositories.module_instrument import PostgresModuleInstrumentRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.note_extraction import PostgresModuleNoteExtractionRepository
+from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from sampleextract.notes.resolution import resolve_module_instruments, resolve_note_events
 
 
-def persist_module_notes(
-    connection: Connection, *, song: Song, module_id: int, extracted_at: datetime, minimum_sample_frames: int
-) -> int:
+def persist_module_notes(connection: Connection, *, song: Song, module_id: int, extracted_at: datetime) -> int:
     """Record one module's instrument slots and the notes its patterns play, and mark it read.
 
     The caller owns the transaction, so this joins whatever ingest or a backfill pass already has
@@ -23,7 +22,8 @@ def persist_module_notes(
 
     A module whose rows are already on file is cleared through ``clear_module_notes`` first.
     """
-    events = resolve_note_events(song, module_id=module_id, minimum_sample_frames=minimum_sample_frames)
+    catalogued_slots = PostgresSamplePropertiesRepository(connection).catalogued_slots(module_id)
+    events = resolve_note_events(song, module_id=module_id, catalogued_slots=catalogued_slots)
     PostgresModuleInstrumentRepository(connection).insert_many(resolve_module_instruments(song, module_id=module_id))
     PostgresNoteEventRepository(connection).insert_many(events)
     PostgresModuleNoteExtractionRepository(connection).mark(

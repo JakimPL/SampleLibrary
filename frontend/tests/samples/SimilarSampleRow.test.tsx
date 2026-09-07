@@ -6,7 +6,7 @@ import type { SimilarSample } from "../../src/api/samples";
 import { SimilarSampleRow } from "../../src/samples/SimilarSampleRow";
 
 function buildSimilar(): SimilarSample {
-    return { hash: "def456", distance: 0.125 };
+    return { hash: "def456", distance: 0.125, dominant_rate_hz: null };
 }
 
 function renderRow(): ReturnType<typeof render> {

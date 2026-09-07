@@ -72,6 +72,8 @@ class SamplePropertiesRepository(Protocol):
 
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]: ...
 
+    def catalogued_slots(self, module_id: int) -> frozenset[tuple[int, int]]: ...
+
 
 class PostgresSamplePropertiesRepository:
     """A SamplePropertiesRepository backed by class-table inheritance: a shared base table plus one
@@ -99,6 +101,18 @@ class PostgresSamplePropertiesRepository:
 
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]:
         return self._list_by(sample_properties.c.sample_hash == sample_hash)
+
+    def catalogued_slots(self, module_id: int) -> frozenset[tuple[int, int]]:
+        """Every ``(instrument_index, sample_slot)`` pair this module actually holds an occurrence for.
+
+        Asking the catalog directly is what lets a caller resolving something onto an occurrence
+        agree with what was really stored, whatever reason an ingest had for leaving a slot out.
+        """
+        statement = select(sample_properties.c.instrument_index, sample_properties.c.sample_slot).where(
+            sample_properties.c.module_id == module_id
+        )
+        rows = self._connection.execute(statement).fetchall()
+        return frozenset((int(row.instrument_index), int(row.sample_slot)) for row in rows)
 
     def _list_by(self, condition: ColumnElement[bool]) -> tuple[TrackerSampleProperties, ...]:
         xm_statement = (

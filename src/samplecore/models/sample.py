@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
+from trackmod.core.notes.pitch import Note
 from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
@@ -49,8 +50,11 @@ class SampleSummary(Sample):
     to, resolved from the whole catalog's relation graph, and is ``None`` for a sample with no
     detected relation. ``equivalence_member_count`` is that class's total size (1 for a sample
     with no class), independent of how many of its members are present on this page. ``category``
-    resolves the same way ``display_name`` does, via `samplecore.categorization.classify_sample_category`
-    against the sample's own occurrence names.
+    resolves the same way ``display_name`` does, via `samplecore.categorization.classify_sample_category`,
+    against the sample's own occurrence names together with the names of the instruments reaching it.
+    ``dominant_note`` is the note the library plays this sample at most often, which with
+    ``dominant_rate_hz`` gives the pitch a preview should sound at; it is ``None`` for a sample whose
+    modules have not had their patterns read, and for one no pattern plays.
     """
 
     occurrence_count: Count
@@ -59,5 +63,6 @@ class SampleSummary(Sample):
     size_bytes: Count
     thumbnail: tuple[WaveformPeak, ...] | None
     dominant_rate_hz: Rate | None
+    dominant_note: Note | None
     equivalence_class_hash: str | None
     equivalence_member_count: Count

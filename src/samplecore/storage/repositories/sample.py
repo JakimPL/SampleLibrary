@@ -5,6 +5,7 @@ from typing import Any, Final, Protocol
 
 from sqlalchemy import Connection, Row, func, select
 from sqlalchemy.dialects.postgresql import insert
+from trackmod.core.notes.pitch import Note
 from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
@@ -15,6 +16,7 @@ from samplecore.models.sample import Sample, SampleSummary
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.naming import choose_dominant_name, choose_dominant_rate
 from samplecore.storage.database import module_instrument, sample, sample_properties
+from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
 
 # Postgres binds at most 65535 parameters to one statement, a limit of its own wire protocol rather
@@ -117,6 +119,7 @@ class PostgresSampleRepository:
         hashes = [row.hash for row in rows]
         names_by_hash, rates_by_hash = self.names_and_rates_by_hash(hashes)
         instrument_names_by_hash = self.instrument_names_by_hash(hashes)
+        dominant_note_by_hash = PostgresNoteEventRepository(self._connection).dominant_note_by_hash(hashes)
         thumbnails_by_hash = PostgresSampleThumbnailRepository(self._connection).get_many(hashes)
         return tuple(
             _row_to_sample_summary(
@@ -124,6 +127,7 @@ class PostgresSampleRepository:
                 names=names_by_hash.get(row.hash, ()),
                 instrument_names=instrument_names_by_hash.get(row.hash, ()),
                 rates=rates_by_hash.get(row.hash, ()),
+                dominant_note=dominant_note_by_hash.get(row.hash),
                 thumbnail=thumbnails_by_hash.get(row.hash),
                 equivalence_class=class_by_hash.get(row.hash),
             )
@@ -204,6 +208,7 @@ def _row_to_sample_summary(
     names: tuple[str, ...],
     instrument_names: tuple[str, ...],
     rates: tuple[Rate, ...],
+    dominant_note: Note | None,
     thumbnail: SampleThumbnail | None,
     equivalence_class: EquivalenceClass | None,
 ) -> SampleSummary:
@@ -225,6 +230,7 @@ def _row_to_sample_summary(
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),
         dominant_rate_hz=choose_dominant_rate(rates),
+        dominant_note=dominant_note,
         equivalence_class_hash=equivalence_class.class_hash if equivalence_class is not None else None,
         equivalence_member_count=len(equivalence_class.member_hashes) if equivalence_class is not None else 1,
     )
