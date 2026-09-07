@@ -1,9 +1,13 @@
+import type { SampleCategory } from "../samples/category";
 import type { EntityRef } from "../workspace/selectionStore";
 
 export interface CloudEntityPoint {
     readonly ref: EntityRef;
     readonly x: number;
     readonly y: number;
+    // Present for every sample-cloud point (each sample always resolves to a category, worst case
+    // "uncategorized"), and absent for a module-cloud point -- modules carry no category concept.
+    readonly category?: SampleCategory;
 }
 
 const NORMALIZED_MIN = -1;
@@ -35,5 +39,8 @@ export function normalizePoints(points: readonly CloudEntityPoint[]): readonly C
         ref: point.ref,
         x: NORMALIZED_MIN + ((point.x - minX) / rangeX) * NORMALIZED_SPAN,
         y: NORMALIZED_MIN + ((point.y - minY) / rangeY) * NORMALIZED_SPAN,
+        // Spread conditionally rather than assigning `point.category` outright: with
+        // exactOptionalPropertyTypes on, an optional field must be omitted, not set to `undefined`.
+        ...(point.category !== undefined && { category: point.category }),
     }));
 }

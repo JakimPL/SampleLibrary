@@ -593,14 +593,19 @@ export interface components {
             readonly filename?: string | null;
         };
         /**
-         * SampleCloudCoordinate
-         * @description Where one Sample sits in the library's 2D embedding space, as of one embedding run.
-         *
-         *     A full embedding run recomputes every sample's position at once -- UMAP has no natural
-         *     per-point incremental update -- so a later run's coordinate for a given hash entirely replaces
-         *     an earlier one, rather than the two ever coexisting.
+         * SampleCategory
+         * @description A coarse instrument-role classification for a sample, guessed from its occurrence names.
+         * @enum {string}
          */
-        readonly SampleCloudCoordinate: {
+        readonly SampleCategory: "kick" | "snare" | "clap" | "hi_hat" | "cymbal" | "percussion" | "bass" | "lead" | "pad" | "pluck" | "vocal" | "fx" | "loop" | "uncategorized";
+        /**
+         * SampleCloudPoint
+         * @description A SampleCloudCoordinate together with its sample's derived category, for cloud coloring.
+         *
+         *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
+         *     sample's own occurrence names -- rather than stored alongside the coordinate itself.
+         */
+        readonly SampleCloudPoint: {
             /** Sample Hash */
             readonly sample_hash: string;
             /** X */
@@ -612,6 +617,7 @@ export interface components {
              * Format: date-time
              */
             readonly computed_at: string;
+            readonly category: components["schemas"]["SampleCategory"];
         };
         /**
          * SampleDetail
@@ -630,6 +636,7 @@ export interface components {
             readonly size_bytes: number;
             /** Display Name */
             readonly display_name: string;
+            readonly category: components["schemas"]["SampleCategory"];
             /** Dominant Rate Hz */
             readonly dominant_rate_hz: number | null;
             /** Duration Seconds */
@@ -734,7 +741,9 @@ export interface components {
          *     ``equivalence_class_hash`` identifies the group of near-duplicate variants this sample belongs
          *     to, resolved from the whole catalog's relation graph, and is ``None`` for a sample with no
          *     detected relation. ``equivalence_member_count`` is that class's total size (1 for a sample
-         *     with no class), independent of how many of its members are present on this page.
+         *     with no class), independent of how many of its members are present on this page. ``category``
+         *     resolves the same way ``display_name`` does, via `samplecore.categorization.classify_sample_category`
+         *     against the sample's own occurrence names.
          */
         readonly SampleSummary: {
             /** Hash */
@@ -747,6 +756,7 @@ export interface components {
             readonly occurrence_count: number;
             /** Display Name */
             readonly display_name: string;
+            readonly category: components["schemas"]["SampleCategory"];
             /** Size Bytes */
             readonly size_bytes: number;
             /** Thumbnail */
@@ -1197,7 +1207,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": readonly components["schemas"]["SampleCloudCoordinate"][];
+                    readonly "application/json": readonly components["schemas"]["SampleCloudPoint"][];
                 };
             };
         };

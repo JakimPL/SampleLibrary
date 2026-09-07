@@ -45,6 +45,7 @@ describe("CloudHoverTooltip", () => {
             occurrences: [],
             size_bytes: 8192,
             display_name: "kick",
+            category: "kick",
             dominant_rate_hz: 8363,
             duration_seconds: 0.09,
         });
@@ -56,6 +57,7 @@ describe("CloudHoverTooltip", () => {
             expect(screen.getByText("kick")).toBeInTheDocument();
         });
         expect(screen.getByText(SAMPLE_HASH.slice(0, 8))).toBeInTheDocument();
+        expect(screen.getByText("Kick")).toBeInTheDocument();
     });
 
     it("falls back to the unnamed-sample placeholder for an empty display name", async () => {
@@ -67,6 +69,7 @@ describe("CloudHoverTooltip", () => {
             occurrences: [],
             size_bytes: 8192,
             display_name: "",
+            category: "uncategorized",
             dominant_rate_hz: null,
             duration_seconds: 0.09,
         });

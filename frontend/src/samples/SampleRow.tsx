@@ -7,7 +7,7 @@ import { formatBytes, shortHash } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
-import { CATEGORY_PLACEHOLDER } from "./category";
+import { CATEGORY_LABELS } from "./category";
 import { Thumbnail } from "./Thumbnail";
 
 interface SampleRowProps {
@@ -42,7 +42,9 @@ export function SampleRow({ sample }: SampleRowProps): ReactElement {
                     </span>
                 </Link>
             </td>
-            <td className="cell-muted">{CATEGORY_PLACEHOLDER}</td>
+            <td className="cell-muted">
+                <span className={`badge badge-category-${sample.category}`}>{CATEGORY_LABELS[sample.category]}</span>
+            </td>
             <td className="cell-muted mono">{formatBytes(sample.size_bytes)}</td>
             <td className="cell-muted mono">{sample.occurrence_count}</td>
         </tr>

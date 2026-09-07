@@ -31,6 +31,27 @@
     --cloud-point-selected: var(--accent);
     --cloud-point-shape: circle;
     --cloud-ping-color: var(--accent);
+
+    /* One fixed hue per SampleCategory (see frontend/src/samples/category.ts's CATEGORY_ORDER),
+       shared by the cloud's per-category point coloring and the samples table/detail badge -- the
+       same color names the same category everywhere in the app. Fourteen categories exceed what a
+       categorical palette can keep pairwise distinct for every full-color and color-vision-deficient
+       viewer at once, so a category's name is always shown alongside its color (the cloud's hover
+       tooltip, the table cell, the badge label) rather than color carrying identity alone. */
+    --category-kick: #2a78d6;
+    --category-snare: #eb6834;
+    --category-clap: #1baf7a;
+    --category-hi-hat: #eda100;
+    --category-cymbal: #e87ba4;
+    --category-percussion: #008300;
+    --category-bass: #4a3aa7;
+    --category-lead: #e34948;
+    --category-pad: #0e9594;
+    --category-pluck: #a15c2e;
+    --category-vocal: #d6336c;
+    --category-fx: #5c8a0a;
+    --category-loop: #6d5ce8;
+    --category-uncategorized: #7a7972;
     --mini-waveform-color: var(--text-faint);
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
@@ -60,6 +81,20 @@
         --badge-tint-strength: 16%;
         --shadow: 0 12px 32px rgb(0 0 0 / 45%);
         --wave-fill: #4a5364;
+        --category-kick: #3987e5;
+        --category-snare: #d95926;
+        --category-clap: #199e70;
+        --category-hi-hat: #c98500;
+        --category-cymbal: #d55181;
+        --category-percussion: #008300;
+        --category-bass: #9085e9;
+        --category-lead: #e66767;
+        --category-pad: #14b3b1;
+        --category-pluck: #c17a45;
+        --category-vocal: #e85d90;
+        --category-fx: #8fc020;
+        --category-loop: #8f82f0;
+        --category-uncategorized: #a3a196;
     }
 }
 
@@ -86,6 +121,20 @@
     --badge-tint-strength: 16%;
     --shadow: 0 12px 32px rgb(0 0 0 / 45%);
     --wave-fill: #4a5364;
+    --category-kick: #3987e5;
+    --category-snare: #d95926;
+    --category-clap: #199e70;
+    --category-hi-hat: #c98500;
+    --category-cymbal: #d55181;
+    --category-percussion: #008300;
+    --category-bass: #9085e9;
+    --category-lead: #e66767;
+    --category-pad: #14b3b1;
+    --category-pluck: #c17a45;
+    --category-vocal: #e85d90;
+    --category-fx: #8fc020;
+    --category-loop: #8f82f0;
+    --category-uncategorized: #a3a196;
 }
 
 /* Palette sampled from a real OpenMPT 1.32 window on Windows 11, not the classic Win98 3D-bevel
@@ -124,6 +173,24 @@
     --cloud-point-selected: var(--wave-fill);
     --cloud-point-shape: square;
     --cloud-ping-color: #ff0;
+
+    /* Reuses the dark theme's own category steps rather than this theme's own light chrome
+       colors: they were tuned for legibility against a near-black surface, which this theme's
+       cloud canvas is too, even though its table chrome stays light. */
+    --category-kick: #3987e5;
+    --category-snare: #d95926;
+    --category-clap: #199e70;
+    --category-hi-hat: #c98500;
+    --category-cymbal: #d55181;
+    --category-percussion: #008300;
+    --category-bass: #9085e9;
+    --category-lead: #e66767;
+    --category-pad: #14b3b1;
+    --category-pluck: #c17a45;
+    --category-vocal: #e85d90;
+    --category-fx: #8fc020;
+    --category-loop: #8f82f0;
+    --category-uncategorized: #a3a196;
     --mini-waveform-color: var(--wave-fill);
     --font-body: "Segoe UI", "Tahoma", sans-serif;
     --font-mono: var(--font-body);
@@ -474,6 +541,80 @@ tr.is-focused {
 .badge-amplification_variant {
     background: color-mix(in srgb, var(--critical) var(--badge-tint-strength), var(--surface-1));
     color: var(--critical);
+}
+
+/* One rule per SampleCategory, each keyed to its own --category-* token (see the palette comment
+   in the :root block above) rather than the four status tokens the badges above share -- fourteen
+   categories need their own hues to stay visually distinct from one another. */
+.badge-category-kick {
+    background: color-mix(in srgb, var(--category-kick) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-kick);
+}
+
+.badge-category-snare {
+    background: color-mix(in srgb, var(--category-snare) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-snare);
+}
+
+.badge-category-clap {
+    background: color-mix(in srgb, var(--category-clap) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-clap);
+}
+
+/* stylelint-disable-next-line selector-class-pattern */
+.badge-category-hi_hat {
+    background: color-mix(in srgb, var(--category-hi-hat) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-hi-hat);
+}
+
+.badge-category-cymbal {
+    background: color-mix(in srgb, var(--category-cymbal) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-cymbal);
+}
+
+.badge-category-percussion {
+    background: color-mix(in srgb, var(--category-percussion) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-percussion);
+}
+
+.badge-category-bass {
+    background: color-mix(in srgb, var(--category-bass) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-bass);
+}
+
+.badge-category-lead {
+    background: color-mix(in srgb, var(--category-lead) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-lead);
+}
+
+.badge-category-pad {
+    background: color-mix(in srgb, var(--category-pad) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-pad);
+}
+
+.badge-category-pluck {
+    background: color-mix(in srgb, var(--category-pluck) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-pluck);
+}
+
+.badge-category-vocal {
+    background: color-mix(in srgb, var(--category-vocal) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-vocal);
+}
+
+.badge-category-fx {
+    background: color-mix(in srgb, var(--category-fx) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-fx);
+}
+
+.badge-category-loop {
+    background: color-mix(in srgb, var(--category-loop) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-loop);
+}
+
+.badge-category-uncategorized {
+    background: color-mix(in srgb, var(--category-uncategorized) var(--badge-tint-strength), var(--surface-1));
+    color: var(--category-uncategorized);
 }
 
 /* ---------- List panels (filter bar + virtualized, scrollable body) ---------- */

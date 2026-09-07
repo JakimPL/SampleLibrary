@@ -13,6 +13,7 @@ function buildSample(
         depth: 16,
         channels: 1,
         frames: 4096,
+        category: "uncategorized",
         size_bytes: 8192,
         thumbnail: null,
         dominant_rate_hz: null,

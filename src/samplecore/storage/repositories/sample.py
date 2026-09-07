@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
+from samplecore.categorization import classify_sample_category
 from samplecore.equivalence_classes import EquivalenceClass
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSummary
@@ -33,6 +34,10 @@ class SampleRepository(Protocol):
     ) -> tuple[SampleSummary, ...]: ...
 
     def count(self) -> int: ...
+
+    def names_and_rates_by_hash(
+        self, hashes: list[str]
+    ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]: ...
 
 
 class DuckDBSampleRepository:
@@ -103,7 +108,7 @@ class DuckDBSampleRepository:
         )
         rows = self._connection.execute(statement).fetchall()
         hashes = [row.hash for row in rows]
-        names_by_hash, rates_by_hash = self._names_and_rates_by_sample_hash(hashes)
+        names_by_hash, rates_by_hash = self.names_and_rates_by_hash(hashes)
         thumbnails_by_hash = DuckDBSampleThumbnailRepository(self._connection).get_many(hashes)
         return tuple(
             _row_to_sample_summary(
@@ -120,7 +125,7 @@ class DuckDBSampleRepository:
         # pylint: disable-next=not-callable
         return self._connection.execute(select(func.count()).select_from(sample)).scalar_one()
 
-    def _names_and_rates_by_sample_hash(
+    def names_and_rates_by_hash(
         self, hashes: list[str]
     ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]:
         """Every occurrence's raw name and rate for each given sample hash, in one batched query."""
@@ -163,6 +168,7 @@ def _row_to_sample_summary(
         frames=sample_.frames,
         occurrence_count=row.occurrence_count,
         display_name=choose_dominant_name(names),
+        category=classify_sample_category(names),
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),
         dominant_rate_hz=choose_dominant_rate(rates),

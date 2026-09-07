@@ -5,6 +5,7 @@ from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
 from samplecore.models.base import FROZEN
+from samplecore.models.category import SampleCategory
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.scalars import Count, Frames, SampleHash
 from samplecore.waveform import WaveformPeak
@@ -47,11 +48,14 @@ class SampleSummary(Sample):
     ``equivalence_class_hash`` identifies the group of near-duplicate variants this sample belongs
     to, resolved from the whole catalog's relation graph, and is ``None`` for a sample with no
     detected relation. ``equivalence_member_count`` is that class's total size (1 for a sample
-    with no class), independent of how many of its members are present on this page.
+    with no class), independent of how many of its members are present on this page. ``category``
+    resolves the same way ``display_name`` does, via `samplecore.categorization.classify_sample_category`
+    against the sample's own occurrence names.
     """
 
     occurrence_count: Count
     display_name: str
+    category: SampleCategory
     size_bytes: Count
     thumbnail: tuple[WaveformPeak, ...] | None
     dominant_rate_hz: Rate | None

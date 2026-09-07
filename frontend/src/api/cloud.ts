@@ -1,7 +1,7 @@
 import { requestJson } from "./client";
 import type { components } from "./schema";
 
-export type CloudPoint = components["schemas"]["SampleCloudCoordinate"];
+export type CloudPoint = components["schemas"]["SampleCloudPoint"];
 export type ModuleCloudPoint = components["schemas"]["ModuleCloudCoordinate"];
 
 export async function getCloud(): Promise<readonly CloudPoint[]> {

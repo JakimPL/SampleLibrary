@@ -103,6 +103,7 @@ def test_list_samples_ranks_by_occurrence_count(client: TestClient, connection: 
     assert [item["hash"] for item in body["items"]] == [frequent.hash, rare.hash]
     assert body["items"][0]["occurrence_count"] == 2
     assert body["items"][0]["display_name"] == "kick"
+    assert body["items"][0]["category"] == "kick"
 
 
 def test_list_samples_resolves_the_dominant_occurrence_rate(
@@ -277,6 +278,7 @@ def test_get_sample_returns_detail_with_occurrences_and_module_context(
     body = response.json()
     assert body["hash"] == sample.hash
     assert body["display_name"] == "lead"
+    assert body["category"] == "lead"
     assert len(body["occurrences"]) == 1
     occurrence = body["occurrences"][0]
     assert occurrence["properties"]["name"] == "lead"

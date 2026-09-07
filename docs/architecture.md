@@ -74,6 +74,21 @@ UMAP coordinate, and persisted spectral feature reflect the new method consisten
 cache against a changed extractor would silently mix two incompatible vector shapes in one
 projection.
 
+## Sample categorization
+
+`SampleCategory` (`samplecore.models.category`) is a coarse, guessed instrument role -- kick,
+snare, bass, and so on -- attached to every sample summary, detail, and cloud point. It is not a
+stored column: mirroring equivalence classes, `samplecore.categorization.classify_sample_category`
+derives it at read time from the sample's own occurrence names, the same name data
+`samplecore.naming.choose_dominant_name` already reads to resolve `display_name`. Classification is
+one plain, ordered keyword table matched against each name with its separators stripped, deliberately
+a first-pass heuristic rather than a tuned classifier -- expect to retune the keyword table against
+how well it agrees with real listening. The frontend colors the sample cloud by category
+(`regl-scatterplot`'s own categorical coloring, one fixed hue per `SampleCategory` declared as a CSS
+custom property per theme in `styles.css`) and shows the category as a badge everywhere a sample's
+name appears; the same color and label always travel together, since fourteen categories are too
+many to stay reliably distinguishable by hue alone for every viewer.
+
 ## Extending to new tracker formats
 
 `sampleextract`'s format dispatch is a small registry (module suffix → loader function), not

@@ -29,6 +29,7 @@ function samplePoints(coordinates: readonly CloudPoint[]): readonly CloudEntityP
         ref: { kind: "sample", hash: coordinate.sample_hash },
         x: coordinate.x,
         y: coordinate.y,
+        category: coordinate.category,
     }));
 }
 

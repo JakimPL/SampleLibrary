@@ -68,8 +68,8 @@ function latestCanvas(): HTMLCanvasElement {
     return canvas;
 }
 
-function point(ref: EntityRef, x: number, y: number): CloudEntityPoint {
-    return { ref, x, y };
+function point(ref: EntityRef, x: number, y: number, category?: CloudEntityPoint["category"]): CloudEntityPoint {
+    return category === undefined ? { ref, x, y } : { ref, x, y, category };
 }
 
 interface RenderOverrides {
@@ -452,5 +452,41 @@ describe("CloudView", () => {
         });
 
         expect(instance.set).toHaveBeenCalled();
+    });
+
+    it("configures categorical coloring and draws category-index triples when every point carries a category", async () => {
+        await renderCloudView({
+            points: [point(SAMPLE_REF, 0, 0, "kick"), point(MODULE_REF, 1, 1, "snare")],
+        });
+        const instance = latestInstance();
+
+        const setCall = instance.set.mock.calls[0]?.[0] as { colorBy?: string; pointColor?: unknown };
+        expect(setCall.colorBy).toBe("category");
+        expect(Array.isArray(setCall.pointColor)).toBe(true);
+        const drawnPoints = instance.draw.mock.calls[0]?.[0] as number[][];
+        expect(drawnPoints[0]).toHaveLength(3);
+        expect(drawnPoints[1]).toHaveLength(3);
+        expect(instance.draw.mock.calls[0]?.[1]).toEqual({ zDataType: "categorical" });
+    });
+
+    it("draws flat [x, y] pairs under the plain point color when no point carries a category", async () => {
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
+        const instance = latestInstance();
+
+        const setCall = instance.set.mock.calls[0]?.[0] as { colorBy?: string | null };
+        expect(setCall.colorBy).toBeNull();
+        const drawnPoints = instance.draw.mock.calls[0]?.[0] as number[][];
+        expect(drawnPoints[0]).toHaveLength(2);
+        expect(instance.draw.mock.calls[0]?.[1]).toBeUndefined();
+    });
+
+    it("falls back to flat coloring when only some points on this draw carry a category", async () => {
+        await renderCloudView({
+            points: [point(SAMPLE_REF, 0, 0, "kick"), point(MODULE_REF, 1, 1)],
+        });
+        const instance = latestInstance();
+
+        const setCall = instance.set.mock.calls[0]?.[0] as { colorBy?: string | null };
+        expect(setCall.colorBy).toBeNull();
     });
 });

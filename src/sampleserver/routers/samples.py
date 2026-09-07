@@ -9,8 +9,10 @@ from pydantic import BaseModel
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
+from samplecore.categorization import classify_sample_category
 from samplecore.equivalence_classes import classes_by_member_hash, compute_equivalence_classes
 from samplecore.models.base import FROZEN
+from samplecore.models.category import SampleCategory
 from samplecore.models.module import Module
 from samplecore.models.relation import SampleRelation
 from samplecore.models.sample import Sample, SampleSummary
@@ -80,6 +82,7 @@ class SampleDetail(Sample):
     occurrences: tuple[SampleOccurrenceDetail, ...]
     size_bytes: Count
     display_name: str
+    category: SampleCategory
     dominant_rate_hz: Rate | None
     duration_seconds: float
 
@@ -167,6 +170,7 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
         occurrences=occurrences,
         size_bytes=sample.stored_bytes,
         display_name=choose_dominant_name(item.name for item in properties),
+        category=classify_sample_category(item.name for item in properties),
         dominant_rate_hz=choose_dominant_rate(item.rate for item in properties),
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
     )

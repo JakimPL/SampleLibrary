@@ -112,7 +112,9 @@ describe("CloudPanel", () => {
     });
 
     it("renders a canvas for the Samples tab once its points have loaded", async () => {
-        getCloud.mockResolvedValue([{ sample_hash: "a".repeat(64), x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        getCloud.mockResolvedValue([
+            { sample_hash: "a".repeat(64), x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z", category: "uncategorized" },
+        ]);
         getModuleCloud.mockResolvedValue([]);
 
         renderPanel();
@@ -135,7 +137,9 @@ describe("CloudPanel", () => {
 
     it("highlights the clicked sample in the shared selection store", async () => {
         const sampleHash = "b".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        getCloud.mockResolvedValue([
+            { sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z", category: "uncategorized" },
+        ]);
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
@@ -149,7 +153,9 @@ describe("CloudPanel", () => {
 
     it("clears the shared highlight on a click that misses every point", async () => {
         const sampleHash = "f".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        getCloud.mockResolvedValue([
+            { sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z", category: "uncategorized" },
+        ]);
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
@@ -164,7 +170,9 @@ describe("CloudPanel", () => {
 
     it("navigates to the double-clicked sample's route", async () => {
         const sampleHash = "c".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        getCloud.mockResolvedValue([
+            { sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z", category: "uncategorized" },
+        ]);
         getModuleCloud.mockResolvedValue([]);
         // The hover tooltip fetches a sample preview as soon as pointOver fires below.
         getSample.mockReturnValue(new Promise(() => undefined));
@@ -218,7 +226,9 @@ describe("CloudPanel", () => {
 
     it("shows a hover tooltip with the sample's name and hash", async () => {
         const sampleHash = "1".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        getCloud.mockResolvedValue([
+            { sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z", category: "uncategorized" },
+        ]);
         getModuleCloud.mockResolvedValue([]);
         getSample.mockResolvedValue({
             hash: sampleHash,
@@ -228,6 +238,7 @@ describe("CloudPanel", () => {
             occurrences: [],
             size_bytes: 8192,
             display_name: "kick",
+            category: "kick",
             dominant_rate_hz: 8363,
             duration_seconds: 0.09,
         });
@@ -245,7 +256,9 @@ describe("CloudPanel", () => {
 
     it("hides the hover tooltip once the cursor leaves the point", async () => {
         const sampleHash = "2".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z" }]);
+        getCloud.mockResolvedValue([
+            { sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z", category: "uncategorized" },
+        ]);
         getModuleCloud.mockResolvedValue([]);
         getSample.mockResolvedValue({
             hash: sampleHash,
@@ -255,6 +268,7 @@ describe("CloudPanel", () => {
             occurrences: [],
             size_bytes: 8192,
             display_name: "snare",
+            category: "snare",
             dominant_rate_hz: 8363,
             duration_seconds: 0.09,
         });

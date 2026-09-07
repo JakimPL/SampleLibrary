@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import createScatterplot from "regl-scatterplot";
 
+import { CATEGORY_ORDER, categoryColorProperty, categoryIndex } from "../samples/category";
 import { readThemeColor } from "../theme/readThemeColor";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import type { EntityRef } from "../workspace/selectionStore";
@@ -20,6 +21,7 @@ const BACKGROUND_COLOR_PROPERTY = "--cloud-bg";
 const BACKGROUND_COLOR_FALLBACK = "#f4f5f7";
 const POINT_SHAPE_PROPERTY = "--cloud-point-shape";
 const SQUARE_POINT_SHAPE_VALUE = "square";
+const CATEGORICAL_COLOR_BY = "category";
 
 interface CloudColors {
     readonly pointColor: string;
@@ -33,6 +35,41 @@ function readCloudColors(): CloudColors {
         pointColorActive: readThemeColor(SELECTED_COLOR_PROPERTY, SELECTED_COLOR_FALLBACK),
         backgroundColor: readThemeColor(BACKGROUND_COLOR_PROPERTY, BACKGROUND_COLOR_FALLBACK),
     };
+}
+
+function readCategoryPalette(): string[] {
+    return CATEGORY_ORDER.map((category) => readThemeColor(categoryColorProperty(category), POINT_COLOR_FALLBACK));
+}
+
+interface DrawSpec {
+    readonly positions: number[][];
+    readonly categorized: boolean;
+    readonly colorBy: typeof CATEGORICAL_COLOR_BY | null;
+    readonly pointColor: string | string[];
+}
+
+/**
+ * Builds both the point positions and the color configuration a draw call needs from one pass over
+ * `points`, since the two must agree: a sample-cloud point always carries a `category` (worst case
+ * "uncategorized"), so a batch where every point has one gets a `[x, y, categoryIndex]` triple and
+ * regl-scatterplot's own categorical coloring (`colorBy: 'category'`, one `pointColor` entry per
+ * `CATEGORY_ORDER` slot); a module-cloud point carries none, so its batch stays a plain `[x, y]`
+ * pair under the shell's single flat point color -- the two tabs share one scatterplot instance
+ * (see `CloudPanel`), so this decides per draw call which of the two point kinds is on screen.
+ */
+function buildDrawSpec(points: readonly CloudEntityPoint[]): DrawSpec {
+    const categorized = points.length > 0 && points.every((point) => point.category !== undefined);
+    const positions = points.map((point) =>
+        point.category === undefined ? [point.x, point.y] : [point.x, point.y, categoryIndex(point.category)],
+    );
+    return categorized
+        ? { positions, categorized, colorBy: CATEGORICAL_COLOR_BY, pointColor: readCategoryPalette() }
+        : {
+              positions,
+              categorized,
+              colorBy: null,
+              pointColor: readThemeColor(POINT_COLOR_PROPERTY, POINT_COLOR_FALLBACK),
+          };
 }
 
 // regl-scatterplot compiles its point shape into the WebGL shader at creation and has no setter
@@ -91,11 +128,12 @@ function drawSerialized(
     chain: DrawChain,
     points: readonly CloudEntityPoint[],
 ): Promise<void> {
-    const positions: number[][] = points.map((point) => [point.x, point.y]);
-    const next = chain.current.then(
-        () => scatterplot.draw(positions),
-        () => scatterplot.draw(positions),
-    );
+    const spec = buildDrawSpec(points);
+    const runDraw = (): Promise<void> =>
+        scatterplot
+            .set({ colorBy: spec.colorBy, pointColor: spec.pointColor })
+            .then(() => scatterplot.draw(spec.positions, spec.categorized ? { zDataType: "categorical" } : undefined));
+    const next = chain.current.then(runDraw, runDraw);
     chain.current = next.then(
         () => undefined,
         () => undefined,
@@ -179,7 +217,11 @@ async function applyPoints(
  * changed, mirroring how `useWaveformPlayer.ts` keeps wavesurfer's own canvas in step. Point shape
  * (circle or square) is read the same way, but the library compiles it into the WebGL shader at
  * creation with no live setter, so a theme switch that flips it recreates the whole scatterplot
- * instead -- the one visual this view cannot just restyle in place.
+ * instead -- the one visual this view cannot just restyle in place. Points that carry a `category`
+ * (every sample-cloud point does; a module-cloud point carries none) draw with regl-scatterplot's
+ * own categorical coloring instead of the flat point color, one fixed hue per `SampleCategory` --
+ * see `buildDrawSpec`, which both draw calls and the theme re-apply above route through so the two
+ * stay in step regardless of which of this view's two entity kinds is currently on screen.
  */
 export function CloudView({
     points: rawPoints,
@@ -378,7 +420,18 @@ export function CloudView({
 
     useEffect(() => {
         // Redundantly re-applies the colors the mount effect above just set on the first render.
-        void scatterplotRef.current?.set(readCloudColors());
+        // pointColor/colorBy specifically follow the currently-drawn points' own categorization
+        // (see buildDrawSpec) rather than always falling back to the flat point color, so a live
+        // theme switch while viewing the categorized Samples tab keeps every category's own color
+        // instead of collapsing them all back to one.
+        const { pointColorActive, backgroundColor } = readCloudColors();
+        const spec = buildDrawSpec(pointsRef.current);
+        void scatterplotRef.current?.set({
+            pointColorActive,
+            backgroundColor,
+            colorBy: spec.colorBy,
+            pointColor: spec.pointColor,
+        });
     }, [themeSignal.preference, themeSignal.systemVersion]);
 
     useEffect(() => {

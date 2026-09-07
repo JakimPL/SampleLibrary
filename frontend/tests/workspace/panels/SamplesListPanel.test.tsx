@@ -31,6 +31,7 @@ const SAMPLE_SUMMARY = {
     frames: 4096,
     occurrence_count: 3,
     display_name: "kick",
+    category: "kick",
     size_bytes: 8192,
     thumbnail: null,
     dominant_rate_hz: null,
