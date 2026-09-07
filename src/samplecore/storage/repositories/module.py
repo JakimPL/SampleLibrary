@@ -6,7 +6,7 @@ from sqlalchemy import Connection, Row, Select, func, select
 
 from samplecore.models.module import Module
 from samplecore.models.tracker import TrackerFormat
-from samplecore.storage.database import module, module_id_sequence
+from samplecore.storage.database import module, module_id_sequence, sample_properties
 
 _SelectT = TypeVar("_SelectT", bound=Select[Any])
 
@@ -77,16 +77,24 @@ class PostgresModuleRepository:
         return tuple(_row_to_module(row) for row in rows)
 
     def list_page(self, *, limit: int, offset: int, tracker: TrackerFormat | None = None) -> tuple[Module, ...]:
+        """A page of the modules this library holds samples from, oldest first.
+
+        Browsing is over modules that contributed something: a module every one of whose samples
+        falls under `minimum_sample_frames` -- a chiptune built from single-cycle waveforms, most
+        often -- stays catalogued and reachable by its own hash, and `list_all` still reaches it for
+        the pipelines that walk every module. It simply has nothing to show a reader here.
+        """
         statement = select(module).order_by(module.c.id).limit(limit).offset(offset)
-        statement = _with_tracker_filter(statement, tracker)
+        statement = _with_catalogued_samples(_with_tracker_filter(statement, tracker))
         rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_module(row) for row in rows)
 
     def count(self, *, tracker: TrackerFormat | None = None) -> int:
+        """How many modules `list_page` pages over, so a page total matches what it lists."""
         # func.count() is SQLAlchemy's dynamically-generated SQL COUNT(*), invisible to pylint's static analysis.
         # pylint: disable-next=not-callable
         statement = select(func.count()).select_from(module)
-        statement = _with_tracker_filter(statement, tracker)
+        statement = _with_catalogued_samples(_with_tracker_filter(statement, tracker))
         return self._connection.execute(statement).scalar_one()
 
 
@@ -95,6 +103,12 @@ def _with_tracker_filter(statement: _SelectT, tracker: TrackerFormat | None) -> 
         return statement
 
     return statement.where(module.c.tracker == tracker.value)
+
+
+def _with_catalogued_samples(statement: _SelectT) -> _SelectT:
+    return statement.where(
+        select(sample_properties.c.module_id).where(sample_properties.c.module_id == module.c.id).exists()
+    )
 
 
 def _row_to_module(row: Row[Any]) -> Module:

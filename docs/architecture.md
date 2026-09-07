@@ -67,6 +67,13 @@ the waveforms its keys reach, so a sample stored as "smp03" is described only th
 `module_note_extraction` records which modules have been read, so a module whose patterns press no
 keys still reads as finished and a resumed pass spares it a second parse.
 
+A module every one of whose samples falls under `minimum_sample_frames` is ingested and kept like
+any other, and stays reachable by its own hash and through `PostgresModuleRepository.list_all` for
+the pipelines that walk every module. It is left out of `list_page`/`count`, so browsing passes over
+it: a chiptune built from single-cycle waveforms is part of the collection while contributing
+nothing to a library of samples. `LibraryStats` still counts every ingested module, that being a
+statement about the catalog rather than about what is worth browsing.
+
 ## Hand-curated work
 
 `curation.sample_label` holds the category a person chose for a sample, and it is the one thing in

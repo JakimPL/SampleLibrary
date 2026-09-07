@@ -20,8 +20,10 @@ from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 
+_LISTED_SAMPLE_HASH = "e" * 64
 
-def _insert_module(connection: Connection, seed: int, *, tracker: TrackerFormat) -> Module:
+
+def _insert_module_without_samples(connection: Connection, seed: int, *, tracker: TrackerFormat) -> Module:
     repository = PostgresModuleRepository(connection)
     module = Module(
         hash=format(seed, "064x"),
@@ -40,6 +42,25 @@ def _insert_module(connection: Connection, seed: int, *, tracker: TrackerFormat)
     return module
 
 
+def _insert_module(connection: Connection, seed: int, *, tracker: TrackerFormat) -> Module:
+    """A module as the listing expects one: catalogued, with a sample the library actually holds."""
+    module = _insert_module_without_samples(connection, seed, tracker=tracker)
+    PostgresSampleRepository(connection).upsert(
+        Sample(hash=_LISTED_SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
+    )
+    PostgresSamplePropertiesRepository(connection).upsert(
+        XMSampleProperties(
+            sample_hash=_LISTED_SAMPLE_HASH,
+            occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=0),
+            name="lead",
+            rate=8363,
+            volume=64,
+            tuning=Tuning(relative_note=0, finetune=0),
+        )
+    )
+    return module
+
+
 def test_list_modules_returns_a_page(client: TestClient, connection: Connection) -> None:
     first = _insert_module(connection, 1, tracker=TrackerFormat.XM)
     second = _insert_module(connection, 2, tracker=TrackerFormat.IT)
@@ -50,6 +71,20 @@ def test_list_modules_returns_a_page(client: TestClient, connection: Connection)
     body = response.json()
     assert body["total"] == 2
     assert {item["hash"] for item in body["items"]} == {first.hash, second.hash}
+
+
+def test_list_modules_leaves_out_a_module_the_library_holds_no_sample_from(
+    client: TestClient, connection: Connection
+) -> None:
+    """A chiptune of single-cycle waveforms stays catalogued, and browsing past it is noise."""
+    listed = _insert_module(connection, 1, tracker=TrackerFormat.XM)
+    chiptune = _insert_module_without_samples(connection, 2, tracker=TrackerFormat.MOD)
+
+    body = client.get("/modules").json()
+
+    assert {item["hash"] for item in body["items"]} == {listed.hash}
+    assert body["total"] == 1
+    assert client.get(f"/modules/{chiptune.hash}").status_code == 200
 
 
 def test_list_modules_respects_limit_and_offset(client: TestClient, connection: Connection) -> None:
@@ -77,7 +112,7 @@ def test_list_modules_filters_by_tracker(client: TestClient, connection: Connect
 
 
 def test_get_module_returns_detail_with_occurrences(client: TestClient, connection: Connection) -> None:
-    module = _insert_module(connection, 1, tracker=TrackerFormat.XM)
+    module = _insert_module_without_samples(connection, 1, tracker=TrackerFormat.XM)
 
     response = client.get(f"/modules/{module.hash}")
 
@@ -90,7 +125,7 @@ def test_get_module_returns_detail_with_occurrences(client: TestClient, connecti
 def test_get_module_resolves_each_occurrence_s_sample_content_and_thumbnail(
     client: TestClient, connection: Connection, tmp_path: Path
 ) -> None:
-    module = _insert_module(connection, 1, tracker=TrackerFormat.XM)
+    module = _insert_module_without_samples(connection, 1, tracker=TrackerFormat.XM)
     sample = Sample(hash="a" * 64, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=4)
     PostgresSampleRepository(connection).upsert(sample)
     pcm = np.array([[0.5], [-0.5], [0.25], [-0.25]], dtype=np.float64)
