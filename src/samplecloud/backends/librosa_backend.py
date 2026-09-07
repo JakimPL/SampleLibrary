@@ -6,6 +6,7 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 
+from samplecloud.backends.preprocessing import fold_to_mono
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 
 MFCC_COUNT: Final[int] = 13
@@ -64,7 +65,7 @@ class LibrosaFeatureExtractor:
 
 
 def _prepare_mono_signal(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
-    mono = waveform.mean(axis=1) if waveform.ndim > 1 else waveform
+    mono = fold_to_mono(waveform)
     if mono.shape[0] < MINIMUM_SIGNAL_LENGTH:
         return np.pad(mono, (0, MINIMUM_SIGNAL_LENGTH - mono.shape[0]))
     return mono
