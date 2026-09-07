@@ -4,7 +4,21 @@ from pydantic import BaseModel, model_validator
 from trackmod.core.notes.pitch import Note
 
 from samplecore.models.base import FROZEN
-from samplecore.models.scalars import Index
+from samplecore.models.scalars import Count, Index
+
+
+class SampleNoteUsage(BaseModel):
+    """How often one sample is heard at one note, counted across every module that plays it.
+
+    A sample-hash carries no pitch of its own; what it is heard at is decided per note event. Read
+    together, these say which pitches a waveform is actually used at and how much each is leaned on,
+    which is what grounds a preview in the way the library really plays it.
+    """
+
+    model_config = FROZEN
+
+    sounded_note: Note
+    event_count: Count
 
 
 class NoteEvent(BaseModel):

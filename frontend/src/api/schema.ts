@@ -621,7 +621,7 @@ export interface components {
         };
         /**
          * SampleDetail
-         * @description A sample together with every module occurrence that references it.
+         * @description A sample together with every module occurrence that references it, and the notes it is played at.
          */
         readonly SampleDetail: {
             /** Hash */
@@ -641,6 +641,8 @@ export interface components {
             readonly dominant_rate_hz: number | null;
             /** Duration Seconds */
             readonly duration_seconds: number;
+            /** Notes Played */
+            readonly notes_played: readonly components["schemas"]["SampleNotePlayed"][];
         };
         /**
          * SampleDistance
@@ -653,6 +655,24 @@ export interface components {
             readonly other_hash: string;
             /** Distance */
             readonly distance: number;
+        };
+        /**
+         * SampleNotePlayed
+         * @description One note a sample is heard at, with how often the library plays it there.
+         *
+         *     ``sounding_rate_hz`` reads the note against the sample's dominant occurrence rate, which is the
+         *     rate a preview would otherwise play at, so a caller can sound the sample as the library really
+         *     uses it rather than at its bare reference rate.
+         */
+        readonly SampleNotePlayed: {
+            /** Sounded Note */
+            readonly sounded_note: number;
+            /** Note Name */
+            readonly note_name: string;
+            /** Event Count */
+            readonly event_count: number;
+            /** Sounding Rate Hz */
+            readonly sounding_rate_hz: number | null;
         };
         /**
          * SampleOccurrence

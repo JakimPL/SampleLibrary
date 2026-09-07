@@ -1,11 +1,15 @@
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 
+import type { components } from "../../api/schema";
+import { REFERENCE_NOTE } from "../../samples/nominalRate";
 import { useSampleDetail } from "../../samples/useSampleDetail";
-import { type RateOption, WaveformPlayer } from "../../samples/WaveformPlayer";
+import { type NoteOption, type RateOption, WaveformPlayer } from "../../samples/WaveformPlayer";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
+
+type NotePlayed = components["schemas"]["SampleNotePlayed"];
 
 interface FocusedWaveformProps {
     readonly sampleHash: string;
@@ -22,12 +26,36 @@ function rateOptionsByOccurrenceCount(rates: readonly number[]): RateOption[] {
     );
 }
 
+function noteOptionsFrom(notesPlayed: readonly NotePlayed[]): NoteOption[] {
+    return notesPlayed.map((note) => ({
+        soundedNote: note.sounded_note,
+        noteName: note.note_name,
+        eventCount: note.event_count,
+    }));
+}
+
+/** The note the library leans on most, which is the pitch a preview should open at. */
+function mostPlayedNote(noteOptions: readonly NoteOption[]): number {
+    let chosen = REFERENCE_NOTE;
+    let highestCount = 0;
+    for (const option of noteOptions) {
+        if (option.eventCount > highestCount) {
+            chosen = option.soundedNote;
+            highestCount = option.eventCount;
+        }
+    }
+
+    return chosen;
+}
+
 function FocusedWaveform({ sampleHash }: FocusedWaveformProps): ReactElement {
     const state = useSampleDetail(sampleHash);
     const [selectedRateHz, setSelectedRateHz] = useState<number | null>(null);
+    const [selectedNote, setSelectedNote] = useState<number | null>(null);
 
     useEffect(() => {
         setSelectedRateHz(null);
+        setSelectedNote(null);
     }, [sampleHash]);
 
     if (state.status === "loading") {
@@ -52,12 +80,21 @@ function FocusedWaveform({ sampleHash }: FocusedWaveformProps): ReactElement {
             ? selectedRateHz
             : defaultRateHz;
 
+    const noteOptions = noteOptionsFrom(sample.notes_played);
+    const soundedNote =
+        selectedNote !== null && noteOptions.some((option) => option.soundedNote === selectedNote)
+            ? selectedNote
+            : mostPlayedNote(noteOptions);
+
     return (
         <WaveformPlayer
             sampleHash={sample.hash}
             rateHz={rateHz}
             rateOptions={rateOptions}
             onRateChange={setSelectedRateHz}
+            soundedNote={soundedNote}
+            noteOptions={noteOptions}
+            onNoteChange={setSelectedNote}
         />
     );
 }

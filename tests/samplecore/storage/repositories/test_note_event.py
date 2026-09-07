@@ -142,3 +142,42 @@ def test_count_reflects_every_stored_event(
     repository.insert_many([_note_event(stored_module), _note_event(stored_module, row_index=1)])
 
     assert repository.count() == 2
+
+
+def test_note_usage_counts_the_events_reaching_a_sample_at_each_note(
+    connection: Connection, stored_sample: Sample, stored_module: Module, stored_occurrence: None
+) -> None:
+    repository = PostgresNoteEventRepository(connection)
+    repository.insert_many(
+        [
+            _note_event(stored_module, row_index=0, sounded_note=SOUNDED_NOTE),
+            _note_event(stored_module, row_index=1, sounded_note=SOUNDED_NOTE),
+            _note_event(stored_module, row_index=2, sounded_note=PRESSED_NOTE),
+        ]
+    )
+
+    usage = repository.note_usage_for_sample(stored_sample.hash)
+
+    assert [(item.sounded_note, item.event_count) for item in usage] == [(PRESSED_NOTE, 1), (SOUNDED_NOTE, 2)]
+
+
+def test_note_usage_leaves_out_an_event_reaching_no_catalogued_occurrence(
+    connection: Connection, stored_sample: Sample, stored_module: Module, stored_occurrence: None
+) -> None:
+    repository = PostgresNoteEventRepository(connection)
+    repository.insert_many(
+        [
+            _note_event(stored_module, row_index=0),
+            _note_event(stored_module, row_index=1, sample_slot=None),
+        ]
+    )
+
+    usage = repository.note_usage_for_sample(stored_sample.hash)
+
+    assert [item.event_count for item in usage] == [1]
+
+
+def test_note_usage_for_a_sample_no_pattern_plays_returns_nothing(
+    connection: Connection, stored_sample: Sample, stored_occurrence: None
+) -> None:
+    assert PostgresNoteEventRepository(connection).note_usage_for_sample(stored_sample.hash) == ()

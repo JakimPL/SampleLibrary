@@ -6,8 +6,8 @@ from typing import Any, Final, Protocol
 from sqlalchemy import Connection, Row, func, select
 from trackmod.core.notes.pitch import Note
 
-from samplecore.models.note_event import NoteEvent
-from samplecore.storage.database import bulk_insert, note_event
+from samplecore.models.note_event import NoteEvent, SampleNoteUsage
+from samplecore.storage.database import bulk_insert, note_event, sample_properties
 
 _COLUMN_NAMES: Final[tuple[str, ...]] = (
     "module_id",
@@ -31,6 +31,8 @@ class NoteEventRepository(Protocol):
     def delete_for_module(self, module_id: int) -> None: ...
 
     def count(self) -> int: ...
+
+    def note_usage_for_sample(self, sample_hash: str) -> tuple[SampleNoteUsage, ...]: ...
 
 
 class PostgresNoteEventRepository:
@@ -82,6 +84,31 @@ class PostgresNoteEventRepository:
     def count(self) -> int:
         # pylint: disable-next=not-callable
         return self._connection.execute(select(func.count()).select_from(note_event)).scalar_one()
+
+    def note_usage_for_sample(self, sample_hash: str) -> tuple[SampleNoteUsage, ...]:
+        """Every note one sample is heard at, with how many events reach it, lowest note first.
+
+        A sample is reached through the occurrences that name it, so the count gathers every module
+        playing the same waveform into one picture of the pitches it is used at.
+        """
+        # pylint: disable-next=not-callable
+        event_count = func.count().label("event_count")
+        statement = (
+            select(note_event.c.sounded_note, event_count)
+            .select_from(
+                note_event.join(
+                    sample_properties,
+                    (sample_properties.c.module_id == note_event.c.module_id)
+                    & (sample_properties.c.instrument_index == note_event.c.instrument_index)
+                    & (sample_properties.c.sample_slot == note_event.c.sample_slot),
+                )
+            )
+            .where(sample_properties.c.sample_hash == sample_hash)
+            .group_by(note_event.c.sounded_note)
+            .order_by(note_event.c.sounded_note)
+        )
+        rows = self._connection.execute(statement).fetchall()
+        return tuple(SampleNoteUsage(sounded_note=Note(row.sounded_note), event_count=row.event_count) for row in rows)
 
 
 def _row_to_note_event(row: Row[Any]) -> NoteEvent:

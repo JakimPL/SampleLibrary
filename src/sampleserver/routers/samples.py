@@ -14,15 +14,18 @@ from samplecore.equivalence_classes import classes_by_member_hash, compute_equiv
 from samplecore.models.base import FROZEN
 from samplecore.models.category import SampleCategory
 from samplecore.models.module import Module
+from samplecore.models.note_event import SampleNoteUsage
 from samplecore.models.relation import SampleRelation
 from samplecore.models.sample import Sample, SampleSummary
 from samplecore.models.sample_properties import TrackerSampleProperties
 from samplecore.models.scalars import Count, ModuleHash, SampleHash
 from samplecore.models.tracker import TrackerFormat
 from samplecore.naming import choose_dominant_name, choose_dominant_rate
+from samplecore.pitch import sounding_rate_hz
 from samplecore.spectral_distance import euclidean_distance, nearest_neighbors
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
@@ -76,8 +79,24 @@ class SimilarSample(BaseModel):
     distance: float
 
 
+class SampleNotePlayed(BaseModel):
+    """One note a sample is heard at, with how often the library plays it there.
+
+    ``sounding_rate_hz`` reads the note against the sample's dominant occurrence rate, which is the
+    rate a preview would otherwise play at, so a caller can sound the sample as the library really
+    uses it rather than at its bare reference rate.
+    """
+
+    model_config = FROZEN
+
+    sounded_note: int
+    note_name: str
+    event_count: Count
+    sounding_rate_hz: float | None
+
+
 class SampleDetail(Sample):
-    """A sample together with every module occurrence that references it."""
+    """A sample together with every module occurrence that references it, and the notes it is played at."""
 
     occurrences: tuple[SampleOccurrenceDetail, ...]
     size_bytes: Count
@@ -85,6 +104,7 @@ class SampleDetail(Sample):
     category: SampleCategory
     dominant_rate_hz: Rate | None
     duration_seconds: float
+    notes_played: tuple[SampleNotePlayed, ...]
 
 
 @router.get("")
@@ -162,6 +182,11 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
         SampleOccurrenceDetail(properties=item, module=_occurrence_module(modules_by_hash[item.occurrence.module_hash]))
         for item in properties
     )
+    dominant_rate_hz = choose_dominant_rate(item.rate for item in properties)
+    notes_played = tuple(
+        _note_played(usage, dominant_rate_hz=dominant_rate_hz)
+        for usage in PostgresNoteEventRepository(connection).note_usage_for_sample(sample_hash)
+    )
     return SampleDetail(
         hash=sample.hash,
         depth=sample.depth,
@@ -174,8 +199,23 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
             tuple(item.name for item in properties)
             + PostgresSampleRepository(connection).instrument_names_by_hash([sample.hash]).get(sample.hash, ())
         ),
-        dominant_rate_hz=choose_dominant_rate(item.rate for item in properties),
+        dominant_rate_hz=dominant_rate_hz,
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
+        notes_played=notes_played,
+    )
+
+
+def _note_played(usage: SampleNoteUsage, *, dominant_rate_hz: Rate | None) -> SampleNotePlayed:
+    """One note usage rendered for the API, sounded against the sample's dominant occurrence rate."""
+    return SampleNotePlayed(
+        sounded_note=usage.sounded_note.value,
+        note_name=str(usage.sounded_note),
+        event_count=usage.event_count,
+        sounding_rate_hz=(
+            None
+            if dominant_rate_hz is None
+            else sounding_rate_hz(reference_rate_hz=dominant_rate_hz, sounded_note=usage.sounded_note)
+        ),
     )
 
 

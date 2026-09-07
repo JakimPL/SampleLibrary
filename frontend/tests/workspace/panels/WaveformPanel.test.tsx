@@ -45,7 +45,20 @@ function latestInstance(): (typeof instances)[number] {
     return instance;
 }
 
-function buildSampleDetail(overrides: { readonly dominantRateHz: number | null; readonly rates: number[] }): unknown {
+interface NotePlayedFixture {
+    readonly sounded_note: number;
+    readonly note_name: string;
+    readonly event_count: number;
+    readonly sounding_rate_hz: number | null;
+}
+
+interface SampleDetailOverrides {
+    readonly dominantRateHz: number | null;
+    readonly rates: number[];
+    readonly notesPlayed?: readonly NotePlayedFixture[];
+}
+
+function buildSampleDetail(overrides: SampleDetailOverrides): unknown {
     return {
         hash: "abc",
         depth: 16,
@@ -56,6 +69,7 @@ function buildSampleDetail(overrides: { readonly dominantRateHz: number | null; 
         size_bytes: 8192,
         duration_seconds: 0.09,
         dominant_rate_hz: overrides.dominantRateHz,
+        notes_played: overrides.notesPlayed ?? [],
         occurrences: overrides.rates.map((rate, index) => ({
             properties: {
                 sample_hash: "abc",
@@ -105,6 +119,29 @@ describe("WaveformPanel", () => {
         fireEvent.change(screen.getByLabelText("Rate"), { target: { value: "8363" } });
 
         expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 44100, false);
+    });
+
+    it("opens at the note the library plays the sample at most, not at its reference rate", async () => {
+        getSample.mockResolvedValue(
+            buildSampleDetail({
+                dominantRateHz: 8363,
+                rates: [8363],
+                notesPlayed: [
+                    { sounded_note: 60, note_name: "C-5", event_count: 2, sounding_rate_hz: 8363 },
+                    { sounded_note: 36, note_name: "C-3", event_count: 40, sounding_rate_hz: 2090.75 },
+                ],
+            }),
+        );
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+        useSelectionStore.getState().focusSample("abc");
+
+        render(<WaveformPanel />);
+
+        await waitFor(() => {
+            expect(screen.getByLabelText("Note")).toHaveValue("36");
+        });
+        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 4 / 44100, false);
     });
 
     it("shows an honest empty state for a sample with no occurrences", async () => {
