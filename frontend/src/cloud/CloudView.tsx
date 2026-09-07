@@ -11,7 +11,7 @@ import { type CloudEntityPoint, normalizePoints } from "./geometry";
 type Scatterplot = ReturnType<typeof createScatterplot>;
 type ScreenPosition = readonly [number, number];
 
-const POINT_SIZE = 4;
+const POINT_SIZE = 2.5;
 const POINT_SIZE_SELECTED = 9;
 const POINT_COLOR_PROPERTY = "--cloud-point";
 const POINT_COLOR_FALLBACK = "#1b1f26";
@@ -19,9 +19,16 @@ const SELECTED_COLOR_PROPERTY = "--cloud-point-selected";
 const SELECTED_COLOR_FALLBACK = "#a8690f";
 const BACKGROUND_COLOR_PROPERTY = "--cloud-bg";
 const BACKGROUND_COLOR_FALLBACK = "#f4f5f7";
-const POINT_SHAPE_PROPERTY = "--cloud-point-shape";
-const SQUARE_POINT_SHAPE_VALUE = "square";
+const UNCATEGORIZED_CATEGORY = "uncategorized";
+const UNCATEGORIZED_COLOR_PROPERTY = "--cloud-point-uncategorized";
+const UNCATEGORIZED_COLOR_FALLBACK = "#d5d4ce";
 const CATEGORICAL_COLOR_BY = "category";
+
+// Points grow sub-linearly with zoom, so magnifying a crowded region separates its points rather
+// than enlarging them in step and keeping them just as merged. Fading points by local density was
+// measured against this and rejected: a library this size is dense nearly everywhere, so it dimmed
+// the classified points as much as the substrate and left every hue washed out.
+const POINT_SCALE_MODE = "asinh";
 
 interface CloudColors {
     readonly pointColor: string;
@@ -37,8 +44,15 @@ function readCloudColors(): CloudColors {
     };
 }
 
+// Most of a real library's samples match no category keyword, so drawing them as strongly as the
+// classified ones buries the very structure the colors exist to show. They take a recessive tone of
+// their own instead, reading as the substrate the classified points sit in.
 function readCategoryPalette(): string[] {
-    return CATEGORY_ORDER.map((category) => readThemeColor(categoryColorProperty(category), POINT_COLOR_FALLBACK));
+    return CATEGORY_ORDER.map((category) =>
+        category === UNCATEGORIZED_CATEGORY
+            ? readThemeColor(UNCATEGORIZED_COLOR_PROPERTY, UNCATEGORIZED_COLOR_FALLBACK)
+            : readThemeColor(categoryColorProperty(category), POINT_COLOR_FALLBACK),
+    );
 }
 
 interface DrawSpec {
@@ -70,13 +84,6 @@ function buildDrawSpec(points: readonly CloudEntityPoint[]): DrawSpec {
               colorBy: null,
               pointColor: readThemeColor(POINT_COLOR_PROPERTY, POINT_COLOR_FALLBACK),
           };
-}
-
-// regl-scatterplot compiles its point shape into the WebGL shader at creation and has no setter
-// for it afterwards (unlike color, which `.set()` updates live), so picking up a live theme switch
-// between circle and square points means recreating the whole scatterplot rather than restyling it.
-function readRenderPointsAsSquares(): boolean {
-    return readThemeColor(POINT_SHAPE_PROPERTY, "") === SQUARE_POINT_SHAPE_VALUE;
 }
 
 // Kept in step with the ring animations' own total duration in styles.css (two staggered 1400ms
@@ -214,10 +221,9 @@ async function applyPoints(
  * listener, so `onActivate` fires for a Shift-click too. Point, active-point,
  * and background colors are read from the theme's CSS custom properties at creation, and re-applied
  * through the library's own `set` whenever `useThemeSignal` reports the resolved theme could have
- * changed, mirroring how `useWaveformPlayer.ts` keeps wavesurfer's own canvas in step. Point shape
- * (circle or square) is read the same way, but the library compiles it into the WebGL shader at
- * creation with no live setter, so a theme switch that flips it recreates the whole scatterplot
- * instead -- the one visual this view cannot just restyle in place. Points that carry a `category`
+ * changed, mirroring how `useWaveformPlayer.ts` keeps wavesurfer's own canvas in step. Points draw
+ * as circles carrying a background-colored outline, which keeps each one readable where a dense
+ * region crowds many together. Points that carry a `category`
  * (every sample-cloud point does; a module-cloud point carries none) draw with regl-scatterplot's
  * own categorical coloring instead of the flat point color, one fixed hue per `SampleCategory` --
  * see `buildDrawSpec`, which both draw calls and the theme re-apply above route through so the two
@@ -272,7 +278,6 @@ export function CloudView({
     pointsRef.current = points;
 
     const themeSignal = useThemeSignal();
-    const renderPointsAsSquares = readRenderPointsAsSquares();
 
     useEffect(() => {
         const container = containerRef.current;
@@ -288,8 +293,8 @@ export function CloudView({
             ...readCloudColors(),
             pointSize: POINT_SIZE,
             pointSizeSelected: POINT_SIZE_SELECTED,
+            pointScaleMode: POINT_SCALE_MODE,
             deselectOnDblClick: false,
-            renderPointsAsSquares,
         });
         scatterplotRef.current = scatterplot;
         pointsDrawnRef.current = false;
@@ -377,13 +382,12 @@ export function CloudView({
             scatterplotRef.current = null;
             canvas.remove();
         };
-        // Recreated only when the point shape flips (see readRenderPointsAsSquares above); point and
-        // highlight updates otherwise flow through the effect below rather than recreating the whole
-        // WebGL context.
-        // highlighted is deliberately left out: this effect only needs its value at the moment of
-        // (re)creation, and reading it fresh here would otherwise force a recreation on every select.
+        // Created once per mount: point and highlight updates flow through the effect below, and a
+        // theme switch restyles the live instance, so neither rebuilds the WebGL context.
+        // highlighted is deliberately left out: this effect only needs its value at creation, and
+        // reading it fresh here would otherwise force a recreation on every select.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [renderPointsAsSquares]);
+    }, []);
 
     useEffect(() => {
         const scatterplot = scatterplotRef.current;

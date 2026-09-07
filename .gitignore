@@ -40,3 +40,6 @@ Thumbs.db
 
 # Claude Code session runtime state
 .claude/scheduled_tasks.lock
+
+# Local server log from a detached dev run
+.uvicorn.log

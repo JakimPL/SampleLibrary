@@ -29,7 +29,6 @@
     --cloud-bg: var(--surface-0);
     --cloud-point: var(--text-primary);
     --cloud-point-selected: var(--accent);
-    --cloud-point-shape: circle;
     --cloud-ping-color: var(--accent);
 
     /* One fixed hue per SampleCategory (see frontend/src/samples/category.ts's CATEGORY_ORDER),
@@ -52,6 +51,7 @@
     --category-fx: #5c8a0a;
     --category-loop: #6d5ce8;
     --category-uncategorized: #7a7972;
+    --cloud-point-uncategorized: #d5d4ce;
     --mini-waveform-color: var(--text-faint);
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
@@ -95,6 +95,7 @@
         --category-fx: #8fc020;
         --category-loop: #8f82f0;
         --category-uncategorized: #a3a196;
+        --cloud-point-uncategorized: #4b4a45;
     }
 }
 
@@ -135,6 +136,7 @@
     --category-fx: #8fc020;
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
+    --cloud-point-uncategorized: #4b4a45;
 }
 
 /* Palette sampled from a real OpenMPT 1.32 window on Windows 11, not the classic Win98 3D-bevel
@@ -171,7 +173,6 @@
     --cloud-bg: #000;
     --cloud-point: #fff;
     --cloud-point-selected: var(--wave-fill);
-    --cloud-point-shape: square;
     --cloud-ping-color: #ff0;
 
     /* Reuses the dark theme's own category steps rather than this theme's own light chrome
@@ -191,6 +192,7 @@
     --category-fx: #8fc020;
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
+    --cloud-point-uncategorized: #3c3b37;
     --mini-waveform-color: var(--wave-fill);
     --font-body: "Segoe UI", "Tahoma", sans-serif;
     --font-mono: var(--font-body);
