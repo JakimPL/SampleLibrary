@@ -56,6 +56,37 @@ to a temporary CSV file and letting DuckDB's own `COPY ... FROM` read it back av
 cost entirely -- the same technique `feature_store.py` already uses for the Parquet side of this
 same problem.
 
+## Deployment
+
+`sampleserver` is the only package meant to run as a long-lived service; `sampleextract` and
+`samplecloud` are one-shot offline batch scripts, run by hand or on a schedule, never by the served
+app itself. The root `Dockerfile` builds a runtime image for `sampleserver` alone, installing only
+the `server` extra (`fastapi`, `uvicorn`) -- `sampleextract`/`samplecloud`'s own heavier
+dependencies (`librosa`, `umap-learn`, `scikit-learn`) never reach that image, mirroring the
+`sampleserver never imports the offline batch pipelines` import-linter contract above. The
+container runs multiple `uvicorn` worker processes (`--workers`, not `--reload`) rather than the
+single-process dev server `make serve` starts: each worker opens its own read-only DuckDB
+connection per request (`sampleserver.dependencies.get_connection`), which is exactly the
+concurrent-readers pattern DuckDB's read-only mode supports, so multiple people browsing the
+library through one deployed server works correctly with no shared state between workers. The
+library's data directory and a `config.toml` pointing at its in-container path are supplied at
+`docker run` time (a bind mount plus `SAMPLELIBRARY_CONFIG`), never baked into the image, mirroring
+`config.toml` never being committed to the repository.
+
+DuckDB's own concurrency model is a single writer *or* multiple readers, not both against the same
+file at once: a database file already open for read-write excludes every other connection, read-only
+included, until the writer closes it -- confirmed directly against this project's own duckdb 1.5.5
+by holding one process's write transaction open and having a second, separate process try to open a
+genuine read-only connection to the same file concurrently, which failed immediately (an `IOException`
+reporting the file already open elsewhere, not a slow block) rather than reading alongside it. This
+was verified on Windows, the platform this project is developed on; DuckDB's documented concurrency
+model describes the same single-writer-process architecture generally, not as an OS-specific
+caveat, so the same exclusion is the safer assumption on any deployment platform absent a similar
+check run there. The operational consequence: a batch job (`sampleextract`, `sampleequivalence`,
+`samplethumbnail`, `samplecloud`) must never run while `sampleserver` is serving live traffic
+against the same catalog file -- run batch jobs during a maintenance window with the server stopped,
+or restart the server once a batch job completes, rather than expecting the two to overlap safely.
+
 ## Sample cloud embeddings
 
 `samplecloud.backends.FeatureExtractor` is a protocol, not a fixed implementation: anything

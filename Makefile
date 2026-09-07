@@ -98,6 +98,21 @@ serve-dev:
 serve:
 	uv run uvicorn sampleserver.main:app --reload
 
+.PHONY: docker-build
+docker-build:
+	docker build -t samplelibrary-server .
+
+# LIBRARY_ROOT and CONFIG_PATH must be set to your own local library directory and config.toml --
+# see docs/architecture.md's Deployment section for the concurrency rule this container's own
+# batch-job-timing convention comes from before running this alongside sampleextract/samplecloud.
+.PHONY: docker-run
+docker-run:
+	docker run --rm -p 8000:8000 \
+		-v "$(LIBRARY_ROOT)":/library \
+		-v "$(CONFIG_PATH)":/app/config.toml \
+		-e SAMPLELIBRARY_CONFIG=/app/config.toml \
+		samplelibrary-server
+
 .PHONY: openapi
 openapi:
 	uv run sampleserver-schema > frontend/openapi.json

@@ -1,0 +1,12 @@
+.git
+.venv
+frontend
+dev-library
+notebooks
+docs
+tests
+scripts
+*.md
+.pre-commit-config.yaml
+.gitignore
+config.toml
