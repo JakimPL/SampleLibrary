@@ -26,6 +26,9 @@ dev-library/
 # Regenerable data: never commit
 *.npz
 
+# Exported hand labels: irreplaceable, and yours to keep somewhere of your own choosing
+labels.jsonl
+
 # Frontend
 frontend/node_modules/
 frontend/dist/

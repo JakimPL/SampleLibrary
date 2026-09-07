@@ -42,6 +42,22 @@ thumbnails:
 notes:
 	uv run samplenotes
 
+# Hand-chosen sample labels. The export is the copy that outlives the database, and nothing else in
+# this repository can rebuild one -- keep it somewhere safe of your own.
+.PHONY: labels-export
+labels-export:
+	uv run samplelabels export
+
+.PHONY: labels-import
+labels-import:
+	uv run samplelabels import
+
+# Reattaches labels whose sample hash the catalog no longer holds, through the module slot each was
+# chosen from. Run it after anything that changes how samples are hashed.
+.PHONY: labels-relink
+labels-relink:
+	uv run samplelabels relink
+
 .PHONY: embed
 embed:
 	uv run samplecloud
