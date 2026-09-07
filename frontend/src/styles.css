@@ -95,7 +95,7 @@
         --category-fx: #8fc020;
         --category-loop: #8f82f0;
         --category-uncategorized: #a3a196;
-        --cloud-point-uncategorized: #4b4a45;
+        --cloud-point-uncategorized: #6e6d64;
     }
 }
 
@@ -136,7 +136,7 @@
     --category-fx: #8fc020;
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
-    --cloud-point-uncategorized: #4b4a45;
+    --cloud-point-uncategorized: #6e6d64;
 }
 
 /* Palette sampled from a real OpenMPT 1.32 window on Windows 11, not the classic Win98 3D-bevel
@@ -192,7 +192,7 @@
     --category-fx: #8fc020;
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
-    --cloud-point-uncategorized: #3c3b37;
+    --cloud-point-uncategorized: #63625a;
     --mini-waveform-color: var(--wave-fill);
     --font-body: "Segoe UI", "Tahoma", sans-serif;
     --font-mono: var(--font-body);

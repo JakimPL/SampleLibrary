@@ -24,12 +24,6 @@ const UNCATEGORIZED_COLOR_PROPERTY = "--cloud-point-uncategorized";
 const UNCATEGORIZED_COLOR_FALLBACK = "#d5d4ce";
 const CATEGORICAL_COLOR_BY = "category";
 
-// Points grow sub-linearly with zoom, so magnifying a crowded region separates its points rather
-// than enlarging them in step and keeping them just as merged. Fading points by local density was
-// measured against this and rejected: a library this size is dense nearly everywhere, so it dimmed
-// the classified points as much as the substrate and left every hue washed out.
-const POINT_SCALE_MODE = "asinh";
-
 interface CloudColors {
     readonly pointColor: string;
     readonly pointColorActive: string;
@@ -293,7 +287,6 @@ export function CloudView({
             ...readCloudColors(),
             pointSize: POINT_SIZE,
             pointSizeSelected: POINT_SIZE_SELECTED,
-            pointScaleMode: POINT_SCALE_MODE,
             deselectOnDblClick: false,
         });
         scatterplotRef.current = scatterplot;
