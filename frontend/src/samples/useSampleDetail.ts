@@ -37,6 +37,11 @@ async function loadSimilarSamples(sampleHash: string): Promise<readonly SimilarS
     }
 }
 
+/** The cache key one sample's detail is shared under, so a write can drop what it made stale. */
+export function sampleDetailCacheKey(sampleHash: string): string {
+    return `sample-detail:${sampleHash}`;
+}
+
 /**
  * The sample together with its relations and spectral-distance neighbors, cached by sample hash
  * so the Sample Detail and Waveform panels -- both mounted at once, both keyed off the same
@@ -51,5 +56,5 @@ export function useSampleDetail(sampleHash: string): FetchState<SampleDetailWith
         ]);
         return { sample, relations, similar };
     }, [sampleHash]);
-    return useFetch(loader, [sampleHash], `sample-detail:${sampleHash}`);
+    return useFetch(loader, [sampleHash], sampleDetailCacheKey(sampleHash));
 }

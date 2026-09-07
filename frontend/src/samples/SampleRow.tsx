@@ -7,7 +7,7 @@ import { formatBytes, shortHash } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
-import { CATEGORY_LABELS } from "./category";
+import { CategoryBadge } from "./CategoryBadge";
 import { REFERENCE_NOTE } from "./nominalRate";
 import { Thumbnail } from "./Thumbnail";
 import type { PreviewPitch } from "./useAudioPreview";
@@ -53,7 +53,7 @@ export function SampleRow({ sample }: SampleRowProps): ReactElement {
                 </Link>
             </td>
             <td className="cell-muted">
-                <span className={`badge badge-category-${sample.category}`}>{CATEGORY_LABELS[sample.category]}</span>
+                <CategoryBadge sampleHash={sample.hash} category={sample.category} handLabel={sample.hand_label} />
             </td>
             <td className="cell-muted mono">{formatBytes(sample.size_bytes)}</td>
             <td className="cell-muted mono">{sample.occurrence_count}</td>

@@ -46,6 +46,7 @@ describe("CloudHoverTooltip", () => {
             size_bytes: 8192,
             display_name: "kick",
             category: "kick",
+            hand_label: null,
             dominant_rate_hz: 8363,
             duration_seconds: 0.09,
         });
@@ -70,6 +71,7 @@ describe("CloudHoverTooltip", () => {
             size_bytes: 8192,
             display_name: "",
             category: "uncategorized",
+            hand_label: null,
             dominant_rate_hz: null,
             duration_seconds: 0.09,
         });

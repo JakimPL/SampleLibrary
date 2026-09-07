@@ -5,7 +5,8 @@ import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { SpectralDistanceReadout } from "../workspace/panels/SpectralDistanceReadout";
-import { CATEGORY_LABELS } from "./category";
+import { CategoryBadge } from "./CategoryBadge";
+import { LabelEditor } from "./LabelEditor";
 import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { SampleRelationRow } from "./SampleRelationRow";
 import { SimilarSampleRow } from "./SimilarSampleRow";
@@ -27,9 +28,11 @@ export function SampleDetailView({ sample, relations, similar }: SampleDetailVie
             <dl className="kv">
                 <dt>Category</dt>
                 <dd>
-                    <span className={`badge badge-category-${sample.category}`}>
-                        {CATEGORY_LABELS[sample.category]}
-                    </span>
+                    <CategoryBadge sampleHash={sample.hash} category={sample.category} handLabel={sample.hand_label} />
+                </dd>
+                <dt>Label</dt>
+                <dd>
+                    <LabelEditor key={sample.hash} sample={sample} />
                 </dd>
                 <dt>Size</dt>
                 <dd className="mono">{formatBytes(sample.size_bytes)}</dd>

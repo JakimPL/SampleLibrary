@@ -38,6 +38,14 @@ export function getCachedResult<T>(key: string): FetchState<T> | null {
     return (cache.get(key)?.result as FetchState<T> | null) ?? null;
 }
 
+/**
+ * Drops one cached request, so the next component to ask for `key` fetches it again. Used after a
+ * write, where whatever was cached under that key describes the library as it was beforehand.
+ */
+export function invalidateRequest(key: string): void {
+    cache.delete(key);
+}
+
 /** Drops every cached request. Exists for tests, where each case expects a clean cache. */
 export function clearRequestCache(): void {
     cache.clear();

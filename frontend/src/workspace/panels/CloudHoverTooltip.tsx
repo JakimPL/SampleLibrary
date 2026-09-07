@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 
 import type { WaveformPeak } from "../../api/samples";
 import { useModule } from "../../modules/useModule";
-import { CATEGORY_LABELS } from "../../samples/category";
+import { CategoryBadge } from "../../samples/CategoryBadge";
 import { readMiniWaveformColor } from "../../samples/miniWaveformColor";
 import { useSampleHoverPreview } from "../../samples/useSampleHoverPreview";
 import { layoutWaveformBars } from "../../samples/waveformLayout";
@@ -61,9 +61,7 @@ function SampleHoverTooltip({ hash, x, y }: EntityTooltipProps): ReactElement | 
             </div>
             <div className="cloud-hover-meta">
                 <span className="entity-hash mono">{shortHash(hash)}</span>
-                <span className={`badge badge-category-${state.data.category}`}>
-                    {CATEGORY_LABELS[state.data.category]}
-                </span>
+                <CategoryBadge sampleHash={hash} category={state.data.category} handLabel={state.data.handLabel} />
             </div>
             <MiniWaveform peaks={state.data.peaks} />
         </div>

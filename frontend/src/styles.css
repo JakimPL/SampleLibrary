@@ -524,6 +524,48 @@ tr.is-focused {
     color: var(--accent);
 }
 
+/* A hand label is free text, so it has no place in the fourteen fixed category hues; a filled,
+   bordered badge marks it as the different kind of statement it is -- what a person decided,
+   rather than what the keyword table guessed. */
+.badge-hand-label {
+    background: var(--surface-2);
+    color: var(--text-primary);
+    border: 1px solid var(--border-strong);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.label-editor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.label-editor-input {
+    flex: 1 1 140px;
+    min-width: 120px;
+    padding: 3px 6px;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+.label-editor-scope {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-basis: 100%;
+    color: var(--text-muted);
+}
+
+.label-editor-message {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--critical);
+}
+
 /* Class names below echo the backend's RelationType/TrackerFormat enum values verbatim (snake_case
    is their contract, not ours), so selector-class-pattern is disabled per selector rather than
    introducing a translation layer just to satisfy kebab-case. */

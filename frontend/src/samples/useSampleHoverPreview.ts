@@ -8,7 +8,13 @@ import type { SampleCategory } from "./category";
 export interface SampleHoverPreview {
     readonly displayName: string;
     readonly category: SampleCategory;
+    readonly handLabel: string | null;
     readonly peaks: readonly WaveformPeak[];
+}
+
+/** The cache key one sample's hover preview is shared under, so a write can drop what it made stale. */
+export function sampleHoverCacheKey(sampleHash: string): string {
+    return `sample-hover:${sampleHash}`;
 }
 
 /**
@@ -19,7 +25,12 @@ export interface SampleHoverPreview {
 export function useSampleHoverPreview(sampleHash: string): FetchState<SampleHoverPreview> {
     const loader = useCallback(async () => {
         const [sample, peaks] = await Promise.all([getSample(sampleHash), getSampleWaveform(sampleHash)]);
-        return { displayName: sample.display_name, category: sample.category, peaks };
+        return {
+            displayName: sample.display_name,
+            category: sample.category,
+            handLabel: sample.hand_label,
+            peaks,
+        };
     }, [sampleHash]);
-    return useFetch(loader, [sampleHash], `sample-hover:${sampleHash}`);
+    return useFetch(loader, [sampleHash], sampleHoverCacheKey(sampleHash));
 }
