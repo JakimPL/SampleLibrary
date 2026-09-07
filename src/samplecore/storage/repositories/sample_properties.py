@@ -73,7 +73,7 @@ class SamplePropertiesRepository(Protocol):
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]: ...
 
 
-class DuckDBSamplePropertiesRepository:
+class PostgresSamplePropertiesRepository:
     """A SamplePropertiesRepository backed by class-table inheritance: a shared base table plus one
     tracker-specific child table, joined back together on read by the ``tracker`` discriminator.
     """

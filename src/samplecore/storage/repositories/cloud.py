@@ -7,7 +7,7 @@ from sqlalchemy import Connection, Row, delete, select
 from sqlalchemy.dialects.postgresql import insert as upsert
 
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
-from samplecore.storage.database import bulk_insert_csv, module_cloud_coordinates, sample_cloud_coordinates
+from samplecore.storage.database import bulk_insert, module_cloud_coordinates, sample_cloud_coordinates
 
 
 class CloudCoordinateRepository(Protocol):
@@ -20,7 +20,7 @@ class CloudCoordinateRepository(Protocol):
     def list_all(self) -> tuple[SampleCloudCoordinate, ...]: ...
 
 
-class DuckDBCloudCoordinateRepository:
+class PostgresCloudCoordinateRepository:
     """A CloudCoordinateRepository backed by the catalog's ``sample_cloud_coordinates`` table.
 
     ``upsert`` replaces a sample's coordinate outright: unlike a Sample's own hash-determined
@@ -50,13 +50,13 @@ class DuckDBCloudCoordinateRepository:
 
         A full-recompute writer like ``reduce_and_persist_coordinates`` never needs conflict
         resolution against a previous value -- every run replaces the whole table -- so clearing it
-        first and bulk-loading fresh (see ``bulk_insert_csv``) stands in for a conflict-checked
+        first and bulk-loading fresh (see ``bulk_insert``) stands in for a conflict-checked
         upsert per row, the difference between seconds and hours at this catalog's scale.
         """
         self._connection.execute(delete(sample_cloud_coordinates))
         if not coordinates:
             return
-        bulk_insert_csv(
+        bulk_insert(
             self._connection,
             sample_cloud_coordinates,
             ["sample_hash", "x", "y", "computed_at"],
@@ -86,10 +86,10 @@ class ModuleCloudCoordinateRepository(Protocol):
     def list_all(self) -> tuple[ModuleCloudCoordinate, ...]: ...
 
 
-class DuckDBModuleCloudCoordinateRepository:
+class PostgresModuleCloudCoordinateRepository:
     """A ModuleCloudCoordinateRepository backed by the catalog's ``module_cloud_coordinates`` table.
 
-    Mirrors DuckDBCloudCoordinateRepository's replace-outright upsert: a position comes from a
+    Mirrors PostgresCloudCoordinateRepository's replace-outright upsert: a position comes from a
     whole embedding run's fit, placeholder or genuine, so the latest run's value always wins.
     """
 
@@ -113,14 +113,14 @@ class DuckDBModuleCloudCoordinateRepository:
     def replace_all(self, coordinates: Sequence[ModuleCloudCoordinate]) -> None:
         """Replace every persisted coordinate with exactly the given set, in one bulk operation.
 
-        Mirrors ``DuckDBCloudCoordinateRepository.replace_all`` -- a full-recompute writer like
+        Mirrors ``PostgresCloudCoordinateRepository.replace_all`` -- a full-recompute writer like
         ``place_and_persist_coordinates`` replaces the whole table every run, so a bulk clear and
-        bulk-load (see ``bulk_insert_csv``) stands in for a conflict-checked upsert per row.
+        bulk-load (see ``bulk_insert``) stands in for a conflict-checked upsert per row.
         """
         self._connection.execute(delete(module_cloud_coordinates))
         if not coordinates:
             return
-        bulk_insert_csv(
+        bulk_insert(
             self._connection,
             module_cloud_coordinates,
             ["module_hash", "x", "y", "computed_at"],

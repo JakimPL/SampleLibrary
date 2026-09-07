@@ -12,8 +12,11 @@ from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.models.cloud import ModuleCloudCoordinate
 from samplecore.models.module import Module
 from samplecore.storage.database import start_batch
-from samplecore.storage.repositories.cloud import DuckDBModuleCloudCoordinateRepository, ModuleCloudCoordinateRepository
-from samplecore.storage.repositories.module import DuckDBModuleRepository
+from samplecore.storage.repositories.cloud import (
+    ModuleCloudCoordinateRepository,
+    PostgresModuleCloudCoordinateRepository,
+)
+from samplecore.storage.repositories.module import PostgresModuleRepository
 
 PLACEHOLDER_COORDINATE_BOUND: Final[float] = 10.0
 
@@ -54,10 +57,10 @@ def place_and_persist_coordinates(connection: Connection) -> PlaceholderEmbeddin
     A full recompute every run, mirroring `reduce_and_persist_coordinates`'s own crash-safety
     pattern -- the whole pass runs as one transaction, landing completely or not at all.
     """
-    modules = DuckDBModuleRepository(connection).list_all()
+    modules = PostgresModuleRepository(connection).list_all()
     coordinates = generate_placeholder_coordinates(modules, computed_at=datetime.now(UTC))
 
-    coordinate_repository: ModuleCloudCoordinateRepository = DuckDBModuleCloudCoordinateRepository(connection)
+    coordinate_repository: ModuleCloudCoordinateRepository = PostgresModuleCloudCoordinateRepository(connection)
     with start_batch(connection):
         coordinate_repository.replace_all(coordinates)
 
@@ -67,7 +70,7 @@ def place_and_persist_coordinates(connection: Connection) -> PlaceholderEmbeddin
 def main() -> None:
     """Place every catalogued module at a placeholder 2D coordinate and report the result."""
     config = bootstrap_cli()
-    with open_catalog_connection(config.resolved_database_path) as connection:
+    with open_catalog_connection(config.database_url) as connection:
         summary = place_and_persist_coordinates(connection)
 
     _logger.info("Placed %d module(s) at placeholder cloud coordinates.", summary.modules_placed)

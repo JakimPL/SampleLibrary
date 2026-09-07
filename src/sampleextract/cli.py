@@ -13,7 +13,7 @@ def main() -> None:
     """Run one extraction pass over the configured module source directory and report the result."""
     config = bootstrap_cli()
     config.library_root.mkdir(parents=True, exist_ok=True)
-    with open_catalog_connection(config.resolved_database_path) as connection:
+    with open_catalog_connection(config.database_url) as connection:
         summary = run_extraction(config, connection)
 
     _logger.info(

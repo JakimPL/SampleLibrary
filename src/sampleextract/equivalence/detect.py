@@ -14,8 +14,8 @@ from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
 from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
-from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository, SampleRelationRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository, SampleRepository
+from samplecore.storage.repositories.relation import PostgresSampleRelationRepository, SampleRelationRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository, SampleRepository
 from samplecore.waveform import trim_trailing_silence
 from sampleextract.equivalence.candidates import gain_variant_candidate_pairs, resampled_candidate_pairs
 from sampleextract.equivalence.fingerprint import compute_fingerprint
@@ -71,7 +71,7 @@ def detect_equivalences(
     relation_type, method) identity, so recomputing the same pair only refreshes its confidence
     and evidence rather than duplicating the row. The whole pass runs as one transaction so an
     interrupted run leaves nothing committed, rather than a partial set of relations a fresh rerun
-    could then collide with -- DuckDB's own sequence-generated ids are not guaranteed to reflect
+    could then collide with -- Postgres's own sequence-generated ids are not guaranteed to reflect
     every value already handed out once a connection ends without a clean commit.
 
     ``sample_limit``, when given, considers only that many catalogued samples -- a full pass over
@@ -80,8 +80,8 @@ def detect_equivalences(
     expected to run repeatedly as the catalog itself grows, so leaving some pairs undetected in
     any one pass is an accepted, ordinary outcome, not a defect to guard against here.
     """
-    sample_repository: SampleRepository = DuckDBSampleRepository(connection)
-    relation_repository: SampleRelationRepository = DuckDBSampleRelationRepository(connection)
+    sample_repository: SampleRepository = PostgresSampleRepository(connection)
+    relation_repository: SampleRelationRepository = PostgresSampleRelationRepository(connection)
     samples = sample_repository.list_all()
     if sample_limit is not None:
         samples = samples[:sample_limit]

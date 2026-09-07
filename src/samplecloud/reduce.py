@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Final
 
 import numpy as np
@@ -11,14 +10,13 @@ import umap
 from sklearn.preprocessing import StandardScaler
 from sqlalchemy import Connection
 
-from samplecloud.feature_store import read_features
 from samplecore.models.cloud import SampleCloudCoordinate
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.storage.database import start_batch
-from samplecore.storage.repositories.cloud import CloudCoordinateRepository, DuckDBCloudCoordinateRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
+from samplecore.storage.repositories.cloud import CloudCoordinateRepository, PostgresCloudCoordinateRepository
+from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.spectral import (
-    DuckDBSampleSpectralFeatureRepository,
+    PostgresSampleSpectralFeatureRepository,
     SampleSpectralFeatureRepository,
 )
 
@@ -32,20 +30,13 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class CloudSummary:
-    """What one coordinate-reduction pass did, across every feature vector it considered.
-
-    ``samples_orphaned`` counts feature-store entries for a sample hash no longer in the catalog --
-    left behind by a reset whose cache predates it, or by any other drift between the store and the
-    catalog -- skipped rather than reduced, since a coordinate can never reference a sample that no
-    longer exists.
-    """
+    """What one coordinate-reduction pass did, across one experiment's feature vectors."""
 
     samples_reduced: int
-    samples_orphaned: int
 
 
-def reduce_and_persist_coordinates(connection: Connection, feature_store_path: Path) -> CloudSummary:
-    """Fit UMAP over every currently-extracted feature vector and persist a 2D coordinate each.
+def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -> CloudSummary:
+    """Fit UMAP over one experiment's feature vectors and persist a 2D coordinate for each sample.
 
     A full recompute every run, rather than placing only new points into an already-fitted model,
     is a deliberate simplification: UMAP has no natural per-point incremental update without
@@ -56,25 +47,16 @@ def reduce_and_persist_coordinates(connection: Connection, feature_store_path: P
     projection below is fit from -- is persisted alongside its coordinate, so a named, reusable
     "spectral distance" between two samples is always the same metric this projection respects.
 
-    The feature store is a standalone cache, keyed only by sample hash, so it can outlive the
-    catalog row it was computed from -- a reset that clears the catalog but predates a fix to also
-    clear this cache, or any other drift between the two, would otherwise leave a stale entry that
-    a coordinate upsert can never satisfy, since ``sample_cloud_coordinates`` and
-    ``sample_spectral_feature`` both foreign-key to ``sample``. Filtering to hashes the catalog
-    still recognizes keeps every fit and every persisted row honestly scoped to the library as it
-    exists today.
+    ``sample_feature_vector.sample_hash`` foreign-keys to ``sample.hash``, so every vector this
+    reads already belongs to a catalogued sample -- promoting an experiment can never reference a
+    sample the catalog no longer has.
     """
-    features = read_features(feature_store_path)
-    catalogued_hashes = {sample_.hash for sample_ in DuckDBSampleRepository(connection).list_all()}
-    orphaned_hash_count = sum(1 for sample_hash in features if sample_hash not in catalogued_hashes)
-    features = {sample_hash: vector for sample_hash, vector in features.items() if sample_hash in catalogued_hashes}
-    if orphaned_hash_count:
-        _logger.info("Skipping %d cached feature vectors for samples no longer in the catalog.", orphaned_hash_count)
-    if len(features) < MINIMUM_SAMPLES_FOR_REDUCTION:
-        return CloudSummary(samples_reduced=0, samples_orphaned=orphaned_hash_count)
+    feature_vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
+    if len(feature_vectors) < MINIMUM_SAMPLES_FOR_REDUCTION:
+        return CloudSummary(samples_reduced=0)
 
-    sample_hashes = list(features.keys())
-    feature_matrix = np.stack([features[sample_hash] for sample_hash in sample_hashes])
+    sample_hashes = [vector.sample_hash for vector in feature_vectors]
+    feature_matrix = np.stack([np.array(vector.vector, dtype=np.float64) for vector in feature_vectors])
     standardized = StandardScaler().fit_transform(feature_matrix)
     n_neighbors = min(DEFAULT_N_NEIGHBORS, len(sample_hashes) - 1)
     _logger.info("Fitting UMAP over %d feature vectors...", len(sample_hashes))
@@ -83,8 +65,8 @@ def reduce_and_persist_coordinates(connection: Connection, feature_store_path: P
     ).fit_transform(standardized)
     _logger.info("UMAP fit complete.")
 
-    coordinate_repository: CloudCoordinateRepository = DuckDBCloudCoordinateRepository(connection)
-    spectral_feature_repository: SampleSpectralFeatureRepository = DuckDBSampleSpectralFeatureRepository(connection)
+    coordinate_repository: CloudCoordinateRepository = PostgresCloudCoordinateRepository(connection)
+    spectral_feature_repository: SampleSpectralFeatureRepository = PostgresSampleSpectralFeatureRepository(connection)
     computed_at = datetime.now(UTC)
     new_coordinates: list[SampleCloudCoordinate] = []
     new_features: list[SampleSpectralFeature] = []
@@ -104,4 +86,4 @@ def reduce_and_persist_coordinates(connection: Connection, feature_store_path: P
         spectral_feature_repository.replace_all(new_features)
     _logger.info("Persisting complete.")
 
-    return CloudSummary(samples_reduced=len(sample_hashes), samples_orphaned=orphaned_hash_count)
+    return CloudSummary(samples_reduced=len(sample_hashes))

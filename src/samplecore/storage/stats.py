@@ -6,7 +6,7 @@ from samplecore.models.relation import RelationType
 from samplecore.models.stats import LibraryStats, RelationTypeCount, TrackerModuleCount
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.database import module, sample_properties, sample_relation
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
 
 
 def compute_library_stats(connection: Connection) -> LibraryStats:
@@ -21,7 +21,7 @@ def compute_library_stats(connection: Connection) -> LibraryStats:
     module_count = connection.execute(select(func.count()).select_from(module)).scalar_one()
     # pylint: disable-next=not-callable
     sample_properties_count = connection.execute(select(func.count()).select_from(sample_properties)).scalar_one()
-    samples = DuckDBSampleRepository(connection).list_all()
+    samples = PostgresSampleRepository(connection).list_all()
 
     modules_by_tracker = tuple(
         TrackerModuleCount(tracker=TrackerFormat(row.tracker), module_count=row.module_count)

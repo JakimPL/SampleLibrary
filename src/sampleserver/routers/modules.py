@@ -13,10 +13,10 @@ from samplecore.models.sample_properties import TrackerSampleProperties
 from samplecore.models.scalars import Count
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
-from samplecore.storage.repositories.module import DuckDBModuleRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
-from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
-from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository, peaks_from_thumbnail
+from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
 from samplecore.waveform import WaveformPeak
 from sampleserver.dependencies import get_connection
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
@@ -59,7 +59,7 @@ def list_modules(
     connection: Connection = Depends(get_connection),
 ) -> Page[Module]:
     """A page of catalogued modules, optionally filtered by tracker format."""
-    repository = DuckDBModuleRepository(connection)
+    repository = PostgresModuleRepository(connection)
     items = repository.list_page(limit=limit, offset=offset, tracker=tracker)
     total = repository.count(tracker=tracker)
     return Page(items=items, total=total, limit=limit, offset=offset)
@@ -72,11 +72,11 @@ def get_module(module_hash: str, connection: Connection = Depends(get_connection
     Raises:
         HTTPException: 404 when no module is catalogued under this hash.
     """
-    module = DuckDBModuleRepository(connection).get(module_hash)
+    module = PostgresModuleRepository(connection).get(module_hash)
     if module is None:
         raise HTTPException(status_code=404, detail=f"no module catalogued with hash {module_hash!r}")
 
-    properties = DuckDBSamplePropertiesRepository(connection).list_for_module(module_hash)
+    properties = PostgresSamplePropertiesRepository(connection).list_for_module(module_hash)
     samples_by_hash = _samples_by_hash(connection, properties)
     occurrences = tuple(
         ModuleOccurrenceDetail(properties=item, sample=samples_by_hash[item.sample_hash]) for item in properties
@@ -88,8 +88,8 @@ def _samples_by_hash(
     connection: Connection, properties: tuple[TrackerSampleProperties, ...]
 ) -> dict[str, ModuleOccurrenceSample]:
     hashes = sorted({item.sample_hash for item in properties})
-    samples = DuckDBSampleRepository(connection).get_many(hashes)
-    thumbnails_by_hash = DuckDBSampleThumbnailRepository(connection).get_many(hashes)
+    samples = PostgresSampleRepository(connection).get_many(hashes)
+    thumbnails_by_hash = PostgresSampleThumbnailRepository(connection).get_many(hashes)
 
     samples_by_hash: dict[str, ModuleOccurrenceSample] = {}
     for sample_hash in hashes:

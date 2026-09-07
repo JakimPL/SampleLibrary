@@ -29,7 +29,7 @@ class ModuleRepository(Protocol):
     def count(self, *, tracker: TrackerFormat | None = None) -> int: ...
 
 
-class DuckDBModuleRepository:
+class PostgresModuleRepository:
     """A ModuleRepository backed by the catalog's ``module`` table.
 
     A module's ``id`` is assigned before construction, via ``next_id``, rather than left to the

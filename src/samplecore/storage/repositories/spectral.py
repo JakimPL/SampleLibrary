@@ -8,7 +8,7 @@ from sqlalchemy import Connection, Row, delete, select
 from sqlalchemy.dialects.postgresql import insert as upsert
 
 from samplecore.models.spectral import SampleSpectralFeature
-from samplecore.storage.database import bulk_insert_csv, sample_spectral_feature
+from samplecore.storage.database import bulk_insert, sample_spectral_feature
 
 
 class SampleSpectralFeatureRepository(Protocol):
@@ -23,13 +23,13 @@ class SampleSpectralFeatureRepository(Protocol):
     def list_all(self) -> tuple[SampleSpectralFeature, ...]: ...
 
 
-class DuckDBSampleSpectralFeatureRepository:
+class PostgresSampleSpectralFeatureRepository:
     """A SampleSpectralFeatureRepository backed by the catalog's ``sample_spectral_feature`` table.
 
-    ``vector`` is stored as a JSON-encoded string rather than the native ``JSON`` column type,
-    mirroring ``DuckDBSampleRelationRepository``'s own reasoning: its round trip then never depends
-    on how a particular DuckDB version chooses to represent that type in the Python API. ``upsert``
-    replaces a sample's vector outright, mirroring ``DuckDBCloudCoordinateRepository``'s own
+    ``vector`` is stored as a JSON-encoded string rather than the native ``JSON``/``JSONB`` column
+    type, mirroring ``PostgresSampleRelationRepository``'s own reasoning: its round trip then never
+    depends on a particular database's own JSON representation. ``upsert``
+    replaces a sample's vector outright, mirroring ``PostgresCloudCoordinateRepository``'s own
     replace-outright semantics -- both come from the same embedding run's fit.
     """
 
@@ -53,13 +53,13 @@ class DuckDBSampleSpectralFeatureRepository:
 
         A full-recompute writer like ``reduce_and_persist_coordinates`` never needs conflict
         resolution against a previous value -- every run replaces the whole table -- so clearing it
-        first and bulk-loading fresh (see ``bulk_insert_csv``) stands in for a conflict-checked
+        first and bulk-loading fresh (see ``bulk_insert``) stands in for a conflict-checked
         upsert per row, the difference between seconds and hours at this catalog's scale.
         """
         self._connection.execute(delete(sample_spectral_feature))
         if not features:
             return
-        bulk_insert_csv(
+        bulk_insert(
             self._connection,
             sample_spectral_feature,
             ["sample_hash", "vector", "computed_at"],

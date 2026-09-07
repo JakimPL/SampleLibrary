@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import csv
-import tempfile
 from collections.abc import Iterable
-from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
+from psycopg import Connection as PsycopgConnection
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -27,9 +25,8 @@ from sqlalchemy import (
     and_,
     column,
     create_engine,
-    text,
 )
-from sqlalchemy.engine import URL, RootTransaction
+from sqlalchemy.engine import RootTransaction
 from sqlalchemy.pool import NullPool
 from sqlalchemy.types import ARRAY
 from trackmod.core.samples.depth import BitDepth
@@ -52,6 +49,16 @@ _LOOP_MODE_VALUES: Final[tuple[str, ...]] = tuple(mode.value for mode in LoopMod
 _RELATION_TYPE_VALUES: Final[tuple[str, ...]] = tuple(relation_type.value for relation_type in RelationType)
 
 
+def _non_negative(column_name: str) -> ColumnElement[bool]:
+    """A CHECK expression requiring a column to never go negative.
+
+    DuckDB's own unsigned integer types (``UTINYINT``, ``USMALLINT``, ``UINTEGER``, ``UBIGINT``)
+    enforced this at the type level for free; Postgres has no unsigned integer type at all, so every
+    column that relied on that now needs it spelled out here instead.
+    """
+    return column(column_name) >= 0
+
+
 def _all_null_together(first_column_name: str, *other_column_names: str) -> ColumnElement[bool]:
     """A CHECK expression requiring a group of columns to be either all NULL or all filled in.
 
@@ -67,6 +74,7 @@ metadata = MetaData()
 
 module_id_sequence = Sequence("module_id_seq")
 sample_relation_id_sequence = Sequence("sample_relation_id_seq")
+experiment_id_sequence = Sequence("experiment_id_seq")
 
 sample = Table(
     "sample",
@@ -98,6 +106,11 @@ module = Table(
         column("filename").not_like("%/%") & column("filename").not_like(r"%\%"), name="module_filename_check"
     ),
     CheckConstraint(column("tracker").in_(_TRACKER_FORMAT_VALUES), name="module_tracker_check"),
+    CheckConstraint(_non_negative("channel_count"), name="module_channel_count_check"),
+    CheckConstraint(_non_negative("pattern_count"), name="module_pattern_count_check"),
+    CheckConstraint(_non_negative("instrument_count"), name="module_instrument_count_check"),
+    CheckConstraint(_non_negative("sample_count"), name="module_sample_count_check"),
+    CheckConstraint(_non_negative("file_size"), name="module_file_size_check"),
 )
 
 sample_properties = Table(
@@ -118,12 +131,16 @@ sample_properties = Table(
     PrimaryKeyConstraint("module_id", "instrument_index", "sample_slot"),
     CheckConstraint(column("tracker").in_(_TRACKER_FORMAT_VALUES), name="sample_properties_tracker_check"),
     CheckConstraint(column("rate") > 0, name="sample_properties_rate_check"),
-    CheckConstraint(column("volume") <= 64, name="sample_properties_volume_check"),
-    CheckConstraint(column("panning") <= 255, name="sample_properties_panning_check"),
+    CheckConstraint(column("volume").between(0, 64), name="sample_properties_volume_check"),
+    CheckConstraint(column("panning").between(0, 255), name="sample_properties_panning_check"),
     CheckConstraint(column("loop_mode").in_(_LOOP_MODE_VALUES), name="sample_properties_loop_mode_check"),
     CheckConstraint(
         _all_null_together("loop_begin", "loop_end", "loop_mode"), name="sample_properties_loop_conull_check"
     ),
+    CheckConstraint(_non_negative("instrument_index"), name="sample_properties_instrument_index_check"),
+    CheckConstraint(_non_negative("sample_slot"), name="sample_properties_sample_slot_check"),
+    CheckConstraint(_non_negative("loop_begin"), name="sample_properties_loop_begin_check"),
+    CheckConstraint(_non_negative("loop_end"), name="sample_properties_loop_end_check"),
 )
 
 xm_sample_properties = Table(
@@ -161,7 +178,7 @@ it_sample_properties = Table(
         ["module_id", "instrument_index", "sample_slot"],
         ["sample_properties.module_id", "sample_properties.instrument_index", "sample_properties.sample_slot"],
     ),
-    CheckConstraint(column("global_volume") <= 64, name="it_sample_properties_global_volume_check"),
+    CheckConstraint(column("global_volume").between(0, 64), name="it_sample_properties_global_volume_check"),
     CheckConstraint(column("sustain_mode").in_(_LOOP_MODE_VALUES), name="it_sample_properties_sustain_mode_check"),
     CheckConstraint(
         _all_null_together("sustain_begin", "sustain_end", "sustain_mode"),
@@ -171,6 +188,12 @@ it_sample_properties = Table(
         _all_null_together("vibrato_speed", "vibrato_depth", "vibrato_rate", "vibrato_waveform"),
         name="it_sample_properties_vibrato_conull_check",
     ),
+    CheckConstraint(_non_negative("sustain_begin"), name="it_sample_properties_sustain_begin_check"),
+    CheckConstraint(_non_negative("sustain_end"), name="it_sample_properties_sustain_end_check"),
+    CheckConstraint(_non_negative("vibrato_speed"), name="it_sample_properties_vibrato_speed_check"),
+    CheckConstraint(_non_negative("vibrato_depth"), name="it_sample_properties_vibrato_depth_check"),
+    CheckConstraint(_non_negative("vibrato_rate"), name="it_sample_properties_vibrato_rate_check"),
+    CheckConstraint(_non_negative("vibrato_waveform"), name="it_sample_properties_vibrato_waveform_check"),
 )
 
 s3m_sample_properties = Table(
@@ -255,20 +278,43 @@ sample_thumbnail = Table(
     CheckConstraint(column("bucket_count") > 0, name="sample_thumbnail_bucket_count_check"),
 )
 
+experiment = Table(
+    "experiment",
+    metadata,
+    Column("id", Integer, experiment_id_sequence, primary_key=True, server_default=experiment_id_sequence.next_value()),
+    Column("backend_name", String, nullable=False),
+    Column("params", String, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("label", String, nullable=True),
+)
 
-def connect(database_path: Path, *, read_only: bool = False) -> Connection:
-    """Open the library's DuckDB catalog, creating its schema on first use.
+sample_feature_vector = Table(
+    "sample_feature_vector",
+    metadata,
+    Column("experiment_id", Integer, ForeignKey("experiment.id"), nullable=False),
+    Column("sample_hash", String(64), ForeignKey("sample.hash"), nullable=False),
+    Column("vector", ARRAY(Double), nullable=False),
+    Column("computed_at", DateTime(timezone=True), nullable=False),
+    PrimaryKeyConstraint("experiment_id", "sample_hash"),
+)
+
+
+def connect(database_url: str, *, read_only: bool = False) -> Connection:
+    """Open the library's Postgres catalog, creating its schema on first use.
 
     Schema creation is skipped for a read-only connection: a read-only process must never be the
     one to bring a catalog into existence, only ever attach to one another process has prepared.
+    Read-only is enforced at the transaction level (``postgresql_readonly``), rejected server-side
+    for any write the same as a role-level grant would, without needing a second role provisioned.
     ``NullPool`` gives every call its own dedicated DBAPI connection, closed for real (not merely
     returned to a pool) the moment the caller closes it -- the same one-connection-in, one-close-out
     lifecycle this catalog has always had.
     """
-    url = URL.create(drivername="duckdb", database=str(database_path))
-    engine = create_engine(url, connect_args={"read_only": read_only}, poolclass=NullPool)
+    engine = create_engine(database_url, poolclass=NullPool)
     connection = engine.connect()
-    if not read_only:
+    if read_only:
+        connection = connection.execution_options(postgresql_readonly=True)
+    else:
         create_schema(connection)
         connection.commit()
 
@@ -293,28 +339,25 @@ def start_batch(connection: Connection) -> RootTransaction:
     return connection.begin()
 
 
-def bulk_insert_csv(
+def bulk_insert(
     connection: Connection, table: Table, column_names: Iterable[str], rows: Iterable[Iterable[object]]
 ) -> None:
-    """Insert many rows into ``table`` by way of a temporary CSV file and DuckDB's own ``COPY``.
+    """Insert many rows into ``table`` by way of Postgres's own ``COPY ... FROM STDIN``.
 
-    Measured directly against this project's own schema: DuckDB's Python client has no fast path
-    for inserting many parameterized rows through SQLAlchemy or its own driver -- ``executemany``,
-    one large multi-row ``VALUES`` statement, and DuckDB's own ``values()`` relation constructor
-    were all measured at the same few-milliseconds-per-row cost regardless of batch size, turning
-    tens of thousands of rows into minutes rather than the fraction of a second DuckDB's own
-    bulk-format readers take. Writing the same rows to a CSV file with the standard library's own
-    ``csv`` module, then letting ``COPY ... FROM`` read it back, avoids that per-row binding cost
-    entirely -- the same technique ``feature_store.py`` already uses for the Parquet side of this
-    same problem, and the reason a repository's own ``replace_all`` goes through this rather than a
-    loop of individual inserts.
+    A database's own bulk-format loader is dramatically faster than parameterized per-row inserts at
+    this catalog's scale -- ``executemany`` and one large multi-row ``VALUES`` statement were both
+    measured, under this project's previous engine, at the same few-milliseconds-per-row cost
+    regardless of batch size, turning tens of thousands of rows into minutes rather than a fraction
+    of a second. ``psycopg``'s own ``Copy.write_row`` streams each row over the connection already
+    open for everything else, adapting every value to Postgres's wire format itself -- no
+    client-side CSV encoding, and no shared-filesystem assumption between client and server, unlike
+    a file-path-based ``COPY``. SQLAlchemy's ``Connection`` has no ``COPY`` construct of its own, so
+    reaching for the underlying ``psycopg`` connection directly is this function's whole purpose,
+    not a workaround of one.
     """
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", newline="", delete=False, encoding="utf-8") as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerow(column_names)
-        writer.writerows(rows)
-        csv_path = Path(csv_file.name)
-    try:
-        connection.execute(text(f"COPY \"{table.name}\" FROM :path (HEADER, DELIMITER ',')"), {"path": str(csv_path)})
-    finally:
-        csv_path.unlink(missing_ok=True)
+    quoted_columns = ", ".join(f'"{column_name}"' for column_name in column_names)
+    psycopg_connection = cast(PsycopgConnection, connection.connection.dbapi_connection)
+    with psycopg_connection.cursor() as cursor:
+        with cursor.copy(f'COPY "{table.name}" ({quoted_columns}) FROM STDIN') as copy:
+            for row in rows:
+                copy.write_row(tuple(row))

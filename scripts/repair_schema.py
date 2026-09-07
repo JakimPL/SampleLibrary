@@ -119,8 +119,8 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     config = bootstrap_cli()
-    _logger.info("Repairing the schema at %s...", config.resolved_database_path)
-    with open_catalog_connection(config.resolved_database_path) as connection:
+    _logger.info("Repairing the schema at %s...", config.database_url)
+    with open_catalog_connection(config.database_url) as connection:
         repair_schema(connection)
 
     _logger.info("Done. Every table now matches the current schema; every row survived.")

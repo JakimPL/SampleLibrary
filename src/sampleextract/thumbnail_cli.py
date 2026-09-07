@@ -13,7 +13,7 @@ def main(argv: list[str] | None = None) -> None:
     """Run one thumbnail backfill pass over the catalog and report the result."""
     arguments = _parse_arguments(argv)
     config = bootstrap_cli()
-    with open_catalog_connection(config.resolved_database_path) as connection:
+    with open_catalog_connection(config.database_url) as connection:
         summary = compute_missing_thumbnails(connection, config.library_root, force=arguments.force)
 
     _logger.info(

@@ -5,4 +5,4 @@ from sampleserver.app import create_app
 
 _config = load_config()
 
-app = create_app(_config.resolved_database_path, _config.library_root)
+app = create_app(_config.database_url, _config.library_root)

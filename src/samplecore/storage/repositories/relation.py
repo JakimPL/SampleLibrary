@@ -27,12 +27,12 @@ class SampleRelationRepository(Protocol):
     def list_for_sample(self, sample_hash: str) -> tuple[SampleRelation, ...]: ...
 
 
-class DuckDBSampleRelationRepository:
+class PostgresSampleRelationRepository:
     """A SampleRelationRepository backed by the catalog's ``sample_relation`` table.
 
-    ``evidence`` is stored as a JSON-encoded string rather than the native ``JSON`` column type,
-    so its round trip through this repository never depends on how a particular DuckDB version
-    chooses to represent that type in the Python API.
+    ``evidence`` is stored as a JSON-encoded string rather than the native ``JSON``/``JSONB`` column
+    type, so its round trip through this repository never depends on a particular database's own
+    JSON representation.
     """
 
     def __init__(self, connection: Connection) -> None:

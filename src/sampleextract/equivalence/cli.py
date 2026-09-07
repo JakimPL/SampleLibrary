@@ -13,7 +13,7 @@ def main(argv: list[str] | None = None) -> None:
     """Run one equivalence-detection pass over the catalog and report the result."""
     arguments = _parse_arguments(argv)
     config = bootstrap_cli()
-    with open_catalog_connection(config.resolved_database_path) as connection:
+    with open_catalog_connection(config.database_url) as connection:
         summary = detect_equivalences(connection, config.library_root, sample_limit=arguments.limit)
 
     _logger.info(

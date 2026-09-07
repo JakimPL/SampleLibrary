@@ -192,7 +192,7 @@ def _(mo):
 def _(ConfigurationError, connect, load_config, mo):
     try:
         library_config = load_config()
-        catalog_connection = connect(library_config.resolved_database_path, read_only=True)
+        catalog_connection = connect(library_config.database_url, read_only=True)
         config_error = None
     except ConfigurationError as error:
         library_config, catalog_connection, config_error = None, None, error

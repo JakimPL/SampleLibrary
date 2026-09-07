@@ -22,13 +22,13 @@ from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
-from samplecore.storage.repositories.module import DuckDBModuleRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository, SampleRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository, SampleRepository
 from samplecore.storage.repositories.sample_properties import (
-    DuckDBSamplePropertiesRepository,
+    PostgresSamplePropertiesRepository,
     SamplePropertiesRepository,
 )
-from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository, SampleThumbnailRepository
+from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, SampleThumbnailRepository
 from samplecore.waveform import DEFAULT_THUMBNAIL_BUCKET_COUNT, compute_waveform_peaks
 from sampleextract.rendering import render_properties, render_sample_pcm
 
@@ -71,11 +71,11 @@ def ingest_module(
     equivalence detection and browsing are built around, the same reasoning that already excludes
     an empty placeholder slot.
     """
-    module_repository = DuckDBModuleRepository(connection)
+    module_repository = PostgresModuleRepository(connection)
     context = _IngestContext(
-        sample_repository=DuckDBSampleRepository(connection),
-        properties_repository=DuckDBSamplePropertiesRepository(connection),
-        thumbnail_repository=DuckDBSampleThumbnailRepository(connection),
+        sample_repository=PostgresSampleRepository(connection),
+        properties_repository=PostgresSamplePropertiesRepository(connection),
+        thumbnail_repository=PostgresSampleThumbnailRepository(connection),
         library_root=library_root,
         tracker=tracker,
         module_hash=module_hash,

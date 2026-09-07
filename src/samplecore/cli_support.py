@@ -6,7 +6,6 @@ import logging
 import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Final
 
 from sqlalchemy import Connection
@@ -93,13 +92,13 @@ def bootstrap_cli() -> LibraryConfig:
 
 
 @contextmanager
-def open_catalog_connection(database_path: Path) -> Iterator[Connection]:
+def open_catalog_connection(database_url: str) -> Iterator[Connection]:
     """Open the catalog for one console entry point's operation, closing it again afterward.
 
     Shared by every console entry point that needs the catalog open for exactly the duration of
     one call, so this connect/close lifecycle reads identically regardless of which one it is.
     """
-    connection = connect(database_path)
+    connection = connect(database_url)
     try:
         yield connection
     finally:

@@ -6,8 +6,11 @@ from sqlalchemy import Connection
 from samplecore.categorization import classify_sample_category
 from samplecore.models.category import SampleCategory
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
-from samplecore.storage.repositories.cloud import DuckDBCloudCoordinateRepository, DuckDBModuleCloudCoordinateRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
+from samplecore.storage.repositories.cloud import (
+    PostgresCloudCoordinateRepository,
+    PostgresModuleCloudCoordinateRepository,
+)
+from samplecore.storage.repositories.sample import PostgresSampleRepository
 from sampleserver.dependencies import get_connection
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
@@ -26,8 +29,8 @@ class SampleCloudPoint(SampleCloudCoordinate):
 @router.get("")
 def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleCloudPoint, ...]:
     """Every sample's position in the library's 2D embedding space, as of the latest embedding run."""
-    coordinates = DuckDBCloudCoordinateRepository(connection).list_all()
-    names_by_hash, _ = DuckDBSampleRepository(connection).names_and_rates_by_hash(
+    coordinates = PostgresCloudCoordinateRepository(connection).list_all()
+    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash(
         [coordinate.sample_hash for coordinate in coordinates]
     )
     return tuple(
@@ -49,4 +52,4 @@ def get_module_cloud(connection: Connection = Depends(get_connection)) -> tuple[
     Placeholder until a spectral-distance-based per-module embedding replaces it -- see
     `samplecloud.placeholder_modules`.
     """
-    return DuckDBModuleCloudCoordinateRepository(connection).list_all()
+    return PostgresModuleCloudCoordinateRepository(connection).list_all()

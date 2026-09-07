@@ -15,7 +15,7 @@ from samplecore.models.sample import Sample, SampleSummary
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.naming import choose_dominant_name, choose_dominant_rate
 from samplecore.storage.database import sample, sample_properties
-from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository, peaks_from_thumbnail
+from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
 
 
 class SampleRepository(Protocol):
@@ -40,7 +40,7 @@ class SampleRepository(Protocol):
     ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]: ...
 
 
-class DuckDBSampleRepository:
+class PostgresSampleRepository:
     """A SampleRepository backed by the catalog's ``sample`` table.
 
     ``upsert`` is idempotent-insert, not a true update: a Sample's fields are fully determined by
@@ -109,7 +109,7 @@ class DuckDBSampleRepository:
         rows = self._connection.execute(statement).fetchall()
         hashes = [row.hash for row in rows]
         names_by_hash, rates_by_hash = self.names_and_rates_by_hash(hashes)
-        thumbnails_by_hash = DuckDBSampleThumbnailRepository(self._connection).get_many(hashes)
+        thumbnails_by_hash = PostgresSampleThumbnailRepository(self._connection).get_many(hashes)
         return tuple(
             _row_to_sample_summary(
                 row,

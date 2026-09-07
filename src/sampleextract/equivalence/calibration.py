@@ -11,7 +11,7 @@ from trackmod.binary.pcm.quantise import dequantise, quantise
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.relation import RelationType, SampleRelation
-from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
+from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from sampleextract.equivalence.scoring import score_gain_variant, score_resampled_variant
 
 DEFAULT_TRIAL_FRAME_COUNT: Final[int] = 2000
@@ -194,7 +194,7 @@ def most_marginal_relations(
     """The `limit` least-confident stored relations of `relation_type` -- the borderline cases worth
     a human's ear before trusting the threshold that accepted them.
     """
-    relations = DuckDBSampleRelationRepository(connection).list_all()
+    relations = PostgresSampleRelationRepository(connection).list_all()
     matching = sorted(
         (relation for relation in relations if relation.relation_type is relation_type),
         key=lambda relation: relation.confidence,

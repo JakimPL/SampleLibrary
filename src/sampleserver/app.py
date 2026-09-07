@@ -7,8 +7,8 @@ from fastapi import FastAPI
 from sampleserver.routers import cloud, modules, samples, stats
 
 
-def create_app(database_path: Path, library_root: Path) -> FastAPI:
-    """Build the read-only FastAPI app serving the catalog at the given database path.
+def create_app(database_url: str, library_root: Path) -> FastAPI:
+    """Build the read-only FastAPI app serving the catalog at the given database URL.
 
     A pure factory, deliberately without any module-level instance built from real
     configuration -- that belongs to `sampleserver.main`, the actual ASGI entry point, so that
@@ -16,7 +16,7 @@ def create_app(database_path: Path, library_root: Path) -> FastAPI:
     on a real `config.toml` existing.
     """
     application = FastAPI(title="SampleLibrary", description="Read-only access to the sample catalog.")
-    application.state.database_path = database_path
+    application.state.database_url = database_url
     application.state.library_root = library_root
     application.include_router(modules.router)
     application.include_router(samples.router)

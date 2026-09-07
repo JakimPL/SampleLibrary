@@ -17,12 +17,13 @@ def get_library_root(request: Request) -> Path:
 def get_connection(request: Request) -> Iterator[Connection]:
     """A fresh read-only connection to the app's configured catalog, closed after the request.
 
-    DuckDB's read-only mode is built for concurrent readers, while a single connection is not
-    safe to use concurrently from the thread pool FastAPI's synchronous route handlers run in --
-    opening one per request sidesteps that entirely, at a cost negligible next to an HTTP round
-    trip at this project's personal-library scale.
+    A single SQLAlchemy ``Connection`` is not safe to use concurrently from the thread pool
+    FastAPI's synchronous route handlers run in -- opening one per request sidesteps that entirely,
+    at a cost negligible next to an HTTP round trip at this project's personal-library scale.
+    Postgres itself handles many concurrent connections natively, so this per-request pattern needs
+    no extra coordination to stay safe.
     """
-    connection = connect(Path(request.app.state.database_path), read_only=True)
+    connection = connect(request.app.state.database_url, read_only=True)
     try:
         yield connection
     finally:

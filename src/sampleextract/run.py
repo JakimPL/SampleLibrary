@@ -12,7 +12,7 @@ from tqdm import tqdm
 from samplecore.config import LibraryConfig
 from samplecore.hashing import compute_module_hash
 from samplecore.models.module import Module
-from samplecore.storage.repositories.module import DuckDBModuleRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
 from sampleextract.discovery import FORMAT_LOADERS, discover_modules
 from sampleextract.ingest import ingest_module
 from sampleextract.parsing import parse_module
@@ -49,7 +49,7 @@ def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionS
     unchanged corpus costs one hash and one indexed lookup per file, never a re-parse. A file that
     fails to parse is recorded as a failure and the run continues over the rest of the corpus.
     """
-    module_repository = DuckDBModuleRepository(connection)
+    module_repository = PostgresModuleRepository(connection)
     paths = discover_modules(config.module_source_directory)
     ingested: list[Module] = []
     failures: list[ExtractionFailure] = []

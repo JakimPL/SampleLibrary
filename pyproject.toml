@@ -7,9 +7,8 @@ requires-python = ">=3.12"
 authors = [{ name = "Jakim" }]
 
 dependencies = [
-    "duckdb>=1.4",
-    "duckdb-sqlalchemy>=1.5",
     "numpy>=2.1",
+    "psycopg[binary]>=3.2",
     "pydantic>=2.13.4",
     "pytz>=2025.2",
     "scipy>=1.16",
@@ -48,6 +47,7 @@ dev = [
     "import-linter>=2.5",
     "pre-commit==4.6.0",
     "marimo>=0.23",
+    "testcontainers[postgres]>=4.9",
 ]
 
 [build-system]

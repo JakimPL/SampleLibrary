@@ -22,11 +22,11 @@ from samplecore.models.tracker import TrackerFormat
 from samplecore.naming import choose_dominant_name, choose_dominant_rate
 from samplecore.spectral_distance import euclidean_distance, nearest_neighbors
 from samplecore.storage import audio_store
-from samplecore.storage.repositories.module import DuckDBModuleRepository
-from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
-from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
-from samplecore.storage.repositories.spectral import DuckDBSampleSpectralFeatureRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.waveform import DEFAULT_WAVEFORM_BUCKET_COUNT, WaveformPeak, compute_waveform_peaks
 from sampleserver.dependencies import get_connection, get_library_root
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
@@ -101,10 +101,10 @@ def list_samples(
     rows that share a class into one representative, leaving the page's own size and offset
     meaning unchanged -- a class split across two pages collapses only on the page it appears on.
     """
-    relations = DuckDBSampleRelationRepository(connection).list_all()
+    relations = PostgresSampleRelationRepository(connection).list_all()
     class_by_hash = classes_by_member_hash(compute_equivalence_classes(relations))
 
-    repository = DuckDBSampleRepository(connection)
+    repository = PostgresSampleRepository(connection)
     items = repository.list_page(limit=limit, offset=offset, class_by_hash=class_by_hash)
     total = repository.count()
     if group_by_equivalence:
@@ -152,11 +152,11 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
     Raises:
         HTTPException: 404 when no sample is catalogued under this hash.
     """
-    sample = DuckDBSampleRepository(connection).get(sample_hash)
+    sample = PostgresSampleRepository(connection).get(sample_hash)
     if sample is None:
         raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
 
-    properties = DuckDBSamplePropertiesRepository(connection).list_for_sample(sample_hash)
+    properties = PostgresSamplePropertiesRepository(connection).list_for_sample(sample_hash)
     modules_by_hash = _modules_by_hash(connection, properties)
     occurrences = tuple(
         SampleOccurrenceDetail(properties=item, module=_occurrence_module(modules_by_hash[item.occurrence.module_hash]))
@@ -187,7 +187,7 @@ def get_sample_audio(
     Raises:
         HTTPException: 404 when no sample is catalogued under this hash.
     """
-    if DuckDBSampleRepository(connection).get(sample_hash) is None:
+    if PostgresSampleRepository(connection).get(sample_hash) is None:
         raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
 
     return FileResponse(audio_store.object_path(library_root, sample_hash), media_type="audio/wav")
@@ -204,7 +204,7 @@ def get_sample_waveform(
     Raises:
         HTTPException: 404 when no sample is catalogued under this hash.
     """
-    sample = DuckDBSampleRepository(connection).get(sample_hash)
+    sample = PostgresSampleRepository(connection).get(sample_hash)
     if sample is None:
         raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
 
@@ -221,10 +221,10 @@ def get_sample_relations(
     Raises:
         HTTPException: 404 when no sample is catalogued under this hash.
     """
-    if DuckDBSampleRepository(connection).get(sample_hash) is None:
+    if PostgresSampleRepository(connection).get(sample_hash) is None:
         raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
 
-    return DuckDBSampleRelationRepository(connection).list_for_sample(sample_hash)
+    return PostgresSampleRelationRepository(connection).list_for_sample(sample_hash)
 
 
 @router.get("/{sample_hash}/distance/{other_hash}")
@@ -237,7 +237,7 @@ def get_sample_distance(
         HTTPException: 404 when either sample has no persisted spectral feature vector yet -- not
             yet embedded, or embedded before this metric existed.
     """
-    repository = DuckDBSampleSpectralFeatureRepository(connection)
+    repository = PostgresSampleSpectralFeatureRepository(connection)
     subject = repository.get(sample_hash)
     reference = repository.get(other_hash)
     if subject is None or reference is None:
@@ -259,7 +259,7 @@ def get_similar_samples(
     Raises:
         HTTPException: 404 when this sample has no persisted spectral feature vector yet.
     """
-    features = DuckDBSampleSpectralFeatureRepository(connection).list_all()
+    features = PostgresSampleSpectralFeatureRepository(connection).list_all()
     vectors_by_hash = {feature.sample_hash: feature.vector for feature in features}
     if sample_hash not in vectors_by_hash:
         raise HTTPException(status_code=404, detail=f"sample {sample_hash!r} has no spectral feature vector yet")
@@ -270,7 +270,7 @@ def get_similar_samples(
 
 def _modules_by_hash(connection: Connection, properties: tuple[TrackerSampleProperties, ...]) -> dict[str, Module]:
     hashes = sorted({item.occurrence.module_hash for item in properties})
-    modules_by_hash = DuckDBModuleRepository(connection).get_many(hashes)
+    modules_by_hash = PostgresModuleRepository(connection).get_many(hashes)
     for module_hash in hashes:
         if module_hash not in modules_by_hash:
             raise ValueError(f"sample occurrence references module {module_hash!r}, which is not catalogued")
