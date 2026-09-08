@@ -7,7 +7,7 @@ import pytest
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
 from sqlalchemy import Connection
-from trackmod.binary.pcm.quantise import dequantise, quantise
+from trackmod.binary.pcm.quantize import dequantize, quantize
 from trackmod.core.samples.depth import BitDepth
 
 import sampleextract.equivalence.detect as detect_module
@@ -54,7 +54,7 @@ def _seed_catalog(connection: Connection, library_root: Path) -> tuple[Sample, S
     has a real reject case alongside the pair it is meant to find.
     """
     original_16_pcm = _tonal_waveform(2500)
-    quantized_8_pcm = dequantise(quantise(original_16_pcm, BitDepth.EIGHT), BitDepth.EIGHT)
+    quantized_8_pcm = dequantize(quantize(original_16_pcm, BitDepth.EIGHT), BitDepth.EIGHT)
     unrelated_bit_depth_pcm = np.random.default_rng(101).uniform(-1.0, 1.0, (2500, 1))
 
     original_44k_pcm = _tonal_waveform(4410)
@@ -62,7 +62,7 @@ def _seed_catalog(connection: Connection, library_root: Path) -> tuple[Sample, S
     unrelated_resampled_pcm = np.random.default_rng(202).uniform(-1.0, 1.0, (2205, 1))
 
     louder_original_pcm = _tonal_waveform(1600)
-    quieter_and_requantized_pcm = dequantise(quantise(louder_original_pcm * 0.25, BitDepth.EIGHT), BitDepth.EIGHT)
+    quieter_and_requantized_pcm = dequantize(quantize(louder_original_pcm * 0.25, BitDepth.EIGHT), BitDepth.EIGHT)
 
     original_16 = _store_sample(connection, library_root, hash_seed=1, depth=BitDepth.SIXTEEN, pcm=original_16_pcm)
     quantized_8 = _store_sample(connection, library_root, hash_seed=2, depth=BitDepth.EIGHT, pcm=quantized_8_pcm)

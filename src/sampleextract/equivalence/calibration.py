@@ -7,7 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
 from sqlalchemy import Connection
-from trackmod.binary.pcm.quantise import dequantise, quantise
+from trackmod.binary.pcm.quantize import dequantize, quantize
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.relation import RelationType, SampleRelation
@@ -91,7 +91,7 @@ def gain_variant_calibration_trials(*, gains: tuple[float, ...], rng_seed: int) 
         _gain_variant_trial(
             "bit_depth",
             is_genuine_match=True,
-            waveforms=(reference, dequantise(quantise(reference, BitDepth.EIGHT), BitDepth.EIGHT)),
+            waveforms=(reference, dequantize(quantize(reference, BitDepth.EIGHT), BitDepth.EIGHT)),
             depths=(BitDepth.SIXTEEN, BitDepth.EIGHT),
         ),
         _gain_variant_trial(
@@ -115,7 +115,7 @@ def gain_variant_calibration_trials(*, gains: tuple[float, ...], rng_seed: int) 
             _gain_variant_trial(
                 "compound_depth_gain",
                 is_genuine_match=True,
-                waveforms=(reference, dequantise(quantise(scaled, BitDepth.EIGHT), BitDepth.EIGHT)),
+                waveforms=(reference, dequantize(quantize(scaled, BitDepth.EIGHT), BitDepth.EIGHT)),
                 depths=(BitDepth.SIXTEEN, BitDepth.EIGHT),
             )
         )

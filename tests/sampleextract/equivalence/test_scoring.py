@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
-from trackmod.binary.pcm.quantise import dequantise, quantise
+from trackmod.binary.pcm.quantize import dequantize, quantize
 from trackmod.core.samples.depth import BitDepth
 
 from sampleextract.equivalence.scoring import (
@@ -34,7 +34,7 @@ def _tonal_waveform(frames: int, *, sample_rate: int = SAMPLE_RATE) -> NDArray[n
 
 def test_score_gain_variant_scores_a_true_quantization_pair_highly() -> None:
     waveform = _tonal_waveform(2000)
-    eight_bit_roundtrip = dequantise(quantise(waveform, BitDepth.EIGHT), BitDepth.EIGHT)
+    eight_bit_roundtrip = dequantize(quantize(waveform, BitDepth.EIGHT), BitDepth.EIGHT)
 
     score = score_gain_variant(waveform, eight_bit_roundtrip, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.EIGHT)
 
@@ -56,7 +56,7 @@ def test_score_gain_variant_scores_a_true_amplification_pair_highly() -> None:
 
 def test_score_gain_variant_scores_a_compound_depth_and_gain_pair_highly() -> None:
     waveform = _tonal_waveform(2000)
-    quieter_and_requantized = dequantise(quantise(waveform * 0.5, BitDepth.EIGHT), BitDepth.EIGHT)
+    quieter_and_requantized = dequantize(quantize(waveform * 0.5, BitDepth.EIGHT), BitDepth.EIGHT)
 
     score = score_gain_variant(waveform, quieter_and_requantized, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.EIGHT)
 

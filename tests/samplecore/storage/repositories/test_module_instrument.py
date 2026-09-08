@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import Connection
-from trackmod.core.instruments.behaviour import DuplicateAction, DuplicateCheck, NewNoteAction
+from trackmod.core.instruments.behavior import DuplicateAction, DuplicateCheck, NewNoteAction
 
 from samplecore.models.module import Module
 from samplecore.models.module_instrument import ModuleInstrument

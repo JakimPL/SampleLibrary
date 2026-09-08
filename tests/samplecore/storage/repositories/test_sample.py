@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import Connection
-from trackmod.core.instruments.behaviour import DuplicateAction, DuplicateCheck, NewNoteAction
+from trackmod.core.instruments.behavior import DuplicateAction, DuplicateCheck, NewNoteAction
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 

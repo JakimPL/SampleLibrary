@@ -6,7 +6,7 @@ from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
-from trackmod.binary.pcm.quantise import dequantise, quantise
+from trackmod.binary.pcm.quantize import dequantize, quantize
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.sample import Sample
@@ -42,7 +42,7 @@ def write(library_root: Path, sample_pcm: SamplePCM) -> Path:
         return path
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    quantized = quantise(sample_pcm.pcm, sample.depth)
+    quantized = quantize(sample_pcm.pcm, sample.depth)
     # pylint mis-infers wave.open's mode-dependent overload as Wave_read even for "wb"; mypy resolves it correctly.
     # pylint: disable=no-member
     with wave.open(str(path), "wb") as wav_file:
@@ -62,7 +62,7 @@ def read(library_root: Path, sample: Sample) -> SamplePCM:
         frame_bytes = wav_file.readframes(wav_file.getnframes())
 
     quantized = _decode_frames(frame_bytes, sample.depth, sample.channels.value)
-    return SamplePCM(sample=sample, pcm=dequantise(quantized, sample.depth))
+    return SamplePCM(sample=sample, pcm=dequantize(quantized, sample.depth))
 
 
 def _encode_frames(quantized: NDArray[np.int64], depth: BitDepth) -> bytes:

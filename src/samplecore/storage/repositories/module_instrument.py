@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Any, Final, Protocol
 
 from sqlalchemy import Connection, Row, select
-from trackmod.core.instruments.behaviour import DuplicateAction, DuplicateCheck, NewNoteAction
+from trackmod.core.instruments.behavior import DuplicateAction, DuplicateCheck, NewNoteAction
 
 from samplecore.models.module_instrument import ModuleInstrument
 from samplecore.storage.database import bulk_insert, module_instrument

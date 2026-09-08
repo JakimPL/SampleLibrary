@@ -6,6 +6,8 @@ relabelling->relabeling
 normalised->normalized
 normalising->normalizing
 normalisation->normalization
+quantise->quantize
+dequantise->dequantize
 quantisation->quantization
 quantised->quantized
 quantising->quantizing

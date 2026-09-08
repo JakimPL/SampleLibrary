@@ -3,4 +3,3 @@ builtin = clear,en-GB_to_en-US
 dictionary = .codespell-dictionary.txt,-
 skip = */trackmod/*,./trackmod,*/node_modules/*,*/dist/*,*/.venv/*,*/htmlcov/*,*openapi.json,*schema.ts,*.lock,*lock.json,./.git,./.codespellrc,./.codespell-dictionary.txt
 ignore-words-list = doubleclick
-ignore-regex = trackmod[\w.]*

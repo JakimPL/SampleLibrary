@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
-from trackmod.core.instruments.behaviour import DuplicateAction, DuplicateCheck, NewNoteAction
+from trackmod.core.instruments.behavior import DuplicateAction, DuplicateCheck, NewNoteAction
 from trackmod.schema.scalars import Fadeout, InstrumentVolume, Panning
 
 from samplecore.models.base import FROZEN

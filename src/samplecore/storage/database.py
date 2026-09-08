@@ -28,7 +28,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import RootTransaction
 from sqlalchemy.pool import NullPool
 from sqlalchemy.types import ARRAY
-from trackmod.core.instruments.behaviour import DuplicateAction, DuplicateCheck, NewNoteAction
+from trackmod.core.instruments.behavior import DuplicateAction, DuplicateCheck, NewNoteAction
 from trackmod.core.samples.depth import BitDepth
 from trackmod.core.samples.loop import LoopMode
 from trackmod.spec.levels import MAX_INSTRUMENT_VOLUME, MAX_PANNING, MIN_INSTRUMENT_VOLUME, MIN_PANNING
