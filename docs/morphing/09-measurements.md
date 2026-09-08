@@ -201,9 +201,44 @@ Sweeping the dynamic range the grid spans moves the failures around without remo
 decides it. One bass guitar sample improves from 22.41 dB to 9.42 dB at 80 dB, which says the
 dynamic range is part of the story for at least some failures.
 
-**The tail is the open question this stage hands on.** Each trial records the frame count it came
-from, and the first thing to check is whether the failures concentrate in the long samples the
-64-column time axis compresses hardest.
+### What the tail is, and what it is not
+
+Over 120 real samples, correlating the reconstruction error against what the canonicalizer did to
+each one:
+
+| Against | Rank correlation with the error |
+|---|---|
+| Share of the grid sitting at the dynamic-range floor | **+0.391** |
+| Size of the alignment shift, in bands | +0.257 |
+| Frame count | +0.150 |
+| Analysis frame count | +0.150 |
+
+**The long-sample explanation is the weak one.** The 64-column time axis compresses a long sample
+hardest, and the roadmap's natural first guess is that the failures live there, but frame count
+barely predicts the error. What does predict it is a **sparse spectrum**: the worst fifth carries
+half its grid at the dynamic-range floor against a sixth for the rest.
+
+The alignment cap looked like a second cause -- samples hitting it reconstructed at 11.33 dB against
+7.44 dB for those that did not, and 30% of samples hit it at 24 semitones. Raising the cap settles
+that it is a correlate rather than a cause, and reveals something better:
+
+| Alignment cap | Reconstruction median | p90 | Explained retuning | Exact translation |
+|---|---|---|---|---|
+| 24 semitones | 7.94 | 14.81 | 64% | 57% |
+| 36 semitones | 8.10 | 15.67 | 70% | 78% |
+| **48 semitones** | **8.10** | **15.67** | **73%** | **89%** |
+| 72 semitones | 8.15 | 16.08 | 74% | 91% |
+
+Reconstruction is flat across the whole sweep, so the clipped samples were failing for their own
+reasons. Alignment accuracy is not flat at all: the share of retunings the conditioner locates to
+within half a semitone climbs from 57% to 89%. **The cap is 48 semitones**, bought for 0.16 dB of
+median reconstruction, because a linear codec can only interpolate two grids that are aligned, and
+57% was leaving a third of every morph smeared.
+
+**The tail is the open question this stage hands on**, and the sparse-spectrum correlation is where
+to pick it up. The dynamic range is part of it -- one bass guitar sample improves from 22.41 dB to
+9.42 dB at an 80 dB range -- but 80 dB trades a better median for a worse upper decile across the
+corpus, so nothing yet decides it.
 
 ## Corrections to earlier documents
 
