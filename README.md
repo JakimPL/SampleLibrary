@@ -56,18 +56,25 @@ serve`), start the frontend in a separate terminal with `make frontend-dev` and 
 `http://localhost:5173`. `make frontend-build` produces a production build; `make frontend-check`
 runs its typecheck, lint, format, and test suite.
 
-### Labeling samples by hand
+### Labeling and rating samples by hand
 
 Open a sample in the app and type what it actually is. The wording is yours to choose, and what
-you have already used is offered back as you type, so one vocabulary settles by habit. Where a
-sample has near-duplicates the same decision reaches all of them by default.
+you have already used is offered back as you type, so one vocabulary settles by habit. Beside it,
+five stars record what you make of the sample and a heart keeps it in your own collection; both
+save the moment you click them. Where a sample has near-duplicates the same decision reaches all
+of them by default.
 
-These labels are the one thing here that nothing can rebuild, so they are kept apart from
+The samples list can then show only your favorites, or only what you rated at least a given
+number, or put the best-rated first. Those reach the whole library rather than the rows already on
+screen, so a collection scattered across a hundred thousand samples still browses as one.
+
+These decisions are the one thing here that nothing can rebuild, so they are kept apart from
 everything the pipelines generate: they live in their own `curation` schema, and `make
-reset-library` leaves them exactly where they are. `make labels-export` writes them all to
-`labels.jsonl` — keep a copy somewhere of your own — and `make labels-import` reads a file back,
-merging it into whatever is already there. Each label also remembers the module and slot its
-sample came from, so `make labels-relink` reattaches your work if a sample's hash ever changes.
+reset-library` leaves them exactly where they are. `make annotations-export` writes them all to
+`annotations.jsonl` — keep a copy somewhere of your own — and `make annotations-import` reads a
+file back, merging it into whatever is already there. Each one also remembers the module and slot
+its sample came from, so `make annotations-relink` reattaches your work if a sample's hash ever
+changes.
 
 ## Development
 
