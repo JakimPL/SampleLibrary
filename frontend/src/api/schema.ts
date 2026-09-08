@@ -56,12 +56,12 @@ export interface paths {
         };
         /**
          * List Samples
-         * @description A page of cataloged samples, ranked by how many module occurrences reference each one.
+         * @description A page of the catalog's samples, narrowed and ordered by what a person has decided.
          *
-         *     Ranks by sample identity: one row per exact content hash. Every row still carries its
-         *     equivalence class, when it has one; ``group_by_equivalence`` additionally collapses same-page
-         *     rows that share a class into one representative, leaving the page's own size and offset
-         *     meaning unchanged -- a class split across two pages collapses only on the page it appears on.
+         *     ``favorites_only`` and ``minimum_rating`` reach the whole catalog rather than one page, so a
+         *     collection scattered across a hundred thousand samples still browses as a collection.
+         *     ``group_by_equivalence`` collapses same-page rows sharing an equivalence class afterwards, which
+         *     is why the total counts rows rather than groups.
          */
         readonly get: operations["list_samples_samples_get"];
         readonly put?: never;
@@ -883,6 +883,12 @@ export interface components {
             readonly review?: components["schemas"]["RelationReview"] | null;
         };
         /**
+         * SampleSort
+         * @description The orders a samples listing can be walked in.
+         * @enum {string}
+         */
+        readonly SampleSort: "occurrences" | "rating";
+        /**
          * SampleSummary
          * @description One row of a paginated, occurrence-ranked samples listing.
          *
@@ -1120,6 +1126,9 @@ export interface operations {
                 readonly limit?: number;
                 readonly offset?: number;
                 readonly group_by_equivalence?: boolean;
+                readonly favorites_only?: boolean;
+                readonly minimum_rating?: number | null;
+                readonly sort?: components["schemas"]["SampleSort"];
             };
             readonly header?: never;
             readonly path?: never;

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import Connection
 from trackmod.core.instruments.behaviour import DuplicateAction, DuplicateCheck, NewNoteAction
@@ -7,18 +9,23 @@ from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.equivalence_classes import EquivalenceClass
+from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.category import SampleCategory
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
 from samplecore.models.module_instrument import ModuleInstrument
-from samplecore.models.sample import Sample
+from samplecore.models.sample import Sample, SampleSelection, SampleSort
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.storage.repositories import sample as sample_repository
 from samplecore.storage.repositories.module_instrument import PostgresModuleInstrumentRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
+
+EVERYTHING = SampleSelection()
+"""Every sample, in the listing's own order: the selection a test makes when it is about something else."""
 
 
 def _add_occurrence(
@@ -76,7 +83,9 @@ def test_list_all_returns_every_stored_sample(connection: Connection, sample_has
 
 
 def test_list_page_on_an_empty_catalog_returns_nothing(connection: Connection) -> None:
-    assert PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}) == ()
+    assert (
+        PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING) == ()
+    )
 
 
 def test_list_page_ranks_by_occurrence_count_descending(
@@ -85,7 +94,7 @@ def test_list_page_ranks_by_occurrence_count_descending(
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick")
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=1, name="kick")
 
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert [summary.hash for summary in page] == [stored_sample.hash, stored_sample_b.hash]
     assert page[0].occurrence_count == 2
@@ -95,7 +104,7 @@ def test_list_page_ranks_by_occurrence_count_descending(
 def test_list_page_breaks_a_tied_occurrence_count_by_hash(
     connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert [summary.hash for summary in page] == sorted([stored_sample.hash, stored_sample_b.hash])
 
@@ -103,7 +112,7 @@ def test_list_page_breaks_a_tied_occurrence_count_by_hash(
 def test_list_page_respects_limit_and_offset(
     connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    page = PostgresSampleRepository(connection).list_page(limit=1, offset=1, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=1, offset=1, class_by_hash={}, selection=EVERYTHING)
 
     assert len(page) == 1
     assert page[0].hash == sorted([stored_sample.hash, stored_sample_b.hash])[1]
@@ -115,7 +124,7 @@ def test_list_page_resolves_the_dominant_occurrence_name(
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick")
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=1, name="KICK")
 
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert page[0].display_name == "kick"
 
@@ -127,7 +136,7 @@ def test_list_page_resolves_the_dominant_occurrence_rate(
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=1, name="kick", rate=8363)
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=2, name="kick", rate=22050)
 
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert page[0].dominant_rate_hz == 8363
 
@@ -135,13 +144,13 @@ def test_list_page_resolves_the_dominant_occurrence_rate(
 def test_list_page_leaves_dominant_rate_none_for_a_sample_with_no_occurrences(
     connection: Connection, stored_sample: Sample
 ) -> None:
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert page[0].dominant_rate_hz is None
 
 
 def test_list_page_resolves_size_bytes_from_the_sample_itself(connection: Connection, stored_sample: Sample) -> None:
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert page[0].size_bytes == stored_sample.stored_bytes
 
@@ -149,7 +158,7 @@ def test_list_page_resolves_size_bytes_from_the_sample_itself(connection: Connec
 def test_list_page_leaves_thumbnail_none_for_a_sample_not_yet_thumbnailed(
     connection: Connection, stored_sample: Sample
 ) -> None:
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert page[0].thumbnail is None
 
@@ -159,7 +168,7 @@ def test_list_page_resolves_a_cached_thumbnail(connection: Connection, stored_sa
         SampleThumbnail(sample_hash=stored_sample.hash, bucket_count=2, minimums=(-1.0, -0.5), maximums=(0.5, 1.0))
     )
 
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert page[0].thumbnail is not None
     assert [peak.minimum for peak in page[0].thumbnail] == [-1.0, -0.5]
@@ -169,7 +178,7 @@ def test_list_page_resolves_a_cached_thumbnail(connection: Connection, stored_sa
 def test_list_page_leaves_equivalence_fields_at_their_standalone_default(
     connection: Connection, stored_sample: Sample
 ) -> None:
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert page[0].equivalence_class_hash is None
     assert page[0].equivalence_member_count == 1
@@ -181,7 +190,7 @@ def test_list_page_resolves_a_sample_s_equivalence_class(
     equivalence_class = EquivalenceClass(class_hash="c" * 64, member_hashes=(stored_sample.hash, stored_sample_b.hash))
 
     page = PostgresSampleRepository(connection).list_page(
-        limit=50, offset=0, class_by_hash={stored_sample.hash: equivalence_class}
+        limit=50, offset=0, class_by_hash={stored_sample.hash: equivalence_class}, selection=EVERYTHING
     )
 
     by_hash = {summary.hash: summary for summary in page}
@@ -206,7 +215,7 @@ def test_get_many_with_no_hashes_returns_nothing(connection: Connection) -> None
 def test_count_reflects_every_stored_sample(
     connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    assert PostgresSampleRepository(connection).count() == 2
+    assert PostgresSampleRepository(connection).count(selection=EVERYTHING) == 2
 
 
 def test_names_and_rates_by_hash_covers_hashes_spanning_several_chunks(
@@ -278,7 +287,98 @@ def test_a_sample_is_categorized_by_the_name_of_the_voice_that_plays_it(
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="smp03")
     _add_instrument(connection, module=stored_module, instrument_index=0, name="warm pad")
 
-    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={})
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
     assert page[0].display_name == "smp03"
     assert page[0].category is SampleCategory.PAD
+
+
+def _annotate(
+    connection: Connection,
+    sample: Sample,
+    *,
+    rating: int | None = None,
+    favorite: bool = False,
+) -> None:
+    PostgresSampleAnnotationRepository(connection).replace_many(
+        (
+            SampleAnnotation(
+                sample_hash=sample.hash,
+                label=None,
+                rating=rating,
+                favorite=favorite,
+                occurrence=SampleOccurrence(module_hash=format(1, "064x"), instrument_index=0, sample_slot=0),
+                module_filename="song.xm",
+                sample_name="smp01",
+                source=AnnotationSource.SAMPLE,
+                annotated_at=datetime.now(UTC),
+            ),
+        )
+    )
+
+
+def test_list_page_narrowed_to_favorites_leaves_out_what_was_never_marked(
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    """A favorite is rare and scattered, so narrowing has to reach the catalog, not just one page."""
+    _annotate(connection, stored_sample, favorite=True)
+
+    page = PostgresSampleRepository(connection).list_page(
+        limit=50, offset=0, class_by_hash={}, selection=SampleSelection(favorites_only=True)
+    )
+
+    assert [summary.hash for summary in page] == [stored_sample.hash]
+
+
+def test_a_narrowed_total_counts_what_the_page_walks(
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    _annotate(connection, stored_sample, favorite=True)
+    repository = PostgresSampleRepository(connection)
+
+    assert repository.count(selection=SampleSelection(favorites_only=True)) == 1
+    assert repository.count(selection=EVERYTHING) == 2
+
+
+def test_list_page_narrowed_by_rating_keeps_only_what_reaches_the_floor(
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    _annotate(connection, stored_sample, rating=4)
+    _annotate(connection, stored_sample_b, rating=2)
+
+    page = PostgresSampleRepository(connection).list_page(
+        limit=50, offset=0, class_by_hash={}, selection=SampleSelection(minimum_rating=3)
+    )
+
+    assert [summary.hash for summary in page] == [stored_sample.hash]
+
+
+def test_sorting_by_rating_puts_the_best_first_and_the_unrated_last(
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    """Postgres places nulls first under DESC, which would open the listing with everything unrated."""
+    unrated = Sample(hash="e" * 64, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
+    PostgresSampleRepository(connection).upsert(unrated)
+    _annotate(connection, stored_sample, rating=2)
+    _annotate(connection, stored_sample_b, rating=5)
+
+    page = PostgresSampleRepository(connection).list_page(
+        limit=50, offset=0, class_by_hash={}, selection=SampleSelection(sort=SampleSort.RATING)
+    )
+
+    assert [summary.hash for summary in page] == [stored_sample_b.hash, stored_sample.hash, unrated.hash]
+
+
+def test_successive_pages_under_a_rating_sort_stay_disjoint(
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    """A rating takes five values across the whole catalog, so ties need a total order under them."""
+    _annotate(connection, stored_sample, rating=3)
+    _annotate(connection, stored_sample_b, rating=3)
+    repository = PostgresSampleRepository(connection)
+    selection = SampleSelection(sort=SampleSort.RATING)
+
+    first = repository.list_page(limit=1, offset=0, class_by_hash={}, selection=selection)
+    second = repository.list_page(limit=1, offset=1, class_by_hash={}, selection=selection)
+
+    assert {summary.hash for summary in first}.isdisjoint({summary.hash for summary in second})

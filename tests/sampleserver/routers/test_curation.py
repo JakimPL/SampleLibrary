@@ -333,3 +333,42 @@ def test_the_vocabulary_offers_back_what_has_already_been_chosen(client: TestCli
 
 def test_the_vocabulary_of_an_unlabeled_library_is_empty(client: TestClient) -> None:
     assert client.get("/curation/annotations/vocabulary").json() == []
+
+
+def test_a_listing_narrowed_to_favorites_reaches_only_what_was_marked(
+    client: TestClient, connection: Connection
+) -> None:
+    _seed_a_pair_of_near_duplicates(connection)
+    client.put(f"/curation/annotations/{SAMPLE_HASH_A}", json=_state(favorite=True, scope="sample"))
+
+    body = client.get("/samples", params={"favorites_only": True}).json()
+
+    assert [item["hash"] for item in body["items"]] == [SAMPLE_HASH_A]
+    assert body["total"] == 1
+
+
+def test_a_listing_narrowed_by_rating_keeps_only_what_reaches_the_floor(
+    client: TestClient, connection: Connection
+) -> None:
+    _seed_a_pair_of_near_duplicates(connection)
+    client.put(f"/curation/annotations/{SAMPLE_HASH_A}", json=_state(rating=5, scope="sample"))
+    client.put(f"/curation/annotations/{SAMPLE_HASH_B}", json=_state(rating=1, scope="sample"))
+
+    body = client.get("/samples", params={"minimum_rating": 3}).json()
+
+    assert [item["hash"] for item in body["items"]] == [SAMPLE_HASH_A]
+    assert body["total"] == 1
+
+
+def test_a_listing_sorted_by_rating_puts_the_best_first(client: TestClient, connection: Connection) -> None:
+    _seed_a_pair_of_near_duplicates(connection)
+    client.put(f"/curation/annotations/{SAMPLE_HASH_A}", json=_state(rating=2, scope="sample"))
+    client.put(f"/curation/annotations/{SAMPLE_HASH_B}", json=_state(rating=5, scope="sample"))
+
+    body = client.get("/samples", params={"sort": "rating"}).json()
+
+    assert [item["hash"] for item in body["items"]] == [SAMPLE_HASH_B, SAMPLE_HASH_A]
+
+
+def test_a_rating_floor_outside_the_scale_is_refused(client: TestClient) -> None:
+    assert client.get("/samples", params={"minimum_rating": 9}).status_code == 422

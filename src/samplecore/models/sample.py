@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from enum import StrEnum, unique
+
+from pydantic import BaseModel, ConfigDict
 from trackmod.core.notes.pitch import Note
 from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
@@ -79,3 +81,29 @@ class SampleSummary(DescribedSample):
     dominant_note: Note | None
     equivalence_class_hash: str | None
     equivalence_member_count: Count
+
+
+@unique
+class SampleSort(StrEnum):
+    """The orders a samples listing can be walked in."""
+
+    OCCURRENCES = "occurrences"
+    RATING = "rating"
+
+
+class SampleSelection(BaseModel):
+    """Which samples a listing walks, and the order it walks them in.
+
+    ``favorites_only`` and ``minimum_rating`` narrow the listing to what a person has already
+    decided about, which is what makes their own collection browsable rather than only visible one
+    sample at a time. ``sort`` by rating puts the best first and the unrated last.
+
+    Read straight off a query string, so unknown fields are ignored rather than refused: ``limit``
+    and ``offset`` arrive beside these and belong to the page, not to the selection.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    favorites_only: bool = False
+    minimum_rating: Rating | None = None
+    sort: SampleSort = SampleSort.OCCURRENCES

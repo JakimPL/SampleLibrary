@@ -15,9 +15,9 @@ from samplecore.models.base import FROZEN
 from samplecore.models.module import Module
 from samplecore.models.note_event import SampleNoteUsage
 from samplecore.models.relation import SampleRelation
-from samplecore.models.sample import DescribedSample, SampleSummary
+from samplecore.models.sample import DescribedSample, SampleSelection, SampleSort, SampleSummary
 from samplecore.models.sample_properties import TrackerSampleProperties
-from samplecore.models.scalars import Count, ModuleHash, SampleHash
+from samplecore.models.scalars import MAXIMUM_RATING, MINIMUM_RATING, Count, ModuleHash, SampleHash
 from samplecore.models.tracker import TrackerFormat
 from samplecore.naming import choose_dominant_name, choose_dominant_rate
 from samplecore.pitch import sounding_rate_hz
@@ -110,26 +110,41 @@ class SampleDetail(DescribedSample):
     equivalence_member_count: Count
 
 
+def get_selection(
+    favorites_only: bool = False,
+    minimum_rating: Annotated[int | None, Query(ge=MINIMUM_RATING, le=MAXIMUM_RATING)] = None,
+    sort: SampleSort = SampleSort.OCCURRENCES,
+) -> SampleSelection:
+    """Read a listing's narrowing and ordering off the query string.
+
+    Gathered as a dependency so the three arrive as one value: a query-parameter model expands only
+    where it is the sole ``Query`` on a route, and this listing pages with ``limit`` and ``offset``
+    beside it.
+    """
+    return SampleSelection(favorites_only=favorites_only, minimum_rating=minimum_rating, sort=sort)
+
+
 @router.get("")
 def list_samples(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)] = DEFAULT_PAGE_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
     group_by_equivalence: bool = False,
+    selection: SampleSelection = Depends(get_selection),
     connection: Connection = Depends(get_connection),
 ) -> Page[SampleSummary]:
-    """A page of cataloged samples, ranked by how many module occurrences reference each one.
+    """A page of the catalog's samples, narrowed and ordered by what a person has decided.
 
-    Ranks by sample identity: one row per exact content hash. Every row still carries its
-    equivalence class, when it has one; ``group_by_equivalence`` additionally collapses same-page
-    rows that share a class into one representative, leaving the page's own size and offset
-    meaning unchanged -- a class split across two pages collapses only on the page it appears on.
+    ``favorites_only`` and ``minimum_rating`` reach the whole catalog rather than one page, so a
+    collection scattered across a hundred thousand samples still browses as a collection.
+    ``group_by_equivalence`` collapses same-page rows sharing an equivalence class afterwards, which
+    is why the total counts rows rather than groups.
     """
     relations = PostgresSampleRelationRepository(connection).list_all()
     class_by_hash = classes_by_member_hash(compute_equivalence_classes(relations))
 
     repository = PostgresSampleRepository(connection)
-    items = repository.list_page(limit=limit, offset=offset, class_by_hash=class_by_hash)
-    total = repository.count()
+    items = repository.list_page(limit=limit, offset=offset, class_by_hash=class_by_hash, selection=selection)
+    total = repository.count(selection=selection)
     if group_by_equivalence:
         items = _collapse_by_equivalence(items)
 
