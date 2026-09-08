@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from queue import Queue
 from typing import Any, Final, Protocol
 
 from tqdm import tqdm
@@ -37,3 +38,13 @@ def extraction_bar(total: int) -> Iterator[BarProgress]:
     """One bar covering a whole extraction pass, closed once the pass ends."""
     with tqdm(total=total, desc=EXTRACTION_DESCRIPTION) as progress_bar:
         yield BarProgress(progress_bar)
+
+
+@dataclass(frozen=True)
+class QueueProgress:
+    """A ProgressSink handing its count to whichever process owns the bar."""
+
+    counts: Queue[int]
+
+    def advance(self, count: int) -> None:
+        self.counts.put(count)

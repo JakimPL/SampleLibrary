@@ -86,3 +86,18 @@ def test_main_ingests_every_module_the_source_directory_holds(
     main([])
 
     assert "Discovered 2 modules: 2 ingested" in capsys.readouterr().out
+
+
+def test_main_refuses_a_worker_count_below_one() -> None:
+    """A run spends at least one process, so a count under that is a typo worth stopping for."""
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--workers", "0"])
+
+    assert exit_info.value.code == 2
+
+
+def test_main_refuses_a_worker_count_that_is_not_a_whole_number() -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--workers", "many"])
+
+    assert exit_info.value.code == 2

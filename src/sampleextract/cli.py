@@ -4,22 +4,20 @@ import argparse
 import logging
 import sys
 
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
-from sampleextract.discovery import discover_modules
-from sampleextract.progress import extraction_bar
-from sampleextract.run import ExtractionSummary, run_extraction
+from samplecore.cli_support import bootstrap_cli
+from samplecore.models.scalars import MINIMUM_WORKER_COUNT, WorkerCount
+from sampleextract.parallel.supervisor import default_worker_count, extract_corpus
+from sampleextract.run import ExtractionSummary
 
 _logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> None:
     """Run one extraction pass over the configured source directory and report it."""
-    _parse_arguments(argv)
+    arguments = _parse_arguments(argv)
     config = bootstrap_cli()
     config.library_root.mkdir(parents=True, exist_ok=True)
-    paths = discover_modules(config.module_source_directory)
-    with open_catalog_connection(config.database_url) as connection, extraction_bar(len(paths)) as progress:
-        summary = run_extraction(config, connection, paths, progress=progress)
+    summary = extract_corpus(config, workers=arguments.workers)
 
     _report(summary)
     if summary.failures:
@@ -29,7 +27,7 @@ def main(argv: list[str] | None = None) -> None:
 def _report(summary: ExtractionSummary) -> None:
     """Say what the pass did, then name every file it could not read."""
     _logger.info(
-        "Discovered %d modules: %d ingested, %d already known, %d ingested by another run, %d failed.",
+        "Discovered %d modules: %d ingested, %d already known, %d ingested by another worker, %d failed.",
         summary.discovered,
         len(summary.ingested),
         summary.skipped_existing,
@@ -40,6 +38,33 @@ def _report(summary: ExtractionSummary) -> None:
         _logger.info("  %s: %s", failure.path, failure.reason)
 
 
+def _worker_count_argument(value: str) -> WorkerCount:
+    """Read the ``--workers`` value, reporting a bad one the way argparse reports its own.
+
+    Raises:
+        argparse.ArgumentTypeError: the value is not a whole number, or names fewer processes than
+            a run can be spent on.
+    """
+    try:
+        workers = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"a worker count reads as a whole number, not {value!r}") from error
+
+    if workers < MINIMUM_WORKER_COUNT:
+        raise argparse.ArgumentTypeError(f"a run spends at least {MINIMUM_WORKER_COUNT} process, not {workers}")
+
+    return workers
+
+
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Extract every module under the configured source directory.")
+    parser.add_argument(
+        "--workers",
+        type=_worker_count_argument,
+        default=default_worker_count(),
+        help=(
+            "How many processes to spend on the corpus. Defaults to one per core, up to a ceiling "
+            "this machine's memory carries comfortably."
+        ),
+    )
     return parser.parse_args(argv)

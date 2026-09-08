@@ -12,6 +12,10 @@ Index = Annotated[int, Field(ge=0)]
 Count = Annotated[int, Field(ge=0)]
 BucketCount = Annotated[int, Field(gt=0)]
 
+MINIMUM_WORKER_COUNT: Final[int] = 1
+
+WorkerCount = Annotated[int, Field(ge=MINIMUM_WORKER_COUNT)]
+
 MINIMUM_RATING: Final[int] = 1
 MAXIMUM_RATING: Final[int] = 5
 
