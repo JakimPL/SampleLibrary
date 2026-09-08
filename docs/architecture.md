@@ -166,10 +166,15 @@ the `server` extra (`fastapi`, `uvicorn`) -- `sampleextract`/`samplecloud`'s own
 dependencies (`librosa`, `umap-learn`, `scikit-learn`) never reach that image, mirroring the
 `sampleserver never imports the offline batch pipelines` import-linter contract above.
 `docker-compose.yml` adds a `postgres` service alongside it (a named volume for persistence), as a
-worked example of the two running together; a real deployment points
-`database_url`/`SAMPLELIBRARY_DATABASE_URL` at whatever Postgres instance it actually runs against,
-container or otherwise. Local development runs against a Postgres installed on the machine directly,
-which the test suite and both library databases share -- see README.md. The container runs multiple
+worked example of the two running together; a real deployment points `database_url`/`SAMPLELIBRARY_DATABASE_URL` at
+whatever Postgres instance it actually runs against, container or otherwise. Local development runs
+against a Postgres installed on the machine directly, which the test suite and both library
+databases share; `scripts/setup.py database` (`make database`) creates the role and those three
+databases wherever they are missing, reading the server and credentials from `config.toml` and
+adding only what is absent. `samplecore.storage.cluster` owns that work: `quoting` turns a name or
+a password into a fragment of SQL and rejects what quoting cannot carry, `statements` holds every
+statement this project runs against the cluster rather than inside one database, and `provisioning`
+decides what to ask for. See README.md. The container runs multiple
 `uvicorn` worker processes (`--workers`, not `--reload`) rather than the single-process dev server
 `make serve` starts: each worker opens its own read-only Postgres connection per request
 (`sampleserver.dependencies.get_connection`), which Postgres's own concurrent-connection handling

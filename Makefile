@@ -7,7 +7,15 @@ NPM := npm --script-shell=$(SHELL)
 install:
 	uv sync --all-extras --all-groups
 	uv run pre-commit install --hook-type pre-commit --hook-type pre-push
+	uv run python scripts/setup.py config
 	$(MAKE) frontend-install
+
+# Creates the role and the three databases this project expects, wherever they are missing, and
+# leaves everything already on the server exactly as it is -- a catalog's rows and the `curation`
+# schema's hand-made labels, ratings and favorites included. Safe to re-run at any time.
+.PHONY: database
+database:
+	uv run python scripts/setup.py database
 
 .PHONY: format
 format:
@@ -88,8 +96,8 @@ reset-library:
 rebuild-library: extract equivalence embed embed-modules-placeholder
 
 # dev-library keeps its own database on the same local Postgres server the real library uses, so a
-# rebuild of this disposable 30-module sandbox leaves the real catalog untouched. See README.md for
-# creating the role and the three databases this project expects.
+# rebuild of this disposable 30-module sandbox leaves the real catalog untouched. `make database`
+# creates that database, along with the role and the two others this project expects.
 DEV_DATABASE_URL := postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev
 
 .PHONY: library-dev

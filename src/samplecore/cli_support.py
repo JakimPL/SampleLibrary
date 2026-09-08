@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from typing import Final
 
 from sqlalchemy import Connection
+from sqlalchemy.engine import make_url
 
 from samplecore.config import ConfigurationError, LibraryConfig, load_config
 from samplecore.storage.database import connect
@@ -89,6 +90,16 @@ def bootstrap_cli() -> LibraryConfig:
     """
     configure_console_output_encoding()
     return load_config_or_exit()
+
+
+def redact_database_url(database_url: str) -> str:
+    """A database URL as it is safe to log, with the password masked.
+
+    Shared by every console entry point that names the database it is about to act on, so a URL
+    reaching a console or a captured shell log carries the server, the role, and the database, and
+    leaves the credential behind.
+    """
+    return make_url(database_url).render_as_string()
 
 
 @contextmanager

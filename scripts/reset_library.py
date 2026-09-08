@@ -7,7 +7,7 @@ from pathlib import Path
 
 from sqlalchemy import Connection
 
-from samplecore.cli_support import bootstrap_cli, confirmed, open_catalog_connection
+from samplecore.cli_support import bootstrap_cli, confirmed, open_catalog_connection, redact_database_url
 from samplecore.storage.audio_store import OBJECTS_DIRECTORY_NAME
 from samplecore.storage.database import metadata
 
@@ -64,7 +64,11 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     config = bootstrap_cli()
-    _logger.info("Resetting the library at %s (database: %s)...", config.library_root, config.database_url)
+    _logger.info(
+        "Resetting the library at %s (database: %s)...",
+        config.library_root,
+        redact_database_url(config.database_url),
+    )
     with open_catalog_connection(config.database_url) as connection:
         reset_library(connection, config.library_root)
 

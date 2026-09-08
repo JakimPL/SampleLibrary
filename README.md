@@ -17,31 +17,44 @@ modules, samples, and their cross-references, including a visual "cloud" of the 
 ```sh
 git clone --recurse-submodules <this repository>
 cd SampleLibrary
-cp config.example.toml config.toml   # then edit config.toml with your local paths
 make install
+# open config.toml and fill in your own paths
+make database
 ```
 
-`config.toml` holds machine-specific paths (where your module collection lives, where extracted
-samples are stored) and is never committed.
+`make install` installs the dependencies and puts a `config.toml` at the repository root, copied
+from `config.example.toml`. That file holds machine-specific paths — where your module collection
+lives, where extracted samples are stored — and is never committed. Fill those two paths in before
+going further; every command here says so plainly until you do.
+
+If you have no PostgreSQL on the machine, `docker compose up -d postgres` starts one for
+`make database` to work against.
 
 ### Database
 
 The project keeps three databases on one PostgreSQL server: your real library, the disposable
-development library, and one the test suite owns. Create them once, along with the role they share:
+development library, and one the test suite owns. `make database` creates all three, and the role
+they share, reading the server and credentials from your `config.toml`. It only ever adds what is
+missing — anything already on the server is left exactly as it is, catalog rows and hand-made
+annotations included — so it is safe to run again whenever you wonder whether something is in
+place.
 
-```sql
-CREATE ROLE samplelibrary WITH LOGIN CREATEDB PASSWORD 'samplelibrary';
-CREATE DATABASE samplelibrary OWNER samplelibrary;
-CREATE DATABASE samplelibrary_dev OWNER samplelibrary;
-CREATE DATABASE samplelibrary_test OWNER samplelibrary;
-```
+Creating the role itself needs a PostgreSQL superuser, which is the one step `make database` may
+hand back to you: it prints the single `sudo -u postgres psql -c "CREATE ROLE ..."` line to run,
+and then works from there on. Setting `SAMPLELIBRARY_ADMIN_DATABASE_URL` to a superuser connection
+lets it create the role for you instead.
 
-Each pipeline creates its own tables the first time it connects. Point `database_url` in
-`config.toml` at your real library; the `SAMPLELIBRARY_DATABASE_URL` environment variable overrides
-it, which is how the `*-dev` targets in the `Makefile` reach the development library instead. The
-test suite reads `SAMPLELIBRARY_TEST_DATABASE_URL`, and otherwise connects to `samplelibrary_test`
-on localhost with the credentials above. It gives each of its parallel workers a database of its
-own, created and dropped around the run, which is what the `CREATEDB` grant is for.
+Each pipeline creates its own tables the first time it connects, so a database is ready to use the
+moment it exists. Point `database_url` in `config.toml` at your real library; the
+`SAMPLELIBRARY_DATABASE_URL` environment variable overrides it, which is how the `*-dev` targets in
+the `Makefile` reach the development library instead. The test suite reads
+`SAMPLELIBRARY_TEST_DATABASE_URL`, and otherwise connects to `samplelibrary_test` on localhost with
+the credentials above. It gives each of its parallel workers a database of its own, created and
+dropped around the run, which is what the role's `CREATEDB` grant is for.
+
+`docker compose up -d postgres` is the container equivalent of having PostgreSQL installed: it
+brings up a server holding the library database, and `make database` adds the other two the same
+way it would on any other server.
 
 ## Usage
 

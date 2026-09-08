@@ -10,11 +10,14 @@ services:
       POSTGRES_PASSWORD: samplelibrary
       POSTGRES_DB: samplelibrary
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U samplelibrary"]
+      # Over TCP rather than the socket: while the image sets a new cluster up it runs a temporary
+      # server listening on the socket alone, so a socket probe reports healthy before the server
+      # this depends on is actually accepting connections.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U samplelibrary"]
       interval: 5s
       timeout: 5s
       retries: 10
