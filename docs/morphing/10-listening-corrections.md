@@ -176,13 +176,57 @@ structure has been averaged away. Recovering that structure means putting detail
 representation does not carry, which is a decoder's job rather than a phase estimator's. Griffin-Lim
 reaching its ceiling here is the expected result rather than a defect in it.
 
+## The resolution that clears the bar
+
+A fourth round judged `fft2048_bpo144` acceptable: *"in percussion you can get away with these
+artifacts, but the general clarity may be a problem in the long run… it passes our initial bar."*
+That verdict was given on the frequency-axis round trip carried by the source's own phase, so the
+pipeline was measured again at that density to see what survives the rest of it.
+
+| Rung | oboe | bass | snare | pad |
+|---|---|---|---|---|
+| 3 — frequency axis, true phase | 3.34 | 2.20 | 3.37 | 2.78 |
+| 6 — whole representation, true phase | 3.41 | 2.22 | 3.46 | 2.89 |
+| 7 — whole pipeline, Griffin-Lim | 7.26 | 6.67 | 6.79 | 7.34 |
+
+The representation costs almost nothing beyond its frequency axis at this density, and alignment is
+lossless again. Griffin-Lim adds 3.8 to 4.5 dB on top, which is now the whole of the remaining gap
+and the subject of the next listening round.
+
+### What the density costs
+
+| Bands per octave | Alignment cap | Grid rows | Cells | Headroom share |
+|---|---|---|---|---|
+| 36 | 48 st | 628 | 40,192 | 46% |
+| 144 | 24 st | 1,931 | 123,584 | 30% |
+| 144 | 48 st | 2,507 | 160,448 | 46% |
+
+The cap stays at 48 semitones because alignment accuracy is what lets a linear codec interpolate one
+sound rather than two pitches, and at 144 bands per octave it reads 79% of retunings exactly with a
+median error of 0.08 semitones, against 57% and 0.33 at 24 semitones.
+
+Fitting 256 components over 2,000 samples at this grid takes 59 seconds and 9.7 GB, holding 97.7% of
+the variance. That fits this machine and sets the point where a larger fitting body needs the
+components built in batches or on the GPU.
+
+### A band range that stopped short of Nyquist
+
+Reading silence outside the band range turned out to discard audible content. The bands reached
+21,504 Hz against a 22,050 Hz Nyquist, leaving 26 Fourier bins outside them, and a sample stored at
+the nominal 44,100 Hz plays back at a fraction of it -- 21,504 Hz lands near 4 kHz for a sample
+played at 8,363 Hz. The whole-pipeline distance rose from 4.64 to 7.81 dB before this was found.
+
+The bands now reach Nyquist, through `bands_reaching_nyquist`. `constant_q` keeps the older rule as
+`bands_below_nyquist`, since a transform building one wavelet per band asks every band to fit under
+Nyquist.
+
 ## Defaults these findings changed
 
 | Setting | Was | Now | Why |
 |---|---|---|---|
 | Default axis | `constant_q` | `log_frequency` | its bands state amplitude per Fourier bin |
 | `DEFAULT_FFT_LENGTH` | 1024 | 2048 | exact translation 64% → 82% |
-| `DEFAULT_BINS_PER_OCTAVE` | 24 | 36 | same |
+| `DEFAULT_BINS_PER_OCTAVE` | 24 | 144 | 36 settled the axis, 144 cleared the listening bar |
 | `DEFAULT_DYNAMIC_RANGE_DB` | 60 | 100 | the 60 dB clip cost 2.5–3.4 dB |
 | Grid height | `band_count` | `band_count + 2 × headroom` | alignment keeps every band |
 
