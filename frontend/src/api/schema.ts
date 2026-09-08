@@ -393,6 +393,16 @@ export interface components {
         /**
          * BitDepth
          * @description How many bits one stored frame of PCM occupies.
+         *
+         *     A :class:`~trackmod.core.samples.sample.Sample` holds float amplitudes whatever its depth. This is
+         *     the width its frames are written at, and what a format's size model charges for them.
+         *
+         *     Example:
+         *         >>> from trackmod import BitDepth
+         *         >>> BitDepth.SIXTEEN.bytes_per_frame
+         *         2
+         *         >>> BitDepth.EIGHT.scale
+         *         128.0
          * @enum {integer}
          */
         readonly BitDepth: 8 | 16;
@@ -460,7 +470,22 @@ export interface components {
         };
         /**
          * Loop
-         * @description A half-open frame range ``[begin, end)`` playback repeats once it reaches ``end``.
+         * @description A half-open frame range ``[begin, end)`` that playback repeats on reaching ``end``.
+         *
+         *     Args:
+         *         begin: The first frame of the repeated region.
+         *         end: One frame past the last, so the region spans ``end - begin`` frames.
+         *         mode: Whether the region plays forward each time, or alternates direction.
+         *
+         *     Raises:
+         *         ValidationError: when ``end`` is not above ``begin``. A loop spans at least one frame.
+         *
+         *     Example:
+         *         >>> from trackmod import Loop
+         *         >>> Loop(begin=8, end=64).frames
+         *         56
+         *         >>> Loop(begin=8, end=64).mode
+         *         <LoopMode.FORWARD: 'forward'>
          */
         readonly Loop: {
             /** Begin */
@@ -473,6 +498,9 @@ export interface components {
         /**
          * LoopMode
          * @description How playback repeats a looped region.
+         *
+         *     ``FORWARD`` plays the region from ``begin`` each time round. ``PING_PONG`` alternates direction,
+         *     playing it forward and then backward. Only Impulse Tracker and FastTracker 2 store ping-pong loops.
          * @enum {string}
          */
         readonly LoopMode: "forward" | "ping_pong";

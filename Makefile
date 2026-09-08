@@ -1,3 +1,8 @@
+# npm picks its script shell from ComSpec, which make does not pass on, leaving cmd.exe to resolve
+# commands from a POSIX PATH it cannot read: the script prints its banner and exits 1 having run
+# nothing. Naming the shell make itself uses keeps these targets working, on Windows and elsewhere.
+NPM := npm --script-shell=$(SHELL)
+
 .PHONY: install
 install:
 	uv sync --all-extras --all-groups
@@ -143,20 +148,20 @@ openapi:
 
 .PHONY: frontend-types
 frontend-types: openapi
-	cd frontend && npm run types
+	cd frontend && $(NPM) run types
 
 .PHONY: frontend-install
 frontend-install:
-	cd frontend && npm install
+	cd frontend && $(NPM) install
 
 .PHONY: frontend-dev
 frontend-dev:
-	cd frontend && npm run dev
+	cd frontend && $(NPM) run dev
 
 .PHONY: frontend-build
 frontend-build:
-	cd frontend && npm run build
+	cd frontend && $(NPM) run build
 
 .PHONY: frontend-check
 frontend-check:
-	cd frontend && npm run typecheck && npm run lint && npm run format:check && npm test
+	cd frontend && $(NPM) run typecheck && $(NPM) run lint && $(NPM) run format:check && $(NPM) test
