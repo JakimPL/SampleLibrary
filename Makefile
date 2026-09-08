@@ -82,6 +82,18 @@ embed:
 embed-modules-placeholder:
 	uv run samplecloud-modules-placeholder
 
+# The decodable representation. `morph-fit` learns a codec over a draw of the library and writes it
+# under the configured library root; `morph-render` writes a listening set between two sample
+# hashes. FIRST and SECOND are hashes from the real library: the dev sandbox has no counterpart
+# here on purpose, since its 40-100 ms synthetic tones say nothing about how a morph sounds.
+.PHONY: morph-fit
+morph-fit:
+	uv run samplemorph fit $(if $(CANONICALIZER),--canonicalizer $(CANONICALIZER),) $(if $(LATENT),--latent-size $(LATENT),)
+
+.PHONY: morph-render
+morph-render:
+	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT)
+
 # Destructive: empties the configured library's catalog and content store. Prints what it would
 # do and changes nothing unless invoked as `make reset-library CONFIRM=1`.
 .PHONY: reset-library

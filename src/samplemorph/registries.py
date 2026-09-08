@@ -7,11 +7,14 @@ from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.canonicalizers.constant_q import build_constant_q_canonicalizer
 from samplemorph.canonicalizers.log_frequency import build_log_frequency_canonicalizer
 from samplemorph.canonicalizers.mel import build_mel_canonicalizer
+from samplemorph.morphers import Morpher
+from samplemorph.morphers.linear import LinearMorpher
 from samplemorph.vocoders import Vocoder
 from samplemorph.vocoders.griffin_lim import GriffinLimVocoder
 
 DEFAULT_CANONICALIZER_NAME: Final[str] = "constant_q"
 DEFAULT_VOCODER_NAME: Final[str] = "griffin_lim"
+DEFAULT_MORPHER_NAME: Final[str] = "linear"
 
 CANONICALIZER_REGISTRY: Final[dict[str, Callable[[], Canonicalizer]]] = {
     DEFAULT_CANONICALIZER_NAME: build_constant_q_canonicalizer,
@@ -21,4 +24,8 @@ CANONICALIZER_REGISTRY: Final[dict[str, Callable[[], Canonicalizer]]] = {
 
 VOCODER_REGISTRY: Final[dict[str, Callable[[], Vocoder]]] = {
     DEFAULT_VOCODER_NAME: GriffinLimVocoder,
+}
+
+MORPHER_REGISTRY: Final[dict[str, Callable[[], Morpher]]] = {
+    DEFAULT_MORPHER_NAME: LinearMorpher,
 }

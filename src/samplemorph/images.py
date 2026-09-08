@@ -87,3 +87,27 @@ class AnalysisSpectrogram:
             )
         if self.frame_count < 1:
             raise ValueError(f"analysis spectrogram must sound for at least one frame, got {self.frame_count}")
+
+
+@dataclass(frozen=True)
+class SampleLatent:
+    """A sound image's grid reduced to a fixed-length code, beside the conditioners it kept.
+
+    The conditioners travel untouched: they describe the reference frame the grid was normalized
+    into, and a codec spends its capacity on the grid alone. Interpolating the two separately is
+    what lets a morph move timbre while pitch stays put, or the reverse.
+    """
+
+    values: NDArray[np.float64]
+    conditioners: Conditioners
+    geometry: Geometry
+
+    def __post_init__(self) -> None:
+        if self.values.ndim != 1:
+            raise ValueError(f"a sample latent must be 1-D, got shape {self.values.shape}")
+        if not np.all(np.isfinite(self.values)):
+            raise ValueError("a sample latent carries values that are not finite")
+
+    @property
+    def latent_size(self) -> int:
+        return int(self.values.shape[0])

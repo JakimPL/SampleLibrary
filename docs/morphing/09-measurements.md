@@ -149,6 +149,62 @@ The log-frequency Fourier axis and the mel axis stay registered. The first is th
 leader and the natural place to test whether a longer analysis window fixes its bass resolution; the
 second is the reference the other two are measured against.
 
+## The first audio
+
+A constant-Q canonicalizer, a 256-component principal-component codec fitted over 2,000 real
+samples, a Griffin-Lim vocoder and a linear morpher, rendered end to end. The codec holds **93.1%
+of the fitted body's variance** and takes about 80 seconds to fit; a seven-file listening set
+renders in about three seconds.
+
+### The morph path is a path, not a wash
+
+The standing worry is that a codec produces a crossfade -- both sounds at once -- which is the
+result this project built once before and rejected. Measured on two real pairs, the decoded grid's
+distance to each endpoint moves evenly across the weight:
+
+| Weight | To the first | To the second |
+|---|---|---|
+| 0.00 | 0.0000 | 0.2946 |
+| 0.25 | 0.0726 | 0.2222 |
+| 0.50 | 0.1465 | 0.1481 |
+| 0.75 | 0.2206 | 0.0740 |
+| 1.00 | 0.2946 | 0.0000 |
+
+Both pairs travel away from the first sample and toward the second at every step, with no step
+sitting closer to both than the endpoints sit to each other. `samplemorph.measurement.plausibility`
+holds this as a standing check.
+
+### Reconstruction has a good median and a bad tail
+
+Over 40 real samples, the round trip through an exactly invertible codec lands at a **median of
+8.71 dB** against the roughly 22 dB that separates two unrelated samples. The upper decile reaches
+**16.67 dB** and the worst case **38.19 dB**, which is further from its own original than an
+unrelated sample would be.
+
+Two things were tested and ruled out as the cause:
+
+- **The measure's own floor.** Clamping the log-mel comparison 80 dB below each peak leaves the bad
+  cases where they were, so the error is not a difference between bands too quiet to hear.
+- **Phase estimation.** The failing cases fail as badly when handed the source's own phase, so the
+  loss happens before synthesis.
+
+Sweeping the dynamic range the grid spans moves the failures around without removing them:
+
+| Dynamic range | Median | p90 | Worst |
+|---|---|---|---|
+| 60 dB | 8.71 | 16.67 | 38.19 |
+| 80 dB | **7.16** | 19.67 | 34.00 |
+| 100 dB | 9.70 | 27.35 | 32.89 |
+| 120 dB | 12.96 | 37.58 | 42.27 |
+
+80 dB gives the best median and a worse upper decile, so the default stays at 60 dB until something
+decides it. One bass guitar sample improves from 22.41 dB to 9.42 dB at 80 dB, which says the
+dynamic range is part of the story for at least some failures.
+
+**The tail is the open question this stage hands on.** Each trial records the frame count it came
+from, and the first thing to check is whether the failures concentrate in the long samples the
+64-column time axis compresses hardest.
+
 ## Corrections to earlier documents
 
 1. **[`02-representation.md`](02-representation.md): "Mel inverts more cleanly" than constant-Q.**
