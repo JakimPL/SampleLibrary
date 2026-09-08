@@ -157,27 +157,42 @@ never live in a file. The suite reads `SAMPLELIBRARY_TEST_DATABASE_URL`, default
 and dropped around the run: that is what the role's `CREATEDB` grant is for, and why
 `samplelibrary_test` itself stays empty.
 
-## Splitting an extraction run
+## Running extraction in parallel
 
-`sampleextract --shard index/count` gives one run its share of the corpus, so several can split it
-between them: across cores on one machine, or across machines pointed at one catalog. `Shard.select`
-takes every `count`-th path from the sorted discovery, starting at `index` -- striding rather than
-slicing into blocks, since paths sorted by name group a directory's similar files together and
-contiguous blocks would hand one run all the large ones. Every run sorts identically, so the shares
-cover the corpus exactly once whatever order the runs start in.
-
-Three things make concurrent runs safe. `audio_store.write` stages its bytes in a temporary file
-beside the destination and moves them into place in one step, so two runs reaching the same sample
-hash -- routine, since one sample recurs across many modules -- each write a whole object rather
-than interleaving into one. `create_schema` takes a Postgres advisory lock, so runs opening the same
-fresh catalog at once create its tables in turn instead of racing on `CREATE TABLE IF NOT EXISTS`.
-And a module two runs reach at the same moment, which this corpus invites by holding hundreds of
-byte-identical pairs under different names, is settled by the catalog's own uniqueness on the module
-hash: the losing run rolls its whole module back and counts it under `ingested_elsewhere`.
+`sampleextract --workers count` spends that many processes on one corpus, defaulting to one per
+core up to `MAXIMUM_AUTOMATIC_WORKERS`. `sampleextract.parallel` owns the arrangement: the
+supervisor walks the source directory once, `divide` splits the sorted discovery into one share per
+worker by taking every `count`-th path -- striding rather than slicing into blocks, since paths
+sorted by name group a directory's similar files together and contiguous blocks would hand one
+worker all the large ones -- and each worker covers its share in a process of its own, opening its
+own catalog connection. Progress crosses back on a queue so the supervisor draws one bar over the
+whole corpus, and the workers' summaries fold into one through `ExtractionSummary.combine`.
 
 Parsing is where the time goes, and it is ordinary Python, so shares want separate processes rather
 than threads. Peak memory bounds how many: one module can materialize tens of thousands of note
-events, and each run carries that alone.
+events, and each worker carries that alone, which is what the ceiling on the automatic count is
+for. The pool names `spawn` rather than taking the platform's default start method, so the promise
+that no catalog connection is open when a worker starts holds wherever the run happens.
+
+Four things make concurrent workers safe. `audio_store.write` stages its bytes in a temporary file
+beside the destination and moves them into place in one step, so two workers reaching the same
+sample hash -- routine, since one sample recurs across many modules -- each write a whole object
+rather than interleaving into one. `create_schema` takes a Postgres advisory lock, so workers
+opening the same fresh catalog at once create its tables in turn instead of racing on `CREATE TABLE
+IF NOT EXISTS`. A module two workers reach at the same moment, which this corpus invites by holding
+hundreds of byte-identical pairs under different names, is settled by the catalog's own uniqueness
+on the module hash: the losing worker rolls its whole module back and counts it under
+`ingested_elsewhere`.
+
+And `ingest_module` writes the rows two workers can hold in common -- `sample` and
+`sample_thumbnail`, both keyed by content hash -- in ascending hash order, ahead of the occurrences
+keyed by `module_id` that belong to one worker alone. Ascending hash order is a total order every
+worker agrees on, so two transactions holding one pair of samples between them reach those rows in
+the same sequence and the second simply waits for the first. Taking them in the order a module's
+own slots happen to list them would let two modules holding one pair in opposite orders each hold
+what the other wants next, which Postgres resolves by aborting one with `DeadlockDetected` -- a
+failure arriving as `OperationalError`, outside the `IntegrityError` a collision is read from, with
+no retry anywhere in this project to fall back on.
 
 ## Deployment
 

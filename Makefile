@@ -40,11 +40,11 @@ coverage:
 .PHONY: check
 check: format lint test frontend-check
 
-# SHARD splits one corpus between several runs: `make extract SHARD=0/4` through `SHARD=3/4`, in
-# four terminals or on four machines pointed at one catalog. Left unset, one run takes it all.
+# WORKERS is how many processes one run spends on the corpus: `make extract WORKERS=2`. Left
+# unset, a run takes one per core, up to a ceiling one machine's memory carries comfortably.
 .PHONY: extract
 extract:
-	uv run sampleextract $(if $(SHARD),--shard $(SHARD),)
+	uv run sampleextract $(if $(WORKERS),--workers $(WORKERS),)
 
 .PHONY: equivalence
 equivalence:
@@ -106,7 +106,7 @@ library-dev:
 
 .PHONY: extract-dev
 extract-dev: library-dev
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run sampleextract
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run sampleextract $(if $(WORKERS),--workers $(WORKERS),)
 
 .PHONY: equivalence-dev
 equivalence-dev:

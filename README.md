@@ -42,8 +42,9 @@ make serve         # start the API
 make frontend-dev  # start the frontend, then open http://localhost:5173
 ```
 
-Extraction takes a couple of hours over a large collection. To split it, run `make extract
-SHARD=0/4` through `SHARD=3/4` in four terminals, or on four machines pointed at one database.
+Extraction takes a while over a large collection, so it spreads itself across your machine's
+cores. `make extract WORKERS=2` holds it to two processes if you want the machine back while it
+runs.
 
 The `Makefile` lists the rest of the pipeline: `make embed`, `make thumbnails` and so on.
 
