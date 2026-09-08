@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { useAnnotationStore } from "../../src/samples/annotationStore";
 import { CategoryBadge } from "../../src/samples/CategoryBadge";
-import { useLabelStore } from "../../src/samples/labelStore";
 
 const SAMPLE_HASH = "a".repeat(64);
 
@@ -21,7 +21,9 @@ describe("CategoryBadge", () => {
     });
 
     it("prefers a label set in this session over the one the server sent", () => {
-        useLabelStore.getState().applyLabel([SAMPLE_HASH], "rimshot");
+        useAnnotationStore
+            .getState()
+            .applyAnnotation([SAMPLE_HASH], { label: "rimshot", rating: null, favorite: false });
 
         render(<CategoryBadge sampleHash={SAMPLE_HASH} category="kick" handLabel="dirty 909" />);
 
@@ -29,7 +31,7 @@ describe("CategoryBadge", () => {
     });
 
     it("falls back to the guess once a label is cleared in this session", () => {
-        useLabelStore.getState().applyLabel([SAMPLE_HASH], null);
+        useAnnotationStore.getState().applyAnnotation([SAMPLE_HASH], null);
 
         render(<CategoryBadge sampleHash={SAMPLE_HASH} category="kick" handLabel="dirty 909" />);
 
@@ -37,7 +39,9 @@ describe("CategoryBadge", () => {
     });
 
     it("leaves a sample nobody labeled in this session alone", () => {
-        useLabelStore.getState().applyLabel(["b".repeat(64)], "rimshot");
+        useAnnotationStore
+            .getState()
+            .applyAnnotation(["b".repeat(64)], { label: "rimshot", rating: null, favorite: false });
 
         render(<CategoryBadge sampleHash={SAMPLE_HASH} category="snare" handLabel={null} />);
 

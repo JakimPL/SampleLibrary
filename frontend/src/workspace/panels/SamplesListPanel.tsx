@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { useState } from "react";
 
+import { type SampleSelection, WHOLE_CATALOG } from "../../api/samples";
 import { SamplesTable } from "../../samples/SamplesTable";
 import { useWindowedSamples } from "../../samples/useWindowedSamples";
 import { ErrorNotice } from "../../shared/ErrorNotice";
@@ -12,7 +13,8 @@ const GROUP_BY_EQUIVALENCE_DEFAULT = true;
 
 export function SamplesListPanel(): ReactElement {
     const [groupByEquivalence, setGroupByEquivalence] = useState(GROUP_BY_EQUIVALENCE_DEFAULT);
-    const state = useWindowedSamples(groupByEquivalence);
+    const [selection, setSelection] = useState<SampleSelection>(WHOLE_CATALOG);
+    const state = useWindowedSamples(groupByEquivalence, selection);
 
     if (state.status === "loading") {
         return <Loading />;
@@ -31,6 +33,8 @@ export function SamplesListPanel(): ReactElement {
             loadMoreError={state.status === "error" ? state.message : null}
             groupByEquivalence={groupByEquivalence}
             onGroupByEquivalenceChange={setGroupByEquivalence}
+            selection={selection}
+            onSelectionChange={setSelection}
         />
     );
 }

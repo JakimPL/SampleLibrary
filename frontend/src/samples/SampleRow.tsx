@@ -7,8 +7,10 @@ import { formatBytes, shortHash } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
+import { decisionsOf, useSampleAnnotation } from "./annotationStore";
 import { CategoryBadge } from "./CategoryBadge";
 import { REFERENCE_NOTE } from "./nominalRate";
+import { ratingGlyphs } from "./rating";
 import { Thumbnail } from "./Thumbnail";
 import type { PreviewPitch } from "./useAudioPreview";
 
@@ -20,6 +22,11 @@ function previewPitchFor(sample: SampleSummary): PreviewPitch | null {
         : { rateHz: sample.dominant_rate_hz, soundedNote: sample.dominant_note ?? REFERENCE_NOTE };
 }
 
+/** What a rating reads as to a screen reader, where the stars alone would say nothing. */
+function ratingLabel(rating: number | null): string {
+    return rating === null ? "Unrated" : `Rated ${String(rating)}`;
+}
+
 interface SampleRowProps {
     readonly sample: SampleSummary;
 }
@@ -29,6 +36,7 @@ export function SampleRow({ sample }: SampleRowProps): ReactElement {
         kind: "sample",
         hash: sample.hash,
     });
+    const annotation = useSampleAnnotation(sample.hash, decisionsOf(sample));
 
     return (
         <tr
@@ -54,6 +62,16 @@ export function SampleRow({ sample }: SampleRowProps): ReactElement {
             </td>
             <td className="cell-muted">
                 <CategoryBadge sampleHash={sample.hash} category={sample.category} handLabel={sample.hand_label} />
+            </td>
+            <td className="cell-muted cell-verdict">
+                {annotation?.favorite === true && (
+                    <span className="favorite-mark" title="Favorite" aria-label="Favorite">
+                        ♥
+                    </span>
+                )}
+                <span className="rating-mark" aria-label={ratingLabel(annotation?.rating ?? null)}>
+                    {ratingGlyphs(annotation?.rating ?? null)}
+                </span>
             </td>
             <td className="cell-muted mono">{formatBytes(sample.size_bytes)}</td>
             <td className="cell-muted mono">{sample.occurrence_count}</td>

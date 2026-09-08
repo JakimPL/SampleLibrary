@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 
+import { useSampleAnnotation } from "./annotationStore";
 import { CATEGORY_LABELS, type SampleCategory } from "./category";
-import { useHandLabel } from "./labelStore";
 
 interface CategoryBadgeProps {
     readonly sampleHash: string;
@@ -17,7 +17,8 @@ interface CategoryBadgeProps {
  * wears one style of its own and reads as the different kind of statement it is.
  */
 export function CategoryBadge({ sampleHash, category, handLabel }: CategoryBadgeProps): ReactElement {
-    const resolved = useHandLabel(sampleHash, handLabel);
+    const annotation = useSampleAnnotation(sampleHash, { label: handLabel, rating: null, favorite: false });
+    const resolved = annotation?.label ?? null;
     if (resolved !== null) {
         return <span className="badge badge-hand-label">{resolved}</span>;
     }

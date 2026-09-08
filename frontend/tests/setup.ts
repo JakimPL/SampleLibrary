@@ -3,7 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
-import { INITIAL_LABEL_STATE, useLabelStore } from "../src/samples/labelStore";
+import { INITIAL_ANNOTATION_STATE, useAnnotationStore } from "../src/samples/annotationStore";
 import { clearRequestCache } from "../src/shared/requestCache";
 import { DEFAULT_THEME_PREFERENCE } from "../src/theme/themeOptions";
 import { useThemeStore } from "../src/theme/themeStore";
@@ -34,10 +34,10 @@ afterEach(() => {
     clearRequestCache();
 });
 
-// labelStore holds what this session has labeled, module-level like the stores above, so a label
-// written by one test would otherwise decide what a later test's badge renders.
+// annotationStore holds what this session has decided, module-level like the stores above, so a
+// decision made by one test would otherwise decide what a later test's badge renders.
 afterEach(() => {
-    useLabelStore.setState(INITIAL_LABEL_STATE);
+    useAnnotationStore.setState(INITIAL_ANNOTATION_STATE);
 });
 
 // jsdom's localStorage persists across tests in the same file; without clearing it, a test that

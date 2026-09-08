@@ -8,11 +8,22 @@ export type SampleRelation = components["schemas"]["SampleRelation"];
 export type SampleDistance = components["schemas"]["SampleDistance"];
 export type SimilarSample = components["schemas"]["SimilarSample"];
 export type WaveformPeak = components["schemas"]["WaveformPeak"];
+export type SampleSort = components["schemas"]["SampleSort"];
+
+/** Which samples a listing walks, and the order it walks them in. */
+export interface SampleSelection {
+    readonly favoritesOnly: boolean;
+    readonly minimumRating: number | null;
+    readonly sort: SampleSort;
+}
+
+export const WHOLE_CATALOG: SampleSelection = { favoritesOnly: false, minimumRating: null, sort: "occurrences" };
 
 export interface ListSamplesParams {
     readonly limit: number;
     readonly offset: number;
     readonly groupByEquivalence: boolean;
+    readonly selection: SampleSelection;
 }
 
 export async function listSamples(params: ListSamplesParams): Promise<SamplePage> {
@@ -20,7 +31,12 @@ export async function listSamples(params: ListSamplesParams): Promise<SamplePage
         limit: String(params.limit),
         offset: String(params.offset),
         group_by_equivalence: String(params.groupByEquivalence),
+        favorites_only: String(params.selection.favoritesOnly),
+        sort: params.selection.sort,
     });
+    if (params.selection.minimumRating !== null) {
+        query.set("minimum_rating", String(params.selection.minimumRating));
+    }
     return requestJson<SamplePage>(`/samples?${query.toString()}`);
 }
 

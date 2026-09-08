@@ -7,6 +7,7 @@ import {
     getSimilarSamples,
     listSamples,
     sampleAudioUrl,
+    WHOLE_CATALOG,
 } from "../../src/api/samples";
 
 function stubFetchReturning(payload: unknown): ReturnType<typeof vi.fn> {
@@ -23,17 +24,36 @@ describe("listSamples", () => {
     it("builds a query string from limit and offset", async () => {
         const fetchMock = stubFetchReturning({ items: [], total: 0, limit: 50, offset: 0 });
 
-        await listSamples({ limit: 50, offset: 0, groupByEquivalence: false });
+        await listSamples({ limit: 50, offset: 0, groupByEquivalence: false, selection: WHOLE_CATALOG });
 
-        expect(fetchMock).toHaveBeenCalledWith("/samples?limit=50&offset=0&group_by_equivalence=false");
+        expect(fetchMock).toHaveBeenCalledWith(
+            "/samples?limit=50&offset=0&group_by_equivalence=false&favorites_only=false&sort=occurrences",
+        );
+    });
+
+    it("names a narrowing only once a person has asked for one", async () => {
+        const fetchMock = stubFetchReturning({ items: [], total: 0, limit: 50, offset: 0 });
+
+        await listSamples({
+            limit: 50,
+            offset: 0,
+            groupByEquivalence: false,
+            selection: { favoritesOnly: true, minimumRating: 4, sort: "rating" },
+        });
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            "/samples?limit=50&offset=0&group_by_equivalence=false&favorites_only=true&sort=rating&minimum_rating=4",
+        );
     });
 
     it("passes the equivalence grouping flag through to the query string", async () => {
         const fetchMock = stubFetchReturning({ items: [], total: 0, limit: 50, offset: 0 });
 
-        await listSamples({ limit: 50, offset: 0, groupByEquivalence: true });
+        await listSamples({ limit: 50, offset: 0, groupByEquivalence: true, selection: WHOLE_CATALOG });
 
-        expect(fetchMock).toHaveBeenCalledWith("/samples?limit=50&offset=0&group_by_equivalence=true");
+        expect(fetchMock).toHaveBeenCalledWith(
+            "/samples?limit=50&offset=0&group_by_equivalence=true&favorites_only=false&sort=occurrences",
+        );
     });
 });
 

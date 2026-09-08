@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import type { SampleSummary } from "../../src/api/samples";
+import { type SampleSelection, type SampleSummary, WHOLE_CATALOG } from "../../src/api/samples";
 import { SamplesTable } from "../../src/samples/SamplesTable";
 
 function buildSample(
@@ -41,6 +42,8 @@ function renderTable(
         readonly onLoadMore: () => void;
         readonly groupByEquivalence: boolean;
         readonly onGroupByEquivalenceChange: (groupByEquivalence: boolean) => void;
+        readonly selection: SampleSelection;
+        readonly onSelectionChange: (selection: SampleSelection) => void;
     }> = {},
 ): ReturnType<typeof render> {
     return render(
@@ -54,6 +57,8 @@ function renderTable(
                 loadMoreError={null}
                 groupByEquivalence={overrides.groupByEquivalence ?? false}
                 onGroupByEquivalenceChange={overrides.onGroupByEquivalenceChange ?? vi.fn()}
+                selection={overrides.selection ?? WHOLE_CATALOG}
+                onSelectionChange={overrides.onSelectionChange ?? vi.fn()}
             />
         </MemoryRouter>,
     );
@@ -165,5 +170,40 @@ describe("SamplesTable", () => {
         fireEvent.scroll(scrollContainer);
 
         expect(onLoadMore).toHaveBeenCalled();
+    });
+});
+
+describe("SamplesTable narrowing", () => {
+    it("asks the server for favorites rather than filtering the rows already loaded", async () => {
+        const onSelectionChange = vi.fn();
+        renderTable({ onSelectionChange });
+
+        await userEvent.click(screen.getByRole("button", { name: "Favorites" }));
+
+        expect(onSelectionChange).toHaveBeenCalledWith({ ...WHOLE_CATALOG, favoritesOnly: true });
+    });
+
+    it("reports a rating floor a person chose", async () => {
+        const onSelectionChange = vi.fn();
+        renderTable({ onSelectionChange });
+
+        await userEvent.selectOptions(screen.getByLabelText("Minimum rating"), "4");
+
+        expect(onSelectionChange).toHaveBeenCalledWith({ ...WHOLE_CATALOG, minimumRating: 4 });
+    });
+
+    it("reports the order a person chose", async () => {
+        const onSelectionChange = vi.fn();
+        renderTable({ onSelectionChange });
+
+        await userEvent.selectOptions(screen.getByLabelText("Order"), "rating");
+
+        expect(onSelectionChange).toHaveBeenCalledWith({ ...WHOLE_CATALOG, sort: "rating" });
+    });
+
+    it("shows a live favorites narrowing as pressed", () => {
+        renderTable({ selection: { ...WHOLE_CATALOG, favoritesOnly: true } });
+
+        expect(screen.getByRole("button", { name: "Favorites" })).toHaveAttribute("aria-pressed", "true");
     });
 });

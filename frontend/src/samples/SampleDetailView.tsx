@@ -5,8 +5,8 @@ import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { SpectralDistanceReadout } from "../workspace/panels/SpectralDistanceReadout";
+import { AnnotationEditor } from "./AnnotationEditor";
 import { CategoryBadge } from "./CategoryBadge";
-import { LabelEditor } from "./LabelEditor";
 import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { SampleRelationRow } from "./SampleRelationRow";
 import { SimilarSampleRow } from "./SimilarSampleRow";
@@ -32,7 +32,7 @@ export function SampleDetailView({ sample, relations, similar }: SampleDetailVie
                 </dd>
                 <dt>Label</dt>
                 <dd>
-                    <LabelEditor key={sample.hash} sample={sample} />
+                    <AnnotationEditor key={sample.hash} sample={sample} />
                 </dd>
                 <dt>Size</dt>
                 <dd className="mono">{formatBytes(sample.size_bytes)}</dd>

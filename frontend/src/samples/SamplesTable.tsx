@@ -11,8 +11,9 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ReactElement } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { SampleSummary } from "../api/samples";
+import type { SampleSelection, SampleSummary } from "../api/samples";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
+import { RATING_VALUES } from "./rating";
 import { SampleRow } from "./SampleRow";
 
 const ROW_HEIGHT_PX = 44;
@@ -36,6 +37,7 @@ const COLUMNS = [
         },
     ),
     columnHelper.display({ id: "category", header: "Category" }),
+    columnHelper.display({ id: "verdict", header: "Rating" }),
     columnHelper.accessor("size_bytes", { header: "Size" }),
     columnHelper.accessor("occurrence_count", { header: "Occurrences" }),
 ];
@@ -49,6 +51,8 @@ interface SamplesTableProps {
     readonly loadMoreError: string | null;
     readonly groupByEquivalence: boolean;
     readonly onGroupByEquivalenceChange: (groupByEquivalence: boolean) => void;
+    readonly selection: SampleSelection;
+    readonly onSelectionChange: (selection: SampleSelection) => void;
 }
 
 export function SamplesTable({
@@ -60,6 +64,8 @@ export function SamplesTable({
     loadMoreError,
     groupByEquivalence,
     onGroupByEquivalenceChange,
+    selection,
+    onSelectionChange,
 }: SamplesTableProps): ReactElement {
     const [globalFilter, setGlobalFilter] = useState("");
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -119,6 +125,45 @@ export function SamplesTable({
                     />
                     Group similar
                 </label>
+                <button
+                    type="button"
+                    aria-pressed={selection.favoritesOnly}
+                    onClick={() => {
+                        onSelectionChange({ ...selection, favoritesOnly: !selection.favoritesOnly });
+                    }}
+                >
+                    Favorites
+                </button>
+                <select
+                    aria-label="Minimum rating"
+                    value={selection.minimumRating === null ? "" : String(selection.minimumRating)}
+                    onChange={(event) => {
+                        onSelectionChange({
+                            ...selection,
+                            minimumRating: event.target.value === "" ? null : Number(event.target.value),
+                        });
+                    }}
+                >
+                    <option value="">Any rating</option>
+                    {RATING_VALUES.map((value) => (
+                        <option key={value} value={value}>
+                            {value}+
+                        </option>
+                    ))}
+                </select>
+                <select
+                    aria-label="Order"
+                    value={selection.sort}
+                    onChange={(event) => {
+                        onSelectionChange({
+                            ...selection,
+                            sort: event.target.value === "rating" ? "rating" : "occurrences",
+                        });
+                    }}
+                >
+                    <option value="occurrences">Most used</option>
+                    <option value="rating">Best rated</option>
+                </select>
                 <span className="cell-muted mono">
                     {samples.length} of {total} loaded
                     {isLoadingMore && hasMore ? " · loading…" : ""}

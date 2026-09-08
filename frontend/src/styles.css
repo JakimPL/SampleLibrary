@@ -535,14 +535,20 @@ tr.is-focused {
     letter-spacing: 0;
 }
 
-.label-editor {
+.annotation-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.annotation-editor-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
 }
 
-.label-editor-input {
+.annotation-editor-input {
     flex: 1 1 140px;
     min-width: 120px;
     padding: 3px 6px;
@@ -552,7 +558,7 @@ tr.is-focused {
     border-radius: 4px;
 }
 
-.label-editor-scope {
+.annotation-editor-scope {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -560,10 +566,55 @@ tr.is-focused {
     color: var(--text-muted);
 }
 
-.label-editor-message {
+.annotation-editor-message {
     flex-basis: 100%;
     margin: 0;
     color: var(--critical);
+}
+
+/* Stars and the heart are bare glyph buttons, like the sort arrows and the thumbnail preview: this
+   interface reads by its type, and one accent color marks everything a person has decided. */
+.rating-stars {
+    display: inline-flex;
+}
+
+.rating-star,
+.favorite-toggle {
+    background: none;
+    border: none;
+    padding: 0 1px;
+    font-size: 15px;
+    line-height: 1;
+    color: var(--text-faint);
+    cursor: pointer;
+}
+
+.rating-star:hover,
+.favorite-toggle:hover {
+    color: var(--accent);
+}
+
+.rating-star[aria-pressed="true"],
+.favorite-toggle[aria-pressed="true"] {
+    color: var(--accent);
+}
+
+.rating-star:disabled,
+.favorite-toggle:disabled {
+    cursor: default;
+}
+
+.cell-verdict {
+    white-space: nowrap;
+    color: var(--accent);
+}
+
+.favorite-mark {
+    margin-right: 4px;
+}
+
+.rating-mark {
+    letter-spacing: -1px;
 }
 
 /* Class names below echo the backend's RelationType/TrackerFormat enum values verbatim (snake_case
