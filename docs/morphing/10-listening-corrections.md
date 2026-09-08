@@ -220,6 +220,48 @@ The bands now reach Nyquist, through `bands_reaching_nyquist`. `constant_q` keep
 `bands_below_nyquist`, since a transform building one wavelet per band asks every band to fit under
 Nyquist.
 
+## Griffin-Lim is dismissed
+
+The whole pipeline at 144 bands per octave was judged and rejected: *"the effect is disturbing the
+sound too much to convince me to commit to Griffin-Lim. All examples suffered from the same
+artifact, more or less."* The representation had passed the same listener on the rung carried by the
+source's own phase, so the verdict falls on phase estimation alone.
+
+Two experiments then asked whether any grid rescues it.
+
+**Time resolution does not.** Holding 144 bands per octave and raising the columns:
+
+| Columns | oboe true phase | oboe GL | snare true phase | snare GL |
+|---|---|---|---|---|
+| 64 | 3.31 | 7.12 | 3.41 | 6.73 |
+| 512 | 3.29 | 6.51 | 3.41 | 6.62 |
+
+At 512 columns the snare's time axis decimates nothing at all -- its 79 analysis frames are read onto
+512 columns -- and the estimate still stands 3.2 dB from the phase it is trying to recover.
+
+**Frequency resolution does not either.** Holding 64 columns and raising the bands:
+
+| Bands per octave | Crossover | Grid cells | oboe true phase | oboe GL | snare true phase | snare GL |
+|---|---|---|---|---|---|---|
+| 144 | 2,237 Hz | 160,448 | 3.31 | 7.05 | 3.41 | 6.67 |
+| 288 | 4,473 Hz | 320,768 | 2.92 | 6.57 | 2.85 | 5.87 |
+| 576 | 8,947 Hz | 641,408 | 2.75 | 6.08 | 2.56 | 5.10 |
+| 1,152 | 17,894 Hz | 1,282,752 | 2.71 | 5.84 | 2.50 | 4.87 |
+
+At 1,152 bands per octave a band is narrower than a Fourier bin across nearly the whole audible
+range, on a grid of 1.28 million cells, and the gap has closed by 0.6 dB for eight times the grid.
+The estimate converges on its own limit rather than on the phase.
+
+**What this settles.** The magnitude a grid holds is a smoothed reading, and no real signal has it as
+its Fourier magnitude. Griffin-Lim searches for phase consistent with a magnitude that admits none,
+and reaches the same artifact whatever resolution it is given -- which is why it was clean on the
+untouched magnitude in rung 2 and fails here. Recovering the waveform means a decoder that produces
+one, trained to put back what the reading smoothed away, rather than an estimator that solves for
+phase.
+
+The representation stands: at 144 bands per octave it clears the listening bar on the rung the
+source's own phase carries, at 2.2 to 3.5 dB. The vocoder is the open problem, and it is Phase 4.
+
 ## Defaults these findings changed
 
 | Setting | Was | Now | Why |
