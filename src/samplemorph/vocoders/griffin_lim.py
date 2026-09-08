@@ -6,7 +6,8 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 
-from samplemorph.canonicalizers import constant_q, log_frequency, mel
+from samplemorph.canonicalizers import mel
+from samplemorph.canonicalizers.common import bands_onto_linear_axis
 from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
 from samplemorph.images import AnalysisSpectrogram
 
@@ -65,9 +66,11 @@ class OraclePhaseVocoder:
 
 def _onto_linear_axis(magnitude: NDArray[np.float64], *, geometry: Geometry) -> NDArray[np.float64]:
     match geometry:
-        case LogFrequencyGeometry():
-            return log_frequency.onto_linear_axis(magnitude, geometry=geometry)
+        case LogFrequencyGeometry() | ConstantQGeometry():
+            return bands_onto_linear_axis(
+                magnitude,
+                band_frequencies=geometry.band_frequencies,
+                linear_frequencies=geometry.linear_frequencies,
+            )
         case MelGeometry():
             return mel.onto_linear_axis(magnitude, geometry=geometry)
-        case ConstantQGeometry():
-            return constant_q.onto_linear_axis(magnitude, geometry=geometry)

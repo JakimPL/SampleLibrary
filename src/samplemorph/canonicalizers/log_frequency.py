@@ -37,13 +37,6 @@ class LogFrequencyCanonicalizer:
         return restore_spectrogram(image, geometry=self._geometry)
 
 
-def onto_linear_axis(magnitude: NDArray[np.float64], *, geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
-    """Read a logarithmic magnitude spectrogram back onto the linear Fourier frequency grid."""
-    band_frequencies = geometry.band_frequencies
-    linear_frequencies = geometry.linear_frequencies
-    return np.stack([np.interp(linear_frequencies, band_frequencies, frame) for frame in magnitude.T]).T
-
-
 def _onto_log_axis(linear: NDArray[np.float64], *, geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
     bands: NDArray[np.float64] = band_weights(geometry) @ linear
     return bands

@@ -150,6 +150,24 @@ def to_sound_image(bands: NDArray[np.float64], *, geometry: Geometry, frame_coun
     return SoundImage(grid=grid, conditioners=conditioners, geometry=geometry)
 
 
+def bands_onto_linear_axis(
+    magnitude: NDArray[np.float64],
+    *,
+    band_frequencies: NDArray[np.float64],
+    linear_frequencies: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Read a magnitude spectrogram from its own bands onto the linear Fourier frequency grid.
+
+    Every axis returns to audio through one magnitude inversion on the Fourier grid, so the reading
+    that gets it there is one rule shared by all of them. Bins outside the range the bands cover
+    read as silence, which carries the content the analysis measured and states nothing about the
+    rest.
+    """
+    return np.stack(
+        [np.interp(linear_frequencies, band_frequencies, frame, left=0.0, right=0.0) for frame in magnitude.T]
+    ).T
+
+
 def restore_spectrogram(image: SoundImage, *, geometry: Geometry) -> AnalysisSpectrogram:
     """Undo `to_sound_image`, returning the magnitude spectrogram the image describes."""
     columns = restore_columns(image.grid, geometry=geometry, conditioners=image.conditioners)

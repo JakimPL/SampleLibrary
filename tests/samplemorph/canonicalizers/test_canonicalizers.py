@@ -6,6 +6,8 @@ import numpy as np
 import pytest
 
 from samplemorph.canonicalizers import Canonicalizer
+from samplemorph.canonicalizers.common import bands_onto_linear_axis
+from samplemorph.geometry import log_frequency_geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_burst
 
@@ -124,3 +126,25 @@ def test_a_transposed_tone_lands_closer_than_unrelated_content(case: Canonicaliz
     transposed_distance = float(np.sqrt(np.mean((low.grid - high.grid) ** 2)))
     unrelated_distance = float(np.sqrt(np.mean((low.grid - unrelated.grid) ** 2)))
     assert transposed_distance < unrelated_distance
+
+
+def test_the_linear_axis_reads_silence_beyond_the_bands_the_analysis_covers() -> None:
+    """Bands start above DC and stop below Nyquist, and the bins outside carry what was measured.
+
+    Holding the edge band's value across them would state a level for frequencies no band read,
+    putting energy at DC into every synthesized frame.
+    """
+    geometry = log_frequency_geometry()
+    bands = np.ones((geometry.band_count, 4))
+
+    linear = bands_onto_linear_axis(
+        bands,
+        band_frequencies=geometry.band_frequencies,
+        linear_frequencies=geometry.linear_frequencies,
+    )
+
+    outside = (geometry.linear_frequencies < geometry.band_frequencies[0]) | (
+        geometry.linear_frequencies > geometry.band_frequencies[-1]
+    )
+    assert outside.sum() > 0
+    assert np.array_equal(linear[outside], np.zeros((int(outside.sum()), 4)))

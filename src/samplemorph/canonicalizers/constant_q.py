@@ -47,16 +47,5 @@ class ConstantQCanonicalizer:
         return restore_spectrogram(image, geometry=self._geometry)
 
 
-def onto_linear_axis(magnitude: NDArray[np.float64], *, geometry: ConstantQGeometry) -> NDArray[np.float64]:
-    """Read a constant-Q magnitude spectrogram onto the linear Fourier frequency grid.
-
-    The result states each constant-Q band's amplitude at the linear bin frequencies, which holds
-    the shape of the constant-Q reading and carries its band widths with it.
-    """
-    band_frequencies = geometry.band_frequencies
-    linear_frequencies = geometry.linear_frequencies
-    return np.stack([np.interp(linear_frequencies, band_frequencies, frame) for frame in magnitude.T]).T
-
-
 def build_constant_q_canonicalizer() -> ConstantQCanonicalizer:
     return ConstantQCanonicalizer(constant_q_geometry())
