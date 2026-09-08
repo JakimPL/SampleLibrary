@@ -6,7 +6,7 @@ from typing import Any, Final, Protocol
 from sqlalchemy import Connection, Row, func, select
 from trackmod.core.notes.pitch import Note
 
-from samplecore.models.note_event import NoteEvent, SampleNoteUsage
+from samplecore.models.note_event import NoteEvent, SampleNoteStatistics, SampleNoteUsage
 from samplecore.storage.database import bulk_insert, note_event, sample_properties
 
 _COLUMN_NAMES: Final[tuple[str, ...]] = (
@@ -35,6 +35,8 @@ class NoteEventRepository(Protocol):
     def note_usage_for_sample(self, sample_hash: str) -> tuple[SampleNoteUsage, ...]: ...
 
     def dominant_note_by_hash(self, hashes: list[str]) -> dict[str, Note]: ...
+
+    def note_statistics_for_every_sample(self) -> dict[str, SampleNoteStatistics]: ...
 
 
 class PostgresNoteEventRepository:
@@ -149,6 +151,49 @@ class PostgresNoteEventRepository:
         statement = select(ranking.c.sample_hash, ranking.c.sounded_note).where(ranking.c.rank == 1)
         rows = self._connection.execute(statement).fetchall()
         return {row.sample_hash: Note(row.sounded_note) for row in rows}
+
+    def note_statistics_for_every_sample(self) -> dict[str, SampleNoteStatistics]:
+        """How every sample the note events reach is played, in one pass over the whole catalog.
+
+        Read together with a descriptor, these say whether an embedding puts samples used the same
+        way near one another, over the part of the catalog note events cover -- which is most of it,
+        and far more than any keyword label reaches. One aggregate query serves the whole catalog,
+        since naming a hash per sample would pass Postgres's parameter ceiling many times over.
+        """
+        # pylint: disable-next=not-callable
+        strike_count = func.count().label("strike_count")
+        # pylint: disable-next=not-callable
+        distinct_pitch_count = func.count(func.distinct(note_event.c.sounded_note)).label("distinct_pitch_count")
+        statement = (
+            select(
+                sample_properties.c.sample_hash,
+                distinct_pitch_count,
+                func.min(note_event.c.sounded_note).label("lowest_note"),
+                func.max(note_event.c.sounded_note).label("highest_note"),
+                strike_count,
+            )
+            .select_from(
+                note_event.join(
+                    sample_properties,
+                    (sample_properties.c.module_id == note_event.c.module_id)
+                    & (sample_properties.c.instrument_index == note_event.c.instrument_index)
+                    & (sample_properties.c.sample_slot == note_event.c.sample_slot),
+                )
+            )
+            .where(note_event.c.sounded_note.is_not(None))
+            .group_by(sample_properties.c.sample_hash)
+        )
+        rows = self._connection.execute(statement).fetchall()
+        return {
+            row.sample_hash: SampleNoteStatistics(
+                sample_hash=row.sample_hash,
+                distinct_pitch_count=row.distinct_pitch_count,
+                lowest_note=Note(row.lowest_note),
+                highest_note=Note(row.highest_note),
+                strike_count=row.strike_count,
+            )
+            for row in rows
+        }
 
 
 def _row_to_note_event(row: Row[Any]) -> NoteEvent:

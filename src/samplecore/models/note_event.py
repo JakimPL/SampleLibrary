@@ -4,7 +4,7 @@ from pydantic import BaseModel, model_validator
 from trackmod.core.notes.pitch import Note
 
 from samplecore.models.base import FROZEN
-from samplecore.models.scalars import Count, Index
+from samplecore.models.scalars import Count, Index, SampleHash
 
 
 class SampleNoteUsage(BaseModel):
@@ -19,6 +19,29 @@ class SampleNoteUsage(BaseModel):
 
     sounded_note: Note
     event_count: Count
+
+
+class SampleNoteStatistics(BaseModel):
+    """How one sample is played across the catalog: at how many pitches, over what span, how often.
+
+    A waveform carries no pitch of its own, so what a sample is used for shows in the notes the
+    library plays it at. A sample struck at one pitch throughout is used as a fixed sound, and one
+    spread over a wide span is played as an instrument. `strike_count` says how much evidence either
+    reading rests on, since a sample struck twice can show at most two pitches whatever it is.
+    """
+
+    model_config = FROZEN
+
+    sample_hash: SampleHash
+    distinct_pitch_count: Count
+    lowest_note: Note
+    highest_note: Note
+    strike_count: Count
+
+    @property
+    def pitch_span_semitones(self) -> int:
+        """How far apart the lowest and highest notes this sample is played at sit."""
+        return self.highest_note.midi - self.lowest_note.midi
 
 
 class NoteEvent(BaseModel):
