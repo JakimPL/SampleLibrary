@@ -45,7 +45,7 @@ def test_the_identity_codec_returns_exactly_what_it_was_given() -> None:
 def test_the_identity_codec_reports_a_latent_the_size_of_the_grid() -> None:
     geometry = mel_geometry()
 
-    assert IdentityCodec(geometry).latent_size == geometry.band_count * geometry.time_columns
+    assert IdentityCodec(geometry).latent_size == geometry.grid_shape[0] * geometry.grid_shape[1]
 
 
 def test_a_projection_keeps_the_conditioners_untouched() -> None:

@@ -34,8 +34,23 @@ GEOMETRY_CASES = (
 
 
 @pytest.mark.parametrize("case", GEOMETRY_CASES, ids=lambda case: case.name)
-def test_the_grid_shape_pairs_the_band_count_with_the_time_columns(case: GeometryCase) -> None:
-    assert case.geometry.grid_shape == (case.geometry.band_count, case.geometry.time_columns)
+def test_the_grid_shape_pairs_the_analyzed_bands_and_their_headroom_with_the_time_columns(
+    case: GeometryCase,
+) -> None:
+    geometry = case.geometry
+
+    assert geometry.grid_shape == (
+        geometry.band_count + 2 * geometry.shift_headroom_bands,
+        geometry.time_columns,
+    )
+
+
+@pytest.mark.parametrize("case", GEOMETRY_CASES, ids=lambda case: case.name)
+def test_the_headroom_holds_the_largest_translation_the_geometry_allows(case: GeometryCase) -> None:
+    """Alignment moves content by at most this much, so the picture keeps every band it analyzed."""
+    geometry = case.geometry
+
+    assert geometry.shift_headroom_bands == round(geometry.maximum_shift_semitones * geometry.bands_per_semitone)
 
 
 @pytest.mark.parametrize("case", GEOMETRY_CASES, ids=lambda case: case.name)

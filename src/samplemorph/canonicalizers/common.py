@@ -83,29 +83,33 @@ def align_and_describe(
 ) -> tuple[NDArray[np.float64], Conditioners]:
     """Normalize a magnitude grid into a sound image's grid and the conditioners it removed.
 
-    The grid is scaled into ``[0, 1]``, then translated so its strongest band sits at the
-    geometry's reference band. The translation travels out as `translation_semitones`, so the
-    picture describes timbre alone while the conditioners carry where that timbre sat, how long it
-    sounded, and how loud it was.
+    The grid is scaled into ``[0, 1]``, laid inside the geometry's shift headroom, then translated
+    so its strongest band sits at the geometry's reference band. The translation travels out as
+    `translation_semitones`, so the picture describes timbre alone while the conditioners carry
+    where that timbre sat, how long it sounded, and how loud it was. The headroom holds the largest
+    translation the geometry allows, so the picture keeps every band the analysis produced.
     """
     normalized, log_gain = to_normalized_decibels(columns, dynamic_range_db=geometry.dynamic_range_db)
-    maximum_shift = geometry.maximum_shift_semitones * geometry.bands_per_semitone
+    headroom = geometry.shift_headroom_bands
+    padded = np.pad(normalized, ((headroom, headroom), (0, 0)))
     offered_shift = float(geometry.reference_band - dominant_band(normalized))
-    applied_shift = float(np.clip(round(offered_shift), -maximum_shift, maximum_shift))
+    applied_shift = float(np.clip(round(offered_shift), -headroom, headroom))
     conditioners = Conditioners(
         translation_semitones=-applied_shift / geometry.bands_per_semitone,
         log_duration=float(np.log2(frame_count / NOMINAL_WAV_RATE)),
         log_gain=log_gain,
     )
-    return shift_bands(normalized, applied_shift), conditioners
+    return shift_bands(padded, applied_shift), conditioners
 
 
 def restore_columns(
     grid: NDArray[np.float64], *, geometry: Geometry, conditioners: Conditioners
 ) -> NDArray[np.float64]:
     """Undo `align_and_describe`, returning the magnitude grid the conditioners describe."""
+    headroom = geometry.shift_headroom_bands
     unaligned = shift_bands(grid, conditioners.translation_semitones * geometry.bands_per_semitone)
-    return to_magnitudes(unaligned, dynamic_range_db=geometry.dynamic_range_db, log_gain=conditioners.log_gain)
+    analyzed = unaligned[headroom : headroom + geometry.band_count]
+    return to_magnitudes(analyzed, dynamic_range_db=geometry.dynamic_range_db, log_gain=conditioners.log_gain)
 
 
 def frames_for_conditioners(conditioners: Conditioners, *, geometry: Geometry) -> tuple[int, int]:

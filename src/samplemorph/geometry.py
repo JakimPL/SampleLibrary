@@ -23,6 +23,17 @@ DEFAULT_MEL_BAND_COUNT: Final[int] = 128
 DEFAULT_CONSTANT_Q_BINS_PER_OCTAVE: Final[int] = 36
 
 
+def shift_headroom_bands(*, maximum_shift_semitones: float, bands_per_semitone: float) -> int:
+    """How many empty bands a grid carries at each end, so alignment moves content without losing it.
+
+    Alignment translates the whole picture along the frequency axis, and a grid exactly as tall as
+    the analysis range would push whatever passes its edge out of the picture. Reserving the largest
+    shift at both ends keeps every band that entered the grid inside it, whatever pitch a sample sat
+    at -- which matters most for bass material, whose distance from the reference band is greatest.
+    """
+    return int(round(maximum_shift_semitones * bands_per_semitone))
+
+
 class LogFrequencyGeometry(BaseModel):
     """A short-time Fourier magnitude read onto an exactly logarithmic frequency axis.
 
@@ -47,8 +58,14 @@ class LogFrequencyGeometry(BaseModel):
     maximum_shift_semitones: float
 
     @property
+    def shift_headroom_bands(self) -> int:
+        return shift_headroom_bands(
+            maximum_shift_semitones=self.maximum_shift_semitones, bands_per_semitone=self.bands_per_semitone
+        )
+
+    @property
     def grid_shape(self) -> tuple[int, int]:
-        return self.band_count, self.time_columns
+        return self.band_count + 2 * self.shift_headroom_bands, self.time_columns
 
     @property
     def bands_per_semitone(self) -> float:
@@ -90,8 +107,14 @@ class MelGeometry(BaseModel):
     maximum_shift_semitones: float
 
     @property
+    def shift_headroom_bands(self) -> int:
+        return shift_headroom_bands(
+            maximum_shift_semitones=self.maximum_shift_semitones, bands_per_semitone=self.bands_per_semitone
+        )
+
+    @property
     def grid_shape(self) -> tuple[int, int]:
-        return self.band_count, self.time_columns
+        return self.band_count + 2 * self.shift_headroom_bands, self.time_columns
 
     @property
     def band_frequencies(self) -> NDArray[np.float64]:
@@ -146,8 +169,14 @@ class ConstantQGeometry(BaseModel):
     maximum_shift_semitones: float
 
     @property
+    def shift_headroom_bands(self) -> int:
+        return shift_headroom_bands(
+            maximum_shift_semitones=self.maximum_shift_semitones, bands_per_semitone=self.bands_per_semitone
+        )
+
+    @property
     def grid_shape(self) -> tuple[int, int]:
-        return self.band_count, self.time_columns
+        return self.band_count + 2 * self.shift_headroom_bands, self.time_columns
 
     @property
     def bands_per_semitone(self) -> float:
