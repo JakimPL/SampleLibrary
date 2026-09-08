@@ -246,6 +246,11 @@ result, and only promote it (`reduce_and_persist_coordinates` against that exper
 satisfied -- the previously promoted experiment's `sample_cloud_coordinates` stay exactly as they
 were until that deliberate step.
 
+A descriptor of this kind answers what a sample resembles. Producing audio from a point between two
+samples asks for a representation carrying a decoder as well, which is a separate design: the
+research behind it, the measured facts about the corpus it rests on, and the staged plan for the
+`samplemorph` package live under [`morphing/`](morphing/00-handover.md).
+
 ## Sample categorization
 
 `SampleCategory` (`samplecore.models.category`) is a coarse, guessed instrument role -- kick,

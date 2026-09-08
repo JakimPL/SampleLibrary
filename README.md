@@ -48,6 +48,9 @@ runs.
 
 The `Makefile` lists the rest of the pipeline: `make embed`, `make thumbnails` and so on.
 
+Work on generating audio from a point between two samples is documented separately, under
+`docs/morphing/`, starting from `docs/morphing/00-handover.md`.
+
 ## Labeling and rating samples
 
 Open a sample in the app and type what it is; words you have used before are suggested as you type.
