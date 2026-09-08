@@ -1,23 +1,37 @@
 import { requestJson, sendJson } from "./client";
 import type { components } from "./schema";
 
-export type LabelsWritten = components["schemas"]["LabelsWritten"];
+export type AnnotationDecisions = components["schemas"]["AnnotationDecisions"];
+export type AnnotationWritten = components["schemas"]["AnnotationWritten"];
 
-/** How far a labeling reaches: this sample alone, or every near-duplicate grouped with it. */
-export type LabelScope = components["schemas"]["LabelSource"];
+/** How far one gesture reaches: this sample alone, or every near-duplicate grouped with it. */
+export type AnnotationScope = components["schemas"]["AnnotationSource"];
 
-export async function setSampleLabel(sampleHash: string, label: string, scope: LabelScope): Promise<LabelsWritten> {
-    return sendJson<LabelsWritten>(`/curation/labels/${sampleHash}`, { method: "PUT", body: { label, scope } });
-}
+/** What a sample says when nobody has decided anything about it. */
+export const NO_DECISIONS: AnnotationDecisions = { label: null, rating: null, favorite: false };
 
-export async function clearSampleLabel(sampleHash: string, scope: LabelScope): Promise<LabelsWritten> {
-    const query = new URLSearchParams({ scope });
-    return sendJson<LabelsWritten>(`/curation/labels/${sampleHash}?${query.toString()}`, {
-        method: "DELETE",
-        body: null,
+/**
+ * Record the whole state a sample should carry from here on.
+ *
+ * Every decision travels on every write, so anything left empty is a decision undone; a state
+ * saying nothing at all removes the annotation. An emptied label is sent as `null`, blank text
+ * being malformed rather than a way to clear one.
+ */
+export async function setSampleAnnotation(
+    sampleHash: string,
+    decisions: AnnotationDecisions,
+    scope: AnnotationScope,
+): Promise<AnnotationWritten> {
+    return sendJson<AnnotationWritten>(`/curation/annotations/${sampleHash}`, {
+        method: "PUT",
+        body: { ...decisions, scope },
     });
 }
 
+export async function clearSampleAnnotation(sampleHash: string, scope: AnnotationScope): Promise<AnnotationWritten> {
+    return setSampleAnnotation(sampleHash, NO_DECISIONS, scope);
+}
+
 export async function getLabelVocabulary(): Promise<readonly string[]> {
-    return requestJson<readonly string[]>("/curation/labels/vocabulary");
+    return requestJson<readonly string[]>("/curation/annotations/vocabulary");
 }

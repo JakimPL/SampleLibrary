@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
-from samplecore.models.label import SampleLabel
-from samplecore.storage.repositories.sample_label import PostgresSampleLabelRepository
-from sampleextract.labels.cli import main
+from samplecore.models.annotation import SampleAnnotation
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from sampleextract.annotations.cli import main
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
@@ -29,35 +29,35 @@ def _write_config(tmp_path: Path, database_url: str) -> Path:
 @pytest.fixture
 def configured(tmp_path: Path, _database_url: str, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    return tmp_path / "labels.jsonl"
+    return tmp_path / "annotations.jsonl"
 
 
 def test_export_reports_what_it_wrote(
-    connection: Connection, stored_label: SampleLabel, configured: Path, capsys: pytest.CaptureFixture[str]
+    connection: Connection, stored_annotation: SampleAnnotation, configured: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     main(["export", "--path", str(configured)])
 
-    assert "Wrote 1 label(s)" in capsys.readouterr().out
+    assert "Wrote 1 annotation(s)" in capsys.readouterr().out
     assert configured.exists()
 
 
 def test_import_reads_a_file_back_into_the_catalog(
-    connection: Connection, stored_label: SampleLabel, configured: Path, capsys: pytest.CaptureFixture[str]
+    connection: Connection, stored_annotation: SampleAnnotation, configured: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     main(["export", "--path", str(configured)])
-    repository = PostgresSampleLabelRepository(connection)
-    repository.delete_many((stored_label.sample_hash,))
+    repository = PostgresSampleAnnotationRepository(connection)
+    repository.delete_many((stored_annotation.sample_hash,))
     connection.commit()
 
     main(["import", "--path", str(configured)])
 
-    assert "Read 1 label(s)" in capsys.readouterr().out
-    assert repository.get(stored_label.sample_hash) == stored_label
+    assert "Read 1 annotation(s)" in capsys.readouterr().out
+    assert repository.get(stored_annotation.sample_hash) == stored_annotation
 
 
 def test_relink_reports_a_label_it_reattached(
     connection: Connection,
-    stored_label: SampleLabel,
+    stored_annotation: SampleAnnotation,
     rehash_the_labeled_sample: Callable[[], str],
     configured: Path,
     capsys: pytest.CaptureFixture[str],
@@ -71,7 +71,7 @@ def test_relink_reports_a_label_it_reattached(
 
 def test_relink_exits_nonzero_when_a_label_needs_a_person(
     connection: Connection,
-    stored_label: SampleLabel,
+    stored_annotation: SampleAnnotation,
     forget_the_labeled_occurrence: Callable[[], None],
     configured: Path,
 ) -> None:

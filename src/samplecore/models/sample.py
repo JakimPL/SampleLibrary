@@ -8,7 +8,7 @@ from trackmod.schema.scalars import Rate
 from samplecore.models.base import FROZEN
 from samplecore.models.category import SampleCategory
 from samplecore.models.channels import ChannelLayout
-from samplecore.models.scalars import Count, Frames, SampleHash
+from samplecore.models.scalars import Count, Frames, Rating, SampleHash
 from samplecore.waveform import WaveformPeak
 
 
@@ -34,38 +34,48 @@ class Sample(BaseModel):
         return self.frames * self.channels * self.depth.bytes_per_frame
 
 
-class SampleSummary(Sample):
+class DescribedSample(Sample):
+    """A sample as a reader meets it: what to call it, what it is taken to be, and how it sounds.
+
+    ``display_name`` resolves the sample's, possibly conflicting, occurrence names via
+    `samplecore.naming.choose_dominant_name`, and ``category`` resolves the same way via
+    `samplecore.categorization.classify_sample_category`, against those names together with the
+    names of the instruments reaching it. ``hand_label`` is the category a person chose; where it is
+    filled in it is what the sample is, and ``category`` beside it stays the keyword table's own
+    guess. ``rating`` and ``favorite`` carry what that person thought of the sample, which is what
+    makes a collection of their own. ``size_bytes`` re-exposes ``Sample.stored_bytes`` under its own
+    name: a Pydantic field cannot share a name with an inherited plain property without the property
+    silently winning on attribute access. ``dominant_rate_hz`` resolves the sample's, possibly
+    conflicting, occurrence rates via `samplecore.naming.choose_dominant_rate`, and is ``None`` for a
+    sample the catalog holds no occurrence of.
+    """
+
+    display_name: str
+    category: SampleCategory
+    hand_label: str | None
+    rating: Rating | None
+    favorite: bool
+    size_bytes: Count
+    dominant_rate_hz: Rate | None
+
+
+class SampleSummary(DescribedSample):
     """One row of a paginated, occurrence-ranked samples listing.
 
     Ranks samples by identity -- one row per exact content hash -- rather than by equivalence
     class; grouping near-duplicate variants into one row is a distinct future ranking mode, not a
-    hidden variant of this one. `display_name` resolves the sample's, possibly conflicting,
-    occurrence names via `samplecore.naming.choose_dominant_name`. ``size_bytes`` re-exposes
-    ``Sample.stored_bytes`` under its own name: a Pydantic field cannot share a name with an
-    inherited plain property without the property silently winning on attribute access.
-    ``thumbnail`` is ``None`` for a sample whose cached waveform preview has not been computed yet.
-    ``dominant_rate_hz`` resolves the sample's, possibly conflicting, occurrence rates via
-    `samplecore.naming.choose_dominant_rate`, and is ``None`` under that same no-occurrences case.
-    ``equivalence_class_hash`` identifies the group of near-duplicate variants this sample belongs
-    to, resolved from the whole catalog's relation graph, and is ``None`` for a sample with no
-    detected relation. ``equivalence_member_count`` is that class's total size (1 for a sample
-    with no class), independent of how many of its members are present on this page. ``category``
-    resolves the same way ``display_name`` does, via `samplecore.categorization.classify_sample_category`,
-    against the sample's own occurrence names together with the names of the instruments reaching it.
-    ``dominant_note`` is the note the library plays this sample at most often, which with
+    hidden variant of this one. ``thumbnail`` is ``None`` for a sample whose cached waveform preview
+    has not been computed yet. ``equivalence_class_hash`` identifies the group of near-duplicate
+    variants this sample belongs to, resolved from the whole catalog's relation graph, and is
+    ``None`` for a sample with no detected relation. ``equivalence_member_count`` is that class's
+    total size (1 for a sample with no class), independent of how many of its members are present on
+    this page. ``dominant_note`` is the note the library plays this sample at most often, which with
     ``dominant_rate_hz`` gives the pitch a preview should sound at; it is ``None`` for a sample whose
-    modules have not had their patterns read, and for one no pattern plays. ``hand_label`` is the
-    category a person chose for this sample; where it is filled in it is what the sample is, and
-    ``category`` beside it stays the keyword table's own guess.
+    modules have not had their patterns read, and for one no pattern plays.
     """
 
     occurrence_count: Count
-    display_name: str
-    category: SampleCategory
-    hand_label: str | None
-    size_bytes: Count
     thumbnail: tuple[WaveformPeak, ...] | None
-    dominant_rate_hz: Rate | None
     dominant_note: Note | None
     equivalence_class_hash: str | None
     equivalence_member_count: Count

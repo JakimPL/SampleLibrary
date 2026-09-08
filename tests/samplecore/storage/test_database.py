@@ -70,7 +70,7 @@ def test_a_read_only_connection_never_creates_the_schema(fresh_database_url: str
 
 
 def test_hand_labels_get_a_schema_of_their_own(connection: Connection) -> None:
-    assert "sample_label" in set(inspect(connection).get_table_names(schema=CURATION_SCHEMA))
+    assert "sample_annotation" in set(inspect(connection).get_table_names(schema=CURATION_SCHEMA))
 
 
 def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alone(
@@ -85,4 +85,4 @@ def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alo
         connection.close()
 
     assert catalog_tables == set()
-    assert curation_tables == {"sample_label"}
+    assert curation_tables == {"sample_annotation"}

@@ -22,6 +22,8 @@ function buildSample(id: number): SampleSummary {
         display_name: `sample-${String(id)}`,
         category: "uncategorized",
         hand_label: null,
+        rating: null,
+        favorite: false,
         size_bytes: 8192,
         thumbnail: null,
         dominant_rate_hz: null,

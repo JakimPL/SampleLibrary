@@ -8,9 +8,9 @@ from pathlib import Path
 from sqlalchemy import Connection, func, select
 
 from samplecore.hashing import compute_module_hash
+from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
-from samplecore.models.label import LabelSource, SampleLabel
 from samplecore.models.module import Module
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.spectral import SampleSpectralFeature
@@ -24,7 +24,7 @@ from samplecore.storage.repositories.cloud import (
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
-from samplecore.storage.repositories.sample_label import PostgresSampleLabelRepository
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 from sampleextract.discovery import FORMAT_LOADERS
@@ -151,12 +151,14 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, tmp_
     ).fetchone()
     assert occurrence_row is not None
 
-    label_repository = PostgresSampleLabelRepository(connection)
-    label_repository.upsert_many(
+    annotation_repository = PostgresSampleAnnotationRepository(connection)
+    annotation_repository.replace_many(
         (
-            SampleLabel(
+            SampleAnnotation(
                 sample_hash=occurrence_row.sample_hash,
                 label="warm pad",
+                rating=None,
+                favorite=False,
                 occurrence=SampleOccurrence(
                     module_hash=module.hash,
                     instrument_index=occurrence_row.instrument_index,
@@ -164,8 +166,8 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, tmp_
                 ),
                 module_filename=module.filename,
                 sample_name=occurrence_row.name,
-                source=LabelSource.SAMPLE,
-                labeled_at=datetime.now(UTC),
+                source=AnnotationSource.SAMPLE,
+                annotated_at=datetime.now(UTC),
             ),
         )
     )
@@ -175,7 +177,7 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, tmp_
     connection.commit()
 
     assert all(count == 0 for count in _row_counts(connection).values())
-    surviving = label_repository.get(occurrence_row.sample_hash)
+    surviving = annotation_repository.get(occurrence_row.sample_hash)
     assert surviving is not None
     assert surviving.label == "warm pad"
     assert surviving.occurrence.module_hash == module.hash

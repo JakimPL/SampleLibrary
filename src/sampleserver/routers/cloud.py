@@ -5,6 +5,7 @@ from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
 from samplecore.categorization import classify_sample_category
+from samplecore.models.annotation import SampleAnnotation
 from samplecore.models.category import SampleCategory
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.naming import choose_dominant_rate
@@ -13,7 +14,7 @@ from samplecore.storage.repositories.cloud import (
     PostgresModuleCloudCoordinateRepository,
 )
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplecore.storage.repositories.sample_label import PostgresSampleLabelRepository
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from sampleserver.dependencies import get_connection
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
@@ -43,7 +44,7 @@ def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleC
     hashes = [coordinate.sample_hash for coordinate in coordinates]
     names_by_hash, rates_by_hash = repository.names_and_rates_by_hash(hashes)
     instrument_names_by_hash = repository.instrument_names_by_hash(hashes)
-    label_by_hash = PostgresSampleLabelRepository(connection).labels_by_hash(hashes)
+    annotation_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(hashes)
     return tuple(
         SampleCloudPoint(
             sample_hash=coordinate.sample_hash,
@@ -53,7 +54,7 @@ def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleC
             category=classify_sample_category(
                 names_by_hash.get(coordinate.sample_hash, ()) + instrument_names_by_hash.get(coordinate.sample_hash, ())
             ),
-            hand_label=label_by_hash.get(coordinate.sample_hash),
+            hand_label=_label_of(annotation_by_hash.get(coordinate.sample_hash)),
             dominant_rate_hz=choose_dominant_rate(rates_by_hash.get(coordinate.sample_hash, ())),
         )
         for coordinate in coordinates
@@ -68,3 +69,8 @@ def get_module_cloud(connection: Connection = Depends(get_connection)) -> tuple[
     `samplecloud.placeholder_modules`.
     """
     return PostgresModuleCloudCoordinateRepository(connection).list_all()
+
+
+def _label_of(annotation: SampleAnnotation | None) -> str | None:
+    """The wording a person gave this sample, where they gave one."""
+    return annotation.label if annotation is not None else None

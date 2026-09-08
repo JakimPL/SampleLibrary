@@ -7,19 +7,19 @@ import type { SampleDetail } from "../../src/api/samples";
 import { LabelEditor } from "../../src/samples/LabelEditor";
 import { useLabelStore } from "../../src/samples/labelStore";
 
-const { setSampleLabel, clearSampleLabel, getLabelVocabulary } = vi.hoisted(() => ({
-    setSampleLabel: vi.fn(),
-    clearSampleLabel: vi.fn(),
+const { setSampleAnnotation, getLabelVocabulary } = vi.hoisted(() => ({
+    setSampleAnnotation: vi.fn(),
     getLabelVocabulary: vi.fn(),
 }));
 
 vi.mock("../../src/api/curation", async () => {
     const actual = await vi.importActual<typeof CurationApi>("../../src/api/curation");
-    return { ...actual, setSampleLabel, clearSampleLabel, getLabelVocabulary };
+    return { ...actual, setSampleAnnotation, getLabelVocabulary };
 });
 
 const SAMPLE_HASH = "a".repeat(64);
 const OTHER_HASH = "b".repeat(64);
+const NOTHING = { label: null, rating: null, favorite: false };
 
 function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
     return {
@@ -32,6 +32,8 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         display_name: "smp01",
         category: "uncategorized",
         hand_label: null,
+        rating: null,
+        favorite: false,
         dominant_rate_hz: null,
         duration_seconds: 0.1,
         notes_played: [],
@@ -43,20 +45,26 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
 describe("LabelEditor", () => {
     it("saves the wording a person typed for this sample alone", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        setSampleLabel.mockResolvedValue({ label: "warm pad", sample_hashes: [SAMPLE_HASH] });
+        setSampleAnnotation.mockResolvedValue({
+            annotation: { ...NOTHING, label: "warm pad" },
+            sample_hashes: [SAMPLE_HASH],
+        });
         render(<LabelEditor sample={buildSample()} />);
 
         await userEvent.type(screen.getByLabelText("Hand label"), "warm pad");
         await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
         await waitFor(() => {
-            expect(setSampleLabel).toHaveBeenCalledWith(SAMPLE_HASH, "warm pad", "sample");
+            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, label: "warm pad" }, "sample");
         });
     });
 
     it("records what was written so every row showing those samples updates at once", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        setSampleLabel.mockResolvedValue({ label: "snare", sample_hashes: [SAMPLE_HASH, OTHER_HASH] });
+        setSampleAnnotation.mockResolvedValue({
+            annotation: { ...NOTHING, label: "snare" },
+            sample_hashes: [SAMPLE_HASH, OTHER_HASH],
+        });
         render(<LabelEditor sample={buildSample({ equivalence_member_count: 2 })} />);
 
         await userEvent.type(screen.getByLabelText("Hand label"), "snare");
@@ -69,20 +77,30 @@ describe("LabelEditor", () => {
 
     it("reaches a whole group by default, since that is how the listing browses them", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        setSampleLabel.mockResolvedValue({ label: "snare", sample_hashes: [SAMPLE_HASH] });
+        setSampleAnnotation.mockResolvedValue({
+            annotation: { ...NOTHING, label: "snare" },
+            sample_hashes: [SAMPLE_HASH],
+        });
         render(<LabelEditor sample={buildSample({ equivalence_member_count: 3 })} />);
 
         await userEvent.type(screen.getByLabelText("Hand label"), "snare");
         await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
         await waitFor(() => {
-            expect(setSampleLabel).toHaveBeenCalledWith(SAMPLE_HASH, "snare", "equivalence_class");
+            expect(setSampleAnnotation).toHaveBeenCalledWith(
+                SAMPLE_HASH,
+                { ...NOTHING, label: "snare" },
+                "equivalence_class",
+            );
         });
     });
 
     it("narrows to the one sample when the group box is unticked", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        setSampleLabel.mockResolvedValue({ label: "snare", sample_hashes: [SAMPLE_HASH] });
+        setSampleAnnotation.mockResolvedValue({
+            annotation: { ...NOTHING, label: "snare" },
+            sample_hashes: [SAMPLE_HASH],
+        });
         render(<LabelEditor sample={buildSample({ equivalence_member_count: 3 })} />);
 
         await userEvent.click(screen.getByRole("checkbox"));
@@ -90,7 +108,7 @@ describe("LabelEditor", () => {
         await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
         await waitFor(() => {
-            expect(setSampleLabel).toHaveBeenCalledWith(SAMPLE_HASH, "snare", "sample");
+            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, label: "snare" }, "sample");
         });
     });
 
@@ -117,7 +135,7 @@ describe("LabelEditor", () => {
 
     it("takes a decision back through the same scope", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        clearSampleLabel.mockResolvedValue({ label: null, sample_hashes: [SAMPLE_HASH] });
+        setSampleAnnotation.mockResolvedValue({ annotation: null, sample_hashes: [SAMPLE_HASH] });
         render(<LabelEditor sample={buildSample({ hand_label: "warm pad" })} />);
 
         await userEvent.click(screen.getByRole("button", { name: "Clear" }));
@@ -129,7 +147,7 @@ describe("LabelEditor", () => {
 
     it("reports a refused write rather than pretending it landed", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        setSampleLabel.mockRejectedValue(new Error("request failed with status 404"));
+        setSampleAnnotation.mockRejectedValue(new Error("request failed with status 404"));
         render(<LabelEditor sample={buildSample()} />);
 
         await userEvent.type(screen.getByLabelText("Hand label"), "warm pad");

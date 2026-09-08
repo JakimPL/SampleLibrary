@@ -277,7 +277,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/curation/labels/{sample_hash}": {
+    readonly "/curation/annotations/{sample_hash}": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -286,36 +286,34 @@ export interface paths {
         };
         readonly get?: never;
         /**
-         * Set Label
-         * @description Record what a person decided this sample is, optionally across its near-duplicates.
+         * Set Annotation
+         * @description Record what a person decided about this sample, optionally across its near-duplicates.
+         *
+         *     The whole state arrives at once and replaces whatever the sample said before. A state recording
+         *     nothing removes the annotation, which is how a person takes a decision back.
          *
          *     A scope of ``equivalence_class`` reaches every sample the detector groups with this one, which
-         *     is the same group the listing collapses under one row, and each member is written as its own
-         *     label so the group boundary moving later leaves those decisions intact. A sample with no
-         *     detected relation forms a group of one, so both scopes behave identically for it.
+         *     is the same group the listing collapses under one row, and each member is written as its own row
+         *     so the group boundary moving later leaves those decisions intact. A sample with no detected
+         *     relation forms a group of one, so both scopes behave identically for it. A member the catalog
+         *     holds no occurrence for has nowhere to anchor, so its annotation is removed rather than left
+         *     saying something the group no longer says.
          *
-         *     The catalog is read through the read-only connection and only the label is written, which keeps
-         *     the one write this application performs to the schema it owns.
+         *     The catalog is read through the read-only connection and only the annotation is written, which
+         *     keeps the one write this application performs to the schema it owns.
          *
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly put: operations["set_label_curation_labels__sample_hash__put"];
+        readonly put: operations["set_annotation_curation_annotations__sample_hash__put"];
         readonly post?: never;
-        /**
-         * Clear Label
-         * @description Take back a decision, over the same scope that could have made it.
-         *
-         *     Raises:
-         *         HTTPException: 404 when no sample is cataloged under this hash.
-         */
-        readonly delete: operations["clear_label_curation_labels__sample_hash__delete"];
+        readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/curation/labels/vocabulary": {
+    readonly "/curation/annotations/vocabulary": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -326,7 +324,7 @@ export interface paths {
          * Get Label Vocabulary
          * @description Every label already in use, most-used first, for offering a person their own wording back.
          */
-        readonly get: operations["get_label_vocabulary_curation_labels_vocabulary_get"];
+        readonly get: operations["get_label_vocabulary_curation_annotations_vocabulary_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -339,6 +337,59 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AnnotationDecisions
+         * @description The three things a person can decide about a sample.
+         *
+         *     The label says what the sample is, as free text: it records what a listener actually decided,
+         *     ahead of any vocabulary being settled, so it stays unconstrained by `SampleCategory`'s fourteen
+         *     guessed roles and wins wherever it exists. The rating and the favorite mark say what the
+         *     listener thought of it, which is what turns browsing the library into a collection of a person's
+         *     own.
+         *
+         *     Any one of them may stand alone, and all three may be empty: an empty set of decisions is how a
+         *     person takes back everything they had said about a sample.
+         */
+        readonly AnnotationDecisions: {
+            /** Label */
+            readonly label: string | null;
+            /** Rating */
+            readonly rating: number | null;
+            /** Favorite */
+            readonly favorite: boolean;
+        };
+        /**
+         * AnnotationRequest
+         * @description The whole state a person wants a sample, or its whole group, to carry from here on.
+         *
+         *     Every decision is sent on every write, so what a person left empty is what the sample ends up
+         *     saying nothing about. An emptied label arrives as ``null``: blank text is malformed rather than
+         *     a way to clear one, which keeps a slip of the keyboard from silently discarding a decision.
+         */
+        readonly AnnotationRequest: {
+            /** Label */
+            readonly label: string | null;
+            /** Rating */
+            readonly rating: number | null;
+            /** Favorite */
+            readonly favorite: boolean;
+            readonly scope: components["schemas"]["AnnotationSource"];
+        };
+        /**
+         * AnnotationSource
+         * @description Whether an annotation was made for one sample or applied to a whole equivalence class.
+         * @enum {string}
+         */
+        readonly AnnotationSource: "sample" | "equivalence_class";
+        /**
+         * AnnotationWritten
+         * @description What every reached sample now says, so a caller updates exactly the rows that changed.
+         */
+        readonly AnnotationWritten: {
+            readonly annotation: components["schemas"]["AnnotationDecisions"] | null;
+            /** Sample Hashes */
+            readonly sample_hashes: readonly string[];
+        };
         /**
          * BitDepth
          * @description How many bits one stored frame of PCM occupies.
@@ -388,31 +439,6 @@ export interface components {
             /** Filename */
             readonly filename?: string | null;
             readonly vibrato?: components["schemas"]["Vibrato"] | null;
-        };
-        /**
-         * LabelRequest
-         * @description What a person decided a sample is, and how far that decision should reach.
-         */
-        readonly LabelRequest: {
-            /** Label */
-            readonly label: string;
-            readonly scope: components["schemas"]["LabelSource"];
-        };
-        /**
-         * LabelSource
-         * @description Whether a hand label was chosen for one sample or applied to a whole equivalence class.
-         * @enum {string}
-         */
-        readonly LabelSource: "sample" | "equivalence_class";
-        /**
-         * LabelsWritten
-         * @description Which samples a labeling reached, so a caller updates exactly the rows that changed.
-         */
-        readonly LabelsWritten: {
-            /** Label */
-            readonly label: string | null;
-            /** Sample Hashes */
-            readonly sample_hashes: readonly string[];
         };
         /**
          * LibraryStats
@@ -725,9 +751,6 @@ export interface components {
         /**
          * SampleDetail
          * @description A sample together with every module occurrence that references it, and the notes it is played at.
-         *
-         *     ``hand_label`` is the category a person chose for this sample, and ``category`` beside it stays
-         *     the keyword table's guess, so a reader sees both what was decided and what was inferred.
          */
         readonly SampleDetail: {
             /** Hash */
@@ -736,17 +759,21 @@ export interface components {
             readonly channels: components["schemas"]["ChannelLayout"];
             /** Frames */
             readonly frames: number;
-            /** Occurrences */
-            readonly occurrences: readonly components["schemas"]["SampleOccurrenceDetail"][];
-            /** Size Bytes */
-            readonly size_bytes: number;
             /** Display Name */
             readonly display_name: string;
             readonly category: components["schemas"]["SampleCategory"];
             /** Hand Label */
             readonly hand_label: string | null;
+            /** Rating */
+            readonly rating: number | null;
+            /** Favorite */
+            readonly favorite: boolean;
+            /** Size Bytes */
+            readonly size_bytes: number;
             /** Dominant Rate Hz */
             readonly dominant_rate_hz: number | null;
+            /** Occurrences */
+            readonly occurrences: readonly components["schemas"]["SampleOccurrenceDetail"][];
             /** Duration Seconds */
             readonly duration_seconds: number;
             /** Notes Played */
@@ -861,24 +888,14 @@ export interface components {
          *
          *     Ranks samples by identity -- one row per exact content hash -- rather than by equivalence
          *     class; grouping near-duplicate variants into one row is a distinct future ranking mode, not a
-         *     hidden variant of this one. `display_name` resolves the sample's, possibly conflicting,
-         *     occurrence names via `samplecore.naming.choose_dominant_name`. ``size_bytes`` re-exposes
-         *     ``Sample.stored_bytes`` under its own name: a Pydantic field cannot share a name with an
-         *     inherited plain property without the property silently winning on attribute access.
-         *     ``thumbnail`` is ``None`` for a sample whose cached waveform preview has not been computed yet.
-         *     ``dominant_rate_hz`` resolves the sample's, possibly conflicting, occurrence rates via
-         *     `samplecore.naming.choose_dominant_rate`, and is ``None`` under that same no-occurrences case.
-         *     ``equivalence_class_hash`` identifies the group of near-duplicate variants this sample belongs
-         *     to, resolved from the whole catalog's relation graph, and is ``None`` for a sample with no
-         *     detected relation. ``equivalence_member_count`` is that class's total size (1 for a sample
-         *     with no class), independent of how many of its members are present on this page. ``category``
-         *     resolves the same way ``display_name`` does, via `samplecore.categorization.classify_sample_category`,
-         *     against the sample's own occurrence names together with the names of the instruments reaching it.
-         *     ``dominant_note`` is the note the library plays this sample at most often, which with
+         *     hidden variant of this one. ``thumbnail`` is ``None`` for a sample whose cached waveform preview
+         *     has not been computed yet. ``equivalence_class_hash`` identifies the group of near-duplicate
+         *     variants this sample belongs to, resolved from the whole catalog's relation graph, and is
+         *     ``None`` for a sample with no detected relation. ``equivalence_member_count`` is that class's
+         *     total size (1 for a sample with no class), independent of how many of its members are present on
+         *     this page. ``dominant_note`` is the note the library plays this sample at most often, which with
          *     ``dominant_rate_hz`` gives the pitch a preview should sound at; it is ``None`` for a sample whose
-         *     modules have not had their patterns read, and for one no pattern plays. ``hand_label`` is the
-         *     category a person chose for this sample; where it is filled in it is what the sample is, and
-         *     ``category`` beside it stays the keyword table's own guess.
+         *     modules have not had their patterns read, and for one no pattern plays.
          */
         readonly SampleSummary: {
             /** Hash */
@@ -887,19 +904,23 @@ export interface components {
             readonly channels: components["schemas"]["ChannelLayout"];
             /** Frames */
             readonly frames: number;
-            /** Occurrence Count */
-            readonly occurrence_count: number;
             /** Display Name */
             readonly display_name: string;
             readonly category: components["schemas"]["SampleCategory"];
             /** Hand Label */
             readonly hand_label: string | null;
+            /** Rating */
+            readonly rating: number | null;
+            /** Favorite */
+            readonly favorite: boolean;
             /** Size Bytes */
             readonly size_bytes: number;
-            /** Thumbnail */
-            readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
             /** Dominant Rate Hz */
             readonly dominant_rate_hz: number | null;
+            /** Occurrence Count */
+            readonly occurrence_count: number;
+            /** Thumbnail */
+            readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
             readonly dominant_note: components["schemas"]["Note"] | null;
             /** Equivalence Class Hash */
             readonly equivalence_class_hash: string | null;
@@ -1375,7 +1396,7 @@ export interface operations {
             };
         };
     };
-    readonly set_label_curation_labels__sample_hash__put: {
+    readonly set_annotation_curation_annotations__sample_hash__put: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1386,7 +1407,7 @@ export interface operations {
         };
         readonly requestBody: {
             readonly content: {
-                readonly "application/json": components["schemas"]["LabelRequest"];
+                readonly "application/json": components["schemas"]["AnnotationRequest"];
             };
         };
         readonly responses: {
@@ -1396,7 +1417,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": components["schemas"]["LabelsWritten"];
+                    readonly "application/json": components["schemas"]["AnnotationWritten"];
                 };
             };
             /** @description Validation Error */
@@ -1410,40 +1431,7 @@ export interface operations {
             };
         };
     };
-    readonly clear_label_curation_labels__sample_hash__delete: {
-        readonly parameters: {
-            readonly query?: {
-                readonly scope?: components["schemas"]["LabelSource"];
-            };
-            readonly header?: never;
-            readonly path: {
-                readonly sample_hash: string;
-            };
-            readonly cookie?: never;
-        };
-        readonly requestBody?: never;
-        readonly responses: {
-            /** @description Successful Response */
-            readonly 200: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["LabelsWritten"];
-                };
-            };
-            /** @description Validation Error */
-            readonly 422: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    readonly get_label_vocabulary_curation_labels_vocabulary_get: {
+    readonly get_label_vocabulary_curation_annotations_vocabulary_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;

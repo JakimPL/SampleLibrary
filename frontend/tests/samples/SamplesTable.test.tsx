@@ -15,6 +15,8 @@ function buildSample(
         frames: 4096,
         category: "uncategorized",
         hand_label: null,
+        rating: null,
+        favorite: false,
         size_bytes: 8192,
         thumbnail: null,
         dominant_rate_hz: null,

@@ -12,6 +12,8 @@ function buildSample(): SampleSummary {
         display_name: "kick",
         category: "kick",
         hand_label: null,
+        rating: null,
+        favorite: false,
         occurrence_count: 1,
         depth: 16,
         channels: 1,

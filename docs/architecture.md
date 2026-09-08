@@ -12,7 +12,7 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 | Package | Owns | Depends on |
 |---|---|---|
-| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleLabel`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the anchoring rule that keeps a hand label attached to its sample, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
+| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the anchoring rule that keeps a hand label attached to its sample, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
 | `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each), the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors, UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
 | `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own sample labels. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
@@ -76,7 +76,7 @@ statement about the catalog rather than about what is worth browsing.
 
 ## Hand-curated work
 
-`curation.sample_label` holds the category a person chose for a sample, and it is the one thing in
+`curation.sample_annotation` holds the category a person chose for a sample, and it is the one thing in
 this library no pass can rebuild. It therefore sits on a `MetaData` of its own, in a Postgres schema
 of its own (`samplecore.storage.curation`), apart from the single `MetaData` every other table
 belongs to. Both places this project empties a database — `scripts/reset_library.py` and the test
@@ -90,13 +90,13 @@ full reset.
 Because a sample's hash follows from how this project hashes audio, a label keyed on the hash alone
 would be lost the moment that changes. Every label therefore also records the module slot it was
 chosen from — module hash, filename, instrument index, sample slot, and the occurrence's name — and
-`samplelabels relink` reads those slots back to recover whatever sample sits there now. The label is
+`sampleannotations relink` reads those slots back to recover whatever sample sits there now. The label is
 stored per sample even when it was applied to a whole equivalence class at once, since a class is
 identified by a content hash over its members and gains a different identity the moment its
 membership changes; `source` records which gesture applied it, so a decision made about one sample
 stays distinguishable from one inherited from its near-duplicates.
 
-`samplelabels export` writes every label to JSONL as the copy that outlives the database, and
+`sampleannotations export` writes every label to JSONL as the copy that outlives the database, and
 `import` merges a file back without clearing anything.
 
 Local, machine-specific configuration (the module source directory, the library root, the catalog's

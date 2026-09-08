@@ -1,6 +1,6 @@
 import { type ReactElement, useCallback, useState } from "react";
 
-import { clearSampleLabel, getLabelVocabulary, type LabelsWritten, setSampleLabel } from "../api/curation";
+import { type AnnotationWritten, getLabelVocabulary, setSampleAnnotation } from "../api/curation";
 import type { SampleDetail } from "../api/samples";
 import { describeError } from "../shared/fetchState";
 import { invalidateRequest } from "../shared/requestCache";
@@ -43,12 +43,12 @@ export function LabelEditor({ sample }: LabelEditorProps): ReactElement {
     const [message, setMessage] = useState<string | null>(null);
 
     const run = useCallback(
-        (operation: Promise<LabelsWritten>): void => {
+        (operation: Promise<AnnotationWritten>): void => {
             setIsSaving(true);
             setMessage(null);
             operation
                 .then((written) => {
-                    applyLabel(written.sample_hashes, written.label);
+                    applyLabel(written.sample_hashes, written.annotation?.label ?? null);
                     forgetCachedSamples(written.sample_hashes);
                     invalidateRequest(VOCABULARY_CACHE_KEY);
                 })
@@ -63,6 +63,7 @@ export function LabelEditor({ sample }: LabelEditorProps): ReactElement {
     );
 
     const scope = reachesGroup ? "equivalence_class" : "sample";
+    const decisions = { rating: sample.rating, favorite: sample.favorite };
     const trimmed = text.trim();
 
     return (
@@ -86,7 +87,7 @@ export function LabelEditor({ sample }: LabelEditorProps): ReactElement {
                 type="button"
                 disabled={isSaving || trimmed === ""}
                 onClick={() => {
-                    run(setSampleLabel(sample.hash, trimmed, scope));
+                    run(setSampleAnnotation(sample.hash, { ...decisions, label: trimmed }, scope));
                 }}
             >
                 Save
@@ -96,7 +97,7 @@ export function LabelEditor({ sample }: LabelEditorProps): ReactElement {
                 disabled={isSaving || currentLabel === null}
                 onClick={() => {
                     setText("");
-                    run(clearSampleLabel(sample.hash, scope));
+                    run(setSampleAnnotation(sample.hash, { ...decisions, label: null }, scope));
                 }}
             >
                 Clear

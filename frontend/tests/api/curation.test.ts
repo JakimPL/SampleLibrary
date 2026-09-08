@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { clearSampleLabel, getLabelVocabulary, setSampleLabel } from "../../src/api/curation";
+import { clearSampleAnnotation, getLabelVocabulary, setSampleAnnotation } from "../../src/api/curation";
 
 const SAMPLE_HASH = "a".repeat(64);
+const NOTHING = { label: null, rating: null, favorite: false };
 
 function stubFetch(payload: unknown): ReturnType<typeof vi.fn> {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(payload) });
@@ -14,45 +15,52 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
-describe("setSampleLabel", () => {
-    it("sends the chosen wording and scope as a PUT", async () => {
-        const fetchMock = stubFetch({ label: "warm pad", sample_hashes: [SAMPLE_HASH] });
+describe("setSampleAnnotation", () => {
+    it("sends every decision and the scope as a PUT", async () => {
+        const fetchMock = stubFetch({ annotation: null, sample_hashes: [SAMPLE_HASH] });
 
-        await setSampleLabel(SAMPLE_HASH, "warm pad", "sample");
+        await setSampleAnnotation(SAMPLE_HASH, { label: "warm pad", rating: 4, favorite: true }, "sample");
 
-        expect(fetchMock).toHaveBeenCalledWith(`/curation/labels/${SAMPLE_HASH}`, {
+        expect(fetchMock).toHaveBeenCalledWith(`/curation/annotations/${SAMPLE_HASH}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ label: "warm pad", scope: "sample" }),
+            body: JSON.stringify({ label: "warm pad", rating: 4, favorite: true, scope: "sample" }),
         });
     });
 
     it("carries a group scope through to the server", async () => {
-        const fetchMock = stubFetch({ label: "snare", sample_hashes: [SAMPLE_HASH] });
+        const fetchMock = stubFetch({ annotation: null, sample_hashes: [SAMPLE_HASH] });
 
-        await setSampleLabel(SAMPLE_HASH, "snare", "equivalence_class");
+        await setSampleAnnotation(SAMPLE_HASH, { ...NOTHING, label: "snare" }, "equivalence_class");
 
         expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
-            body: JSON.stringify({ label: "snare", scope: "equivalence_class" }),
+            body: JSON.stringify({ label: "snare", rating: null, favorite: false, scope: "equivalence_class" }),
         });
     });
 
-    it("reports back which samples the labeling reached", async () => {
-        stubFetch({ label: "snare", sample_hashes: [SAMPLE_HASH, "b".repeat(64)] });
+    it("reports back which samples the gesture reached", async () => {
+        stubFetch({
+            annotation: { label: "snare", rating: null, favorite: false },
+            sample_hashes: [SAMPLE_HASH, "b".repeat(64)],
+        });
 
-        const written = await setSampleLabel(SAMPLE_HASH, "snare", "equivalence_class");
+        const written = await setSampleAnnotation(SAMPLE_HASH, { ...NOTHING, label: "snare" }, "equivalence_class");
 
         expect(written.sample_hashes).toHaveLength(2);
     });
 });
 
-describe("clearSampleLabel", () => {
-    it("sends a DELETE naming the scope, with no body", async () => {
-        const fetchMock = stubFetch({ label: null, sample_hashes: [SAMPLE_HASH] });
+describe("clearSampleAnnotation", () => {
+    it("sends a state recording nothing, which is what takes every decision back", async () => {
+        const fetchMock = stubFetch({ annotation: null, sample_hashes: [SAMPLE_HASH] });
 
-        await clearSampleLabel(SAMPLE_HASH, "sample");
+        await clearSampleAnnotation(SAMPLE_HASH, "sample");
 
-        expect(fetchMock).toHaveBeenCalledWith(`/curation/labels/${SAMPLE_HASH}?scope=sample`, { method: "DELETE" });
+        expect(fetchMock).toHaveBeenCalledWith(`/curation/annotations/${SAMPLE_HASH}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ label: null, rating: null, favorite: false, scope: "sample" }),
+        });
     });
 });
 
@@ -62,6 +70,6 @@ describe("getLabelVocabulary", () => {
 
         await getLabelVocabulary();
 
-        expect(fetchMock).toHaveBeenCalledWith("/curation/labels/vocabulary");
+        expect(fetchMock).toHaveBeenCalledWith("/curation/annotations/vocabulary");
     });
 });
