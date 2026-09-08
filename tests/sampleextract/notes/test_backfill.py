@@ -7,12 +7,13 @@ from sqlalchemy import Connection
 from trackmod.core.notes.pitch import Note
 
 from samplecore.config import LibraryConfig
-from samplecore.sharding import WHOLE
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.module_instrument import PostgresModuleInstrumentRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
+from sampleextract.discovery import discover_modules
 from sampleextract.notes.backfill import extract_missing_notes
 from sampleextract.notes.persistence import clear_module_notes
+from sampleextract.progress import ProgressSink
 from sampleextract.run import run_extraction
 
 
@@ -25,7 +26,11 @@ def config(tmp_path: Path) -> LibraryConfig:
 
 @pytest.fixture
 def cataloged_corpus(
-    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, it_module_bytes: bytes
+    connection: Connection,
+    config: LibraryConfig,
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+    progress: ProgressSink,
 ) -> LibraryConfig:
     """Two modules already ingested, with the notes a run of ingest recorded cleared away again.
 
@@ -34,7 +39,7 @@ def cataloged_corpus(
     """
     (config.module_source_directory / "song.xm").write_bytes(xm_module_bytes)
     (config.module_source_directory / "song.it").write_bytes(it_module_bytes)
-    run_extraction(config, connection, shard=WHOLE)
+    run_extraction(config, connection, discover_modules(config.module_source_directory), progress=progress)
     for module in PostgresModuleRepository(connection).list_all():
         clear_module_notes(connection, module_id=module.id)
 
@@ -132,11 +137,11 @@ def test_a_file_the_catalog_never_ingested_is_passed_over(
 
 
 def test_ingest_records_a_new_module_s_notes_without_a_backfill_pass(
-    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, played_note: Note
+    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, played_note: Note, progress: ProgressSink
 ) -> None:
     (config.module_source_directory / "song.xm").write_bytes(xm_module_bytes)
 
-    summary = run_extraction(config, connection, shard=WHOLE)
+    summary = run_extraction(config, connection, discover_modules(config.module_source_directory), progress=progress)
 
     events = PostgresNoteEventRepository(connection).list_for_module(summary.ingested[0].id)
     assert [event.sounded_note for event in events] == [played_note]

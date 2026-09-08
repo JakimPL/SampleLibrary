@@ -68,7 +68,7 @@ def test_main_exits_with_an_error_status_and_lists_every_failure(
     assert "corrupt.xm" in capsys.readouterr().out
 
 
-def test_main_takes_only_its_own_share_when_a_shard_is_named(
+def test_main_ingests_every_module_the_source_directory_holds(
     connection: Connection,
     _database_url: str,
     tmp_path: Path,
@@ -83,14 +83,6 @@ def test_main_takes_only_its_own_share_when_a_shard_is_named(
     (source / "first.xm").write_bytes(xm_module_bytes)
     (source / "second.it").write_bytes(it_module_bytes)
 
-    main(["--shard", "0/2"])
+    main([])
 
-    assert "Shard 0/2 discovered 1 modules" in capsys.readouterr().out
-
-
-def test_main_refuses_a_shard_naming_no_real_share() -> None:
-    """A share outside its own split is a typo worth stopping for, not a run that quietly does nothing."""
-    with pytest.raises(SystemExit) as exit_info:
-        main(["--shard", "4/4"])
-
-    assert exit_info.value.code == 2
+    assert "Discovered 2 modules: 2 ingested" in capsys.readouterr().out

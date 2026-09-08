@@ -150,3 +150,19 @@ def transposing_it_module_bytes() -> bytes:
         playback=Playback(speed=6, tempo=125),
     )
     return ITModule.from_song(song, compliance=Compliance.EXTENDED).to_bytes()
+
+
+class CountingProgress:
+    """A ProgressSink for tests, keeping the count a pass reports while drawing nothing."""
+
+    def __init__(self) -> None:
+        self.advanced = 0
+
+    def advance(self, count: int) -> None:
+        self.advanced += count
+
+
+@pytest.fixture
+def progress() -> CountingProgress:
+    """The progress sink every extraction test passes, in place of a bar on a terminal."""
+    return CountingProgress()
