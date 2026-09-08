@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -107,8 +106,3 @@ def _codec_arrays(codec: SampleCodec) -> dict[str, np.ndarray]:
             }
         case unknown:
             raise ValueError(f"no writer is registered for a {type(unknown).__name__}")
-
-
-def describe_json(description: MorphModelDescription) -> str:
-    """The description as indented JSON, for a manifest a person reads."""
-    return json.dumps(json.loads(description.model_dump_json()), indent=2)

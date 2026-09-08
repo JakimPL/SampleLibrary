@@ -25,7 +25,11 @@ class RenderKind(StrEnum):
 
 @dataclass(frozen=True)
 class RenderedFile:
-    """One written audio file, together with the rate it is meant to be played at."""
+    """One file in a listening set: where it goes, what it is, and the rate it is heard at.
+
+    The same description names a file before it is written and records it afterwards, so a summary
+    of a listening set says exactly what was asked for.
+    """
 
     path: Path
     kind: RenderKind
@@ -33,9 +37,7 @@ class RenderedFile:
     weight: float | None
 
 
-def write_rendering(
-    path: Path, waveform: NDArray[np.float64], *, rate_hz: float, kind: RenderKind, weight: float | None
-) -> RenderedFile:
+def write_rendering(file: RenderedFile, waveform: NDArray[np.float64]) -> RenderedFile:
     """Write one waveform at the rate it is heard at, and report what was written.
 
     The stored library writes every object under one nominal rate, which is a container convention
@@ -44,9 +46,9 @@ def write_rendering(
     only worth running when each file states the rate it is meant to sound at, so that is what goes
     into the header here.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    soundfile.write(path, _with_headroom(waveform), int(round(rate_hz)), subtype=RENDERED_SUBTYPE)
-    return RenderedFile(path=path, kind=kind, rate_hz=rate_hz, weight=weight)
+    file.path.parent.mkdir(parents=True, exist_ok=True)
+    soundfile.write(file.path, _with_headroom(waveform), int(round(file.rate_hz)), subtype=RENDERED_SUBTYPE)
+    return file
 
 
 def _with_headroom(waveform: NDArray[np.float64]) -> NDArray[np.float64]:

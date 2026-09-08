@@ -13,7 +13,6 @@ from samplemorph.model_store import (
     PRINCIPAL_COMPONENT_CODEC_NAME,
     MorphModel,
     MorphModelDescription,
-    describe_json,
     load_model,
     model_path,
     save_model,
@@ -105,10 +104,3 @@ def test_reading_a_model_naming_an_unknown_codec_says_so(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="no reader is registered"):
         load_model(path)
-
-
-def test_a_description_renders_as_readable_json() -> None:
-    rendered = describe_json(_description(PRINCIPAL_COMPONENT_CODEC_NAME, latent_size=LATENT_SIZE))
-
-    assert '"codec": "principal_components"' in rendered
-    assert '"canonicalizer": "mel"' in rendered

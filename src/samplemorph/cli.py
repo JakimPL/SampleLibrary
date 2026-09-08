@@ -22,12 +22,11 @@ from samplemorph.model_store import (
     PRINCIPAL_COMPONENT_CODEC_NAME,
     MorphModel,
     MorphModelDescription,
-    describe_json,
     load_model,
     model_path,
     save_model,
 )
-from samplemorph.pipeline import encode_sample, render_listening_set
+from samplemorph.pipeline import MorphRoute, encode_sample, listening_set_manifest, render_listening_set
 from samplemorph.registries import (
     CANONICALIZER_REGISTRY,
     DEFAULT_CANONICALIZER_NAME,
@@ -128,13 +127,15 @@ def _render(connection: Connection, config: LibraryConfig, arguments: argparse.N
     summary = render_listening_set(
         first,
         second,
-        canonicalizer=canonicalizer,
-        codec=codec,
-        morpher=MORPHER_REGISTRY[arguments.morpher](),
-        vocoder=VOCODER_REGISTRY[arguments.vocoder](),
+        route=MorphRoute(
+            canonicalizer=canonicalizer,
+            codec=codec,
+            vocoder=VOCODER_REGISTRY[arguments.vocoder](),
+            morpher=MORPHER_REGISTRY[arguments.morpher](),
+        ),
         output_directory=output_directory,
     )
-    (output_directory / MANIFEST_NAME).write_text(describe_json(model.description))
+    (output_directory / MANIFEST_NAME).write_text(listening_set_manifest(model.description, summary))
 
     _logger.info(
         "Wrote %d files for %s against %s, %d of them morphs, into %s.",

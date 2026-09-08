@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -15,6 +16,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.codecs import SampleCodec
 from samplemorph.images import SampleLatent
+from samplemorph.model_store import MorphModelDescription
 from samplemorph.morphers import Morpher, MorphWeights
 from samplemorph.rendering import RenderedFile, RenderKind, rate_between, write_rendering
 from samplemorph.vocoders import Vocoder
@@ -30,6 +32,20 @@ class EncodedSample:
     latent: SampleLatent
     mono: NDArray[np.float64]
     rate_hz: float
+
+
+@dataclass(frozen=True)
+class MorphRoute:
+    """The route a sample takes from a latent back to audio, and the morpher that lands between two.
+
+    A listening set is only readable when every file on it took the same route, so the four pieces
+    that decide what is heard travel together and one set names one of these.
+    """
+
+    canonicalizer: Canonicalizer
+    codec: SampleCodec
+    vocoder: Vocoder
+    morpher: Morpher
 
 
 @dataclass(frozen=True)
@@ -75,10 +91,7 @@ def render_listening_set(
     first: EncodedSample,
     second: EncodedSample,
     *,
-    canonicalizer: Canonicalizer,
-    codec: SampleCodec,
-    morpher: Morpher,
-    vocoder: Vocoder,
+    route: MorphRoute,
     output_directory: Path,
     weights: tuple[float, ...] = DEFAULT_MORPH_WEIGHTS,
 ) -> MorphRenderSummary:
@@ -90,77 +103,87 @@ def render_listening_set(
     """
     files = [
         write_rendering(
-            output_directory / "original_first.wav",
+            RenderedFile(
+                path=output_directory / "original_first.wav",
+                kind=RenderKind.ORIGINAL,
+                rate_hz=first.rate_hz,
+                weight=0.0,
+            ),
             first.mono,
-            rate_hz=first.rate_hz,
-            kind=RenderKind.ORIGINAL,
-            weight=0.0,
         ),
         _render_decoded(
-            output_directory / "reconstruction_first.wav",
+            RenderedFile(
+                path=output_directory / "reconstruction_first.wav",
+                kind=RenderKind.RECONSTRUCTION,
+                rate_hz=first.rate_hz,
+                weight=0.0,
+            ),
             first.latent,
-            canonicalizer=canonicalizer,
-            codec=codec,
-            vocoder=vocoder,
-            rate_hz=first.rate_hz,
-            kind=RenderKind.RECONSTRUCTION,
-            weight=0.0,
+            route=route,
         ),
     ]
     for weight in weights:
         files.append(
             _render_decoded(
-                output_directory / f"morph_{int(round(weight * 100)):03d}.wav",
-                morpher.morph(first.latent, second.latent, weights=MorphWeights.uniform(weight)),
-                canonicalizer=canonicalizer,
-                codec=codec,
-                vocoder=vocoder,
-                rate_hz=rate_between(first.rate_hz, second.rate_hz, weight),
-                kind=RenderKind.MORPH,
-                weight=weight,
+                RenderedFile(
+                    path=output_directory / f"morph_{int(round(weight * 100)):03d}.wav",
+                    kind=RenderKind.MORPH,
+                    rate_hz=rate_between(first.rate_hz, second.rate_hz, weight),
+                    weight=weight,
+                ),
+                route.morpher.morph(first.latent, second.latent, weights=MorphWeights.uniform(weight)),
+                route=route,
             )
         )
     files.extend(
         [
             _render_decoded(
-                output_directory / "reconstruction_second.wav",
+                RenderedFile(
+                    path=output_directory / "reconstruction_second.wav",
+                    kind=RenderKind.RECONSTRUCTION,
+                    rate_hz=second.rate_hz,
+                    weight=1.0,
+                ),
                 second.latent,
-                canonicalizer=canonicalizer,
-                codec=codec,
-                vocoder=vocoder,
-                rate_hz=second.rate_hz,
-                kind=RenderKind.RECONSTRUCTION,
-                weight=1.0,
+                route=route,
             ),
             write_rendering(
-                output_directory / "original_second.wav",
+                RenderedFile(
+                    path=output_directory / "original_second.wav",
+                    kind=RenderKind.ORIGINAL,
+                    rate_hz=second.rate_hz,
+                    weight=1.0,
+                ),
                 second.mono,
-                rate_hz=second.rate_hz,
-                kind=RenderKind.ORIGINAL,
-                weight=1.0,
             ),
         ]
     )
     return MorphRenderSummary(first_hash=first.sample.hash, second_hash=second.sample.hash, files=tuple(files))
 
 
-def decode_to_audio(
-    latent: SampleLatent, *, canonicalizer: Canonicalizer, codec: SampleCodec, vocoder: Vocoder
-) -> NDArray[np.float64]:
+def decode_to_audio(latent: SampleLatent, *, route: MorphRoute) -> NDArray[np.float64]:
     """Carry a latent back to frames: decode it to an image, restore it, and estimate its phase."""
-    return vocoder.synthesize(canonicalizer.restore(codec.decode(latent)))
+    return route.vocoder.synthesize(route.canonicalizer.restore(route.codec.decode(latent)))
 
 
-def _render_decoded(
-    path: Path,
-    latent: SampleLatent,
-    *,
-    canonicalizer: Canonicalizer,
-    codec: SampleCodec,
-    vocoder: Vocoder,
-    rate_hz: float,
-    kind: RenderKind,
-    weight: float | None,
-) -> RenderedFile:
-    waveform = decode_to_audio(latent, canonicalizer=canonicalizer, codec=codec, vocoder=vocoder)
-    return write_rendering(path, waveform, rate_hz=rate_hz, kind=kind, weight=weight)
+def _render_decoded(file: RenderedFile, latent: SampleLatent, *, route: MorphRoute) -> RenderedFile:
+    return write_rendering(file, decode_to_audio(latent, route=route))
+
+
+def listening_set_manifest(description: MorphModelDescription, summary: MorphRenderSummary) -> str:
+    """What a listening set is, as indented JSON written beside the audio.
+
+    A set is judged by ear days after it was written, so the manifest names the two samples it runs
+    between and the rate each file states, which is what it takes to render the same comparison
+    again or to look either sample up in the catalog.
+    """
+    manifest = {
+        "model": json.loads(description.model_dump_json()),
+        "first_hash": summary.first_hash,
+        "second_hash": summary.second_hash,
+        "files": [
+            {"name": file.path.name, "kind": str(file.kind), "rate_hz": file.rate_hz, "weight": file.weight}
+            for file in summary.files
+        ],
+    }
+    return json.dumps(manifest, indent=2)

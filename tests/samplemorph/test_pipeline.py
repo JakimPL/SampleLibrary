@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,10 +23,18 @@ from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplemorph.codecs.identity import IdentityCodec
+from samplemorph.geometry import mel_geometry
+from samplemorph.model_store import PRINCIPAL_COMPONENT_CODEC_NAME, MorphModelDescription
 from samplemorph.morphers.linear import LinearMorpher
-from samplemorph.pipeline import encode_sample, render_listening_set
+from samplemorph.pipeline import (
+    MorphRenderSummary,
+    MorphRoute,
+    encode_sample,
+    listening_set_manifest,
+    render_listening_set,
+)
 from samplemorph.registries import CANONICALIZER_REGISTRY
-from samplemorph.rendering import RenderKind, rate_between, write_rendering
+from samplemorph.rendering import RenderedFile, RenderKind, rate_between, write_rendering
 from samplemorph.vocoders.griffin_lim import GriffinLimVocoder
 from tests.samplemorph.conftest import harmonic_tone
 
@@ -89,10 +98,12 @@ def test_a_rendered_listening_set_writes_both_ends_and_every_morph(connection: C
     summary = render_listening_set(
         first,
         second,
-        canonicalizer=canonicalizer,
-        codec=codec,
-        morpher=LinearMorpher(),
-        vocoder=GriffinLimVocoder(iterations=FAST_ITERATIONS),
+        route=MorphRoute(
+            canonicalizer=canonicalizer,
+            codec=codec,
+            vocoder=GriffinLimVocoder(iterations=FAST_ITERATIONS),
+            morpher=LinearMorpher(),
+        ),
         output_directory=tmp_path / "render",
     )
 
@@ -115,10 +126,12 @@ def test_a_rendered_file_states_the_rate_its_content_is_heard_at(connection: Con
     summary = render_listening_set(
         first,
         second,
-        canonicalizer=canonicalizer,
-        codec=codec,
-        morpher=LinearMorpher(),
-        vocoder=GriffinLimVocoder(iterations=FAST_ITERATIONS),
+        route=MorphRoute(
+            canonicalizer=canonicalizer,
+            codec=codec,
+            vocoder=GriffinLimVocoder(iterations=FAST_ITERATIONS),
+            morpher=LinearMorpher(),
+        ),
         output_directory=tmp_path / "render",
     )
 
@@ -159,7 +172,9 @@ def test_the_rate_between_two_samples_runs_through_their_pitches() -> None:
 def test_a_rendered_file_carries_headroom_below_full_scale(tmp_path: Path) -> None:
     loud = np.linspace(-4.0, 4.0, 512)
 
-    written = write_rendering(tmp_path / "loud.wav", loud, rate_hz=FIRST_RATE_HZ, kind=RenderKind.ORIGINAL, weight=None)
+    written = write_rendering(
+        RenderedFile(path=tmp_path / "loud.wav", kind=RenderKind.ORIGINAL, rate_hz=FIRST_RATE_HZ, weight=None), loud
+    )
 
     frames, _ = soundfile.read(written.path)
     assert float(np.abs(frames).max()) < 1.0
@@ -168,3 +183,28 @@ def test_a_rendered_file_carries_headroom_below_full_scale(tmp_path: Path) -> No
 def test_note_matches_the_reference_key_the_library_counts_from() -> None:
     """Tracker C-5 is the key an occurrence's rate is stated at, which the render path assumes."""
     assert Note(60).midi == 72
+
+
+def test_a_listening_set_manifest_names_the_samples_it_runs_between() -> None:
+    """A set is judged by ear days later, so it has to say which samples produced it."""
+    description = MorphModelDescription(
+        codec=PRINCIPAL_COMPONENT_CODEC_NAME,
+        canonicalizer="mel",
+        geometry=mel_geometry(),
+        latent_size=4,
+        fitted_sample_count=12,
+        random_seed=0,
+        explained_variance=0.9,
+    )
+    summary = MorphRenderSummary(
+        first_hash="a" * 64,
+        second_hash="b" * 64,
+        files=(RenderedFile(path=Path("morph_050.wav"), kind=RenderKind.MORPH, rate_hz=8363.0, weight=0.5),),
+    )
+
+    manifest = json.loads(listening_set_manifest(description, summary))
+
+    assert manifest["first_hash"] == "a" * 64
+    assert manifest["second_hash"] == "b" * 64
+    assert manifest["model"]["canonicalizer"] == "mel"
+    assert manifest["files"] == [{"name": "morph_050.wav", "kind": "morph", "rate_hz": 8363.0, "weight": 0.5}]
