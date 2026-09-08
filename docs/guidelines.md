@@ -62,6 +62,7 @@
 1. Documentation should explain the intention of a class/function and context of usage.
 1. State functionality in positive terms. Describe what a class or function *does* — not what it avoids, omits, skips, differs from, or no longer does. Reframe every negation ("does not", "rather than", "instead of", "without", "never", "cannot", "no longer") into the behavior that actually happens. Do not contrast with rejected alternatives as justification; the positive statement carries the meaning.
 1. Negative phrasing is allowed only where the condition itself is the contract: exception triggers in `Raises:` clauses, precondition/postcondition bounds (prefer "must be at least X" over "cannot be less than X" where natural), and documented edge-case returns. Outside these concrete cases, negative descriptions are information noise and must be removed.
+1. The research documents under [`morphing/`](morphing/00-handover.md) are exempt from the two rules above, by deliberate choice. Their subject is which approaches were rejected and why, and positive phrasing cannot carry that. The exemption covers those files alone; leave them as they are when sweeping prose elsewhere.
 1. If a function makes a non-obvious decision, the logic should be explained with a justification for arbitrary choices in docstrings, not code comments. Frame the justification positively (what the choice achieves), not as the failure it sidesteps.
 1. Avoid comments and docstrings that restate code.
 1. Use clear names instead of explanatory comments.

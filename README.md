@@ -53,6 +53,9 @@ Extraction takes a couple of hours over a large collection. To split it, run `ma
 SHARD=0/4` through `SHARD=3/4` in four terminals, or on four machines pointed at one database:
 each takes a quarter of the files, and between them they cover the collection once.
 
+Work on generating audio from a point between two samples is documented separately, under
+`docs/morphing/`, starting from `docs/morphing/00-handover.md`.
+
 ### Frontend
 
 `make install` also installs the frontend's npm dependencies. With the API running (`make
