@@ -20,15 +20,17 @@ from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
-from samplecore.storage.repositories.module import DuckDBModuleRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository, SampleRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository, SampleRepository
 from samplecore.storage.repositories.sample_properties import (
-    DuckDBSamplePropertiesRepository,
+    PostgresSamplePropertiesRepository,
     SamplePropertiesRepository,
 )
-from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository, SampleThumbnailRepository
+from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, SampleThumbnailRepository
 from samplecore.waveform import DEFAULT_THUMBNAIL_BUCKET_COUNT, compute_waveform_peaks
+from sampleextract.notes.persistence import persist_module_notes
 from sampleextract.rendering import render_properties, render_sample_pcm
+from sampleextract.voices import addressable_voices
 
 
 @dataclass(frozen=True)
@@ -65,20 +67,22 @@ def ingest_module(
     this always inserts, and a second call for the same hash raises on the table's own UNIQUE
     constraint rather than silently doing nothing. Idempotent re-runs are ``run_extraction``'s
     concern, not this function's. A sample occurrence shorter than ``minimum_sample_frames`` is
-    never catalogued at all -- too short to hold the kind of recorded audio this library's
+    never cataloged at all -- too short to hold the kind of recorded audio this library's
     equivalence detection and browsing are built around, the same reasoning that already excludes
     an empty placeholder slot.
     """
-    module_repository = DuckDBModuleRepository(connection)
+    module_repository = PostgresModuleRepository(connection)
     context = _IngestContext(
-        sample_repository=DuckDBSampleRepository(connection),
-        properties_repository=DuckDBSamplePropertiesRepository(connection),
-        thumbnail_repository=DuckDBSampleThumbnailRepository(connection),
+        sample_repository=PostgresSampleRepository(connection),
+        properties_repository=PostgresSamplePropertiesRepository(connection),
+        thumbnail_repository=PostgresSampleThumbnailRepository(connection),
         library_root=library_root,
         tracker=tracker,
         module_hash=module_hash,
         minimum_sample_frames=minimum_sample_frames,
     )
+
+    voices = addressable_voices(song)
 
     with start_batch(connection):
         module = Module(
@@ -89,14 +93,21 @@ def ingest_module(
             title=song.name,
             channel_count=song.channels,
             pattern_count=len(song.patterns),
-            instrument_count=len(song.instruments),
-            sample_count=len(song.samples),
+            instrument_count=len(voices.instruments),
+            sample_count=len(voices.samples),
             file_size=file_size,
             ingested_at=ingested_at,
         )
         module_repository.insert(module)
-        for instrument_index, unit in enumerate(held(song)):
+        for instrument_index, unit in enumerate(held(voices)):
             _ingest_instrument_unit(context, instrument_index=instrument_index, unit=unit)
+
+        persist_module_notes(
+            connection,
+            song=song,
+            module_id=module.id,
+            extracted_at=ingested_at,
+        )
 
     return module
 
@@ -104,7 +115,7 @@ def ingest_module(
 def _ingest_instrument_unit(context: _IngestContext, *, instrument_index: int, unit: InstrumentUnit) -> None:
     for sample_slot, trackmod_sample in enumerate(unit.samples):
         if trackmod_sample.frames < context.minimum_sample_frames:
-            continue  # a placeholder slot or a too-short sample has nothing worth cataloguing
+            continue  # a placeholder slot or a too-short sample has nothing worth cataloging
 
         _ingest_sample_occurrence(
             context, instrument_index=instrument_index, sample_slot=sample_slot, trackmod_sample=trackmod_sample

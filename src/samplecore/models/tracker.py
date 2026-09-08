@@ -9,3 +9,5 @@ class TrackerFormat(StrEnum):
 
     XM = "xm"
     IT = "it"
+    MOD = "mod"
+    S3M = "s3m"

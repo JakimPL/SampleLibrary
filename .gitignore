@@ -24,11 +24,12 @@ notebooks/__marimo__/
 dev-library/
 
 # Regenerable data: never commit
-*.duckdb
-*.duckdb.wal
-embeddings/
-*.parquet
 *.npz
+
+# Exported hand annotations: irreplaceable, and yours to keep somewhere of your own choosing.
+# The older name stays listed so an export made before the rename is never offered up for commit.
+annotations.jsonl
+labels.jsonl
 
 # Frontend
 frontend/node_modules/
@@ -44,3 +45,7 @@ Thumbs.db
 
 # Claude Code session runtime state
 .claude/scheduled_tasks.lock
+
+# Local server log from a detached dev run
+.uvicorn.log
+.samplenotes.log

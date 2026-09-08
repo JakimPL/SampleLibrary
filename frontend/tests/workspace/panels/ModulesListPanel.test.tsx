@@ -53,7 +53,7 @@ describe("ModulesListPanel", () => {
         renderPanel();
 
         await waitFor(() => {
-            expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/abc");
+            expect(screen.getByRole("link", { name: /A Song/ })).toHaveAttribute("href", "/modules/abc");
         });
         expect(screen.getByText("song.xm")).toBeInTheDocument();
         expect(screen.getByText("4.0 KiB")).toBeInTheDocument();

@@ -20,8 +20,8 @@ function FocusedSampleDetail({ sampleHash }: FocusedSampleDetailProps): ReactEle
         return <ErrorNotice message={state.message} />;
     }
 
-    const { sample, relations } = state.data;
-    return <SampleDetailView sample={sample} relations={relations} />;
+    const { sample, relations, similar } = state.data;
+    return <SampleDetailView sample={sample} relations={relations} similar={similar} />;
 }
 
 export function SampleDetailPanel(): ReactElement {

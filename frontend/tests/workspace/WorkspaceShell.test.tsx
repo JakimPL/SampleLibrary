@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -25,17 +25,23 @@ function renderShellAt(initialPath: string): ReturnType<typeof render> {
     );
 }
 
+/**
+ * Every panel's own tab title, read from dockview's tab markup specifically -- a plain text query
+ * would also match unrelated same-named controls a panel renders inside its own body, such as the
+ * Cloud panel's Samples/Modules tab buttons.
+ */
+function panelTabTitles(): string[] {
+    return Array.from(document.querySelectorAll(".dv-default-tab-content")).map((element) => element.textContent);
+}
+
 describe("WorkspaceShell", () => {
     it("mounts every default panel", () => {
         renderShellAt("/");
 
-        expect(screen.getByText("Modules")).toBeInTheDocument();
-        expect(screen.getByText("Samples")).toBeInTheDocument();
-        expect(screen.getByText("Cloud")).toBeInTheDocument();
-        expect(screen.getByText("Waveform")).toBeInTheDocument();
-        expect(screen.getByText("Module Detail")).toBeInTheDocument();
-        expect(screen.getByText("Sample Detail")).toBeInTheDocument();
-        expect(screen.getByText("Stats")).toBeInTheDocument();
+        const titles = panelTabTitles();
+        for (const title of ["Modules", "Samples", "Cloud", "Waveform", "Module Detail", "Sample Detail", "Stats"]) {
+            expect(titles).toContain(title);
+        }
     });
 
     it("seeds the focused module from a deep-linked route without requiring a click", async () => {
@@ -58,6 +64,26 @@ describe("WorkspaceShell", () => {
 
         await waitFor(() => {
             expect(useSelectionStore.getState().focusedModuleHash).toBe("abc");
+        });
+    });
+
+    it("renders the theme picker in the toolbar", () => {
+        renderShellAt("/");
+
+        expect(screen.getByLabelText("Theme")).toBeInTheDocument();
+    });
+
+    it("lets a closed panel be reopened through the Add panel menu", async () => {
+        renderShellAt("/");
+        expect(panelTabTitles()).toContain("Stats");
+
+        fireEvent.click(screen.getByRole("button", { name: "Close Stats" }));
+        expect(panelTabTitles()).not.toContain("Stats");
+
+        fireEvent.click(await screen.findByRole("button", { name: "Stats" }));
+
+        await waitFor(() => {
+            expect(panelTabTitles()).toContain("Stats");
         });
     });
 });

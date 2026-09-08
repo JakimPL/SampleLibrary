@@ -2,15 +2,75 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import Connection
+from trackmod.schema.scalars import Rate
 
-from samplecore.models.cloud import SampleCloudCoordinate
-from samplecore.storage.repositories.cloud import DuckDBCloudCoordinateRepository
+from samplecore.categorization import classify_sample_category
+from samplecore.models.annotation import SampleAnnotation
+from samplecore.models.category import SampleCategory
+from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
+from samplecore.naming import choose_dominant_rate
+from samplecore.storage.repositories.cloud import (
+    PostgresCloudCoordinateRepository,
+    PostgresModuleCloudCoordinateRepository,
+)
+from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from sampleserver.dependencies import get_connection
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
 
 
+class SampleCloudPoint(SampleCloudCoordinate):
+    """A SampleCloudCoordinate together with what a viewer needs to color and hear the point.
+
+    ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
+    sample's own occurrence names together with the names of the instruments reaching it -- rather
+    than stored alongside the coordinate itself. ``dominant_rate_hz`` travels with the point so
+    clicking one plays it at a real tracker rate; it is ``None`` for a sample with no occurrences.
+    ``hand_label`` carries what a person decided this sample is, for a viewer inspecting a point;
+    the cloud keeps coloring by ``category``, whose fourteen roles hold a fixed hue each.
+    """
+
+    category: SampleCategory
+    hand_label: str | None
+    dominant_rate_hz: Rate | None
+
+
 @router.get("")
-def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleCloudCoordinate, ...]:
+def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleCloudPoint, ...]:
     """Every sample's position in the library's 2D embedding space, as of the latest embedding run."""
-    return DuckDBCloudCoordinateRepository(connection).list_all()
+    coordinates = PostgresCloudCoordinateRepository(connection).list_all()
+    repository = PostgresSampleRepository(connection)
+    hashes = [coordinate.sample_hash for coordinate in coordinates]
+    names_by_hash, rates_by_hash = repository.names_and_rates_by_hash(hashes)
+    instrument_names_by_hash = repository.instrument_names_by_hash(hashes)
+    annotation_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(hashes)
+    return tuple(
+        SampleCloudPoint(
+            sample_hash=coordinate.sample_hash,
+            x=coordinate.x,
+            y=coordinate.y,
+            computed_at=coordinate.computed_at,
+            category=classify_sample_category(
+                names_by_hash.get(coordinate.sample_hash, ()) + instrument_names_by_hash.get(coordinate.sample_hash, ())
+            ),
+            hand_label=_label_of(annotation_by_hash.get(coordinate.sample_hash)),
+            dominant_rate_hz=choose_dominant_rate(rates_by_hash.get(coordinate.sample_hash, ())),
+        )
+        for coordinate in coordinates
+    )
+
+
+@router.get("/modules")
+def get_module_cloud(connection: Connection = Depends(get_connection)) -> tuple[ModuleCloudCoordinate, ...]:
+    """Every module's placeholder position in the library's 2D embedding space.
+
+    Placeholder until a spectral-distance-based per-module embedding replaces it -- see
+    `samplecloud.placeholder_modules`.
+    """
+    return PostgresModuleCloudCoordinateRepository(connection).list_all()
+
+
+def _label_of(annotation: SampleAnnotation | None) -> str | None:
+    """The wording a person gave this sample, where they gave one."""
+    return annotation.label if annotation is not None else None

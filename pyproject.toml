@@ -7,9 +7,8 @@ requires-python = ">=3.12"
 authors = [{ name = "Jakim" }]
 
 dependencies = [
-    "duckdb>=1.4",
-    "duckdb-sqlalchemy>=1.5",
     "numpy>=2.1",
+    "psycopg[binary]>=3.2",
     "pydantic>=2.13.4",
     "pytz>=2025.2",
     "scipy>=1.16",
@@ -27,7 +26,10 @@ cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9"]
 sampleextract = "sampleextract.cli:main"
 sampleequivalence = "sampleextract.equivalence.cli:main"
 samplethumbnail = "sampleextract.thumbnail_cli:main"
+samplenotes = "sampleextract.notes.cli:main"
+sampleannotations = "sampleextract.annotations.cli:main"
 samplecloud = "samplecloud.cli:main"
+samplecloud-modules-placeholder = "samplecloud.placeholder_modules:main"
 sampleserver-schema = "sampleserver.openapi_export:main"
 
 [tool.uv.sources]
@@ -36,6 +38,7 @@ trackmod = { path = "trackmod", editable = true }
 [dependency-groups]
 dev = [
     "black==26.5.1",
+    "codespell==2.4.3",
     "isort==8.0.1",
     "mypy==2.1.0",
     "pylint==4.0.6",

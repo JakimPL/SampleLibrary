@@ -23,7 +23,7 @@ MAX_TRAILING_TRIM_FRAMES: Final[int] = 4410
 
 
 def gain_variant_candidate_pairs(samples: Sequence[Sample]) -> tuple[tuple[Sample, Sample], ...]:
-    """Every pair of catalogued samples that could be the same content at a different gain, depth, or both.
+    """Every pair of cataloged samples that could be the same content at a different gain, depth, or both.
 
     Two samples can only be related this way when they share the same channel layout and a frame
     count within MAX_TRAILING_TRIM_FRAMES of each other -- neither an amplitude change nor a depth
@@ -46,12 +46,12 @@ def gain_variant_candidate_pairs(samples: Sequence[Sample]) -> tuple[tuple[Sampl
 def resampled_candidate_pairs(
     samples: Sequence[Sample], fingerprints: Mapping[str, NDArray[np.float64]]
 ) -> tuple[tuple[Sample, Sample], ...]:
-    """Every pair of catalogued samples plausibly the same content at two different sample rates.
+    """Every pair of cataloged samples plausibly the same content at two different sample rates.
 
     A brute-force scan over every pair of samples is not viable at real library scale -- even
     after the ratio and minimum-length bounds below, a catalog of a few thousand samples still
     leaves millions of candidates, each expensive to score fully. Candidates are instead found via
-    a spatial nearest-neighbour search over each sample's coarse fingerprint (fingerprint.py):
+    a spatial nearest-neighbor search over each sample's coarse fingerprint (fingerprint.py):
     genuinely unrelated content only very rarely lands within MINIMUM_FINGERPRINT_COSINE_SIMILARITY
     of another sample's fingerprint, so this narrows the search to a tractable set without
     meaningfully changing which pairs the full scorer in scoring.py ultimately sees. The ratio and

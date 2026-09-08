@@ -3,7 +3,10 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+import { INITIAL_ANNOTATION_STATE, useAnnotationStore } from "../src/samples/annotationStore";
 import { clearRequestCache } from "../src/shared/requestCache";
+import { DEFAULT_THEME_PREFERENCE } from "../src/theme/themeOptions";
+import { useThemeStore } from "../src/theme/themeStore";
 import { INITIAL_SELECTION_STATE, useSelectionStore } from "../src/workspace/selectionStore";
 
 afterEach(() => {
@@ -16,10 +19,32 @@ afterEach(() => {
     useSelectionStore.setState(INITIAL_SELECTION_STATE);
 });
 
+// themeStore is likewise a module-level singleton, and every test that renders WorkspaceShell
+// touches it through ThemeMenu; reset both the store and the DOM attribute it drives directly
+// (not through setPreference) so this cleanup never re-writes the localStorage entry the hook
+// below is about to clear anyway.
+afterEach(() => {
+    useThemeStore.setState({ preference: DEFAULT_THEME_PREFERENCE });
+    delete document.documentElement.dataset.theme;
+});
+
 // requestCache is likewise a module-level singleton; without a reset, a cache key reused across
 // test files would silently seed a later test's fetch with an earlier test's cached result.
 afterEach(() => {
     clearRequestCache();
+});
+
+// annotationStore holds what this session has decided, module-level like the stores above, so a
+// decision made by one test would otherwise decide what a later test's badge renders.
+afterEach(() => {
+    useAnnotationStore.setState(INITIAL_ANNOTATION_STATE);
+});
+
+// jsdom's localStorage persists across tests in the same file; without clearing it, a test that
+// exercises the shell's own layout persistence (closing/reopening a panel) would leak a saved
+// layout into every test that mounts WorkspaceShell afterwards.
+afterEach(() => {
+    localStorage.clear();
 });
 
 // jsdom has no real canvas renderer; components must already treat a null 2D context as normal
@@ -47,6 +72,16 @@ class ResizeObserverStub implements ResizeObserver {
 
 vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 
+// jsdom does not implement matchMedia either, which useThemeSignal calls to notice a live OS
+// light/dark flip; a stub with working add/removeEventListener is enough, since no test here
+// evaluates a real media query against jsdom's viewport.
+vi.stubGlobal("matchMedia", (media: string) => ({
+    matches: false,
+    media,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+}));
+
 // jsdom never computes real layout, so every element's offsetWidth/offsetHeight reads 0. The
 // virtualized list panels measure their scroll container this way on mount, before the
 // ResizeObserver stub above could ever report a real size, so a fixed nonzero measurement is
@@ -60,4 +95,20 @@ Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
 Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
     get: () => STUBBED_ELEMENT_EXTENT_PX,
+});
+
+// jsdom's getBoundingClientRect always reads an all-zero rect. recharts' ResponsiveContainer reads
+// it once synchronously on mount to size its chart, before its ResizeObserver-driven updates could
+// ever take over (the stub above is a no-op), so a real chart panel would otherwise measure zero
+// and render nothing.
+vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    width: STUBBED_ELEMENT_EXTENT_PX,
+    height: STUBBED_ELEMENT_EXTENT_PX,
+    top: 0,
+    right: STUBBED_ELEMENT_EXTENT_PX,
+    bottom: STUBBED_ELEMENT_EXTENT_PX,
+    left: 0,
+    toJSON: () => ({}),
 });

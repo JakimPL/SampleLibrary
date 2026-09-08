@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
 import { useWaveformPlayer, type WaveformPlayer } from "../../src/samples/useWaveformPlayer";
+import { useThemeStore } from "../../src/theme/themeStore";
 
 const { instances, createMock } = vi.hoisted(() => {
     class FakeWaveSurfer {
@@ -13,6 +14,7 @@ const { instances, createMock } = vi.hoisted(() => {
         readonly pause = vi.fn();
         readonly setTime = vi.fn();
         readonly setPlaybackRate = vi.fn();
+        readonly setOptions = vi.fn();
         readonly destroy = vi.fn();
 
         constructor(options: unknown) {
@@ -115,5 +117,30 @@ describe("useWaveformPlayer", () => {
 
         expect(firstInstance.destroy).toHaveBeenCalled();
         expect(createMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("creates the instance with theme-driven wave, progress, and cursor colors", () => {
+        render(<Harness audioUrl="/samples/abc/audio" rateHz={8363} />);
+
+        const options = createMock.mock.calls[0]?.[0] as {
+            waveColor?: string;
+            progressColor?: string;
+            cursorColor?: string;
+        };
+        expect(options.waveColor).toBeTruthy();
+        expect(options.progressColor).toBeTruthy();
+        expect(options.cursorColor).toBeTruthy();
+    });
+
+    it("re-applies colors through setOptions when the theme preference changes", () => {
+        render(<Harness audioUrl="/samples/abc/audio" rateHz={8363} />);
+        const instance = latestInstance();
+        instance.setOptions.mockClear();
+
+        act(() => {
+            useThemeStore.getState().setPreference("openmpt");
+        });
+
+        expect(instance.setOptions).toHaveBeenCalled();
     });
 });

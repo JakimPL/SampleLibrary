@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+import threading
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -11,6 +14,10 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
+
+WRITER_COUNT = 4
+
+StrPath = str | os.PathLike[str]
 
 
 def _sample_pcm(depth: BitDepth, channels: ChannelLayout, pcm: np.ndarray) -> SamplePCM:
@@ -89,3 +96,60 @@ def test_reading_a_sample_that_was_never_written_raises(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError):
         audio_store.read(tmp_path, sample)
+
+
+def test_a_sample_appears_at_its_own_path_only_once_it_is_whole(tmp_path: Path) -> None:
+    """A reader either finds a complete sample or finds nothing, never a half-written one.
+
+    Watches the move that puts the object in place: that it happens at all is what says the bytes
+    were staged elsewhere first, and that the destination is absent until then is what says no
+    reader could have opened a partial file.
+    """
+    pcm = np.linspace(-1.0, 0.999, 4096, dtype=np.float64).reshape(-1, 1)
+    sample_pcm = _sample_pcm(BitDepth.SIXTEEN, ChannelLayout.MONO, pcm)
+    destination = audio_store.object_path(tmp_path, sample_pcm.sample.hash)
+    moves: list[bool] = []
+    original_replace = os.replace
+
+    def watch_replace(source: StrPath, target: StrPath) -> None:
+        moves.append(destination.exists())
+        original_replace(source, target)
+
+    with mock.patch.object(audio_store.os, "replace", watch_replace):
+        audio_store.write(tmp_path, sample_pcm)
+
+    assert moves == [False]
+    assert audio_store.read(tmp_path, sample_pcm.sample).sample.hash == sample_pcm.sample.hash
+
+
+def test_two_writers_reaching_the_same_sample_leave_it_readable(tmp_path: Path) -> None:
+    """One sample recurs across many modules, so parallel extraction reaches the same hash at once."""
+    pcm = np.linspace(-1.0, 0.999, 8192, dtype=np.float64).reshape(-1, 1)
+    sample_pcm = _sample_pcm(BitDepth.SIXTEEN, ChannelLayout.MONO, pcm)
+    audio_store.object_path(tmp_path, sample_pcm.sample.hash).parent.mkdir(parents=True, exist_ok=True)
+    ready = threading.Barrier(WRITER_COUNT)
+
+    def write_once() -> None:
+        ready.wait()
+        audio_store.write(tmp_path, sample_pcm)
+
+    writers = [threading.Thread(target=write_once) for _ in range(WRITER_COUNT)]
+    for writer in writers:
+        writer.start()
+    for writer in writers:
+        writer.join()
+
+    assert audio_store.read(tmp_path, sample_pcm.sample).sample.hash == sample_pcm.sample.hash
+
+
+def test_a_leftover_partial_file_is_never_mistaken_for_a_stored_sample(tmp_path: Path) -> None:
+    """What a killed run leaves behind is ignorable, rather than a truncated object trusted forever."""
+    pcm = np.zeros((8, 1), dtype=np.float64)
+    sample_pcm = _sample_pcm(BitDepth.SIXTEEN, ChannelLayout.MONO, pcm)
+    destination = audio_store.object_path(tmp_path, sample_pcm.sample.hash)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    (destination.parent / "tmp12345.partial").write_bytes(b"half a wav")
+
+    audio_store.write(tmp_path, sample_pcm)
+
+    assert audio_store.read(tmp_path, sample_pcm.sample).sample.hash == sample_pcm.sample.hash

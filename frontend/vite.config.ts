@@ -1,7 +1,9 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-const BACKEND_DEV_URL = "http://127.0.0.1:8000";
+// Overridable so a dev server can point at a second backend instance (e.g. one serving
+// dev-library/config.toml) without disturbing the default that talks to the real one.
+const BACKEND_DEV_URL = process.env.VITE_BACKEND_DEV_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
     plugins: [react()],

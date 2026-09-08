@@ -20,7 +20,7 @@ class SampleThumbnailRepository(Protocol):
     def get_many(self, sample_hashes: list[str]) -> dict[str, SampleThumbnail]: ...
 
 
-class DuckDBSampleThumbnailRepository:
+class PostgresSampleThumbnailRepository:
     """A SampleThumbnailRepository backed by the catalog's ``sample_thumbnail`` table.
 
     ``upsert`` replaces a sample's thumbnail outright: a resolution change or a re-render always

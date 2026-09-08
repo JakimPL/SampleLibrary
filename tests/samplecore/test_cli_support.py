@@ -39,14 +39,19 @@ def test_load_config_or_exit_returns_the_loaded_configuration(tmp_path: Path, mo
     config_path.write_text(
         f"[library]\n"
         f'module_source_directory = "{module_source_directory.as_posix()}"\n'
-        f'library_root = "{library_root.as_posix()}"\n',
+        f'library_root = "{library_root.as_posix()}"\n'
+        f'database_url = "postgresql+psycopg://user:pass@host/db"\n',
         encoding="utf-8",
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
 
     config = load_config_or_exit()
 
-    assert config == LibraryConfig(module_source_directory=module_source_directory, library_root=library_root)
+    assert config == LibraryConfig(
+        module_source_directory=module_source_directory,
+        library_root=library_root,
+        database_url="postgresql+psycopg://user:pass@host/db",
+    )
 
 
 def test_load_config_or_exit_reports_a_missing_config_file_and_exits(
@@ -70,7 +75,8 @@ def test_bootstrap_cli_configures_console_encoding_and_returns_the_loaded_config
     config_path.write_text(
         f"[library]\n"
         f'module_source_directory = "{module_source_directory.as_posix()}"\n'
-        f'library_root = "{library_root.as_posix()}"\n',
+        f'library_root = "{library_root.as_posix()}"\n'
+        f'database_url = "postgresql+psycopg://user:pass@host/db"\n',
         encoding="utf-8",
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
@@ -81,5 +87,9 @@ def test_bootstrap_cli_configures_console_encoding_and_returns_the_loaded_config
     print("Moduły", file=narrow_stdout)
     narrow_stdout.flush()
 
-    assert config == LibraryConfig(module_source_directory=module_source_directory, library_root=library_root)
+    assert config == LibraryConfig(
+        module_source_directory=module_source_directory,
+        library_root=library_root,
+        database_url="postgresql+psycopg://user:pass@host/db",
+    )
     assert b"Modu" in narrow_stdout.buffer.getvalue()

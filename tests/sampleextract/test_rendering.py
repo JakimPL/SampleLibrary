@@ -8,7 +8,14 @@ from trackmod.core.samples.vibrato import Vibrato as TrackModVibrato
 from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.models.channels import ChannelLayout
-from samplecore.models.sample_properties import ITSampleProperties, SampleOccurrence, Vibrato, XMSampleProperties
+from samplecore.models.sample_properties import (
+    ITSampleProperties,
+    MODSampleProperties,
+    S3MSampleProperties,
+    SampleOccurrence,
+    Vibrato,
+    XMSampleProperties,
+)
 from samplecore.models.tracker import TrackerFormat
 from sampleextract.rendering import render_properties, render_sample_pcm
 
@@ -95,3 +102,29 @@ def test_render_properties_carries_it_specific_fields_through() -> None:
     assert properties.sustain_loop == Loop(begin=0, end=8, mode=LoopMode.PING_PONG)
     assert properties.filename == "KICK.WAV"
     assert properties.vibrato == Vibrato(speed=1, depth=2, rate=3, waveform=0)
+
+
+def test_render_properties_carries_mod_fields_through() -> None:
+    trackmod_sample = TrackModSample(name="chip", pcm=probe_waveform(8, seed=4), rate=SAMPLE_RATE, volume=50)
+    occurrence = SampleOccurrence(module_hash=MODULE_HASH, instrument_index=0, sample_slot=0)
+
+    properties = render_properties(
+        tracker=TrackerFormat.MOD, sample_hash=SAMPLE_HASH, occurrence=occurrence, trackmod_sample=trackmod_sample
+    )
+
+    assert isinstance(properties, MODSampleProperties)
+    assert properties.volume == 50
+
+
+def test_render_properties_carries_s3m_filename_through() -> None:
+    trackmod_sample = TrackModSample(
+        name="pluck", pcm=probe_waveform(8, seed=5), rate=SAMPLE_RATE, filename="PLUCK.S3I"
+    )
+    occurrence = SampleOccurrence(module_hash=MODULE_HASH, instrument_index=0, sample_slot=0)
+
+    properties = render_properties(
+        tracker=TrackerFormat.S3M, sample_hash=SAMPLE_HASH, occurrence=occurrence, trackmod_sample=trackmod_sample
+    )
+
+    assert isinstance(properties, S3MSampleProperties)
+    assert properties.filename == "PLUCK.S3I"

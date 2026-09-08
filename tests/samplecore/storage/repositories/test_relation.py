@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import duckdb
 import pytest
+from sqlalchemy import Connection
 
 from samplecore.models.relation import RelationReview, RelationType, SampleRelation
 from samplecore.models.sample import Sample
-from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository, _review_from_row
+from samplecore.storage.repositories.relation import PostgresSampleRelationRepository, _review_from_row
 
 
 def _relation(relation_id: int, subject_hash: str, reference_hash: str, *, confidence: float = 0.9) -> SampleRelation:
@@ -24,9 +24,9 @@ def _relation(relation_id: int, subject_hash: str, reference_hash: str, *, confi
 
 
 def test_an_unreviewed_relation_round_trips_through_get(
-    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    repository = DuckDBSampleRelationRepository(connection)
+    repository = PostgresSampleRelationRepository(connection)
     relation = _relation(repository.next_id(), stored_sample.hash, stored_sample_b.hash)
 
     repository.upsert(relation)
@@ -35,9 +35,9 @@ def test_an_unreviewed_relation_round_trips_through_get(
 
 
 def test_reviewing_a_relation_populates_the_review_fields(
-    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    repository = DuckDBSampleRelationRepository(connection)
+    repository = PostgresSampleRelationRepository(connection)
     relation = _relation(repository.next_id(), stored_sample.hash, stored_sample_b.hash)
     repository.upsert(relation)
     review = RelationReview(confirmed=True, reviewed_at=datetime.now(UTC), reviewed_by="jakim")
@@ -50,9 +50,9 @@ def test_reviewing_a_relation_populates_the_review_fields(
 
 
 def test_upserting_the_same_pair_and_method_again_updates_confidence(
-    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    repository = DuckDBSampleRelationRepository(connection)
+    repository = PostgresSampleRelationRepository(connection)
     original = _relation(repository.next_id(), stored_sample.hash, stored_sample_b.hash, confidence=0.6)
     repository.upsert(original)
     refined = _relation(original.id, stored_sample.hash, stored_sample_b.hash, confidence=0.97)
@@ -64,8 +64,8 @@ def test_upserting_the_same_pair_and_method_again_updates_confidence(
     assert round_tripped.confidence == 0.97
 
 
-def test_get_on_an_unknown_id_returns_none(connection: duckdb.DuckDBPyConnection) -> None:
-    repository = DuckDBSampleRelationRepository(connection)
+def test_get_on_an_unknown_id_returns_none(connection: Connection) -> None:
+    repository = PostgresSampleRelationRepository(connection)
 
     assert repository.get(999) is None
 
@@ -75,14 +75,14 @@ def test_a_partially_populated_review_is_rejected_as_inconsistent() -> None:
         _review_from_row(True, None, "jakim")
 
 
-def test_list_all_on_an_empty_table_returns_nothing(connection: duckdb.DuckDBPyConnection) -> None:
-    assert DuckDBSampleRelationRepository(connection).list_all() == ()
+def test_list_all_on_an_empty_table_returns_nothing(connection: Connection) -> None:
+    assert PostgresSampleRelationRepository(connection).list_all() == ()
 
 
 def test_list_all_returns_every_stored_relation(
-    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    repository = DuckDBSampleRelationRepository(connection)
+    repository = PostgresSampleRelationRepository(connection)
     relation = _relation(repository.next_id(), stored_sample.hash, stored_sample_b.hash)
 
     repository.upsert(relation)
@@ -91,9 +91,9 @@ def test_list_all_returns_every_stored_relation(
 
 
 def test_list_for_sample_finds_a_relation_by_either_subject_or_reference_hash(
-    connection: duckdb.DuckDBPyConnection, stored_sample: Sample, stored_sample_b: Sample
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    repository = DuckDBSampleRelationRepository(connection)
+    repository = PostgresSampleRelationRepository(connection)
     relation = _relation(repository.next_id(), stored_sample.hash, stored_sample_b.hash)
 
     repository.upsert(relation)
@@ -102,7 +102,5 @@ def test_list_for_sample_finds_a_relation_by_either_subject_or_reference_hash(
     assert repository.list_for_sample(stored_sample_b.hash) == (relation,)
 
 
-def test_list_for_sample_finds_nothing_for_an_unrelated_sample(
-    connection: duckdb.DuckDBPyConnection, sample_hash_a: str
-) -> None:
-    assert DuckDBSampleRelationRepository(connection).list_for_sample(sample_hash_a) == ()
+def test_list_for_sample_finds_nothing_for_an_unrelated_sample(connection: Connection, sample_hash_a: str) -> None:
+    assert PostgresSampleRelationRepository(connection).list_for_sample(sample_hash_a) == ()

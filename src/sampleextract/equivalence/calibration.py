@@ -7,11 +7,11 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
 from sqlalchemy import Connection
-from trackmod.binary.pcm.quantise import dequantise, quantise
+from trackmod.binary.pcm.quantize import dequantize, quantize
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.relation import RelationType, SampleRelation
-from samplecore.storage.repositories.relation import DuckDBSampleRelationRepository
+from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from sampleextract.equivalence.scoring import score_gain_variant, score_resampled_variant
 
 DEFAULT_TRIAL_FRAME_COUNT: Final[int] = 2000
@@ -80,7 +80,7 @@ def gain_variant_calibration_trials(*, gains: tuple[float, ...], rng_seed: int) 
     content sharing the candidate shape.
 
     The reference waveform is scaled down by the largest requested gain first, so that amplifying it
-    back up before quantising never clips full-scale PCM -- a clipped compound trial would fail for
+    back up before quantizing never clips full-scale PCM -- a clipped compound trial would fail for
     a reason that has nothing to do with the scorer's own gain compensation.
     """
     headroom = max(1.0, max((abs(gain) for gain in gains), default=1.0))
@@ -91,7 +91,7 @@ def gain_variant_calibration_trials(*, gains: tuple[float, ...], rng_seed: int) 
         _gain_variant_trial(
             "bit_depth",
             is_genuine_match=True,
-            waveforms=(reference, dequantise(quantise(reference, BitDepth.EIGHT), BitDepth.EIGHT)),
+            waveforms=(reference, dequantize(quantize(reference, BitDepth.EIGHT), BitDepth.EIGHT)),
             depths=(BitDepth.SIXTEEN, BitDepth.EIGHT),
         ),
         _gain_variant_trial(
@@ -115,7 +115,7 @@ def gain_variant_calibration_trials(*, gains: tuple[float, ...], rng_seed: int) 
             _gain_variant_trial(
                 "compound_depth_gain",
                 is_genuine_match=True,
-                waveforms=(reference, dequantise(quantise(scaled, BitDepth.EIGHT), BitDepth.EIGHT)),
+                waveforms=(reference, dequantize(quantize(scaled, BitDepth.EIGHT), BitDepth.EIGHT)),
                 depths=(BitDepth.SIXTEEN, BitDepth.EIGHT),
             )
         )
@@ -194,7 +194,7 @@ def most_marginal_relations(
     """The `limit` least-confident stored relations of `relation_type` -- the borderline cases worth
     a human's ear before trusting the threshold that accepted them.
     """
-    relations = DuckDBSampleRelationRepository(connection).list_all()
+    relations = PostgresSampleRelationRepository(connection).list_all()
     matching = sorted(
         (relation for relation in relations if relation.relation_type is relation_type),
         key=lambda relation: relation.confidence,

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { Module } from "../api/modules";
 import { classNames } from "../shared/classNames";
-import { formatBytes } from "../shared/format";
+import { formatBytes, shortHash } from "../shared/format";
 import { UNTITLED_MODULE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
@@ -21,12 +21,15 @@ export function ModuleRow({ module }: ModuleRowProps): ReactElement {
     return (
         <tr
             className={classNames(isHighlighted && "is-highlighted", isFocused && "is-focused")}
-            onClick={onClick}
+            onClickCapture={onClick}
             onDoubleClick={onDoubleClick}
         >
             <td className="cell-name">
-                <Link to={href} className="cell-primary">
-                    <OptionalLabel value={module.title} placeholder={UNTITLED_MODULE_LABEL} />
+                <Link to={href} className="cell-name-stack">
+                    <span className="cell-primary">
+                        <OptionalLabel value={module.title} placeholder={UNTITLED_MODULE_LABEL} />
+                    </span>
+                    <span className="entity-hash mono">{shortHash(module.hash)}</span>
                 </Link>
             </td>
             <td className="cell-muted">{module.filename}</td>

@@ -10,7 +10,7 @@ class SampleThumbnail(BaseModel):
     """A cached, low-resolution amplitude-envelope preview of one Sample's waveform.
 
     Computed once (at ingest time for a new sample, or by a standalone backfill pass for one
-    already catalogued) and reused by every list view that shows this sample, rather than
+    already cataloged) and reused by every list view that shows this sample, rather than
     recomputed per request. ``bucket_count`` travels with the row so a later change to the
     configured thumbnail resolution is a detectable, explicit fact about a row, not a silent
     mismatch between what is stored and what is currently configured.

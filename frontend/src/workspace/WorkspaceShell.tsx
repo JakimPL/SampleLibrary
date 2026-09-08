@@ -1,11 +1,13 @@
 import "dockview-react/dist/styles/dockview.css";
 
-import { DockviewReact, type DockviewReadyEvent, type IDockviewPanelProps } from "dockview-react";
+import { type DockviewApi, DockviewReact, type DockviewReadyEvent, type IDockviewPanelProps } from "dockview-react";
 import type { FunctionComponent, ReactElement } from "react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { restoreOrBuildLayout } from "./dockviewPersistence";
+import { ThemeMenu } from "../theme/ThemeMenu";
+import { AddPanelMenu } from "./AddPanelMenu";
+import { resetLayout, restoreOrBuildLayout } from "./dockviewPersistence";
 import { PANEL_REGISTRY } from "./panelRegistry";
 import { useSelectionStore } from "./selectionStore";
 
@@ -29,6 +31,7 @@ export function WorkspaceShell(): ReactElement {
     const focusSample = useSelectionStore((state) => state.focusSample);
     const focusModule = useSelectionStore((state) => state.focusModule);
     const components = useMemo(buildDockviewComponents, []);
+    const [api, setApi] = useState<DockviewApi | null>(null);
 
     useEffect(() => {
         if (sampleHash !== undefined) {
@@ -44,9 +47,29 @@ export function WorkspaceShell(): ReactElement {
 
     function handleReady(event: DockviewReadyEvent): void {
         restoreOrBuildLayout(event.api);
+        setApi(event.api);
+    }
+
+    function handleResetLayout(): void {
+        if (api !== null) {
+            resetLayout(api);
+        }
     }
 
     return (
-        <DockviewReact className="workspace-shell dockview-theme-abyss" components={components} onReady={handleReady} />
+        <div className="workspace-root">
+            <div className="workspace-toolbar">
+                <AddPanelMenu api={api} />
+                <button type="button" className="reset-layout-button" onClick={handleResetLayout}>
+                    Reset layout
+                </button>
+                <ThemeMenu />
+            </div>
+            <DockviewReact
+                className="workspace-shell dockview-theme-abyss"
+                components={components}
+                onReady={handleReady}
+            />
+        </div>
     );
 }

@@ -1,0 +1,37 @@
+# Local development only -- see docs/architecture.md's "Deployment" section for how `sampleserver`
+# and Postgres actually relate in a real deployment. LIBRARY_ROOT and CONFIG_PATH must point at your
+# own local library directory and config.toml before running `docker compose up`.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: samplelibrary
+      POSTGRES_PASSWORD: samplelibrary
+      POSTGRES_DB: samplelibrary
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U samplelibrary"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  sampleserver:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${LIBRARY_ROOT}:/library
+      - ${CONFIG_PATH}:/app/config.toml
+    environment:
+      SAMPLELIBRARY_CONFIG: /app/config.toml
+      SAMPLELIBRARY_DATABASE_URL: postgresql+psycopg://samplelibrary:samplelibrary@postgres:5432/samplelibrary
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

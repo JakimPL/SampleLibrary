@@ -1,12 +1,20 @@
 import type { ReactElement } from "react";
+import { useState } from "react";
 
+import { type SampleSelection, WHOLE_CATALOG } from "../../api/samples";
 import { SamplesTable } from "../../samples/SamplesTable";
 import { useWindowedSamples } from "../../samples/useWindowedSamples";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import { Loading } from "../../shared/Loading";
 
+// Grouping starts on: the equivalence class is the primary identity samples are meant to be
+// browsed by, with this toggle offered to see raw per-hash rows on demand.
+const GROUP_BY_EQUIVALENCE_DEFAULT = true;
+
 export function SamplesListPanel(): ReactElement {
-    const state = useWindowedSamples();
+    const [groupByEquivalence, setGroupByEquivalence] = useState(GROUP_BY_EQUIVALENCE_DEFAULT);
+    const [selection, setSelection] = useState<SampleSelection>(WHOLE_CATALOG);
+    const state = useWindowedSamples(groupByEquivalence, selection);
 
     if (state.status === "loading") {
         return <Loading />;
@@ -23,6 +31,10 @@ export function SamplesListPanel(): ReactElement {
             isLoadingMore={state.isLoadingMore}
             onLoadMore={state.loadMore}
             loadMoreError={state.status === "error" ? state.message : null}
+            groupByEquivalence={groupByEquivalence}
+            onGroupByEquivalenceChange={setGroupByEquivalence}
+            selection={selection}
+            onSelectionChange={setSelection}
         />
     );
 }

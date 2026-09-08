@@ -4,7 +4,7 @@ from sqlalchemy import Connection
 
 from samplecore.models.sample import Sample
 from samplecore.models.thumbnail import SampleThumbnail
-from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository
+from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 
 
 def _thumbnail(sample_hash: str, *, bucket_count: int = 4) -> SampleThumbnail:
@@ -17,11 +17,11 @@ def _thumbnail(sample_hash: str, *, bucket_count: int = 4) -> SampleThumbnail:
 
 
 def test_get_for_a_sample_with_no_thumbnail_returns_none(connection: Connection, stored_sample: Sample) -> None:
-    assert DuckDBSampleThumbnailRepository(connection).get(stored_sample.hash) is None
+    assert PostgresSampleThumbnailRepository(connection).get(stored_sample.hash) is None
 
 
 def test_a_thumbnail_round_trips_through_get(connection: Connection, stored_sample: Sample) -> None:
-    repository = DuckDBSampleThumbnailRepository(connection)
+    repository = PostgresSampleThumbnailRepository(connection)
     thumbnail = _thumbnail(stored_sample.hash)
 
     repository.upsert(thumbnail)
@@ -30,7 +30,7 @@ def test_a_thumbnail_round_trips_through_get(connection: Connection, stored_samp
 
 
 def test_upserting_the_same_sample_again_replaces_its_thumbnail(connection: Connection, stored_sample: Sample) -> None:
-    repository = DuckDBSampleThumbnailRepository(connection)
+    repository = PostgresSampleThumbnailRepository(connection)
     repository.upsert(_thumbnail(stored_sample.hash, bucket_count=4))
     refined = _thumbnail(stored_sample.hash, bucket_count=8)
 
@@ -42,7 +42,7 @@ def test_upserting_the_same_sample_again_replaces_its_thumbnail(connection: Conn
 def test_get_many_returns_only_the_requested_hashes_that_have_a_thumbnail(
     connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
-    repository = DuckDBSampleThumbnailRepository(connection)
+    repository = PostgresSampleThumbnailRepository(connection)
     thumbnail = _thumbnail(stored_sample.hash)
     repository.upsert(thumbnail)
 
@@ -52,4 +52,4 @@ def test_get_many_returns_only_the_requested_hashes_that_have_a_thumbnail(
 
 
 def test_get_many_with_no_hashes_returns_nothing(connection: Connection) -> None:
-    assert DuckDBSampleThumbnailRepository(connection).get_many([]) == {}
+    assert PostgresSampleThumbnailRepository(connection).get_many([]) == {}

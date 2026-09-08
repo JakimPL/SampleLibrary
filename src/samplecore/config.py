@@ -9,8 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 DEFAULT_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config.toml"
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
-DEFAULT_DATABASE_FILENAME: Final[str] = "samplelibrary.duckdb"
-DEFAULT_CLOUD_ARTIFACT_DIRECTORY_NAME: Final[str] = "embeddings"
+DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_DATABASE_URL"
 DEFAULT_MINIMUM_SAMPLE_FRAMES: Final[int] = 512
 
 
@@ -21,29 +20,18 @@ class ConfigurationError(Exception):
 class LibraryConfig(BaseModel):
     """Local, machine-specific configuration this project reads at startup.
 
-    Nothing here is checked into the repository. ``module_source_directory`` and
-    ``library_root`` are required with no default, since fabricating a plausible-looking path
-    would point the library at the wrong place silently rather than failing loudly when
-    configuration is missing.
+    Nothing here is checked into the repository. ``module_source_directory``, ``library_root``, and
+    ``database_url`` are required with no default, since fabricating a plausible-looking value would
+    point the library at the wrong place, or the wrong database, silently rather than failing loudly
+    when configuration is missing.
     """
 
     model_config = ConfigDict(frozen=True)
 
     module_source_directory: Path
     library_root: Path
-    database_path: Path | None = None
-    cloud_artifact_directory: Path | None = None
+    database_url: str
     minimum_sample_frames: int = DEFAULT_MINIMUM_SAMPLE_FRAMES
-
-    @property
-    def resolved_database_path(self) -> Path:
-        """Where the DuckDB catalog lives, defaulting to a fixed filename under the library root."""
-        return self.database_path or self.library_root / DEFAULT_DATABASE_FILENAME
-
-    @property
-    def resolved_cloud_artifact_directory(self) -> Path:
-        """Where cloud-embedding artifacts live, defaulting to a fixed directory under the library root."""
-        return self.cloud_artifact_directory or self.library_root / DEFAULT_CLOUD_ARTIFACT_DIRECTORY_NAME
 
 
 def load_config(path: Path | None = None) -> LibraryConfig:
@@ -52,7 +40,10 @@ def load_config(path: Path | None = None) -> LibraryConfig:
     The lookup order is an explicit ``path``, then the ``SAMPLELIBRARY_CONFIG`` environment
     variable, then ``config.toml`` at the repository root — the first of these that is actually
     provided wins, so a caller (a test, a CLI flag) can always be explicit about where to read
-    from without an environment variable silently overriding it.
+    from without an environment variable silently overriding it. ``database_url`` follows the same
+    precedence separately: the ``SAMPLELIBRARY_DATABASE_URL`` environment variable, when set,
+    overrides whatever ``config.toml`` holds, so credentials can be supplied at deployment time (a
+    Docker secret, a CI variable) without living in a config file at all.
 
     Raises:
         ConfigurationError: no config file exists at the resolved path.
@@ -64,7 +55,11 @@ def load_config(path: Path | None = None) -> LibraryConfig:
         )
     with resolved_path.open("rb") as config_file:
         data = tomllib.load(config_file)
-    return LibraryConfig.model_validate(data.get("library", {}))
+    library_data = dict(data.get("library", {}))
+    database_url_from_environment = os.environ.get(DATABASE_URL_ENVIRONMENT_VARIABLE)
+    if database_url_from_environment is not None:
+        library_data["database_url"] = database_url_from_environment
+    return LibraryConfig.model_validate(library_data)
 
 
 def _config_path_from_environment() -> Path | None:

@@ -1,25 +1,26 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
-from samplecore.cli_support import bootstrap_cli
-from samplecore.storage.database import connect
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from sampleextract.thumbnail import compute_missing_thumbnails
+
+_logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> None:
     """Run one thumbnail backfill pass over the catalog and report the result."""
     arguments = _parse_arguments(argv)
     config = bootstrap_cli()
-    connection = connect(config.resolved_database_path)
-    try:
+    with open_catalog_connection(config.database_url) as connection:
         summary = compute_missing_thumbnails(connection, config.library_root, force=arguments.force)
-    finally:
-        connection.close()
 
-    print(
-        f"{summary.catalogued} samples catalogued: {summary.computed} thumbnail(s) computed, "
-        f"{summary.already_thumbnailed} already cached."
+    _logger.info(
+        "%d samples cataloged: %d thumbnail(s) computed, %d already cached.",
+        summary.cataloged,
+        summary.computed,
+        summary.already_thumbnailed,
     )
 
 

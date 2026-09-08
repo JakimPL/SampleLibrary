@@ -16,10 +16,10 @@ from trackmod.core.songs.song import Song
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
 from samplecore.storage.database import sample_properties
-from samplecore.storage.repositories.module import DuckDBModuleRepository
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
-from samplecore.storage.repositories.sample_properties import DuckDBSamplePropertiesRepository
-from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 from samplecore.waveform import DEFAULT_THUMBNAIL_BUCKET_COUNT, compute_waveform_peaks
 from sampleextract import ingest as ingest_module_under_test
 from sampleextract.ingest import ingest_module
@@ -73,7 +73,7 @@ def test_ingest_module_returns_the_module_it_persisted(
         minimum_sample_frames=NO_MINIMUM_FRAMES,
     )
 
-    assert DuckDBModuleRepository(connection).get(MODULE_HASH) == module
+    assert PostgresModuleRepository(connection).get(MODULE_HASH) == module
     assert module.instrument_count == 2
     assert module.sample_count == 3
 
@@ -83,7 +83,7 @@ def test_ingest_module_only_stores_occurrences_a_keymap_reaches(
 ) -> None:
     _ingest_two_instrument_song(connection, tmp_path, song_builder)
 
-    properties = DuckDBSamplePropertiesRepository(connection).list_for_module(MODULE_HASH)
+    properties = PostgresSamplePropertiesRepository(connection).list_for_module(MODULE_HASH)
 
     assert len(properties) == 2
     assert {item.occurrence.instrument_index for item in properties} == {0, 1}
@@ -95,8 +95,8 @@ def test_ingest_module_writes_audio_a_stored_sample_can_be_read_back(
 ) -> None:
     _ingest_two_instrument_song(connection, tmp_path, song_builder)
 
-    properties = DuckDBSamplePropertiesRepository(connection).list_for_module(MODULE_HASH)
-    stored_sample = DuckDBSampleRepository(connection).get(properties[0].sample_hash)
+    properties = PostgresSamplePropertiesRepository(connection).list_for_module(MODULE_HASH)
+    stored_sample = PostgresSampleRepository(connection).get(properties[0].sample_hash)
     assert stored_sample is not None
 
     sample_pcm = audio_store.read(tmp_path, stored_sample)
@@ -131,7 +131,7 @@ def test_ingest_module_skips_a_reachable_placeholder_sample_with_no_frames(
         minimum_sample_frames=NO_MINIMUM_FRAMES,
     )
 
-    assert DuckDBSamplePropertiesRepository(connection).list_for_module(MODULE_HASH) == ()
+    assert PostgresSamplePropertiesRepository(connection).list_for_module(MODULE_HASH) == ()
 
 
 def test_ingest_module_skips_a_reachable_sample_shorter_than_the_configured_minimum(
@@ -152,8 +152,8 @@ def test_ingest_module_skips_a_reachable_sample_shorter_than_the_configured_mini
         minimum_sample_frames=32,
     )
 
-    assert DuckDBSamplePropertiesRepository(connection).list_for_module(MODULE_HASH) == ()
-    assert DuckDBSampleRepository(connection).list_all() == ()
+    assert PostgresSamplePropertiesRepository(connection).list_for_module(MODULE_HASH) == ()
+    assert PostgresSampleRepository(connection).list_all() == ()
 
 
 def test_ingest_module_keeps_a_reachable_sample_at_or_above_the_configured_minimum(
@@ -174,14 +174,14 @@ def test_ingest_module_keeps_a_reachable_sample_at_or_above_the_configured_minim
         minimum_sample_frames=32,
     )
 
-    assert len(DuckDBSamplePropertiesRepository(connection).list_for_module(MODULE_HASH)) == 1
+    assert len(PostgresSamplePropertiesRepository(connection).list_for_module(MODULE_HASH)) == 1
 
 
 def test_ingest_module_caches_a_thumbnail_matching_the_stored_sample_s_own_waveform(
     connection: Connection, tmp_path: Path, song_builder: SongBuilder
 ) -> None:
     # The thumbnail is compared against this exact in-memory waveform, not a disk round trip
-    # through the stored WAV: quantising and dequantising an 8/16-bit file introduces noise a
+    # through the stored WAV: quantizing and dequantizing an 8/16-bit file introduces noise a
     # bit-for-bit comparison would wrongly flag, the same reasoning `compute_waveform_peaks`'s own
     # bit-depth-independence already rests on.
     pcm = np.linspace(-1.0, 1.0, 32)
@@ -200,8 +200,8 @@ def test_ingest_module_caches_a_thumbnail_matching_the_stored_sample_s_own_wavef
         minimum_sample_frames=NO_MINIMUM_FRAMES,
     )
 
-    properties = DuckDBSamplePropertiesRepository(connection).list_for_module(MODULE_HASH)
-    thumbnail = DuckDBSampleThumbnailRepository(connection).get(properties[0].sample_hash)
+    properties = PostgresSamplePropertiesRepository(connection).list_for_module(MODULE_HASH)
+    thumbnail = PostgresSampleThumbnailRepository(connection).get(properties[0].sample_hash)
     assert thumbnail is not None
 
     expected_peaks = compute_waveform_peaks(pcm.reshape(-1, 1), bucket_count=DEFAULT_THUMBNAIL_BUCKET_COUNT)
@@ -221,5 +221,5 @@ def test_a_failure_partway_through_leaves_nothing_committed(
     with pytest.raises(OSError):
         _ingest_two_instrument_song(connection, tmp_path, song_builder)
 
-    assert DuckDBModuleRepository(connection).get(MODULE_HASH) is None
+    assert PostgresModuleRepository(connection).get(MODULE_HASH) is None
     assert connection.execute(select(func.count()).select_from(sample_properties)).scalar_one() == 0

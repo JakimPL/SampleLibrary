@@ -9,8 +9,8 @@ from tqdm import tqdm
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
-from samplecore.storage.repositories.sample import DuckDBSampleRepository
-from samplecore.storage.repositories.thumbnail import DuckDBSampleThumbnailRepository, SampleThumbnailRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, SampleThumbnailRepository
 from samplecore.waveform import DEFAULT_THUMBNAIL_BUCKET_COUNT, compute_waveform_peaks
 
 
@@ -18,7 +18,7 @@ from samplecore.waveform import DEFAULT_THUMBNAIL_BUCKET_COUNT, compute_waveform
 class ThumbnailBackfillSummary:
     """What one thumbnail backfill pass did, across every sample it considered."""
 
-    catalogued: int
+    cataloged: int
     already_thumbnailed: int
     computed: int
 
@@ -31,8 +31,8 @@ def compute_missing_thumbnails(connection: Connection, library_root: Path, *, fo
     "skip what's already done" idempotence. ``force`` recomputes and overwrites every sample's
     thumbnail regardless -- the refresh path for when the configured thumbnail resolution changes.
     """
-    sample_repository = DuckDBSampleRepository(connection)
-    thumbnail_repository: SampleThumbnailRepository = DuckDBSampleThumbnailRepository(connection)
+    sample_repository = PostgresSampleRepository(connection)
+    thumbnail_repository: SampleThumbnailRepository = PostgresSampleThumbnailRepository(connection)
     samples = sample_repository.list_all()
 
     already_thumbnailed = 0
@@ -55,4 +55,4 @@ def compute_missing_thumbnails(connection: Connection, library_root: Path, *, fo
             )
             computed += 1
 
-    return ThumbnailBackfillSummary(catalogued=len(samples), already_thumbnailed=already_thumbnailed, computed=computed)
+    return ThumbnailBackfillSummary(cataloged=len(samples), already_thumbnailed=already_thumbnailed, computed=computed)

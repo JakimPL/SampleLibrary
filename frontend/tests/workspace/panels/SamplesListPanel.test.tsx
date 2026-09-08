@@ -31,8 +31,12 @@ const SAMPLE_SUMMARY = {
     frames: 4096,
     occurrence_count: 3,
     display_name: "kick",
+    category: "kick",
     size_bytes: 8192,
     thumbnail: null,
+    dominant_rate_hz: null,
+    equivalence_class_hash: null,
+    equivalence_member_count: 1,
 };
 
 describe("SamplesListPanel", () => {
@@ -50,9 +54,19 @@ describe("SamplesListPanel", () => {
         renderPanel();
 
         await waitFor(() => {
-            expect(screen.getByRole("link", { name: "kick" })).toHaveAttribute("href", "/samples/abc");
+            expect(screen.getByRole("link", { name: /kick/ })).toHaveAttribute("href", "/samples/abc");
         });
         expect(screen.getByText("3")).toBeInTheDocument();
+    });
+
+    it("requests samples grouped by acoustic identity by default", async () => {
+        listSamples.mockResolvedValue({ items: [SAMPLE_SUMMARY], total: 1, limit: 50, offset: 0 });
+
+        renderPanel();
+
+        await waitFor(() => {
+            expect(listSamples).toHaveBeenCalledWith(expect.objectContaining({ groupByEquivalence: true }));
+        });
     });
 
     it("shows an error notice when the request fails", async () => {

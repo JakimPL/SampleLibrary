@@ -1,28 +1,39 @@
 import type { ReactElement } from "react";
 
-import type { SampleDetail, SampleRelation } from "../api/samples";
+import type { SampleDetail, SampleRelation, SimilarSample } from "../api/samples";
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
-import { CATEGORY_PLACEHOLDER } from "./category";
+import { SpectralDistanceReadout } from "../workspace/panels/SpectralDistanceReadout";
+import { AnnotationEditor } from "./AnnotationEditor";
+import { CategoryBadge } from "./CategoryBadge";
 import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { SampleRelationRow } from "./SampleRelationRow";
+import { SimilarSampleRow } from "./SimilarSampleRow";
 
 interface SampleDetailViewProps {
     readonly sample: SampleDetail;
     readonly relations: readonly SampleRelation[];
+    readonly similar: readonly SimilarSample[];
 }
 
-export function SampleDetailView({ sample, relations }: SampleDetailViewProps): ReactElement {
+export function SampleDetailView({ sample, relations, similar }: SampleDetailViewProps): ReactElement {
     return (
         <section className="detail-scroll">
             <h2>
                 <OptionalLabel value={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} />
             </h2>
             <p className="hash mono cell-muted">{sample.hash}</p>
+            <SpectralDistanceReadout />
             <dl className="kv">
                 <dt>Category</dt>
-                <dd>{CATEGORY_PLACEHOLDER}</dd>
+                <dd>
+                    <CategoryBadge sampleHash={sample.hash} category={sample.category} handLabel={sample.hand_label} />
+                </dd>
+                <dt>Label</dt>
+                <dd>
+                    <AnnotationEditor key={sample.hash} sample={sample} />
+                </dd>
                 <dt>Size</dt>
                 <dd className="mono">{formatBytes(sample.size_bytes)}</dd>
                 <dt>Duration</dt>
@@ -82,6 +93,33 @@ export function SampleDetailView({ sample, relations }: SampleDetailViewProps): 
                         </tbody>
                     </table>
                 )}
+            </div>
+            <div className="detail-section">
+                <h3>Similar Samples</h3>
+                {similar.length === 0 ? (
+                    <p className="placeholder-box">
+                        No spectral neighbors yet — run the embedding pipeline to populate this.
+                    </p>
+                ) : (
+                    <table className="mini">
+                        <thead>
+                            <tr>
+                                <th>Play</th>
+                                <th>Sample</th>
+                                <th>Distance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {similar.map((neighbor) => (
+                                <SimilarSampleRow key={neighbor.hash} similar={neighbor} />
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+            <div className="detail-section">
+                <h3>Frequently Co-occurs With</h3>
+                <p className="placeholder-box">Awaits a co-occurrence analysis across the catalog.</p>
             </div>
         </section>
     );

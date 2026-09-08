@@ -9,12 +9,20 @@ from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.models.sample_properties import (
     ITSampleProperties,
+    MODSampleProperties,
+    S3MSampleProperties,
     SampleOccurrence,
     TrackerSampleProperties,
     Vibrato,
     XMSampleProperties,
 )
-from samplecore.storage.database import it_sample_properties, module, sample_properties, xm_sample_properties
+from samplecore.storage.database import (
+    it_sample_properties,
+    module,
+    s3m_sample_properties,
+    sample_properties,
+    xm_sample_properties,
+)
 
 _BASE_COLUMNS = (
     sample_properties.c.instrument_index,
@@ -43,6 +51,17 @@ _IT_JOIN = sample_properties.join(
     & (it_sample_properties.c.sample_slot == sample_properties.c.sample_slot),
 ).join(module, module.c.id == sample_properties.c.module_id)
 
+# MOD carries nothing beyond the shared base (see MODSampleProperties's own docstring), so its rows
+# are read straight off sample_properties -- no child table to join.
+_MOD_JOIN = sample_properties.join(module, module.c.id == sample_properties.c.module_id)
+
+_S3M_JOIN = sample_properties.join(
+    s3m_sample_properties,
+    (s3m_sample_properties.c.module_id == sample_properties.c.module_id)
+    & (s3m_sample_properties.c.instrument_index == sample_properties.c.instrument_index)
+    & (s3m_sample_properties.c.sample_slot == sample_properties.c.sample_slot),
+).join(module, module.c.id == sample_properties.c.module_id)
+
 
 class SamplePropertiesRepository(Protocol):
     """Persistence for tracker-specific occurrence properties, one row per (module, instrument, slot)."""
@@ -53,8 +72,10 @@ class SamplePropertiesRepository(Protocol):
 
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]: ...
 
+    def cataloged_slots(self, module_id: int) -> frozenset[tuple[int, int]]: ...
 
-class DuckDBSamplePropertiesRepository:
+
+class PostgresSamplePropertiesRepository:
     """A SamplePropertiesRepository backed by class-table inheritance: a shared base table plus one
     tracker-specific child table, joined back together on read by the ``tracker`` discriminator.
     """
@@ -70,12 +91,28 @@ class DuckDBSamplePropertiesRepository:
                 self._insert_xm(module_id, properties)
             case ITSampleProperties():
                 self._insert_it(module_id, properties)
+            case MODSampleProperties():
+                pass
+            case S3MSampleProperties():
+                self._insert_s3m(module_id, properties)
 
     def list_for_module(self, module_hash: str) -> tuple[TrackerSampleProperties, ...]:
         return self._list_by(module.c.hash == module_hash)
 
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]:
         return self._list_by(sample_properties.c.sample_hash == sample_hash)
+
+    def cataloged_slots(self, module_id: int) -> frozenset[tuple[int, int]]:
+        """Every ``(instrument_index, sample_slot)`` pair this module actually holds an occurrence for.
+
+        Asking the catalog directly is what lets a caller resolving something onto an occurrence
+        agree with what was really stored, whatever reason an ingest had for leaving a slot out.
+        """
+        statement = select(sample_properties.c.instrument_index, sample_properties.c.sample_slot).where(
+            sample_properties.c.module_id == module_id
+        )
+        rows = self._connection.execute(statement).fetchall()
+        return frozenset((int(row.instrument_index), int(row.sample_slot)) for row in rows)
 
     def _list_by(self, condition: ColumnElement[bool]) -> tuple[TrackerSampleProperties, ...]:
         xm_statement = (
@@ -100,9 +137,26 @@ class DuckDBSamplePropertiesRepository:
             .select_from(_IT_JOIN)
             .where(condition)
         )
+        mod_statement = (
+            select(*_BASE_COLUMNS, module.c.hash)
+            .select_from(_MOD_JOIN)
+            .where(condition & (sample_properties.c.tracker == "mod"))
+        )
+        s3m_statement = (
+            select(*_BASE_COLUMNS, s3m_sample_properties.c.filename, module.c.hash)
+            .select_from(_S3M_JOIN)
+            .where(condition)
+        )
         xm_rows = self._connection.execute(xm_statement).fetchall()
         it_rows = self._connection.execute(it_statement).fetchall()
-        properties = [_row_to_xm_properties(row) for row in xm_rows] + [_row_to_it_properties(row) for row in it_rows]
+        mod_rows = self._connection.execute(mod_statement).fetchall()
+        s3m_rows = self._connection.execute(s3m_statement).fetchall()
+        properties = (
+            [_row_to_xm_properties(row) for row in xm_rows]
+            + [_row_to_it_properties(row) for row in it_rows]
+            + [_row_to_mod_properties(row) for row in mod_rows]
+            + [_row_to_s3m_properties(row) for row in s3m_rows]
+        )
         return tuple(
             sorted(
                 properties,
@@ -189,6 +243,22 @@ class DuckDBSamplePropertiesRepository:
         )
         self._connection.execute(statement)
 
+    def _insert_s3m(self, module_id: int, properties: S3MSampleProperties) -> None:
+        statement = insert(s3m_sample_properties).values(
+            module_id=module_id,
+            instrument_index=properties.occurrence.instrument_index,
+            sample_slot=properties.occurrence.sample_slot,
+            filename=properties.filename,
+        )
+        statement = statement.on_conflict_do_nothing(
+            index_elements=[
+                s3m_sample_properties.c.module_id,
+                s3m_sample_properties.c.instrument_index,
+                s3m_sample_properties.c.sample_slot,
+            ]
+        )
+        self._connection.execute(statement)
+
 
 def _loop_from_row(begin: int | None, end: int | None, mode: str | None) -> Loop | None:
     if begin is None:
@@ -221,6 +291,37 @@ def _row_to_xm_properties(row: Row[Any]) -> XMSampleProperties:
         panning=row.panning,
         loop=_loop_from_row(row.loop_begin, row.loop_end, row.loop_mode),
         tuning=Tuning(relative_note=row.relative_note, finetune=row.finetune),
+    )
+
+
+def _row_to_mod_properties(row: Row[Any]) -> MODSampleProperties:
+    """Reconstruct a MODSampleProperties from a Core row, addressed by its own column names."""
+    return MODSampleProperties(
+        sample_hash=row.sample_hash,
+        occurrence=SampleOccurrence(
+            module_hash=row.hash, instrument_index=row.instrument_index, sample_slot=row.sample_slot
+        ),
+        name=row.name,
+        rate=row.rate,
+        volume=row.volume,
+        panning=row.panning,
+        loop=_loop_from_row(row.loop_begin, row.loop_end, row.loop_mode),
+    )
+
+
+def _row_to_s3m_properties(row: Row[Any]) -> S3MSampleProperties:
+    """Reconstruct an S3MSampleProperties from a Core row, addressed by its own column names."""
+    return S3MSampleProperties(
+        sample_hash=row.sample_hash,
+        occurrence=SampleOccurrence(
+            module_hash=row.hash, instrument_index=row.instrument_index, sample_slot=row.sample_slot
+        ),
+        name=row.name,
+        rate=row.rate,
+        volume=row.volume,
+        panning=row.panning,
+        loop=_loop_from_row(row.loop_begin, row.loop_end, row.loop_mode),
+        filename=row.filename,
     )
 
 

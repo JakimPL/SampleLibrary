@@ -18,7 +18,7 @@ def compute_fingerprint(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
     single whole-signal spectrum, it stays close to unchanged under the few frames of lead-in or
     trim difference two independent exports of the same content commonly carry, since a small
     shift only moves content between adjacent time bins rather than corrupting the whole
-    descriptor. This is a candidate pre-filter only: it exists to make a spatial nearest-neighbour
+    descriptor. This is a candidate pre-filter only: it exists to make a spatial nearest-neighbor
     search over the whole catalog tractable, and the confidence and evidence behind any relation
     it helps surface always come from the full-resolution scorer in scoring.py, never from here.
     """

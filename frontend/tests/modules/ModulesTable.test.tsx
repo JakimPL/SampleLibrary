@@ -32,7 +32,7 @@ function renderTable(): ReturnType<typeof render> {
 }
 
 function titleOrder(): string[] {
-    return screen.getAllByRole("link").map((link) => link.textContent);
+    return screen.getAllByRole("link").map((link) => link.querySelector(".cell-primary")?.textContent ?? "");
 }
 
 describe("ModulesTable", () => {
@@ -58,6 +58,14 @@ describe("ModulesTable", () => {
         fireEvent.change(screen.getByPlaceholderText("Filter modules…"), { target: { value: "alpha" } });
 
         expect(titleOrder()).toEqual(["Alpha"]);
+    });
+
+    it("shows each module's own short hash beneath its title", () => {
+        renderTable();
+
+        expect(screen.getByText("a")).toBeInTheDocument();
+        expect(screen.getByText("b")).toBeInTheDocument();
+        expect(screen.getByText("c")).toBeInTheDocument();
     });
 
     it("narrows rows to the selected tracker", () => {

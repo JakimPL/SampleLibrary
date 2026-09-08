@@ -1,59 +1,60 @@
 from __future__ import annotations
 
-import struct
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
 
 from sqlalchemy import Connection
+from sqlalchemy.exc import IntegrityError
 from tqdm import tqdm
 
 from samplecore.config import LibraryConfig
 from samplecore.hashing import compute_module_hash
 from samplecore.models.module import Module
-from samplecore.storage.repositories.module import DuckDBModuleRepository
+from samplecore.sharding import Shard
+from samplecore.storage.repositories.module import PostgresModuleRepository
 from sampleextract.discovery import FORMAT_LOADERS, discover_modules
 from sampleextract.ingest import ingest_module
-from sampleextract.parsing import parse_module
-
-_RECOVERABLE_PARSE_ERRORS: Final[tuple[type[Exception], ...]] = (ValueError, OSError, struct.error, IndexError)
-# ValueError: TrackMod's own documented parse failures (a bad tag, a malformed structure) and every
-#   pydantic ValidationError, which subclasses it. OSError: the file could not be read. struct.error and
-#   IndexError: raw struct/array bounds failures a sufficiently corrupt file can still trigger beneath
-#   TrackMod's own ValueError guards. Anything outside this set is treated as a bug, and crashes loudly.
-
-
-@dataclass(frozen=True)
-class ExtractionFailure:
-    """One module a run could not ingest, and why."""
-
-    path: Path
-    reason: str
+from sampleextract.parsing import RECOVERABLE_PARSE_ERRORS, ExtractionFailure, parse_module
 
 
 @dataclass(frozen=True)
 class ExtractionSummary:
-    """What one extraction run did, across every module it discovered."""
+    """What one extraction run did, across the modules its own shard covered."""
 
+    shard: Shard
     discovered: int
     ingested: tuple[Module, ...]
     skipped_existing: int
+    ingested_elsewhere: int
     failures: tuple[ExtractionFailure, ...]
 
 
-def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionSummary:
-    """Discover every readable module under the configured source directory and ingest each once.
+def run_extraction(config: LibraryConfig, connection: Connection, *, shard: Shard) -> ExtractionSummary:
+    """Discover the readable modules under the configured source directory and ingest each once.
+
+    ``shard`` is this run's share of them, so several runs can split one corpus between them --
+    across cores, or across machines pointed at one catalog. ``discovered`` counts what this share
+    holds, not what the directory holds.
 
     A module already known by its hash is skipped before it is parsed, so a repeat run over an
     unchanged corpus costs one hash and one indexed lookup per file, never a re-parse. A file that
     fails to parse is recorded as a failure and the run continues over the rest of the corpus.
+
+    Several runs may share one catalog, each over its own shard. Two of them can hold copies of the
+    same module under different names -- this corpus has hundreds of such pairs -- and reach it at
+    the same moment, both finding it unknown and both inserting. The catalog's own uniqueness on the
+    module hash settles which one lands; the other rolls its whole module back and counts under
+    ``ingested_elsewhere``, having done work that turned out to be someone else's. What tells the
+    two apart is the catalog holding the module afterwards: no other route could have put it there,
+    since this run had just found it absent.
     """
-    module_repository = DuckDBModuleRepository(connection)
-    paths = discover_modules(config.module_source_directory)
+    module_repository = PostgresModuleRepository(connection)
+    paths = shard.select(discover_modules(config.module_source_directory))
     ingested: list[Module] = []
     failures: list[ExtractionFailure] = []
     skipped_existing = 0
+    ingested_elsewhere = 0
     for path in tqdm(paths, desc="Extracting modules"):
         data = path.read_bytes()
         module_hash = compute_module_hash(data)
@@ -63,11 +64,21 @@ def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionS
 
         try:
             ingested.append(_ingest_one(connection, config, path=path, data=data, module_hash=module_hash))
-        except _RECOVERABLE_PARSE_ERRORS as error:
+        except RECOVERABLE_PARSE_ERRORS as error:
             failures.append(ExtractionFailure(path=path, reason=str(error)))
+        except IntegrityError:
+            if module_repository.get(module_hash) is None:
+                raise
+
+            ingested_elsewhere += 1
 
     return ExtractionSummary(
-        discovered=len(paths), ingested=tuple(ingested), skipped_existing=skipped_existing, failures=tuple(failures)
+        shard=shard,
+        discovered=len(paths),
+        ingested=tuple(ingested),
+        skipped_existing=skipped_existing,
+        ingested_elsewhere=ingested_elsewhere,
+        failures=tuple(failures),
     )
 
 

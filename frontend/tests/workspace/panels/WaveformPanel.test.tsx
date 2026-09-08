@@ -7,12 +7,13 @@ import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPan
 import { WaveformPanel } from "../../../src/workspace/panels/WaveformPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { instances, createMock, getSample, getSampleRelations } = vi.hoisted(() => {
+const { instances, createMock, getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => {
     class FakeWaveSurfer {
         readonly play = vi.fn().mockResolvedValue(undefined);
         readonly pause = vi.fn();
         readonly setTime = vi.fn();
         readonly setPlaybackRate = vi.fn();
+        readonly setOptions = vi.fn();
         readonly destroy = vi.fn();
         on(): () => void {
             return () => undefined;
@@ -24,7 +25,7 @@ const { instances, createMock, getSample, getSampleRelations } = vi.hoisted(() =
         instances.push(instance);
         return instance;
     });
-    return { instances, createMock, getSample: vi.fn(), getSampleRelations: vi.fn() };
+    return { instances, createMock, getSample: vi.fn(), getSampleRelations: vi.fn(), getSimilarSamples: vi.fn() };
 });
 
 vi.mock("wavesurfer.js", () => ({
@@ -33,9 +34,10 @@ vi.mock("wavesurfer.js", () => ({
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations };
+    return { ...actual, getSample, getSampleRelations, getSimilarSamples };
 });
 
+/** The waveform the panel built. Created by an effect of its own, so callers wait for it. */
 function latestInstance(): (typeof instances)[number] {
     const instance = instances[instances.length - 1];
     if (instance === undefined) {
@@ -44,16 +46,31 @@ function latestInstance(): (typeof instances)[number] {
     return instance;
 }
 
-function buildSampleDetail(overrides: { readonly dominantRateHz: number | null; readonly rates: number[] }): unknown {
+interface NotePlayedFixture {
+    readonly sounded_note: number;
+    readonly note_name: string;
+    readonly event_count: number;
+    readonly sounding_rate_hz: number | null;
+}
+
+interface SampleDetailOverrides {
+    readonly dominantRateHz: number | null;
+    readonly rates: number[];
+    readonly notesPlayed?: readonly NotePlayedFixture[];
+}
+
+function buildSampleDetail(overrides: SampleDetailOverrides): unknown {
     return {
         hash: "abc",
         depth: 16,
         channels: 1,
         frames: 4096,
         display_name: "kick",
+        category: "kick",
         size_bytes: 8192,
         duration_seconds: 0.09,
         dominant_rate_hz: overrides.dominantRateHz,
+        notes_played: overrides.notesPlayed ?? [],
         occurrences: overrides.rates.map((rate, index) => ({
             properties: {
                 sample_hash: "abc",
@@ -79,6 +96,7 @@ describe("WaveformPanel", () => {
     it("plays the focused sample at its dominant rate by default", async () => {
         getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: 22050, rates: [8363, 22050, 22050] }));
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         render(<WaveformPanel />);
@@ -86,12 +104,15 @@ describe("WaveformPanel", () => {
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
-        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(22050 / 44100, false);
+        await waitFor(() => {
+            expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(22050 / 44100, false);
+        });
     });
 
     it("lets the user switch to a different occurrence's rate", async () => {
         getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: 22050, rates: [8363, 22050] }));
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
         render(<WaveformPanel />);
         await waitFor(() => {
@@ -100,12 +121,40 @@ describe("WaveformPanel", () => {
 
         fireEvent.change(screen.getByLabelText("Rate"), { target: { value: "8363" } });
 
-        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 44100, false);
+        await waitFor(() => {
+            expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 44100, false);
+        });
+    });
+
+    it("opens at the note the library plays the sample at most, not at its reference rate", async () => {
+        getSample.mockResolvedValue(
+            buildSampleDetail({
+                dominantRateHz: 8363,
+                rates: [8363],
+                notesPlayed: [
+                    { sounded_note: 60, note_name: "C-5", event_count: 2, sounding_rate_hz: 8363 },
+                    { sounded_note: 36, note_name: "C-3", event_count: 40, sounding_rate_hz: 2090.75 },
+                ],
+            }),
+        );
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+        useSelectionStore.getState().focusSample("abc");
+
+        render(<WaveformPanel />);
+
+        await waitFor(() => {
+            expect(screen.getByLabelText("Note")).toHaveValue("36");
+        });
+        await waitFor(() => {
+            expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 4 / 44100, false);
+        });
     });
 
     it("shows an honest empty state for a sample with no occurrences", async () => {
         getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: null, rates: [] }));
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         render(<WaveformPanel />);
@@ -118,6 +167,7 @@ describe("WaveformPanel", () => {
     it("shares one request with SampleDetailPanel for the same focused sample", async () => {
         getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: 8363, rates: [8363] }));
         getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         render(
