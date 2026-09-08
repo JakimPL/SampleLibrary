@@ -125,6 +125,57 @@ because a magnitude yardstick reads a low-pass as error and reads aliasing as ag
 same blindness [the yardstick section](#the-yardstick-was-the-first-defect) records, and it is why
 this change rests on the mechanism and on listening rather than on the number.
 
+## Where the ceiling actually sits
+
+A third listening round settled what the remaining artifact is. On the ladder, *"besides the
+original, only 1, 2 and 4 have clarity, 7 still is the worst"*, and the point-sampled reading was
+*"worse in general than 3, introduces some chorus-like combined with slight tremolo effect"*.
+
+Read against what each rung is:
+
+| Rung | What it is | Judged |
+|---|---|---|
+| 1 | Fourier round trip, true phase | clear |
+| 2 | Griffin-Lim on the untouched magnitude | clear |
+| 3 | frequency axis alone, true phase | carries it |
+| 3b | the same, read at band centers | worse |
+| 4 | time axis alone, true phase | clear |
+| 7 | whole pipeline, Griffin-Lim | worst |
+
+Rung 2 being clear rules the phase estimate out as the source. Rung 4 being clear rules the time
+axis out. **Rung 3 carries the artifact while holding the source's own phase**, so what remains is
+the frequency axis, and no phase estimate can recover from it.
+
+The averaging fix helped and did not finish the job. It removed the folding that made 3b sound
+chorused, and what is left is the resolution the axis has: 338 bands stand where 1,025 Fourier bins
+were, and the reduction falls entirely above the crossover. Between 559 Hz and Nyquist, several
+harmonics land inside one band, so the band records their sum and synthesis spreads that sum back
+across the band's width. Partials come back as a plateau rather than as lines, and the flanging is
+what that sounds like after overlap-add.
+
+The crossover is where a log band equals a Fourier bin, and both the window length and the band
+density move it:
+
+| Analysis and grid | Crossover | Bands | Grid rows | oboe | snare |
+|---|---|---|---|---|---|
+| 2048 / 36 per octave | 559 Hz | 338 | 626 | 4.04 | 3.59 |
+| 1024 / 36 per octave | 1118 Hz | 338 | 626 | 3.70 | 2.95 |
+| 512 / 36 per octave | 2237 Hz | 338 | 626 | 4.83 | 2.79 |
+| 2048 / 72 per octave | 1118 Hz | 676 | 1252 | 2.95 | 3.12 |
+| 2048 / 144 per octave | 2237 Hz | 1353 | 2505 | 2.14 | 2.48 |
+
+A shorter window widens the bins and suits percussive material; more bands per octave narrows the
+bands and suits both, at a grid four times taller. The two knobs trade against each other because a
+fixed analysis window holds one absolute resolution while a log axis asks for one proportional to
+frequency, which is the same tension `constant_q` resolves for analysis and cannot resolve for
+synthesis.
+
+This reframes what a vocoder is for. Phase retrieval recovers phase for a magnitude that some real
+signal produced, and the magnitude this grid holds is not one: above the crossover its harmonic
+structure has been averaged away. Recovering that structure means putting detail back that the
+representation does not carry, which is a decoder's job rather than a phase estimator's. Griffin-Lim
+reaching its ceiling here is the expected result rather than a defect in it.
+
 ## Defaults these findings changed
 
 | Setting | Was | Now | Why |
