@@ -382,3 +382,56 @@ def test_successive_pages_under_a_rating_sort_stay_disjoint(
     second = repository.list_page(limit=1, offset=1, class_by_hash={}, selection=selection)
 
     assert {summary.hash for summary in first}.isdisjoint({summary.hash for summary in second})
+
+
+def _store_sized_sample(connection: Connection, *, index: int, frames: int) -> Sample:
+    sample_ = Sample(hash=format(index, "064x"), depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=frames)
+    PostgresSampleRepository(connection).upsert(sample_)
+    connection.commit()
+    return sample_
+
+
+def test_sampling_reproducibly_returns_the_requested_count(connection: Connection) -> None:
+    for index in range(10):
+        _store_sized_sample(connection, index=index, frames=10_000)
+
+    drawn = PostgresSampleRepository(connection).sample_reproducibly(
+        count=4, random_seed=1, frame_floor=1_000, frame_ceiling=100_000
+    )
+
+    assert len(drawn) == 4
+
+
+def test_sampling_reproducibly_repeats_its_draw_for_one_seed(connection: Connection) -> None:
+    """A measurement re-run has to report on the same samples for its numbers to stay comparable."""
+    for index in range(10):
+        _store_sized_sample(connection, index=index, frames=10_000)
+    repository = PostgresSampleRepository(connection)
+
+    first = repository.sample_reproducibly(count=4, random_seed=1, frame_floor=1_000, frame_ceiling=100_000)
+    second = repository.sample_reproducibly(count=4, random_seed=1, frame_floor=1_000, frame_ceiling=100_000)
+
+    assert first == second
+
+
+def test_sampling_reproducibly_draws_differently_under_a_different_seed(connection: Connection) -> None:
+    for index in range(20):
+        _store_sized_sample(connection, index=index, frames=10_000)
+    repository = PostgresSampleRepository(connection)
+
+    first = repository.sample_reproducibly(count=5, random_seed=1, frame_floor=1_000, frame_ceiling=100_000)
+    second = repository.sample_reproducibly(count=5, random_seed=2, frame_floor=1_000, frame_ceiling=100_000)
+
+    assert first != second
+
+
+def test_sampling_reproducibly_keeps_to_the_frame_bounds(connection: Connection) -> None:
+    _store_sized_sample(connection, index=1, frames=500)
+    _store_sized_sample(connection, index=2, frames=10_000)
+    _store_sized_sample(connection, index=3, frames=500_000)
+
+    drawn = PostgresSampleRepository(connection).sample_reproducibly(
+        count=10, random_seed=1, frame_floor=1_000, frame_ceiling=100_000
+    )
+
+    assert [sample_.frames for sample_ in drawn] == [10_000]

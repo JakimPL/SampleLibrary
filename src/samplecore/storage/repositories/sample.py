@@ -36,6 +36,10 @@ class SampleRepository(Protocol):
 
     def list_all(self) -> tuple[Sample, ...]: ...
 
+    def sample_reproducibly(
+        self, *, count: int, random_seed: int, frame_floor: int, frame_ceiling: int
+    ) -> tuple[Sample, ...]: ...
+
     def list_page(
         self, *, limit: int, offset: int, class_by_hash: dict[str, EquivalenceClass], selection: SampleSelection
     ) -> tuple[SampleSummary, ...]: ...
@@ -80,6 +84,25 @@ class PostgresSampleRepository:
 
     def list_all(self) -> tuple[Sample, ...]:
         rows = self._connection.execute(select(sample)).fetchall()
+        return tuple(_row_to_sample(row) for row in rows)
+
+    def sample_reproducibly(
+        self, *, count: int, random_seed: int, frame_floor: int, frame_ceiling: int
+    ) -> tuple[Sample, ...]:
+        """Up to `count` samples of a length between the two bounds, drawn the same way every run.
+
+        Ordering by a digest of each hash together with `random_seed` gives one fixed draw per
+        seed, so a measurement re-run reports on the same samples and its numbers stay comparable
+        across runs. Sorting in the database keeps the whole catalog available to the draw without
+        reading it into memory first.
+        """
+        statement = (
+            select(sample)
+            .where(sample.c.frames.between(frame_floor, frame_ceiling))
+            .order_by(func.md5(sample.c.hash + str(random_seed)))
+            .limit(count)
+        )
+        rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_sample(row) for row in rows)
 
     def list_page(

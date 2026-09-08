@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
+from scipy.signal import resample_poly
 
 from samplecore.models.base import FROZEN
 
 DEFAULT_WAVEFORM_BUCKET_COUNT: Final[int] = 200
 DEFAULT_THUMBNAIL_BUCKET_COUNT: Final[int] = 32
+SEMITONES_PER_OCTAVE: Final[int] = 12
+DEFAULT_RESAMPLING_DENOMINATOR: Final[int] = 200
 
 
 class WaveformPeak(BaseModel):
@@ -34,6 +38,28 @@ def remove_dc_offset(mono: NDArray[np.float64]) -> NDArray[np.float64]:
     its mean already sits at or near zero.
     """
     return mono - mono.mean()
+
+
+def resample_by_semitones(
+    waveform: NDArray[np.float64],
+    *,
+    semitones: float,
+    maximum_denominator: int = DEFAULT_RESAMPLING_DENOMINATOR,
+) -> NDArray[np.float64]:
+    """Read a waveform as though its playback rate sat `semitones` above the rate it was stored at.
+
+    This is what a tracker does when one instrument slot points at another slot's waveform: the
+    same frames are read faster or slower, which raises the pitch and shortens the sound together.
+    Positive semitones therefore return fewer frames than they were given, and negative semitones
+    return more.
+
+    The rate ratio is approached by a fraction of at most `maximum_denominator`, which keeps the
+    polyphase resampler's filter a manageable length while landing within a thousandth of a
+    semitone of the requested interval across the range this corpus retunes over.
+    """
+    ratio = Fraction(2.0 ** (-semitones / SEMITONES_PER_OCTAVE)).limit_denominator(maximum_denominator)
+    resampled: NDArray[np.float64] = resample_poly(waveform, ratio.numerator, ratio.denominator, axis=0)
+    return resampled
 
 
 def resample_to_fraction_points(values: NDArray[np.float64], *, point_count: int, axis: int = 0) -> NDArray[np.float64]:
