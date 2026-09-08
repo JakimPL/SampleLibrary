@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -7,15 +8,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 from sqlalchemy import Connection, func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from trackmod.core.instruments.instrument import Instrument
 from trackmod.core.instruments.keymap import pitched_keymap
 from trackmod.core.samples.sample import Sample as TrackModSample
 from trackmod.core.songs.song import Song
 
+from samplecore.hashing import compute_sample_hash
+from samplecore.models.channels import ChannelLayout
+from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
-from samplecore.storage.database import sample_properties
+from samplecore.storage.database import connect, sample_properties
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
@@ -27,6 +31,8 @@ from sampleextract.ingest import ingest_module
 MODULE_HASH = "d" * 64
 SAMPLE_RATE = 44100
 NO_MINIMUM_FRAMES = 1
+CONCURRENT_INGEST_COUNT = 2
+BARRIER_TIMEOUT_SECONDS = 30
 SongBuilder = Callable[[tuple[TrackModSample, ...], tuple[Instrument, ...]], Song]
 
 
@@ -223,3 +229,135 @@ def test_a_failure_partway_through_leaves_nothing_committed(
 
     assert PostgresModuleRepository(connection).get(MODULE_HASH) is None
     assert connection.execute(select(func.count()).select_from(sample_properties)).scalar_one() == 0
+
+
+class _FirstWriteBarrier:
+    """Holds every thread until each has reached its first sample, before any of them takes a row.
+
+    Waiting at the point a waveform is rendered, ahead of the row it is about to claim, is what lets
+    both transactions arrive: a thread that already held one shared row would keep the other waiting
+    somewhere earlier and never reach the barrier at all.
+    """
+
+    def __init__(self, parties: int) -> None:
+        self._barrier = threading.Barrier(parties, timeout=BARRIER_TIMEOUT_SECONDS)
+        self._lock = threading.Lock()
+        self._arrived: set[int] = set()
+
+    def reached(self) -> None:
+        thread = threading.get_ident()
+        with self._lock:
+            first_time = thread not in self._arrived
+            self._arrived.add(thread)
+
+        if first_time:
+            self._barrier.wait()
+
+
+def _sample_hash_of(trackmod_sample: TrackModSample) -> str:
+    return compute_sample_hash(
+        depth=trackmod_sample.depth,
+        channels=ChannelLayout(trackmod_sample.channels),
+        frames=trackmod_sample.frames,
+        pcm=trackmod_sample.pcm,
+    )
+
+
+def _pair_ordered_against_their_hashes() -> tuple[TrackModSample, TrackModSample]:
+    """Two samples in slot order, the higher content hash first, so slot order opposes hash order."""
+    first = TrackModSample(name="lead", pcm=np.linspace(-1.0, 1.0, 64), rate=SAMPLE_RATE)
+    second = TrackModSample(name="bass", pcm=np.linspace(1.0, -1.0, 96), rate=SAMPLE_RATE)
+    return (first, second) if _sample_hash_of(first) > _sample_hash_of(second) else (second, first)
+
+
+def _two_pitched_instruments() -> tuple[Instrument, ...]:
+    return (
+        Instrument(name="one", keymap=pitched_keymap(sample=0)),
+        Instrument(name="two", keymap=pitched_keymap(sample=1)),
+    )
+
+
+def _ingest_pair(
+    connection: Connection,
+    library_root: Path,
+    song_builder: SongBuilder,
+    *,
+    module_hash: str,
+    samples: tuple[TrackModSample, ...],
+) -> None:
+    ingest_module(
+        connection,
+        library_root,
+        module_hash=module_hash,
+        tracker=TrackerFormat.XM,
+        filename=f"{module_hash[:8]}.xm",
+        file_size=4096,
+        song=song_builder(samples, _two_pitched_instruments()),
+        ingested_at=datetime.now(UTC),
+        minimum_sample_frames=NO_MINIMUM_FRAMES,
+    )
+
+
+def test_the_rows_two_modules_share_are_written_in_ascending_hash_order(
+    connection: Connection, tmp_path: Path, song_builder: SongBuilder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hash order is the total order concurrent ingests agree on, whichever slots a module holds."""
+    written: list[str] = []
+    render = ingest_module_under_test.render_sample_pcm
+
+    def record(sample_hash: str, trackmod_sample: TrackModSample) -> SamplePCM:
+        written.append(sample_hash)
+        return render(sample_hash, trackmod_sample)
+
+    monkeypatch.setattr(ingest_module_under_test, "render_sample_pcm", record)
+
+    _ingest_pair(
+        connection, tmp_path, song_builder, module_hash=MODULE_HASH, samples=_pair_ordered_against_their_hashes()
+    )
+
+    assert len(written) == 2
+    assert written == sorted(written)
+
+
+def test_two_modules_holding_one_pair_in_opposite_slots_both_commit(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    song_builder: SongBuilder,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two runs reaching one pair of samples at once settle in turn, each keeping what it ingested."""
+    higher, lower = _pair_ordered_against_their_hashes()
+    barrier = _FirstWriteBarrier(CONCURRENT_INGEST_COUNT)
+    render = ingest_module_under_test.render_sample_pcm
+
+    def render_then_wait(sample_hash: str, trackmod_sample: TrackModSample) -> SamplePCM:
+        barrier.reached()
+        return render(sample_hash, trackmod_sample)
+
+    monkeypatch.setattr(ingest_module_under_test, "render_sample_pcm", render_then_wait)
+
+    refusals: list[OperationalError] = []
+
+    def ingest(module_hash: str, samples: tuple[TrackModSample, ...]) -> None:
+        worker_connection = connect(_database_url)
+        try:
+            _ingest_pair(worker_connection, tmp_path, song_builder, module_hash=module_hash, samples=samples)
+            worker_connection.commit()
+        except OperationalError as error:
+            refusals.append(error)
+        finally:
+            worker_connection.close()
+
+    runs = [
+        threading.Thread(target=ingest, args=("a" * 64, (higher, lower))),
+        threading.Thread(target=ingest, args=("b" * 64, (lower, higher))),
+    ]
+    for run in runs:
+        run.start()
+    for run in runs:
+        run.join()
+
+    assert refusals == []
+    assert len(PostgresModuleRepository(connection).list_all()) == CONCURRENT_INGEST_COUNT
+    assert len(PostgresSampleRepository(connection).list_all()) == 2

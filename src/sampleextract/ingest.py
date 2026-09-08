@@ -8,9 +8,9 @@ import numpy as np
 from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.core.instruments.transfer import held
-from trackmod.core.instruments.unit import InstrumentUnit
 from trackmod.core.samples.sample import Sample as TrackModSample
 from trackmod.core.songs.song import Song
+from trackmod.core.voices.voices import InstrumentVoices
 
 from samplecore.hashing import compute_sample_hash
 from samplecore.models.channels import ChannelLayout
@@ -43,7 +43,16 @@ class _IngestContext:
     library_root: Path
     tracker: TrackerFormat
     module_hash: str
-    minimum_sample_frames: int
+
+
+@dataclass(frozen=True)
+class _Occurrence:
+    """One sample slot a keymap reaches, paired with the content hash its waveform carries."""
+
+    instrument_index: int
+    sample_slot: int
+    sample_hash: str
+    trackmod_sample: TrackModSample
 
 
 # Every keyword argument below is an independent fact about the module being ingested, with no
@@ -66,10 +75,10 @@ def ingest_module(
     The caller is responsible for confirming this module is not already known before calling --
     this always inserts, and a second call for the same hash raises on the table's own UNIQUE
     constraint rather than silently doing nothing. Idempotent re-runs are ``run_extraction``'s
-    concern, not this function's. A sample occurrence shorter than ``minimum_sample_frames`` is
-    never cataloged at all -- too short to hold the kind of recorded audio this library's
-    equivalence detection and browsing are built around, the same reasoning that already excludes
-    an empty placeholder slot.
+    concern, not this function's.
+
+    Content comes first and occurrences follow, which is the order that lets several runs ingest at
+    once: see ``_store_content`` for the ordering rule the shared rows depend on.
     """
     module_repository = PostgresModuleRepository(connection)
     context = _IngestContext(
@@ -79,10 +88,10 @@ def ingest_module(
         library_root=library_root,
         tracker=tracker,
         module_hash=module_hash,
-        minimum_sample_frames=minimum_sample_frames,
     )
 
     voices = addressable_voices(song)
+    occurrences = _reachable_occurrences(voices, minimum_sample_frames=minimum_sample_frames)
 
     with start_batch(connection):
         module = Module(
@@ -99,8 +108,8 @@ def ingest_module(
             ingested_at=ingested_at,
         )
         module_repository.insert(module)
-        for instrument_index, unit in enumerate(held(voices)):
-            _ingest_instrument_unit(context, instrument_index=instrument_index, unit=unit)
+        _store_content(context, occurrences)
+        _store_occurrences(context, occurrences)
 
         persist_module_notes(
             connection,
@@ -112,38 +121,76 @@ def ingest_module(
     return module
 
 
-def _ingest_instrument_unit(context: _IngestContext, *, instrument_index: int, unit: InstrumentUnit) -> None:
-    for sample_slot, trackmod_sample in enumerate(unit.samples):
-        if trackmod_sample.frames < context.minimum_sample_frames:
-            continue  # a placeholder slot or a too-short sample has nothing worth cataloging
+def _reachable_occurrences(voices: InstrumentVoices, *, minimum_sample_frames: int) -> tuple[_Occurrence, ...]:
+    """Every sample slot this module's keymaps reach, in the order the catalog numbers them.
 
-        _ingest_sample_occurrence(
-            context, instrument_index=instrument_index, sample_slot=sample_slot, trackmod_sample=trackmod_sample
-        )
+    A slot is cataloged once its waveform holds at least ``minimum_sample_frames`` frames -- long
+    enough to hold the kind of recorded audio this library's equivalence detection and browsing are
+    built around, the same bar an empty placeholder slot is measured against.
+    """
+    return tuple(
+        _occurrence(instrument_index=instrument_index, sample_slot=sample_slot, trackmod_sample=trackmod_sample)
+        for instrument_index, unit in enumerate(held(voices))
+        for sample_slot, trackmod_sample in enumerate(unit.samples)
+        if trackmod_sample.frames >= minimum_sample_frames
+    )
 
 
-def _ingest_sample_occurrence(
-    context: _IngestContext, *, instrument_index: int, sample_slot: int, trackmod_sample: TrackModSample
-) -> None:
+def _occurrence(*, instrument_index: int, sample_slot: int, trackmod_sample: TrackModSample) -> _Occurrence:
     sample_hash = compute_sample_hash(
         depth=trackmod_sample.depth,
         channels=ChannelLayout(trackmod_sample.channels),
         frames=trackmod_sample.frames,
         pcm=trackmod_sample.pcm,
     )
-    sample_pcm = render_sample_pcm(sample_hash, trackmod_sample)
-    context.sample_repository.upsert(sample_pcm.sample)
-    audio_store.write(context.library_root, sample_pcm)
-    _upsert_thumbnail(context.thumbnail_repository, sample_hash, sample_pcm.pcm)
+    return _Occurrence(
+        instrument_index=instrument_index,
+        sample_slot=sample_slot,
+        sample_hash=sample_hash,
+        trackmod_sample=trackmod_sample,
+    )
 
-    occurrence = SampleOccurrence(
-        module_hash=context.module_hash, instrument_index=instrument_index, sample_slot=sample_slot
-    )
-    context.properties_repository.upsert(
-        render_properties(
-            tracker=context.tracker, sample_hash=sample_hash, occurrence=occurrence, trackmod_sample=trackmod_sample
+
+def _store_content(context: _IngestContext, occurrences: tuple[_Occurrence, ...]) -> None:
+    """Write each distinct sample this module reaches, taking the shared rows in hash order.
+
+    ``sample`` and ``sample_thumbnail`` are keyed by content hash, which is the one thing two
+    modules ingesting at the same moment hold in common -- routine here, since a sample recurs
+    across many modules. Ascending hash order is a total order every run agrees on, so concurrent
+    transactions reach these rows in the same sequence and each waits only on the one ahead of it,
+    which is what lets them proceed without a retry to fall back on.
+
+    Rendering is keyed by hash as well, so a sample filling several of a module's slots is rendered
+    once and written once.
+    """
+    samples_by_hash = _distinct_samples(occurrences)
+    for sample_hash in sorted(samples_by_hash):
+        sample_pcm = render_sample_pcm(sample_hash, samples_by_hash[sample_hash])
+        context.sample_repository.upsert(sample_pcm.sample)
+        audio_store.write(context.library_root, sample_pcm)
+        _upsert_thumbnail(context.thumbnail_repository, sample_hash, sample_pcm.pcm)
+
+
+def _distinct_samples(occurrences: tuple[_Occurrence, ...]) -> dict[str, TrackModSample]:
+    """One TrackMod sample per content hash, since a hash names one waveform whichever slot holds it."""
+    return {occurrence.sample_hash: occurrence.trackmod_sample for occurrence in occurrences}
+
+
+def _store_occurrences(context: _IngestContext, occurrences: tuple[_Occurrence, ...]) -> None:
+    """Write every slot's tracker-specific properties, addressed by the module and slot holding it."""
+    for occurrence in occurrences:
+        context.properties_repository.upsert(
+            render_properties(
+                tracker=context.tracker,
+                sample_hash=occurrence.sample_hash,
+                occurrence=SampleOccurrence(
+                    module_hash=context.module_hash,
+                    instrument_index=occurrence.instrument_index,
+                    sample_slot=occurrence.sample_slot,
+                ),
+                trackmod_sample=occurrence.trackmod_sample,
+            )
         )
-    )
 
 
 def _upsert_thumbnail(repository: SampleThumbnailRepository, sample_hash: str, pcm: NDArray[np.float64]) -> None:
