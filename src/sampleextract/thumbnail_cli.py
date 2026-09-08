@@ -17,8 +17,8 @@ def main(argv: list[str] | None = None) -> None:
         summary = compute_missing_thumbnails(connection, config.library_root, force=arguments.force)
 
     _logger.info(
-        "%d samples catalogued: %d thumbnail(s) computed, %d already cached.",
-        summary.catalogued,
+        "%d samples cataloged: %d thumbnail(s) computed, %d already cached.",
+        summary.cataloged,
         summary.computed,
         summary.already_thumbnailed,
     )

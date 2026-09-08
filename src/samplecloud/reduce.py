@@ -48,7 +48,7 @@ def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -
     "spectral distance" between two samples is always the same metric this projection respects.
 
     ``sample_feature_vector.sample_hash`` foreign-keys to ``sample.hash``, so every vector this
-    reads already belongs to a catalogued sample -- promoting an experiment can never reference a
+    reads already belongs to a cataloged sample -- promoting an experiment can never reference a
     sample the catalog no longer has.
     """
     feature_vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)

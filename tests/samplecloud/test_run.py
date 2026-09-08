@@ -73,7 +73,7 @@ def test_run_embedding_on_an_empty_catalog_reduces_nothing(
 
     summary = run_embedding(config, connection, _StubFeatureExtractor(), experiment_id)
 
-    assert summary.extraction.catalogued == 0
+    assert summary.extraction.cataloged == 0
     assert summary.reduction.samples_reduced == 0
 
 

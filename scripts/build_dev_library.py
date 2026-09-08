@@ -71,7 +71,7 @@ def _tonal_waveform(frame_count: int, *, frequency: float, seed: int) -> NDArray
     A fixed harmonic ratio is not enough to keep unrelated scenarios apart: two tones sharing the
     same relative harmonic weights are, at some resampling ratio, numerically indistinguishable --
     resampling scales every harmonic by the same factor, so it can reproduce one tone's frequency
-    from another's exactly. Randomising the weights per `seed` instead gives each scenario its own
+    from another's exactly. Randomizing the weights per `seed` instead gives each scenario its own
     spectral shape, which a resampling ratio cannot reproduce from a different scenario's shape, so
     independently seeded waveforms stay apart under the same fingerprint search this library's own
     detectors use. A deliberate pair still shares one identical waveform (weights included) before
@@ -93,7 +93,7 @@ def _tonal_waveform(frame_count: int, *, frequency: float, seed: int) -> NDArray
 
 def _resample_stable_waveform(frame_count: int, *, frequency: float) -> NDArray[np.float64]:
     """A waveform for the resampled-variant pair specifically, whose harmonic shape is fixed rather
-    than randomised, at this function's own default frequency (440 Hz, matching the call site below).
+    than randomized, at this function's own default frequency (440 Hz, matching the call site below).
 
     Checked empirically while building this corpus: `compute_fingerprint`'s candidate-generation
     similarity depends on more than the resampling ratio alone -- this exact three-harmonic ratio
@@ -238,12 +238,12 @@ def _compound_pair() -> dict[str, bytes]:
     """
     waveform = _tonal_waveform(2600, frequency=660.0, seed=7)
     original = TrackModSample(name="compound_original", pcm=waveform, rate=SAMPLE_RATE, depth=BitDepth.SIXTEEN)
-    quieter_and_requantised = TrackModSample(
+    quieter_and_requantized = TrackModSample(
         name="compound_variant", pcm=waveform * 0.4, rate=SAMPLE_RATE, depth=BitDepth.EIGHT
     )
     return {
         "pair_compound_a.xm": _xm_bytes(_single_instrument_song(original)),
-        "pair_compound_b.xm": _xm_bytes(_single_instrument_song(quieter_and_requantised)),
+        "pair_compound_b.xm": _xm_bytes(_single_instrument_song(quieter_and_requantized)),
     }
 
 
@@ -279,7 +279,7 @@ def _trailing_trim_pair() -> dict[str, bytes]:
 
 
 def _too_short_module() -> dict[str, bytes]:
-    """A sample below the ingestion-time frame filter's floor -- never catalogued at all."""
+    """A sample below the ingestion-time frame filter's floor -- never cataloged at all."""
     too_short = TrackModSample(
         name="too_short", pcm=_tonal_waveform(TOO_SHORT_SAMPLE_FRAMES, frequency=880.0, seed=10), rate=SAMPLE_RATE
     )

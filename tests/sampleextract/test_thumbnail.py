@@ -32,7 +32,7 @@ def test_computes_a_thumbnail_for_every_sample_with_none_yet(connection: Connect
 
     summary = compute_missing_thumbnails(connection, tmp_path, force=False)
 
-    assert summary == ThumbnailBackfillSummary(catalogued=2, already_thumbnailed=0, computed=2)
+    assert summary == ThumbnailBackfillSummary(cataloged=2, already_thumbnailed=0, computed=2)
     thumbnail_repository = PostgresSampleThumbnailRepository(connection)
     assert thumbnail_repository.get(sample_a.hash) is not None
     assert thumbnail_repository.get(sample_b.hash) is not None
@@ -44,7 +44,7 @@ def test_a_second_pass_skips_every_sample_already_thumbnailed(connection: Connec
 
     summary = compute_missing_thumbnails(connection, tmp_path, force=False)
 
-    assert summary.catalogued == 1
+    assert summary.cataloged == 1
     assert summary.already_thumbnailed == 1
     assert summary.computed == 0
 
@@ -57,6 +57,6 @@ def test_force_recomputes_every_sample_regardless_of_what_is_already_cached(
 
     summary = compute_missing_thumbnails(connection, tmp_path, force=True)
 
-    assert summary.catalogued == 1
+    assert summary.cataloged == 1
     assert summary.already_thumbnailed == 0
     assert summary.computed == 1

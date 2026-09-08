@@ -181,7 +181,7 @@ def test_ingest_module_caches_a_thumbnail_matching_the_stored_sample_s_own_wavef
     connection: Connection, tmp_path: Path, song_builder: SongBuilder
 ) -> None:
     # The thumbnail is compared against this exact in-memory waveform, not a disk round trip
-    # through the stored WAV: quantising and dequantising an 8/16-bit file introduces noise a
+    # through the stored WAV: quantizing and dequantizing an 8/16-bit file introduces noise a
     # bit-for-bit comparison would wrongly flag, the same reasoning `compute_waveform_peaks`'s own
     # bit-depth-independence already rests on.
     pcm = np.linspace(-1.0, 1.0, 32)

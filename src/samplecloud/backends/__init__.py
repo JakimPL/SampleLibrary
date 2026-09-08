@@ -11,7 +11,7 @@ class FeatureExtractor(Protocol):
 
     An implementation must return the same vector length for every call regardless of the input
     waveform's frame count, so that any two samples' vectors are directly comparable however long
-    or short either recording is. The waveform it receives is already dequantised to float PCM
+    or short either recording is. The waveform it receives is already dequantized to float PCM
     (see ``samplecore.storage.audio_store.read``), so an implementation never has to account for
     the sample's original bit depth either -- both invariants are what let this project swap in a
     different extraction method later without touching the pipeline that calls it.

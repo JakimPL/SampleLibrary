@@ -17,7 +17,7 @@ from samplecore.storage.repositories.sample_properties import PostgresSampleProp
 _SHARED_SAMPLE_HASH = "a" * 64
 
 
-def _catalogue_one_sample(connection: Connection, module_: Module) -> None:
+def _catalog_one_sample(connection: Connection, module_: Module) -> None:
     """Give a module the sample occurrence that makes it worth browsing to."""
     PostgresSampleRepository(connection).upsert(
         Sample(hash=_SHARED_SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
@@ -81,7 +81,7 @@ def _insert_three_modules(
     another_xm_module = _build_module(format(3, "064x"), repository.next_id(), tracker=TrackerFormat.XM)
     for module in (xm_module, it_module, another_xm_module):
         repository.insert(module)
-        _catalogue_one_sample(connection, module)
+        _catalog_one_sample(connection, module)
 
     return xm_module, it_module, another_xm_module
 
@@ -135,7 +135,7 @@ def test_count_matches_the_number_of_stored_modules(connection: Connection) -> N
 
 
 def test_a_module_the_catalog_holds_no_sample_from_is_left_out_of_the_listing(connection: Connection) -> None:
-    """A chiptune whose every waveform is too short to catalogue has nothing to show a reader."""
+    """A chiptune whose every waveform is too short to catalog has nothing to show a reader."""
     repository = PostgresModuleRepository(connection)
     first, _, _ = _insert_three_modules(repository, connection)
     chiptune = _build_module(format(4, "064x"), repository.next_id())
@@ -148,7 +148,7 @@ def test_a_module_the_catalog_holds_no_sample_from_is_left_out_of_the_listing(co
     assert repository.count() == 3
 
 
-def test_a_module_left_out_of_the_listing_stays_catalogued_and_reachable(connection: Connection) -> None:
+def test_a_module_left_out_of_the_listing_stays_cataloged_and_reachable(connection: Connection) -> None:
     """Keeping the module is the point: only browsing past it is noise."""
     repository = PostgresModuleRepository(connection)
     chiptune = _build_module(format(4, "064x"), repository.next_id())

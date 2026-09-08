@@ -9,7 +9,7 @@ from samplecore.models.tracker import TrackerFormat
 
 
 class TrackerModuleCount(BaseModel):
-    """How many catalogued modules belong to one tracker format."""
+    """How many cataloged modules belong to one tracker format."""
 
     model_config = FROZEN
 

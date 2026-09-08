@@ -77,7 +77,7 @@ def test_list_for_module_orders_events_by_their_grid_position(
     assert repository.list_for_module(stored_module.id) == (first, middle, last)
 
 
-def test_an_event_reaching_no_catalogued_occurrence_keeps_its_resolved_note(
+def test_an_event_reaching_no_cataloged_occurrence_keeps_its_resolved_note(
     connection: Connection, stored_module: Module
 ) -> None:
     repository = PostgresNoteEventRepository(connection)
@@ -161,7 +161,7 @@ def test_note_usage_counts_the_events_reaching_a_sample_at_each_note(
     assert [(item.sounded_note, item.event_count) for item in usage] == [(PRESSED_NOTE, 1), (SOUNDED_NOTE, 2)]
 
 
-def test_note_usage_leaves_out_an_event_reaching_no_catalogued_occurrence(
+def test_note_usage_leaves_out_an_event_reaching_no_cataloged_occurrence(
     connection: Connection, stored_sample: Sample, stored_module: Module, stored_occurrence: None
 ) -> None:
     repository = PostgresNoteEventRepository(connection)

@@ -29,9 +29,9 @@ class NoteExtractionSummary:
 
 
 def extract_missing_notes(config: LibraryConfig, connection: Connection, *, force: bool) -> NoteExtractionSummary:
-    """Read the patterns of every catalogued module whose notes are not yet on file.
+    """Read the patterns of every cataloged module whose notes are not yet on file.
 
-    A module is found by hashing the file and looking the hash up, the same way ingest recognises
+    A module is found by hashing the file and looking the hash up, the same way ingest recognizes
     one, so this holds wherever a collection keeps its files. A catalog holds one module per content
     hash while a collection may keep the same bytes under several paths, so every module this pass
     reads is remembered as it goes and a later file naming it is counted as the duplicate it is.

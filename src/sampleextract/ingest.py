@@ -67,7 +67,7 @@ def ingest_module(
     this always inserts, and a second call for the same hash raises on the table's own UNIQUE
     constraint rather than silently doing nothing. Idempotent re-runs are ``run_extraction``'s
     concern, not this function's. A sample occurrence shorter than ``minimum_sample_frames`` is
-    never catalogued at all -- too short to hold the kind of recorded audio this library's
+    never cataloged at all -- too short to hold the kind of recorded audio this library's
     equivalence detection and browsing are built around, the same reasoning that already excludes
     an empty placeholder slot.
     """
@@ -115,7 +115,7 @@ def ingest_module(
 def _ingest_instrument_unit(context: _IngestContext, *, instrument_index: int, unit: InstrumentUnit) -> None:
     for sample_slot, trackmod_sample in enumerate(unit.samples):
         if trackmod_sample.frames < context.minimum_sample_frames:
-            continue  # a placeholder slot or a too-short sample has nothing worth cataloguing
+            continue  # a placeholder slot or a too-short sample has nothing worth cataloging
 
         _ingest_sample_occurrence(
             context, instrument_index=instrument_index, sample_slot=sample_slot, trackmod_sample=trackmod_sample

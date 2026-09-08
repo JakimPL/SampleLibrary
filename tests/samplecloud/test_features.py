@@ -47,14 +47,14 @@ def _create_experiment(connection: Connection) -> int:
     return experiment_id
 
 
-def test_extract_features_writes_a_vector_for_every_catalogued_sample(connection: Connection, tmp_path: Path) -> None:
+def test_extract_features_writes_a_vector_for_every_cataloged_sample(connection: Connection, tmp_path: Path) -> None:
     first = _store_sample(connection, tmp_path, hash_seed=1)
     second = _store_sample(connection, tmp_path, hash_seed=2)
     experiment_id = _create_experiment(connection)
 
     summary = extract_features(connection, tmp_path, experiment_id, _StubFeatureExtractor())
 
-    assert summary == FeatureExtractionSummary(catalogued=2, already_extracted=0, newly_extracted=2)
+    assert summary == FeatureExtractionSummary(cataloged=2, already_extracted=0, newly_extracted=2)
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
     assert {vector.sample_hash for vector in vectors} == {first.hash, second.hash}
 
@@ -67,7 +67,7 @@ def test_a_second_run_skips_already_extracted_samples(connection: Connection, tm
 
     summary = extract_features(connection, tmp_path, experiment_id, _StubFeatureExtractor())
 
-    assert summary == FeatureExtractionSummary(catalogued=2, already_extracted=1, newly_extracted=1)
+    assert summary == FeatureExtractionSummary(cataloged=2, already_extracted=1, newly_extracted=1)
 
 
 def test_a_different_experiment_extracts_independently(connection: Connection, tmp_path: Path) -> None:
@@ -78,7 +78,7 @@ def test_a_different_experiment_extracts_independently(connection: Connection, t
     second_experiment_id = _create_experiment(connection)
     summary = extract_features(connection, tmp_path, second_experiment_id, _StubFeatureExtractor())
 
-    assert summary == FeatureExtractionSummary(catalogued=1, already_extracted=0, newly_extracted=1)
+    assert summary == FeatureExtractionSummary(cataloged=1, already_extracted=0, newly_extracted=1)
 
 
 def test_sample_limit_bounds_how_many_new_samples_are_extracted(connection: Connection, tmp_path: Path) -> None:
@@ -96,7 +96,7 @@ def test_an_empty_catalog_extracts_nothing(connection: Connection, tmp_path: Pat
 
     summary = extract_features(connection, tmp_path, experiment_id, _StubFeatureExtractor())
 
-    assert summary == FeatureExtractionSummary(catalogued=0, already_extracted=0, newly_extracted=0)
+    assert summary == FeatureExtractionSummary(cataloged=0, already_extracted=0, newly_extracted=0)
 
 
 class _InterruptingFeatureExtractor:

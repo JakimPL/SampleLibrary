@@ -56,7 +56,7 @@ serve`), start the frontend in a separate terminal with `make frontend-dev` and 
 `http://localhost:5173`. `make frontend-build` produces a production build; `make frontend-check`
 runs its typecheck, lint, format, and test suite.
 
-### Labelling samples by hand
+### Labeling samples by hand
 
 Open a sample in the app and type what it actually is. The wording is yours to choose, and what
 you have already used is offered back as you type, so one vocabulary settles by habit. Where a

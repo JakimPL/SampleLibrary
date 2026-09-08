@@ -72,13 +72,13 @@ describe("ModuleDetailPanel", () => {
     });
 
     it("shows an error notice when the module cannot be found", async () => {
-        getModule.mockRejectedValue(new Error("no module catalogued with hash 'abc'"));
+        getModule.mockRejectedValue(new Error("no module cataloged with hash 'abc'"));
         useSelectionStore.getState().focusModule("abc");
 
         renderPanel();
 
         await waitFor(() => {
-            expect(screen.getByRole("alert")).toHaveTextContent("no module catalogued with hash 'abc'");
+            expect(screen.getByRole("alert")).toHaveTextContent("no module cataloged with hash 'abc'");
         });
     });
 

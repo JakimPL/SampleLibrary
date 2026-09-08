@@ -32,7 +32,7 @@ def test_an_export_writes_one_line_per_label(connection: Connection, stored_labe
     assert len(path.read_text(encoding="utf-8").splitlines()) == 1
 
 
-def test_an_export_of_an_unlabelled_library_writes_an_empty_file(connection: Connection, tmp_path: Path) -> None:
+def test_an_export_of_an_unlabeled_library_writes_an_empty_file(connection: Connection, tmp_path: Path) -> None:
     path = tmp_path / "labels.jsonl"
 
     summary = export_labels(connection, path=path)

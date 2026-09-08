@@ -81,11 +81,11 @@ class PostgresModuleRepository:
 
         Browsing is over modules that contributed something: a module every one of whose samples
         falls under `minimum_sample_frames` -- a chiptune built from single-cycle waveforms, most
-        often -- stays catalogued and reachable by its own hash, and `list_all` still reaches it for
+        often -- stays cataloged and reachable by its own hash, and `list_all` still reaches it for
         the pipelines that walk every module. It simply has nothing to show a reader here.
         """
         statement = select(module).order_by(module.c.id).limit(limit).offset(offset)
-        statement = _with_catalogued_samples(_with_tracker_filter(statement, tracker))
+        statement = _with_cataloged_samples(_with_tracker_filter(statement, tracker))
         rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_module(row) for row in rows)
 
@@ -94,7 +94,7 @@ class PostgresModuleRepository:
         # func.count() is SQLAlchemy's dynamically-generated SQL COUNT(*), invisible to pylint's static analysis.
         # pylint: disable-next=not-callable
         statement = select(func.count()).select_from(module)
-        statement = _with_catalogued_samples(_with_tracker_filter(statement, tracker))
+        statement = _with_cataloged_samples(_with_tracker_filter(statement, tracker))
         return self._connection.execute(statement).scalar_one()
 
 
@@ -105,7 +105,7 @@ def _with_tracker_filter(statement: _SelectT, tracker: TrackerFormat | None) -> 
     return statement.where(module.c.tracker == tracker.value)
 
 
-def _with_catalogued_samples(statement: _SelectT) -> _SelectT:
+def _with_cataloged_samples(statement: _SelectT) -> _SelectT:
     return statement.where(
         select(sample_properties.c.module_id).where(sample_properties.c.module_id == module.c.id).exists()
     )

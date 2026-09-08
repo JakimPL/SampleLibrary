@@ -11,6 +11,7 @@ format:
 
 .PHONY: lint
 lint:
+	uv run codespell
 	uv run mypy
 	uv run pylint src scripts
 	uv run lint-imports

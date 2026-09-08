@@ -28,7 +28,7 @@ class LabelRequest(BaseModel):
 
 
 class LabelsWritten(BaseModel):
-    """Which samples a labelling reached, so a caller updates exactly the rows that changed."""
+    """Which samples a labeling reached, so a caller updates exactly the rows that changed."""
 
     model_config = FROZEN
 
@@ -54,9 +54,9 @@ def set_label(
     the one write this application performs to the schema it owns.
 
     Raises:
-        HTTPException: 404 when no sample is catalogued under this hash.
+        HTTPException: 404 when no sample is cataloged under this hash.
     """
-    _require_catalogued(connection, sample_hash)
+    _require_cataloged(connection, sample_hash)
     hashes = _scoped_hashes(connection, sample_hash, scope=request.scope)
     labels = anchored_labels(
         connection,
@@ -81,9 +81,9 @@ def clear_label(
     """Take back a decision, over the same scope that could have made it.
 
     Raises:
-        HTTPException: 404 when no sample is catalogued under this hash.
+        HTTPException: 404 when no sample is cataloged under this hash.
     """
-    _require_catalogued(connection, sample_hash)
+    _require_cataloged(connection, sample_hash)
     hashes = _scoped_hashes(connection, sample_hash, scope=scope)
     PostgresSampleLabelRepository(curation_connection).delete_many(hashes)
     curation_connection.commit()
@@ -97,9 +97,9 @@ def get_label_vocabulary(curation_connection: Connection = Depends(get_curation_
     return PostgresSampleLabelRepository(curation_connection).vocabulary()
 
 
-def _require_catalogued(connection: Connection, sample_hash: str) -> None:
+def _require_cataloged(connection: Connection, sample_hash: str) -> None:
     if PostgresSampleRepository(connection).get(sample_hash) is None:
-        raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
+        raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
 
 def _scoped_hashes(connection: Connection, sample_hash: str, *, scope: LabelSource) -> tuple[str, ...]:

@@ -36,16 +36,16 @@ def resolve_module_instruments(song: Song, *, module_id: int) -> tuple[ModuleIns
 
 
 def resolve_note_events(
-    song: Song, *, module_id: int, catalogued_slots: frozenset[tuple[int, int]]
+    song: Song, *, module_id: int, cataloged_slots: frozenset[tuple[int, int]]
 ) -> tuple[NoteEvent, ...]:
     """Every key the song's patterns press, carrying the note and sample its instrument routes it to.
 
-    ``catalogued_slots`` states which occurrences the catalog holds for this module, so a key routed
+    ``cataloged_slots`` states which occurrences the catalog holds for this module, so a key routed
     onto a sample it left out resolves to a note with an open slot: the event stays on record, and
     every slot named is one the catalog can actually be joined to.
     """
     voices = addressable_voices(song)
-    sample_slots = _sample_slots(voices, catalogued_slots=catalogued_slots)
+    sample_slots = _sample_slots(voices, cataloged_slots=cataloged_slots)
     events: list[NoteEvent] = []
     for pattern_index, pattern in enumerate(song.patterns):
         events.extend(
@@ -57,7 +57,7 @@ def resolve_note_events(
     return tuple(events)
 
 
-def _sample_slots(voices: InstrumentVoices, *, catalogued_slots: frozenset[tuple[int, int]]) -> SampleSlots:
+def _sample_slots(voices: InstrumentVoices, *, cataloged_slots: frozenset[tuple[int, int]]) -> SampleSlots:
     """Per instrument, the catalog slot each sample its keys reach is stored under.
 
     ``held`` numbers an instrument's samples from zero in the order its keys first name them, which
@@ -69,7 +69,7 @@ def _sample_slots(voices: InstrumentVoices, *, catalogued_slots: frozenset[tuple
         {
             sample_index: slot
             for slot, sample_index in enumerate(instrument.samples)
-            if (instrument_index, slot) in catalogued_slots
+            if (instrument_index, slot) in cataloged_slots
         }
         for instrument_index, instrument in enumerate(voices.instruments)
     )

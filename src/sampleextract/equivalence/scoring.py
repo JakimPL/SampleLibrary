@@ -16,7 +16,7 @@ MINIMUM_GAIN: Final[float] = 0.1
 MAXIMUM_GAIN: Final[float] = 10.0
 GAIN_UNITY_TOLERANCE: Final[float] = 0.05
 
-# One 8-bit quantisation step: the smallest amplitude even the library's lowest stored fidelity can
+# One 8-bit quantization step: the smallest amplitude even the library's lowest stored fidelity can
 # represent, so content at or below it is indistinguishable from silence regardless of a sample's
 # own depth.
 TRAILING_SILENCE_THRESHOLD: Final[float] = 1.0 / BitDepth.EIGHT.scale
@@ -41,8 +41,8 @@ class RelationScore:
     evidence: dict[str, float]
 
 
-def _quantisation_rms_noise(depth: BitDepth) -> float:
-    """The theoretical root-mean-square noise a uniform quantiser at ``depth`` adds to full-scale content."""
+def _quantization_rms_noise(depth: BitDepth) -> float:
+    """The theoretical root-mean-square noise a uniform quantizer at ``depth`` adds to full-scale content."""
     return 1.0 / (depth.scale * sqrt(12.0))
 
 
@@ -50,10 +50,10 @@ def _gain_variant_ceiling(depth: BitDepth) -> float:
     """The residual-error ceiling for a gain-compensated match at ``depth``.
 
     Scales ``GAIN_VARIANT_RMS_ERROR_CEILING`` -- set for the 8-bit case, at roughly eight times that
-    depth's own theoretical quantisation noise -- by the ratio between ``depth``'s theoretical noise
+    depth's own theoretical quantization noise -- by the ratio between ``depth``'s theoretical noise
     and 8-bit's, so the same headroom applies regardless of which depth a candidate pair shares.
     """
-    return GAIN_VARIANT_RMS_ERROR_CEILING * _quantisation_rms_noise(depth) / _quantisation_rms_noise(BitDepth.EIGHT)
+    return GAIN_VARIANT_RMS_ERROR_CEILING * _quantization_rms_noise(depth) / _quantization_rms_noise(BitDepth.EIGHT)
 
 
 def score_gain_variant(
@@ -63,10 +63,10 @@ def score_gain_variant(
     gain are compensated for.
 
     Fitting a gain by least squares before comparing, rather than comparing raw waveforms directly,
-    is what lets this scorer recognise a pair related by amplitude alone, by bit depth alone, or by
+    is what lets this scorer recognize a pair related by amplitude alone, by bit depth alone, or by
     both at once -- a depth change alone fits a gain near 1.0, and the confidence and evidence are
     identical either way. Trimming both to their common length before fitting is what lets it
-    recognise a pair whose trailing-silence trim (``samplecore.waveform.trim_trailing_silence``)
+    recognize a pair whose trailing-silence trim (``samplecore.waveform.trim_trailing_silence``)
     landed a few frames apart, without needing them to be pre-aligned by the caller. The ceiling
     compares against ``min(depth_a, depth_b)``, the lower-fidelity side's noise floor, since that
     dominates the residual regardless of which side it is on.
@@ -105,7 +105,7 @@ def score_resampled_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray
     """How closely a shorter waveform, resampled up and best-aligned, matches a longer one.
 
     Pearson correlation is exactly invariant to a positive gain applied to either waveform (it is
-    computed on mean-centred, self-normalised signals), so this already recognises a pair related by
+    computed on mean-centered, self-normalized signals), so this already recognizes a pair related by
     resampling and amplitude at once without any gain compensation of its own; the best-fitting gain
     is still recovered and reported in ``evidence``, purely as corroborating detail. Returns None
     when every offset in the search window leaves one of the compared windows silent (zero

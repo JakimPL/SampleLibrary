@@ -80,7 +80,7 @@ def gain_variant_calibration_trials(*, gains: tuple[float, ...], rng_seed: int) 
     content sharing the candidate shape.
 
     The reference waveform is scaled down by the largest requested gain first, so that amplifying it
-    back up before quantising never clips full-scale PCM -- a clipped compound trial would fail for
+    back up before quantizing never clips full-scale PCM -- a clipped compound trial would fail for
     a reason that has nothing to do with the scorer's own gain compensation.
     """
     headroom = max(1.0, max((abs(gain) for gain in gains), default=1.0))

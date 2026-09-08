@@ -48,7 +48,7 @@ def configure_console_output_encoding() -> None:
     """Let stdout and stderr substitute an escape for any character the console cannot encode.
 
     Shared by every console entry point in this project. A narrow console codepage (for example
-    Windows' cp1250) cannot represent every character a catalogued module or sample path may
+    Windows' cp1250) cannot represent every character a cataloged module or sample path may
     contain; without this, printing such a path crashes the whole command instead of garbling
     only that one line. Left alone when a stream has been replaced by something other than the
     usual text wrapper, such as a test's captured stream.

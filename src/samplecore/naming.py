@@ -39,7 +39,7 @@ def choose_dominant_name(names: Iterable[str]) -> str:
     """Resolve one display name out of a sample's, possibly conflicting, occurrence names.
 
     Sanitizes every name and picks the most frequent sanitized form. A tie is broken by
-    ascending alphabetical order -- a stable, deterministic rule that favours neither the
+    ascending alphabetical order -- a stable, deterministic rule that favors neither the
     shortest nor the longest candidate. An input with no non-empty sanitized name (a sample
     with no occurrences, or occurrences named only with stripped characters) resolves to `""`.
     """

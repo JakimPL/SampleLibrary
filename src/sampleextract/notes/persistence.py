@@ -22,8 +22,8 @@ def persist_module_notes(connection: Connection, *, song: Song, module_id: int, 
 
     A module whose rows are already on file is cleared through ``clear_module_notes`` first.
     """
-    catalogued_slots = PostgresSamplePropertiesRepository(connection).catalogued_slots(module_id)
-    events = resolve_note_events(song, module_id=module_id, catalogued_slots=catalogued_slots)
+    cataloged_slots = PostgresSamplePropertiesRepository(connection).cataloged_slots(module_id)
+    events = resolve_note_events(song, module_id=module_id, cataloged_slots=cataloged_slots)
     PostgresModuleInstrumentRepository(connection).insert_many(resolve_module_instruments(song, module_id=module_id))
     PostgresNoteEventRepository(connection).insert_many(events)
     PostgresModuleNoteExtractionRepository(connection).mark(

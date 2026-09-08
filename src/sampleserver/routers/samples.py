@@ -75,7 +75,7 @@ class SampleDistance(BaseModel):
 class SimilarSample(BaseModel):
     """One neighbor in a sample's spectral-distance nearest-neighbor listing.
 
-    ``dominant_rate_hz`` travels with the neighbour so a listener hears it at a real tracker rate
+    ``dominant_rate_hz`` travels with the neighbor so a listener hears it at a real tracker rate
     rather than at the stored file's own header rate; it is ``None`` for a sample with no occurrences.
     """
 
@@ -127,7 +127,7 @@ def list_samples(
     group_by_equivalence: bool = False,
     connection: Connection = Depends(get_connection),
 ) -> Page[SampleSummary]:
-    """A page of catalogued samples, ranked by how many module occurrences reference each one.
+    """A page of cataloged samples, ranked by how many module occurrences reference each one.
 
     Ranks by sample identity: one row per exact content hash. Every row still carries its
     equivalence class, when it has one; ``group_by_equivalence`` additionally collapses same-page
@@ -182,15 +182,15 @@ def _collapse_by_equivalence(items: tuple[SampleSummary, ...]) -> tuple[SampleSu
 def get_sample(sample_hash: str, connection: Connection = Depends(get_connection)) -> SampleDetail:
     """One sample's own fields plus every module occurrence that references it.
 
-    ``equivalence_member_count`` travels with the sample so a caller labelling it knows how many
+    ``equivalence_member_count`` travels with the sample so a caller labeling it knows how many
     near-duplicates the same choice would reach.
 
     Raises:
-        HTTPException: 404 when no sample is catalogued under this hash.
+        HTTPException: 404 when no sample is cataloged under this hash.
     """
     sample = PostgresSampleRepository(connection).get(sample_hash)
     if sample is None:
-        raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
+        raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
     label = PostgresSampleLabelRepository(connection).get(sample_hash)
     properties = PostgresSamplePropertiesRepository(connection).list_for_sample(sample_hash)
@@ -247,10 +247,10 @@ def get_sample_audio(
     """The sample's own canonical audio, as stored in the content-addressable store.
 
     Raises:
-        HTTPException: 404 when no sample is catalogued under this hash.
+        HTTPException: 404 when no sample is cataloged under this hash.
     """
     if PostgresSampleRepository(connection).get(sample_hash) is None:
-        raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
+        raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
     return FileResponse(audio_store.object_path(library_root, sample_hash), media_type="audio/wav")
 
@@ -264,11 +264,11 @@ def get_sample_waveform(
     """A compact amplitude-envelope preview of the sample's own waveform.
 
     Raises:
-        HTTPException: 404 when no sample is catalogued under this hash.
+        HTTPException: 404 when no sample is cataloged under this hash.
     """
     sample = PostgresSampleRepository(connection).get(sample_hash)
     if sample is None:
-        raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
+        raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
     pcm = audio_store.read(library_root, sample).pcm
     return compute_waveform_peaks(pcm, bucket_count=DEFAULT_WAVEFORM_BUCKET_COUNT)
@@ -281,10 +281,10 @@ def get_sample_relations(
     """Every equivalence-class link this sample participates in, on either side of the pair.
 
     Raises:
-        HTTPException: 404 when no sample is catalogued under this hash.
+        HTTPException: 404 when no sample is cataloged under this hash.
     """
     if PostgresSampleRepository(connection).get(sample_hash) is None:
-        raise HTTPException(status_code=404, detail=f"no sample catalogued with hash {sample_hash!r}")
+        raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
     return PostgresSampleRelationRepository(connection).list_for_sample(sample_hash)
 
@@ -345,7 +345,7 @@ def _modules_by_hash(connection: Connection, properties: tuple[TrackerSampleProp
     modules_by_hash = PostgresModuleRepository(connection).get_many(hashes)
     for module_hash in hashes:
         if module_hash not in modules_by_hash:
-            raise ValueError(f"sample occurrence references module {module_hash!r}, which is not catalogued")
+            raise ValueError(f"sample occurrence references module {module_hash!r}, which is not cataloged")
 
     return modules_by_hash
 

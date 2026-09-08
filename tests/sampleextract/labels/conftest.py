@@ -20,11 +20,11 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_label import PostgresSampleLabelRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 
-_LABELLED_SAMPLE_HASH: Final[str] = "a" * 64
+_LABELED_SAMPLE_HASH: Final[str] = "a" * 64
 _REHASHED_SAMPLE_HASH: Final[str] = "b" * 64
-_LABELLED_MODULE_HASH: Final[str] = "c" * 64
+_LABELED_MODULE_HASH: Final[str] = "c" * 64
 _OCCURRENCE: Final[SampleOccurrence] = SampleOccurrence(
-    module_hash=_LABELLED_MODULE_HASH, instrument_index=0, sample_slot=0
+    module_hash=_LABELED_MODULE_HASH, instrument_index=0, sample_slot=0
 )
 
 
@@ -40,10 +40,10 @@ def _occupy_slot(connection: Connection, sample_hash: str) -> None:
 
 
 @pytest.fixture
-def catalogued_module(connection: Connection) -> Module:
+def cataloged_module(connection: Connection) -> Module:
     repository = PostgresModuleRepository(connection)
     module = Module(
-        hash=_LABELLED_MODULE_HASH,
+        hash=_LABELED_MODULE_HASH,
         id=repository.next_id(),
         filename="song.mod",
         tracker=TrackerFormat.MOD,
@@ -61,15 +61,15 @@ def catalogued_module(connection: Connection) -> Module:
 
 
 @pytest.fixture
-def catalogued_sample(connection: Connection, catalogued_module: Module) -> str:
-    _occupy_slot(connection, _LABELLED_SAMPLE_HASH)
-    return _LABELLED_SAMPLE_HASH
+def cataloged_sample(connection: Connection, cataloged_module: Module) -> str:
+    _occupy_slot(connection, _LABELED_SAMPLE_HASH)
+    return _LABELED_SAMPLE_HASH
 
 
 @pytest.fixture
-def stored_label(connection: Connection, catalogued_sample: str) -> SampleLabel:
+def stored_label(connection: Connection, cataloged_sample: str) -> SampleLabel:
     label = SampleLabel(
-        sample_hash=catalogued_sample,
+        sample_hash=cataloged_sample,
         label="warm pad",
         occurrence=_OCCURRENCE,
         module_filename="song.mod",
@@ -83,7 +83,7 @@ def stored_label(connection: Connection, catalogued_sample: str) -> SampleLabel:
 
 
 @pytest.fixture
-def rehash_the_labelled_sample(connection: Connection) -> Callable[[], str]:
+def rehash_the_labeled_sample(connection: Connection) -> Callable[[], str]:
     """Stands in for a change in how samples are hashed: the same slot, a differently-named sample.
 
     Returns the hash the slot holds afterwards, which is what a relink pass is expected to find.
@@ -91,7 +91,7 @@ def rehash_the_labelled_sample(connection: Connection) -> Callable[[], str]:
 
     def rehash() -> str:
         connection.execute(delete(sample_properties))
-        connection.execute(delete(sample).where(sample.c.hash == _LABELLED_SAMPLE_HASH))
+        connection.execute(delete(sample).where(sample.c.hash == _LABELED_SAMPLE_HASH))
         connection.commit()
         _occupy_slot(connection, _REHASHED_SAMPLE_HASH)
         return _REHASHED_SAMPLE_HASH
@@ -100,12 +100,12 @@ def rehash_the_labelled_sample(connection: Connection) -> Callable[[], str]:
 
 
 @pytest.fixture
-def forget_the_labelled_occurrence(connection: Connection) -> Callable[[], None]:
-    """Takes the labelled slot out of the catalog entirely, leaving the label nothing to reach."""
+def forget_the_labeled_occurrence(connection: Connection) -> Callable[[], None]:
+    """Takes the labeled slot out of the catalog entirely, leaving the label nothing to reach."""
 
     def forget() -> None:
         connection.execute(delete(sample_properties))
-        connection.execute(delete(sample).where(sample.c.hash == _LABELLED_SAMPLE_HASH))
+        connection.execute(delete(sample).where(sample.c.hash == _LABELED_SAMPLE_HASH))
         connection.commit()
 
     return forget

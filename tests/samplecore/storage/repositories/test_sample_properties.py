@@ -207,20 +207,20 @@ def test_list_for_sample_finds_occurrences_across_different_modules(
     assert set(repository.list_for_sample(stored_sample.hash)) == {first_occurrence, second_occurrence}
 
 
-def test_catalogued_slots_reports_every_occurrence_a_module_holds(
+def test_cataloged_slots_reports_every_occurrence_a_module_holds(
     connection: Connection, stored_sample: Sample, stored_module: Module
 ) -> None:
     repository = PostgresSamplePropertiesRepository(connection)
     repository.upsert(_xm_properties(stored_module.hash, stored_sample.hash, sample_slot=0))
     repository.upsert(_it_properties(stored_module.hash, stored_sample.hash, sample_slot=3))
 
-    assert repository.catalogued_slots(stored_module.id) == frozenset({(0, 0), (1, 3)})
+    assert repository.cataloged_slots(stored_module.id) == frozenset({(0, 0), (1, 3)})
 
 
-def test_catalogued_slots_for_a_module_with_no_occurrences_returns_nothing(
+def test_cataloged_slots_for_a_module_with_no_occurrences_returns_nothing(
     connection: Connection, stored_module: Module
 ) -> None:
-    assert PostgresSamplePropertiesRepository(connection).catalogued_slots(stored_module.id) == frozenset()
+    assert PostgresSamplePropertiesRepository(connection).cataloged_slots(stored_module.id) == frozenset()
 
 
 def test_list_for_sample_finds_nothing_for_an_unreferenced_sample(connection: Connection, sample_hash_b: str) -> None:

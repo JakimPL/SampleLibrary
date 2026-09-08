@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> None:
     if not confirmed(
         argv,
         _parse_arguments,
-        "This would permanently delete every catalogued module, sample, relation, cloud "
+        "This would permanently delete every cataloged module, sample, relation, cloud "
         "coordinate, experiment, and feature vector, and every stored audio object, for the "
         "library named in your config.toml.",
     ):

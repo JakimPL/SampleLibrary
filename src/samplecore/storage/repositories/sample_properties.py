@@ -72,7 +72,7 @@ class SamplePropertiesRepository(Protocol):
 
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]: ...
 
-    def catalogued_slots(self, module_id: int) -> frozenset[tuple[int, int]]: ...
+    def cataloged_slots(self, module_id: int) -> frozenset[tuple[int, int]]: ...
 
 
 class PostgresSamplePropertiesRepository:
@@ -102,7 +102,7 @@ class PostgresSamplePropertiesRepository:
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]:
         return self._list_by(sample_properties.c.sample_hash == sample_hash)
 
-    def catalogued_slots(self, module_id: int) -> frozenset[tuple[int, int]]:
+    def cataloged_slots(self, module_id: int) -> frozenset[tuple[int, int]]:
         """Every ``(instrument_index, sample_slot)`` pair this module actually holds an occurrence for.
 
         Asking the catalog directly is what lets a caller resolving something onto an occurrence

@@ -24,7 +24,7 @@ _logger = logging.getLogger(__name__)
 class FeatureExtractionSummary:
     """What one feature-extraction run did, across every sample it considered."""
 
-    catalogued: int
+    cataloged: int
     already_extracted: int
     newly_extracted: int
 
@@ -37,7 +37,7 @@ def extract_features(
     *,
     sample_limit: int | None = None,
 ) -> FeatureExtractionSummary:
-    """Extract a feature vector for every catalogued sample the given experiment does not have yet.
+    """Extract a feature vector for every cataloged sample the given experiment does not have yet.
 
     Idempotent within one experiment: resuming an interrupted or previously limited run only
     extracts samples the experiment has no vector for yet, matching ``run_extraction``'s and
@@ -83,5 +83,5 @@ def extract_features(
     connection.commit()
     _logger.info("Feature extraction complete.")
     return FeatureExtractionSummary(
-        catalogued=len(samples), already_extracted=len(already_extracted_hashes), newly_extracted=newly_extracted_count
+        cataloged=len(samples), already_extracted=len(already_extracted_hashes), newly_extracted=newly_extracted_count
     )

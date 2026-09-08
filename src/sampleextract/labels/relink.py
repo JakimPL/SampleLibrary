@@ -27,7 +27,7 @@ def relink_labels(connection: Connection) -> RelinkSummary:
     A sample's hash follows from how this project hashes audio, so changing that leaves a label
     naming a hash the catalog knows nothing about. Each label also carries the module slot it was
     found in, and reading that slot's current occupant is what recovers the sample it meant. Labels
-    whose sample is still catalogued are left exactly as they are, so this is safe to run at any
+    whose sample is still cataloged are left exactly as they are, so this is safe to run at any
     time.
 
     A label whose module or slot is gone from the catalog too comes back under ``unresolved``, for a
@@ -35,8 +35,8 @@ def relink_labels(connection: Connection) -> RelinkSummary:
     """
     repository = PostgresSampleLabelRepository(connection)
     labels = repository.list_all()
-    catalogued = PostgresSampleRepository(connection).get_many([label.sample_hash for label in labels])
-    stale = tuple(label for label in labels if label.sample_hash not in catalogued)
+    cataloged = PostgresSampleRepository(connection).get_many([label.sample_hash for label in labels])
+    stale = tuple(label for label in labels if label.sample_hash not in cataloged)
 
     recovered: list[tuple[str, SampleLabel]] = []
     unresolved: list[SampleLabel] = []

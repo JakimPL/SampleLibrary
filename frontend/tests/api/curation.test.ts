@@ -37,7 +37,7 @@ describe("setSampleLabel", () => {
         });
     });
 
-    it("reports back which samples the labelling reached", async () => {
+    it("reports back which samples the labeling reached", async () => {
         stubFetch({ label: "snare", sample_hashes: [SAMPLE_HASH, "b".repeat(64)] });
 
         const written = await setSampleLabel(SAMPLE_HASH, "snare", "equivalence_class");

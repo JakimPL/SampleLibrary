@@ -44,7 +44,7 @@ def test_a_label_is_kept_for_a_sample_the_catalog_does_not_hold(connection: Conn
     assert repository.count() == 1
 
 
-def test_relabelling_a_sample_replaces_what_was_there(connection: Connection, sample_hash_a: str) -> None:
+def test_relabeling_a_sample_replaces_what_was_there(connection: Connection, sample_hash_a: str) -> None:
     repository = PostgresSampleLabelRepository(connection)
     repository.upsert_many((_label(sample_hash_a, "lead"),))
 
@@ -56,7 +56,7 @@ def test_relabelling_a_sample_replaces_what_was_there(connection: Connection, sa
     assert repository.count() == 1
 
 
-def test_labelling_a_group_writes_one_row_per_member(
+def test_labeling_a_group_writes_one_row_per_member(
     connection: Connection, sample_hash_a: str, sample_hash_b: str
 ) -> None:
     repository = PostgresSampleLabelRepository(connection)

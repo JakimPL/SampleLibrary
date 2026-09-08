@@ -54,7 +54,7 @@ def _seed_catalog(connection: Connection, library_root: Path) -> tuple[Sample, S
     has a real reject case alongside the pair it is meant to find.
     """
     original_16_pcm = _tonal_waveform(2500)
-    quantised_8_pcm = dequantise(quantise(original_16_pcm, BitDepth.EIGHT), BitDepth.EIGHT)
+    quantized_8_pcm = dequantise(quantise(original_16_pcm, BitDepth.EIGHT), BitDepth.EIGHT)
     unrelated_bit_depth_pcm = np.random.default_rng(101).uniform(-1.0, 1.0, (2500, 1))
 
     original_44k_pcm = _tonal_waveform(4410)
@@ -62,10 +62,10 @@ def _seed_catalog(connection: Connection, library_root: Path) -> tuple[Sample, S
     unrelated_resampled_pcm = np.random.default_rng(202).uniform(-1.0, 1.0, (2205, 1))
 
     louder_original_pcm = _tonal_waveform(1600)
-    quieter_and_requantised_pcm = dequantise(quantise(louder_original_pcm * 0.25, BitDepth.EIGHT), BitDepth.EIGHT)
+    quieter_and_requantized_pcm = dequantise(quantise(louder_original_pcm * 0.25, BitDepth.EIGHT), BitDepth.EIGHT)
 
     original_16 = _store_sample(connection, library_root, hash_seed=1, depth=BitDepth.SIXTEEN, pcm=original_16_pcm)
-    quantised_8 = _store_sample(connection, library_root, hash_seed=2, depth=BitDepth.EIGHT, pcm=quantised_8_pcm)
+    quantized_8 = _store_sample(connection, library_root, hash_seed=2, depth=BitDepth.EIGHT, pcm=quantized_8_pcm)
     _store_sample(connection, library_root, hash_seed=3, depth=BitDepth.EIGHT, pcm=unrelated_bit_depth_pcm)
 
     original_44k = _store_sample(connection, library_root, hash_seed=4, depth=BitDepth.SIXTEEN, pcm=original_44k_pcm)
@@ -75,15 +75,15 @@ def _seed_catalog(connection: Connection, library_root: Path) -> tuple[Sample, S
     louder_original = _store_sample(
         connection, library_root, hash_seed=7, depth=BitDepth.SIXTEEN, pcm=louder_original_pcm
     )
-    quieter_and_requantised = _store_sample(
-        connection, library_root, hash_seed=8, depth=BitDepth.EIGHT, pcm=quieter_and_requantised_pcm
+    quieter_and_requantized = _store_sample(
+        connection, library_root, hash_seed=8, depth=BitDepth.EIGHT, pcm=quieter_and_requantized_pcm
     )
 
-    return original_16, quantised_8, original_44k, resampled_22k, louder_original
+    return original_16, quantized_8, original_44k, resampled_22k, louder_original
 
 
 def test_detect_equivalences_records_exactly_the_genuine_pairs(connection: Connection, tmp_path: Path) -> None:
-    original_16, quantised_8, original_44k, resampled_22k, louder_original = _seed_catalog(connection, tmp_path)
+    original_16, quantized_8, original_44k, resampled_22k, louder_original = _seed_catalog(connection, tmp_path)
 
     summary = detect_equivalences(connection, tmp_path)
 
@@ -95,7 +95,7 @@ def test_detect_equivalences_records_exactly_the_genuine_pairs(connection: Conne
     assert len(relations) == 3
 
     found_pairs = {frozenset((relation.subject_hash, relation.reference_hash)) for relation in relations}
-    assert frozenset((original_16.hash, quantised_8.hash)) in found_pairs
+    assert frozenset((original_16.hash, quantized_8.hash)) in found_pairs
     assert frozenset((original_44k.hash, resampled_22k.hash)) in found_pairs
 
     relation_by_type = {relation.relation_type: relation for relation in relations}

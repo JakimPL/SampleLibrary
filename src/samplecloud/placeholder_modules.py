@@ -52,7 +52,7 @@ def _placeholder_coordinate(module: Module, *, computed_at: datetime) -> ModuleC
 
 
 def place_and_persist_coordinates(connection: Connection) -> PlaceholderEmbeddingSummary:
-    """Generate and store one placeholder 2D coordinate for every currently-catalogued Module.
+    """Generate and store one placeholder 2D coordinate for every currently-cataloged Module.
 
     A full recompute every run, mirroring `reduce_and_persist_coordinates`'s own crash-safety
     pattern -- the whole pass runs as one transaction, landing completely or not at all.
@@ -68,7 +68,7 @@ def place_and_persist_coordinates(connection: Connection) -> PlaceholderEmbeddin
 
 
 def main() -> None:
-    """Place every catalogued module at a placeholder 2D coordinate and report the result."""
+    """Place every cataloged module at a placeholder 2D coordinate and report the result."""
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         summary = place_and_persist_coordinates(connection)

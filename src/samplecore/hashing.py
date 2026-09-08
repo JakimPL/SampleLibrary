@@ -18,8 +18,8 @@ def compute_sample_hash(*, depth: BitDepth, channels: ChannelLayout, frames: int
     """The content-addressed identity of a waveform at a given bit depth and channel layout.
 
     The hash domain-separates on depth, channel count, and frame count before hashing the
-    quantised payload, git-blob style, so two different (depth, channels, frames) combinations
-    can never collide on identical short or silent payload bytes. Quantisation reuses TrackMod's
+    quantized payload, git-blob style, so two different (depth, channels, frames) combinations
+    can never collide on identical short or silent payload bytes. Quantization reuses TrackMod's
     own signed convention at both depths, so two extractions of the same source audio always agree
     on the hash regardless of which code path decoded it.
     """

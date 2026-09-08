@@ -30,7 +30,7 @@ def compute_equivalence_classes(relations: tuple[SampleRelation, ...]) -> tuple[
     Each SampleRelation -- already confidence-gated before being persisted -- is treated as an
     edge between its two sample hashes; every connected component of two or more samples becomes
     one class. A sample with no relation at all joins no class: membership means "known to be
-    related to at least one other sample," not "every catalogued sample." Classes are returned
+    related to at least one other sample," not "every cataloged sample." Classes are returned
     ordered by ascending class hash, so the same relation set always yields the same sequence.
     """
     parents: dict[str, str] = {}

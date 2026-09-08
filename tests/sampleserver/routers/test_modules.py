@@ -43,7 +43,7 @@ def _insert_module_without_samples(connection: Connection, seed: int, *, tracker
 
 
 def _insert_module(connection: Connection, seed: int, *, tracker: TrackerFormat) -> Module:
-    """A module as the listing expects one: catalogued, with a sample the library actually holds."""
+    """A module as the listing expects one: cataloged, with a sample the library actually holds."""
     module = _insert_module_without_samples(connection, seed, tracker=tracker)
     PostgresSampleRepository(connection).upsert(
         Sample(hash=_LISTED_SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
@@ -76,7 +76,7 @@ def test_list_modules_returns_a_page(client: TestClient, connection: Connection)
 def test_list_modules_leaves_out_a_module_the_library_holds_no_sample_from(
     client: TestClient, connection: Connection
 ) -> None:
-    """A chiptune of single-cycle waveforms stays catalogued, and browsing past it is noise."""
+    """A chiptune of single-cycle waveforms stays cataloged, and browsing past it is noise."""
     listed = _insert_module(connection, 1, tracker=TrackerFormat.XM)
     chiptune = _insert_module_without_samples(connection, 2, tracker=TrackerFormat.MOD)
 

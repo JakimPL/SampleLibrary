@@ -7,7 +7,7 @@ import { useLabelStore } from "../../src/samples/labelStore";
 const SAMPLE_HASH = "a".repeat(64);
 
 describe("CategoryBadge", () => {
-    it("names the guessed category when nobody has labelled the sample", () => {
+    it("names the guessed category when nobody has labeled the sample", () => {
         render(<CategoryBadge sampleHash={SAMPLE_HASH} category="kick" handLabel={null} />);
 
         expect(screen.getByText("Kick")).toBeInTheDocument();
@@ -36,7 +36,7 @@ describe("CategoryBadge", () => {
         expect(screen.getByText("Kick")).toBeInTheDocument();
     });
 
-    it("leaves a sample nobody labelled in this session alone", () => {
+    it("leaves a sample nobody labeled in this session alone", () => {
         useLabelStore.getState().applyLabel(["b".repeat(64)], "rimshot");
 
         render(<CategoryBadge sampleHash={SAMPLE_HASH} category="snare" handLabel={null} />);

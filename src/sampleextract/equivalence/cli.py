@@ -33,6 +33,6 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         "--limit",
         type=int,
         default=None,
-        help="Consider only the first N catalogued samples, for a quick run over a small slice.",
+        help="Consider only the first N cataloged samples, for a quick run over a small slice.",
     )
     return parser.parse_args(argv)

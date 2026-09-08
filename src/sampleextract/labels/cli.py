@@ -54,7 +54,7 @@ def _report_relink(summary: RelinkSummary) -> None:
     )
     for label in summary.unresolved:
         _logger.warning(
-            "Left alone: %r on %s, whose slot %d/%d in %s is no longer catalogued.",
+            "Left alone: %r on %s, whose slot %d/%d in %s is no longer cataloged.",
             label.label,
             label.sample_hash,
             label.occurrence.instrument_index,

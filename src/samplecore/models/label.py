@@ -32,7 +32,7 @@ class SampleLabel(BaseModel):
     reading the current hash out of that module slot is what relinks the label to its sample, which
     is the whole reason a label is worth more than the hash it happens to carry today.
     `module_filename` and `sample_name` are the same anchor in human-readable form, for the case
-    where even the module is no longer recognised.
+    where even the module is no longer recognized.
 
     `source` keeps the difference between a sample a person listened to individually and one that
     inherited its label from the near-duplicates it was grouped with, since that distinction matters

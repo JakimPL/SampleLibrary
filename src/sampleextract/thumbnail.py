@@ -18,7 +18,7 @@ from samplecore.waveform import DEFAULT_THUMBNAIL_BUCKET_COUNT, compute_waveform
 class ThumbnailBackfillSummary:
     """What one thumbnail backfill pass did, across every sample it considered."""
 
-    catalogued: int
+    cataloged: int
     already_thumbnailed: int
     computed: int
 
@@ -55,4 +55,4 @@ def compute_missing_thumbnails(connection: Connection, library_root: Path, *, fo
             )
             computed += 1
 
-    return ThumbnailBackfillSummary(catalogued=len(samples), already_thumbnailed=already_thumbnailed, computed=computed)
+    return ThumbnailBackfillSummary(cataloged=len(samples), already_thumbnailed=already_thumbnailed, computed=computed)

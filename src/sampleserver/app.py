@@ -20,7 +20,7 @@ def create_app(database_url: str, library_root: Path) -> FastAPI:
     importing this module (as tests do, to build an app over a temporary catalog) never depends
     on a real `config.toml` existing.
     """
-    application = FastAPI(title="SampleLibrary", description="Read access to the sample catalog, with hand labelling.")
+    application = FastAPI(title="SampleLibrary", description="Read access to the sample catalog, with hand labeling.")
     application.state.database_url = database_url
     application.state.library_root = library_root
     application.include_router(modules.router)

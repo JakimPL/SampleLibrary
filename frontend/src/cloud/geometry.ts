@@ -21,7 +21,7 @@ const FALLBACK_RANGE = 1;
 /**
  * Maps a set of points' bounding box onto regl-scatterplot's own [-1, 1] coordinate space.
  *
- * A shared coordinate range across every render keeps the plot centred and fully visible
+ * A shared coordinate range across every render keeps the plot centered and fully visible
  * regardless of the arbitrary scale a UMAP fit or a placeholder embedding happens to produce.
  */
 export function normalizePoints(points: readonly CloudEntityPoint[]): readonly CloudEntityPoint[] {

@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * List Modules
-         * @description A page of catalogued modules, optionally filtered by tracker format.
+         * @description A page of cataloged modules, optionally filtered by tracker format.
          */
         readonly get: operations["list_modules_modules_get"];
         readonly put?: never;
@@ -36,7 +36,7 @@ export interface paths {
          * @description One module's own fields plus every sample occurrence it declares.
          *
          *     Raises:
-         *         HTTPException: 404 when no module is catalogued under this hash.
+         *         HTTPException: 404 when no module is cataloged under this hash.
          */
         readonly get: operations["get_module_modules__module_hash__get"];
         readonly put?: never;
@@ -56,7 +56,7 @@ export interface paths {
         };
         /**
          * List Samples
-         * @description A page of catalogued samples, ranked by how many module occurrences reference each one.
+         * @description A page of cataloged samples, ranked by how many module occurrences reference each one.
          *
          *     Ranks by sample identity: one row per exact content hash. Every row still carries its
          *     equivalence class, when it has one; ``group_by_equivalence`` additionally collapses same-page
@@ -83,11 +83,11 @@ export interface paths {
          * Get Sample
          * @description One sample's own fields plus every module occurrence that references it.
          *
-         *     ``equivalence_member_count`` travels with the sample so a caller labelling it knows how many
+         *     ``equivalence_member_count`` travels with the sample so a caller labeling it knows how many
          *     near-duplicates the same choice would reach.
          *
          *     Raises:
-         *         HTTPException: 404 when no sample is catalogued under this hash.
+         *         HTTPException: 404 when no sample is cataloged under this hash.
          */
         readonly get: operations["get_sample_samples__sample_hash__get"];
         readonly put?: never;
@@ -110,7 +110,7 @@ export interface paths {
          * @description The sample's own canonical audio, as stored in the content-addressable store.
          *
          *     Raises:
-         *         HTTPException: 404 when no sample is catalogued under this hash.
+         *         HTTPException: 404 when no sample is cataloged under this hash.
          */
         readonly get: operations["get_sample_audio_samples__sample_hash__audio_get"];
         readonly put?: never;
@@ -133,7 +133,7 @@ export interface paths {
          * @description A compact amplitude-envelope preview of the sample's own waveform.
          *
          *     Raises:
-         *         HTTPException: 404 when no sample is catalogued under this hash.
+         *         HTTPException: 404 when no sample is cataloged under this hash.
          */
         readonly get: operations["get_sample_waveform_samples__sample_hash__waveform_get"];
         readonly put?: never;
@@ -156,7 +156,7 @@ export interface paths {
          * @description Every equivalence-class link this sample participates in, on either side of the pair.
          *
          *     Raises:
-         *         HTTPException: 404 when no sample is catalogued under this hash.
+         *         HTTPException: 404 when no sample is cataloged under this hash.
          */
         readonly get: operations["get_sample_relations_samples__sample_hash__relations_get"];
         readonly put?: never;
@@ -298,7 +298,7 @@ export interface paths {
          *     the one write this application performs to the schema it owns.
          *
          *     Raises:
-         *         HTTPException: 404 when no sample is catalogued under this hash.
+         *         HTTPException: 404 when no sample is cataloged under this hash.
          */
         readonly put: operations["set_label_curation_labels__sample_hash__put"];
         readonly post?: never;
@@ -307,7 +307,7 @@ export interface paths {
          * @description Take back a decision, over the same scope that could have made it.
          *
          *     Raises:
-         *         HTTPException: 404 when no sample is catalogued under this hash.
+         *         HTTPException: 404 when no sample is cataloged under this hash.
          */
         readonly delete: operations["clear_label_curation_labels__sample_hash__delete"];
         readonly options?: never;
@@ -406,7 +406,7 @@ export interface components {
         readonly LabelSource: "sample" | "equivalence_class";
         /**
          * LabelsWritten
-         * @description Which samples a labelling reached, so a caller updates exactly the rows that changed.
+         * @description Which samples a labeling reached, so a caller updates exactly the rows that changed.
          */
         readonly LabelsWritten: {
             /** Label */
@@ -695,14 +695,14 @@ export interface components {
         readonly SampleCategory: "kick" | "snare" | "clap" | "hi_hat" | "cymbal" | "percussion" | "bass" | "lead" | "pad" | "pluck" | "vocal" | "fx" | "loop" | "uncategorized";
         /**
          * SampleCloudPoint
-         * @description A SampleCloudCoordinate together with what a viewer needs to colour and hear the point.
+         * @description A SampleCloudCoordinate together with what a viewer needs to color and hear the point.
          *
          *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
          *     sample's own occurrence names together with the names of the instruments reaching it -- rather
          *     than stored alongside the coordinate itself. ``dominant_rate_hz`` travels with the point so
          *     clicking one plays it at a real tracker rate; it is ``None`` for a sample with no occurrences.
          *     ``hand_label`` carries what a person decided this sample is, for a viewer inspecting a point;
-         *     the cloud keeps colouring by ``category``, whose fourteen roles hold a fixed hue each.
+         *     the cloud keeps coloring by ``category``, whose fourteen roles hold a fixed hue each.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -910,7 +910,7 @@ export interface components {
          * SimilarSample
          * @description One neighbor in a sample's spectral-distance nearest-neighbor listing.
          *
-         *     ``dominant_rate_hz`` travels with the neighbour so a listener hears it at a real tracker rate
+         *     ``dominant_rate_hz`` travels with the neighbor so a listener hears it at a real tracker rate
          *     rather than at the stored file's own header rate; it is ``None`` for a sample with no occurrences.
          */
         readonly SimilarSample: {
@@ -929,7 +929,7 @@ export interface components {
         readonly TrackerFormat: "xm" | "it" | "mod" | "s3m";
         /**
          * TrackerModuleCount
-         * @description How many catalogued modules belong to one tracker format.
+         * @description How many cataloged modules belong to one tracker format.
          */
         readonly TrackerModuleCount: {
             readonly tracker: components["schemas"]["TrackerFormat"];

@@ -64,7 +64,7 @@ def test_two_experiments_hold_independent_vectors_for_the_same_sample(
     assert [vector.vector for vector in second_vectors] == [(3.0, 4.0)]
 
 
-def test_inserting_a_vector_for_an_uncatalogued_sample_fails(connection: Connection) -> None:
+def test_inserting_a_vector_for_an_uncataloged_sample_fails(connection: Connection) -> None:
     experiment_id = _create_experiment(connection)
 
     with pytest.raises(psycopg.errors.ForeignKeyViolation):

@@ -58,7 +58,7 @@ def list_modules(
     tracker: TrackerFormat | None = None,
     connection: Connection = Depends(get_connection),
 ) -> Page[Module]:
-    """A page of catalogued modules, optionally filtered by tracker format."""
+    """A page of cataloged modules, optionally filtered by tracker format."""
     repository = PostgresModuleRepository(connection)
     items = repository.list_page(limit=limit, offset=offset, tracker=tracker)
     total = repository.count(tracker=tracker)
@@ -70,11 +70,11 @@ def get_module(module_hash: str, connection: Connection = Depends(get_connection
     """One module's own fields plus every sample occurrence it declares.
 
     Raises:
-        HTTPException: 404 when no module is catalogued under this hash.
+        HTTPException: 404 when no module is cataloged under this hash.
     """
     module = PostgresModuleRepository(connection).get(module_hash)
     if module is None:
-        raise HTTPException(status_code=404, detail=f"no module catalogued with hash {module_hash!r}")
+        raise HTTPException(status_code=404, detail=f"no module cataloged with hash {module_hash!r}")
 
     properties = PostgresSamplePropertiesRepository(connection).list_for_module(module_hash)
     samples_by_hash = _samples_by_hash(connection, properties)
@@ -95,7 +95,7 @@ def _samples_by_hash(
     for sample_hash in hashes:
         sample = samples.get(sample_hash)
         if sample is None:
-            raise ValueError(f"module occurrence references sample {sample_hash!r}, which is not catalogued")
+            raise ValueError(f"module occurrence references sample {sample_hash!r}, which is not cataloged")
 
         samples_by_hash[sample_hash] = _occurrence_sample(sample, thumbnails_by_hash.get(sample_hash))
 

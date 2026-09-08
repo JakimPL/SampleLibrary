@@ -10,10 +10,10 @@ from sampleextract.labels.relink import relink_labels
 
 
 def test_a_label_follows_its_sample_through_a_change_of_hash(
-    connection: Connection, stored_label: SampleLabel, rehash_the_labelled_sample: Callable[[], str]
+    connection: Connection, stored_label: SampleLabel, rehash_the_labeled_sample: Callable[[], str]
 ) -> None:
     """The anchor is the whole point of storing the occurrence: the slot outlives the hash."""
-    current_hash = rehash_the_labelled_sample()
+    current_hash = rehash_the_labeled_sample()
 
     summary = relink_labels(connection)
 
@@ -26,7 +26,7 @@ def test_a_label_follows_its_sample_through_a_change_of_hash(
     assert recovered.occurrence == stored_label.occurrence
 
 
-def test_a_label_whose_sample_is_still_catalogued_is_left_exactly_as_it_is(
+def test_a_label_whose_sample_is_still_cataloged_is_left_exactly_as_it_is(
     connection: Connection, stored_label: SampleLabel
 ) -> None:
     summary = relink_labels(connection)
@@ -37,10 +37,10 @@ def test_a_label_whose_sample_is_still_catalogued_is_left_exactly_as_it_is(
 
 
 def test_a_label_whose_slot_is_gone_is_reported_and_kept(
-    connection: Connection, stored_label: SampleLabel, forget_the_labelled_occurrence: Callable[[], None]
+    connection: Connection, stored_label: SampleLabel, forget_the_labeled_occurrence: Callable[[], None]
 ) -> None:
     """Nothing is thrown away on a person's behalf: an unresolvable label stays on file, reported."""
-    forget_the_labelled_occurrence()
+    forget_the_labeled_occurrence()
 
     summary = relink_labels(connection)
 
@@ -50,7 +50,7 @@ def test_a_label_whose_slot_is_gone_is_reported_and_kept(
     assert PostgresSampleLabelRepository(connection).get(stored_label.sample_hash) == stored_label
 
 
-def test_relinking_an_unlabelled_library_finds_nothing_to_do(connection: Connection) -> None:
+def test_relinking_an_unlabeled_library_finds_nothing_to_do(connection: Connection) -> None:
     summary = relink_labels(connection)
 
     assert summary.checked == 0

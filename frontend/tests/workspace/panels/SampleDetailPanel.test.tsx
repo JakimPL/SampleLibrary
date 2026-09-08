@@ -104,14 +104,14 @@ describe("SampleDetailPanel", () => {
     });
 
     it("shows an error notice when the sample cannot be found", async () => {
-        getSample.mockRejectedValue(new Error("no sample catalogued with hash 'abc'"));
+        getSample.mockRejectedValue(new Error("no sample cataloged with hash 'abc'"));
         getSampleRelations.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
 
         renderPanel();
 
         await waitFor(() => {
-            expect(screen.getByRole("alert")).toHaveTextContent("no sample catalogued with hash 'abc'");
+            expect(screen.getByRole("alert")).toHaveTextContent("no sample cataloged with hash 'abc'");
         });
     });
 

@@ -184,7 +184,7 @@ the single place that rule is applied. The frontend colors the sample cloud by c
 (`regl-scatterplot`'s own categorical coloring, one fixed hue per `SampleCategory` declared as a CSS
 custom property per theme in `styles.css`) and shows the category as a badge everywhere a sample's
 name appears; the same color and label always travel together, since fourteen categories are too
-many to stay reliably distinguishable by hue alone for every viewer. The cloud keeps colouring by
+many to stay reliably distinguishable by hue alone for every viewer. The cloud keeps coloring by
 the guessed category for that same reason: a hand label is free text, so it belongs to an unbounded
 set of hues, and it wears one style of its own in the badge instead.
 

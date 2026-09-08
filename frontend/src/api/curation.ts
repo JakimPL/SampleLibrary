@@ -3,7 +3,7 @@ import type { components } from "./schema";
 
 export type LabelsWritten = components["schemas"]["LabelsWritten"];
 
-/** How far a labelling reaches: this sample alone, or every near-duplicate grouped with it. */
+/** How far a labeling reaches: this sample alone, or every near-duplicate grouped with it. */
 export type LabelScope = components["schemas"]["LabelSource"];
 
 export async function setSampleLabel(sampleHash: string, label: string, scope: LabelScope): Promise<LabelsWritten> {

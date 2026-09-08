@@ -58,11 +58,11 @@ def test_import_reads_a_file_back_into_the_catalog(
 def test_relink_reports_a_label_it_reattached(
     connection: Connection,
     stored_label: SampleLabel,
-    rehash_the_labelled_sample: Callable[[], str],
+    rehash_the_labeled_sample: Callable[[], str],
     configured: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    rehash_the_labelled_sample()
+    rehash_the_labeled_sample()
 
     main(["relink"])
 
@@ -72,11 +72,11 @@ def test_relink_reports_a_label_it_reattached(
 def test_relink_exits_nonzero_when_a_label_needs_a_person(
     connection: Connection,
     stored_label: SampleLabel,
-    forget_the_labelled_occurrence: Callable[[], None],
+    forget_the_labeled_occurrence: Callable[[], None],
     configured: Path,
 ) -> None:
     """A label nobody can reattach automatically is worth failing the command over."""
-    forget_the_labelled_occurrence()
+    forget_the_labeled_occurrence()
 
     with pytest.raises(SystemExit) as exit_info:
         main(["relink"])

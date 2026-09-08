@@ -32,12 +32,12 @@ def main(argv: list[str] | None = None) -> None:
         summary = run_embedding(config, connection, feature_extractor, experiment_id, sample_limit=arguments.limit)
 
     _logger.info(
-        "Experiment %d: extracted features for %d new samples (%d already known, %d catalogued). "
+        "Experiment %d: extracted features for %d new samples (%d already known, %d cataloged). "
         "Reduced %d samples to 2D coordinates.",
         summary.experiment_id,
         summary.extraction.newly_extracted,
         summary.extraction.already_extracted,
-        summary.extraction.catalogued,
+        summary.extraction.cataloged,
         summary.reduction.samples_reduced,
     )
 

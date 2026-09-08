@@ -93,7 +93,7 @@ def _seed_a_pair_of_near_duplicates(connection: Connection) -> None:
     _relate(connection)
 
 
-def test_labelling_a_sample_records_the_wording_that_was_chosen(client: TestClient, connection: Connection) -> None:
+def test_labeling_a_sample_records_the_wording_that_was_chosen(client: TestClient, connection: Connection) -> None:
     _seed_one_sample(connection)
 
     response = client.put(f"/curation/labels/{SAMPLE_HASH_A}", json={"label": "warm pad", "scope": "sample"})
@@ -115,7 +115,7 @@ def test_a_label_is_anchored_to_the_module_slot_it_was_found_in(client: TestClie
     assert stored.sample_name == "lead"
 
 
-def test_a_labelled_sample_reports_its_label_in_its_own_detail(client: TestClient, connection: Connection) -> None:
+def test_a_labeled_sample_reports_its_label_in_its_own_detail(client: TestClient, connection: Connection) -> None:
     _seed_one_sample(connection)
     client.put(f"/curation/labels/{SAMPLE_HASH_A}", json={"label": "warm pad", "scope": "sample"})
 
@@ -125,7 +125,7 @@ def test_a_labelled_sample_reports_its_label_in_its_own_detail(client: TestClien
     assert body["category"] == "lead"
 
 
-def test_a_labelled_sample_reports_its_label_in_the_listing(client: TestClient, connection: Connection) -> None:
+def test_a_labeled_sample_reports_its_label_in_the_listing(client: TestClient, connection: Connection) -> None:
     _seed_one_sample(connection)
     client.put(f"/curation/labels/{SAMPLE_HASH_A}", json={"label": "warm pad", "scope": "sample"})
 
@@ -134,13 +134,13 @@ def test_a_labelled_sample_reports_its_label_in_the_listing(client: TestClient, 
     assert [item["hand_label"] for item in items] == ["warm pad"]
 
 
-def test_an_unlabelled_sample_carries_no_label(client: TestClient, connection: Connection) -> None:
+def test_an_unlabeled_sample_carries_no_label(client: TestClient, connection: Connection) -> None:
     _seed_one_sample(connection)
 
     assert client.get(f"/samples/{SAMPLE_HASH_A}").json()["hand_label"] is None
 
 
-def test_labelling_a_group_reaches_every_near_duplicate(client: TestClient, connection: Connection) -> None:
+def test_labeling_a_group_reaches_every_near_duplicate(client: TestClient, connection: Connection) -> None:
     _seed_a_pair_of_near_duplicates(connection)
 
     response = client.put(f"/curation/labels/{SAMPLE_HASH_A}", json={"label": "snare", "scope": "equivalence_class"})
@@ -152,7 +152,7 @@ def test_labelling_a_group_reaches_every_near_duplicate(client: TestClient, conn
     }
 
 
-def test_labelling_a_sample_only_leaves_its_near_duplicates_alone(client: TestClient, connection: Connection) -> None:
+def test_labeling_a_sample_only_leaves_its_near_duplicates_alone(client: TestClient, connection: Connection) -> None:
     _seed_a_pair_of_near_duplicates(connection)
 
     client.put(f"/curation/labels/{SAMPLE_HASH_A}", json={"label": "snare", "scope": "sample"})
@@ -176,7 +176,7 @@ def test_a_detail_reports_how_many_samples_a_group_label_would_reach(
     assert client.get(f"/samples/{SAMPLE_HASH_A}").json()["equivalence_member_count"] == 2
 
 
-def test_relabelling_replaces_the_previous_choice(client: TestClient, connection: Connection) -> None:
+def test_relabeling_replaces_the_previous_choice(client: TestClient, connection: Connection) -> None:
     _seed_one_sample(connection)
     client.put(f"/curation/labels/{SAMPLE_HASH_A}", json={"label": "lead", "scope": "sample"})
 
@@ -204,7 +204,7 @@ def test_clearing_over_a_group_reaches_every_near_duplicate(client: TestClient, 
     assert PostgresSampleLabelRepository(connection).count() == 0
 
 
-def test_labelling_a_sample_the_catalog_lacks_is_refused(client: TestClient) -> None:
+def test_labeling_a_sample_the_catalog_lacks_is_refused(client: TestClient) -> None:
     response = client.put(f"/curation/labels/{UNKNOWN_SAMPLE_HASH}", json={"label": "kick", "scope": "sample"})
 
     assert response.status_code == 404
@@ -226,5 +226,5 @@ def test_the_vocabulary_offers_back_what_has_already_been_chosen(client: TestCli
     assert sorted(client.get("/curation/labels/vocabulary").json()) == ["clap", "snare"]
 
 
-def test_the_vocabulary_of_an_unlabelled_library_is_empty(client: TestClient) -> None:
+def test_the_vocabulary_of_an_unlabeled_library_is_empty(client: TestClient) -> None:
     assert client.get("/curation/labels/vocabulary").json() == []

@@ -32,7 +32,7 @@ def _tonal_waveform(frames: int, *, sample_rate: int = SAMPLE_RATE) -> NDArray[n
     return waveform.reshape(-1, 1)
 
 
-def test_score_gain_variant_scores_a_true_quantisation_pair_highly() -> None:
+def test_score_gain_variant_scores_a_true_quantization_pair_highly() -> None:
     waveform = _tonal_waveform(2000)
     eight_bit_roundtrip = dequantise(quantise(waveform, BitDepth.EIGHT), BitDepth.EIGHT)
 
@@ -56,9 +56,9 @@ def test_score_gain_variant_scores_a_true_amplification_pair_highly() -> None:
 
 def test_score_gain_variant_scores_a_compound_depth_and_gain_pair_highly() -> None:
     waveform = _tonal_waveform(2000)
-    quieter_and_requantised = dequantise(quantise(waveform * 0.5, BitDepth.EIGHT), BitDepth.EIGHT)
+    quieter_and_requantized = dequantise(quantise(waveform * 0.5, BitDepth.EIGHT), BitDepth.EIGHT)
 
-    score = score_gain_variant(waveform, quieter_and_requantised, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.EIGHT)
+    score = score_gain_variant(waveform, quieter_and_requantized, depth_a=BitDepth.SIXTEEN, depth_b=BitDepth.EIGHT)
 
     assert score is not None
     assert score.confidence > GAIN_VARIANT_MINIMUM_CONFIDENCE

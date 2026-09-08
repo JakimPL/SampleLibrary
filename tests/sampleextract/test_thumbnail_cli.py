@@ -45,7 +45,7 @@ def test_main_reports_an_empty_catalog(
 
     main([])
 
-    assert "0 samples catalogued: 0 thumbnail(s) computed, 0 already cached." in capsys.readouterr().out
+    assert "0 samples cataloged: 0 thumbnail(s) computed, 0 already cached." in capsys.readouterr().out
 
 
 def test_the_force_flag_is_accepted(
@@ -59,4 +59,4 @@ def test_the_force_flag_is_accepted(
 
     main(["--force"])
 
-    assert "0 samples catalogued" in capsys.readouterr().out
+    assert "0 samples cataloged" in capsys.readouterr().out

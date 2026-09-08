@@ -43,7 +43,7 @@ class SampleLabelRepository(Protocol):
 class PostgresSampleLabelRepository:
     """A SampleLabelRepository backed by the ``curation.sample_label`` table.
 
-    ``upsert_many`` replaces a sample's label outright, since a person relabelling a sample means
+    ``upsert_many`` replaces a sample's label outright, since a person relabeling a sample means
     the new choice, and it is the single write path for both a lone sample and a whole group -- a
     group gesture arrives here as the several rows it expands to.
     """

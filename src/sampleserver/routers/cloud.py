@@ -20,14 +20,14 @@ router = APIRouter(prefix="/cloud", tags=["cloud"])
 
 
 class SampleCloudPoint(SampleCloudCoordinate):
-    """A SampleCloudCoordinate together with what a viewer needs to colour and hear the point.
+    """A SampleCloudCoordinate together with what a viewer needs to color and hear the point.
 
     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
     sample's own occurrence names together with the names of the instruments reaching it -- rather
     than stored alongside the coordinate itself. ``dominant_rate_hz`` travels with the point so
     clicking one plays it at a real tracker rate; it is ``None`` for a sample with no occurrences.
     ``hand_label`` carries what a person decided this sample is, for a viewer inspecting a point;
-    the cloud keeps colouring by ``category``, whose fourteen roles hold a fixed hue each.
+    the cloud keeps coloring by ``category``, whose fourteen roles hold a fixed hue each.
     """
 
     category: SampleCategory

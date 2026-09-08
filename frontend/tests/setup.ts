@@ -34,7 +34,7 @@ afterEach(() => {
     clearRequestCache();
 });
 
-// labelStore holds what this session has labelled, module-level like the stores above, so a label
+// labelStore holds what this session has labeled, module-level like the stores above, so a label
 // written by one test would otherwise decide what a later test's badge renders.
 afterEach(() => {
     useLabelStore.setState(INITIAL_LABEL_STATE);

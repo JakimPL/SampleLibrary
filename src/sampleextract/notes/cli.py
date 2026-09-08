@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Read each catalogued module's patterns for the notes they play.")
+    parser = argparse.ArgumentParser(description="Read each cataloged module's patterns for the notes they play.")
     parser.add_argument(
         "--force",
         action="store_true",

@@ -74,7 +74,7 @@ def detect_equivalences(
     could then collide with -- Postgres's own sequence-generated ids are not guaranteed to reflect
     every value already handed out once a connection ends without a clean commit.
 
-    ``sample_limit``, when given, considers only that many catalogued samples -- a full pass over
+    ``sample_limit``, when given, considers only that many cataloged samples -- a full pass over
     a real library is a batch job measured in tens of minutes, so this gives a quick way to
     validate a run over a small slice before committing to the whole catalog. Detection is
     expected to run repeatedly as the catalog itself grows, so leaving some pairs undetected in

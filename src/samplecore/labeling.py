@@ -22,7 +22,7 @@ def anchored_labels(
 
     A sample's hash depends on how this project hashes audio, so a label keyed on the hash alone
     would be lost the moment that changes. The anchor is the occurrence lowest in
-    ``(module_hash, instrument_index, sample_slot)`` order -- a deterministic choice, so relabelling
+    ``(module_hash, instrument_index, sample_slot)`` order -- a deterministic choice, so relabeling
     the same sample keeps naming the same slot -- recorded together with the module's filename and
     the occurrence's name, which stay readable to a person even when neither hash resolves.
 
@@ -53,11 +53,11 @@ def anchored_labels(
 
 
 def relinked_hash(connection: Connection, label: SampleLabel) -> str | None:
-    """The hash the labelled module slot holds now, for a label whose sample has been rehashed.
+    """The hash the labeled module slot holds now, for a label whose sample has been rehashed.
 
     Reads the anchor back through the catalog: the module is found by its own hash, and the slot it
     names gives whatever sample sits there today. ``None`` where the module or the slot is no longer
-    catalogued, which is what a report of labels needing a person's attention is built from.
+    cataloged, which is what a report of labels needing a person's attention is built from.
     """
     for properties in PostgresSamplePropertiesRepository(connection).list_for_module(label.occurrence.module_hash):
         if properties.occurrence == label.occurrence:

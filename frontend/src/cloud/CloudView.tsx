@@ -150,14 +150,14 @@ function drawSerialized(
  * `getScreenPosition` (and a caller reading it right after `select` hits the same unset state) if
  * it's called before a first `draw` resolves, which a fresh scatterplot -- still compiling its
  * WebGL shaders -- does not do synchronously the way an already-drawn one redrawing existing points
- * effectively does. `isCancelled` reports true once the effect that started this call has been
+ * effectively does. `isCanceled` reports true once the effect that started this call has been
  * cleaned up (its scatterplot destroyed, e.g. by an unmount racing the pending draw), so its result
  * goes unused.
  *
  * A queued draw can reach the front of `drawChain` only after its own effect's cleanup already
  * destroyed the scatterplot -- an unmount racing a still-pending, serialized-behind-another draw --
  * in which case regl-scatterplot rejects it outright rather than running. That rejection is exactly
- * as moot as any other cancelled result, so it is treated the same way once `isCancelled` confirms
+ * as moot as any other canceled result, so it is treated the same way once `isCanceled` confirms
  * it was expected; a draw failing for any other reason still surfaces, since nothing else here knows
  * how to recover from it.
  */
@@ -166,17 +166,17 @@ async function applyPoints(
     drawChain: DrawChain,
     points: readonly CloudEntityPoint[],
     highlighted: EntityRef | null,
-    isCancelled: () => boolean,
+    isCanceled: () => boolean,
 ): Promise<number> {
     try {
         await drawSerialized(scatterplot, drawChain, points);
     } catch (error) {
-        if (isCancelled()) {
+        if (isCanceled()) {
             return -1;
         }
         throw error;
     }
-    if (isCancelled()) {
+    if (isCanceled()) {
         return -1;
     }
 
@@ -198,12 +198,12 @@ async function applyPoints(
  *
  * A single click selects the point under the cursor through regl-scatterplot's own hit-testing,
  * and clears the shell-wide highlight when the click misses every point. regl-scatterplot's own
- * double-click behaviour only deselects, so this view disables it (`deselectOnDblClick: false`)
+ * double-click behavior only deselects, so this view disables it (`deselectOnDblClick: false`)
  * and focuses the hovered point on a native double-click instead, looked up through the library's
  * continuous `pointOver`/`pointOut` hover tracking -- the same tracking a miss-click reads to tell
  * a hit from empty space, and that `onHover` reports upward for a caller-rendered detail popup.
  * Pressing Escape while the canvas has focus clears the highlight too, through the library's own
- * built-in `deselect` behaviour. Whenever `highlighted` changes to a point present in this view (a
+ * built-in `deselect` behavior. Whenever `highlighted` changes to a point present in this view (a
  * click elsewhere in the shell just located a sample or module here), a brief sonar-style ping
  * marks its screen position -- tracking the library's own `view` event so the ping stays pinned to
  * the point through any pan or zoom while it plays, rather than drifting off it. Selecting a point
@@ -292,9 +292,9 @@ export function CloudView({
         scatterplotRef.current = scatterplot;
         pointsDrawnRef.current = false;
         drawChainRef.current = Promise.resolve();
-        let cancelled = false;
-        void applyPoints(scatterplot, drawChainRef, pointsRef.current, highlighted, () => cancelled).then(() => {
-            if (!cancelled) {
+        let canceled = false;
+        void applyPoints(scatterplot, drawChainRef, pointsRef.current, highlighted, () => canceled).then(() => {
+            if (!canceled) {
                 pointsDrawnRef.current = true;
             }
         });
@@ -363,7 +363,7 @@ export function CloudView({
         canvas.addEventListener("dblclick", handleDoubleClick);
 
         return (): void => {
-            cancelled = true;
+            canceled = true;
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("dblclick", handleDoubleClick);
             scatterplot.unsubscribe(selectSubscription);
@@ -388,15 +388,15 @@ export function CloudView({
             return undefined;
         }
 
-        // Cancelled if a newer call to this effect (points or highlighted changing again before
+        // Canceled if a newer call to this effect (points or highlighted changing again before
         // this draw resolves) supersedes this one -- otherwise a slow, stale draw could still land
         // its ping, or overwrite `previousHighlightedRef` with an already-outdated value, after a
         // newer run already has. The draw itself still queues behind the mount effect's own initial
         // draw (or any other run's) through `drawChainRef` regardless of this cancellation, since a
-        // cancelled run's `draw` call was already issued and the scatterplot has no way to retract it.
-        let cancelled = false;
-        void applyPoints(scatterplot, drawChainRef, points, highlighted, () => cancelled).then((highlightedIndex) => {
-            if (cancelled) {
+        // canceled run's `draw` call was already issued and the scatterplot has no way to retract it.
+        let canceled = false;
+        void applyPoints(scatterplot, drawChainRef, points, highlighted, () => canceled).then((highlightedIndex) => {
+            if (canceled) {
                 return;
             }
 
@@ -411,7 +411,7 @@ export function CloudView({
             previousHighlightedRef.current = highlighted;
         });
         return (): void => {
-            cancelled = true;
+            canceled = true;
         };
     }, [points, highlighted]);
 
