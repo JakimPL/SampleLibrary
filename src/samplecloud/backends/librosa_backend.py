@@ -6,8 +6,8 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 
-from samplecloud.backends.preprocessing import fold_to_mono
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
+from samplecore.waveform import fold_to_mono
 
 MFCC_COUNT: Final[int] = 13
 DEFAULT_N_FFT: Final[int] = 2048

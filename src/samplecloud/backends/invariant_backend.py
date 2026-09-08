@@ -7,8 +7,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import fftconvolve
 
-from samplecloud.backends.preprocessing import fold_to_mono, remove_dc_offset
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
+from samplecore.waveform import fold_to_mono, remove_dc_offset, resample_to_fraction_points
 
 # Envelope/dynamics descriptor -- OptiSample's own level extraction
 # (github.com/JakimPL/OptiSample, src/optisample/dsp/envelope.py), reproduced faithfully. `level`
@@ -60,20 +60,6 @@ def _unit_normalized(vector: NDArray[np.float64]) -> NDArray[np.float64]:
     return vector / (np.linalg.norm(vector) + 1e-12)
 
 
-def _resample_to_duration_fraction(values: NDArray[np.float64], point_count: int) -> NDArray[np.float64]:
-    """Resample a 1D series, indexed by analysis frame, onto ``point_count`` fixed points spanning
-    the clip's own duration-fraction ``[0, 1]``.
-
-    Decouples a descriptor's output length from however many raw analysis frames a clip happens to
-    produce -- which varies with the assumed sample rate, and is a noisy, unstable count for a short
-    clip -- so the same content interpreted at two different rates lands on directly comparable
-    vectors.
-    """
-    original_fractions = np.linspace(0.0, 1.0, values.shape[0])
-    target_fractions = np.linspace(0.0, 1.0, point_count)
-    return np.interp(target_fractions, original_fractions, values)
-
-
 def _hann_kernel(span: int) -> NDArray[np.float64]:
     taps = np.hanning(span + span % 2 + 1)
     return taps / np.sum(taps)
@@ -98,7 +84,7 @@ def _envelope_shape_descriptor(mono: NDArray[np.float64], *, assumed_rate: int) 
     kernel = _hann_kernel(round(PERIODS_PER_KERNEL * assumed_rate / ROOT_HZ))
     floor = max(10 ** (-FLOOR_DB / 20) * np.max(np.abs(mono)), QUIET_LEVEL)
     level = np.sqrt(np.maximum(_weighted_mean(mono**2, kernel), 0.0) + floor**2)
-    resampled = _resample_to_duration_fraction(level, ENVELOPE_POINTS)
+    resampled = resample_to_fraction_points(level, point_count=ENVELOPE_POINTS)
     return resampled / (np.max(resampled) + 1e-12)
 
 
@@ -170,7 +156,7 @@ def _spectral_shape_descriptor(mono: NDArray[np.float64], *, assumed_rate: int) 
     truncated = spectral_component[:coefficient_count, :]
     resampled = np.stack(
         [
-            _resample_to_duration_fraction(truncated[coefficient_index, :], SPECTRAL_TIME_POINTS)
+            resample_to_fraction_points(truncated[coefficient_index, :], point_count=SPECTRAL_TIME_POINTS)
             for coefficient_index in range(coefficient_count)
         ]
     )

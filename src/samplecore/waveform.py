@@ -21,6 +21,42 @@ class WaveformPeak(BaseModel):
     maximum: float
 
 
+def fold_to_mono(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Average a waveform's channels into one, passing an already-mono signal through unchanged."""
+    return waveform.mean(axis=1) if waveform.ndim > 1 else waveform
+
+
+def remove_dc_offset(mono: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Subtract a mono signal's own mean, correcting a constant recording-chain bias.
+
+    An off-center signal registers as spurious low-frequency energy in a spectral analysis and
+    skews an RMS-based envelope reading; a signal already centered passes through unaffected, since
+    its mean already sits at or near zero.
+    """
+    return mono - mono.mean()
+
+
+def resample_to_fraction_points(values: NDArray[np.float64], *, point_count: int, axis: int = 0) -> NDArray[np.float64]:
+    """Resample a series indexed by analysis frame onto `point_count` points of duration fraction.
+
+    Both the source and target positions span ``[0, 1]``, so the result describes the same content
+    at a fixed resolution whatever the frame count was. This decouples a descriptor's or an image's
+    output size from however many raw analysis frames a clip happens to produce -- a count that
+    varies with the assumed sample rate and is a noisy estimate for a short clip -- so the same
+    content read at two different rates lands on directly comparable output.
+
+    `axis` selects which axis carries the frames; every other axis is preserved in place.
+    """
+    frame_count = values.shape[axis]
+    source_fractions = np.linspace(0.0, 1.0, frame_count)
+    target_fractions = np.linspace(0.0, 1.0, point_count)
+    frames_last = np.moveaxis(values, axis, -1)
+    resampled = np.stack(
+        [np.interp(target_fractions, source_fractions, series) for series in frames_last.reshape(-1, frame_count)]
+    )
+    return np.moveaxis(resampled.reshape(*frames_last.shape[:-1], point_count), -1, axis)
+
+
 def trim_trailing_silence(waveform: NDArray[np.float64], *, threshold: float) -> NDArray[np.float64]:
     """Removes trailing content at or below `threshold` amplitude, leaving the leading content untouched.
 
