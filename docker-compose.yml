@@ -9,8 +9,11 @@ services:
       POSTGRES_USER: samplelibrary
       POSTGRES_PASSWORD: samplelibrary
       POSTGRES_DB: samplelibrary
+    # POSTGRES_PORT moves the published port where a Postgres installed on the machine already
+    # holds 5432: `POSTGRES_PORT=5433 docker compose up -d postgres`, with config.toml's
+    # database_url naming the same port.
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -26,9 +29,11 @@ services:
     build: .
     ports:
       - "8000:8000"
+    # Defaults so the file validates when only `postgres` is wanted -- Compose reads every service
+    # whichever one is started. Starting `sampleserver` itself wants the real paths.
     volumes:
-      - ${LIBRARY_ROOT}:/library
-      - ${CONFIG_PATH}:/app/config.toml
+      - ${LIBRARY_ROOT:-./library}:/library
+      - ${CONFIG_PATH:-./config.toml}:/app/config.toml
     environment:
       SAMPLELIBRARY_CONFIG: /app/config.toml
       SAMPLELIBRARY_DATABASE_URL: postgresql+psycopg://samplelibrary:samplelibrary@postgres:5432/samplelibrary

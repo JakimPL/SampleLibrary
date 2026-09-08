@@ -135,6 +135,28 @@ SQLAlchemy's `Connection` for the underlying `psycopg` connection and streams ro
 Postgres's own `COPY ... FROM STDIN`, avoiding that per-row cost entirely without assuming the
 client and server share a filesystem the way a file-path-based `COPY` would.
 
+## The three databases
+
+One Postgres server carries three: the real library, `samplelibrary_dev` for the disposable
+sandbox `scripts/build_dev_library.py` builds, and `samplelibrary_test` for the suite. One role,
+named by `config.toml`'s `database_url`, owns all three.
+
+`scripts/setup.py database` (`make database`) creates whatever of those is missing and touches
+nothing that already exists, so it is safe against a populated library. `samplecore.storage.cluster`
+owns that work: `quoting` turns a name or a password into a fragment of SQL and rejects what quoting
+cannot carry (an empty identifier, or a NUL byte, which the driver would otherwise cut a name
+short at), `statements` holds every statement this project runs against the cluster rather than
+inside one database, and `provisioning` decides what to ask for. `CREATE ROLE` needs a superuser,
+which `SAMPLELIBRARY_ADMIN_DATABASE_URL` supplies where the library's own credentials cannot;
+without it the command reports the statement to run by hand.
+
+Which database a run reaches is `database_url`, overridden by `SAMPLELIBRARY_DATABASE_URL` --
+which is how the `*-dev` targets reach the sandbox, and how a deployment supplies credentials that
+never live in a file. The suite reads `SAMPLELIBRARY_TEST_DATABASE_URL`, defaulting to
+`samplelibrary_test` on localhost, and gives each `pytest -n` worker a database of its own, created
+and dropped around the run: that is what the role's `CREATEDB` grant is for, and why
+`samplelibrary_test` itself stays empty.
+
 ## Splitting an extraction run
 
 `sampleextract --shard index/count` gives one run its share of the corpus, so several can split it
@@ -169,12 +191,7 @@ dependencies (`librosa`, `umap-learn`, `scikit-learn`) never reach that image, m
 worked example of the two running together; a real deployment points `database_url`/`SAMPLELIBRARY_DATABASE_URL` at
 whatever Postgres instance it actually runs against, container or otherwise. Local development runs
 against a Postgres installed on the machine directly, which the test suite and both library
-databases share; `scripts/setup.py database` (`make database`) creates the role and those three
-databases wherever they are missing, reading the server and credentials from `config.toml` and
-adding only what is absent. `samplecore.storage.cluster` owns that work: `quoting` turns a name or
-a password into a fragment of SQL and rejects what quoting cannot carry, `statements` holds every
-statement this project runs against the cluster rather than inside one database, and `provisioning`
-decides what to ask for. See README.md. The container runs multiple
+databases share. The container runs multiple
 `uvicorn` worker processes (`--workers`, not `--reload`) rather than the single-process dev server
 `make serve` starts: each worker opens its own read-only Postgres connection per request
 (`sampleserver.dependencies.get_connection`), which Postgres's own concurrent-connection handling

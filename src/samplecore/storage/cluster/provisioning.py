@@ -4,6 +4,7 @@ import os
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
+from enum import StrEnum, unique
 from typing import Final
 
 from psycopg import errors as postgres_errors
@@ -12,7 +13,7 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.pool import NullPool
 
-from samplecore.storage.cluster.quoting import UnsafeValueError, identifier
+from samplecore.storage.cluster.quoting import UnsafeValueError, identifier, literal
 from samplecore.storage.cluster.statements import create_database, create_role, database_owner, role_attributes
 from samplecore.storage.database import connect
 
@@ -40,6 +41,21 @@ _PASSWORD_REJECTED_FRAGMENT: Final[str] = "password authentication failed"
 _ROLE_MISSING_FRAGMENTS: Final[tuple[str, str]] = ('role "', "does not exist")
 _DATABASE_MISSING_FRAGMENTS: Final[tuple[str, str]] = ('database "', "does not exist")
 _UNNAMED_ROLE: Final[str] = "(none)"
+_CONTAINER_COMMAND: Final[str] = "docker compose up -d postgres"
+_ALTERNATIVE_CONTAINER_PORT: Final[int] = 5433
+
+# psycopg wraps a refusal in a "connection failed" line of its own, and Postgres marks its own
+# words with FATAL, so what actually happened sits at the end of the first line.
+_DRIVER_PREFIX: Final[str] = "connection failed: "
+_SERVER_ERROR_MARKER: Final[str] = "FATAL:"
+
+
+@unique
+class ConnectionSource(StrEnum):
+    """Where the connection one pass tried was named, so advice points at the right place."""
+
+    CONFIGURATION = "config.toml's database_url"
+    ADMIN_VARIABLE = ADMIN_URL_ENVIRONMENT_VARIABLE
 
 
 class ProvisioningError(Exception):
@@ -204,49 +220,109 @@ def _require_nameable(*values: str) -> None:
             ) from error
 
 
-def connection_remedy(url: URL, message: str) -> tuple[str, ...]:
-    """What to do about a refused connection, read from the words Postgres refused it with.
+def connection_source() -> ConnectionSource:
+    """Where the connection for server-level work is named this run."""
+    if os.environ.get(ADMIN_URL_ENVIRONMENT_VARIABLE) is not None:
+        return ConnectionSource.ADMIN_VARIABLE
 
-    Postgres answers a missing role and a wrong password alike on purpose, so where it does, both
-    are named and a person picks the one that applies.
+    return ConnectionSource.CONFIGURATION
+
+
+def connection_remedy(url: URL, message: str, *, source: ConnectionSource) -> tuple[str, ...]:
+    """The lines that address a refused connection, read from the words Postgres refused it with.
+
+    Advice names the place the refused role and password were actually read from, and leaves out
+    the route that was already taken, so a run that set ``SAMPLELIBRARY_ADMIN_DATABASE_URL`` is
+    never told to set it.
     """
     role = url.username if url.username is not None else _UNNAMED_ROLE
     password = url.password if url.password is not None else ""
+    said = (f"Postgres said: {headline(message)}", "")
 
     if any(fragment in message for fragment in _SERVER_UNREACHABLE_FRAGMENTS):
         return (
-            f"Start Postgres, or correct the host and port your database_url names ({describe_server(url)}).",
-            "A container is one way to have one: docker compose up -d postgres",
+            *said,
+            f"Start Postgres, or correct the host and port in {source.value} ({describe_server(url)}).",
+            f"If there is no Postgres on this machine, `{_CONTAINER_COMMAND}` starts one.",
         )
 
-    if _PASSWORD_REJECTED_FRAGMENT in message:
-        return (
-            f"Role {role!r} either does not exist yet, or its password differs from your database_url's.",
-            *role_creation_remedy(role, password),
-            "Or, where it exists under another password:",
-            f"    sudo -u postgres psql -c \"ALTER ROLE {role} PASSWORD '{password}'\"",
-        )
+    if _PASSWORD_REJECTED_FRAGMENT in message or all(fragment in message for fragment in _ROLE_MISSING_FRAGMENTS):
+        if source is ConnectionSource.ADMIN_VARIABLE:
+            return (*said, *_role_diagnosis(source), "", *container_route())
 
-    if all(fragment in message for fragment in _ROLE_MISSING_FRAGMENTS):
-        return role_creation_remedy(role, password)
+        return (*said, *_role_diagnosis(source), "", *role_creation_remedy(url, role, password))
 
     if all(fragment in message for fragment in _DATABASE_MISSING_FRAGMENTS):
         return (
-            f"This server keeps none of the databases server-level work connects through "
-            f"({', '.join(MAINTENANCE_DATABASES)}).",
-            f"Point {ADMIN_URL_ENVIRONMENT_VARIABLE} at a database on it that role {role!r} may reach.",
+            *said,
+            f"This command connects through the {' or '.join(MAINTENANCE_DATABASES)} database, and this "
+            "server has neither.",
+            f"Set {ADMIN_URL_ENVIRONMENT_VARIABLE} to a database on this server that role {role!r} can reach.",
         )
 
-    return (f"Check that {describe_server(url)} is the server you meant, and that role {role!r} may reach it.",)
-
-
-def role_creation_remedy(role: str, password: str) -> tuple[str, ...]:
-    """The one command that creates this project's login role, and the way to avoid needing it."""
     return (
-        "Creating a role needs a Postgres superuser. Run this once, then run `make database` again:",
-        f"    sudo -u postgres psql -c \"CREATE ROLE {role} WITH LOGIN CREATEDB PASSWORD '{password}'\"",
-        f"Or point {ADMIN_URL_ENVIRONMENT_VARIABLE} at a superuser connection, and this creates it for you.",
+        *said,
+        f"Check that {describe_server(url)} is the server you meant, and that role {role!r} can reach it.",
     )
+
+
+def _role_diagnosis(source: ConnectionSource) -> tuple[str, ...]:
+    """Say where the refused role and password were read from, and what that leaves open."""
+    if source is ConnectionSource.ADMIN_VARIABLE:
+        return (
+            f"That role and password come from {ADMIN_URL_ENVIRONMENT_VARIABLE}. Correct it, or unset it",
+            f"to use {ConnectionSource.CONFIGURATION.value} instead.",
+        )
+
+    return (
+        f"That role and password come from {source.value}. Either the role does not exist on this",
+        "server, or its password there is different.",
+    )
+
+
+def role_creation_remedy(url: URL, role: str, password: str) -> tuple[str, ...]:
+    """Every way to reach a superuser able to create this project's login role.
+
+    Each route says what it needs before it says what to type, since the account and password a
+    superuser connection asks for are a person's own to supply and no command can guess them. The
+    statement is spelled the way this command would spell it, so a role named for a word Postgres
+    keeps for itself still lands.
+    """
+    return (
+        "Creating a role needs a PostgreSQL superuser. Any of these will do:",
+        "",
+        "  * Run this at a superuser prompt, such as `sudo -u postgres psql`:",
+        f"        CREATE ROLE {statement_value(role)} WITH LOGIN CREATEDB "
+        f"PASSWORD {statement_value(password, quoted=False)};",
+        "",
+        "  * If you know the password of a superuser on this server, usually the `postgres`",
+        f"    account, give it to {ADMIN_URL_ENVIRONMENT_VARIABLE} and this command creates the",
+        "    role for you. Replace <password> with that account's own:",
+        f"        {ADMIN_URL_ENVIRONMENT_VARIABLE}=postgresql+psycopg://postgres:<password>@"
+        f"{describe_server(url)}/{MAINTENANCE_DATABASES[0]} make database",
+        "",
+        *container_route(),
+    )
+
+
+def container_route() -> tuple[str, ...]:
+    """The way to a server of one's own where the machine hands over no superuser at all."""
+    return (
+        "  * If you have no superuser on this machine, a container comes with one:",
+        f"        {_CONTAINER_COMMAND}",
+        f"    Add POSTGRES_PORT={_ALTERNATIVE_CONTAINER_PORT} if something already holds 5432, then set that",
+        "    port in config.toml's database_url.",
+    )
+
+
+def statement_value(value: str, *, quoted: bool = True) -> str:
+    """One name or password, spelled as it would be spelled in a statement a person types.
+
+    Composed through the same quoting the command's own statements go through, so an advice line
+    and the statement it stands for agree on how a value is spelled.
+    """
+    fragment = identifier(value) if quoted else literal(value)
+    return fragment.as_string(None).strip()
 
 
 def _open_admin(database_url: str) -> tuple[Engine, Connection]:
@@ -268,9 +344,8 @@ def _open_admin(database_url: str) -> tuple[Engine, Connection]:
     refused_url = candidates[-1]
     role = refused_url.username if refused_url.username is not None else _UNNAMED_ROLE
     raise ProvisioningError(
-        f"Could not reach Postgres at {describe_server(refused_url)} as role {role!r}. "
-        f"Postgres said: {headline(refusal)}",
-        remedy=connection_remedy(refused_url, refusal),
+        f"Could not reach Postgres at {describe_server(refused_url)} as role {role!r}.",
+        remedy=connection_remedy(refused_url, refusal, source=connection_source()),
     )
 
 
@@ -284,8 +359,10 @@ def server_message(error: DBAPIError) -> str:
 
 
 def headline(message: str) -> str:
-    """The one line of a driver message that states what happened."""
-    return message.splitlines()[0].strip()
+    """What a driver message reports, with the wrapping the driver puts around it taken off."""
+    first_line = message.splitlines()[0].strip().removeprefix(_DRIVER_PREFIX)
+    _, _, reported = first_line.rpartition(_SERVER_ERROR_MARKER)
+    return " ".join(reported.split())
 
 
 def _claim_role(connection: Connection, *, url: URL, role: str) -> bool:
@@ -312,7 +389,7 @@ def _claim_role(connection: Connection, *, url: URL, role: str) -> bool:
     except postgres_errors.InsufficientPrivilege as error:
         raise ProvisioningError(
             f"Role {role!r} is missing, and this connection may not create one.",
-            remedy=role_creation_remedy(role, password),
+            remedy=role_creation_remedy(url, role, password),
         ) from error
 
     return True
@@ -339,8 +416,9 @@ def _claim_database(connection: Connection, *, name: str, owner: str) -> Databas
         raise ProvisioningError(
             f"Database {name!r} is missing, and role {owner!r} may not create one.",
             remedy=(
-                f'Grant it that: sudo -u postgres psql -c "ALTER ROLE {owner} CREATEDB"',
-                f"Or point {ADMIN_URL_ENVIRONMENT_VARIABLE} at a connection that may create databases.",
+                "Grant it at a superuser prompt, such as `sudo -u postgres psql`, then run `make database` again:",
+                "",
+                f"    ALTER ROLE {statement_value(owner)} CREATEDB;",
             ),
         ) from error
 
@@ -363,9 +441,9 @@ def _require_ownership(outcome: DatabaseOutcome, *, role: str) -> None:
         f"Database {outcome.name!r} belongs to role {outcome.owner!r}, so role {role!r} cannot "
         "create the catalog's tables in it.",
         remedy=(
-            f"Hand it over, from a connection that may: "
-            f'sudo -u postgres psql -c "ALTER DATABASE {outcome.name} OWNER TO {role}"',
-            f"Or point your database_url at a library role {outcome.owner!r} owns.",
+            "Change its owner at a superuser prompt, such as `sudo -u postgres psql`, then run `make database` again:",
+            "",
+            f"    ALTER DATABASE {statement_value(outcome.name)} OWNER TO {statement_value(role)};",
         ),
     )
 
@@ -385,8 +463,10 @@ def _prepare_schemas(url: URL, *, role: str) -> None:
                 raise ProvisioningError(
                     f"Role {role!r} may not create this project's tables in database {url.database!r}.",
                     remedy=(
-                        f"Grant it what it needs, from a connection that may: "
-                        f'sudo -u postgres psql -c "ALTER DATABASE {url.database} OWNER TO {role}"',
+                        "Change its owner at a superuser prompt, such as `sudo -u postgres psql`, "
+                        "then run `make database` again:",
+                        "",
+                        f"    ALTER DATABASE {statement_value(str(url.database))} OWNER TO {statement_value(role)};",
                     ),
                 ) from error
             case _:

@@ -89,10 +89,12 @@ def _report(summary: ProvisioningSummary) -> None:
 
 
 def _report_obstacle(error: ProvisioningError) -> None:
-    """Say what the server refused, then the steps that would let it succeed."""
-    _logger.error("%s", error)
-    for line in error.remedy:
-        _logger.error("%s", line)
+    """Say what the server refused, then the steps that would let it succeed.
+
+    The whole report goes out as one log record, so the timestamp every record carries lands once
+    at the top rather than down the left of a command a person is about to copy.
+    """
+    _logger.error("%s", "\n".join((str(error), "", *error.remedy)))
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
