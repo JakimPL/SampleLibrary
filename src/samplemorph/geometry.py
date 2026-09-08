@@ -14,11 +14,11 @@ SEMITONES_PER_OCTAVE: Final[int] = 12
 REFERENCE_FREQUENCY_HZ: Final[float] = 440.0
 MINIMUM_FREQUENCY_HZ: Final[float] = 32.70
 DEFAULT_HOP_LENGTH: Final[int] = 256
-DEFAULT_FFT_LENGTH: Final[int] = 1024
+DEFAULT_FFT_LENGTH: Final[int] = 2048
 DEFAULT_TIME_COLUMNS: Final[int] = 64
-DEFAULT_DYNAMIC_RANGE_DB: Final[float] = 60.0
+DEFAULT_DYNAMIC_RANGE_DB: Final[float] = 100.0
 DEFAULT_MAXIMUM_SHIFT_SEMITONES: Final[float] = 48.0
-DEFAULT_BINS_PER_OCTAVE: Final[int] = 24
+DEFAULT_BINS_PER_OCTAVE: Final[int] = 36
 DEFAULT_MEL_BAND_COUNT: Final[int] = 128
 DEFAULT_CONSTANT_Q_BINS_PER_OCTAVE: Final[int] = 36
 
@@ -122,8 +122,14 @@ class ConstantQGeometry(BaseModel):
 
     Every bin carries the same number of cycles, so resolution follows pitch rather than a fixed
     Fourier window, and the translation a rate change produces is exact in the bass as well as the
-    treble. Synthesis reads the bins onto the linear Fourier grid, so one magnitude inversion
-    serves this axis as it serves the others.
+    treble. That makes this the axis that locates a retuning most accurately, which is what it is
+    kept for.
+
+    A bin states the amplitude the signal carries within a band whose width grows with its center
+    frequency, so its value stands in a different relation to the waveform than a Fourier
+    magnitude, which reads a band of one fixed width. Measurement puts the gap between the two at
+    roughly 20 dB across the lowest octaves, so audio is synthesized from an axis whose bins share
+    the Fourier grid's own width.
     """
 
     model_config = FROZEN

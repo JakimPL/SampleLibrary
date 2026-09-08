@@ -14,9 +14,12 @@ class ConstantQCanonicalizer:
 
     Every bin carries the same number of cycles, so the frequency resolution follows pitch instead
     of a fixed Fourier window and the translation a rate change produces holds in the bass as
-    exactly as in the treble. Synthesis reads the bins onto the linear Fourier grid by
-    interpolation, so one magnitude inversion serves this axis as it serves the others and the
-    comparison between axes runs through one shared return path.
+    exactly as in the treble. That accuracy is what this axis supplies, and it locates a retuning
+    on real material more often than the Fourier axes do.
+
+    The bins measure amplitude per constant-Q band rather than per Fourier bin, and the two differ
+    by around 20 dB over the lowest octaves, so this axis serves analysis while audio is
+    synthesized from `LogFrequencyCanonicalizer`, whose bands share the Fourier grid's width.
     """
 
     def __init__(self, geometry: ConstantQGeometry) -> None:
@@ -45,7 +48,11 @@ class ConstantQCanonicalizer:
 
 
 def onto_linear_axis(magnitude: NDArray[np.float64], *, geometry: ConstantQGeometry) -> NDArray[np.float64]:
-    """Read a constant-Q magnitude spectrogram onto the linear Fourier frequency grid."""
+    """Read a constant-Q magnitude spectrogram onto the linear Fourier frequency grid.
+
+    The result states each constant-Q band's amplitude at the linear bin frequencies, which holds
+    the shape of the constant-Q reading and carries its band widths with it.
+    """
     band_frequencies = geometry.band_frequencies
     linear_frequencies = geometry.linear_frequencies
     return np.stack([np.interp(linear_frequencies, band_frequencies, frame) for frame in magnitude.T]).T
