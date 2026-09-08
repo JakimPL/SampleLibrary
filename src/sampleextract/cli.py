@@ -17,10 +17,11 @@ def main() -> None:
         summary = run_extraction(config, connection)
 
     _logger.info(
-        "Discovered %d modules: %d ingested, %d already known, %d failed.",
+        "Discovered %d modules: %d ingested, %d already known, %d ingested by another run, %d failed.",
         summary.discovered,
         len(summary.ingested),
         summary.skipped_existing,
+        summary.ingested_elsewhere,
         len(summary.failures),
     )
     for failure in summary.failures:
