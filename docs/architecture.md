@@ -14,7 +14,7 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 |---|---|---|
 | `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the anchoring rule that keeps a hand label attached to its sample, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
 | `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each), the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
-| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors, UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
+| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors, UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the keyword table names alike, and whether it groups what the note events say the library plays alike. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
 | `samplemorph` | The decodable-representation pipeline: canonicalizing a sample into a fixed-size sound image on a log-frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a pluggable `Vocoder` turning a magnitude spectrogram back into audible frames. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner -- which is what leaves the representation invertible where the sample cloud's descriptors are not. Depends on `samplecore` only. | `samplecore`, `librosa`, `scikit-learn` (the `morph` extra) |
 | `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
 
@@ -249,6 +249,34 @@ changed extractor as a new experiment (`samplecloud --backend <name>`), inspect 
 result, and only promote it (`reduce_and_persist_coordinates` against that experiment's id) once
 satisfied -- the previously promoted experiment's `sample_cloud_coordinates` stay exactly as they
 were until that deliberate step.
+
+### Judging a descriptor
+
+`samplecloud.evaluation` scores any experiment's vectors against three targets the catalog already
+carries, so a change to an extractor is answered by numbers rather than by an impression.
+
+- **Transposition retrieval** retunes a sample by a fixed mirrored grid of semitone offsets,
+  describes the result, and reports where the original ranks against the whole catalog. It needs no
+  label at all, since retuning produces a query the catalog holds the answer to. Rank-1 and rank-5
+  shares travel beside the median rank, because a descriptor placing the original second every time
+  and one placing it forty-thousandth both score zero at rank one.
+- **Category agreement** classifies each keyword-labeled sample from its neighbors. `UNCATEGORIZED`
+  stays out, since it records that no keyword matched rather than a class the samples share, and
+  macro-F1 sits beside accuracy because supports run from about a hundred to a few thousand.
+- **Note-event agreement** predicts how many distinct pitches a sample is played at and how wide a
+  span it covers, scored by rank correlation. Both are continuous, because the percussive and tonal
+  split they were once read as is a tendency rather than a division. A second reading covers only
+  samples struck often enough for a pitch count to mean something, since a sample struck twice shows
+  at most two pitches whatever it is.
+
+Each metric reports the share of the catalog it describes, so a reader sees which part of the
+library a score speaks for. Splits are grouped by equivalence class, which changes nothing while
+`sample_relation` is empty and becomes correct on its own once it is not. One seed fixes every split
+and every draw, so a second run reproduces every number.
+
+This lives in `samplecloud` rather than `samplemorph` because it judges embeddings, which is what
+`samplecloud` owns. A learned codec's latents reach it as an ordinary experiment through the
+database, with no import in either direction, which is what keeps the two pipelines independent.
 
 A descriptor of this kind answers what a sample resembles. Producing audio from a point between two
 samples asks for a representation carrying a decoder as well, which is a separate design: the

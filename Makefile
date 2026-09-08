@@ -82,6 +82,17 @@ embed:
 embed-modules-placeholder:
 	uv run samplecloud-modules-placeholder
 
+# Scores one experiment's descriptor against the catalog's own targets. EXPERIMENT is the
+# experiment id; OUTPUT, when given, writes the report as JSON. Transposition retrieval reads and
+# describes audio again, so `evaluate-fast` leaves it out for a pass over the stored vectors alone.
+.PHONY: evaluate
+evaluate:
+	uv run samplecloud-evaluate --experiment-id $(EXPERIMENT) $(if $(PROBES),--probes $(PROBES),) $(if $(OUTPUT),--output $(OUTPUT),)
+
+.PHONY: evaluate-fast
+evaluate-fast:
+	uv run samplecloud-evaluate --experiment-id $(EXPERIMENT) --skip-transposition $(if $(OUTPUT),--output $(OUTPUT),)
+
 # The decodable representation. `morph-fit` learns a codec over a draw of the library and writes it
 # under the configured library root; `morph-render` writes a listening set between two sample
 # hashes. FIRST and SECOND are hashes from the real library: the dev sandbox has no counterpart
