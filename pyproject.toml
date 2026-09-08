@@ -21,6 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 server = ["fastapi>=0.120", "uvicorn>=0.35"]
 cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9"]
+morph = ["librosa>=0.11", "scikit-learn>=1.9"]
 
 [project.scripts]
 sampleextract = "sampleextract.cli:main"
@@ -57,13 +58,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/samplecore", "src/sampleextract", "src/samplecloud", "src/sampleserver"]
+packages = ["src/samplecore", "src/sampleextract", "src/samplecloud", "src/sampleserver", "src/samplemorph"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/samplecore/py.typed" = "samplecore/py.typed"
 "src/sampleextract/py.typed" = "sampleextract/py.typed"
 "src/samplecloud/py.typed" = "samplecloud/py.typed"
 "src/sampleserver/py.typed" = "sampleserver/py.typed"
+"src/samplemorph/py.typed" = "samplemorph/py.typed"
 
 [tool.black]
 line-length = 120
@@ -73,7 +75,7 @@ extend-exclude = "trackmod"
 [tool.isort]
 profile = "black"
 line_length = 120
-known_first_party = ["samplecore", "sampleextract", "samplecloud", "sampleserver"]
+known_first_party = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph"]
 known_third_party = ["trackmod"]
 skip = ["trackmod"]
 
@@ -82,7 +84,7 @@ testpaths = ["tests"]
 addopts = "--import-mode=importlib"
 
 [tool.coverage.run]
-source = ["samplecore", "sampleextract", "samplecloud", "sampleserver"]
+source = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph"]
 # Extraction spends worker processes of its own, whose lines are measured only where coverage
 # follows a process into multiprocessing's own children.
 concurrency = ["multiprocessing", "thread"]
@@ -127,21 +129,21 @@ disable = [
 max-line-length = 120
 
 [tool.importlinter]
-root_packages = ["samplecore", "sampleextract", "samplecloud", "sampleserver"]
+root_packages = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph"]
 
 [[tool.importlinter.contracts]]
 name = "core has no dependents among peer packages"
 type = "forbidden"
 source_modules = ["samplecore"]
-forbidden_modules = ["sampleextract", "samplecloud", "sampleserver"]
+forbidden_modules = ["sampleextract", "samplecloud", "sampleserver", "samplemorph"]
 
 [[tool.importlinter.contracts]]
 name = "server never imports the offline batch pipelines"
 type = "forbidden"
 source_modules = ["sampleserver"]
-forbidden_modules = ["sampleextract", "samplecloud"]
+forbidden_modules = ["sampleextract", "samplecloud", "samplemorph"]
 
 [[tool.importlinter.contracts]]
-name = "extraction and cloud pipelines stay independent"
+name = "the offline pipelines stay independent of each other"
 type = "independence"
-modules = ["sampleextract", "samplecloud"]
+modules = ["sampleextract", "samplecloud", "samplemorph"]

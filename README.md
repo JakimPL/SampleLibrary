@@ -48,8 +48,9 @@ runs.
 
 The `Makefile` lists the rest of the pipeline: `make embed`, `make thumbnails` and so on.
 
-Work on generating audio from a point between two samples is documented separately, under
-`docs/morphing/`, starting from `docs/morphing/00-handover.md`.
+Work on generating audio from a point between two samples lives in the `samplemorph` package,
+and the research behind it is documented separately under `docs/morphing/`, starting from
+`docs/morphing/00-handover.md`.
 
 ## Labeling and rating samples
 

@@ -5,7 +5,7 @@ sample library: a Postgres catalog of modules, samples, and their tracker-specif
 content-addressable store of extracted audio; detected equivalence classes between near-duplicate
 samples; and a web application for navigating and visualizing all of it. The project has two
 natures — an offline, batch-oriented extraction/analysis tool, and a served read-only web app —
-kept as four packages under one `pyproject.toml` so each keeps its own dependency footprint and
+kept as five packages under one `pyproject.toml` so each keeps its own dependency footprint and
 its own write/read boundary, enforced by the `[tool.importlinter]` contracts in `pyproject.toml`.
 
 ## Package map (`src/`)
@@ -15,16 +15,20 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 | `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the anchoring rule that keeps a hand label attached to its sample, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
 | `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each), the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors, UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
+| `samplemorph` | The decodable-representation pipeline: canonicalizing a sample into a fixed-size sound image on a log-frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a pluggable `Vocoder` turning a magnitude spectrogram back into audible frames. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner -- which is what leaves the representation invertible where the sample cloud's descriptors are not. Depends on `samplecore` only. | `samplecore`, `librosa`, `scikit-learn` (the `morph` extra) |
 | `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
 
 ## Boundaries the import-linter contracts enforce
 
 - `samplecore` has no dependents among its peers: nothing it does can accidentally couple to the
   extraction pipeline, the embedding pipeline, or the web server.
-- `sampleserver` never imports `sampleextract` or `samplecloud`: the read API cannot trigger a
+- `sampleserver` never imports `sampleextract`, `samplecloud` or `samplemorph`: the read API cannot trigger a
   batch job, and cannot inherit either pipeline's heavier dependencies.
-- `sampleextract` and `samplecloud` are declared independent of each other: extraction never waits
-  on embedding, and a change to one pipeline's dependencies never touches the other.
+- `sampleextract`, `samplecloud` and `samplemorph` are each declared independent of the others:
+  extraction never waits on embedding, and a change to one pipeline's dependencies never touches
+  another. The morph pipeline reaches the cloud through the catalog rather than through an
+  import, writing its latents as `sample_feature_vector` rows under their own `Experiment` for
+  `samplecloud.reduce` to project.
 
 ## Persistence
 
