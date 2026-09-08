@@ -95,3 +95,21 @@ def test_the_mel_axis_spaces_its_low_bands_more_widely_than_a_logarithm_would() 
     high_ratio = frequencies[-1] / frequencies[-2]
 
     assert low_ratio > high_ratio
+
+
+def test_the_log_frequency_bands_reach_every_fourier_bin_the_analysis_produces() -> None:
+    """Synthesis reads each Fourier bin from a band that measured it.
+
+    A sample stored at the nominal rate plays back far below it, so the top of the analyzed range
+    lands within hearing and has to carry content rather than silence.
+    """
+    geometry = log_frequency_geometry()
+
+    assert geometry.band_frequencies[-1] >= geometry.analysis_rate_hz / 2
+
+
+def test_the_constant_q_bands_stay_below_nyquist() -> None:
+    """A wavelet per band is what this axis is built from, and each one has to fit under Nyquist."""
+    geometry = constant_q_geometry()
+
+    assert geometry.band_frequencies[-1] < geometry.analysis_rate_hz / 2

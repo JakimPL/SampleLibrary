@@ -18,7 +18,7 @@ DEFAULT_FFT_LENGTH: Final[int] = 2048
 DEFAULT_TIME_COLUMNS: Final[int] = 64
 DEFAULT_DYNAMIC_RANGE_DB: Final[float] = 100.0
 DEFAULT_MAXIMUM_SHIFT_SEMITONES: Final[float] = 48.0
-DEFAULT_BINS_PER_OCTAVE: Final[int] = 36
+DEFAULT_BINS_PER_OCTAVE: Final[int] = 144
 DEFAULT_MEL_BAND_COUNT: Final[int] = 128
 DEFAULT_CONSTANT_Q_BINS_PER_OCTAVE: Final[int] = 36
 
@@ -199,8 +199,23 @@ class ConstantQGeometry(BaseModel):
 Geometry = Annotated[LogFrequencyGeometry | MelGeometry | ConstantQGeometry, Field(discriminator="kind")]
 
 
-def bands_spanning_nyquist(*, analysis_rate_hz: int, minimum_frequency_hz: float, bins_per_octave: int) -> int:
-    """How many logarithmic bands fit between `minimum_frequency_hz` and the Nyquist frequency."""
+def bands_reaching_nyquist(*, analysis_rate_hz: int, minimum_frequency_hz: float, bins_per_octave: int) -> int:
+    """How many logarithmic bands reach from `minimum_frequency_hz` to the Nyquist frequency.
+
+    The highest band sits at or above Nyquist, so the bands cover every Fourier bin the analysis
+    produces and synthesis reads each one from a band that measured it. A sample plays back well
+    below the nominal rate the store writes, which puts the top of this range within hearing.
+    """
+    octaves = np.log2((analysis_rate_hz / 2) / minimum_frequency_hz)
+    return int(np.ceil(bins_per_octave * octaves)) + 1
+
+
+def bands_below_nyquist(*, analysis_rate_hz: int, minimum_frequency_hz: float, bins_per_octave: int) -> int:
+    """How many logarithmic bands fit between `minimum_frequency_hz` and the Nyquist frequency.
+
+    Every band stays below Nyquist, which is what a transform building a wavelet per band asks
+    for.
+    """
     return int(np.floor(bins_per_octave * np.log2((analysis_rate_hz / 2) / minimum_frequency_hz)))
 
 
@@ -211,7 +226,7 @@ def log_frequency_geometry(*, bins_per_octave: int = DEFAULT_BINS_PER_OCTAVE) ->
         hop_length=DEFAULT_HOP_LENGTH,
         minimum_frequency_hz=MINIMUM_FREQUENCY_HZ,
         bins_per_octave=bins_per_octave,
-        band_count=bands_spanning_nyquist(
+        band_count=bands_reaching_nyquist(
             analysis_rate_hz=NOMINAL_WAV_RATE,
             minimum_frequency_hz=MINIMUM_FREQUENCY_HZ,
             bins_per_octave=bins_per_octave,
@@ -241,7 +256,7 @@ def constant_q_geometry(*, bins_per_octave: int = DEFAULT_CONSTANT_Q_BINS_PER_OC
         hop_length=DEFAULT_HOP_LENGTH,
         minimum_frequency_hz=MINIMUM_FREQUENCY_HZ,
         bins_per_octave=bins_per_octave,
-        band_count=bands_spanning_nyquist(
+        band_count=bands_below_nyquist(
             analysis_rate_hz=NOMINAL_WAV_RATE,
             minimum_frequency_hz=MINIMUM_FREQUENCY_HZ,
             bins_per_octave=bins_per_octave,
