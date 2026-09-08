@@ -7,9 +7,9 @@ from typing import Final
 
 import numpy as np
 import umap
-from sklearn.preprocessing import StandardScaler
 from sqlalchemy import Connection
 
+from samplecloud.standardization import standardize
 from samplecore.models.cloud import SampleCloudCoordinate
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.storage.database import start_batch
@@ -57,7 +57,7 @@ def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -
 
     sample_hashes = [vector.sample_hash for vector in feature_vectors]
     feature_matrix = np.stack([np.array(vector.vector, dtype=np.float64) for vector in feature_vectors])
-    standardized = StandardScaler().fit_transform(feature_matrix)
+    standardized = standardize(feature_matrix)
     n_neighbors = min(DEFAULT_N_NEIGHBORS, len(sample_hashes) - 1)
     _logger.info("Fitting UMAP over %d feature vectors...", len(sample_hashes))
     coordinates = umap.UMAP(
