@@ -83,6 +83,51 @@ def resample_to_fraction_points(values: NDArray[np.float64], *, point_count: int
     return np.moveaxis(resampled.reshape(*frames_last.shape[:-1], point_count), -1, axis)
 
 
+def triangular_weights(
+    *,
+    source_positions: NDArray[np.float64],
+    target_positions: NDArray[np.float64],
+    half_widths: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Weights averaging a series read at `source_positions` onto each of `target_positions`.
+
+    Each target draws on the sources within its own half-width, weighted linearly from its center
+    down to its edge and summing to one. A target covering many sources averages across them, and
+    one landing between two sources interpolates between them, so the same rule serves a series
+    read onto fewer points and onto more. Every half-width covers at least the source spacing, so
+    each target draws on the series it reads from.
+    """
+    distance = np.abs(source_positions[None, :] - target_positions[:, None])
+    weights = np.clip(1.0 - distance / half_widths[:, None], 0.0, None)
+    normalized: NDArray[np.float64] = weights / weights.sum(axis=1, keepdims=True)
+    return normalized
+
+
+def average_to_fraction_points(values: NDArray[np.float64], *, point_count: int, axis: int = 0) -> NDArray[np.float64]:
+    """Resample a series onto `point_count` points of duration fraction, averaging across each span.
+
+    Like `resample_to_fraction_points`, both source and target positions span ``[0, 1]``, so the
+    result describes the same content at a fixed resolution whatever the frame count was. Each
+    output point averages the input across the span it stands for, so a series read onto fewer
+    points carries the whole of what those points cover -- which holds a spectrogram's frames in
+    the time order the analysis found them.
+
+    `axis` selects which axis carries the frames; every other axis is preserved in place.
+    """
+    frame_count = values.shape[axis]
+    source_positions = np.linspace(0.0, 1.0, frame_count)
+    target_positions = np.linspace(0.0, 1.0, point_count)
+    source_spacing = 1.0 / max(frame_count - 1, 1)
+    target_spacing = 1.0 / max(point_count - 1, 1)
+    half_widths = np.full(point_count, max(target_spacing, source_spacing))
+    weights = triangular_weights(
+        source_positions=source_positions, target_positions=target_positions, half_widths=half_widths
+    )
+    frames_last = np.moveaxis(values, axis, -1)
+    averaged = frames_last.reshape(-1, frame_count) @ weights.T
+    return np.moveaxis(averaged.reshape(*frames_last.shape[:-1], point_count), -1, axis)
+
+
 def trim_trailing_silence(waveform: NDArray[np.float64], *, threshold: float) -> NDArray[np.float64]:
     """Removes trailing content at or below `threshold` amplitude, leaving the leading content untouched.
 

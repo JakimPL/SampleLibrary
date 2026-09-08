@@ -6,7 +6,12 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
-from samplecore.waveform import fold_to_mono, remove_dc_offset, resample_to_fraction_points
+from samplecore.waveform import (
+    average_to_fraction_points,
+    fold_to_mono,
+    remove_dc_offset,
+    resample_to_fraction_points,
+)
 from samplemorph.geometry import Geometry
 from samplemorph.images import AnalysisSpectrogram, Conditioners, SoundImage
 
@@ -120,8 +125,13 @@ def frames_for_conditioners(conditioners: Conditioners, *, geometry: Geometry) -
 
 
 def to_time_columns(magnitude: NDArray[np.float64], *, time_columns: int) -> NDArray[np.float64]:
-    """Read an analysis spectrogram's frame axis onto a fixed number of duration-fraction columns."""
-    return resample_to_fraction_points(magnitude, point_count=time_columns, axis=1)
+    """Read an analysis spectrogram's frame axis onto a fixed number of duration-fraction columns.
+
+    A column stands for a span of analysis frames, and averaging across that span carries every
+    frame it covers into the picture -- which keeps a long sample's content in the time order the
+    analysis found it, whatever the ratio between its frames and its columns.
+    """
+    return average_to_fraction_points(magnitude, point_count=time_columns, axis=1)
 
 
 def to_analysis_frames(columns: NDArray[np.float64], *, frame_count: int) -> NDArray[np.float64]:

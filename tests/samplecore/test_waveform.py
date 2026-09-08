@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from samplecore.waveform import (
+    average_to_fraction_points,
     compute_waveform_peaks,
     fold_to_mono,
     remove_dc_offset,
     resample_to_fraction_points,
+    triangular_weights,
     trim_trailing_silence,
 )
 
@@ -144,3 +147,51 @@ def test_resample_to_fraction_points_holds_the_output_size_across_differing_inpu
     long = resample_to_fraction_points(np.linspace(0.0, 1.0, 4096), point_count=32)
 
     assert short.shape == long.shape == (32,)
+
+
+def test_average_to_fraction_points_holds_a_constant_series_flat() -> None:
+    averaged = average_to_fraction_points(np.full(400, 3.0), point_count=16)
+
+    assert np.allclose(averaged, 3.0)
+
+
+def test_average_to_fraction_points_carries_content_a_sampling_resample_would_step_over() -> None:
+    """The guard this resampler exists for.
+
+    A series alternating between two values carries no content at the rate a decimating sample
+    reads it, so reading every nth point returns whichever value those points happen to land on.
+    Averaging across each output point's span returns the mean the span actually holds.
+    """
+    alternating = np.tile([0.0, 1.0], 200)
+
+    averaged = average_to_fraction_points(alternating, point_count=8)
+    sampled = resample_to_fraction_points(alternating, point_count=8)
+
+    assert np.allclose(averaged, 0.5, atol=0.05)
+    assert float(np.abs(sampled - 0.5).max()) > 0.4
+
+
+def test_average_to_fraction_points_interpolates_when_asked_for_more_points() -> None:
+    averaged = average_to_fraction_points(np.array([0.0, 1.0]), point_count=3)
+
+    assert averaged == pytest.approx([0.0, 0.5, 1.0])
+
+
+def test_average_to_fraction_points_resamples_each_row_of_a_two_dimensional_series() -> None:
+    spectrogram = np.stack([np.full(100, 1.0), np.full(100, 2.0)])
+
+    averaged = average_to_fraction_points(spectrogram, point_count=5, axis=1)
+
+    assert averaged.shape == (2, 5)
+    assert np.allclose(averaged[0], 1.0)
+    assert np.allclose(averaged[1], 2.0)
+
+
+def test_triangular_weights_sum_to_one_for_every_target() -> None:
+    weights = triangular_weights(
+        source_positions=np.linspace(0.0, 1.0, 40),
+        target_positions=np.linspace(0.0, 1.0, 7),
+        half_widths=np.full(7, 1.0 / 6.0),
+    )
+
+    assert np.allclose(weights.sum(axis=1), 1.0)
