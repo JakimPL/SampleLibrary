@@ -37,6 +37,7 @@ vi.mock("../../../src/api/samples", async () => {
     return { ...actual, getSample, getSampleRelations, getSimilarSamples };
 });
 
+/** The waveform the panel built. Created by an effect of its own, so callers wait for it. */
 function latestInstance(): (typeof instances)[number] {
     const instance = instances[instances.length - 1];
     if (instance === undefined) {
@@ -103,7 +104,9 @@ describe("WaveformPanel", () => {
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
-        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(22050 / 44100, false);
+        await waitFor(() => {
+            expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(22050 / 44100, false);
+        });
     });
 
     it("lets the user switch to a different occurrence's rate", async () => {
@@ -118,7 +121,9 @@ describe("WaveformPanel", () => {
 
         fireEvent.change(screen.getByLabelText("Rate"), { target: { value: "8363" } });
 
-        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 44100, false);
+        await waitFor(() => {
+            expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 44100, false);
+        });
     });
 
     it("opens at the note the library plays the sample at most, not at its reference rate", async () => {
@@ -141,7 +146,9 @@ describe("WaveformPanel", () => {
         await waitFor(() => {
             expect(screen.getByLabelText("Note")).toHaveValue("36");
         });
-        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 4 / 44100, false);
+        await waitFor(() => {
+            expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 4 / 44100, false);
+        });
     });
 
     it("shows an honest empty state for a sample with no occurrences", async () => {
