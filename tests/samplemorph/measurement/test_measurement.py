@@ -6,7 +6,7 @@ import pytest
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplemorph.canonicalizers.log_frequency import build_log_frequency_canonicalizer
-from samplemorph.measurement.comparison import grid_distance, log_mel_distance_db, log_mel_spectrum
+from samplemorph.measurement.comparison import grid_distance, held_out_distance_db, held_out_spectrum
 from samplemorph.measurement.corpus import ProbeSample, unrelated_pairs
 from samplemorph.measurement.equivariance import (
     EquivarianceTrial,
@@ -51,17 +51,31 @@ def test_grid_distance_reports_zero_for_one_grid_against_itself() -> None:
     assert grid_distance(grid, grid) == pytest.approx(0.0)
 
 
-def test_log_mel_distance_reports_zero_for_one_waveform_against_itself() -> None:
-    spectrum = log_mel_spectrum(harmonic_tone(TEST_FRAME_COUNT, frequency=330.0)[:, 0])
+def test_the_held_out_distance_reports_zero_for_one_waveform_against_itself() -> None:
+    spectrum = held_out_spectrum(harmonic_tone(TEST_FRAME_COUNT, frequency=330.0)[:, 0])
 
-    assert log_mel_distance_db(spectrum, spectrum) == pytest.approx(0.0)
+    assert held_out_distance_db(spectrum, spectrum) == pytest.approx(0.0)
 
 
-def test_log_mel_distance_separates_a_tone_from_a_noise_burst() -> None:
-    tone = log_mel_spectrum(harmonic_tone(TEST_FRAME_COUNT, frequency=330.0)[:, 0])
-    burst = log_mel_spectrum(noise_burst(TEST_FRAME_COUNT, seed=0)[:, 0])
+def test_the_held_out_distance_separates_a_tone_from_a_noise_burst() -> None:
+    tone = held_out_spectrum(harmonic_tone(TEST_FRAME_COUNT, frequency=330.0)[:, 0])
+    burst = held_out_spectrum(noise_burst(TEST_FRAME_COUNT, seed=0)[:, 0])
 
-    assert log_mel_distance_db(tone, burst) > 0.0
+    assert held_out_distance_db(tone, burst) > 0.0
+
+
+def test_the_held_out_distance_reports_a_spectrum_whose_shape_is_wrong() -> None:
+    """The guard this yardstick exists for.
+
+    A synthesis route that returns the right content under a sloped spectrum sounds wrong, and a
+    filterbank yardstick averages that slope away across its wider bands. Reading every band at one
+    width keeps the error the tilt introduces in the number.
+    """
+    waveform = harmonic_tone(TEST_FRAME_COUNT, frequency=330.0)[:, 0]
+    spectrum = held_out_spectrum(waveform)
+    tilt = np.linspace(0.0, 24.0, spectrum.shape[0])[:, None]
+
+    assert held_out_distance_db(spectrum, spectrum - tilt) > 10.0
 
 
 def test_unrelated_pairs_names_two_distinct_samples_each_time() -> None:

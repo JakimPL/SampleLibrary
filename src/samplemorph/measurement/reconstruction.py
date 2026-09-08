@@ -7,7 +7,7 @@ from typing import Final
 import numpy as np
 
 from samplemorph.canonicalizers import Canonicalizer
-from samplemorph.measurement.comparison import log_mel_distance_db, log_mel_spectrum
+from samplemorph.measurement.comparison import held_out_distance_db, held_out_spectrum
 from samplemorph.measurement.corpus import ProbeSample, unrelated_pairs
 from samplemorph.vocoders.griffin_lim import GriffinLimVocoder, OraclePhaseVocoder
 
@@ -89,7 +89,7 @@ def reconstruction_trials(
     """Canonicalize each probe, restore it, and measure both rungs against the original audio."""
     trials = []
     for probe in probes:
-        reference = log_mel_spectrum(probe.mono)
+        reference = held_out_spectrum(probe.mono)
         spectrogram = canonicalizer.restore(canonicalizer.canonicalize(probe.mono))
         for rung, vocoder in (
             (ReconstructionRung.ORACLE_PHASE, OraclePhaseVocoder(probe.mono)),
@@ -100,7 +100,7 @@ def reconstruction_trials(
                 ReconstructionTrial(
                     sample_hash=probe.sample.hash,
                     rung=rung,
-                    distance_db=log_mel_distance_db(reference, log_mel_spectrum(rebuilt)),
+                    distance_db=held_out_distance_db(reference, held_out_spectrum(rebuilt)),
                     frame_count=probe.sample.frames,
                 )
             )
@@ -110,10 +110,10 @@ def reconstruction_trials(
 def unrelated_distance_db(
     probes: tuple[ProbeSample, ...], *, pair_count: int = DEFAULT_UNRELATED_PAIR_COUNT, random_seed: int
 ) -> float:
-    """The median log-mel distance between samples drawn independently of one another."""
-    spectra = [log_mel_spectrum(probe.mono) for probe in probes]
+    """The median held-out distance between samples drawn independently of one another."""
+    spectra = [held_out_spectrum(probe.mono) for probe in probes]
     pairs = unrelated_pairs(len(spectra), pair_count=pair_count, random_seed=random_seed)
-    return float(np.median([log_mel_distance_db(spectra[first], spectra[second]) for first, second in pairs]))
+    return float(np.median([held_out_distance_db(spectra[first], spectra[second]) for first, second in pairs]))
 
 
 def summarize_reconstruction(
