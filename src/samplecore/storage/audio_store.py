@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import wave
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Final
 
 import numpy as np
@@ -14,6 +16,7 @@ from samplecore.models.sample_pcm import SamplePCM
 
 NOMINAL_WAV_RATE: Final[int] = 44100
 OBJECTS_DIRECTORY_NAME: Final[str] = "objects"
+_PARTIAL_SUFFIX: Final[str] = ".partial"
 _UNSIGNED_EIGHT_BIT_OFFSET: Final[int] = 128
 
 
@@ -27,6 +30,13 @@ def write(library_root: Path, sample_pcm: SamplePCM) -> Path:
 
     Writing is skipped when the object already exists: content-addressed storage means a second
     write for the same hash could only ever repeat the same bytes.
+
+    The bytes land in a temporary file beside their destination and are moved into place in one
+    step, so a reader only ever sees a whole sample. One sample recurs across many modules, so two
+    processes extracting at once routinely reach the same hash together; the move settles that,
+    each having written identical bytes. It also decides what a run killed mid-write leaves behind:
+    a leftover temporary file, which the next run passes over, rather than a truncated object the
+    existence check above would trust forever.
 
     The stored bytes are quantized with TrackMod's own signed convention, exactly matching what
     the sample's hash was computed from. Only 8-bit PCM is offset before writing, to the WAV
@@ -42,17 +52,31 @@ def write(library_root: Path, sample_pcm: SamplePCM) -> Path:
         return path
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    quantized = quantize(sample_pcm.pcm, sample.depth)
-    # pylint mis-infers wave.open's mode-dependent overload as Wave_read even for "wb"; mypy resolves it correctly.
-    # pylint: disable=no-member
-    with wave.open(str(path), "wb") as wav_file:
-        wav_file.setnchannels(sample.channels.value)
-        wav_file.setsampwidth(sample.depth.bytes_per_frame)
-        wav_file.setframerate(NOMINAL_WAV_RATE)
-        wav_file.writeframes(_encode_frames(quantized, sample.depth))
-    # pylint: enable=no-member
+    written = _write_partial(path.parent, sample_pcm)
+    os.replace(written, path)
 
     return path
+
+
+def _write_partial(directory: Path, sample_pcm: SamplePCM) -> Path:
+    """Write the WAV to a temporary file in ``directory``, returning where it landed.
+
+    The same directory as the destination, so the move that follows stays within one filesystem and
+    is therefore atomic.
+    """
+    sample = sample_pcm.sample
+    quantized = quantize(sample_pcm.pcm, sample.depth)
+    with NamedTemporaryFile(dir=directory, suffix=_PARTIAL_SUFFIX, delete=False) as partial:
+        # pylint mis-infers wave.open's mode-dependent overload as Wave_read even for "wb"; mypy resolves it correctly.
+        # pylint: disable=no-member
+        with wave.open(partial, "wb") as wav_file:
+            wav_file.setnchannels(sample.channels.value)
+            wav_file.setsampwidth(sample.depth.bytes_per_frame)
+            wav_file.setframerate(NOMINAL_WAV_RATE)
+            wav_file.writeframes(_encode_frames(quantized, sample.depth))
+        # pylint: enable=no-member
+
+    return Path(partial.name)
 
 
 def read(library_root: Path, sample: Sample) -> SamplePCM:
