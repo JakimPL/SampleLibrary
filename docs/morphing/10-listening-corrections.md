@@ -82,6 +82,49 @@ The grid grew from `band_count` rows to `band_count + 2 × headroom` — 338 to 
 octave with a 48-semitone cap. Fitting 256 components over 2,000 samples takes 13 seconds, and the
 codec holds 97.3% of the variance where it held 93.2%.
 
+## Defect 3 — the axis was sampled where it should have been averaged
+
+The corrected renders were judged again and still carried an artifact, described as *"an unaligned
+other frequency… rendered in windows of frequencies unmatched with the fundamental"*, and likened to
+an Amiga ProTracker sample stepped through with `901 902 903` while the tempo runs against the
+playback rate. Rung by rung: `2_griffin_lim_only` was clean, while rungs 3, 5, 6 and 7 carried it,
+and on bass only rung 7 did.
+
+That pattern names the stage exactly. Rung 2 is Griffin-Lim on the untouched Fourier magnitude, so
+the phase estimate was never the source. Rung 3 is the frequency-axis round trip alone, and it read
+each log band from its own center frequency by interpolation:
+
+| Band | Frequency | Linear bins the band spans |
+|---|---|---|
+| 144 | 523 Hz | 0.94 |
+| 180 | 1046 Hz | 1.87 |
+| 252 | 4186 Hz | 7.49 |
+| 324 | 16742 Hz | 29.94 |
+| 337 | 21504 Hz | 38.46 |
+
+Above 559 Hz a band covers more than one Fourier bin, reaching 38 at the top of the range, so
+reading the band at its center kept one bin in thirty-eight. Sampling a spectrum that sparsely is
+decimation along the frequency axis with nothing filtering it first, and decimating a spectrum folds
+the frame back on itself in time. Each frame repeats at a period set by the Fourier grid rather than
+by the sample's pitch, which is what the ProTracker comparison describes and why bass — whose energy
+sits mostly below the crossover — was the one sample it spared.
+
+Each band now takes a weighted mean across its own width, through `triangular_weights` in
+`samplecore.waveform`. The round trip improves on every probe: oboe 4.74 → 4.14, bass 3.66 → 2.94,
+snare 4.60 → 3.63, pad 3.80 → 3.04. Both readings are rendered side by side as `3_log_axis_only`
+and `3b_log_axis_by_sampling`.
+
+The time axis carried the same defect: `to_time_columns` read 194 analysis frames onto 64 columns by
+interpolation, stepping over the frames between. It now averages across each column's span, through
+`average_to_fraction_points`. `resample_to_fraction_points` keeps its interpolating behavior, since
+`samplecloud`'s invariant backend is built on it and its vectors are already extracted over the whole
+catalog.
+
+Averaging the time axis raises the held-out distance slightly — oboe 0.72 → 0.88, pad 1.10 → 1.25 —
+because a magnitude yardstick reads a low-pass as error and reads aliasing as agreement. That is the
+same blindness [the yardstick section](#the-yardstick-was-the-first-defect) records, and it is why
+this change rests on the mechanism and on listening rather than on the number.
+
 ## Defaults these findings changed
 
 | Setting | Was | Now | Why |
