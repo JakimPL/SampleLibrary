@@ -4,11 +4,11 @@ import uuid
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import Connection, create_engine, inspect, text
+from sqlalchemy import Connection, create_engine, func, inspect, select, text
 from sqlalchemy.engine import make_url
 
 from samplecore.storage.curation import CURATION_SCHEMA
-from samplecore.storage.database import connect, connect_for_curation, create_schema
+from samplecore.storage.database import SCHEMA_LOCK_KEY, connect, connect_for_curation, create_schema
 
 EXPECTED_TABLES = frozenset(
     {"sample", "module", "sample_properties", "xm_sample_properties", "it_sample_properties", "sample_relation"}
@@ -86,3 +86,19 @@ def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alo
 
     assert catalog_tables == set()
     assert curation_tables == {"sample_annotation"}
+
+
+def test_creating_the_schema_holds_a_claim_no_other_run_can_take(connection: Connection, _database_url: str) -> None:
+    """Two runs opening one fresh catalog would otherwise both try to create the same table.
+
+    The second connection stands for that other run, asking for the claim rather than waiting on
+    it, so the test reports the state instead of blocking on it.
+    """
+    with connect(_database_url) as other_run:
+        create_schema(connection)
+        while_creating = other_run.execute(select(func.pg_try_advisory_xact_lock(SCHEMA_LOCK_KEY))).scalar_one()
+        connection.commit()
+        once_created = other_run.execute(select(func.pg_try_advisory_xact_lock(SCHEMA_LOCK_KEY))).scalar_one()
+
+    assert not while_creating
+    assert once_created

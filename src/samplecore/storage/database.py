@@ -24,6 +24,8 @@ from sqlalchemy import (
     UniqueConstraint,
     column,
     create_engine,
+    func,
+    select,
 )
 from sqlalchemy.engine import RootTransaction
 from sqlalchemy.pool import NullPool
@@ -60,6 +62,9 @@ _HIGHEST_NOTE: Final[int] = NOTE_COUNT - 1
 # than a tunable setting. A whole-catalog lookup passes far more hashes than that, so queries taking
 # one parameter per hash run in chunks comfortably inside the ceiling.
 HASH_CHUNK_SIZE: Final[int] = 20_000
+
+# An arbitrary number, needing only to be one no other advisory lock in this database picks.
+SCHEMA_LOCK_KEY: Final[int] = 6_853_197_402_115_308_001
 
 
 metadata = MetaData()
@@ -410,9 +415,27 @@ def create_schema(bind: Connection | Engine) -> None:
 
     The curation schema comes with it, so hand-curated work is readable wherever the catalog is,
     while staying outside the metadata every rebuild and purge iterates.
+
+    Safe to call from several processes opening the same fresh catalog at once: each waits its turn
+    on `_claim_schema_creation`, and every one after the first finds the tables already standing.
     """
+    if isinstance(bind, Connection):
+        _claim_schema_creation(bind)
+
     metadata.create_all(bind)
     create_curation_schema(bind)
+
+
+def _claim_schema_creation(connection: Connection) -> None:
+    """Hold the catalog's creation lock until the caller's transaction ends.
+
+    ``CREATE TABLE IF NOT EXISTS`` still races: two processes can both find a table missing and both
+    try to create it, and the loser is handed an error rather than the table it asked for. Taking
+    one advisory lock first turns concurrent starts -- several extraction runs sharing a catalog,
+    say -- into ordered ones. Postgres releases it with the transaction, which is the same commit
+    that publishes the tables.
+    """
+    connection.execute(select(func.pg_advisory_xact_lock(SCHEMA_LOCK_KEY)))
 
 
 def start_batch(connection: Connection) -> RootTransaction:
