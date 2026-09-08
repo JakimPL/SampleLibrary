@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 
 from samplecore.cli_support import bootstrap_cli
 from samplecore.models.scalars import MINIMUM_WORKER_COUNT, WorkerCount
@@ -17,17 +16,17 @@ def main(argv: list[str] | None = None) -> None:
     arguments = _parse_arguments(argv)
     config = bootstrap_cli()
     config.library_root.mkdir(parents=True, exist_ok=True)
-    summary = extract_corpus(config, workers=arguments.workers)
-
-    _report(summary)
-    if summary.failures:
-        sys.exit(1)
+    _report(extract_corpus(config, workers=arguments.workers))
 
 
 def _report(summary: ExtractionSummary) -> None:
-    """Say what the pass did, then name every file it could not read."""
+    """Say what the pass did, then name every file it could not read.
+
+    An unreadable file describes the collection, so it goes out as a warning and the pass still
+    ends a success: what did land is cataloged, and the stages that follow extraction run on it.
+    """
     _logger.info(
-        "Discovered %d modules: %d ingested, %d already known, %d ingested by another worker, %d failed.",
+        "Discovered %d modules: %d ingested, %d already known, %d ingested by another worker, %d unreadable.",
         summary.discovered,
         len(summary.ingested),
         summary.skipped_existing,
@@ -35,7 +34,7 @@ def _report(summary: ExtractionSummary) -> None:
         len(summary.failures),
     )
     for failure in summary.failures:
-        _logger.info("  %s: %s", failure.path, failure.reason)
+        _logger.warning("Could not read %s: %s", failure.path, failure.reason)
 
 
 def _worker_count_argument(value: str) -> WorkerCount:
