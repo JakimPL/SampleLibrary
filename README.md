@@ -49,6 +49,10 @@ The extraction pipeline, embedding pipeline, and web application are introduced 
 see `docs/architecture.md` for the current package layout and `Makefile` for the available
 commands (`make extract`, `make embed`, `make serve`, and so on) as each phase lands.
 
+Extraction takes a couple of hours over a large collection. To split it, run `make extract
+SHARD=0/4` through `SHARD=3/4` in four terminals, or on four machines pointed at one database:
+each takes a quarter of the files, and between them they cover the collection once.
+
 ### Frontend
 
 `make install` also installs the frontend's npm dependencies. With the API running (`make

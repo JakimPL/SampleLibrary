@@ -135,6 +135,28 @@ SQLAlchemy's `Connection` for the underlying `psycopg` connection and streams ro
 Postgres's own `COPY ... FROM STDIN`, avoiding that per-row cost entirely without assuming the
 client and server share a filesystem the way a file-path-based `COPY` would.
 
+## Splitting an extraction run
+
+`sampleextract --shard index/count` gives one run its share of the corpus, so several can split it
+between them: across cores on one machine, or across machines pointed at one catalog. `Shard.select`
+takes every `count`-th path from the sorted discovery, starting at `index` -- striding rather than
+slicing into blocks, since paths sorted by name group a directory's similar files together and
+contiguous blocks would hand one run all the large ones. Every run sorts identically, so the shares
+cover the corpus exactly once whatever order the runs start in.
+
+Three things make concurrent runs safe. `audio_store.write` stages its bytes in a temporary file
+beside the destination and moves them into place in one step, so two runs reaching the same sample
+hash -- routine, since one sample recurs across many modules -- each write a whole object rather
+than interleaving into one. `create_schema` takes a Postgres advisory lock, so runs opening the same
+fresh catalog at once create its tables in turn instead of racing on `CREATE TABLE IF NOT EXISTS`.
+And a module two runs reach at the same moment, which this corpus invites by holding hundreds of
+byte-identical pairs under different names, is settled by the catalog's own uniqueness on the module
+hash: the losing run rolls its whole module back and counts it under `ingested_elsewhere`.
+
+Parsing is where the time goes, and it is ordinary Python, so shares want separate processes rather
+than threads. Peak memory bounds how many: one module can materialize tens of thousands of note
+events, and each run carries that alone.
+
 ## Deployment
 
 `sampleserver` is the only package meant to run as a long-lived service; `sampleextract` and

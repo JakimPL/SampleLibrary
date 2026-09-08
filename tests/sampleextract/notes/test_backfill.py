@@ -7,6 +7,7 @@ from sqlalchemy import Connection
 from trackmod.core.notes.pitch import Note
 
 from samplecore.config import LibraryConfig
+from samplecore.sharding import WHOLE
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.module_instrument import PostgresModuleInstrumentRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
@@ -33,7 +34,7 @@ def cataloged_corpus(
     """
     (config.module_source_directory / "song.xm").write_bytes(xm_module_bytes)
     (config.module_source_directory / "song.it").write_bytes(it_module_bytes)
-    run_extraction(config, connection)
+    run_extraction(config, connection, shard=WHOLE)
     for module in PostgresModuleRepository(connection).list_all():
         clear_module_notes(connection, module_id=module.id)
 
@@ -135,7 +136,7 @@ def test_ingest_records_a_new_module_s_notes_without_a_backfill_pass(
 ) -> None:
     (config.module_source_directory / "song.xm").write_bytes(xm_module_bytes)
 
-    summary = run_extraction(config, connection)
+    summary = run_extraction(config, connection, shard=WHOLE)
 
     events = PostgresNoteEventRepository(connection).list_for_module(summary.ingested[0].id)
     assert [event.sounded_note for event in events] == [played_note]

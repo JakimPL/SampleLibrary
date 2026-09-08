@@ -29,7 +29,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "does-not-exist.toml"))
 
     with pytest.raises(SystemExit) as raised:
-        main()
+        main([])
 
     assert raised.value.code == 1
     assert "Configuration error" in capsys.readouterr().err
@@ -44,7 +44,7 @@ def test_main_creates_the_library_root_and_reports_an_empty_corpus(
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main()
+    main([])
 
     assert (tmp_path / "library").is_dir()
     assert "Discovered 0 modules" in capsys.readouterr().out
@@ -62,7 +62,35 @@ def test_main_exits_with_an_error_status_and_lists_every_failure(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
 
     with pytest.raises(SystemExit) as raised:
-        main()
+        main([])
 
     assert raised.value.code == 1
     assert "corrupt.xm" in capsys.readouterr().out
+
+
+def test_main_takes_only_its_own_share_when_a_shard_is_named(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+) -> None:
+    config_path = _write_config(tmp_path, _database_url)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+    source = tmp_path / "modules"
+    (source / "first.xm").write_bytes(xm_module_bytes)
+    (source / "second.it").write_bytes(it_module_bytes)
+
+    main(["--shard", "0/2"])
+
+    assert "Shard 0/2 discovered 1 modules" in capsys.readouterr().out
+
+
+def test_main_refuses_a_shard_naming_no_real_share() -> None:
+    """A share outside its own split is a typo worth stopping for, not a run that quietly does nothing."""
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--shard", "4/4"])
+
+    assert exit_info.value.code == 2

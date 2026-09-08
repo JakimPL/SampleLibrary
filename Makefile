@@ -32,9 +32,11 @@ coverage:
 .PHONY: check
 check: format lint test frontend-check
 
+# SHARD splits one corpus between several runs: `make extract SHARD=0/4` through `SHARD=3/4`, in
+# four terminals or on four machines pointed at one catalog. Left unset, one run takes it all.
 .PHONY: extract
 extract:
-	uv run sampleextract
+	uv run sampleextract $(if $(SHARD),--shard $(SHARD),)
 
 .PHONY: equivalence
 equivalence:

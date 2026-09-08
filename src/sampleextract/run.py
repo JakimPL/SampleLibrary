@@ -11,6 +11,7 @@ from tqdm import tqdm
 from samplecore.config import LibraryConfig
 from samplecore.hashing import compute_module_hash
 from samplecore.models.module import Module
+from samplecore.sharding import Shard
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from sampleextract.discovery import FORMAT_LOADERS, discover_modules
 from sampleextract.ingest import ingest_module
@@ -19,8 +20,9 @@ from sampleextract.parsing import RECOVERABLE_PARSE_ERRORS, ExtractionFailure, p
 
 @dataclass(frozen=True)
 class ExtractionSummary:
-    """What one extraction run did, across every module it discovered."""
+    """What one extraction run did, across the modules its own shard covered."""
 
+    shard: Shard
     discovered: int
     ingested: tuple[Module, ...]
     skipped_existing: int
@@ -28,8 +30,12 @@ class ExtractionSummary:
     failures: tuple[ExtractionFailure, ...]
 
 
-def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionSummary:
-    """Discover every readable module under the configured source directory and ingest each once.
+def run_extraction(config: LibraryConfig, connection: Connection, *, shard: Shard) -> ExtractionSummary:
+    """Discover the readable modules under the configured source directory and ingest each once.
+
+    ``shard`` is this run's share of them, so several runs can split one corpus between them --
+    across cores, or across machines pointed at one catalog. ``discovered`` counts what this share
+    holds, not what the directory holds.
 
     A module already known by its hash is skipped before it is parsed, so a repeat run over an
     unchanged corpus costs one hash and one indexed lookup per file, never a re-parse. A file that
@@ -44,7 +50,7 @@ def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionS
     since this run had just found it absent.
     """
     module_repository = PostgresModuleRepository(connection)
-    paths = discover_modules(config.module_source_directory)
+    paths = shard.select(discover_modules(config.module_source_directory))
     ingested: list[Module] = []
     failures: list[ExtractionFailure] = []
     skipped_existing = 0
@@ -67,6 +73,7 @@ def run_extraction(config: LibraryConfig, connection: Connection) -> ExtractionS
             ingested_elsewhere += 1
 
     return ExtractionSummary(
+        shard=shard,
         discovered=len(paths),
         ingested=tuple(ingested),
         skipped_existing=skipped_existing,
