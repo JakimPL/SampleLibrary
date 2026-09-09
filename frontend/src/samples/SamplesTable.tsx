@@ -25,7 +25,9 @@ const LOAD_MORE_TRIGGER_DISTANCE = 20;
 const columnHelper = createColumnHelper<SampleSummary>();
 
 // Every column but the name declares its own width, so the name takes whatever the others leave
-// over -- it is the one column whose content is worth as much room as a panel can spare.
+// over. Each width holds that column's own widest reading -- five stars and a heart, a formatted
+// byte count, a header word -- since these are read whole or not at all, while a name is the one
+// thing a listing can trail off and still say something with.
 const COLUMNS = [
     columnHelper.display({ id: "waveform", header: "Waveform", size: 76 }),
     columnHelper.accessor(
@@ -36,10 +38,10 @@ const COLUMNS = [
             meta: { flexible: true },
         },
     ),
-    columnHelper.display({ id: "category", header: "Category", size: 120 }),
-    columnHelper.display({ id: "verdict", header: "Rating", size: 88 }),
-    columnHelper.accessor("size_bytes", { header: "Size", size: 60 }),
-    columnHelper.accessor("occurrence_count", { header: "Occurrences", size: 52 }),
+    columnHelper.display({ id: "category", header: "Category", size: 96 }),
+    columnHelper.display({ id: "verdict", header: "Rating", size: 110 }),
+    columnHelper.accessor("size_bytes", { header: "Size", size: 80 }),
+    columnHelper.accessor("occurrence_count", { header: "Occurrences", size: 84 }),
 ];
 
 interface SamplesTableProps {
@@ -106,6 +108,13 @@ export function SamplesTable({
 
     return (
         <div className="panel-stack">
+            <div className="panel-status">
+                <span className="cell-muted mono">
+                    {samples.length} of {total} loaded
+                    {isLoadingMore && hasMore ? " · loading…" : ""}
+                </span>
+                {loadMoreError !== null && <span className="error-notice">{loadMoreError}</span>}
+            </div>
             <div className="panel-filter">
                 <input
                     type="text"
@@ -147,11 +156,6 @@ export function SamplesTable({
                     <option value="occurrences">Most used</option>
                     <option value="rating">Best rated</option>
                 </select>
-                <span className="cell-muted mono">
-                    {samples.length} of {total} loaded
-                    {isLoadingMore && hasMore ? " · loading…" : ""}
-                </span>
-                {loadMoreError !== null && <span className="error-notice">{loadMoreError}</span>}
             </div>
             <div className="panel-body" ref={scrollElementRef}>
                 <table className="data">

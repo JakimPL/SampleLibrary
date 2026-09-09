@@ -36,8 +36,8 @@ export function ModuleRow({ module }: ModuleRowProps): ReactElement {
             <td className="cell-stamp">
                 <span className={`badge badge-${module.tracker}`}>{module.tracker}</span>
             </td>
-            <td className="cell-muted mono">{module.sample_count}</td>
-            <td className="cell-muted mono">{formatBytes(module.file_size)}</td>
+            <td className="cell-muted mono cell-numeric">{module.sample_count}</td>
+            <td className="cell-muted mono cell-numeric">{formatBytes(module.file_size)}</td>
         </tr>
     );
 }

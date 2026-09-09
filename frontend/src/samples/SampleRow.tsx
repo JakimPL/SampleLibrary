@@ -79,8 +79,8 @@ export function SampleRow({ sample, groupByEquivalence }: SampleRowProps): React
                     }}
                 />
             </td>
-            <td className="cell-muted mono">{formatBytes(sample.size_bytes)}</td>
-            <td className="cell-muted mono">{sample.occurrence_count}</td>
+            <td className="cell-muted mono cell-numeric">{formatBytes(sample.size_bytes)}</td>
+            <td className="cell-muted mono cell-numeric">{sample.occurrence_count}</td>
         </tr>
     );
 }

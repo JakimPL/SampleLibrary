@@ -25,12 +25,12 @@ const COLUMNS = [
     columnHelper.accessor((module) => (module.title.trim() === "" ? UNTITLED_MODULE_LABEL : module.title), {
         id: "title",
         header: "Title",
-        size: 180,
+        size: 150,
     }),
     columnHelper.accessor("filename", { header: "Filename", meta: { flexible: true } }),
     columnHelper.accessor("tracker", { header: "Tracker", size: 64 }),
-    columnHelper.accessor("sample_count", { header: "Samples", size: 60 }),
-    columnHelper.accessor("file_size", { header: "Size", size: 60 }),
+    columnHelper.accessor("sample_count", { header: "Samples", size: 64 }),
+    columnHelper.accessor("file_size", { header: "Size", size: 80 }),
 ];
 
 interface ModulesTableProps {
@@ -79,6 +79,11 @@ export function ModulesTable({ modules }: ModulesTableProps): ReactElement {
 
     return (
         <div className="panel-stack">
+            <div className="panel-status">
+                <span className="cell-muted mono">
+                    {rows.length} of {modules.length} shown
+                </span>
+            </div>
             <div className="panel-filter">
                 <input
                     type="text"
@@ -98,9 +103,6 @@ export function ModulesTable({ modules }: ModulesTableProps): ReactElement {
                         <option value="s3m">S3M</option>
                     </select>
                 </label>
-                <span className="cell-muted mono">
-                    {rows.length} / {modules.length}
-                </span>
             </div>
             <div className="panel-body" ref={scrollElementRef}>
                 <table className="data">
