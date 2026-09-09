@@ -6,9 +6,7 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 
-from samplemorph.canonicalizers import mel
-from samplemorph.canonicalizers.common import bands_onto_linear_axis
-from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
+from samplemorph.canonicalizers.linear_axis import onto_linear_axis
 from samplemorph.images import AnalysisSpectrogram
 
 GRIFFIN_LIM_ITERATIONS: Final[int] = 32
@@ -26,7 +24,7 @@ class GriffinLimVocoder:
         self._iterations = iterations
 
     def synthesize(self, spectrogram: AnalysisSpectrogram) -> NDArray[np.float64]:
-        linear = _onto_linear_axis(spectrogram.magnitude, geometry=spectrogram.geometry)
+        linear = onto_linear_axis(spectrogram.magnitude, geometry=spectrogram.geometry)
         waveform: NDArray[np.float64] = librosa.griffinlim(
             linear,
             n_iter=self._iterations,
@@ -51,7 +49,7 @@ class OraclePhaseVocoder:
 
     def synthesize(self, spectrogram: AnalysisSpectrogram) -> NDArray[np.float64]:
         geometry = spectrogram.geometry
-        linear = _onto_linear_axis(spectrogram.magnitude, geometry=geometry)
+        linear = onto_linear_axis(spectrogram.magnitude, geometry=geometry)
         reference = librosa.stft(self._reference, n_fft=geometry.fft_length, hop_length=geometry.hop_length)
         frames = min(linear.shape[1], reference.shape[1])
         phase = np.exp(1j * np.angle(reference[:, :frames]))
@@ -62,15 +60,3 @@ class OraclePhaseVocoder:
             length=spectrogram.frame_count,
         )
         return waveform
-
-
-def _onto_linear_axis(magnitude: NDArray[np.float64], *, geometry: Geometry) -> NDArray[np.float64]:
-    match geometry:
-        case LogFrequencyGeometry() | ConstantQGeometry():
-            return bands_onto_linear_axis(
-                magnitude,
-                band_frequencies=geometry.band_frequencies,
-                linear_frequencies=geometry.linear_frequencies,
-            )
-        case MelGeometry():
-            return mel.onto_linear_axis(magnitude, geometry=geometry)
