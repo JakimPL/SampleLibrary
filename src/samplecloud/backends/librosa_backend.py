@@ -93,7 +93,12 @@ def _attack_time_fraction(mono: NDArray[np.float64], *, sample_rate: int, n_fft:
     default when there is nothing to measure.
     """
     onset_envelope = librosa.onset.onset_strength(y=mono, sr=sample_rate, n_fft=n_fft, hop_length=hop_length)
-    onset_frames = librosa.onset.onset_detect(onset_envelope=onset_envelope, sr=sample_rate, hop_length=hop_length)
+    # Single precision carries a 16-bit sample's envelope with room to spare, and it is also the
+    # only specialization that holds here: librosa's peak picker is a numba guvectorize with no
+    # declared signatures, and the double-precision one it compiles segfaults under numba 0.67.
+    onset_frames = librosa.onset.onset_detect(
+        onset_envelope=onset_envelope.astype(np.float32), sr=sample_rate, hop_length=hop_length
+    )
     if onset_frames.size == 0:
         return NO_ONSET_ATTACK_FRACTION
     onset_time = librosa.frames_to_time(onset_frames[0], sr=sample_rate, hop_length=hop_length)
