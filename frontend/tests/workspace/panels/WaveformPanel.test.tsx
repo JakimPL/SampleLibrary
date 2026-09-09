@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,14 +9,25 @@ import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
 const { instances, createMock, getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => {
     class FakeWaveSurfer {
+        private readonly listeners = new Map<string, ((...args: unknown[]) => void)[]>();
         readonly play = vi.fn().mockResolvedValue(undefined);
         readonly pause = vi.fn();
         readonly setTime = vi.fn();
         readonly setPlaybackRate = vi.fn();
         readonly setOptions = vi.fn();
         readonly destroy = vi.fn();
-        on(): () => void {
+
+        on(event: string, callback: (...args: unknown[]) => void): () => void {
+            const callbacks = this.listeners.get(event) ?? [];
+            callbacks.push(callback);
+            this.listeners.set(event, callbacks);
             return () => undefined;
+        }
+
+        emit(event: string, ...args: unknown[]): void {
+            for (const callback of this.listeners.get(event) ?? []) {
+                callback(...args);
+            }
         }
     }
     const instances: FakeWaveSurfer[] = [];
@@ -98,6 +109,10 @@ describe("WaveformPanel", () => {
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
+        act(() => {
+            latestInstance().emit("ready", 1.0);
+        });
+
         await waitFor(() => {
             expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(22050 / 44100, false);
         });

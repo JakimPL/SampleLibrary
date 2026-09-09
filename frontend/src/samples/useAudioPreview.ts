@@ -31,12 +31,16 @@ export function previewPlaybackRate(playbackRateHz: number | null): number {
 function play(sampleHash: string, playbackRateHz: number | null): void {
     audioElement ??= new Audio();
     audioElement.addEventListener("ended", stop, { once: true });
-    // A browser keeps a rate change from moving the pitch unless told otherwise, which is the
-    // opposite of what a tracker does: the rate a sample is read at is its pitch, not a tempo
-    // control.
-    audioElement.preservesPitch = false;
-    audioElement.playbackRate = previewPlaybackRate(playbackRateHz);
     audioElement.src = sampleAudioUrl(sampleHash);
+    // The rate is named after the source, and stated twice: taking on a source sets a media
+    // element's rate back to its default, so the default carries the sample's rate too and every
+    // reading of the file lands on it. A browser also keeps a rate change from moving the pitch
+    // unless told otherwise, which is the opposite of what a tracker does: the rate a sample is
+    // read at is its pitch, not a tempo control.
+    const playbackRate = previewPlaybackRate(playbackRateHz);
+    audioElement.preservesPitch = false;
+    audioElement.defaultPlaybackRate = playbackRate;
+    audioElement.playbackRate = playbackRate;
     playingHash = sampleHash;
     notify();
     audioElement.play().catch(stop);

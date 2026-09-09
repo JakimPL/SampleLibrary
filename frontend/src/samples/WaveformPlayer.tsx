@@ -1,6 +1,7 @@
 import type { ChangeEvent, ReactElement } from "react";
 
 import { sampleAudioUrl } from "../api/samples";
+import { classNames } from "../shared/classNames";
 import { formatDuration } from "../shared/format";
 import { useWaveformPlayer } from "./useWaveformPlayer";
 
@@ -40,7 +41,10 @@ export function WaveformPlayer({ sampleHash, rateHz, rateOptions, onRateChange }
 
     return (
         <div className="wave-panel">
-            <div className="wave-canvas-wrap" ref={player.containerRef} />
+            <div
+                className={classNames("wave-canvas-wrap", player.isPlaying && "is-playing")}
+                ref={player.containerRef}
+            />
             <div className="transport">
                 <button type="button" className="play-btn" onClick={handleTogglePlay} disabled={!player.isReady}>
                     {player.isPlaying ? "⏸" : "▶"}

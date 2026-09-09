@@ -1052,6 +1052,17 @@ table.data td .annotation-editor-input {
     color: var(--wave-fill);
 }
 
+/* wavesurfer draws its playhead inside its own shadow root, which exposes it as the `cursor` part.
+   The panel shows it while a sample is sounding and takes it away otherwise, so a waveform at rest
+   is a plain contour, with nothing on it to read as a position. */
+.wave-canvas-wrap ::part(cursor) {
+    opacity: 0;
+}
+
+.wave-canvas-wrap.is-playing ::part(cursor) {
+    opacity: 1;
+}
+
 .transport {
     flex: 0 0 auto;
     display: flex;

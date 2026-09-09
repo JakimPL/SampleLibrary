@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
 import { previewPlaybackRate, useAudioPreview } from "../../src/samples/useAudioPreview";
@@ -51,5 +51,70 @@ describe("useAudioPreview", () => {
         });
 
         expect(second.result.current.playingHash).toBe("sample-preview-d");
+    });
+});
+
+describe("the shared preview element", () => {
+    it("names the rate after the source, so loading the file cannot take the rate back", async () => {
+        const writes: string[] = [];
+
+        class RecordingAudio {
+            defaultPlaybackRate = 1;
+            preservesPitch = true;
+            private storedSource = "";
+            private storedPlaybackRate = 1;
+
+            get src(): string {
+                return this.storedSource;
+            }
+
+            set src(source: string) {
+                writes.push("src");
+                this.storedSource = source;
+                // What a real media element does with a new source, and the whole point of the
+                // order under test: the rate goes back to the default before the file plays.
+                this.storedPlaybackRate = this.defaultPlaybackRate;
+            }
+
+            get playbackRate(): number {
+                return this.storedPlaybackRate;
+            }
+
+            set playbackRate(rate: number) {
+                writes.push("playbackRate");
+                this.storedPlaybackRate = rate;
+            }
+
+            addEventListener(): void {
+                // no media pipeline to report an ending
+            }
+
+            play(): Promise<void> {
+                return Promise.resolve();
+            }
+
+            pause(): void {
+                // no media pipeline to pause
+            }
+        }
+
+        const element = new RecordingAudio();
+        // Every `new Audio()` in the module under test hands back this one recording element.
+        function audioConstructorStub(): RecordingAudio {
+            return element;
+        }
+
+        vi.stubGlobal("Audio", audioConstructorStub);
+        vi.resetModules();
+        const { useAudioPreview: freshUseAudioPreview } = await import("../../src/samples/useAudioPreview");
+        const { result } = renderHook(() => freshUseAudioPreview());
+
+        act(() => {
+            result.current.play("sample-preview-e", 8363);
+        });
+
+        expect(writes).toEqual(["src", "playbackRate"]);
+        expect(element.playbackRate).toBeCloseTo(8363 / NOMINAL_WAV_RATE_HZ);
+        vi.unstubAllGlobals();
     });
 });

@@ -78,10 +78,29 @@ describe("useWaveformPlayer", () => {
         expect(options.container).toBe(screen.getByTestId("container"));
     });
 
-    it("applies the initial rate without preserving pitch", () => {
+    it("applies the initial rate once the file is ready, without preserving pitch", () => {
         render(<Harness audioUrl="/samples/abc/audio" rateHz={NOMINAL_WAV_RATE_HZ * 2} />);
 
+        // Taking on a source sets a media element's rate back to its default, so a rate named
+        // before the file arrived would be gone by the time it plays.
+        expect(latestInstance().setPlaybackRate).not.toHaveBeenCalled();
+
+        act(() => {
+            latestInstance().emit("ready", 1.5);
+        });
+
         expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(2, false);
+    });
+
+    it("takes a sample back to its start once it has played through", () => {
+        render(<Harness audioUrl="/samples/abc/audio" rateHz={8363} />);
+
+        act(() => {
+            latestInstance().emit("ready", 1.5);
+            latestInstance().emit("finish");
+        });
+
+        expect(latestInstance().setTime).toHaveBeenCalledWith(0);
     });
 
     it("reflects ready and playing state as wavesurfer emits its own events", () => {

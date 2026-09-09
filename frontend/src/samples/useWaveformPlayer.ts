@@ -70,6 +70,7 @@ function waveformHeightFor(containerWidthPx: number, containerHeightPx: number):
 export function useWaveformPlayer(audioUrl: string, initialRateHz: number): WaveformPlayer {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const waveSurferRef = useRef<WaveSurfer | null>(null);
+    const playbackRateRef = useRef(playbackRateFor(initialRateHz));
     const [isReady, setIsReady] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
@@ -87,6 +88,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         setCurrentTimeSeconds(0);
         setDurationSeconds(0);
 
+        playbackRateRef.current = playbackRateFor(initialRateHz);
         const initialSize = container.getBoundingClientRect();
         const waveSurfer = WaveSurfer.create({
             container,
@@ -99,7 +101,6 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             autoCenter: true,
             ...readWaveformColors(),
         });
-        waveSurfer.setPlaybackRate(playbackRateFor(initialRateHz), false);
         waveSurferRef.current = waveSurfer;
 
         let lastAppliedHeightPx = waveformHeightFor(initialSize.width, initialSize.height);
@@ -118,6 +119,11 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         resizeObserver.observe(container);
 
         waveSurfer.on("ready", (duration) => {
+            // The rate is applied here rather than at creation: taking on a source sets a media
+            // element's rate back to its default, so a rate named before the file arrived would be
+            // gone by the time it plays -- the sample would sound at the stored file's own nominal
+            // rate instead of the one the library reads it at.
+            waveSurfer.setPlaybackRate(playbackRateRef.current, false);
             setIsReady(true);
             setDurationSeconds(duration);
         });
@@ -128,6 +134,9 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             setIsPlaying(false);
         });
         waveSurfer.on("finish", () => {
+            // Back to the start, so a sample that has been heard reads the same as one that has
+            // not: an untouched contour with the playhead at its head.
+            waveSurfer.setTime(0);
             setIsPlaying(false);
         });
         waveSurfer.on("timeupdate", (currentTime) => {
@@ -165,7 +174,8 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             waveSurferRef.current?.setTime(seconds);
         },
         setRateHz: (occurrenceRateHz: number) => {
-            waveSurferRef.current?.setPlaybackRate(playbackRateFor(occurrenceRateHz), false);
+            playbackRateRef.current = playbackRateFor(occurrenceRateHz);
+            waveSurferRef.current?.setPlaybackRate(playbackRateRef.current, false);
         },
     };
 }

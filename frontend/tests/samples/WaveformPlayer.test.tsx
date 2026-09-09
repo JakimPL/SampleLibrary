@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, type RenderResult, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
@@ -56,8 +56,8 @@ interface PlayerOverrides {
     readonly onRateChange?: (rateHz: number) => void;
 }
 
-function renderPlayer(overrides: PlayerOverrides = {}): void {
-    render(
+function renderPlayer(overrides: PlayerOverrides = {}): RenderResult {
+    return render(
         <WaveformPlayer
             sampleHash="abc"
             rateHz={overrides.rateHz ?? 8363}
@@ -137,7 +137,31 @@ describe("WaveformPlayer", () => {
     it("opens at the rate it was handed, against the stored file's own", () => {
         renderPlayer({ rateHz: 16726 });
 
+        act(() => {
+            latestInstance().emit("ready", 1.0);
+        });
+
         expect(createMock).toHaveBeenLastCalledWith(expect.objectContaining({ url: "/api/samples/abc/audio" }));
         expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(16726 / NOMINAL_WAV_RATE_HZ, false);
+    });
+
+    it("marks the waveform as sounding only while it is playing", () => {
+        const { container } = renderPlayer();
+        const canvas = container.querySelector(".wave-canvas-wrap");
+
+        act(() => {
+            latestInstance().emit("ready", 1.0);
+        });
+        expect(canvas).not.toHaveClass("is-playing");
+
+        act(() => {
+            latestInstance().emit("play");
+        });
+        expect(canvas).toHaveClass("is-playing");
+
+        act(() => {
+            latestInstance().emit("finish");
+        });
+        expect(canvas).not.toHaveClass("is-playing");
     });
 });
