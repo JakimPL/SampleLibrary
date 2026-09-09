@@ -27,6 +27,25 @@ describe("normalizePoints", () => {
         ]);
     });
 
+    it("carries a sample point's own playback rate through", () => {
+        const points = [{ ...point(sampleA, 0, 0), playbackRateHz: 16726 }, point(sampleB, 10, 20)];
+
+        const normalized = normalizePoints(points);
+
+        expect(normalized[0]?.playbackRateHz).toBe(16726);
+        expect(normalized[1]).not.toHaveProperty("playbackRateHz");
+    });
+
+    it("normalizes a whole catalog's worth of points", () => {
+        const points = Array.from({ length: 200_000 }, (_, index) => point(sampleA, index, index * 2));
+
+        const normalized = normalizePoints(points);
+
+        expect(normalized).toHaveLength(200_000);
+        expect(normalized[0]).toEqual({ ref: sampleA, x: -1, y: -1 });
+        expect(normalized[normalized.length - 1]).toEqual({ ref: sampleA, x: 1, y: 1 });
+    });
+
     it("does not divide by zero when every point shares a coordinate", () => {
         const points = [point(sampleA, 5, 5), point(sampleB, 5, 5)];
 
