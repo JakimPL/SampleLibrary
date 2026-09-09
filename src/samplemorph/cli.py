@@ -15,7 +15,7 @@ from samplecore.models.sample import Sample
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.tracking.session import open_run
 from samplemorph.canonicalizers import Canonicalizer
-from samplemorph.commands import cache_grids, embed, train_descriptor
+from samplemorph.commands import cache_grids, embed, train_codec, train_descriptor
 from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from
 from samplemorph.measurement.corpus import (
     DEFAULT_PROBE_FRAME_CEILING,
@@ -26,7 +26,7 @@ from samplemorph.model_store import (
     PRINCIPAL_COMPONENT_CODEC_NAME,
     MorphModel,
     MorphModelDescription,
-    load_model,
+    load_named_model,
     model_path,
     save_model,
 )
@@ -39,6 +39,7 @@ from samplemorph.registries import (
     LEARNED_VOCODER_NAME,
     MORPHER_REGISTRY,
     VOCODER_REGISTRY,
+    canonicalizer_for_geometry,
 )
 from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_dataset import DEFAULT_CROP_FRAMES
@@ -74,6 +75,7 @@ class MorphCommand(StrEnum):
     CACHE_GRIDS = "cache-grids"
     TRAIN_DESCRIPTOR = "train-descriptor"
     EMBED = "embed"
+    TRAIN_CODEC = "train-codec"
     RENDER = "render"
 
 
@@ -93,6 +95,8 @@ def main(argv: list[str] | None = None) -> None:
                 train_descriptor.run(connection, config, arguments)
             case MorphCommand.EMBED:
                 embed.run(connection, config, arguments)
+            case MorphCommand.TRAIN_CODEC:
+                train_codec.run(connection, config, arguments)
             case MorphCommand.RENDER:
                 _render(connection, config, arguments)
 
@@ -134,7 +138,7 @@ def _fit(connection: Connection, config: LibraryConfig, arguments: argparse.Name
 
 
 def _render(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
-    model = load_model(model_path(config.library_root, name=arguments.model))
+    model = load_named_model(config.library_root, name=arguments.model, device=arguments.device)
     canonicalizer = _canonicalizer_for(model)
     codec = model.codec
     first = encode_sample(
@@ -177,15 +181,8 @@ def _render(connection: Connection, config: LibraryConfig, arguments: argparse.N
 
 
 def _canonicalizer_for(model: MorphModel) -> Canonicalizer:
-    """Rebuild the frequency axis a model was fitted on.
-
-    Raises:
-        ValueError: the model names a canonicalizer this build has no entry for.
-    """
-    if model.description.canonicalizer not in CANONICALIZER_REGISTRY:
-        raise ValueError(f"this model was fitted on the unknown {model.description.canonicalizer} axis")
-
-    return CANONICALIZER_REGISTRY[model.description.canonicalizer]()
+    """Rebuild the very frequency axis a model was fitted on, from the geometry it recorded."""
+    return canonicalizer_for_geometry(model.description.geometry)
 
 
 def _require_sample(connection: Connection, sample_hash: str) -> Sample:
@@ -243,6 +240,7 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     cache_grids.add_parser(commands)
     train_descriptor.add_parser(commands)
     embed.add_parser(commands)
+    train_codec.add_parser(commands)
 
     render = commands.add_parser(MorphCommand.RENDER.value, help="Render a listening set between two samples.")
     render.add_argument("--first", type=str, required=True, help="The sample hash the morph starts from.")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -8,10 +9,18 @@ from lightning.pytorch import Callback, LightningModule, Trainer
 from samplecore.tracking import TrackedRun
 
 
-class ModelWriter(Protocol):
-    """Writes the weights a run has reached, described by how far it got and how well it did."""
+@dataclass(frozen=True)
+class ExportRecord:
+    """How far a run had come when its weights were written, and how well they did."""
 
-    def __call__(self, *, epochs: int, best_validation_loss: float) -> None: ...
+    epochs: int
+    best_validation_loss: float
+
+
+class ModelWriter(Protocol):
+    """Writes the weights a run has reached, described by the record of how it got there."""
+
+    def __call__(self, record: ExportRecord) -> None: ...
 
 
 class BestEpochExport(Callback):
@@ -52,5 +61,5 @@ class BestEpochExport(Callback):
             return
 
         self._best_loss = float(reached)
-        self._writer(epochs=trainer.current_epoch + 1, best_validation_loss=self._best_loss)
+        self._writer(ExportRecord(epochs=trainer.current_epoch + 1, best_validation_loss=self._best_loss))
         self._tracker.log_artifact(self._path)

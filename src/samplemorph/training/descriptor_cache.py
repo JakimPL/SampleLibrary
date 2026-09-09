@@ -20,7 +20,7 @@ from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
 from samplemorph.geometry import Geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY
-from samplemorph.training.phase_data import WORKER_START_METHOD
+from samplemorph.training.loaders import WORKER_START_METHOD
 
 CACHE_DIRECTORY_NAME: Final[str] = "cache"
 GRID_CACHE_DIRECTORY_NAME: Final[str] = "grids"

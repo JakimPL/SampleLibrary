@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from lightning.pytorch import LightningDataModule, LightningModule, Trainer
+from lightning.pytorch import LightningDataModule, LightningModule, Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
 
 from samplecore.tracking import TrackedRun
+from samplemorph.training.descriptor_cache import GridCache
 from samplemorph.training.export import BestEpochExport
 from samplemorph.training.run_settings import GRADIENT_CLIP, RunSettings
 from samplemorph.training.tracked_logger import TrackedRunLogger
@@ -100,4 +101,17 @@ def fit_and_export(
         epochs_completed=trainer.current_epoch,
         model_path=export.path,
         resume_path=started_from,
+    )
+
+
+def begin_cached_run(
+    placement: RunPlacement, *, settings: RunSettings, parameters: dict[str, str], cache: GridCache
+) -> None:
+    """Seed the run and record what it was asked to do and which cache it reads, before the first epoch.
+
+    A pass that ends badly is then still identifiable by what it ran under.
+    """
+    seed_everything(settings.random_seed, workers=True)
+    placement.tracker.log_parameters(
+        parameters | {"cache": cache.directory.name, "canonicalizer": cache.description.canonicalizer}
     )

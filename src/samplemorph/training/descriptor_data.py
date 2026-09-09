@@ -16,8 +16,7 @@ from samplecore.storage.repositories.feature_vector import PostgresSampleFeature
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplemorph.training.descriptor_cache import GRIDS_FILE_NAME, GridCache
 from samplemorph.training.descriptor_settings import DescriptorTrainingSettings
-from samplemorph.training.phase_data import PREFETCH_BATCHES, WORKER_START_METHOD
-from samplemorph.training.phase_dataset import limit_worker_threads
+from samplemorph.training.loaders import build_loader
 
 NO_LABEL: Final[int] = -1
 STORED_VIEW: Final[int] = 0
@@ -259,14 +258,10 @@ class DescriptorDataModule(LightningDataModule):
     def _loader(
         self, dataset: GridCacheSet, *, batch_sampler: LabeledBatchSampler | None
     ) -> DataLoader[DescriptorBatchItem]:
-        parallel = self._worker_count > 0
-        return DataLoader(
+        return build_loader(
             dataset,
-            batch_size=self._batch_size if batch_sampler is None else 1,
+            batch_size=self._batch_size,
+            worker_count=self._worker_count,
+            shuffle=False,
             batch_sampler=batch_sampler,
-            num_workers=self._worker_count,
-            persistent_workers=parallel,
-            worker_init_fn=limit_worker_threads if parallel else None,
-            prefetch_factor=PREFETCH_BATCHES if parallel else None,
-            multiprocessing_context=WORKER_START_METHOD if parallel else None,
         )

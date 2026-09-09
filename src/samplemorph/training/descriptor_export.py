@@ -6,15 +6,15 @@ from pathlib import Path
 from samplemorph.descriptors.learned import DescriptorDescription, save_descriptor
 from samplemorph.training.descriptor_data import DescriptorCorpus
 from samplemorph.training.descriptor_module import DescriptorTrainingModule
+from samplemorph.training.export import ExportRecord
 
 
 def describe_descriptor(
     module: DescriptorTrainingModule,
     *,
     corpus: DescriptorCorpus,
-    epochs: int,
+    record: ExportRecord,
     trained_sample_count: int,
-    best_validation_loss: float,
 ) -> DescriptorDescription:
     """Everything needed to rebuild this network and to say where it came from."""
     cache = corpus.cache.description
@@ -24,9 +24,9 @@ def describe_descriptor(
         bands_per_semitone=cache.bands_per_semitone,
         shape=module.model.shape,
         teacher_experiment_id=corpus.teacher_experiment_id,
-        epochs=epochs,
+        epochs=record.epochs,
         trained_sample_count=trained_sample_count,
-        best_validation_loss=best_validation_loss,
+        best_validation_loss=record.best_validation_loss,
     )
 
 
@@ -39,15 +39,14 @@ class DescriptorWriter:
     corpus: DescriptorCorpus
     trained_sample_count: int
 
-    def __call__(self, *, epochs: int, best_validation_loss: float) -> None:
+    def __call__(self, record: ExportRecord) -> None:
         save_descriptor(
             self.path,
             self.module.model,
             describe_descriptor(
                 self.module,
                 corpus=self.corpus,
-                epochs=epochs,
+                record=record,
                 trained_sample_count=self.trained_sample_count,
-                best_validation_loss=best_validation_loss,
             ),
         )

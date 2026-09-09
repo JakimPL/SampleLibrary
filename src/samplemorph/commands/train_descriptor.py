@@ -8,7 +8,7 @@ from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
 from samplecore.tracking.session import open_run
-from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from
+from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
 from samplemorph.descriptors.grid_descriptor import DEFAULT_WIDTH
 from samplemorph.descriptors.learned import DEFAULT_DESCRIPTOR_NAME
 from samplemorph.training.descriptor_cache import DEFAULT_GRID_CACHE_NAME, grid_cache_directory, open_grid_cache
@@ -130,9 +130,4 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
             ),
         )
 
-    _logger.info(
-        "Trained for %d epochs. The best epoch scored %.4f and is what %s holds.",
-        outcome.epochs_completed,
-        outcome.best_validation_loss,
-        outcome.model_path,
-    )
+    report_outcome(outcome)

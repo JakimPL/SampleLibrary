@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import torch
-from lightning.pytorch import seed_everything
 
 from samplecore.labeling.ranking import agreement_matrix
 from samplemorph.descriptors.grid_descriptor import DescriptorShape
@@ -12,7 +11,7 @@ from samplemorph.training.descriptor_module import DescriptorTrainingModule, Tea
 from samplemorph.training.descriptor_settings import DescriptorTrainingSettings
 from samplemorph.training.export import BestEpochExport
 from samplemorph.training.metrics import DESCRIPTOR_MONITORED_METRIC
-from samplemorph.training.runs import RunPlacement, TrainingOutcome, fit_and_export
+from samplemorph.training.runs import RunPlacement, TrainingOutcome, begin_cached_run, fit_and_export
 
 
 def run_descriptor_training(
@@ -26,15 +25,12 @@ def run_descriptor_training(
     What the run was asked to do reaches the record before the first epoch, together with which
     cache and which teacher it read, so a pass that ends badly is still identifiable.
     """
-    seed_everything(settings.run.random_seed, workers=True)
-    placement.tracker.log_parameters(
-        settings.as_parameters()
-        | {
-            "cache": corpus.cache.directory.name,
-            "canonicalizer": corpus.cache.description.canonicalizer,
-            "teacher_experiment_id": str(corpus.teacher_experiment_id),
-            "labeled_sample_count": str(len(corpus.labels)),
-        }
+    begin_cached_run(
+        placement,
+        settings=settings.run,
+        parameters=settings.as_parameters()
+        | {"teacher_experiment_id": str(corpus.teacher_experiment_id), "labeled_sample_count": str(len(corpus.labels))},
+        cache=corpus.cache,
     )
     data = DescriptorDataModule(corpus, settings=settings)
     module = DescriptorTrainingModule(

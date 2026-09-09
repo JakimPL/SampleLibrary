@@ -10,11 +10,10 @@ from torch.utils.data import DataLoader
 
 from samplecore.models.sample import Sample
 from samplemorph.canonicalizers import Canonicalizer
-from samplemorph.training.phase_dataset import PhaseBatchItem, PhaseTrainingSet, limit_worker_threads
+from samplemorph.training.loaders import build_loader
+from samplemorph.training.phase_dataset import PhaseBatchItem, PhaseTrainingSet
 
 DEFAULT_VALIDATION_SHARE: Final[float] = 0.05
-PREFETCH_BATCHES: Final[int] = 2
-WORKER_START_METHOD: Final[str] = "spawn"
 
 
 @dataclass(frozen=True)
@@ -35,15 +34,9 @@ class PhaseDataModule(LightningDataModule):
     """Hands the trainer the two parts of a corpus, on a transport a long run survives.
 
     Which samples are trained on and which are held back is drawn once, so every epoch is judged on
-    the same unseen material and two runs of one seed see the same division.
-
-    Each worker starts as a fresh interpreter, so it holds the roughly 730 MB its own imports and
-    working arrays need and nothing else. That keeps a worker's memory its own, and it keeps the
-    weights on the GPU out of the picture: a worker started fresh begins with an address space of
-    its own rather than a copy of the trainer's, which is what a page-table copy of that size asks
-    the kernel to do. Batches travel as ordinary pageable memory, and each worker holds
-    `PREFETCH_BATCHES` ready. Together those bound what a run has in flight, which is what lets a
-    whole catalog pass leave the rest of the machine the memory it is using.
+    the same unseen material and two runs of one seed see the same division. Each worker derives
+    examples from the audio itself, in the roughly 730 MB its own imports and working arrays need,
+    on the transport `build_loader` describes.
     """
 
     def __init__(
@@ -85,18 +78,7 @@ class PhaseDataModule(LightningDataModule):
             crop_frames=self._crop_frames,
             random_seed=self._random_seed,
         )
-        parallel = self._worker_count > 0
-        return DataLoader(
-            dataset,
-            batch_size=self._batch_size,
-            shuffle=shuffle,
-            num_workers=self._worker_count,
-            drop_last=shuffle,
-            persistent_workers=parallel,
-            worker_init_fn=limit_worker_threads if parallel else None,
-            prefetch_factor=PREFETCH_BATCHES if parallel else None,
-            multiprocessing_context=WORKER_START_METHOD if parallel else None,
-        )
+        return build_loader(dataset, batch_size=self._batch_size, worker_count=self._worker_count, shuffle=shuffle)
 
 
 def _split(samples: tuple[Sample, ...], *, random_seed: int) -> tuple[tuple[Sample, ...], tuple[Sample, ...]]:

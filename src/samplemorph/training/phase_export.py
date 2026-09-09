@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from samplemorph.training.export import ExportRecord
 from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_module import PhaseTrainingModule
 from samplemorph.vocoders.learned import PhaseModelDescription, save_phase_model
@@ -13,9 +14,8 @@ def describe_phase_model(
     model: PhaseModel,
     *,
     corpus: PhaseCorpus,
-    epochs: int,
+    record: ExportRecord,
     trained_sample_count: int,
-    best_validation_loss: float,
 ) -> PhaseModelDescription:
     """Everything needed to rebuild this network and to say where it came from.
 
@@ -32,9 +32,9 @@ def describe_phase_model(
         dilations=model.shape.dilations,
         fft_length=geometry.fft_length,
         hop_length=geometry.hop_length,
-        epochs=epochs,
+        epochs=record.epochs,
         trained_sample_count=trained_sample_count,
-        best_validation_loss=best_validation_loss,
+        best_validation_loss=record.best_validation_loss,
     )
 
 
@@ -51,15 +51,14 @@ class PhaseModelWriter:
     corpus: PhaseCorpus
     trained_sample_count: int
 
-    def __call__(self, *, epochs: int, best_validation_loss: float) -> None:
+    def __call__(self, record: ExportRecord) -> None:
         save_phase_model(
             self.path,
             self.module.model,
             describe_phase_model(
                 self.module.model,
                 corpus=self.corpus,
-                epochs=epochs,
+                record=record,
                 trained_sample_count=self.trained_sample_count,
-                best_validation_loss=best_validation_loss,
             ),
         )

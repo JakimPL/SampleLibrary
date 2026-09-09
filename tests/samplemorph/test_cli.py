@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplemorph.cli import main
+from samplemorph.codecs.conditioned import codec_path
 from samplemorph.descriptors.grid_descriptor import DESCRIPTOR_SIZE
 from samplemorph.descriptors.learned import descriptor_path
 from samplemorph.model_store import model_path
@@ -42,6 +44,7 @@ PHASE_MODEL_NAME = "phase-under-test"
 PHASE_CHANNELS = 16
 PHASE_CROP_FRAMES = 8
 DESCRIPTOR_NAME = "descriptor-under-test"
+CODEC_NAME = "codec-under-test"
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
@@ -384,7 +387,53 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
 
     assert open_grid_cache(grid_cache_directory(tmp_path, name="under-test")).sample_count == CATALOG_SIZE
     assert descriptor_path(tmp_path, name=DESCRIPTOR_NAME).exists()
-    experiments = [PostgresExperimentRepository(connection).get(teacher_id + offset) for offset in (1,)]
-    assert experiments[0] is not None
-    assert experiments[0].backend_name == LEARNED_BACKEND_NAME
-    assert len(PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiments[0].id)) == CATALOG_SIZE
+    experiment = PostgresExperimentRepository(connection).get(teacher_id + 1)
+    assert experiment is not None
+    assert experiment.backend_name == LEARNED_BACKEND_NAME
+    assert len(PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment.id)) == CATALOG_SIZE
+
+    main(["cache-grids", "--cache", "full", "--bands-per-semitone", "12", "--views", "0", "--workers", "0"])
+    main(
+        [
+            "train-codec",
+            "--cache",
+            "full",
+            "--descriptor",
+            DESCRIPTOR_NAME,
+            "--codec",
+            CODEC_NAME,
+            "--width",
+            "4",
+            "--residual-size",
+            "4",
+            "--epochs",
+            "1",
+            "--batch",
+            "4",
+            "--workers",
+            "0",
+            "--device",
+            "cpu",
+            "--no-tracking",
+        ]
+    )
+    output = tmp_path / "listening"
+    main(
+        [
+            "render",
+            "--first",
+            hashes[0],
+            "--second",
+            hashes[1],
+            "--output",
+            str(output),
+            "--model",
+            CODEC_NAME,
+            "--device",
+            "cpu",
+        ]
+    )
+
+    assert codec_path(tmp_path, name=CODEC_NAME).exists()
+    assert (output / "morph_050.wav").exists()
+    assert json.loads((output / "manifest.json").read_text())["model"]["codec"] == "conditioned"

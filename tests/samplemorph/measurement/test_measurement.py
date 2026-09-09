@@ -6,6 +6,7 @@ import pytest
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplemorph.canonicalizers.log_frequency import build_log_frequency_canonicalizer
+from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.measurement.comparison import grid_distance, held_out_distance_db, held_out_spectrum
 from samplemorph.measurement.corpus import ProbeSample, unrelated_pairs
 from samplemorph.measurement.equivariance import (
@@ -16,10 +17,12 @@ from samplemorph.measurement.equivariance import (
 )
 from samplemorph.measurement.reconstruction import (
     ReconstructionRung,
+    codec_reconstruction_trials,
     reconstruction_trials,
     summarize_reconstruction,
     unrelated_distance_db,
 )
+from samplemorph.vocoders.griffin_lim import OraclePhaseVocoder
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_burst
 
 PROBE_OFFSETS = (-7.0, 7.0)
@@ -155,6 +158,27 @@ def test_summarizing_reconstruction_reports_the_cost_of_estimating_phase(
     estimated = summary.rung(ReconstructionRung.ESTIMATED_PHASE)
     assert summary.phase_estimate_cost_db == pytest.approx(estimated.median_distance_db - oracle.median_distance_db)
     assert oracle.trial_count == estimated.trial_count == len(probes)
+
+
+def test_a_lossless_codec_reconstructs_as_the_representation_alone_does(probes: tuple[ProbeSample, ...]) -> None:
+    """Through the identity codec and the source's own phase, a codec trial is the oracle rung exactly."""
+    canonicalizer = build_log_frequency_canonicalizer()
+
+    trials = codec_reconstruction_trials(
+        probes[:1],
+        canonicalizer=canonicalizer,
+        codec=IdentityCodec(canonicalizer.geometry),
+        vocoder=OraclePhaseVocoder(probes[0].mono),
+    )
+    oracle = [
+        trial
+        for trial in reconstruction_trials(probes[:1], canonicalizer)
+        if trial.rung is ReconstructionRung.ORACLE_PHASE
+    ]
+
+    assert len(trials) == 1
+    assert trials[0].sample_hash == probes[0].sample.hash
+    assert trials[0].distance_db == pytest.approx(oracle[0].distance_db)
 
 
 def test_summarizing_reconstruction_rejects_an_empty_probe() -> None:

@@ -6,11 +6,11 @@ import pytest
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.geometry import log_frequency_geometry, mel_geometry
 from samplemorph.images import Conditioners, SampleLatent
-from samplemorph.measurement.plausibility import MorphEndpoint, morph_plausibility
+from samplemorph.measurement.plausibility import MorphEndpoint, grid_energy, morph_plausibility, spectral_spread
 from samplemorph.morphers import MorphWeights
 from samplemorph.morphers.linear import LinearMorpher
 from samplemorph.registries import CANONICALIZER_REGISTRY
-from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone
+from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_burst
 
 FIRST_HASH = "a" * 64
 SECOND_HASH = "b" * 64
@@ -126,3 +126,43 @@ def test_measuring_a_morph_path_asks_for_at_least_two_weights() -> None:
             morpher=LinearMorpher(),
             weights=(0.5,),
         )
+
+
+def test_a_straight_line_through_a_grid_of_decibels_thins_out_what_two_sounds_do_not_share() -> None:
+    """The midpoint of a tone and a noise burst on a lossless grid keeps a fraction of either's energy."""
+    canonicalizer = CANONICALIZER_REGISTRY["mel"]()
+    codec = IdentityCodec(canonicalizer.geometry)
+    first = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
+    second = codec.encode(canonicalizer.canonicalize(noise_burst(TEST_FRAME_COUNT, seed=1)))
+
+    plausibility = morph_plausibility(
+        MorphEndpoint(sample_hash=FIRST_HASH, latent=first),
+        MorphEndpoint(sample_hash=SECOND_HASH, latent=second),
+        codec=codec,
+        morpher=LinearMorpher(),
+    )
+
+    assert plausibility.smallest_energy_share < 0.5
+    assert plausibility.largest_spread_excess <= 0.0
+
+
+def test_two_lines_at_once_spread_wider_and_carry_the_energy_of_both() -> None:
+    one_line = np.zeros((40, 4))
+    one_line[10] = 1.0
+    other_line = np.zeros((40, 4))
+    other_line[30] = 1.0
+    both = np.maximum(one_line, other_line)
+
+    assert spectral_spread(both) > max(spectral_spread(one_line), spectral_spread(other_line))
+    assert grid_energy(both) == pytest.approx(grid_energy(one_line) + grid_energy(other_line))
+
+
+def test_spectral_spread_reads_a_single_line_as_narrower_than_two() -> None:
+    one_line = np.zeros((40, 4))
+    one_line[10] = 1.0
+    two_lines = one_line.copy()
+    two_lines[30] = 1.0
+
+    assert spectral_spread(one_line) == pytest.approx(0.0)
+    assert spectral_spread(two_lines) == pytest.approx(np.log(2.0))
+    assert spectral_spread(np.zeros((40, 4))) == pytest.approx(0.0)

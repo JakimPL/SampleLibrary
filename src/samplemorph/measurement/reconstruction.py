@@ -7,8 +7,10 @@ from typing import Final
 import numpy as np
 
 from samplemorph.canonicalizers import Canonicalizer
+from samplemorph.codecs import SampleCodec
 from samplemorph.measurement.comparison import held_out_distance_db, held_out_spectrum
 from samplemorph.measurement.corpus import ProbeSample, unrelated_pairs
+from samplemorph.vocoders import Vocoder
 from samplemorph.vocoders.griffin_lim import GriffinLimVocoder, OraclePhaseVocoder
 
 DEFAULT_UNRELATED_PAIR_COUNT: Final[int] = 300
@@ -104,6 +106,38 @@ def reconstruction_trials(
                     frame_count=probe.sample.frames,
                 )
             )
+    return tuple(trials)
+
+
+@dataclass(frozen=True)
+class CodecTrial:
+    """One sample carried through a codec and back to audio through one vocoder."""
+
+    sample_hash: str
+    distance_db: float
+    frame_count: int
+
+
+def codec_reconstruction_trials(
+    probes: tuple[ProbeSample, ...], *, canonicalizer: Canonicalizer, codec: SampleCodec, vocoder: Vocoder
+) -> tuple[CodecTrial, ...]:
+    """Canonicalize each probe, encode and decode it, restore it, and measure the audio against the original.
+
+    The vocoder is chosen by the caller, so two codecs compare through one synthesis and the
+    difference between them is the codec's alone; handing every probe its own phase isolates the
+    codec from phase estimation altogether.
+    """
+    trials = []
+    for probe in probes:
+        image = canonicalizer.canonicalize(probe.mono)
+        rebuilt = vocoder.synthesize(canonicalizer.restore(codec.decode(codec.encode(image))))
+        trials.append(
+            CodecTrial(
+                sample_hash=probe.sample.hash,
+                distance_db=held_out_distance_db(held_out_spectrum(probe.mono), held_out_spectrum(rebuilt)),
+                frame_count=probe.sample.frames,
+            )
+        )
     return tuple(trials)
 
 

@@ -56,6 +56,37 @@ def model_path(library_root: Path, *, name: str) -> Path:
     return library_root / MODELS_DIRECTORY_NAME / f"{name}{MODEL_SUFFIX}"
 
 
+def load_named_model(library_root: Path, *, name: str, device: str) -> MorphModel:
+    """A fitted model by name, from whichever store holds it: arrays for a linear codec, weights for a learned one.
+
+    Raises:
+        FileNotFoundError: no model of that name is stored in either.
+    """
+    array_path = model_path(library_root, name=name)
+    if array_path.exists():
+        return load_model(array_path)
+
+    # pylint: disable=import-outside-toplevel
+    import torch
+
+    from samplemorph.codecs.conditioned import CONDITIONED_CODEC_NAME, codec_path, load_conditioned_codec
+
+    codec = load_conditioned_codec(
+        codec_path(library_root, name=name), library_root=library_root, device=torch.device(device)
+    )
+    stored = codec.model.shape
+    description = MorphModelDescription(
+        codec=CONDITIONED_CODEC_NAME,
+        canonicalizer=codec.description.canonicalizer,
+        geometry=codec.geometry,
+        latent_size=stored.descriptor_size + stored.residual_size,
+        fitted_sample_count=codec.description.trained_sample_count,
+        random_seed=codec.description.random_seed,
+        explained_variance=None,
+    )
+    return MorphModel(description=description, codec=codec)
+
+
 def save_model(path: Path, model: MorphModel) -> None:
     """Write a fitted codec's arrays and its description into one file.
 

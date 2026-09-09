@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
 from samplemorph.training.run_settings import (
     DEFAULT_ACCELERATOR,
@@ -13,6 +14,9 @@ from samplemorph.training.run_settings import (
     TRAINING_PRECISIONS,
     RunSettings,
 )
+from samplemorph.training.runs import TrainingOutcome
+
+_logger = logging.getLogger(__name__)
 
 
 def add_run_arguments(parser: argparse.ArgumentParser) -> None:
@@ -50,4 +54,14 @@ def run_settings_from(arguments: argparse.Namespace) -> RunSettings:
         precision=arguments.precision,
         accelerator=arguments.device,
         random_seed=arguments.seed,
+    )
+
+
+def report_outcome(outcome: TrainingOutcome) -> None:
+    """Say how a run ended and where its best epoch was written."""
+    _logger.info(
+        "Trained for %d epochs. The best epoch scored %.4f and is what %s holds.",
+        outcome.epochs_completed,
+        outcome.best_validation_loss,
+        outcome.model_path,
     )

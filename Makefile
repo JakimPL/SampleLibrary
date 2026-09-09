@@ -135,7 +135,7 @@ morph-train-phase:
 # --experiment-id ID` promotes to the cloud.
 .PHONY: morph-cache-grids
 morph-cache-grids:
-	$(CAPPED) uv run samplemorph cache-grids $(if $(CACHE),--cache $(CACHE),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(WORKERS),--workers $(WORKERS),)
+	$(CAPPED) uv run samplemorph cache-grids $(if $(CACHE),--cache $(CACHE),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(BANDS),--bands-per-semitone $(BANDS),) $(if $(VIEWS),--views $(VIEWS),) $(if $(WORKERS),--workers $(WORKERS),)
 
 .PHONY: morph-train-descriptor
 morph-train-descriptor:
@@ -145,9 +145,16 @@ morph-train-descriptor:
 morph-embed:
 	$(CAPPED) uv run samplemorph embed $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(LABEL),--label "$(LABEL)",)
 
+# The codec that decodes from the descriptor. It reads a full-resolution cache
+# (`make morph-cache-grids CACHE=codec SAMPLES=30000 BANDS=12 VIEWS=0`), and `morph-render
+# MODEL=conditioned` renders a listening set through it.
+.PHONY: morph-train-codec
+morph-train-codec:
+	$(CAPPED) uv run samplemorph train-codec $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(CODEC),--codec $(CODEC),) $(if $(EPOCHS),--epochs $(EPOCHS),)
+
 .PHONY: morph-render
 morph-render:
-	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT)
+	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(PHASE_MODEL),--phase-model $(PHASE_MODEL),)
 
 # Destructive: empties the configured library's catalog and content store. Prints what it would
 # do and changes nothing unless invoked as `make reset-library CONFIRM=1`.

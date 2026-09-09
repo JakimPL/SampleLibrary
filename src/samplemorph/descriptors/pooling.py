@@ -34,6 +34,8 @@ def pool_bands(grid: NDArray[np.floating], *, band_count: int) -> NDArray[np.flo
     spectrum rather than its fine structure, and a coarser axis is what keeps it small and quick.
     """
     rows = grid.shape[0]
+    if band_count == rows:
+        return grid.astype(np.float32)
     starts = (np.arange(band_count) * rows) // band_count
     ends = -((-(np.arange(1, band_count + 1) * rows)) // band_count)
     pooled = np.stack([grid[start:end].mean(axis=0) for start, end in zip(starts, ends, strict=True)])

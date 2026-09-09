@@ -25,3 +25,14 @@ DESCRIPTOR_VALIDATION_RETUNE_RANK_ONE: Final[str] = "validation/retune_rank_one"
 DESCRIPTOR_VALIDATION_NDCG: Final[str] = "validation/hand_label_ndcg"
 
 DESCRIPTOR_MONITORED_METRIC: Final[str] = DESCRIPTOR_VALIDATION_LOSS
+
+CODEC_TRAINING_LOSS: Final[str] = "training/loss"
+CODEC_TRAINING_RECONSTRUCTION: Final[str] = "training/reconstruction"
+CODEC_TRAINING_PRIOR: Final[str] = "training/prior"
+CODEC_TRAINING_CYCLE: Final[str] = "training/cycle"
+CODEC_VALIDATION_LOSS: Final[str] = "validation/loss"
+CODEC_VALIDATION_RECONSTRUCTION: Final[str] = "validation/reconstruction"
+CODEC_VALIDATION_PRIOR: Final[str] = "validation/prior"
+CODEC_VALIDATION_CYCLE: Final[str] = "validation/cycle"
+
+CODEC_MONITORED_METRIC: Final[str] = CODEC_VALIDATION_LOSS

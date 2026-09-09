@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 
 from samplecore.tracking.silent import SilentRun
 from samplemorph.registries import CANONICALIZER_REGISTRY
-from samplemorph.training.export import BestEpochExport
+from samplemorph.training.export import BestEpochExport, ExportRecord
 from samplemorph.training.metrics import MONITORED_METRIC
 from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_dataset import PhaseBatchItem
@@ -45,9 +45,8 @@ def test_a_description_carries_what_rebuilding_the_network_needs(
     description = describe_phase_model(
         phase_module.model,
         corpus=_corpus(tmp_path),
-        epochs=1,
+        record=ExportRecord(epochs=1, best_validation_loss=1.5),
         trained_sample_count=TRAINED_SAMPLE_COUNT,
-        best_validation_loss=1.5,
     )
 
     assert description.channels == CHANNELS
