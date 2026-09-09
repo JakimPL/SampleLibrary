@@ -63,7 +63,8 @@ installs cleanly and then fails the moment it is first asked to compute.
 ## Labeling and rating samples
 
 Click a sample's category in the list and type what it is; words you have used before are suggested
-as you type, and Enter records it. Emptying the field brings back the app's own guess. Five stars
+as you type, and Enter records it. Labels are kept in capitals, so one wording stays one label
+however you typed it. Emptying the field brings back the app's own guess. Five stars
 and a heart sit in the same row, saved as you click, and a sample's own page offers all three as
 well. Near-duplicates get the same decision by default, whenever the list has them grouped. The
 samples list can then show only your favorites, or put your best-rated first, across the whole

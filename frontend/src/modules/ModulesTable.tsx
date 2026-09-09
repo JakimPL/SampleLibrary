@@ -19,17 +19,18 @@ import { ModuleRow } from "./ModuleRow";
 
 const columnHelper = createColumnHelper<Module>();
 
-// The title takes whatever the sized columns leave over, the way a samples listing's name does.
+// The filename takes whatever the sized columns leave over: a title is a handful of words a tracker
+// had room for, while a path is as long as a collection's own folders make it.
 const COLUMNS = [
     columnHelper.accessor((module) => (module.title.trim() === "" ? UNTITLED_MODULE_LABEL : module.title), {
         id: "title",
         header: "Title",
-        meta: { flexible: true },
+        size: 180,
     }),
-    columnHelper.accessor("filename", { header: "Filename", size: 220 }),
-    columnHelper.accessor("tracker", { header: "Tracker", size: 72 }),
-    columnHelper.accessor("sample_count", { header: "Samples", size: 72 }),
-    columnHelper.accessor("file_size", { header: "Size", size: 72 }),
+    columnHelper.accessor("filename", { header: "Filename", meta: { flexible: true } }),
+    columnHelper.accessor("tracker", { header: "Tracker", size: 64 }),
+    columnHelper.accessor("sample_count", { header: "Samples", size: 60 }),
+    columnHelper.accessor("file_size", { header: "Size", size: 60 }),
 ];
 
 interface ModulesTableProps {

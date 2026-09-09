@@ -69,7 +69,7 @@ export function LabelField({ label, isSaving, onCommit, onLeave, takesFocus }: L
                 className="annotation-editor-input"
                 type="text"
                 list={vocabularyListId}
-                placeholder="What is this sample?"
+                placeholder="Label (e.g. BASS)"
                 value={text}
                 aria-label="Hand label"
                 disabled={isSaving}

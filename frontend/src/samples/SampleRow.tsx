@@ -60,7 +60,7 @@ export function SampleRow({ sample, groupByEquivalence }: SampleRowProps): React
                     </span>
                 </Link>
             </td>
-            <td className="cell-muted">
+            <td className="cell-muted cell-stamp">
                 <CategoryCell sample={sample} decisions={decisions} isSaving={isSaving} onCommit={write} />
             </td>
             <td className="cell-verdict">

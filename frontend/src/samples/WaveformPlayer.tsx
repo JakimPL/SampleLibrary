@@ -61,10 +61,6 @@ export function WaveformPlayer({ sampleHash, rateHz, rateOptions, onRateChange }
                     </label>
                 )}
             </div>
-            <p className="wave-caption">
-                Playback runs at the rate the library really reads this sample at, which its own occurrence rate and the
-                notes played on it decide together.
-            </p>
         </div>
     );
 }

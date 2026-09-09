@@ -7,8 +7,8 @@ import { readMiniWaveformColor } from "./miniWaveformColor";
 import { PlayButton } from "./PlayButton";
 import { layoutWaveformBars } from "./waveformLayout";
 
-const THUMBNAIL_WIDTH = 80;
-const THUMBNAIL_HEIGHT = 24;
+const THUMBNAIL_WIDTH = 64;
+const THUMBNAIL_HEIGHT = 20;
 const NO_THUMBNAIL_LABEL = "—";
 
 interface ThumbnailProps {

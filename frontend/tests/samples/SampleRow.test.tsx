@@ -169,6 +169,15 @@ describe("SampleRow", () => {
         });
     });
 
+    it("fills the heart under the pointer, showing what the click would leave behind", async () => {
+        renderRow();
+
+        await userEvent.hover(screen.getByRole("button", { name: "Favorite" }));
+
+        expect(screen.getByRole("button", { name: "Favorite" })).toHaveClass("is-filled");
+        expect(screen.getByRole("button", { name: "Favorite" })).toHaveAttribute("aria-pressed", "false");
+    });
+
     it("fills every star up to the one being pointed at", async () => {
         renderRow();
 

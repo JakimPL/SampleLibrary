@@ -112,6 +112,11 @@ reason it carries no foreign key into the catalog: one would either delete these
 samples or block the purge outright. A test in `tests/scripts/test_reset_library.py` pins exactly
 that, seeding an annotation and asserting it survives a full reset.
 
+A label is stored in upper case, which is the case it is shown in: `LabelText` normalizes it at the
+model boundary, so every path that records one — the curation route, a JSONL import, a relink —
+agrees, and the vocabulary offered back gathers one entry per wording rather than one per way of
+typing it.
+
 One row holds all three decisions, and exists because at least one of them was made — a CHECK
 constraint says so, and `SampleAnnotation`'s own validator says so alongside it. Writes are
 whole-state: `PUT /curation/annotations/{hash}` carries the complete state a sample should hold from
@@ -255,6 +260,16 @@ correctly with no shared state between workers. The library's data directory and
 pointing at its in-container path are supplied at `docker run` time (a bind mount plus
 `SAMPLELIBRARY_CONFIG`), never baked into the image, mirroring `config.toml` never being committed
 to the repository.
+
+Three routes answer for the whole catalog at once — the cloud's hundred thousand points, a
+nearest-neighbor search, the library statistics — and each is written for that shape rather than
+scaled up from a per-sample one. A whole-catalog reader scans a table outright instead of naming
+every hash it wants (`names_and_rates_for_every_sample` beside `names_and_rates_by_hash`), since a
+hundred thousand bound parameters cost Postgres more than reading every row there is. The statistics
+count and total in one grouped query rather than building a model per sample to sum. The spectral
+vectors, which are stored as text and take a couple of seconds to parse, are held per application in
+`SpectralVectorCache` and re-read only when the table's own revision moves, so a search costs one
+cheap query rather than a fresh parse of the whole embedding.
 
 Postgres supports genuine concurrent readers *and* writers against the same database, unlike this
 project's previous engine (DuckDB), which excluded every other connection -- read-only included --

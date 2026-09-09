@@ -27,7 +27,7 @@ const columnHelper = createColumnHelper<SampleSummary>();
 // Every column but the name declares its own width, so the name takes whatever the others leave
 // over -- it is the one column whose content is worth as much room as a panel can spare.
 const COLUMNS = [
-    columnHelper.display({ id: "waveform", header: "Waveform", size: 92 }),
+    columnHelper.display({ id: "waveform", header: "Waveform", size: 76 }),
     columnHelper.accessor(
         (sample) => (sample.display_name.trim() === "" ? UNNAMED_SAMPLE_LABEL : sample.display_name),
         {
@@ -36,10 +36,10 @@ const COLUMNS = [
             meta: { flexible: true },
         },
     ),
-    columnHelper.display({ id: "category", header: "Category", size: 140 }),
-    columnHelper.display({ id: "verdict", header: "Rating", size: 104 }),
-    columnHelper.accessor("size_bytes", { header: "Size", size: 72 }),
-    columnHelper.accessor("occurrence_count", { header: "Occurrences", size: 64 }),
+    columnHelper.display({ id: "category", header: "Category", size: 120 }),
+    columnHelper.display({ id: "verdict", header: "Rating", size: 88 }),
+    columnHelper.accessor("size_bytes", { header: "Size", size: 60 }),
+    columnHelper.accessor("occurrence_count", { header: "Occurrences", size: 52 }),
 ];
 
 interface SamplesTableProps {

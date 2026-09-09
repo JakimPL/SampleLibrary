@@ -112,7 +112,7 @@ def test_annotating_a_sample_records_every_decision_that_was_made(client: TestCl
 
     assert response.status_code == 200
     assert response.json() == {
-        "annotation": {"label": "warm pad", "rating": 4, "favorite": True},
+        "annotation": {"label": "WARM PAD", "rating": 4, "favorite": True},
         "sample_hashes": [SAMPLE_HASH_A],
     }
 
@@ -153,7 +153,7 @@ def test_an_annotated_sample_reports_its_decisions_in_its_own_detail(
 
     body = client.get(f"/samples/{SAMPLE_HASH_A}").json()
 
-    assert (body["hand_label"], body["rating"], body["favorite"]) == ("warm pad", 3, True)
+    assert (body["hand_label"], body["rating"], body["favorite"]) == ("WARM PAD", 3, True)
     assert body["category"] == "lead"
 
 
@@ -166,7 +166,7 @@ def test_an_annotated_sample_reports_its_decisions_in_the_listing(client: TestCl
 
     items = client.get("/samples").json()["items"]
 
-    assert [(item["hand_label"], item["rating"], item["favorite"]) for item in items] == [("warm pad", 2, True)]
+    assert [(item["hand_label"], item["rating"], item["favorite"]) for item in items] == [("WARM PAD", 2, True)]
 
 
 def test_an_untouched_sample_carries_no_decisions(client: TestClient, connection: Connection) -> None:
@@ -188,8 +188,8 @@ def test_annotating_a_group_reaches_every_near_duplicate(client: TestClient, con
     assert sorted(response.json()["sample_hashes"]) == sorted([SAMPLE_HASH_A, SAMPLE_HASH_B])
     stored = PostgresSampleAnnotationRepository(connection).annotations_by_hash([SAMPLE_HASH_A, SAMPLE_HASH_B])
     assert {hash_: (item.label, item.rating) for hash_, item in stored.items()} == {
-        SAMPLE_HASH_A: ("snare", 4),
-        SAMPLE_HASH_B: ("snare", 4),
+        SAMPLE_HASH_A: ("SNARE", 4),
+        SAMPLE_HASH_B: ("SNARE", 4),
     }
 
 
@@ -242,7 +242,7 @@ def test_writing_again_replaces_every_decision_including_the_ones_left_empty(
     client.put(f"/curation/annotations/{SAMPLE_HASH_A}", json=_state(label="pluck", scope="sample"))
 
     body = client.get(f"/samples/{SAMPLE_HASH_A}").json()
-    assert (body["hand_label"], body["rating"], body["favorite"]) == ("pluck", None, False)
+    assert (body["hand_label"], body["rating"], body["favorite"]) == ("PLUCK", None, False)
 
 
 def test_a_state_recording_nothing_takes_the_annotation_back(client: TestClient, connection: Connection) -> None:
@@ -328,7 +328,18 @@ def test_the_vocabulary_offers_back_what_has_already_been_chosen(client: TestCli
     client.put(f"/curation/annotations/{SAMPLE_HASH_A}", json=_state(label="snare", scope="sample"))
     client.put(f"/curation/annotations/{SAMPLE_HASH_B}", json=_state(label="clap", scope="sample"))
 
-    assert sorted(client.get("/curation/annotations/vocabulary").json()) == ["clap", "snare"]
+    assert sorted(client.get("/curation/annotations/vocabulary").json()) == ["CLAP", "SNARE"]
+
+
+def test_the_vocabulary_gathers_one_entry_however_a_wording_was_typed(
+    client: TestClient, connection: Connection
+) -> None:
+    """A label is stored in one case, so two typings of one wording offer back one entry."""
+    _seed_a_pair_of_near_duplicates(connection)
+    client.put(f"/curation/annotations/{SAMPLE_HASH_A}", json=_state(label="Warm Pad", scope="sample"))
+    client.put(f"/curation/annotations/{SAMPLE_HASH_B}", json=_state(label="warm pad", scope="sample"))
+
+    assert client.get("/curation/annotations/vocabulary").json() == ["WARM PAD"]
 
 
 def test_the_vocabulary_of_an_unlabeled_library_is_empty(client: TestClient) -> None:

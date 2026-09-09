@@ -181,7 +181,7 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, tmp_
     assert all(count == 0 for count in _row_counts(connection).values())
     surviving = annotation_repository.get(occurrence_row.sample_hash)
     assert surviving is not None
-    assert surviving.label == "warm pad"
+    assert surviving.label == "WARM PAD"
     assert surviving.occurrence.module_hash == module.hash
 
 
