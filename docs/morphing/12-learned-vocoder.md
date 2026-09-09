@@ -153,3 +153,20 @@ a dozen of them were colliding over the same 24. Held to one thread each and rai
 workers, the same pass runs at 136 a second: an epoch over 5,700 samples fell from 190 seconds to 42,
 and the quality per epoch is unchanged. That is what makes training over the whole catalog possible
 rather than over a draw of a few thousand.
+
+
+## Where it stood before the long run
+
+Six epochs over 6,000 samples, measured on 40 samples the training draw never saw:
+
+| Phase | Median | p90 |
+|---|---|---|
+| The source's own | 3.07 | 4.75 |
+| The model's | 6.81 | 8.72 |
+| Griffin-Lim's | 7.57 | 9.70 |
+
+The model beats Griffin-Lim by 0.76 dB of a 4.5 dB gap, which is a sixth of the way. That is a small
+model trained briefly, and the fixes above landed after it, so it says the approach works rather than
+that it is finished. What it does not say is whether the remaining distance closes with training:
+that is what the long run over the whole catalog is for, and it is a question listening answers
+rather than this table.
