@@ -37,31 +37,25 @@ from samplemorph.registries import (
     MORPHER_REGISTRY,
     VOCODER_REGISTRY,
 )
+from samplemorph.training.phase_data import DEFAULT_WORKER_COUNT, PhaseCorpus
 from samplemorph.training.phase_dataset import DEFAULT_CROP_FRAMES
-from samplemorph.training.phase_trainer import (
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_EPOCHS,
-    DEFAULT_LEARNING_RATE,
-    DEFAULT_WORKER_COUNT,
-    EpochReport,
-    PhaseCorpus,
-    TrainingSettings,
-    train_phase_model,
-)
+from samplemorph.training.phase_run import run_phase_training
 from samplemorph.training.principal_components import (
     DEFAULT_LATENT_SIZE,
     DEFAULT_RANDOM_SEED,
     PrincipalComponentTrainer,
 )
-from samplemorph.vocoders import Vocoder
-from samplemorph.vocoders.learned import (
-    DEFAULT_PHASE_MODEL_NAME,
-    PhaseModelDescription,
-    load_phase_model,
-    phase_model_path,
-    save_phase_model,
+from samplemorph.training.settings import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_EPOCHS,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_PRECISION,
+    TRAINING_PRECISIONS,
+    TrainingSettings,
 )
-from samplemorph.vocoders.phase_model import DEFAULT_CHANNELS, PhaseModel
+from samplemorph.vocoders import Vocoder
+from samplemorph.vocoders.learned import DEFAULT_PHASE_MODEL_NAME, load_phase_model, phase_model_path
+from samplemorph.vocoders.phase_model import DEFAULT_CHANNELS
 
 DEFAULT_MODEL_NAME: Final[str] = "principal_components"
 DEFAULT_FIT_SAMPLE_COUNT: Final[int] = 4_000
@@ -241,10 +235,20 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     train.add_argument(
         "--workers", type=int, default=DEFAULT_WORKER_COUNT, help="How many processes derive training examples."
     )
+    train.add_argument(
+        "--precision",
+        type=str,
+        default=DEFAULT_PRECISION,
+        choices=TRAINING_PRECISIONS,
+        help="The arithmetic a training step is computed in.",
+    )
     train.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed the draw and the split use.")
     train.add_argument("--device", type=str, default=DEFAULT_DEVICE, help="Which device to train on.")
     train.add_argument(
         "--phase-model", type=str, default=DEFAULT_PHASE_MODEL_NAME, help="The name to store the phase model under."
+    )
+    train.add_argument(
+        "--resume", action="store_true", help="Continue the run of this name from where it last stopped."
     )
 
     render = commands.add_parser(MorphCommand.RENDER.value, help="Render a listening set between two samples.")
@@ -283,31 +287,7 @@ def _train_phase(connection: Connection, config: LibraryConfig, arguments: argpa
         frame_floor=DEFAULT_PROBE_FRAME_FLOOR,
         frame_ceiling=DEFAULT_PROBE_FRAME_CEILING,
     )
-    device = torch.device(arguments.device)
-    path = phase_model_path(config.library_root, name=arguments.phase_model)
-
-    def _keep_best(model: PhaseModel, report: EpochReport) -> None:
-        """Write the weights whenever an epoch beats every epoch before it."""
-        save_phase_model(
-            path,
-            model,
-            PhaseModelDescription(
-                canonicalizer=arguments.canonicalizer,
-                bin_count=model.shape.bin_count,
-                frames_per_turn=model.shape.frames_per_turn,
-                channels=model.shape.channels,
-                kernel_size=model.shape.kernel_size,
-                dilations=model.shape.dilations,
-                fft_length=canonicalizer.geometry.fft_length,
-                hop_length=canonicalizer.geometry.hop_length,
-                epochs=report.epoch,
-                trained_sample_count=len(samples),
-                best_validation_loss=report.validation_loss,
-            ),
-        )
-        _logger.info("  epoch %d is the best so far; wrote %s.", report.epoch, path)
-
-    trained = train_phase_model(
+    outcome = run_phase_training(
         PhaseCorpus(
             samples=samples,
             library_root=config.library_root,
@@ -321,17 +301,19 @@ def _train_phase(connection: Connection, config: LibraryConfig, arguments: argpa
             crop_frames=arguments.crop,
             learning_rate=arguments.learning_rate,
             worker_count=arguments.workers,
+            precision=arguments.precision,
             random_seed=arguments.seed,
         ),
-        device=device,
-        on_improvement=_keep_best,
+        model_name=arguments.phase_model,
+        accelerator=arguments.device,
+        resume=arguments.resume,
     )
     _logger.info(
         "Trained over %d samples for %d epochs. The best epoch scored %.4f and is what %s holds.",
         len(samples),
-        trained.settings.epochs,
-        trained.best_validation_loss,
-        path,
+        outcome.epochs_completed,
+        outcome.best_validation_loss,
+        outcome.model_path,
     )
 
 
