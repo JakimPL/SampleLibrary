@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 server = ["fastapi>=0.120", "uvicorn>=0.35"]
 cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9"]
-morph = ["librosa>=0.11", "scikit-learn>=1.9"]
+morph = ["librosa>=0.11", "scikit-learn>=1.9", "torch>=2.9", "threadpoolctl>=3.6"]
 
 [project.scripts]
 sampleextract = "sampleextract.cli:main"
@@ -35,8 +35,16 @@ samplecloud-evaluate = "samplecloud.evaluation.cli:main"
 samplemorph = "samplemorph.cli:main"
 sampleserver-schema = "sampleserver.openapi_export:main"
 
+# The card is sm_120, which needs a CUDA 12.8 or newer build; an older wheel imports cleanly and
+# then fails at the first kernel launch with a no-kernel-image error.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
 [tool.uv.sources]
 trackmod = { path = "trackmod", editable = true }
+torch = { index = "pytorch-cu128" }
 
 [dependency-groups]
 dev = [

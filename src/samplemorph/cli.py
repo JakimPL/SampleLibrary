@@ -6,6 +6,7 @@ from enum import StrEnum, unique
 from pathlib import Path
 from typing import Final
 
+import torch
 from sqlalchemy import Connection
 
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
@@ -32,17 +33,40 @@ from samplemorph.registries import (
     DEFAULT_CANONICALIZER_NAME,
     DEFAULT_MORPHER_NAME,
     DEFAULT_VOCODER_NAME,
+    LEARNED_VOCODER_NAME,
     MORPHER_REGISTRY,
     VOCODER_REGISTRY,
+)
+from samplemorph.training.phase_dataset import DEFAULT_CROP_FRAMES
+from samplemorph.training.phase_trainer import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_EPOCHS,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_WORKER_COUNT,
+    EpochReport,
+    PhaseCorpus,
+    TrainingSettings,
+    train_phase_model,
 )
 from samplemorph.training.principal_components import (
     DEFAULT_LATENT_SIZE,
     DEFAULT_RANDOM_SEED,
     PrincipalComponentTrainer,
 )
+from samplemorph.vocoders import Vocoder
+from samplemorph.vocoders.learned import (
+    DEFAULT_PHASE_MODEL_NAME,
+    PhaseModelDescription,
+    load_phase_model,
+    phase_model_path,
+    save_phase_model,
+)
+from samplemorph.vocoders.phase_model import DEFAULT_CHANNELS, PhaseModel
 
 DEFAULT_MODEL_NAME: Final[str] = "principal_components"
 DEFAULT_FIT_SAMPLE_COUNT: Final[int] = 4_000
+DEFAULT_TRAIN_SAMPLE_COUNT: Final[int] = 20_000
+DEFAULT_DEVICE: Final[str] = "cuda"
 MANIFEST_NAME: Final[str] = "manifest.json"
 
 _logger = logging.getLogger(__name__)
@@ -50,9 +74,10 @@ _logger = logging.getLogger(__name__)
 
 @unique
 class MorphCommand(StrEnum):
-    """The two things this pipeline does from a shell: fit a codec, and render audio through one."""
+    """What this pipeline does from a shell: fit a codec, teach a vocoder, and render audio."""
 
     FIT = "fit"
+    TRAIN_PHASE = "train-phase"
     RENDER = "render"
 
 
@@ -64,6 +89,8 @@ def main(argv: list[str] | None = None) -> None:
         match MorphCommand(arguments.command):
             case MorphCommand.FIT:
                 _fit(connection, config, arguments)
+            case MorphCommand.TRAIN_PHASE:
+                _train_phase(connection, config, arguments)
             case MorphCommand.RENDER:
                 _render(connection, config, arguments)
 
@@ -130,7 +157,7 @@ def _render(connection: Connection, config: LibraryConfig, arguments: argparse.N
         route=MorphRoute(
             canonicalizer=canonicalizer,
             codec=codec,
-            vocoder=VOCODER_REGISTRY[arguments.vocoder](),
+            vocoder=_vocoder_for(config, arguments),
             morpher=MORPHER_REGISTRY[arguments.morpher](),
         ),
         output_directory=output_directory,
@@ -190,6 +217,36 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     fit.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed the draw and the fit use.")
     fit.add_argument("--model", type=str, default=DEFAULT_MODEL_NAME, help="The name to store the model under.")
 
+    train = commands.add_parser(
+        MorphCommand.TRAIN_PHASE.value, help="Teach a phase model the phase this pipeline's magnitudes carry."
+    )
+    train.add_argument(
+        "--canonicalizer",
+        choices=sorted(CANONICALIZER_REGISTRY),
+        default=DEFAULT_CANONICALIZER_NAME,
+        help="Which frequency axis the magnitudes are produced on.",
+    )
+    train.add_argument("--samples", type=int, default=DEFAULT_TRAIN_SAMPLE_COUNT, help="How many samples to train on.")
+    train.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS, help="How many passes over the training samples.")
+    train.add_argument("--batch", type=int, default=DEFAULT_BATCH_SIZE, help="How many crops make up one step.")
+    train.add_argument(
+        "--channels", type=int, default=DEFAULT_CHANNELS, help="How much capacity the network spends per layer."
+    )
+    train.add_argument(
+        "--crop", type=int, default=DEFAULT_CROP_FRAMES, help="How many analysis frames one training crop spans."
+    )
+    train.add_argument(
+        "--learning-rate", type=float, default=DEFAULT_LEARNING_RATE, help="The rate the optimizer starts at."
+    )
+    train.add_argument(
+        "--workers", type=int, default=DEFAULT_WORKER_COUNT, help="How many processes derive training examples."
+    )
+    train.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed the draw and the split use.")
+    train.add_argument("--device", type=str, default=DEFAULT_DEVICE, help="Which device to train on.")
+    train.add_argument(
+        "--phase-model", type=str, default=DEFAULT_PHASE_MODEL_NAME, help="The name to store the phase model under."
+    )
+
     render = commands.add_parser(MorphCommand.RENDER.value, help="Render a listening set between two samples.")
     render.add_argument("--first", type=str, required=True, help="The sample hash the morph starts from.")
     render.add_argument("--second", type=str, required=True, help="The sample hash the morph arrives at.")
@@ -197,10 +254,17 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     render.add_argument("--model", type=str, default=DEFAULT_MODEL_NAME, help="Which stored model to render through.")
     render.add_argument(
         "--vocoder",
-        choices=sorted(VOCODER_REGISTRY),
+        choices=sorted({*VOCODER_REGISTRY, LEARNED_VOCODER_NAME}),
         default=DEFAULT_VOCODER_NAME,
         help="Which vocoder estimates the phase a magnitude spectrogram lost.",
     )
+    render.add_argument(
+        "--phase-model",
+        type=str,
+        default=DEFAULT_PHASE_MODEL_NAME,
+        help="Which stored phase model the learned vocoder reads.",
+    )
+    render.add_argument("--device", type=str, default=DEFAULT_DEVICE, help="Which device the learned vocoder runs on.")
     render.add_argument(
         "--morpher",
         choices=sorted(MORPHER_REGISTRY),
@@ -208,3 +272,78 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         help="Which route the morph takes between the two latents.",
     )
     return parser.parse_args(argv)
+
+
+def _train_phase(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
+    """Teach a phase model on the magnitudes this pipeline's own canonicalizer produces."""
+    canonicalizer = CANONICALIZER_REGISTRY[arguments.canonicalizer]()
+    samples = PostgresSampleRepository(connection).sample_reproducibly(
+        count=arguments.samples,
+        random_seed=arguments.seed,
+        frame_floor=DEFAULT_PROBE_FRAME_FLOOR,
+        frame_ceiling=DEFAULT_PROBE_FRAME_CEILING,
+    )
+    device = torch.device(arguments.device)
+    path = phase_model_path(config.library_root, name=arguments.phase_model)
+
+    def _keep_best(model: PhaseModel, report: EpochReport) -> None:
+        """Write the weights whenever an epoch beats every epoch before it."""
+        save_phase_model(
+            path,
+            model,
+            PhaseModelDescription(
+                canonicalizer=arguments.canonicalizer,
+                bin_count=model.shape.bin_count,
+                frames_per_turn=model.shape.frames_per_turn,
+                channels=model.shape.channels,
+                kernel_size=model.shape.kernel_size,
+                dilations=model.shape.dilations,
+                fft_length=canonicalizer.geometry.fft_length,
+                hop_length=canonicalizer.geometry.hop_length,
+                epochs=report.epoch,
+                trained_sample_count=len(samples),
+                best_validation_loss=report.validation_loss,
+            ),
+        )
+        _logger.info("  epoch %d is the best so far; wrote %s.", report.epoch, path)
+
+    trained = train_phase_model(
+        PhaseCorpus(
+            samples=samples,
+            library_root=config.library_root,
+            canonicalizer=canonicalizer,
+            canonicalizer_name=arguments.canonicalizer,
+        ),
+        settings=TrainingSettings(
+            epochs=arguments.epochs,
+            batch_size=arguments.batch,
+            channels=arguments.channels,
+            crop_frames=arguments.crop,
+            learning_rate=arguments.learning_rate,
+            worker_count=arguments.workers,
+            random_seed=arguments.seed,
+        ),
+        device=device,
+        on_improvement=_keep_best,
+    )
+    _logger.info(
+        "Trained over %d samples for %d epochs. The best epoch scored %.4f and is what %s holds.",
+        len(samples),
+        trained.settings.epochs,
+        trained.best_validation_loss,
+        path,
+    )
+
+
+def _vocoder_for(config: LibraryConfig, arguments: argparse.Namespace) -> Vocoder:
+    """Build the vocoder a render was asked for, loading a fitted phase model when one is named.
+
+    Raises:
+        FileNotFoundError: the learned vocoder was asked for and no model is stored under that name.
+    """
+    if arguments.vocoder == LEARNED_VOCODER_NAME:
+        return load_phase_model(
+            phase_model_path(config.library_root, name=arguments.phase_model), device=torch.device(arguments.device)
+        )
+
+    return VOCODER_REGISTRY[arguments.vocoder]()

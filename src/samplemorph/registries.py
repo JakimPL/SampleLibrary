@@ -14,6 +14,7 @@ from samplemorph.vocoders.griffin_lim import GriffinLimVocoder
 
 DEFAULT_CANONICALIZER_NAME: Final[str] = "log_frequency"
 DEFAULT_VOCODER_NAME: Final[str] = "griffin_lim"
+LEARNED_VOCODER_NAME: Final[str] = "learned"
 DEFAULT_MORPHER_NAME: Final[str] = "linear"
 
 CANONICALIZER_REGISTRY: Final[dict[str, Callable[[], Canonicalizer]]] = {
@@ -35,6 +36,11 @@ analysis.
 VOCODER_REGISTRY: Final[dict[str, Callable[[], Vocoder]]] = {
     DEFAULT_VOCODER_NAME: GriffinLimVocoder,
 }
+"""The vocoders a name alone builds.
+
+`LEARNED_VOCODER_NAME` stays out of it: a fitted phase model is read from a file under the library
+root, so the caller supplies where to read it from rather than a factory guessing.
+"""
 
 MORPHER_REGISTRY: Final[dict[str, Callable[[], Morpher]]] = {
     DEFAULT_MORPHER_NAME: LinearMorpher,

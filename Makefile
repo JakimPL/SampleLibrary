@@ -101,6 +101,13 @@ evaluate-fast:
 morph-fit:
 	uv run samplemorph fit $(if $(CANONICALIZER),--canonicalizer $(CANONICALIZER),) $(if $(LATENT),--latent-size $(LATENT),)
 
+# Teaches a phase model on the magnitudes the canonicalizer produces and writes it under the library
+# root. SAMPLES and EPOCHS size the run; the pass reads audio in worker processes and trains on the
+# GPU, so its length follows the sample count times the epoch count.
+.PHONY: morph-train-phase
+morph-train-phase:
+	uv run samplemorph train-phase $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(PHASE_MODEL),--phase-model $(PHASE_MODEL),)
+
 .PHONY: morph-render
 morph-render:
 	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT)
