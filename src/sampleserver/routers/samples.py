@@ -26,7 +26,7 @@ from samplecore.pitch import (
     playback_rates_of,
     tally_playback_rates,
 )
-from samplecore.spectral_distance import euclidean_distance, nearest_neighbors
+from samplecore.spectral_distance import SpectralVectors, euclidean_distance, nearest_neighbors
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
@@ -37,7 +37,7 @@ from samplecore.storage.repositories.sample_annotation import PostgresSampleAnno
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.waveform import DEFAULT_WAVEFORM_BUCKET_COUNT, WaveformPeak, compute_waveform_peaks
-from sampleserver.dependencies import get_connection, get_library_root
+from sampleserver.dependencies import get_connection, get_library_root, get_spectral_vectors
 from sampleserver.equivalence import equivalence_class_members
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
 
@@ -300,18 +300,20 @@ def get_similar_samples(
     sample_hash: str,
     limit: Annotated[int, Query(ge=1, le=MAX_SIMILAR_SAMPLES_LIMIT)] = DEFAULT_SIMILAR_SAMPLES_LIMIT,
     connection: Connection = Depends(get_connection),
+    vectors: SpectralVectors = Depends(get_spectral_vectors),
 ) -> tuple[SimilarSample, ...]:
     """The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
+
+    Every neighbor is found by measuring this sample against the whole catalog at once, over the
+    vectors held parsed for as long as the embedding behind them stands.
 
     Raises:
         HTTPException: 404 when this sample has no persisted spectral feature vector yet.
     """
-    features = PostgresSampleSpectralFeatureRepository(connection).list_all()
-    vectors_by_hash = {feature.sample_hash: feature.vector for feature in features}
-    if sample_hash not in vectors_by_hash:
+    if sample_hash not in vectors.row_by_hash:
         raise HTTPException(status_code=404, detail=f"sample {sample_hash!r} has no spectral feature vector yet")
 
-    neighbors = nearest_neighbors(sample_hash, vectors_by_hash, limit=limit)
+    neighbors = nearest_neighbors(sample_hash, vectors, limit=limit)
     neighbor_hashes = [neighbor_hash for neighbor_hash, _ in neighbors]
     _, rates_by_hash = PostgresSampleRepository(connection).names_and_rates_by_hash(neighbor_hashes)
     playback_rate_by_hash = PostgresSamplePlaybackRateRepository(connection).get_many(neighbor_hashes)

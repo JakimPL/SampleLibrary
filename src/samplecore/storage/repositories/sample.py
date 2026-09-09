@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Protocol, TypeVar
+from collections.abc import Sequence
+from typing import Any, Final, Protocol, TypeVar
 
 from sqlalchemy import ColumnElement, Connection, Row, Select, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -50,7 +51,11 @@ class SampleRepository(Protocol):
         self, hashes: list[str]
     ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]: ...
 
+    def names_and_rates_for_every_sample(self) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]: ...
+
     def instrument_names_by_hash(self, hashes: list[str]) -> dict[str, tuple[str, ...]]: ...
+
+    def instrument_names_for_every_sample(self) -> dict[str, tuple[str, ...]]: ...
 
 
 class PostgresSampleRepository:
@@ -178,25 +183,19 @@ class PostgresSampleRepository:
     ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]:
         """Every occurrence's raw name and rate for each given sample hash, in chunked queries.
 
-        Chunked by ``HASH_CHUNK_SIZE`` so a whole-catalog lookup stays within Postgres's own
-        parameter ceiling, which a library of this size passes.
+        Chunked by ``HASH_CHUNK_SIZE`` so the lookup stays within Postgres's own parameter ceiling,
+        which a page of any size stays comfortably inside.
         """
-        names_by_hash: dict[str, list[str]] = defaultdict(list)
-        rates_by_hash: dict[str, list[Rate]] = defaultdict(list)
+        return _names_and_rates_of(self._chunked(_NAMES_AND_RATES, hashes))
 
-        for chunk_start in range(0, len(hashes), HASH_CHUNK_SIZE):
-            chunk = hashes[chunk_start : chunk_start + HASH_CHUNK_SIZE]
-            statement = select(
-                sample_properties.c.sample_hash, sample_properties.c.name, sample_properties.c.rate
-            ).where(sample_properties.c.sample_hash.in_(chunk))
-            for row in self._connection.execute(statement).fetchall():
-                names_by_hash[row.sample_hash].append(row.name)
-                rates_by_hash[row.sample_hash].append(row.rate)
+    def names_and_rates_for_every_sample(self) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]:
+        """The same, for the whole catalog, in one scan of the occurrences.
 
-        return (
-            {hash_: tuple(names) for hash_, names in names_by_hash.items()},
-            {hash_: tuple(rates) for hash_, rates in rates_by_hash.items()},
-        )
+        A whole-catalog reader arrives here rather than at ``names_and_rates_by_hash``: naming a
+        hundred thousand hashes costs Postgres more in parameters alone than reading every
+        occurrence there is, and the answer covers the same rows either way.
+        """
+        return _names_and_rates_of(self._connection.execute(_NAMES_AND_RATES).fetchall())
 
     def instrument_names_by_hash(self, hashes: list[str]) -> dict[str, tuple[str, ...]]:
         """The name of every instrument slot each given sample is reached through, in chunked queries.
@@ -204,29 +203,65 @@ class PostgresSampleRepository:
         A tracker names an instrument apart from the waveforms its keys reach, so these carry
         description a sample's own name leaves out -- a waveform stored as "smp03" reached through an
         instrument called "warm pad" says what it is only here. Chunked by ``HASH_CHUNK_SIZE``, the
-        same way occurrence names are, so a whole-catalog lookup stays inside Postgres's parameter
-        ceiling.
+        same way occurrence names are.
         """
-        names_by_hash: dict[str, list[str]] = defaultdict(list)
+        return _names_of(self._chunked(_INSTRUMENT_NAMES, hashes))
 
+    def instrument_names_for_every_sample(self) -> dict[str, tuple[str, ...]]:
+        """The same, for the whole catalog, in one scan of the occurrences and their instruments."""
+        return _names_of(self._connection.execute(_INSTRUMENT_NAMES).fetchall())
+
+    def _chunked(self, statement: Select[Any], hashes: list[str]) -> list[Row[Any]]:
+        """Every row ``statement`` reaches for ``hashes``, asked for in parameter-sized chunks."""
+        rows: list[Row[Any]] = []
         for chunk_start in range(0, len(hashes), HASH_CHUNK_SIZE):
             chunk = hashes[chunk_start : chunk_start + HASH_CHUNK_SIZE]
-            statement = (
-                select(sample_properties.c.sample_hash, module_instrument.c.name)
-                .select_from(
-                    sample_properties.join(
-                        module_instrument,
-                        (module_instrument.c.module_id == sample_properties.c.module_id)
-                        & (module_instrument.c.instrument_index == sample_properties.c.instrument_index),
-                    )
-                )
-                .where(sample_properties.c.sample_hash.in_(chunk))
-                .where(module_instrument.c.name != "")
-            )
-            for row in self._connection.execute(statement).fetchall():
-                names_by_hash[row.sample_hash].append(row.name)
+            narrowed = statement.where(sample_properties.c.sample_hash.in_(chunk))
+            rows.extend(self._connection.execute(narrowed).fetchall())
 
-        return {hash_: tuple(names) for hash_, names in names_by_hash.items()}
+        return rows
+
+
+_NAMES_AND_RATES: Final[Select[Any]] = select(
+    sample_properties.c.sample_hash, sample_properties.c.name, sample_properties.c.rate
+)
+
+_INSTRUMENT_NAMES: Final[Select[Any]] = (
+    select(sample_properties.c.sample_hash, module_instrument.c.name)
+    .select_from(
+        sample_properties.join(
+            module_instrument,
+            (module_instrument.c.module_id == sample_properties.c.module_id)
+            & (module_instrument.c.instrument_index == sample_properties.c.instrument_index),
+        )
+    )
+    .where(module_instrument.c.name != "")
+)
+
+
+def _names_and_rates_of(
+    rows: Sequence[Row[Any]],
+) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]:
+    """Gather occurrence rows into the names and the rates each sample hash carries."""
+    names_by_hash: dict[str, list[str]] = defaultdict(list)
+    rates_by_hash: dict[str, list[Rate]] = defaultdict(list)
+    for row in rows:
+        names_by_hash[row.sample_hash].append(row.name)
+        rates_by_hash[row.sample_hash].append(row.rate)
+
+    return (
+        {hash_: tuple(names) for hash_, names in names_by_hash.items()},
+        {hash_: tuple(rates) for hash_, rates in rates_by_hash.items()},
+    )
+
+
+def _names_of(rows: Sequence[Row[Any]]) -> dict[str, tuple[str, ...]]:
+    """Gather name-carrying rows into the names each sample hash is reached through."""
+    names_by_hash: dict[str, list[str]] = defaultdict(list)
+    for row in rows:
+        names_by_hash[row.sample_hash].append(row.name)
+
+    return {hash_: tuple(names) for hash_, names in names_by_hash.items()}
 
 
 def _row_to_sample(row: Row[Any]) -> Sample:

@@ -202,6 +202,9 @@ export interface paths {
          * Get Similar Samples
          * @description The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
          *
+         *     Every neighbor is found by measuring this sample against the whole catalog at once, over the
+         *     vectors held parsed for as long as the embedding behind them stands.
+         *
          *     Raises:
          *         HTTPException: 404 when this sample has no persisted spectral feature vector yet.
          */
@@ -244,6 +247,10 @@ export interface paths {
         /**
          * Get Cloud
          * @description Every sample's position in the library's 2D embedding space, as of the latest embedding run.
+         *
+         *     Every lookup behind a point is read whole rather than per hash: this route answers for the entire
+         *     catalog, and asking Postgres about a hundred thousand named hashes costs it more than reading
+         *     each table outright.
          */
         readonly get: operations["get_cloud_api_cloud_get"];
         readonly put?: never;
@@ -343,7 +350,8 @@ export interface components {
          *
          *     The label says what the sample is, as free text: it records what a listener actually decided,
          *     ahead of any vocabulary being settled, so it stays unconstrained by `SampleCategory`'s fourteen
-         *     guessed roles and wins wherever it exists. The rating and the favorite mark say what the
+         *     guessed roles and wins wherever it exists. It is kept in upper case, which is the case it is
+         *     shown in, so the vocabulary a person builds by habit collects one entry per wording. The rating and the favorite mark say what the
          *     listener thought of it, which is what turns browsing the library into a collection of a person's
          *     own.
          *
@@ -740,15 +748,19 @@ export interface components {
         readonly SampleCategory: "kick" | "snare" | "clap" | "hi_hat" | "cymbal" | "percussion" | "bass" | "lead" | "pad" | "pluck" | "vocal" | "fx" | "loop" | "uncategorized";
         /**
          * SampleCloudPoint
-         * @description A SampleCloudCoordinate together with what a viewer needs to color and hear the point.
+         * @description One sample's place in the embedding, with what a viewer needs to color and hear the point.
          *
          *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
          *     sample's own occurrence names together with the names of the instruments reaching it -- rather
          *     than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
          *     clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
-         *     the catalog knows no rate for.
-         *     ``hand_label`` carries what a person decided this sample is, for a viewer inspecting a point;
-         *     the cloud keeps coloring by ``category``, whose fourteen roles hold a fixed hue each.
+         *     the catalog knows no rate for. ``hand_label`` carries what a person decided this sample is, for a
+         *     viewer inspecting a point; the cloud keeps coloring by ``category``, whose fourteen roles hold a
+         *     fixed hue each.
+         *
+         *     This carries the coordinate's own fields rather than inheriting them, since a view of the whole
+         *     catalog is a hundred thousand of these at once: when the run that placed them was computed says
+         *     nothing about any one point, and a timestamp per point is several megabytes over the wire.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -757,11 +769,6 @@ export interface components {
             readonly x: number;
             /** Y */
             readonly y: number;
-            /**
-             * Computed At
-             * Format: date-time
-             */
-            readonly computed_at: string;
             readonly category: components["schemas"]["SampleCategory"];
             /** Hand Label */
             readonly hand_label: string | null;

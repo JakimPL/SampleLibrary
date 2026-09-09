@@ -550,6 +550,25 @@ def test_get_similar_samples_respects_the_limit(client: TestClient, connection: 
     assert [item["hash"] for item in body] == [near.hash]
 
 
+def test_get_similar_samples_answer_follows_a_fresh_embedding(client: TestClient, connection: Connection) -> None:
+    """The vectors are held parsed between requests, so a new embedding has to reach a later one."""
+    target = _insert_sample(connection, SAMPLE_HASH_A)
+    neighbor = _insert_sample(connection, SAMPLE_HASH_B)
+    feature_repository = PostgresSampleSpectralFeatureRepository(connection)
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=target.hash, vector=(0.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    client.get(f"/samples/{target.hash}/similar")
+
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=neighbor.hash, vector=(3.0, 4.0), computed_at=datetime.now(UTC))
+    )
+
+    response = client.get(f"/samples/{target.hash}/similar")
+
+    assert [(item["hash"], item["distance"]) for item in response.json()] == [(neighbor.hash, 5.0)]
+
+
 def test_get_similar_samples_404s_when_the_target_has_no_vector(client: TestClient, connection: Connection) -> None:
     _insert_sample(connection, SAMPLE_HASH_A)
 

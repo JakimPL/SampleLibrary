@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from samplecore.storage.database import connect_for_curation
 from sampleserver.routers import cloud, curation, modules, samples, stats
+from sampleserver.spectral_cache import SpectralVectorCache
 
 API_PREFIX: Final[str] = "/api"
 
@@ -51,6 +52,7 @@ def create_app(database_url: str, library_root: Path) -> FastAPI:
     )
     application.state.database_url = database_url
     application.state.library_root = library_root
+    application.state.spectral_vectors = SpectralVectorCache()
     for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.router):
         application.include_router(api_router, prefix=API_PREFIX)
     return application
