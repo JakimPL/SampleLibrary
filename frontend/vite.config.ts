@@ -16,9 +16,9 @@ export default defineConfig({
     },
     test: {
         environment: "jsdom",
-        // Node's own Web Storage API defines a `localStorage` global that jsdom then leaves in
-        // place, and it carries no `clear`, which every test's cleanup calls. Turning it off in
-        // the worker processes lets jsdom's own implementation be the one the suite reaches.
+        // Node 25 ships a Web Storage API of its own, and its `localStorage` global takes
+        // precedence over jsdom's. Turning it off in the worker processes hands the suite jsdom's
+        // own Storage, which carries the whole API these tests exercise.
         poolOptions: { forks: { execArgv: ["--no-experimental-webstorage"] } },
         setupFiles: ["tests/setup.ts"],
         include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],

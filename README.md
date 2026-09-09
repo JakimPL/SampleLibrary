@@ -10,7 +10,7 @@ library.
 - Python 3.12 or later
 - [uv](https://docs.astral.sh/uv/)
 - PostgreSQL 17 or later
-- Node.js and npm, for the frontend
+- Node.js 25.9 or later, and npm, for the frontend
 - An NVIDIA GPU, to train the vocoder that turns a morph back into sound. Everything else in the
   project runs on the processor alone.
 
