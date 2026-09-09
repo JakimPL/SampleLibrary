@@ -30,6 +30,7 @@ from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRep
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
 from sampleextract.ingest import ingest_module
+from sampleextract.notes.playback_rates import record_playback_rates
 from sampleextract.parsing import parse_module
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "reset_library.py"
@@ -77,6 +78,7 @@ def _populate_library(connection: Connection, tmp_path: Path) -> Path:
     connection.commit()
     detect_equivalences(connection, library_root)
     connection.commit()
+    record_playback_rates(connection)
 
     first_module = PostgresModuleRepository(connection).list_all()[0]
     sample_hashes = [row.hash for row in connection.execute(select(metadata.tables["sample"].c.hash)).fetchall()]
@@ -179,7 +181,7 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, tmp_
     assert all(count == 0 for count in _row_counts(connection).values())
     surviving = annotation_repository.get(occurrence_row.sample_hash)
     assert surviving is not None
-    assert surviving.label == "warm pad"
+    assert surviving.label == "WARM PAD"
     assert surviving.occurrence.module_hash == module.hash
 
 

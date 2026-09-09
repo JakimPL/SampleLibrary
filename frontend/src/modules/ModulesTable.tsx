@@ -13,23 +13,24 @@ import { useMemo, useRef, useState } from "react";
 
 import type { Module, TrackerFormat } from "../api/modules";
 import { UNTITLED_MODULE_LABEL } from "../shared/labels";
+import { TableColgroup } from "../shared/TableColgroup";
+import { TABLE_INITIAL_VIEWPORT_HEIGHT_PX, TABLE_OVERSCAN_ROWS, TABLE_ROW_HEIGHT_PX } from "../shared/tableMetrics";
 import { ModuleRow } from "./ModuleRow";
-
-const ROW_HEIGHT_PX = 44;
-const OVERSCAN_ROWS = 12;
-const INITIAL_VIEWPORT_HEIGHT_PX = 480;
 
 const columnHelper = createColumnHelper<Module>();
 
+// The filename takes whatever the sized columns leave over: a title is a handful of words a tracker
+// had room for, while a path is as long as a collection's own folders make it.
 const COLUMNS = [
     columnHelper.accessor((module) => (module.title.trim() === "" ? UNTITLED_MODULE_LABEL : module.title), {
         id: "title",
         header: "Title",
+        size: 150,
     }),
-    columnHelper.accessor("filename", { header: "Filename" }),
-    columnHelper.accessor("tracker", { header: "Tracker" }),
-    columnHelper.accessor("sample_count", { header: "Samples" }),
-    columnHelper.accessor("file_size", { header: "Size" }),
+    columnHelper.accessor("filename", { header: "Filename", meta: { flexible: true } }),
+    columnHelper.accessor("tracker", { header: "Tracker", size: 64 }),
+    columnHelper.accessor("sample_count", { header: "Samples", size: 64 }),
+    columnHelper.accessor("file_size", { header: "Size", size: 80 }),
 ];
 
 interface ModulesTableProps {
@@ -62,9 +63,9 @@ export function ModulesTable({ modules }: ModulesTableProps): ReactElement {
     const virtualizer = useVirtualizer({
         count: rows.length,
         getScrollElement: () => scrollElementRef.current,
-        estimateSize: () => ROW_HEIGHT_PX,
-        overscan: OVERSCAN_ROWS,
-        initialRect: { width: 0, height: INITIAL_VIEWPORT_HEIGHT_PX },
+        estimateSize: () => TABLE_ROW_HEIGHT_PX,
+        overscan: TABLE_OVERSCAN_ROWS,
+        initialRect: { width: 0, height: TABLE_INITIAL_VIEWPORT_HEIGHT_PX },
     });
     const virtualRows = virtualizer.getVirtualItems();
     const lastVirtualRow = virtualRows[virtualRows.length - 1];
@@ -78,6 +79,11 @@ export function ModulesTable({ modules }: ModulesTableProps): ReactElement {
 
     return (
         <div className="panel-stack">
+            <div className="panel-status">
+                <span className="cell-muted mono">
+                    {rows.length} of {modules.length} shown
+                </span>
+            </div>
             <div className="panel-filter">
                 <input
                     type="text"
@@ -97,12 +103,10 @@ export function ModulesTable({ modules }: ModulesTableProps): ReactElement {
                         <option value="s3m">S3M</option>
                     </select>
                 </label>
-                <span className="cell-muted mono">
-                    {rows.length} / {modules.length}
-                </span>
             </div>
             <div className="panel-body" ref={scrollElementRef}>
                 <table className="data">
+                    <TableColgroup table={table} />
                     <thead>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <tr key={headerGroup.id}>

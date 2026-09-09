@@ -10,7 +10,7 @@ library.
 - Python 3.12 or later
 - [uv](https://docs.astral.sh/uv/)
 - PostgreSQL 17 or later
-- Node.js and npm, for the frontend
+- Node.js 25.9 or later, and npm, for the frontend
 - An NVIDIA GPU, to train the vocoder that turns a morph back into sound. Everything else in the
   project runs on the processor alone.
 
@@ -48,7 +48,9 @@ Extraction takes a while over a large collection, so it spreads itself across yo
 cores. `make extract WORKERS=2` holds it to two processes if you want the machine back while it
 runs.
 
-The `Makefile` lists the rest of the pipeline: `make embed`, `make thumbnails` and so on.
+`make notes` reads what your modules actually play, which is what lets the app sound a sample at the
+speed the music does — run it after extraction, and again whenever you add modules. The `Makefile`
+lists the rest of the pipeline: `make embed`, `make thumbnails` and so on.
 
 Work on generating audio from a point between two samples lives in the `samplemorph` package,
 and the research behind it is documented separately under `docs/morphing/`, starting from
@@ -60,10 +62,13 @@ installs cleanly and then fails the moment it is first asked to compute.
 
 ## Labeling and rating samples
 
-Open a sample in the app and type what it is; words you have used before are suggested as you type.
-Five stars and a heart record what you think of it, saved as you click. Near-duplicates get the same
-decision by default. The samples list can then show only your favorites, or only what you rated at
-least a given number, across the whole library.
+Click a sample's category in the list and type what it is; words you have used before are suggested
+as you type, and Enter records it. Labels are kept in capitals, so one wording stays one label
+however you typed it. Emptying the field brings back the app's own guess. Five stars
+and a heart sit in the same row, saved as you click, and a sample's own page offers all three as
+well. Near-duplicates get the same decision by default, whenever the list has them grouped. The
+samples list can then show only your favorites, or put your best-rated first, across the whole
+library.
 
 Labels, ratings and favorites are the one thing here that nothing can rebuild, so they are kept
 apart from everything the pipelines generate, and `make reset-library` leaves them alone.

@@ -57,6 +57,15 @@
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
 }
 
+/* A browser paints a bare button, a select and a scrollbar from `color-scheme`, not from our own
+   tokens, so a theme a person chose by hand has to say which one it is: left to follow the
+   operating system, a light theme on a dark desktop would hand every control dark chrome and then
+   write this theme's dark text onto it. */
+:root[data-theme="light"],
+:root[data-theme="openmpt"] {
+    color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
         --surface-0: #14171c;
@@ -100,6 +109,8 @@
 }
 
 :root[data-theme="dark"] {
+    color-scheme: dark;
+
     --surface-0: #14171c;
     --surface-1: #1b1f26;
     --surface-2: #232a35;
@@ -213,7 +224,7 @@ body {
     background: var(--surface-0);
     color: var(--text-primary);
     font-family: var(--font-body);
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
 }
@@ -376,6 +387,16 @@ table.mini {
     border-collapse: collapse;
 }
 
+/* Column widths come from the table's own <colgroup> (see TableColgroup), which a fixed layout
+   honors: a virtualized listing renders a different handful of rows at every scroll position, and
+   an automatic layout would resize its columns to fit whichever ones happen to be on screen. The
+   minimum leaves the one unsized column (a sample's name, a module's filename) readable rather than
+   squeezed to nothing: a panel narrower than this scrolls sideways to reach the rest. */
+table.data {
+    table-layout: fixed;
+    min-width: 600px;
+}
+
 table.data thead {
     position: sticky;
     top: 0;
@@ -401,10 +422,12 @@ table.mini th {
 }
 
 table.data th {
-    font-size: 10px;
-    padding: 6px 8px;
+    font-size: 9.5px;
+    padding: 4px 6px;
     cursor: pointer;
     user-select: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 table.data th:hover {
@@ -427,8 +450,11 @@ table.mini td {
 }
 
 table.data td {
-    padding: 5px 8px;
+    padding: 3px 6px;
+    font-size: 11px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 table.mini td {
@@ -439,6 +465,12 @@ table.mini td {
 table.data tbody tr,
 table.mini tbody tr {
     cursor: pointer;
+}
+
+/* Kept equal to TABLE_ROW_HEIGHT_PX in `shared/tableMetrics.ts`: a virtualized listing places its
+   rows from that number, and a row of any other height drifts away from the scrollbar. */
+table.data tbody tr {
+    height: 40px;
 }
 
 table.data tbody tr:hover,
@@ -455,20 +487,26 @@ tr.is-focused {
     box-shadow: inset 2px 0 0 var(--accent);
 }
 
+/* A fixed-layout listing takes this column's width from its <colgroup> instead; the cap holds
+   the mini tables, whose layout is still measured from their own content. */
 .cell-name {
     max-width: 220px;
 }
 
+/* The two lines are set tighter than the page's own rhythm so a row holding a name, a hash and a
+   near-duplicate badge still fits the height every listing row is laid out at. */
 .cell-name-stack {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
+    line-height: 1.3;
     overflow: hidden;
 }
 
 .cell-primary {
     color: var(--text-primary);
     font-weight: 600;
+    font-size: 10.5px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -488,9 +526,9 @@ tr.is-focused {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    padding: 2px 6px;
+    padding: 1px 5px;
     border-radius: 4px;
-    line-height: 1.6;
+    line-height: 1.5;
 }
 
 /* Each badge's background is mixed to an opaque color rather than taken from its translucent
@@ -531,8 +569,6 @@ tr.is-focused {
     background: var(--surface-2);
     color: var(--text-primary);
     border: 1px solid var(--border-strong);
-    text-transform: none;
-    letter-spacing: 0;
 }
 
 .annotation-editor {
@@ -552,6 +588,7 @@ tr.is-focused {
     flex: 1 1 140px;
     min-width: 120px;
     padding: 3px 6px;
+    text-transform: uppercase;
     background: var(--surface-1);
     color: var(--text-primary);
     border: 1px solid var(--border);
@@ -589,13 +626,10 @@ tr.is-focused {
     cursor: pointer;
 }
 
-.rating-star:hover,
-.favorite-toggle:hover {
-    color: var(--accent);
-}
-
-.rating-star[aria-pressed="true"],
-.favorite-toggle[aria-pressed="true"] {
+/* `is-filled` covers the star being pointed at and every star before it, and the heart under the
+   pointer -- the decision a click would leave behind; `aria-pressed` stays with what is recorded. */
+.rating-star.is-filled,
+.favorite-toggle.is-filled {
     color: var(--accent);
 }
 
@@ -604,17 +638,51 @@ tr.is-focused {
     cursor: default;
 }
 
+.cell-stamp {
+    text-align: center;
+}
+
 .cell-verdict {
     white-space: nowrap;
-    color: var(--accent);
 }
 
-.favorite-mark {
-    margin-right: 4px;
+/* A count and the rating marks are read whole or not at all: where a name that trails off into an
+   ellipsis still says something, a trimmed number says something false and a trimmed heart says
+   nothing. Their columns are sized to hold them, and what is in them stays as it is. */
+.cell-numeric,
+.cell-verdict {
+    text-overflow: clip;
 }
 
-.rating-mark {
-    letter-spacing: -1px;
+/* A listing row's own controls sit closer together than the detail panel's, the whole row being
+   one line tall, and each takes a slot of its own width rather than its glyph's: a star and a heart
+   are drawn from whichever font a system has for them, so a fixed slot is what lets the Rating
+   column's width be arithmetic -- six of these -- instead of a guess about a glyph. */
+.cell-verdict .rating-star,
+.cell-verdict .favorite-toggle {
+    font-size: 13px;
+    width: 16px;
+    padding: 0;
+    text-align: center;
+}
+
+/* The detail panel gives the field room to grow into; a listing cell hands it the column's own
+   width, which the fixed layout has already settled. */
+table.data td .annotation-editor-input {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+}
+
+.category-cell-button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 /* Class names below echo the backend's RelationType/TrackerFormat enum values verbatim (snake_case
@@ -727,6 +795,26 @@ tr.is-focused {
     position: relative;
 }
 
+/* A listing says how much of itself is on screen on a line of its own, above the filter row: the
+   filter row already carries a field, a checkbox, a button and a select, and a count read at a
+   glance belongs where nothing else competes for the space. */
+.panel-status {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 8px;
+    font-size: 10.5px;
+    background: var(--surface-1);
+}
+
+.panel-status span {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .panel-filter {
     flex: 0 0 auto;
     display: flex;
@@ -767,20 +855,36 @@ tr.is-focused {
     padding: 0 6px;
 }
 
-.panel-filter span {
-    flex: 0 0 auto;
-    white-space: nowrap;
-}
-
-.panel-filter button {
+/* Every plain button in the app wears this, rather than whatever chrome a browser would paint a
+   bare control in: a theme is chosen here, so a control's own surface has to come from the same
+   tokens the surface behind it does. The stars and the heart are marks rather than controls, and
+   keep the bare treatment they are given above; `:where` holds this selector at the specificity it
+   would have without the exception. */
+.panel-filter button,
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
+.spectral-distance-readout button {
     border: 1px solid var(--border);
     background: var(--surface-0);
     border-radius: 5px;
     height: 24px;
     padding: 0 10px;
-    font-size: 11.5px;
+    font-size: 11px;
     cursor: pointer;
     color: var(--text-muted);
+}
+
+.panel-filter button:disabled,
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):disabled,
+.spectral-distance-readout button:disabled {
+    color: var(--text-faint);
+    cursor: default;
+}
+
+.panel-filter button:hover:enabled,
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled,
+.spectral-distance-readout button:hover:enabled {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
 }
 
 .panel-filter button[aria-pressed="true"] {
@@ -882,7 +986,7 @@ tr.is-focused {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 10.5px;
+    font-size: 10px;
     color: var(--text-faint);
 }
 
@@ -979,6 +1083,17 @@ tr.is-focused {
     color: var(--wave-fill);
 }
 
+/* wavesurfer draws its playhead inside its own shadow root, which exposes it as the `cursor` part.
+   The panel shows it while a sample is sounding and takes it away otherwise, so a waveform at rest
+   is a plain contour, with nothing on it to read as a position. */
+.wave-canvas-wrap ::part(cursor) {
+    opacity: 0;
+}
+
+.wave-canvas-wrap.is-playing ::part(cursor) {
+    opacity: 1;
+}
+
 .transport {
     flex: 0 0 auto;
     display: flex;
@@ -1023,15 +1138,6 @@ tr.is-focused {
     padding: 0 6px;
     font-family: var(--font-mono);
     font-size: 11px;
-}
-
-.wave-caption {
-    flex: 0 0 auto;
-    margin: 0;
-    padding: 4px 10px 8px;
-    font-size: 10.5px;
-    color: var(--text-faint);
-    background: var(--surface-2);
 }
 
 /* ---------- Detail panels ---------- */
@@ -1088,27 +1194,18 @@ tr.is-focused {
     font-weight: 600;
 }
 
+/* The readout reads left to right and its one button sits at the far end, which the gap between
+   the last reading and the button carries. */
 .spectral-distance-readout {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     margin-bottom: 14px;
     padding: 8px 10px;
     border-radius: 8px;
     background: var(--accent-soft);
-    font-size: 11.5px;
-}
-
-.spectral-distance-readout button {
-    border: 1px solid var(--border);
-    background: var(--surface-1);
-    border-radius: 5px;
-    height: 22px;
-    padding: 0 8px;
     font-size: 11px;
-    cursor: pointer;
-    color: var(--text-muted);
-    margin-left: auto;
 }
 
 /* ---------- Stats panel ---------- */
@@ -1176,11 +1273,14 @@ tr.is-focused {
 
 /* ---------- OpenMPT chrome ---------- */
 
-/* Flat 1px borders with a slight corner radius, matching real OpenMPT's modern common controls --
-   the round transport play button and the borderless thumbnail toggle keep their own dedicated
-   shapes and are excluded from this sweep. Inputs and selects get an explicit white fill: they read
-   as documents floating on the theme's gray chrome, not chrome themselves. */
-:root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button),
+/* Flat 1px borders with a slight corner radius, matching real OpenMPT's modern common controls.
+   What this sweep passes over is everything that reads as a mark rather than a control: the round
+   transport play button, the thumbnail a row plays through, the stars and the heart, and the badge
+   a category is named in -- each already carries its own shape, and a box drawn around it would say
+   "control" where the shape says what it is. Inputs and selects get an explicit white fill: they
+   read as documents floating on the theme's gray chrome, not chrome themselves. */
+:root[data-theme="openmpt"]
+    button:not(.play-btn, .thumbnail-button, .rating-star, .favorite-toggle, .category-cell-button),
 :root[data-theme="openmpt"] input,
 :root[data-theme="openmpt"] select {
     border-radius: 2px;
@@ -1192,7 +1292,8 @@ tr.is-focused {
     background: var(--surface-1);
 }
 
-:root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button):active {
+:root[data-theme="openmpt"]
+    button:not(.play-btn, .thumbnail-button, .rating-star, .favorite-toggle, .category-cell-button):active {
     background-color: var(--surface-3);
 }
 
@@ -1242,7 +1343,7 @@ tr.is-focused {
 }
 
 :root[data-theme="openmpt"] table.data th {
-    font-size: 13px;
+    font-size: 11px;
 }
 
 :root[data-theme="openmpt"] table.mini th {
@@ -1259,12 +1360,13 @@ tr.is-focused {
    views, the one deliberate size step in an otherwise plain, unweighted table. */
 :root[data-theme="openmpt"] .cell-primary {
     font-weight: 400;
-    font-size: 14px;
+    font-size: 12px;
 }
 
 /* A dockview panel's own content pane reads as OpenMPT's gray document background; a table is the
    one content type OpenMPT renders as a white document floating on top of it. */
 :root[data-theme="openmpt"] .dv-react-part,
+:root[data-theme="openmpt"] .panel-status,
 :root[data-theme="openmpt"] .panel-filter {
     background: var(--surface-2);
 }
@@ -1290,5 +1392,18 @@ tr.is-focused {
 :root[data-theme="openmpt"] tr.is-focused .cell-primary,
 :root[data-theme="openmpt"] tr.is-focused .cell-muted,
 :root[data-theme="openmpt"] tr.is-focused .entity-hash {
+    color: var(--accent-ink);
+}
+
+/* This theme fills a focused row with the accent itself, which the stars and the heart are drawn in
+   too. On that row they take the ink the rest of the row's text does, and the ones not yet given a
+   value step back to a faded shade of it, so a rating still reads as a rating while it is hovered. */
+:root[data-theme="openmpt"] tr.is-focused .rating-star,
+:root[data-theme="openmpt"] tr.is-focused .favorite-toggle {
+    color: color-mix(in srgb, var(--accent-ink) 45%, transparent);
+}
+
+:root[data-theme="openmpt"] tr.is-focused .rating-star.is-filled,
+:root[data-theme="openmpt"] tr.is-focused .favorite-toggle.is-filled {
     color: var(--accent-ink);
 }

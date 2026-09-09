@@ -189,7 +189,7 @@ equals MIDI 72.
 
 **`SampleDetail.duration_seconds` is wrong for real durations.** It is computed as
 `frames / NOMINAL_WAV_RATE`, so it reports the duration at the fictional rate. Use
-`frames / dominant_rate_hz`.
+`frames / playback_rate_hz`.
 
 **PCM shape.** `SamplePCM.pcm` is always 2-D, `(frames, channels)`, float64 in `[-1, 1]`. Mono is
 `(frames, 1)`, never 1-D. The house mixdown is `pcm.mean(axis=1)`. Dequantized 8-bit values land in
@@ -212,10 +212,10 @@ than by bytes, so canonicalize once into a memmap and train from that.
 duration, and `pattern_index` is storage order rather than playback order, since no order list is
 stored.
 
-**Two repository methods break at catalog scale.** `PostgresSampleRepository.get_many` and
-`PostgresNoteEventRepository.dominant_note_by_hash` build unchunked `IN` clauses, which exceed
-Postgres's 65,535-parameter limit above about 65k hashes. `names_and_rates_by_hash` and
-`instrument_names_by_hash` *are* chunked at 20,000. For a whole-catalog pass, a single unfiltered
+**One repository method breaks at catalog scale.** `PostgresSampleRepository.get_many` builds an
+unchunked `IN` clause, which exceeds Postgres's 65,535-parameter limit above about 65k hashes.
+`names_and_rates_by_hash`, `instrument_names_by_hash` and
+`PostgresSamplePlaybackRateRepository.get_many` *are* chunked at 20,000. For a whole-catalog pass, a single unfiltered
 scan of `sample_properties` beats any of them.
 
 **Open a training connection read-only.** `connect(url, read_only=True)` skips schema creation and

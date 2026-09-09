@@ -19,6 +19,7 @@ from samplecore.models.sample_properties import SampleOccurrence, XMSampleProper
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.storage.repositories import sample as sample_repository
 from samplecore.storage.repositories.module_instrument import PostgresModuleInstrumentRepository
+from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
@@ -129,7 +130,19 @@ def test_list_page_resolves_the_dominant_occurrence_name(
     assert page[0].display_name == "kick"
 
 
-def test_list_page_resolves_the_dominant_occurrence_rate(
+def test_list_page_plays_a_sample_at_the_rate_its_note_events_settle_on(
+    connection: Connection, stored_sample: Sample, stored_module: Module
+) -> None:
+    """A recorded rate says how the library really sounds a sample, whatever its occurrences declare."""
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick", rate=8363)
+    PostgresSamplePlaybackRateRepository(connection).replace_all({stored_sample.hash: 16726})
+
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
+
+    assert page[0].playback_rate_hz == 16726
+
+
+def test_list_page_falls_back_to_the_dominant_occurrence_rate_where_no_pattern_plays_a_sample(
     connection: Connection, stored_sample: Sample, stored_module: Module
 ) -> None:
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick", rate=8363)
@@ -138,15 +151,15 @@ def test_list_page_resolves_the_dominant_occurrence_rate(
 
     page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
-    assert page[0].dominant_rate_hz == 8363
+    assert page[0].playback_rate_hz == 8363
 
 
-def test_list_page_leaves_dominant_rate_none_for_a_sample_with_no_occurrences(
+def test_list_page_leaves_the_playback_rate_none_for_a_sample_with_no_occurrences(
     connection: Connection, stored_sample: Sample
 ) -> None:
     page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
 
-    assert page[0].dominant_rate_hz is None
+    assert page[0].playback_rate_hz is None
 
 
 def test_list_page_resolves_size_bytes_from_the_sample_itself(connection: Connection, stored_sample: Sample) -> None:

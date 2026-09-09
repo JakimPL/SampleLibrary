@@ -13,12 +13,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { SampleSelection, SampleSummary } from "../api/samples";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
-import { RATING_VALUES } from "./rating";
+import { TableColgroup } from "../shared/TableColgroup";
+import { TABLE_INITIAL_VIEWPORT_HEIGHT_PX, TABLE_OVERSCAN_ROWS, TABLE_ROW_HEIGHT_PX } from "../shared/tableMetrics";
 import { SampleRow } from "./SampleRow";
-
-const ROW_HEIGHT_PX = 44;
-const OVERSCAN_ROWS = 12;
-const INITIAL_VIEWPORT_HEIGHT_PX = 480;
 
 // Calls onLoadMore once the virtualizer's rendered range comes within this many rows of the end
 // of the currently loaded (and possibly filtered) list, so the next window arrives before the
@@ -27,19 +24,24 @@ const LOAD_MORE_TRIGGER_DISTANCE = 20;
 
 const columnHelper = createColumnHelper<SampleSummary>();
 
+// Every column but the name declares its own width, so the name takes whatever the others leave
+// over. Each width holds that column's own widest reading -- five stars and a heart, a formatted
+// byte count, a header word -- since these are read whole or not at all, while a name is the one
+// thing a listing can trail off and still say something with.
 const COLUMNS = [
-    columnHelper.display({ id: "waveform", header: "Waveform" }),
+    columnHelper.display({ id: "waveform", header: "Waveform", size: 76 }),
     columnHelper.accessor(
         (sample) => (sample.display_name.trim() === "" ? UNNAMED_SAMPLE_LABEL : sample.display_name),
         {
             id: "name",
             header: "Name",
+            meta: { flexible: true },
         },
     ),
-    columnHelper.display({ id: "category", header: "Category" }),
-    columnHelper.display({ id: "verdict", header: "Rating" }),
-    columnHelper.accessor("size_bytes", { header: "Size" }),
-    columnHelper.accessor("occurrence_count", { header: "Occurrences" }),
+    columnHelper.display({ id: "category", header: "Category", size: 96 }),
+    columnHelper.display({ id: "verdict", header: "Rating", size: 110 }),
+    columnHelper.accessor("size_bytes", { header: "Size", size: 80 }),
+    columnHelper.accessor("occurrence_count", { header: "Occurrences", size: 84 }),
 ];
 
 interface SamplesTableProps {
@@ -88,9 +90,9 @@ export function SamplesTable({
     const virtualizer = useVirtualizer({
         count: rows.length,
         getScrollElement: () => scrollElementRef.current,
-        estimateSize: () => ROW_HEIGHT_PX,
-        overscan: OVERSCAN_ROWS,
-        initialRect: { width: 0, height: INITIAL_VIEWPORT_HEIGHT_PX },
+        estimateSize: () => TABLE_ROW_HEIGHT_PX,
+        overscan: TABLE_OVERSCAN_ROWS,
+        initialRect: { width: 0, height: TABLE_INITIAL_VIEWPORT_HEIGHT_PX },
     });
     const virtualRows = virtualizer.getVirtualItems();
     const lastVirtualRow = virtualRows[virtualRows.length - 1];
@@ -106,6 +108,13 @@ export function SamplesTable({
 
     return (
         <div className="panel-stack">
+            <div className="panel-status">
+                <span className="cell-muted mono">
+                    {samples.length} of {total} loaded
+                    {isLoadingMore && hasMore ? " · loading…" : ""}
+                </span>
+                {loadMoreError !== null && <span className="error-notice">{loadMoreError}</span>}
+            </div>
             <div className="panel-filter">
                 <input
                     type="text"
@@ -135,23 +144,6 @@ export function SamplesTable({
                     Favorites
                 </button>
                 <select
-                    aria-label="Minimum rating"
-                    value={selection.minimumRating === null ? "" : String(selection.minimumRating)}
-                    onChange={(event) => {
-                        onSelectionChange({
-                            ...selection,
-                            minimumRating: event.target.value === "" ? null : Number(event.target.value),
-                        });
-                    }}
-                >
-                    <option value="">Any rating</option>
-                    {RATING_VALUES.map((value) => (
-                        <option key={value} value={value}>
-                            {value}+
-                        </option>
-                    ))}
-                </select>
-                <select
                     aria-label="Order"
                     value={selection.sort}
                     onChange={(event) => {
@@ -164,14 +156,10 @@ export function SamplesTable({
                     <option value="occurrences">Most used</option>
                     <option value="rating">Best rated</option>
                 </select>
-                <span className="cell-muted mono">
-                    {samples.length} of {total} loaded
-                    {isLoadingMore && hasMore ? " · loading…" : ""}
-                </span>
-                {loadMoreError !== null && <span className="error-notice">{loadMoreError}</span>}
             </div>
             <div className="panel-body" ref={scrollElementRef}>
                 <table className="data">
+                    <TableColgroup table={table} />
                     <thead>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <tr key={headerGroup.id}>
@@ -207,7 +195,13 @@ export function SamplesTable({
                         )}
                         {virtualRows.map((virtualRow) => {
                             const row = rows[virtualRow.index];
-                            return row ? <SampleRow key={row.original.hash} sample={row.original} /> : null;
+                            return row ? (
+                                <SampleRow
+                                    key={row.original.hash}
+                                    sample={row.original}
+                                    groupByEquivalence={groupByEquivalence}
+                                />
+                            ) : null;
                         })}
                         {paddingBottom > 0 && (
                             <tr aria-hidden="true" style={{ height: paddingBottom }}>

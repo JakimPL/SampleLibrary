@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from fastapi import Request
+from fastapi import Depends, Request
 from sqlalchemy import Connection
 
+from samplecore.spectral_distance import SpectralVectors
 from samplecore.storage.database import connect, connect_for_curation
+from sampleserver.spectral_cache import SpectralVectorCache
 
 
 def get_library_root(request: Request) -> Path:
@@ -42,3 +44,9 @@ def get_curation_connection(request: Request) -> Iterator[Connection]:
         yield connection
     finally:
         connection.close()
+
+
+def get_spectral_vectors(request: Request, connection: Connection = Depends(get_connection)) -> SpectralVectors:
+    """The catalog's spectral vectors as one matrix, parsed once per embedding rather than per request."""
+    cache: SpectralVectorCache = request.app.state.spectral_vectors
+    return cache.vectors(connection)

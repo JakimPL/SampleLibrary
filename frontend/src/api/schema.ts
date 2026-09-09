@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    readonly "/modules": {
+    readonly "/api/modules": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -15,7 +15,7 @@ export interface paths {
          * List Modules
          * @description A page of cataloged modules, optionally filtered by tracker format.
          */
-        readonly get: operations["list_modules_modules_get"];
+        readonly get: operations["list_modules_api_modules_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -24,7 +24,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/modules/{module_hash}": {
+    readonly "/api/modules/{module_hash}": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -38,7 +38,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no module is cataloged under this hash.
          */
-        readonly get: operations["get_module_modules__module_hash__get"];
+        readonly get: operations["get_module_api_modules__module_hash__get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -47,7 +47,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples": {
+    readonly "/api/samples": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -63,7 +63,7 @@ export interface paths {
          *     ``group_by_equivalence`` collapses same-page rows sharing an equivalence class afterwards, which
          *     is why the total counts rows rather than groups.
          */
-        readonly get: operations["list_samples_samples_get"];
+        readonly get: operations["list_samples_api_samples_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -72,7 +72,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}": {
+    readonly "/api/samples/{sample_hash}": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -89,7 +89,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly get: operations["get_sample_samples__sample_hash__get"];
+        readonly get: operations["get_sample_api_samples__sample_hash__get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -98,7 +98,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/audio": {
+    readonly "/api/samples/{sample_hash}/audio": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -112,7 +112,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly get: operations["get_sample_audio_samples__sample_hash__audio_get"];
+        readonly get: operations["get_sample_audio_api_samples__sample_hash__audio_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -121,7 +121,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/waveform": {
+    readonly "/api/samples/{sample_hash}/waveform": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -135,7 +135,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly get: operations["get_sample_waveform_samples__sample_hash__waveform_get"];
+        readonly get: operations["get_sample_waveform_api_samples__sample_hash__waveform_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -144,7 +144,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/relations": {
+    readonly "/api/samples/{sample_hash}/relations": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -158,7 +158,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly get: operations["get_sample_relations_samples__sample_hash__relations_get"];
+        readonly get: operations["get_sample_relations_api_samples__sample_hash__relations_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -167,7 +167,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/distance/{other_hash}": {
+    readonly "/api/samples/{sample_hash}/distance/{other_hash}": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -182,7 +182,7 @@ export interface paths {
          *         HTTPException: 404 when either sample has no persisted spectral feature vector yet -- not
          *             yet embedded, or embedded before this metric existed.
          */
-        readonly get: operations["get_sample_distance_samples__sample_hash__distance__other_hash__get"];
+        readonly get: operations["get_sample_distance_api_samples__sample_hash__distance__other_hash__get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -191,7 +191,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/similar": {
+    readonly "/api/samples/{sample_hash}/similar": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -202,10 +202,13 @@ export interface paths {
          * Get Similar Samples
          * @description The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
          *
+         *     Every neighbor is found by measuring this sample against the whole catalog at once, over the
+         *     vectors held parsed for as long as the embedding behind them stands.
+         *
          *     Raises:
          *         HTTPException: 404 when this sample has no persisted spectral feature vector yet.
          */
-        readonly get: operations["get_similar_samples_samples__sample_hash__similar_get"];
+        readonly get: operations["get_similar_samples_api_samples__sample_hash__similar_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -214,7 +217,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/stats": {
+    readonly "/api/stats": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -225,7 +228,7 @@ export interface paths {
          * Get Stats
          * @description A snapshot of the catalog's overall size and composition.
          */
-        readonly get: operations["get_stats_stats_get"];
+        readonly get: operations["get_stats_api_stats_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -234,7 +237,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/cloud": {
+    readonly "/api/cloud": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -244,8 +247,12 @@ export interface paths {
         /**
          * Get Cloud
          * @description Every sample's position in the library's 2D embedding space, as of the latest embedding run.
+         *
+         *     Every lookup behind a point is read whole rather than per hash: this route answers for the entire
+         *     catalog, and asking Postgres about a hundred thousand named hashes costs it more than reading
+         *     each table outright.
          */
-        readonly get: operations["get_cloud_cloud_get"];
+        readonly get: operations["get_cloud_api_cloud_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -254,7 +261,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/cloud/modules": {
+    readonly "/api/cloud/modules": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -268,7 +275,7 @@ export interface paths {
          *     Placeholder until a spectral-distance-based per-module embedding replaces it -- see
          *     `samplecloud.placeholder_modules`.
          */
-        readonly get: operations["get_module_cloud_cloud_modules_get"];
+        readonly get: operations["get_module_cloud_api_cloud_modules_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -277,7 +284,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/curation/annotations/{sample_hash}": {
+    readonly "/api/curation/annotations/{sample_hash}": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -305,7 +312,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly put: operations["set_annotation_curation_annotations__sample_hash__put"];
+        readonly put: operations["set_annotation_api_curation_annotations__sample_hash__put"];
         readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
@@ -313,7 +320,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/curation/annotations/vocabulary": {
+    readonly "/api/curation/annotations/vocabulary": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -324,7 +331,7 @@ export interface paths {
          * Get Label Vocabulary
          * @description Every label already in use, most-used first, for offering a person their own wording back.
          */
-        readonly get: operations["get_label_vocabulary_curation_annotations_vocabulary_get"];
+        readonly get: operations["get_label_vocabulary_api_curation_annotations_vocabulary_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -343,7 +350,8 @@ export interface components {
          *
          *     The label says what the sample is, as free text: it records what a listener actually decided,
          *     ahead of any vocabulary being settled, so it stays unconstrained by `SampleCategory`'s fourteen
-         *     guessed roles and wins wherever it exists. The rating and the favorite mark say what the
+         *     guessed roles and wins wherever it exists. It is kept in upper case, which is the case it is
+         *     shown in, so the vocabulary a person builds by habit collects one entry per wording. The rating and the favorite mark say what the
          *     listener thought of it, which is what turns browsing the library into a collection of a person's
          *     own.
          *
@@ -651,15 +659,6 @@ export interface components {
             /** Thumbnail */
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
         };
-        /**
-         * Note
-         * @description A playable key, counted in semitones above C-0.
-         *
-         *     Trackers number their keyboards from C-0, and the octave a tracker prints is one above the octave the
-         *     same pitch carries in MIDI: tracker C-5 is MIDI note 72. The stored number is the tracker numbering,
-         *     which Impulse Tracker writes directly and FastTracker 2 writes offset by one.
-         */
-        readonly Note: number;
         /** Page[Module] */
         readonly Page_Module_: {
             /** Items */
@@ -749,14 +748,19 @@ export interface components {
         readonly SampleCategory: "kick" | "snare" | "clap" | "hi_hat" | "cymbal" | "percussion" | "bass" | "lead" | "pad" | "pluck" | "vocal" | "fx" | "loop" | "uncategorized";
         /**
          * SampleCloudPoint
-         * @description A SampleCloudCoordinate together with what a viewer needs to color and hear the point.
+         * @description One sample's place in the embedding, with what a viewer needs to color and hear the point.
          *
          *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
          *     sample's own occurrence names together with the names of the instruments reaching it -- rather
-         *     than stored alongside the coordinate itself. ``dominant_rate_hz`` travels with the point so
-         *     clicking one plays it at a real tracker rate; it is ``None`` for a sample with no occurrences.
-         *     ``hand_label`` carries what a person decided this sample is, for a viewer inspecting a point;
-         *     the cloud keeps coloring by ``category``, whose fourteen roles hold a fixed hue each.
+         *     than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
+         *     clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
+         *     the catalog knows no rate for. ``hand_label`` carries what a person decided this sample is, for a
+         *     viewer inspecting a point; the cloud keeps coloring by ``category``, whose fourteen roles hold a
+         *     fixed hue each.
+         *
+         *     This carries the coordinate's own fields rather than inheriting them, since a view of the whole
+         *     catalog is a hundred thousand of these at once: when the run that placed them was computed says
+         *     nothing about any one point, and a timestamp per point is several megabytes over the wire.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -765,20 +769,18 @@ export interface components {
             readonly x: number;
             /** Y */
             readonly y: number;
-            /**
-             * Computed At
-             * Format: date-time
-             */
-            readonly computed_at: string;
             readonly category: components["schemas"]["SampleCategory"];
             /** Hand Label */
             readonly hand_label: string | null;
-            /** Dominant Rate Hz */
-            readonly dominant_rate_hz: number | null;
+            /** Playback Rate Hz */
+            readonly playback_rate_hz: number | null;
         };
         /**
          * SampleDetail
-         * @description A sample together with every module occurrence that references it, and the notes it is played at.
+         * @description A sample together with every module occurrence that references it, and the rates it is heard at.
+         *
+         *     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
+         *     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
          */
         readonly SampleDetail: {
             /** Hash */
@@ -798,14 +800,14 @@ export interface components {
             readonly favorite: boolean;
             /** Size Bytes */
             readonly size_bytes: number;
-            /** Dominant Rate Hz */
-            readonly dominant_rate_hz: number | null;
+            /** Playback Rate Hz */
+            readonly playback_rate_hz: number | null;
             /** Occurrences */
             readonly occurrences: readonly components["schemas"]["SampleOccurrenceDetail"][];
             /** Duration Seconds */
             readonly duration_seconds: number;
-            /** Notes Played */
-            readonly notes_played: readonly components["schemas"]["SampleNotePlayed"][];
+            /** Playback Rates */
+            readonly playback_rates: readonly components["schemas"]["SamplePlaybackRate"][];
             /** Equivalence Member Count */
             readonly equivalence_member_count: number;
         };
@@ -820,24 +822,6 @@ export interface components {
             readonly other_hash: string;
             /** Distance */
             readonly distance: number;
-        };
-        /**
-         * SampleNotePlayed
-         * @description One note a sample is heard at, with how often the library plays it there.
-         *
-         *     ``sounding_rate_hz`` reads the note against the sample's dominant occurrence rate, which is the
-         *     rate a preview would otherwise play at, so a caller can sound the sample as the library really
-         *     uses it rather than at its bare reference rate.
-         */
-        readonly SampleNotePlayed: {
-            /** Sounded Note */
-            readonly sounded_note: number;
-            /** Note Name */
-            readonly note_name: string;
-            /** Event Count */
-            readonly event_count: number;
-            /** Sounding Rate Hz */
-            readonly sounding_rate_hz: number | null;
         };
         /**
          * SampleOccurrence
@@ -876,6 +860,20 @@ export interface components {
             /** Title */
             readonly title: string;
             readonly tracker: components["schemas"]["TrackerFormat"];
+        };
+        /**
+         * SamplePlaybackRate
+         * @description How often one sample is heard at one effective playback rate, across every module playing it.
+         *
+         *     This is the rate a waveform's frames are really read at: one number standing for an occurrence
+         *     rate and a pressed key together. Read as a group, these say which speeds a sample is used at and
+         *     how much each is leaned on, which is what lets a preview sound it the way the library does.
+         */
+        readonly SamplePlaybackRate: {
+            /** Rate Hz */
+            readonly rate_hz: number;
+            /** Event Count */
+            readonly event_count: number;
         };
         /**
          * SampleRelation
@@ -927,9 +925,7 @@ export interface components {
          *     variants this sample belongs to, resolved from the whole catalog's relation graph, and is
          *     ``None`` for a sample with no detected relation. ``equivalence_member_count`` is that class's
          *     total size (1 for a sample with no class), independent of how many of its members are present on
-         *     this page. ``dominant_note`` is the note the library plays this sample at most often, which with
-         *     ``dominant_rate_hz`` gives the pitch a preview should sound at; it is ``None`` for a sample whose
-         *     modules have not had their patterns read, and for one no pattern plays.
+         *     this page.
          */
         readonly SampleSummary: {
             /** Hash */
@@ -949,13 +945,12 @@ export interface components {
             readonly favorite: boolean;
             /** Size Bytes */
             readonly size_bytes: number;
-            /** Dominant Rate Hz */
-            readonly dominant_rate_hz: number | null;
+            /** Playback Rate Hz */
+            readonly playback_rate_hz: number | null;
             /** Occurrence Count */
             readonly occurrence_count: number;
             /** Thumbnail */
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
-            readonly dominant_note: components["schemas"]["Note"] | null;
             /** Equivalence Class Hash */
             readonly equivalence_class_hash: string | null;
             /** Equivalence Member Count */
@@ -965,16 +960,16 @@ export interface components {
          * SimilarSample
          * @description One neighbor in a sample's spectral-distance nearest-neighbor listing.
          *
-         *     ``dominant_rate_hz`` travels with the neighbor so a listener hears it at a real tracker rate
-         *     rather than at the stored file's own header rate; it is ``None`` for a sample with no occurrences.
+         *     ``playback_rate_hz`` travels with the neighbor so a listener hears it at the speed the library
+         *     really plays it; it is ``None`` for a sample the catalog knows no rate for.
          */
         readonly SimilarSample: {
             /** Hash */
             readonly hash: string;
             /** Distance */
             readonly distance: number;
-            /** Dominant Rate Hz */
-            readonly dominant_rate_hz: number | null;
+            /** Playback Rate Hz */
+            readonly playback_rate_hz: number | null;
         };
         /**
          * TrackerFormat
@@ -1084,7 +1079,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    readonly list_modules_modules_get: {
+    readonly list_modules_api_modules_get: {
         readonly parameters: {
             readonly query?: {
                 readonly limit?: number;
@@ -1117,7 +1112,7 @@ export interface operations {
             };
         };
     };
-    readonly get_module_modules__module_hash__get: {
+    readonly get_module_api_modules__module_hash__get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1148,7 +1143,7 @@ export interface operations {
             };
         };
     };
-    readonly list_samples_samples_get: {
+    readonly list_samples_api_samples_get: {
         readonly parameters: {
             readonly query?: {
                 readonly limit?: number;
@@ -1184,7 +1179,7 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_samples__sample_hash__get: {
+    readonly get_sample_api_samples__sample_hash__get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1215,7 +1210,7 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_audio_samples__sample_hash__audio_get: {
+    readonly get_sample_audio_api_samples__sample_hash__audio_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1246,7 +1241,7 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_waveform_samples__sample_hash__waveform_get: {
+    readonly get_sample_waveform_api_samples__sample_hash__waveform_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1277,7 +1272,7 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_relations_samples__sample_hash__relations_get: {
+    readonly get_sample_relations_api_samples__sample_hash__relations_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1308,7 +1303,7 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_distance_samples__sample_hash__distance__other_hash__get: {
+    readonly get_sample_distance_api_samples__sample_hash__distance__other_hash__get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1340,7 +1335,7 @@ export interface operations {
             };
         };
     };
-    readonly get_similar_samples_samples__sample_hash__similar_get: {
+    readonly get_similar_samples_api_samples__sample_hash__similar_get: {
         readonly parameters: {
             readonly query?: {
                 readonly limit?: number;
@@ -1373,7 +1368,7 @@ export interface operations {
             };
         };
     };
-    readonly get_stats_stats_get: {
+    readonly get_stats_api_stats_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1393,7 +1388,7 @@ export interface operations {
             };
         };
     };
-    readonly get_cloud_cloud_get: {
+    readonly get_cloud_api_cloud_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1413,7 +1408,7 @@ export interface operations {
             };
         };
     };
-    readonly get_module_cloud_cloud_modules_get: {
+    readonly get_module_cloud_api_cloud_modules_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1433,7 +1428,7 @@ export interface operations {
             };
         };
     };
-    readonly set_annotation_curation_annotations__sample_hash__put: {
+    readonly set_annotation_api_curation_annotations__sample_hash__put: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1468,7 +1463,7 @@ export interface operations {
             };
         };
     };
-    readonly get_label_vocabulary_curation_annotations_vocabulary_get: {
+    readonly get_label_vocabulary_api_curation_annotations_vocabulary_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;

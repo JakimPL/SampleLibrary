@@ -1,4 +1,4 @@
-import { requestJson } from "./client";
+import { apiUrl, requestJson } from "./client";
 import type { components } from "./schema";
 
 export type SampleDetail = components["schemas"]["SampleDetail"];
@@ -13,11 +13,10 @@ export type SampleSort = components["schemas"]["SampleSort"];
 /** Which samples a listing walks, and the order it walks them in. */
 export interface SampleSelection {
     readonly favoritesOnly: boolean;
-    readonly minimumRating: number | null;
     readonly sort: SampleSort;
 }
 
-export const WHOLE_CATALOG: SampleSelection = { favoritesOnly: false, minimumRating: null, sort: "occurrences" };
+export const WHOLE_CATALOG: SampleSelection = { favoritesOnly: false, sort: "occurrences" };
 
 export interface ListSamplesParams {
     readonly limit: number;
@@ -34,9 +33,6 @@ export async function listSamples(params: ListSamplesParams): Promise<SamplePage
         favorites_only: String(params.selection.favoritesOnly),
         sort: params.selection.sort,
     });
-    if (params.selection.minimumRating !== null) {
-        query.set("minimum_rating", String(params.selection.minimumRating));
-    }
     return requestJson<SamplePage>(`/samples?${query.toString()}`);
 }
 
@@ -61,5 +57,5 @@ export async function getSampleWaveform(sampleHash: string): Promise<readonly Wa
 }
 
 export function sampleAudioUrl(sampleHash: string): string {
-    return `/samples/${sampleHash}/audio`;
+    return apiUrl(`/samples/${sampleHash}/audio`);
 }

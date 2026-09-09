@@ -15,6 +15,8 @@ from samplecore.storage.repositories.sample_properties import PostgresSampleProp
 
 PRESSED_NOTE = Note(60)
 SOUNDED_NOTE = Note(72)
+OCCURRENCE_RATE = 8363
+TRANSPOSED_RATE = 16726
 
 
 def _note_event(
@@ -41,12 +43,24 @@ def _note_event(
 
 @pytest.fixture
 def stored_occurrence(connection: Connection, stored_sample: Sample, stored_module: Module) -> None:
+    _store_occurrence(connection, stored_sample, stored_module, instrument_index=0, rate=OCCURRENCE_RATE)
+
+
+@pytest.fixture
+def transposed_occurrence(connection: Connection, stored_sample: Sample, stored_module: Module) -> None:
+    """The same waveform reached through a second instrument that plays it an octave higher."""
+    _store_occurrence(connection, stored_sample, stored_module, instrument_index=1, rate=TRANSPOSED_RATE)
+
+
+def _store_occurrence(
+    connection: Connection, sample: Sample, module: Module, *, instrument_index: int, rate: int
+) -> None:
     PostgresSamplePropertiesRepository(connection).upsert(
         XMSampleProperties(
-            sample_hash=stored_sample.hash,
-            occurrence=SampleOccurrence(module_hash=stored_module.hash, instrument_index=0, sample_slot=0),
+            sample_hash=sample.hash,
+            occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=instrument_index, sample_slot=0),
             name="bell",
-            rate=8363,
+            rate=rate,
             volume=64,
             tuning=Tuning(relative_note=0, finetune=0),
         )
@@ -159,6 +173,35 @@ def test_note_usage_counts_the_events_reaching_a_sample_at_each_note(
     usage = repository.note_usage_for_sample(stored_sample.hash)
 
     assert [(item.sounded_note, item.event_count) for item in usage] == [(PRESSED_NOTE, 1), (SOUNDED_NOTE, 2)]
+    assert {item.reference_rate_hz for item in usage} == {OCCURRENCE_RATE}
+
+
+def test_note_usage_keeps_each_note_joined_to_the_rate_it_was_struck_against(
+    connection: Connection,
+    stored_sample: Sample,
+    stored_module: Module,
+    stored_occurrence: None,
+    transposed_occurrence: None,
+) -> None:
+    """The same key against two occurrence rates sounds two speeds, so the pair stays together.
+
+    A grouping that counted notes alone would report one note played twice, losing the fact that one
+    of those two events reads the waveform at twice the speed of the other.
+    """
+    repository = PostgresNoteEventRepository(connection)
+    repository.insert_many(
+        [
+            _note_event(stored_module, row_index=0, instrument_index=0),
+            _note_event(stored_module, row_index=1, instrument_index=1),
+        ]
+    )
+
+    usage = repository.note_usage_for_sample(stored_sample.hash)
+
+    assert [(item.reference_rate_hz, item.sounded_note, item.event_count) for item in usage] == [
+        (OCCURRENCE_RATE, SOUNDED_NOTE, 1),
+        (TRANSPOSED_RATE, SOUNDED_NOTE, 1),
+    ]
 
 
 def test_note_usage_leaves_out_an_event_reaching_no_cataloged_occurrence(
@@ -183,40 +226,35 @@ def test_note_usage_for_a_sample_no_pattern_plays_returns_nothing(
     assert PostgresNoteEventRepository(connection).note_usage_for_sample(stored_sample.hash) == ()
 
 
-def test_the_dominant_note_is_the_one_the_most_events_reach(
-    connection: Connection, stored_sample: Sample, stored_module: Module, stored_occurrence: None
+def test_note_usage_for_every_sample_names_the_hash_each_group_belongs_to(
+    connection: Connection,
+    stored_sample: Sample,
+    stored_module: Module,
+    stored_occurrence: None,
+    transposed_occurrence: None,
 ) -> None:
     repository = PostgresNoteEventRepository(connection)
     repository.insert_many(
         [
-            _note_event(stored_module, row_index=0, sounded_note=PRESSED_NOTE),
-            _note_event(stored_module, row_index=1, sounded_note=SOUNDED_NOTE),
-            _note_event(stored_module, row_index=2, sounded_note=SOUNDED_NOTE),
+            _note_event(stored_module, row_index=0, instrument_index=0),
+            _note_event(stored_module, row_index=1, instrument_index=0, sounded_note=PRESSED_NOTE),
+            _note_event(stored_module, row_index=2, instrument_index=1),
         ]
     )
 
-    assert repository.dominant_note_by_hash([stored_sample.hash]) == {stored_sample.hash: SOUNDED_NOTE}
-
-
-def test_a_tied_dominant_note_resolves_to_the_lower_of_the_two(
-    connection: Connection, stored_sample: Sample, stored_module: Module, stored_occurrence: None
-) -> None:
-    repository = PostgresNoteEventRepository(connection)
-    repository.insert_many(
-        [
-            _note_event(stored_module, row_index=0, sounded_note=SOUNDED_NOTE),
-            _note_event(stored_module, row_index=1, sounded_note=PRESSED_NOTE),
-        ]
+    usage = sorted(
+        (sample_hash, item.reference_rate_hz, item.sounded_note, item.event_count)
+        for sample_hash, item in repository.note_usage_for_every_sample()
     )
 
-    assert repository.dominant_note_by_hash([stored_sample.hash]) == {stored_sample.hash: PRESSED_NOTE}
+    assert usage == [
+        (stored_sample.hash, OCCURRENCE_RATE, PRESSED_NOTE, 1),
+        (stored_sample.hash, OCCURRENCE_RATE, SOUNDED_NOTE, 1),
+        (stored_sample.hash, TRANSPOSED_RATE, SOUNDED_NOTE, 1),
+    ]
 
 
-def test_dominant_note_leaves_out_a_sample_no_pattern_plays(
+def test_note_usage_for_every_sample_leaves_out_a_sample_no_pattern_plays(
     connection: Connection, stored_sample: Sample, stored_occurrence: None
 ) -> None:
-    assert PostgresNoteEventRepository(connection).dominant_note_by_hash([stored_sample.hash]) == {}
-
-
-def test_dominant_note_with_no_hashes_returns_nothing(connection: Connection) -> None:
-    assert PostgresNoteEventRepository(connection).dominant_note_by_hash([]) == {}
+    assert list(PostgresNoteEventRepository(connection).note_usage_for_every_sample()) == []

@@ -18,13 +18,6 @@ from sampleextract.run import run_extraction
 
 
 @pytest.fixture
-def config(tmp_path: Path) -> LibraryConfig:
-    source = tmp_path / "source"
-    source.mkdir()
-    return LibraryConfig(module_source_directory=source, library_root=tmp_path / "library", database_url="unused")
-
-
-@pytest.fixture
 def cataloged_corpus(
     connection: Connection,
     config: LibraryConfig,

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,14 +9,25 @@ import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
 const { instances, createMock, getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => {
     class FakeWaveSurfer {
+        private readonly listeners = new Map<string, ((...args: unknown[]) => void)[]>();
         readonly play = vi.fn().mockResolvedValue(undefined);
         readonly pause = vi.fn();
         readonly setTime = vi.fn();
         readonly setPlaybackRate = vi.fn();
         readonly setOptions = vi.fn();
         readonly destroy = vi.fn();
-        on(): () => void {
+
+        on(event: string, callback: (...args: unknown[]) => void): () => void {
+            const callbacks = this.listeners.get(event) ?? [];
+            callbacks.push(callback);
+            this.listeners.set(event, callbacks);
             return () => undefined;
+        }
+
+        emit(event: string, ...args: unknown[]): void {
+            for (const callback of this.listeners.get(event) ?? []) {
+                callback(...args);
+            }
         }
     }
     const instances: FakeWaveSurfer[] = [];
@@ -46,17 +57,14 @@ function latestInstance(): (typeof instances)[number] {
     return instance;
 }
 
-interface NotePlayedFixture {
-    readonly sounded_note: number;
-    readonly note_name: string;
+interface PlaybackRateFixture {
+    readonly rate_hz: number;
     readonly event_count: number;
-    readonly sounding_rate_hz: number | null;
 }
 
 interface SampleDetailOverrides {
-    readonly dominantRateHz: number | null;
-    readonly rates: number[];
-    readonly notesPlayed?: readonly NotePlayedFixture[];
+    readonly playbackRateHz: number | null;
+    readonly playbackRates?: readonly PlaybackRateFixture[];
 }
 
 function buildSampleDetail(overrides: SampleDetailOverrides): unknown {
@@ -69,20 +77,9 @@ function buildSampleDetail(overrides: SampleDetailOverrides): unknown {
         category: "kick",
         size_bytes: 8192,
         duration_seconds: 0.09,
-        dominant_rate_hz: overrides.dominantRateHz,
-        notes_played: overrides.notesPlayed ?? [],
-        occurrences: overrides.rates.map((rate, index) => ({
-            properties: {
-                sample_hash: "abc",
-                occurrence: { module_hash: "module-1", instrument_index: 0, sample_slot: index },
-                name: "kick",
-                rate,
-                volume: 64,
-                tracker: "xm",
-                tuning: { relative_note: 0, finetune: 0 },
-            },
-            module: { hash: "module-1", title: "A Song", filename: "song.xm", tracker: "xm" },
-        })),
+        playback_rate_hz: overrides.playbackRateHz,
+        playback_rates: overrides.playbackRates ?? [],
+        occurrences: [],
     };
 }
 
@@ -93,8 +90,16 @@ describe("WaveformPanel", () => {
         expect(screen.getByText(/No sample focused yet/)).toBeInTheDocument();
     });
 
-    it("plays the focused sample at its dominant rate by default", async () => {
-        getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: 22050, rates: [8363, 22050, 22050] }));
+    it("plays the focused sample at the rate the library really sounds it at", async () => {
+        getSample.mockResolvedValue(
+            buildSampleDetail({
+                playbackRateHz: 22050,
+                playbackRates: [
+                    { rate_hz: 22050, event_count: 40 },
+                    { rate_hz: 8363, event_count: 2 },
+                ],
+            }),
+        );
         getSampleRelations.mockResolvedValue([]);
         getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
@@ -104,13 +109,25 @@ describe("WaveformPanel", () => {
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
+        act(() => {
+            latestInstance().emit("ready", 1.0);
+        });
+
         await waitFor(() => {
             expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(22050 / 44100, false);
         });
     });
 
-    it("lets the user switch to a different occurrence's rate", async () => {
-        getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: 22050, rates: [8363, 22050] }));
+    it("lets the user hear another rate the library plays the sample at", async () => {
+        getSample.mockResolvedValue(
+            buildSampleDetail({
+                playbackRateHz: 22050,
+                playbackRates: [
+                    { rate_hz: 22050, event_count: 40 },
+                    { rate_hz: 8363, event_count: 2 },
+                ],
+            }),
+        );
         getSampleRelations.mockResolvedValue([]);
         getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
@@ -126,17 +143,8 @@ describe("WaveformPanel", () => {
         });
     });
 
-    it("opens at the note the library plays the sample at most, not at its reference rate", async () => {
-        getSample.mockResolvedValue(
-            buildSampleDetail({
-                dominantRateHz: 8363,
-                rates: [8363],
-                notesPlayed: [
-                    { sounded_note: 60, note_name: "C-5", event_count: 2, sounding_rate_hz: 8363 },
-                    { sounded_note: 36, note_name: "C-3", event_count: 40, sounding_rate_hz: 2090.75 },
-                ],
-            }),
-        );
+    it("shows an honest empty state for a sample the catalog knows no rate for", async () => {
+        getSample.mockResolvedValue(buildSampleDetail({ playbackRateHz: null }));
         getSampleRelations.mockResolvedValue([]);
         getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
@@ -144,28 +152,20 @@ describe("WaveformPanel", () => {
         render(<WaveformPanel />);
 
         await waitFor(() => {
-            expect(screen.getByLabelText("Note")).toHaveValue("36");
-        });
-        await waitFor(() => {
-            expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 4 / 44100, false);
-        });
-    });
-
-    it("shows an honest empty state for a sample with no occurrences", async () => {
-        getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: null, rates: [] }));
-        getSampleRelations.mockResolvedValue([]);
-        getSimilarSamples.mockResolvedValue([]);
-        useSelectionStore.getState().focusSample("abc");
-
-        render(<WaveformPanel />);
-
-        await waitFor(() => {
-            expect(screen.getByText(/no occurrences to play at a real tracker rate/)).toBeInTheDocument();
+            expect(screen.getByText(/no rate the library is known to play it at/)).toBeInTheDocument();
         });
     });
 
     it("shares one request with SampleDetailPanel for the same focused sample", async () => {
-        getSample.mockResolvedValue(buildSampleDetail({ dominantRateHz: 8363, rates: [8363] }));
+        getSample.mockResolvedValue(
+            buildSampleDetail({
+                playbackRateHz: 8363,
+                playbackRates: [
+                    { rate_hz: 8363, event_count: 2 },
+                    { rate_hz: 16726, event_count: 1 },
+                ],
+            }),
+        );
         getSampleRelations.mockResolvedValue([]);
         getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");

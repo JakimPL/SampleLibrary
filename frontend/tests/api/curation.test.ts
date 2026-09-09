@@ -21,7 +21,7 @@ describe("setSampleAnnotation", () => {
 
         await setSampleAnnotation(SAMPLE_HASH, { label: "warm pad", rating: 4, favorite: true }, "sample");
 
-        expect(fetchMock).toHaveBeenCalledWith(`/curation/annotations/${SAMPLE_HASH}`, {
+        expect(fetchMock).toHaveBeenCalledWith(`/api/curation/annotations/${SAMPLE_HASH}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ label: "warm pad", rating: 4, favorite: true, scope: "sample" }),
@@ -56,7 +56,7 @@ describe("clearSampleAnnotation", () => {
 
         await clearSampleAnnotation(SAMPLE_HASH, "sample");
 
-        expect(fetchMock).toHaveBeenCalledWith(`/curation/annotations/${SAMPLE_HASH}`, {
+        expect(fetchMock).toHaveBeenCalledWith(`/api/curation/annotations/${SAMPLE_HASH}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ label: null, rating: null, favorite: false, scope: "sample" }),
@@ -70,6 +70,6 @@ describe("getLabelVocabulary", () => {
 
         await getLabelVocabulary();
 
-        expect(fetchMock).toHaveBeenCalledWith("/curation/annotations/vocabulary");
+        expect(fetchMock).toHaveBeenCalledWith("/api/curation/annotations/vocabulary");
     });
 });

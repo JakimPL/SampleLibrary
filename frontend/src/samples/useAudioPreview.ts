@@ -1,13 +1,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 import { sampleAudioUrl } from "../api/samples";
-import { playbackRateFor, REFERENCE_NOTE, soundingRateHz } from "./nominalRate";
-
-/** The pitch to sound a preview at: an occurrence's own rate, and the note to play against it. */
-export interface PreviewPitch {
-    readonly rateHz: number;
-    readonly soundedNote: number;
-}
+import { playbackRateFor } from "./nominalRate";
 
 let audioElement: HTMLAudioElement | null = null;
 let playingHash: string | null = null;
@@ -25,23 +19,28 @@ function stop(): void {
     notify();
 }
 
-/** How fast to run the stored file so a preview sounds at the pitch its caller named.
+/** How fast to run the stored file so a preview sounds at the rate its caller named.
  *
  * A caller with no rate to hand passes ``null`` and hears the file as stored, which is the honest
- * reading of a sample whose occurrences the catalog does not know.
+ * reading of a sample whose rate the catalog does not know.
  */
-export function previewPlaybackRate(pitch: PreviewPitch | null): number {
-    return pitch === null ? 1 : playbackRateFor(soundingRateHz(pitch.rateHz, pitch.soundedNote));
+export function previewPlaybackRate(playbackRateHz: number | null): number {
+    return playbackRateHz === null ? 1 : playbackRateFor(playbackRateHz);
 }
 
-function play(sampleHash: string, pitch: PreviewPitch | null): void {
+function play(sampleHash: string, playbackRateHz: number | null): void {
     audioElement ??= new Audio();
     audioElement.addEventListener("ended", stop, { once: true });
-    // A browser keeps a rate change from moving the pitch unless told otherwise, which is the
-    // opposite of what a tracker does: an occurrence's rate is its pitch, not a tempo control.
-    audioElement.preservesPitch = false;
-    audioElement.playbackRate = previewPlaybackRate(pitch);
     audioElement.src = sampleAudioUrl(sampleHash);
+    // The rate is named after the source, and stated twice: taking on a source sets a media
+    // element's rate back to its default, so the default carries the sample's rate too and every
+    // reading of the file lands on it. A browser also keeps a rate change from moving the pitch
+    // unless told otherwise, which is the opposite of what a tracker does: the rate a sample is
+    // read at is its pitch, not a tempo control.
+    const playbackRate = previewPlaybackRate(playbackRateHz);
+    audioElement.preservesPitch = false;
+    audioElement.defaultPlaybackRate = playbackRate;
+    audioElement.playbackRate = playbackRate;
     playingHash = sampleHash;
     notify();
     audioElement.play().catch(stop);
@@ -60,26 +59,21 @@ function getSnapshot(): string | null {
 
 export interface AudioPreview {
     readonly playingHash: string | null;
-    readonly play: (sampleHash: string, pitch: PreviewPitch | null) => void;
+    readonly play: (sampleHash: string, playbackRateHz: number | null) => void;
 }
 
 /** One shared audio element every Thumbnail plays through, so starting a new preview always stops
  * whichever one is currently playing rather than layering two sounds at once.
  *
- * A stored WAV carries a fixed header rate, so a caller that knows the rate and note the library
- * plays a sample at passes them and hears it at that pitch. Passing ``null`` sounds the file as
+ * A stored WAV carries a fixed header rate, so a caller that knows the rate the library really
+ * plays a sample at passes it and hears it at that speed. Passing ``null`` sounds the file as
  * stored, which is what a caller with no rate to hand can honestly do.
  */
 export function useAudioPreview(): AudioPreview {
     const currentlyPlayingHash = useSyncExternalStore(subscribe, getSnapshot);
-    const playSample = useCallback((sampleHash: string, pitch: PreviewPitch | null) => {
-        play(sampleHash, pitch);
+    const playSample = useCallback((sampleHash: string, playbackRateHz: number | null) => {
+        play(sampleHash, playbackRateHz);
     }, []);
 
     return { playingHash: currentlyPlayingHash, play: playSample };
-}
-
-/** The pitch for a listing row that knows a rate but not the note it is usually played at. */
-export function pitchAtReferenceNote(rateHz: number | null | undefined): PreviewPitch | null {
-    return rateHz === null || rateHz === undefined ? null : { rateHz, soundedNote: REFERENCE_NOTE };
 }

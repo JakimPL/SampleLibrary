@@ -47,7 +47,7 @@ describe("CloudHoverTooltip", () => {
             display_name: "kick",
             category: "kick",
             hand_label: null,
-            dominant_rate_hz: 8363,
+            playback_rate_hz: 8363,
             duration_seconds: 0.09,
         });
         getSampleWaveform.mockResolvedValue([{ minimum: -0.5, maximum: 0.5 }]);
@@ -72,7 +72,7 @@ describe("CloudHoverTooltip", () => {
             display_name: "",
             category: "uncategorized",
             hand_label: null,
-            dominant_rate_hz: null,
+            playback_rate_hz: null,
             duration_seconds: 0.09,
         });
         getSampleWaveform.mockResolvedValue([]);

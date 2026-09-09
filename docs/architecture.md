@@ -12,11 +12,11 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 | Package | Owns | Depends on |
 |---|---|---|
-| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the anchoring rule that keeps a hand label attached to its sample, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
-| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each), the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
+| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the pitch rule that turns an occurrence rate and a pressed key into the one rate a sample is really played at, the anchoring rule that keeps a hand label attached to its sample, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
+| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each) and folding those notes into the rate each sample is heard at, the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors, UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the keyword table names alike, and whether it groups what the note events say the library plays alike. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
 | `samplemorph` | The decodable-representation pipeline: canonicalizing a sample into a fixed-size sound image on a log-frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a pluggable `Vocoder` turning a magnitude spectrogram back into audible frames, including a learned one taught the phase such magnitudes carry. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner -- which is what leaves the representation invertible where the sample cloud's descriptors are not. Depends on `samplecore` only. | `samplecore`, `librosa`, `scikit-learn`, `torch` (the `morph` extra) |
-| `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
+| `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples. Every route is served under `API_PREFIX` (`/api`), which keeps the whole API inside one path segment and leaves every other path to the single-page application's own routes. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn` (the `server` extra) |
 
 ## Boundaries the import-linter contracts enforce
 
@@ -60,9 +60,18 @@ decides: a keymap routes a key onto a sample *and* the note that sample sounds a
 composer wrote and the pitch a listener hears are separate values, and Impulse Tracker is the format
 that regularly makes them differ. Extraction consumes the keymap and records its outcome, which is
 what lets a reader reach the pitch a sample is heard at without holding a routing table of its own.
-The sounding rate follows from that note and the occurrence's own rate
-(`rate * 2 ** ((sounded_note - 60) / 12)`, tracker C-5 being the rate's reference key), so it is
-computed where it is needed. A key reaching a sample below `minimum_sample_frames` keeps its note and
+The rate a sample's frames are really read at follows from that note *and* the occurrence's own
+rate together (`rate * 2 ** ((sounded_note - 60) / 12)`, tracker C-5 being the rate's reference
+key), which is why the two stay joined wherever they are counted: the same key struck against two
+occurrences of one waveform sounds two speeds, and two different pairs meet at one speed -- a
+waveform transposed down an octave and played an octave higher sounds exactly as the untransposed
+one does. Both pieces of a tracker's own tuning are already in that rate: `trackmod` folds XM's
+`relative_note`/`finetune` and MOD's finetune byte into the stored rate at parse time, and IT and
+S3M carry the transposition in the keymap the sounded note comes from, so the pair is the whole
+story. `samplecore.pitch` owns the rule and rounds an effective rate to whole hertz, tracker rates
+being whole numbers and a fraction of a hertz sitting far below hearing.
+
+A key reaching a sample below `minimum_sample_frames` keeps its note and
 leaves its slot open, since the catalog holds no occurrence to name; a cell stating no instrument
 leaves both open, its routing being a fact about how the song is played rather than what the cell
 holds. `module_instrument` records each voice slot the same numbering addresses, and its names feed
@@ -70,6 +79,17 @@ holds. `module_instrument` records each voice slot the same numbering addresses,
 the waveforms its keys reach, so a sample stored as "smp03" is described only there.
 `module_note_extraction` records which modules have been read, so a module whose patterns press no
 keys still reads as finished and a resumed pass spares it a second parse.
+
+`sample_playback_rate` holds the one rate each sample is heard at most often, which is what the
+whole application plays a sample back at -- a click in the cloud, a listing thumbnail and the
+waveform panel all sound the same sample identically because all three read this one number.
+Answering it means folding tens of millions of note events against the occurrences they reach, some
+fourteen seconds of work over this catalog, so `samplenotes` takes it once at the end of its own
+pass and writes the whole answer down; a served request reads it per sample. A sample no pattern
+plays has no row, and a reader falls back to `choose_dominant_rate` over its occurrences' own rates
+-- what a module declares the waveform plays at, which is the closest reading left. Both rules break
+a tie towards the lower rate, so a rate drawn from note events and one drawn from occurrence rates
+are settled the same way.
 
 A module every one of whose samples falls under `minimum_sample_frames` is ingested and kept like
 any other, and stays reachable by its own hash and through `PostgresModuleRepository.list_all` for
@@ -91,6 +111,11 @@ reach by construction rather than by an exemption list somebody has to keep curr
 reason it carries no foreign key into the catalog: one would either delete these rows along with the
 samples or block the purge outright. A test in `tests/scripts/test_reset_library.py` pins exactly
 that, seeding an annotation and asserting it survives a full reset.
+
+A label is stored in upper case, which is the case it is shown in: `LabelText` normalizes it at the
+model boundary, so every path that records one — the curation route, a JSONL import, a relink —
+agrees, and the vocabulary offered back gathers one entry per wording rather than one per way of
+typing it.
 
 One row holds all three decisions, and exists because at least one of them was made — a CHECK
 constraint says so, and `SampleAnnotation`'s own validator says so alongside it. Writes are
@@ -118,6 +143,15 @@ hundred thousand samples browsable as a collection. Since every listing request 
 schema, `create_app`'s startup prepares it once: the read-only connection every route uses can create
 nothing, so a database the offline pipelines have never written to would otherwise fail to serve a
 listing at all.
+
+Every one of these decisions is made where a sample is met: the samples listing edits a category,
+a rating and a favorite mark in the row itself, and the detail panel offers the same three. A
+wording is recorded on Enter or on leaving the field, and emptying the field takes the hand label
+back so the guessed category shows again -- one gesture to correct a wrong guess and one to undo it.
+An edit reaches exactly what the row it was made in stands for: the whole equivalence class while
+the listing groups near-duplicates together, and the one sample otherwise. `useAnnotationWriter` is
+the single path all of them write through, so every row, badge and panel showing that sample follows
+one write at once.
 
 `sampleannotations export` writes every annotation to JSONL as the copy that outlives the database, and
 `import` merges a file back without clearing anything.
@@ -206,6 +240,13 @@ app itself. The root `Dockerfile` builds a runtime image for `sampleserver` alon
 the `server` extra (`fastapi`, `uvicorn`) -- `sampleextract`/`samplecloud`'s own heavier
 dependencies (`librosa`, `umap-learn`, `scikit-learn`) never reach that image, mirroring the
 `sampleserver never imports the offline batch pipelines` import-linter contract above.
+
+Every route the API serves sits under `/api` (`sampleserver.app.API_PREFIX`), so one path always
+names one thing: the frontend reaches `/api/samples` while a person's browser holds `/samples/{hash}`
+as a client route of its own. That is what lets the Vite dev server forward a single prefix to the
+backend and answer everything else with the application itself, so reloading a sample's own URL
+brings back the dashboard.
+
 `docker-compose.yml` adds a `postgres` service alongside it (a named volume for persistence), as a
 worked example of the two running together; a real deployment points `database_url`/`SAMPLELIBRARY_DATABASE_URL` at
 whatever Postgres instance it actually runs against, container or otherwise. Local development runs
@@ -219,6 +260,16 @@ correctly with no shared state between workers. The library's data directory and
 pointing at its in-container path are supplied at `docker run` time (a bind mount plus
 `SAMPLELIBRARY_CONFIG`), never baked into the image, mirroring `config.toml` never being committed
 to the repository.
+
+Three routes answer for the whole catalog at once — the cloud's hundred thousand points, a
+nearest-neighbor search, the library statistics — and each is written for that shape rather than
+scaled up from a per-sample one. A whole-catalog reader scans a table outright instead of naming
+every hash it wants (`names_and_rates_for_every_sample` beside `names_and_rates_by_hash`), since a
+hundred thousand bound parameters cost Postgres more than reading every row there is. The statistics
+count and total in one grouped query rather than building a model per sample to sum. The spectral
+vectors, which are stored as text and take a couple of seconds to parse, are held per application in
+`SpectralVectorCache` and re-read only when the table's own revision moves, so a search costs one
+cheap query rather than a fresh parse of the whole embedding.
 
 Postgres supports genuine concurrent readers *and* writers against the same database, unlike this
 project's previous engine (DuckDB), which excluded every other connection -- read-only included --
