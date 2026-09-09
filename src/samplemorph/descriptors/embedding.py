@@ -13,8 +13,7 @@ from samplecore.models.experiment import LEARNED_BACKEND_NAME, MODEL_PARAMETER, 
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplemorph.descriptors.learned import LearnedDescriptor
-from samplemorph.training.descriptor_cache import GridCache
-from samplemorph.training.descriptor_data import STORED_VIEW
+from samplemorph.training.descriptor_cache import STORED_VIEW, GridCache
 
 EMBEDDING_BATCH_SIZE: Final[int] = 512
 INSERT_CHUNK_SIZE: Final[int] = 5_000

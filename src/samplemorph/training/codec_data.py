@@ -10,8 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from samplemorph.descriptors.learned import LearnedDescriptor
 from samplemorph.training.codec_settings import CodecTrainingSettings
-from samplemorph.training.descriptor_cache import GRIDS_FILE_NAME, GridCache
-from samplemorph.training.descriptor_data import STORED_VIEW, GridSource
+from samplemorph.training.descriptor_cache import GRIDS_FILE_NAME, STORED_VIEW, GridCache, GridSource
 from samplemorph.training.loaders import build_loader
 
 # (position in the corpus, the stored grid at full resolution, its canonical duration)

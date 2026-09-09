@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from typing import TYPE_CHECKING
 
 from samplemorph.training.run_settings import (
     DEFAULT_ACCELERATOR,
@@ -14,7 +15,9 @@ from samplemorph.training.run_settings import (
     TRAINING_PRECISIONS,
     RunSettings,
 )
-from samplemorph.training.runs import TrainingOutcome
+
+if TYPE_CHECKING:
+    from samplemorph.training.runs import TrainingOutcome
 
 _logger = logging.getLogger(__name__)
 

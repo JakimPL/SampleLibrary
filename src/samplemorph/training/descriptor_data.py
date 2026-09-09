@@ -14,12 +14,11 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 from samplecore.labeling.labels import SampleLabel
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from samplemorph.training.descriptor_cache import GRIDS_FILE_NAME, GridCache
+from samplemorph.training.descriptor_cache import GRIDS_FILE_NAME, STORED_VIEW, GridCache, GridSource
 from samplemorph.training.descriptor_settings import DescriptorTrainingSettings
 from samplemorph.training.loaders import build_loader
 
 NO_LABEL: Final[int] = -1
-STORED_VIEW: Final[int] = 0
 
 # (position in the corpus, stored grid, retuned grid, stored duration, retuned duration)
 DescriptorBatchItem = tuple[int, NDArray[np.float32], NDArray[np.float32], np.float32, np.float32]
@@ -107,23 +106,6 @@ def load_descriptor_corpus(
         label_position=label_position,
         held_out_labels=held_out,
     )
-
-
-@dataclass(frozen=True)
-class GridSource:
-    """What a reading set needs to know about a cache without holding its mapped grids.
-
-    A worker started fresh maps the file itself from the directory, so handing it this rather than
-    the cache keeps the grids out of what is sent to every process.
-    """
-
-    directory: Path
-    durations: NDArray[np.float32]
-    view_count: int
-
-    @classmethod
-    def of(cls, cache: GridCache) -> GridSource:
-        return cls(directory=cache.directory, durations=cache.durations, view_count=cache.view_count)
 
 
 class GridCacheSet(Dataset[DescriptorBatchItem]):

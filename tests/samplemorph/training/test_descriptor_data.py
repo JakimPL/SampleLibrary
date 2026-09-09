@@ -5,14 +5,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from samplemorph.training.descriptor_cache import open_grid_cache
+from samplemorph.training.descriptor_cache import GridSource, open_grid_cache
 from samplemorph.training.descriptor_data import (
     NO_LABEL,
     STORED_VIEW,
     DescriptorCorpus,
     DescriptorDataModule,
     GridCacheSet,
-    GridSource,
     LabeledBatchSampler,
 )
 from samplemorph.training.descriptor_settings import DescriptorTrainingSettings

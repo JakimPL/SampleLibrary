@@ -8,19 +8,16 @@ import torch
 from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
-from samplecore.tracking.session import open_run
 from samplemorph.codecs.conditioned import DEFAULT_CODEC_NAME
 from samplemorph.codecs.conditioned_model import DEFAULT_CODEC_WIDTH, DEFAULT_RESIDUAL_SIZE
 from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
 from samplemorph.descriptors.learned import DEFAULT_DESCRIPTOR_NAME, descriptor_path, load_descriptor
-from samplemorph.training.codec_data import CodecCorpus
 from samplemorph.training.codec_losses import (
     DEFAULT_CYCLE_WEIGHT,
     DEFAULT_PRIOR_WEIGHT,
     DEFAULT_RECONSTRUCTION_WEIGHT,
     CodecLossWeights,
 )
-from samplemorph.training.codec_run import run_codec_training
 from samplemorph.training.codec_settings import (
     DEFAULT_CODEC_BATCH_SIZE,
     DEFAULT_CODEC_EPOCHS,
@@ -29,7 +26,6 @@ from samplemorph.training.codec_settings import (
     CodecTrainingSettings,
 )
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
-from samplemorph.training.runs import RunPlacement
 
 COMMAND_NAME: Final[str] = "train-codec"
 CODEC_EXPERIMENT_NAME: Final[str] = "conditioned-codec"
@@ -82,6 +78,14 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
     """Train one conditioned codec and report where its best epoch was written."""
+    # The trainer and the run store are imported here, so parsing arguments and the commands that
+    # train nothing stay clear of them.
+    # pylint: disable=import-outside-toplevel
+    from samplecore.tracking.session import open_run
+    from samplemorph.training.codec_data import CodecCorpus
+    from samplemorph.training.codec_run import run_codec_training
+    from samplemorph.training.runs import RunPlacement
+
     del connection
     cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))
     descriptor = load_descriptor(

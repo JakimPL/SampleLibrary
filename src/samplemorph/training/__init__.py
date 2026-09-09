@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol
+from typing import Final, Protocol
 
 from samplemorph.codecs import SampleCodec
 from samplemorph.images import SoundImage
@@ -16,3 +16,8 @@ class CodecTrainer(Protocol):
     """
 
     def fit(self, images: Sequence[SoundImage]) -> SampleCodec: ...
+
+
+# Every worker process a trainer or a cache builder starts is a fresh interpreter, which is what
+# keeps a worker's memory its own rather than a copy of a process holding the GPU.
+WORKER_START_METHOD: Final[str] = "spawn"

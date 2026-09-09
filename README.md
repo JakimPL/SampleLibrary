@@ -55,8 +55,10 @@ speed the music does — run it after extraction, and again whenever you add mod
 lists the rest of the pipeline: `make embed`, `make thumbnails` and so on.
 
 Work on generating audio from a point between two samples lives in the `samplemorph` package,
-and the research behind it is documented separately under `docs/morphing/`, starting from
-`docs/morphing/00-handover.md`.
+one module per command under `samplemorph.commands`: fitting a linear codec, teaching a phase
+vocoder, caching the canonical grids, teaching a descriptor and a codec that decodes from it,
+describing the library through a descriptor, and rendering a listening set. The research behind
+it is documented separately under `docs/morphing/`, starting from `docs/morphing/00-handover.md`.
 
 That package installs PyTorch built for CUDA 12.8, which is a large download and the reason
 `make install` takes a while the first time. It needs a card new enough for that build; an older one

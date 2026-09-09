@@ -20,11 +20,13 @@ from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
 from samplemorph.geometry import Geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY
-from samplemorph.training.loaders import WORKER_START_METHOD
+from samplemorph.training import WORKER_START_METHOD
 
 CACHE_DIRECTORY_NAME: Final[str] = "cache"
 GRID_CACHE_DIRECTORY_NAME: Final[str] = "grids"
 DEFAULT_GRID_CACHE_NAME: Final[str] = "descriptor"
+# The first reading of every sample is the stored waveform's own; the retuned views follow it.
+STORED_VIEW: Final[int] = 0
 DEFAULT_RETUNED_VIEW_COUNT: Final[int] = 2
 # The corpus retunes a sample by an octave at the median and seventeen semitones at the ninetieth
 # percentile, so views drawn this far teach the invariance the catalog itself asks for.
@@ -75,6 +77,23 @@ class GridCache:
     @property
     def view_count(self) -> int:
         return self.description.view_count
+
+
+@dataclass(frozen=True)
+class GridSource:
+    """What a reading set needs to know about a cache without holding its mapped grids.
+
+    A worker started fresh maps the file itself from the directory, so handing it this rather than
+    the cache keeps the grids out of what is sent to every process.
+    """
+
+    directory: Path
+    durations: NDArray[np.float32]
+    view_count: int
+
+    @classmethod
+    def of(cls, cache: GridCache) -> GridSource:
+        return cls(directory=cache.directory, durations=cache.durations, view_count=cache.view_count)
 
 
 @dataclass(frozen=True)

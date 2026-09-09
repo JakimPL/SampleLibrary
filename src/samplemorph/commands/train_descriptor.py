@@ -7,19 +7,16 @@ from typing import Final
 from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
-from samplecore.tracking.session import open_run
 from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
 from samplemorph.descriptors.grid_descriptor import DEFAULT_WIDTH
 from samplemorph.descriptors.learned import DEFAULT_DESCRIPTOR_NAME
 from samplemorph.training.descriptor_cache import DEFAULT_GRID_CACHE_NAME, grid_cache_directory, open_grid_cache
-from samplemorph.training.descriptor_data import load_descriptor_corpus
 from samplemorph.training.descriptor_losses import (
     DEFAULT_DISTILLATION_WEIGHT,
     DEFAULT_LABEL_WEIGHT,
     DEFAULT_RETUNING_WEIGHT,
     DescriptorLossWeights,
 )
-from samplemorph.training.descriptor_run import run_descriptor_training
 from samplemorph.training.descriptor_settings import (
     DEFAULT_DESCRIPTOR_BATCH_SIZE,
     DEFAULT_DESCRIPTOR_EPOCHS,
@@ -28,7 +25,6 @@ from samplemorph.training.descriptor_settings import (
     DEFAULT_LABELED_PER_BATCH,
     DescriptorTrainingSettings,
 )
-from samplemorph.training.runs import RunPlacement
 
 COMMAND_NAME: Final[str] = "train-descriptor"
 DESCRIPTOR_EXPERIMENT_NAME: Final[str] = "descriptor"
@@ -88,6 +84,14 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
     """Train one descriptor and report where its best epoch was written."""
+    # The trainer and the run store are imported here, so parsing arguments and the commands that
+    # train nothing stay clear of them.
+    # pylint: disable=import-outside-toplevel
+    from samplecore.tracking.session import open_run
+    from samplemorph.training.descriptor_data import load_descriptor_corpus
+    from samplemorph.training.descriptor_run import run_descriptor_training
+    from samplemorph.training.runs import RunPlacement
+
     cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))
     settings = DescriptorTrainingSettings(
         run=run_settings_from(arguments),

@@ -8,8 +8,8 @@ from sqlalchemy import Connection
 
 from samplecore.config import DEFAULT_MINIMUM_SAMPLE_FRAMES, LibraryConfig
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplemorph.commands.draws import add_canonicalizer_argument
 from samplemorph.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE
-from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
 from samplemorph.training.descriptor_cache import (
     DEFAULT_GRID_CACHE_NAME,
     DEFAULT_RETUNED_VIEW_COUNT,
@@ -34,12 +34,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         COMMAND_NAME, help="Canonicalize a draw of the library once, with retuned views, for training a descriptor."
     )
     parser.add_argument("--cache", type=str, default=DEFAULT_GRID_CACHE_NAME, help="The name to store the cache under.")
-    parser.add_argument(
-        "--canonicalizer",
-        choices=sorted(CANONICALIZER_REGISTRY),
-        default=DEFAULT_CANONICALIZER_NAME,
-        help="Which frequency axis to canonicalize onto.",
-    )
+    add_canonicalizer_argument(parser, help_text="Which frequency axis to canonicalize onto.")
     parser.add_argument(
         "--samples", type=int, default=None, help="How many samples to draw; every sample when left out."
     )

@@ -4,10 +4,10 @@ from typing import Final, TypeVar
 
 from torch.utils.data import DataLoader, Dataset, Sampler
 
+from samplemorph.training import WORKER_START_METHOD
 from samplemorph.training.phase_dataset import limit_worker_threads
 
 PREFETCH_BATCHES: Final[int] = 2
-WORKER_START_METHOD: Final[str] = "spawn"
 
 Item = TypeVar("Item")
 
