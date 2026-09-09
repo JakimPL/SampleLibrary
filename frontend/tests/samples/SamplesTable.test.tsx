@@ -172,6 +172,26 @@ describe("SamplesTable", () => {
     });
 });
 
+describe("SamplesTable columns", () => {
+    it("declares a width for every column but the name, which takes what is left", () => {
+        const { container } = renderTable();
+
+        const widths = Array.from(container.querySelectorAll("colgroup col")).map(
+            (column) => (column as HTMLElement).style.width,
+        );
+
+        expect(widths).toEqual(["92px", "", "110px", "120px", "72px", "64px"]);
+    });
+
+    it("leaves narrowing by rating to the favorites and order controls", () => {
+        renderTable();
+
+        expect(screen.queryByLabelText("Minimum rating")).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Favorites" })).toBeInTheDocument();
+        expect(screen.getByLabelText("Order")).toBeInTheDocument();
+    });
+});
+
 describe("SamplesTable narrowing", () => {
     it("asks the server for favorites rather than filtering the rows already loaded", async () => {
         const onSelectionChange = vi.fn();
@@ -180,15 +200,6 @@ describe("SamplesTable narrowing", () => {
         await userEvent.click(screen.getByRole("button", { name: "Favorites" }));
 
         expect(onSelectionChange).toHaveBeenCalledWith({ ...WHOLE_CATALOG, favoritesOnly: true });
-    });
-
-    it("reports a rating floor a person chose", async () => {
-        const onSelectionChange = vi.fn();
-        renderTable({ onSelectionChange });
-
-        await userEvent.selectOptions(screen.getByLabelText("Minimum rating"), "4");
-
-        expect(onSelectionChange).toHaveBeenCalledWith({ ...WHOLE_CATALOG, minimumRating: 4 });
     });
 
     it("reports the order a person chose", async () => {

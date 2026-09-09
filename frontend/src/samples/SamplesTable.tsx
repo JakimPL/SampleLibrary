@@ -13,12 +13,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { SampleSelection, SampleSummary } from "../api/samples";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
-import { RATING_VALUES } from "./rating";
+import { TableColgroup } from "../shared/TableColgroup";
+import { TABLE_INITIAL_VIEWPORT_HEIGHT_PX, TABLE_OVERSCAN_ROWS, TABLE_ROW_HEIGHT_PX } from "../shared/tableMetrics";
 import { SampleRow } from "./SampleRow";
-
-const ROW_HEIGHT_PX = 44;
-const OVERSCAN_ROWS = 12;
-const INITIAL_VIEWPORT_HEIGHT_PX = 480;
 
 // Calls onLoadMore once the virtualizer's rendered range comes within this many rows of the end
 // of the currently loaded (and possibly filtered) list, so the next window arrives before the
@@ -27,19 +24,22 @@ const LOAD_MORE_TRIGGER_DISTANCE = 20;
 
 const columnHelper = createColumnHelper<SampleSummary>();
 
+// Every column but the name declares its own width, so the name takes whatever the others leave
+// over -- it is the one column whose content is worth as much room as a panel can spare.
 const COLUMNS = [
-    columnHelper.display({ id: "waveform", header: "Waveform" }),
+    columnHelper.display({ id: "waveform", header: "Waveform", size: 92 }),
     columnHelper.accessor(
         (sample) => (sample.display_name.trim() === "" ? UNNAMED_SAMPLE_LABEL : sample.display_name),
         {
             id: "name",
             header: "Name",
+            meta: { flexible: true },
         },
     ),
-    columnHelper.display({ id: "category", header: "Category" }),
-    columnHelper.display({ id: "verdict", header: "Rating" }),
-    columnHelper.accessor("size_bytes", { header: "Size" }),
-    columnHelper.accessor("occurrence_count", { header: "Occurrences" }),
+    columnHelper.display({ id: "category", header: "Category", size: 110 }),
+    columnHelper.display({ id: "verdict", header: "Rating", size: 120 }),
+    columnHelper.accessor("size_bytes", { header: "Size", size: 72 }),
+    columnHelper.accessor("occurrence_count", { header: "Occurrences", size: 64 }),
 ];
 
 interface SamplesTableProps {
@@ -88,9 +88,9 @@ export function SamplesTable({
     const virtualizer = useVirtualizer({
         count: rows.length,
         getScrollElement: () => scrollElementRef.current,
-        estimateSize: () => ROW_HEIGHT_PX,
-        overscan: OVERSCAN_ROWS,
-        initialRect: { width: 0, height: INITIAL_VIEWPORT_HEIGHT_PX },
+        estimateSize: () => TABLE_ROW_HEIGHT_PX,
+        overscan: TABLE_OVERSCAN_ROWS,
+        initialRect: { width: 0, height: TABLE_INITIAL_VIEWPORT_HEIGHT_PX },
     });
     const virtualRows = virtualizer.getVirtualItems();
     const lastVirtualRow = virtualRows[virtualRows.length - 1];
@@ -135,23 +135,6 @@ export function SamplesTable({
                     Favorites
                 </button>
                 <select
-                    aria-label="Minimum rating"
-                    value={selection.minimumRating === null ? "" : String(selection.minimumRating)}
-                    onChange={(event) => {
-                        onSelectionChange({
-                            ...selection,
-                            minimumRating: event.target.value === "" ? null : Number(event.target.value),
-                        });
-                    }}
-                >
-                    <option value="">Any rating</option>
-                    {RATING_VALUES.map((value) => (
-                        <option key={value} value={value}>
-                            {value}+
-                        </option>
-                    ))}
-                </select>
-                <select
                     aria-label="Order"
                     value={selection.sort}
                     onChange={(event) => {
@@ -172,6 +155,7 @@ export function SamplesTable({
             </div>
             <div className="panel-body" ref={scrollElementRef}>
                 <table className="data">
+                    <TableColgroup table={table} />
                     <thead>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <tr key={headerGroup.id}>

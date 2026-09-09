@@ -376,6 +376,15 @@ table.mini {
     border-collapse: collapse;
 }
 
+/* Column widths come from the table's own <colgroup> (see TableColgroup), which a fixed layout
+   honors: a virtualized listing renders a different handful of rows at every scroll position, and
+   an automatic layout would resize its columns to fit whichever ones happen to be on screen. Below
+   this width the columns stop shrinking and the panel scrolls sideways instead. */
+table.data {
+    table-layout: fixed;
+    min-width: 620px;
+}
+
 table.data thead {
     position: sticky;
     top: 0;
@@ -401,10 +410,12 @@ table.mini th {
 }
 
 table.data th {
-    font-size: 10px;
-    padding: 6px 8px;
+    font-size: 9.5px;
+    padding: 4px 6px;
     cursor: pointer;
     user-select: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 table.data th:hover {
@@ -427,8 +438,11 @@ table.mini td {
 }
 
 table.data td {
-    padding: 5px 8px;
+    padding: 4px 6px;
+    font-size: 11.5px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 table.mini td {
@@ -439,6 +453,12 @@ table.mini td {
 table.data tbody tr,
 table.mini tbody tr {
     cursor: pointer;
+}
+
+/* Kept equal to TABLE_ROW_HEIGHT_PX in `shared/tableMetrics.ts`: a virtualized listing places its
+   rows from that number, and a row of any other height drifts away from the scrollbar. */
+table.data tbody tr {
+    height: 44px;
 }
 
 table.data tbody tr:hover,
@@ -455,6 +475,8 @@ tr.is-focused {
     box-shadow: inset 2px 0 0 var(--accent);
 }
 
+/* A fixed-layout listing takes this column's width from its <colgroup> instead; the cap holds
+   the mini tables, whose layout is still measured from their own content. */
 .cell-name {
     max-width: 220px;
 }

@@ -31,18 +31,18 @@ describe("listSamples", () => {
         );
     });
 
-    it("names a narrowing only once a person has asked for one", async () => {
+    it("carries a narrowing a person has asked for", async () => {
         const fetchMock = stubFetchReturning({ items: [], total: 0, limit: 50, offset: 0 });
 
         await listSamples({
             limit: 50,
             offset: 0,
             groupByEquivalence: false,
-            selection: { favoritesOnly: true, minimumRating: 4, sort: "rating" },
+            selection: { favoritesOnly: true, sort: "rating" },
         });
 
         expect(fetchMock).toHaveBeenCalledWith(
-            "/api/samples?limit=50&offset=0&group_by_equivalence=false&favorites_only=true&sort=rating&minimum_rating=4",
+            "/api/samples?limit=50&offset=0&group_by_equivalence=false&favorites_only=true&sort=rating",
         );
     });
 
