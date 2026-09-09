@@ -15,12 +15,24 @@ from samplecore.storage.repositories.experiment import PostgresExperimentReposit
 
 
 @dataclass(frozen=True)
+class EmbeddingOptions:
+    """How far one embedding run goes: over how many samples, and whether it becomes the cloud shown.
+
+    An experiment extracted to be measured, or to teach another descriptor, keeps its vectors and
+    leaves the cloud as it was.
+    """
+
+    sample_limit: int | None
+    promote: bool
+
+
+@dataclass(frozen=True)
 class EmbeddingSummary:
-    """What one embedding run did, across both its extraction and reduction stages."""
+    """What one embedding run did: its extraction stage, and its reduction stage when it ran one."""
 
     experiment_id: int
     extraction: FeatureExtractionSummary
-    reduction: CloudSummary
+    reduction: CloudSummary | None
 
 
 def resolve_experiment(
@@ -68,7 +80,7 @@ def run_embedding(
     feature_extractor: FeatureExtractor,
     experiment_id: int,
     *,
-    sample_limit: int | None = None,
+    options: EmbeddingOptions,
 ) -> EmbeddingSummary:
     """Extract every missing sample's feature vector for the given experiment, then re-fit its 2D layout.
 
@@ -76,7 +88,7 @@ def run_embedding(
     or validating one to resume before calling this.
     """
     extraction = extract_features(
-        connection, config.library_root, experiment_id, feature_extractor, sample_limit=sample_limit
+        connection, config.library_root, experiment_id, feature_extractor, sample_limit=options.sample_limit
     )
-    reduction = reduce_and_persist_coordinates(connection, experiment_id)
+    reduction = reduce_and_persist_coordinates(connection, experiment_id) if options.promote else None
     return EmbeddingSummary(experiment_id=experiment_id, extraction=extraction, reduction=reduction)

@@ -104,6 +104,32 @@ the time. That is the case for the next two stages: the model as a *teacher* for
 reads this project's own canonical grid, where the canonicalizer's alignment supplies the
 invariance the teacher lacks.
 
+### The teacher over the whole catalog
+
+The same model as the `clap` backend (`samplecloud --backend clap --extract-only`), 127,588
+vectors in experiment 4, scored by `samplecloud-evaluate` with 200 probes, seed 0, beside the two
+descriptors from [`11-descriptor-baselines.md`](11-descriptor-baselines.md):
+
+| | `invariant` | `librosa` | **`clap`** |
+|---|---|---|---|
+| Transposition rank-1, all offsets | **62.9%** | 14.3% | 25.9% |
+| Transposition rank-1 at −12 / +12 st | **75.0% / 56.7%** | 0.0% / 1.7% | 11.0% / 8.5% |
+| Transposition rank-1 at ±2 st | 80.0% / 81.7% | 78.3% / 75.0% | 76.0% / 76.0% |
+| Category accuracy | 0.472 | 0.564 | **0.658** |
+| Category macro-F1 | 0.337 | 0.468 | **0.578** |
+| Note agreement, pitch count | +0.520 | +0.567 | **+0.632** |
+| Single-pitch AUC | 0.730 | 0.768 | **0.799** |
+| Hand-label NDCG@10 [90%] | 0.374 [0.350, 0.402] | 0.483 [0.453, 0.514] | **0.609 [0.579, 0.638]** |
+| Hand-label mAP over 24 tags | 0.333 | 0.384 | **0.532** |
+| Hand-label P@1 | 0.594 | 0.690 | **0.787** |
+
+Every metric read off labels or playing goes to the teacher, by a margin that clears every
+interval; the one read off retuning goes to `invariant`, and the teacher's own curve falls from
+three quarters at a whole tone to a tenth at an octave. Per category it lifts `vocal` (0.471 →
+0.600), `pad` (0.329 → 0.432) and `fx` (0.244 → 0.454), the classes both descriptors had been
+weakest on, and it is the first descriptor to find `pluck` at all. The pass over the catalog took
+55 minutes, the model's own log-mel picture computed on the device.
+
 ## The pilot behind the next stage
 
 3,197 samples (the 197 labeled and 3,000 drawn), canonicalized on the committed log-frequency

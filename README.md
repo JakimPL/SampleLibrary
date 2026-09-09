@@ -11,8 +11,10 @@ library.
 - [uv](https://docs.astral.sh/uv/)
 - PostgreSQL 17 or later
 - Node.js 25.9 or later, and npm, for the frontend
-- An NVIDIA GPU, to train the vocoder that turns a morph back into sound. Everything else in the
-  project runs on the processor alone.
+- An NVIDIA GPU, to train the vocoder that turns a morph back into sound and the descriptor that
+  lays out the cloud. Everything else in the project runs on the processor alone.
+- About a gigabyte of disk for the pretrained listening model the `clap` cloud backend downloads
+  on first use. `make install` installs every extra, this one included.
 
 ## Setup
 

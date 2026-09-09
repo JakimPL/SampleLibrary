@@ -4,7 +4,7 @@ import argparse
 import logging
 
 from samplecloud.registries import BACKEND_REGISTRY, DEFAULT_BACKEND_NAME
-from samplecloud.run import resolve_experiment, run_embedding
+from samplecloud.run import EmbeddingOptions, resolve_experiment, run_embedding
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 
 _logger = logging.getLogger(__name__)
@@ -19,17 +19,23 @@ def main(argv: list[str] | None = None) -> None:
         experiment_id = resolve_experiment(
             connection, backend_name=arguments.backend, label=arguments.label, experiment_id=arguments.experiment_id
         )
-        summary = run_embedding(config, connection, feature_extractor, experiment_id, sample_limit=arguments.limit)
+        summary = run_embedding(
+            config,
+            connection,
+            feature_extractor,
+            experiment_id,
+            options=EmbeddingOptions(sample_limit=arguments.limit, promote=not arguments.extract_only),
+        )
 
     _logger.info(
-        "Experiment %d: extracted features for %d new samples (%d already known, %d cataloged). "
-        "Reduced %d samples to 2D coordinates.",
+        "Experiment %d: extracted features for %d new samples (%d already known, %d cataloged).",
         summary.experiment_id,
         summary.extraction.newly_extracted,
         summary.extraction.already_extracted,
         summary.extraction.cataloged,
-        summary.reduction.samples_reduced,
     )
+    if summary.reduction is not None:
+        _logger.info("Reduced %d samples to 2D coordinates.", summary.reduction.samples_reduced)
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
@@ -54,5 +60,10 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         type=int,
         default=None,
         help="Extract features for only the first N unfeatured samples, for a quick run over a small slice.",
+    )
+    parser.add_argument(
+        "--extract-only",
+        action="store_true",
+        help="Keep the experiment's vectors and leave the cloud as it is, for an experiment made to be measured.",
     )
     return parser.parse_args(argv)

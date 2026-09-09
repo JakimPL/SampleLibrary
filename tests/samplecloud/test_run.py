@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
-from samplecloud.run import resolve_experiment, run_embedding
+from samplecloud.run import EmbeddingOptions, resolve_experiment, run_embedding
 from samplecore.config import LibraryConfig
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
@@ -39,6 +39,9 @@ def _config(tmp_path: Path, database_url: str) -> LibraryConfig:
     return LibraryConfig(module_source_directory=tmp_path, library_root=tmp_path, database_url=database_url)
 
 
+PROMOTE = EmbeddingOptions(sample_limit=None, promote=True)
+
+
 def test_run_embedding_extracts_and_reduces_the_whole_catalog(
     connection: Connection, _database_url: str, tmp_path: Path
 ) -> None:
@@ -46,9 +49,10 @@ def test_run_embedding_extracts_and_reduces_the_whole_catalog(
     config = _config(tmp_path, _database_url)
     experiment_id = resolve_experiment(connection, backend_name="stub")
 
-    summary = run_embedding(config, connection, _StubFeatureExtractor(), experiment_id)
+    summary = run_embedding(config, connection, _StubFeatureExtractor(), experiment_id, options=PROMOTE)
 
     assert summary.extraction.newly_extracted == SAMPLE_COUNT
+    assert summary.reduction is not None
     assert summary.reduction.samples_reduced == SAMPLE_COUNT
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
     assert len(vectors) == SAMPLE_COUNT
@@ -60,7 +64,13 @@ def test_run_embedding_respects_the_sample_limit(connection: Connection, _databa
     config = _config(tmp_path, _database_url)
     experiment_id = resolve_experiment(connection, backend_name="stub")
 
-    summary = run_embedding(config, connection, _StubFeatureExtractor(), experiment_id, sample_limit=1)
+    summary = run_embedding(
+        config,
+        connection,
+        _StubFeatureExtractor(),
+        experiment_id,
+        options=EmbeddingOptions(sample_limit=1, promote=True),
+    )
 
     assert summary.extraction.newly_extracted == 1
 
@@ -71,10 +81,32 @@ def test_run_embedding_on_an_empty_catalog_reduces_nothing(
     config = _config(tmp_path, _database_url)
     experiment_id = resolve_experiment(connection, backend_name="stub")
 
-    summary = run_embedding(config, connection, _StubFeatureExtractor(), experiment_id)
+    summary = run_embedding(config, connection, _StubFeatureExtractor(), experiment_id, options=PROMOTE)
 
     assert summary.extraction.cataloged == 0
+    assert summary.reduction is not None
     assert summary.reduction.samples_reduced == 0
+
+
+def test_run_embedding_keeps_the_cloud_as_it_was_when_asked_only_to_extract(
+    connection: Connection, _database_url: str, tmp_path: Path
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    config = _config(tmp_path, _database_url)
+    experiment_id = resolve_experiment(connection, backend_name="stub")
+
+    summary = run_embedding(
+        config,
+        connection,
+        _StubFeatureExtractor(),
+        experiment_id,
+        options=EmbeddingOptions(sample_limit=None, promote=False),
+    )
+
+    assert summary.extraction.newly_extracted == SAMPLE_COUNT
+    assert summary.reduction is None
+    assert len(PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)) == SAMPLE_COUNT
+    assert PostgresCloudCoordinateRepository(connection).list_all() == ()
 
 
 def test_resolve_experiment_creates_a_new_experiment_when_no_id_is_given(connection: Connection) -> None:
