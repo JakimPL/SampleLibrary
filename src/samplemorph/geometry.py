@@ -199,6 +199,24 @@ class ConstantQGeometry(BaseModel):
 Geometry = Annotated[LogFrequencyGeometry | MelGeometry | ConstantQGeometry, Field(discriminator="kind")]
 
 
+def fourier_bin_count(*, fft_length: int) -> int:
+    """How many Fourier bins one analysis window produces.
+
+    Every axis returns to audio through this grid, whichever bands it carries its own picture on, so
+    this is the width a vocoder reads and writes.
+    """
+    return fft_length // 2 + 1
+
+
+def frames_per_phase_turn(*, fft_length: int, hop_length: int) -> int:
+    """How many frames a bin one step above the lowest takes to bring its phase back round.
+
+    A bin advances by a fixed angle each hop, set by the window and the step alone, so this says how
+    fast the phase turns before anything about the sound is taken into account.
+    """
+    return max(fft_length // hop_length, 1)
+
+
 def bands_reaching_nyquist(*, analysis_rate_hz: int, minimum_frequency_hz: float, bins_per_octave: int) -> int:
     """How many logarithmic bands reach from `minimum_frequency_hz` to the Nyquist frequency.
 
