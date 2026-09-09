@@ -87,3 +87,24 @@ def test_relink_exits_nonzero_when_a_label_needs_a_person(
 def test_a_command_is_required(configured: Path) -> None:
     with pytest.raises(SystemExit):
         main([])
+
+
+def test_vocabulary_lists_the_tags_in_use_as_a_tree(
+    connection: Connection, stored_annotation: SampleAnnotation, configured: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repository = PostgresSampleAnnotationRepository(connection)
+    repository.replace_many(
+        (
+            stored_annotation.model_copy(update={"label": "HI-HAT: CLOSED, LO-FI"}),
+            stored_annotation.model_copy(update={"sample_hash": "d" * 64, "label": "HI-HAT: OPEN"}),
+            stored_annotation.model_copy(update={"sample_hash": "e" * 64, "label": "ELECTRIC"}),
+        )
+    )
+    connection.commit()
+
+    main(["vocabulary"])
+
+    reported = capsys.readouterr().out
+    assert "    2  HI-HAT" in reported
+    assert "        1  CLOSED" in reported
+    assert "Carried by one sample each: ELECTRIC, HI-HAT: CLOSED, HI-HAT: OPEN, LO-FI." in reported

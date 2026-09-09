@@ -9,6 +9,7 @@ from sqlalchemy import Connection
 from samplecloud.backends import FeatureExtractor
 from samplecloud.evaluation.categories import category_agreement
 from samplecloud.evaluation.corpus import EvaluationCorpus, load_corpus
+from samplecloud.evaluation.hand_labels import MINIMUM_LABELED_SAMPLES, HandLabelAgreement, hand_label_agreement
 from samplecloud.evaluation.notes import note_agreement
 from samplecloud.evaluation.report import EvaluationReport
 from samplecloud.evaluation.settings import EvaluationSettings
@@ -30,7 +31,8 @@ def evaluate_experiment(
 
     Each metric runs against the same corpus and the same settings, so two runs of this function
     reproduce every number. Passing a `feature_extractor` adds transposition retrieval, which reads
-    audio and describes it again; the other two metrics read the stored vectors alone.
+    audio and describes it again; the other metrics read the stored vectors alone. The hand-label
+    metric appears once enough samples have been labeled to read one.
 
     Raises:
         ValueError: the catalog holds no experiment under that identifier.
@@ -42,10 +44,11 @@ def evaluate_experiment(
     _logger.info("Loading experiment %d and its evaluation targets...", experiment_id)
     corpus = load_corpus(connection, experiment_id=experiment_id)
     _logger.info(
-        "Scoring %d vectors: %d keyword-labeled, %d reached by note events.",
+        "Scoring %d vectors: %d keyword-labeled, %d reached by note events, %d labeled by hand.",
         corpus.sample_count,
         int(corpus.categorized.sum()),
         int(corpus.note_reached.sum()),
+        int(corpus.labeled.sum()),
     )
     return EvaluationReport(
         experiment_id=experiment_id,
@@ -62,7 +65,21 @@ def evaluate_experiment(
         ),
         categories=category_agreement(corpus, settings=settings),
         notes=note_agreement(corpus, settings=settings),
+        hand_labels=_hand_labels(corpus, settings=settings),
     )
+
+
+def _hand_labels(corpus: EvaluationCorpus, *, settings: EvaluationSettings) -> HandLabelAgreement | None:
+    labeled_count = int(corpus.labeled.sum())
+    if labeled_count < MINIMUM_LABELED_SAMPLES:
+        _logger.info(
+            "%d samples are labeled by hand, and %d are needed before a hand-label score is read.",
+            labeled_count,
+            MINIMUM_LABELED_SAMPLES,
+        )
+        return None
+
+    return hand_label_agreement(corpus, settings=settings)
 
 
 def _transposition(

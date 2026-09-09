@@ -7,6 +7,7 @@ DEFAULT_RANDOM_SEED: Final[int] = 0
 DEFAULT_PROBE_COUNT: Final[int] = 200
 DEFAULT_NEIGHBOR_COUNT: Final[int] = 5
 DEFAULT_FOLD_COUNT: Final[int] = 5
+DEFAULT_LABEL_DEPTH: Final[int | None] = None
 DEFAULT_SEMITONE_OFFSETS: Final[tuple[float, ...]] = (
     -24.0,
     -17.0,
@@ -29,7 +30,8 @@ class EvaluationSettings:
 
     Every metric reads the same settings, so one seed fixes every split and every draw and a second
     run of the same pass reproduces every number. The offsets form a fixed mirrored grid rather than
-    a random draw, which is what lets two runs compare offset by offset.
+    a random draw, which is what lets two runs compare offset by offset. `label_depth` reads the
+    hand labels to that many levels, and `None` reads them whole.
     """
 
     random_seed: int = DEFAULT_RANDOM_SEED
@@ -37,6 +39,7 @@ class EvaluationSettings:
     neighbor_count: int = DEFAULT_NEIGHBOR_COUNT
     fold_count: int = DEFAULT_FOLD_COUNT
     semitone_offsets: tuple[float, ...] = field(default=DEFAULT_SEMITONE_OFFSETS)
+    label_depth: int | None = DEFAULT_LABEL_DEPTH
 
     def __post_init__(self) -> None:
         if self.fold_count < 2:
@@ -47,3 +50,5 @@ class EvaluationSettings:
             raise ValueError(f"an evaluation pass needs at least one probe, got {self.probe_count}")
         if not self.semitone_offsets:
             raise ValueError("an evaluation pass needs at least one semitone offset to retune by")
+        if self.label_depth is not None and self.label_depth < 1:
+            raise ValueError(f"a label is read to at least one level, got depth {self.label_depth}")

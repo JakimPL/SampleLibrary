@@ -12,7 +12,7 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 | Package | Owns | Depends on |
 |---|---|---|
-| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the pitch rule that turns an occurrence rate and a pressed key into the one rate a sample is really played at, the anchoring rule that keeps a hand label attached to its sample, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
+| `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the reading of a hand label as tag paths and the agreement between two of them (`samplecore.labeling`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the pitch rule that turns an occurrence rate and a pressed key into the one rate a sample is really played at, the anchoring rule that keeps a hand label attached to its sample, and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `pydantic`, `soundfile` |
 | `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each) and folding those notes into the rate each sample is heard at, the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors, UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the keyword table names alike, and whether it groups what the note events say the library plays alike. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra) |
 | `samplemorph` | The decodable-representation pipeline: canonicalizing a sample into a fixed-size sound image on a log-frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a pluggable `Vocoder` turning a magnitude spectrogram back into audible frames, including a learned one taught the phase such magnitudes carry. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner -- which is what leaves the representation invertible where the sample cloud's descriptors are not. Depends on `samplecore` only. | `samplecore`, `librosa`, `scikit-learn`, `torch` (the `morph` extra) |
@@ -116,6 +116,20 @@ A label is stored in upper case, which is the case it is shown in: `LabelText` n
 model boundary, so every path that records one — the curation route, a JSONL import, a relink —
 agrees, and the vocabulary offered back gathers one entry per wording rather than one per way of
 typing it.
+
+What a label says is read by `samplecore.labeling`, and every consumer reads it the same way. A
+label is a set of tags separated by commas, and each tag is a path whose colons step from a broad
+category to a specification that means something only under it: `HI-HAT: CLOSED, LO-FI` names a
+closed hi-hat that is also lo-fi. The whole path is a tag's identity, so `ELECTRIC` under `BASS`
+and under `GUITAR` are two tags, and a path asserts every category above it. Two labels agree by
+the overlap of those closed sets, from nothing shared to the same label, which gives graded credit
+along the hierarchy -- a closed hi-hat beside an open one earns part of what a closed one would --
+and reads a specification as a refinement of an agreement. Tags are attributes a sample carries
+side by side, never classes it must pick one of, which is what lets a treatment such as `LO-FI` be
+judged apart from a source such as `SNARE`. `sampleannotations vocabulary` lists the tags in use as
+a tree with counts and names the wording worth a second look: a name standing both as a category
+and as a specification under another, and tags carried by one sample. It reads and changes nothing;
+settling the wording stays with the person, in the interface.
 
 One row holds all three decisions, and exists because at least one of them was made — a CHECK
 constraint says so, and `SampleAnnotation`'s own validator says so alongside it. Writes are
@@ -303,7 +317,7 @@ were until that deliberate step.
 
 ### Judging a descriptor
 
-`samplecloud.evaluation` scores any experiment's vectors against three targets the catalog already
+`samplecloud.evaluation` scores any experiment's vectors against four targets the catalog already
 carries, so a change to an extractor is answered by numbers rather than by an impression.
 
 - **Transposition retrieval** retunes a sample by a fixed mirrored grid of semitone offsets,
@@ -319,11 +333,23 @@ carries, so a change to an extractor is answered by numbers rather than by an im
   split they were once read as is a tendency rather than a division. A second reading covers only
   samples struck often enough for a pitch count to mean something, since a sample struck twice shows
   at most two pitches whatever it is.
+- **Hand-label agreement** ranks every labeled sample's labeled neighbors and credits each by how
+  much its label agrees with the query's, graded along the hierarchy as `samplecore.labeling`
+  defines it. NDCG over the nearest ten reads the whole neighborhood, precision at one asks whether
+  the nearest shares any tag, and every tag with enough support is scored on its own by average
+  precision. The labeled set is small and grows as the person labels, so the NDCG carries a
+  bootstrap interval over the queries and every score its chance level. A label depth reads the
+  labels to that many levels, for a coarser reading of the same set.
 
 Each metric reports the share of the catalog it describes, so a reader sees which part of the
 library a score speaks for. Splits are grouped by equivalence class, which changes nothing while
 `sample_relation` is empty and becomes correct on its own once it is not. One seed fixes every split
-and every draw, so a second run reproduces every number.
+and every draw, so a second run reproduces every number. `samplecloud-evaluate` records each pass
+as a run in the tracking store beside the library (`samplecore.tracking`), one metric per
+question under its own namespace and the whole report as an artifact, so two descriptors are
+compared from the store rather than from two terminals; `--no-tracking` keeps a quick look out of
+it. The harness itself returns the report and writes nothing, and `samplecloud.evaluation.recording`
+is the one place that reads the report into a run.
 
 This lives in `samplecloud` rather than `samplemorph` because it judges embeddings, which is what
 `samplecloud` owns. A learned codec's latents reach it as an ordinary experiment through the

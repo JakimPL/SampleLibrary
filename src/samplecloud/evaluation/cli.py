@@ -8,10 +8,13 @@ from sqlalchemy import Connection
 
 from samplecloud.backends import FeatureExtractor
 from samplecloud.evaluation.categories import CategoryAgreement
+from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.harness import evaluate_experiment
 from samplecloud.evaluation.notes import NoteAgreement
+from samplecloud.evaluation.recording import EVALUATION_EXPERIMENT_NAME, record_report, run_name_for
 from samplecloud.evaluation.report import EvaluationReport, report_json
 from samplecloud.evaluation.settings import (
+    DEFAULT_LABEL_DEPTH,
     DEFAULT_PROBE_COUNT,
     DEFAULT_RANDOM_SEED,
     EvaluationSettings,
@@ -19,23 +22,35 @@ from samplecloud.evaluation.settings import (
 from samplecloud.evaluation.transposition import TranspositionRetrieval
 from samplecloud.registries import BACKEND_REGISTRY
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.models.experiment import Experiment
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.tracking.session import open_run
 
 _logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Score one experiment's descriptor and report what it measured."""
+    """Score one experiment's descriptor, record the pass, and report what it measured."""
     arguments = _parse_arguments(argv)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
-        report = evaluate_experiment(
-            connection,
-            experiment_id=arguments.experiment_id,
-            library_root=config.library_root,
-            feature_extractor=_extractor_for(connection, arguments),
-            settings=EvaluationSettings(random_seed=arguments.seed, probe_count=arguments.probes),
-        )
+        experiment = _experiment(connection, arguments.experiment_id)
+        with open_run(
+            config.library_root,
+            recorded=not arguments.no_tracking,
+            experiment_name=EVALUATION_EXPERIMENT_NAME,
+            run_name=run_name_for(backend_name=experiment.backend_name, experiment_id=experiment.id),
+        ) as tracker:
+            report = evaluate_experiment(
+                connection,
+                experiment_id=experiment.id,
+                library_root=config.library_root,
+                feature_extractor=_extractor_for(experiment, skip_transposition=arguments.skip_transposition),
+                settings=EvaluationSettings(
+                    random_seed=arguments.seed, probe_count=arguments.probes, label_depth=arguments.label_depth
+                ),
+            )
+            record_report(report, tracker)
 
     if arguments.output is not None:
         output = Path(arguments.output)
@@ -46,22 +61,28 @@ def main(argv: list[str] | None = None) -> None:
     _report(report)
 
 
-def _extractor_for(connection: Connection, arguments: argparse.Namespace) -> FeatureExtractor | None:
+def _experiment(connection: Connection, experiment_id: int) -> Experiment:
+    """The experiment being scored, which names both the run and the extractor.
+
+    Raises:
+        ValueError: the catalog holds no such experiment.
+    """
+    experiment = PostgresExperimentRepository(connection).get(experiment_id)
+    if experiment is None:
+        raise ValueError(f"the catalog holds no experiment {experiment_id}")
+    return experiment
+
+
+def _extractor_for(experiment: Experiment, *, skip_transposition: bool) -> FeatureExtractor | None:
     """The extractor that produced this experiment, which retrieval needs to describe audio again.
 
     Raises:
-        ValueError: the catalog holds no such experiment, or names a backend this build lacks.
+        ValueError: the experiment names a backend this build lacks.
     """
-    if arguments.skip_transposition:
+    if skip_transposition:
         return None
-
-    experiment = PostgresExperimentRepository(connection).get(arguments.experiment_id)
-    if experiment is None:
-        raise ValueError(f"the catalog holds no experiment {arguments.experiment_id}")
     if experiment.backend_name not in BACKEND_REGISTRY:
-        raise ValueError(
-            f"experiment {arguments.experiment_id} was extracted by the unknown {experiment.backend_name} backend"
-        )
+        raise ValueError(f"experiment {experiment.id} was extracted by the unknown {experiment.backend_name} backend")
 
     return BACKEND_REGISTRY[experiment.backend_name]()
 
@@ -81,6 +102,8 @@ def _report(report: EvaluationReport) -> None:
         _report_categories(report.categories)
     if report.notes is not None:
         _report_notes(report.notes)
+    if report.hand_labels is not None:
+        _report_hand_labels(report.hand_labels)
 
 
 def _report_transposition(retrieval: TranspositionRetrieval) -> None:
@@ -128,6 +151,26 @@ def _report_notes(agreement: NoteAgreement) -> None:
     _logger.info("  single-pitch AUC %.3f, secondary and carrying the same censoring.", agreement.single_pitch_auc)
 
 
+def _report_hand_labels(agreement: HandLabelAgreement) -> None:
+    low, high = agreement.ndcg_interval
+    _logger.info(
+        "Hand-label agreement over %d labeled samples (%.1f%% of the catalog): NDCG %.3f [%.3f, %.3f] "
+        "against %.3f by chance, mAP %.3f over %d tags, precision at one %.3f against %.3f by chance.",
+        agreement.labeled_sample_count,
+        100.0 * agreement.coverage,
+        agreement.ndcg,
+        low,
+        high,
+        agreement.ndcg_chance,
+        agreement.mean_average_precision,
+        len(agreement.per_tag),
+        agreement.precision_at_one,
+        agreement.precision_at_one_chance,
+    )
+    for score in agreement.per_tag:
+        _logger.info("  %-28s AP %.3f over %4d samples.", score.path, score.average_precision, score.support)
+
+
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Score one experiment's descriptor against the catalog's own targets.")
     parser.add_argument("--experiment-id", type=int, required=True, help="Which experiment's vectors to score.")
@@ -143,5 +186,16 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         "--skip-transposition",
         action="store_true",
         help="Score the stored vectors alone, leaving out the pass that reads and describes audio again.",
+    )
+    parser.add_argument(
+        "--label-depth",
+        type=int,
+        default=DEFAULT_LABEL_DEPTH,
+        help="How many levels of each hand label to read; every level when left out.",
+    )
+    parser.add_argument(
+        "--no-tracking",
+        action="store_true",
+        help="Leave this pass out of the run store, for a quick look that is not worth keeping.",
     )
     return parser.parse_args(argv)

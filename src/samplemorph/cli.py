@@ -47,6 +47,7 @@ from samplemorph.training.principal_components import (
     PrincipalComponentTrainer,
 )
 from samplemorph.training.settings import (
+    DEFAULT_ACCELERATOR,
     DEFAULT_BATCH_SIZE,
     DEFAULT_EPOCHS,
     DEFAULT_LEARNING_RATE,
@@ -61,7 +62,7 @@ from samplemorph.vocoders.phase_model import DEFAULT_CHANNELS
 DEFAULT_MODEL_NAME: Final[str] = "principal_components"
 DEFAULT_FIT_SAMPLE_COUNT: Final[int] = 4_000
 DEFAULT_TRAIN_SAMPLE_COUNT: Final[int] = 20_000
-DEFAULT_DEVICE: Final[str] = "cuda"
+DEFAULT_DEVICE: Final[str] = DEFAULT_ACCELERATOR
 MANIFEST_NAME: Final[str] = "manifest.json"
 PHASE_EXPERIMENT_NAME: Final[str] = "phase-vocoder"
 
@@ -304,6 +305,7 @@ def _train_phase(connection: Connection, config: LibraryConfig, arguments: argpa
         learning_rate=arguments.learning_rate,
         worker_count=arguments.workers,
         precision=arguments.precision,
+        accelerator=arguments.device,
         random_seed=arguments.seed,
     )
     with open_run(
@@ -316,7 +318,6 @@ def _train_phase(connection: Connection, config: LibraryConfig, arguments: argpa
             corpus,
             settings=settings,
             model_name=arguments.phase_model,
-            accelerator=arguments.device,
             resume=arguments.resume,
             tracker=tracker,
         )

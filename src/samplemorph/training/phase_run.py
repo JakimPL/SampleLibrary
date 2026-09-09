@@ -48,7 +48,6 @@ def run_phase_training(
     *,
     settings: TrainingSettings,
     model_name: str,
-    accelerator: str,
     resume: bool,
     tracker: TrackedRun,
 ) -> TrainingOutcome:
@@ -90,7 +89,7 @@ def run_phase_training(
     directory = run_directory(library_root, name=model_name)
     trainer = Trainer(
         max_epochs=settings.epochs,
-        accelerator=accelerator,
+        accelerator=settings.accelerator,
         precision=settings.precision,
         gradient_clip_val=GRADIENT_CLIP,
         default_root_dir=directory,

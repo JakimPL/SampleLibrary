@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 
 from samplecloud.evaluation.categories import CategoryAgreement
+from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.notes import NoteAgreement
 from samplecloud.evaluation.transposition import TranspositionRetrieval
 
@@ -13,9 +14,10 @@ from samplecloud.evaluation.transposition import TranspositionRetrieval
 class EvaluationReport:
     """Everything one evaluation pass measured about one experiment's descriptor.
 
-    The three metrics answer three separate questions -- whether pitch moves a descriptor, whether
-    it groups what a keyword calls alike, and whether it groups what the library plays alike -- and
-    each carries its own coverage, so a reader sees which part of the catalog each score describes.
+    The four metrics answer four separate questions -- whether pitch moves a descriptor, whether it
+    groups what a keyword calls alike, whether it groups what the library plays alike, and whether
+    it groups what a person labeled alike -- and each carries its own coverage, so a reader sees
+    which part of the catalog each score describes.
 
     The report holds numbers and writes nothing. A run tracker, when one is chosen, reads this tree
     rather than the harness reading the tracker.
@@ -29,6 +31,7 @@ class EvaluationReport:
     transposition: TranspositionRetrieval | None
     categories: CategoryAgreement | None
     notes: NoteAgreement | None
+    hand_labels: HandLabelAgreement | None
 
 
 def report_json(report: EvaluationReport) -> str:

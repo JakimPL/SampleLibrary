@@ -11,7 +11,7 @@ from samplecloud.standardization import Standardization
 from samplecore.models.category import SampleCategory
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
-from tests.samplecloud.evaluation.conftest import SEEDED_CATEGORIES, SeededCatalog, seed_catalog
+from tests.samplecloud.evaluation.conftest import SEEDED_CATEGORIES, SeededCatalog, label_catalog, seed_catalog
 
 
 def test_a_corpus_carries_one_row_per_feature_vector(connection: Connection, separable_catalog: SeededCatalog) -> None:
@@ -77,6 +77,7 @@ def test_a_corpus_whose_arrays_disagree_says_so() -> None:
             vectors=np.zeros((2, 3)),
             categories=(SampleCategory.KICK,),
             note_statistics=(None, None),
+            labels=(None, None),
             equivalence_groups=np.array([0, 1]),
             standardization=Standardization(center=np.zeros(3), scale=np.ones(3)),
         )
@@ -113,3 +114,18 @@ def test_linked_samples_share_one_equivalence_class(connection: Connection, sepa
 
     assert groups[0] == groups[1] == groups[2]
     assert groups[3] != groups[0]
+
+
+def test_a_corpus_reads_the_label_a_person_gave_each_sample(
+    connection: Connection, separable_catalog: SeededCatalog
+) -> None:
+    labeled = label_catalog(connection, separable_catalog, every=2)
+
+    corpus = load_corpus(connection, experiment_id=separable_catalog.experiment_id)
+
+    assert int(corpus.labeled.sum()) == len(labeled)
+    by_hash = dict(zip(corpus.sample_hashes, corpus.labels, strict=True))
+    first_kick = by_hash[separable_catalog.sample_hashes[0]]
+    assert first_kick is not None
+    assert first_kick.paths == {("KICK", "SOFT")}
+    assert by_hash[separable_catalog.sample_hashes[1]] is None

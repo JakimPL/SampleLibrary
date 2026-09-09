@@ -17,6 +17,7 @@ GRADIENT_CLIP: Final[float] = 1.0
 TrainingPrecision = Literal["32-true", "16-mixed", "bf16-mixed"]
 TRAINING_PRECISIONS: Final[tuple[TrainingPrecision, ...]] = ("32-true", "16-mixed", "bf16-mixed")
 DEFAULT_PRECISION: Final[TrainingPrecision] = "32-true"
+DEFAULT_ACCELERATOR: Final[str] = "cuda"
 
 
 @dataclass(frozen=True)
@@ -26,7 +27,8 @@ class TrainingSettings:
     `precision` names the arithmetic a step is computed in, in the trainer's own vocabulary:
     ``32-true`` throughout, or ``16-mixed`` to carry the products at half precision while the
     weights stay whole. A 16-bit sample leaves room for either, so which one a run uses is a
-    question of speed and memory rather than of what the audio can carry.
+    question of speed and memory rather than of what the audio can carry. `accelerator` names the
+    device the trainer runs on, in its vocabulary too.
     """
 
     epochs: int = DEFAULT_EPOCHS
@@ -36,6 +38,7 @@ class TrainingSettings:
     channels: int = DEFAULT_CHANNELS
     worker_count: int = DEFAULT_WORKER_COUNT
     precision: TrainingPrecision = DEFAULT_PRECISION
+    accelerator: str = DEFAULT_ACCELERATOR
     random_seed: int = DEFAULT_RANDOM_SEED
     weights: LossWeights = field(default_factory=LossWeights)
 
@@ -49,6 +52,7 @@ class TrainingSettings:
             "channels": str(self.channels),
             "worker_count": str(self.worker_count),
             "precision": self.precision,
+            "accelerator": self.accelerator,
             "random_seed": str(self.random_seed),
             "gradient_weight": str(self.weights.gradient),
             "spectral_weight": str(self.weights.spectral),

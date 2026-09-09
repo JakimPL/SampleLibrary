@@ -10,6 +10,7 @@ from trackmod.core.notes.pitch import Note
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
+from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import Experiment, SampleFeatureVector
 from samplecore.models.module import Module
@@ -22,11 +23,19 @@ from samplecore.storage.repositories.feature_vector import PostgresSampleFeature
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 
 SAMPLES_PER_CATEGORY = 8
 FEATURE_DIMENSIONS = 6
 SEEDED_CATEGORIES = ("kick", "snare", "bass", "lead")
+# What a person would write for each seeded category, alternating a specification so the hierarchy is exercised.
+HAND_LABELS = {
+    "kick": ("KICK: SOFT", "KICK: HARD"),
+    "snare": ("SNARE",),
+    "bass": ("BASS: SYNTH",),
+    "lead": ("LEAD, SYNTH",),
+}
 SAMPLE_RATE_HZ = 8_363
 
 
@@ -127,6 +136,33 @@ def _note_events(module_id: int, *, pitch_count: int, strike_count: int) -> list
         )
         for strike in range(strike_count)
     ]
+
+
+def label_catalog(connection: Connection, catalog: SeededCatalog, *, every: int = 1) -> tuple[str, ...]:
+    """Give every `every`-th seeded sample the hand label its category would earn; returns the labeled hashes."""
+    annotations = []
+    for index, (sample_hash, category) in enumerate(zip(catalog.sample_hashes, catalog.categories, strict=True)):
+        if index % every:
+            continue
+        wordings = HAND_LABELS[category]
+        annotations.append(
+            SampleAnnotation(
+                sample_hash=sample_hash,
+                label=wordings[index % len(wordings)],
+                rating=None,
+                favorite=False,
+                occurrence=SampleOccurrence(
+                    module_hash=format(index + 5001, "064x"), instrument_index=0, sample_slot=0
+                ),
+                module_filename=f"song{index + 1}.xm",
+                sample_name=f"{category} {index}",
+                source=AnnotationSource.SAMPLE,
+                annotated_at=datetime.now(UTC),
+            )
+        )
+    PostgresSampleAnnotationRepository(connection).replace_many(tuple(annotations))
+    connection.commit()
+    return tuple(annotation.sample_hash for annotation in annotations)
 
 
 @pytest.fixture(name="separable_catalog")

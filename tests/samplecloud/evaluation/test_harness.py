@@ -14,7 +14,8 @@ from samplecloud.evaluation.report import report_json
 from samplecloud.evaluation.settings import EvaluationSettings
 from samplecloud.evaluation.transposition import OffsetRetrieval, TranspositionRetrieval
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
-from tests.samplecloud.evaluation.conftest import SeededCatalog
+from samplecore.tracking.store import TRACKING_DATABASE_NAME
+from tests.samplecloud.evaluation.conftest import SeededCatalog, label_catalog
 
 SETTINGS = EvaluationSettings(random_seed=0, fold_count=4, neighbor_count=3)
 
@@ -44,8 +45,26 @@ def test_a_pass_without_an_extractor_scores_the_stored_vectors_alone(
     assert report.transposition is None
     assert report.categories is not None
     assert report.notes is not None
+    assert report.hand_labels is None
     assert report.sample_count == len(separable_catalog.sample_hashes)
     assert report.backend_name == "stub"
+
+
+def test_a_pass_scores_the_hand_labels_once_enough_samples_carry_one(
+    connection: Connection, tmp_path: Path, separable_catalog: SeededCatalog
+) -> None:
+    label_catalog(connection, separable_catalog)
+
+    report = evaluate_experiment(
+        connection,
+        experiment_id=separable_catalog.experiment_id,
+        library_root=tmp_path,
+        feature_extractor=None,
+        settings=SETTINGS,
+    )
+
+    assert report.hand_labels is not None
+    assert report.hand_labels.labeled_sample_count == len(separable_catalog.sample_hashes)
 
 
 def test_an_unknown_experiment_says_so(connection: Connection, tmp_path: Path) -> None:
@@ -96,6 +115,21 @@ def test_the_command_writes_the_report_where_it_was_asked_to(
     written = json.loads(output.read_text())
     assert written["experiment_id"] == separable_catalog.experiment_id
     assert written["transposition"] is None
+    assert (tmp_path / TRACKING_DATABASE_NAME).is_file()
+
+
+def test_the_command_leaves_no_run_behind_when_asked_not_to_track(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    separable_catalog: SeededCatalog,
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    main(["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition", "--no-tracking"])
+
+    assert not (tmp_path / TRACKING_DATABASE_NAME).exists()
 
 
 def test_the_command_reports_an_experiment_extracted_by_an_unknown_backend(
@@ -130,6 +164,25 @@ def test_the_command_reports_every_metric_it_ran(
     assert "of the catalog" in reported
     assert "Note-event agreement" in reported
     assert "single-pitch AUC" in reported
+
+
+def test_the_command_reports_the_hand_labels_tag_by_tag(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    separable_catalog: SeededCatalog,
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    label_catalog(connection, separable_catalog)
+
+    main(["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition", "--label-depth", "1"])
+
+    reported = capsys.readouterr().out
+    assert "Hand-label agreement over 32 labeled samples" in reported
+    assert "BASS: SYNTH" not in reported
+    assert "SNARE" in reported
 
 
 def test_the_command_reports_retrieval_offset_by_offset(

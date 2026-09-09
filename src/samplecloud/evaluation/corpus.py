@@ -8,12 +8,14 @@ from sqlalchemy import Connection
 
 from samplecloud.standardization import Standardization, fit_standardization
 from samplecore.categorization import classify_sample_category
+from samplecore.labeling.labels import SampleLabel
 from samplecore.models.category import SampleCategory
 from samplecore.models.note_event import SampleNoteStatistics
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
 
 @dataclass(frozen=True)
@@ -21,15 +23,16 @@ class EvaluationCorpus:
     """One experiment's vectors beside everything a descriptor is scored against.
 
     The rows line up: index `i` names one sample throughout, so a metric selects the samples it can
-    score and reads the same row from every array. Categories reach a tenth of the catalog and note
-    statistics reach almost all of it, which is why each metric reports its own coverage rather than
-    the harness reporting one.
+    score and reads the same row from every array. Categories reach a tenth of the catalog, note
+    statistics reach almost all of it and hand labels reach whatever the person has listened to so
+    far, which is why each metric reports its own coverage rather than the harness reporting one.
     """
 
     sample_hashes: tuple[str, ...]
     vectors: NDArray[np.float64]
     categories: tuple[SampleCategory, ...]
     note_statistics: tuple[SampleNoteStatistics | None, ...]
+    labels: tuple[SampleLabel | None, ...]
     equivalence_groups: NDArray[np.int64]
     standardization: Standardization
 
@@ -38,6 +41,7 @@ class EvaluationCorpus:
             "vectors": self.vectors.shape[0],
             "categories": len(self.categories),
             "note statistics": len(self.note_statistics),
+            "labels": len(self.labels),
             "equivalence groups": int(self.equivalence_groups.shape[0]),
         }
         mismatched = {name: count for name, count in counts.items() if count != len(self.sample_hashes)}
@@ -60,6 +64,11 @@ class EvaluationCorpus:
     def note_reached(self) -> NDArray[np.bool_]:
         """Which samples the note events reach, which is what a note metric can be scored over."""
         return np.array([statistics is not None for statistics in self.note_statistics])
+
+    @property
+    def labeled(self) -> NDArray[np.bool_]:
+        """Which samples a person labeled, which is what a hand-label metric can be scored over."""
+        return np.array([label is not None for label in self.labels])
 
 
 def load_corpus(connection: Connection, *, experiment_id: int) -> EvaluationCorpus:
@@ -85,6 +94,7 @@ def load_corpus(connection: Connection, *, experiment_id: int) -> EvaluationCorp
         vectors=standardization.apply(raw),
         categories=categories,
         note_statistics=tuple(statistics_by_hash.get(sample_hash) for sample_hash in sample_hashes),
+        labels=_labels_for(connection, sample_hashes),
         equivalence_groups=equivalence_groups(connection, sample_hashes),
         standardization=standardization,
     )
@@ -100,6 +110,16 @@ def _categories_for(connection: Connection, sample_hashes: tuple[str, ...]) -> t
         classify_sample_category(occurrence_names.get(sample_hash, ()) + instrument_names.get(sample_hash, ()))
         for sample_hash in sample_hashes
     )
+
+
+def _labels_for(connection: Connection, sample_hashes: tuple[str, ...]) -> tuple[SampleLabel | None, ...]:
+    """The label a person gave each sample, read from the curation schema and never written back."""
+    annotations = PostgresSampleAnnotationRepository(connection).annotations_by_hash(list(sample_hashes))
+    labels: list[SampleLabel | None] = []
+    for sample_hash in sample_hashes:
+        annotation = annotations.get(sample_hash)
+        labels.append(SampleLabel.parse(annotation.label) if annotation is not None and annotation.label else None)
+    return tuple(labels)
 
 
 def equivalence_groups(connection: Connection, sample_hashes: tuple[str, ...]) -> NDArray[np.int64]:
