@@ -13,6 +13,7 @@ from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.config import LibraryConfig
 from samplecore.models.sample import Sample
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.tracking.session import open_run
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.measurement.corpus import (
     DEFAULT_PROBE_FRAME_CEILING,
@@ -62,6 +63,7 @@ DEFAULT_FIT_SAMPLE_COUNT: Final[int] = 4_000
 DEFAULT_TRAIN_SAMPLE_COUNT: Final[int] = 20_000
 DEFAULT_DEVICE: Final[str] = "cuda"
 MANIFEST_NAME: Final[str] = "manifest.json"
+PHASE_EXPERIMENT_NAME: Final[str] = "phase-vocoder"
 
 _logger = logging.getLogger(__name__)
 
@@ -250,6 +252,7 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     train.add_argument(
         "--resume", action="store_true", help="Continue the run of this name from where it last stopped."
     )
+    train.add_argument("--no-tracking", action="store_true", help="Run without keeping a record of it.")
 
     render = commands.add_parser(MorphCommand.RENDER.value, help="Render a listening set between two samples.")
     render.add_argument("--first", type=str, required=True, help="The sample hash the morph starts from.")
@@ -287,27 +290,37 @@ def _train_phase(connection: Connection, config: LibraryConfig, arguments: argpa
         frame_floor=DEFAULT_PROBE_FRAME_FLOOR,
         frame_ceiling=DEFAULT_PROBE_FRAME_CEILING,
     )
-    outcome = run_phase_training(
-        PhaseCorpus(
-            samples=samples,
-            library_root=config.library_root,
-            canonicalizer=canonicalizer,
-            canonicalizer_name=arguments.canonicalizer,
-        ),
-        settings=TrainingSettings(
-            epochs=arguments.epochs,
-            batch_size=arguments.batch,
-            channels=arguments.channels,
-            crop_frames=arguments.crop,
-            learning_rate=arguments.learning_rate,
-            worker_count=arguments.workers,
-            precision=arguments.precision,
-            random_seed=arguments.seed,
-        ),
-        model_name=arguments.phase_model,
-        accelerator=arguments.device,
-        resume=arguments.resume,
+    corpus = PhaseCorpus(
+        samples=samples,
+        library_root=config.library_root,
+        canonicalizer=canonicalizer,
+        canonicalizer_name=arguments.canonicalizer,
     )
+    settings = TrainingSettings(
+        epochs=arguments.epochs,
+        batch_size=arguments.batch,
+        channels=arguments.channels,
+        crop_frames=arguments.crop,
+        learning_rate=arguments.learning_rate,
+        worker_count=arguments.workers,
+        precision=arguments.precision,
+        random_seed=arguments.seed,
+    )
+    with open_run(
+        config.library_root,
+        recorded=not arguments.no_tracking,
+        experiment_name=PHASE_EXPERIMENT_NAME,
+        run_name=arguments.phase_model,
+    ) as tracker:
+        outcome = run_phase_training(
+            corpus,
+            settings=settings,
+            model_name=arguments.phase_model,
+            accelerator=arguments.device,
+            resume=arguments.resume,
+            tracker=tracker,
+        )
+
     _logger.info(
         "Trained over %d samples for %d epochs. The best epoch scored %.4f and is what %s holds.",
         len(samples),

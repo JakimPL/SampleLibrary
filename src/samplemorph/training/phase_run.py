@@ -8,12 +8,14 @@ from lightning.pytorch import Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
 
+from samplecore.tracking import TrackedRun
 from samplemorph.geometry import fourier_bin_count
 from samplemorph.training.metrics import MONITORED_METRIC
 from samplemorph.training.phase_data import PhaseCorpus, PhaseDataModule
 from samplemorph.training.phase_export import PhaseExport
 from samplemorph.training.phase_module import PhaseTrainingModule
 from samplemorph.training.settings import GRADIENT_CLIP, TrainingSettings
+from samplemorph.training.tracked_logger import TrackedRunLogger
 from samplemorph.vocoders.learned import phase_model_path
 from samplemorph.vocoders.phase_model import PhaseModelShape
 
@@ -48,6 +50,7 @@ def run_phase_training(
     model_name: str,
     accelerator: str,
     resume: bool,
+    tracker: TrackedRun,
 ) -> TrainingOutcome:
     """Teach a phase model, writing what it learns as it learns it.
 
@@ -55,8 +58,12 @@ def run_phase_training(
     optimizer, the schedule and the epoch reached, so a run cut short by a crash continues from
     where it stopped. The exported weights carry the network alone, which is what a vocoder reads
     and what makes a run listenable while it is still going.
+
+    What the run was asked to do reaches the record before the first epoch, so a pass that ends
+    badly is still identifiable by the settings it ran under.
     """
     seed_everything(settings.random_seed, workers=True)
+    tracker.log_parameters(settings.as_parameters() | {"canonicalizer": corpus.canonicalizer_name})
     library_root = corpus.library_root
     geometry = corpus.canonicalizer.geometry
     data = PhaseDataModule(
@@ -78,6 +85,7 @@ def run_phase_training(
         path=phase_model_path(library_root, name=model_name),
         corpus=corpus,
         trained_sample_count=data.training_sample_count,
+        tracker=tracker,
     )
     directory = run_directory(library_root, name=model_name)
     trainer = Trainer(
@@ -86,7 +94,7 @@ def run_phase_training(
         precision=settings.precision,
         gradient_clip_val=GRADIENT_CLIP,
         default_root_dir=directory,
-        logger=CSVLogger(save_dir=directory, name=""),
+        logger=[CSVLogger(save_dir=directory, name=""), TrackedRunLogger(tracker)],
         callbacks=[export, _checkpoint(directory)],
     )
     started_from = resume_path(library_root, name=model_name)

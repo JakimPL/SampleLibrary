@@ -6,6 +6,7 @@ import torch
 from lightning.pytorch import Trainer
 from torch.utils.data import DataLoader
 
+from samplecore.tracking.silent import SilentRun
 from samplemorph.registries import CANONICALIZER_REGISTRY
 from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_dataset import PhaseBatchItem
@@ -33,6 +34,7 @@ def _export(module: PhaseTrainingModule, path: Path) -> PhaseExport:
         path=path,
         corpus=_corpus(path.parent),
         trained_sample_count=TRAINED_SAMPLE_COUNT,
+        tracker=SilentRun(),
     )
 
 

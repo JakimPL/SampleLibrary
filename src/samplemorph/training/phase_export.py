@@ -4,6 +4,7 @@ from pathlib import Path
 
 from lightning.pytorch import Callback, LightningModule, Trainer
 
+from samplecore.tracking import TrackedRun
 from samplemorph.training.metrics import MONITORED_METRIC
 from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_module import PhaseTrainingModule
@@ -49,7 +50,8 @@ class PhaseExport(Callback):
     resuming needs.
 
     The module is held rather than taken from the call, so the weights written are known to be the
-    ones this export was built for.
+    ones this export was built for. Each write also reaches the run's record, so the weights an
+    epoch's numbers describe are the ones stored beside them.
     """
 
     def __init__(
@@ -59,12 +61,14 @@ class PhaseExport(Callback):
         path: Path,
         corpus: PhaseCorpus,
         trained_sample_count: int,
+        tracker: TrackedRun,
     ) -> None:
         super().__init__()
         self._module = module
         self._path = path
         self._corpus = corpus
         self._trained_sample_count = trained_sample_count
+        self._tracker = tracker
         self._best_loss = float("inf")
 
     @property
@@ -95,3 +99,4 @@ class PhaseExport(Callback):
                 best_validation_loss=self._best_loss,
             ),
         )
+        self._tracker.log_artifact(self._path)
