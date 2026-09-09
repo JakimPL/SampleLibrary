@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
@@ -22,15 +22,21 @@ from samplemorph.training.phase_dataset import (
     limit_worker_threads,
 )
 from samplemorph.training.phase_losses import AnalysisWindow, LossWeights, phase_loss
-from samplemorph.vocoders.phase_model import DEFAULT_CHANNELS, PhaseModel, PhaseModelShape
+from samplemorph.vocoders.phase_model import (
+    DEFAULT_CHANNELS,
+    PhaseModel,
+    PhaseModelShape,
+)
 
 DEFAULT_BATCH_SIZE: Final[int] = 32
 DEFAULT_EPOCHS: Final[int] = 20
 DEFAULT_LEARNING_RATE: Final[float] = 2e-4
-DEFAULT_WORKER_COUNT: Final[int] = 12
+DEFAULT_WORKER_COUNT: Final[int] = 8
 DEFAULT_VALIDATION_SHARE: Final[float] = 0.05
 PROGRESS_INTERVAL: Final[int] = 100
 GRADIENT_CLIP: Final[float] = 1.0
+PREFETCH_BATCHES: Final[int] = 2
+WORKER_START_METHOD: Final[str] = "spawn"
 
 _logger = logging.getLogger(__name__)
 
@@ -46,7 +52,7 @@ class TrainingSettings:
     channels: int = DEFAULT_CHANNELS
     worker_count: int = DEFAULT_WORKER_COUNT
     random_seed: int = 0
-    weights: LossWeights = LossWeights()
+    weights: LossWeights = field(default_factory=LossWeights)
 
 
 @dataclass(frozen=True)
@@ -196,7 +202,7 @@ def _split(samples: tuple[Sample, ...], *, random_seed: int) -> tuple[tuple[Samp
     Raises:
         ValueError: the body is too small to hold any of it back.
     """
-    holdout = max(int(round(len(samples) * DEFAULT_VALIDATION_SHARE)), 1)
+    holdout = max(round(len(samples) * DEFAULT_VALIDATION_SHARE), 1)
     if len(samples) <= holdout:
         raise ValueError(f"{len(samples)} samples leave nothing to train on once {holdout} are held back")
 
@@ -210,6 +216,18 @@ def _split(samples: tuple[Sample, ...], *, random_seed: int) -> tuple[tuple[Samp
 def _loader(
     samples: tuple[Sample, ...], *, corpus: PhaseCorpus, settings: TrainingSettings, shuffle: bool
 ) -> DataLoader[PhaseBatchItem]:
+    """Build the loader that feeds one part of the corpus, on a transport a long run survives.
+
+    Each worker starts as a fresh interpreter, so it holds the roughly 730 MB its own imports and
+    working arrays need and nothing else. That keeps a worker's memory its own, and it keeps the
+    weights on the GPU out of the picture entirely: the model reaches the device before the first
+    batch is asked for, and a worker started fresh begins after that with an address space of its
+    own rather than a copy of the trainer's.
+
+    Batches travel as ordinary pageable memory, and each worker holds `PREFETCH_BATCHES` of them
+    ready. Together those bound what a run has in flight at any moment, which is what lets a whole
+    catalog pass leave the rest of the machine the memory it is using.
+    """
     dataset = PhaseTrainingSet(
         samples,
         library_root=corpus.library_root,
@@ -217,16 +235,17 @@ def _loader(
         crop_frames=settings.crop_frames,
         random_seed=settings.random_seed,
     )
+    parallel = settings.worker_count > 0
     return DataLoader(
         dataset,
         batch_size=settings.batch_size,
         shuffle=shuffle,
         num_workers=settings.worker_count,
         drop_last=shuffle,
-        persistent_workers=settings.worker_count > 0,
-        pin_memory=True,
-        worker_init_fn=limit_worker_threads if settings.worker_count > 0 else None,
-        prefetch_factor=4 if settings.worker_count > 0 else None,
+        persistent_workers=parallel,
+        worker_init_fn=limit_worker_threads if parallel else None,
+        prefetch_factor=PREFETCH_BATCHES if parallel else None,
+        multiprocessing_context=WORKER_START_METHOD if parallel else None,
     )
 
 
