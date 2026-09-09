@@ -34,9 +34,9 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         hand_label: null,
         rating: null,
         favorite: false,
-        dominant_rate_hz: null,
+        playback_rate_hz: null,
         duration_seconds: 0.1,
-        notes_played: [],
+        playback_rates: [],
         equivalence_member_count: 1,
         ...overrides,
     };

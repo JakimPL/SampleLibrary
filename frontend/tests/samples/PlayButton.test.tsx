@@ -6,7 +6,7 @@ import { PlayButton } from "../../src/samples/PlayButton";
 describe("PlayButton", () => {
     it("renders its children inside a clickable button that plays the sample's audio", () => {
         render(
-            <PlayButton pitch={null} sampleHash="sample-play-button">
+            <PlayButton playbackRateHz={null} sampleHash="sample-play-button">
                 ▶
             </PlayButton>,
         );
@@ -21,7 +21,7 @@ describe("PlayButton", () => {
 
     it("is not pressed for a sample other than the one currently playing", () => {
         render(
-            <PlayButton pitch={null} sampleHash="sample-not-playing">
+            <PlayButton playbackRateHz={null} sampleHash="sample-not-playing">
                 ▶
             </PlayButton>,
         );

@@ -18,6 +18,7 @@ from samplecore.storage.repositories.cloud import (
     PostgresModuleCloudCoordinateRepository,
 )
 from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 
@@ -83,6 +84,21 @@ def test_get_cloud_resolves_each_point_s_category_from_its_occurrence_names(
 
     assert response.status_code == 200
     assert response.json()[0]["category"] == "kick"
+
+
+def test_get_cloud_carries_the_rate_a_point_is_heard_at(client: TestClient, connection: Connection) -> None:
+    """Clicking a point plays it, so the speed the library sounds it at travels with the point."""
+    PostgresSampleRepository(connection).upsert(
+        Sample(hash=SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
+    )
+    PostgresCloudCoordinateRepository(connection).upsert(
+        SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
+    )
+    PostgresSamplePlaybackRateRepository(connection).replace_all({SAMPLE_HASH: 16726})
+
+    response = client.get("/cloud")
+
+    assert response.json()[0]["playback_rate_hz"] == 16726
 
 
 def test_get_cloud_on_an_empty_catalog_returns_nothing(client: TestClient) -> None:

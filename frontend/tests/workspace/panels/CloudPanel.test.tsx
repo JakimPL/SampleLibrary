@@ -239,7 +239,7 @@ describe("CloudPanel", () => {
             size_bytes: 8192,
             display_name: "kick",
             category: "kick",
-            dominant_rate_hz: 8363,
+            playback_rate_hz: 8363,
             duration_seconds: 0.09,
         });
         getSampleWaveform.mockResolvedValue([]);
@@ -269,7 +269,7 @@ describe("CloudPanel", () => {
             size_bytes: 8192,
             display_name: "snare",
             category: "snare",
-            dominant_rate_hz: 8363,
+            playback_rate_hz: 8363,
             duration_seconds: 0.09,
         });
         getSampleWaveform.mockResolvedValue([]);

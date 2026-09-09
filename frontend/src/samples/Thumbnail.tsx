@@ -5,7 +5,6 @@ import type { WaveformPeak } from "../api/samples";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import { readMiniWaveformColor } from "./miniWaveformColor";
 import { PlayButton } from "./PlayButton";
-import type { PreviewPitch } from "./useAudioPreview";
 import { layoutWaveformBars } from "./waveformLayout";
 
 const THUMBNAIL_WIDTH = 80;
@@ -15,10 +14,10 @@ const NO_THUMBNAIL_LABEL = "—";
 interface ThumbnailProps {
     readonly sampleHash: string;
     readonly peaks: readonly WaveformPeak[] | null;
-    readonly pitch: PreviewPitch | null;
+    readonly playbackRateHz: number | null;
 }
 
-export function Thumbnail({ sampleHash, peaks, pitch }: ThumbnailProps): ReactElement {
+export function Thumbnail({ sampleHash, peaks, playbackRateHz }: ThumbnailProps): ReactElement {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const themeSignal = useThemeSignal();
 
@@ -40,7 +39,7 @@ export function Thumbnail({ sampleHash, peaks, pitch }: ThumbnailProps): ReactEl
     }
 
     return (
-        <PlayButton sampleHash={sampleHash} pitch={pitch}>
+        <PlayButton sampleHash={sampleHash} playbackRateHz={playbackRateHz}>
             <canvas ref={canvasRef} width={THUMBNAIL_WIDTH} height={THUMBNAIL_HEIGHT} />
         </PlayButton>
     );

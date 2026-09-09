@@ -54,6 +54,8 @@ equivalence:
 thumbnails:
 	uv run samplethumbnail
 
+# Reads each cataloged module's patterns for the notes they play, then folds those notes into the
+# rate every sample is really heard at -- which is what the app plays a sample back at.
 .PHONY: notes
 notes:
 	uv run samplenotes

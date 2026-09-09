@@ -34,7 +34,7 @@ const SAMPLE_SUMMARY = {
     category: "kick",
     size_bytes: 8192,
     thumbnail: null,
-    dominant_rate_hz: null,
+    playback_rate_hz: null,
     equivalence_class_hash: null,
     equivalence_member_count: 1,
 };

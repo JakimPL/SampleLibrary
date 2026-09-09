@@ -371,6 +371,17 @@ module_note_extraction = Table(
     Column("extracted_at", DateTime(timezone=True), nullable=False),
 )
 
+# The rate a sample's own note events settle on, folded over the whole catalog by the pass that
+# reads those events. One aggregate over tens of millions of events takes a minute, which a served
+# request cannot spend, so the answer is written down once and read back per sample.
+sample_playback_rate = Table(
+    "sample_playback_rate",
+    metadata,
+    Column("sample_hash", String(64), ForeignKey("sample.hash"), primary_key=True),
+    Column("rate", UInteger, nullable=False),
+    CheckConstraint(column("rate") > 0, name="sample_playback_rate_rate_check"),
+)
+
 
 def connect(database_url: str, *, read_only: bool = False) -> Connection:
     """Open the library's Postgres catalog, creating its schema on first use.

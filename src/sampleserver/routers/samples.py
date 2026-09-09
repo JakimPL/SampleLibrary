@@ -13,18 +13,24 @@ from samplecore.categorization import classify_sample_category
 from samplecore.equivalence_classes import classes_by_member_hash, compute_equivalence_classes
 from samplecore.models.base import FROZEN
 from samplecore.models.module import Module
-from samplecore.models.note_event import SampleNoteUsage
+from samplecore.models.note_event import SamplePlaybackRate
 from samplecore.models.relation import SampleRelation
 from samplecore.models.sample import DescribedSample, SampleSelection, SampleSort, SampleSummary
 from samplecore.models.sample_properties import TrackerSampleProperties
 from samplecore.models.scalars import MAXIMUM_RATING, MINIMUM_RATING, Count, ModuleHash, SampleHash
 from samplecore.models.tracker import TrackerFormat
-from samplecore.naming import choose_dominant_name, choose_dominant_rate
-from samplecore.pitch import sounding_rate_hz
+from samplecore.naming import choose_dominant_name
+from samplecore.pitch import (
+    choose_playback_rate,
+    dominant_playback_rate,
+    playback_rates_of,
+    tally_playback_rates,
+)
 from samplecore.spectral_distance import euclidean_distance, nearest_neighbors
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
+from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
@@ -74,39 +80,27 @@ class SampleDistance(BaseModel):
 class SimilarSample(BaseModel):
     """One neighbor in a sample's spectral-distance nearest-neighbor listing.
 
-    ``dominant_rate_hz`` travels with the neighbor so a listener hears it at a real tracker rate
-    rather than at the stored file's own header rate; it is ``None`` for a sample with no occurrences.
+    ``playback_rate_hz`` travels with the neighbor so a listener hears it at the speed the library
+    really plays it; it is ``None`` for a sample the catalog knows no rate for.
     """
 
     model_config = FROZEN
 
     hash: SampleHash
     distance: float
-    dominant_rate_hz: Rate | None
-
-
-class SampleNotePlayed(BaseModel):
-    """One note a sample is heard at, with how often the library plays it there.
-
-    ``sounding_rate_hz`` reads the note against the sample's dominant occurrence rate, which is the
-    rate a preview would otherwise play at, so a caller can sound the sample as the library really
-    uses it rather than at its bare reference rate.
-    """
-
-    model_config = FROZEN
-
-    sounded_note: int
-    note_name: str
-    event_count: Count
-    sounding_rate_hz: float | None
+    playback_rate_hz: Rate | None
 
 
 class SampleDetail(DescribedSample):
-    """A sample together with every module occurrence that references it, and the notes it is played at."""
+    """A sample together with every module occurrence that references it, and the rates it is heard at.
+
+    ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
+    first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
+    """
 
     occurrences: tuple[SampleOccurrenceDetail, ...]
     duration_seconds: float
-    notes_played: tuple[SampleNotePlayed, ...]
+    playback_rates: tuple[SamplePlaybackRate, ...]
     equivalence_member_count: Count
 
 
@@ -204,11 +198,7 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
         SampleOccurrenceDetail(properties=item, module=_occurrence_module(modules_by_hash[item.occurrence.module_hash]))
         for item in properties
     )
-    dominant_rate_hz = choose_dominant_rate(item.rate for item in properties)
-    notes_played = tuple(
-        _note_played(usage, dominant_rate_hz=dominant_rate_hz)
-        for usage in PostgresNoteEventRepository(connection).note_usage_for_sample(sample_hash)
-    )
+    tally = tally_playback_rates(PostgresNoteEventRepository(connection).note_usage_for_sample(sample_hash))
     return SampleDetail(
         hash=sample.hash,
         depth=sample.depth,
@@ -224,24 +214,12 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
         hand_label=annotation.label if annotation is not None else None,
         rating=annotation.rating if annotation is not None else None,
         favorite=annotation.favorite if annotation is not None else False,
-        dominant_rate_hz=dominant_rate_hz,
-        duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
-        notes_played=notes_played,
-        equivalence_member_count=len(equivalence_class_members(connection, sample_hash)),
-    )
-
-
-def _note_played(usage: SampleNoteUsage, *, dominant_rate_hz: Rate | None) -> SampleNotePlayed:
-    """One note usage rendered for the API, sounded against the sample's dominant occurrence rate."""
-    return SampleNotePlayed(
-        sounded_note=usage.sounded_note.value,
-        note_name=str(usage.sounded_note),
-        event_count=usage.event_count,
-        sounding_rate_hz=(
-            None
-            if dominant_rate_hz is None
-            else sounding_rate_hz(reference_rate_hz=dominant_rate_hz, sounded_note=usage.sounded_note)
+        playback_rate_hz=choose_playback_rate(
+            note_event_rate=dominant_playback_rate(tally), occurrence_rates=(item.rate for item in properties)
         ),
+        duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
+        playback_rates=playback_rates_of(tally),
+        equivalence_member_count=len(equivalence_class_members(connection, sample_hash)),
     )
 
 
@@ -334,14 +312,17 @@ def get_similar_samples(
         raise HTTPException(status_code=404, detail=f"sample {sample_hash!r} has no spectral feature vector yet")
 
     neighbors = nearest_neighbors(sample_hash, vectors_by_hash, limit=limit)
-    _, rates_by_hash = PostgresSampleRepository(connection).names_and_rates_by_hash(
-        [neighbor_hash for neighbor_hash, _ in neighbors]
-    )
+    neighbor_hashes = [neighbor_hash for neighbor_hash, _ in neighbors]
+    _, rates_by_hash = PostgresSampleRepository(connection).names_and_rates_by_hash(neighbor_hashes)
+    playback_rate_by_hash = PostgresSamplePlaybackRateRepository(connection).get_many(neighbor_hashes)
     return tuple(
         SimilarSample(
             hash=neighbor_hash,
             distance=distance,
-            dominant_rate_hz=choose_dominant_rate(rates_by_hash.get(neighbor_hash, ())),
+            playback_rate_hz=choose_playback_rate(
+                note_event_rate=playback_rate_by_hash.get(neighbor_hash),
+                occurrence_rates=rates_by_hash.get(neighbor_hash, ()),
+            ),
         )
         for neighbor_hash, distance in neighbors
     )

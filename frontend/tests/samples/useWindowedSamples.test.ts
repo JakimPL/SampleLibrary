@@ -26,8 +26,7 @@ function buildSample(id: number): SampleSummary {
         favorite: false,
         size_bytes: 8192,
         thumbnail: null,
-        dominant_rate_hz: null,
-        dominant_note: null,
+        playback_rate_hz: null,
         equivalence_class_hash: null,
         equivalence_member_count: 1,
     };

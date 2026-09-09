@@ -5,7 +5,6 @@ from typing import Any, Protocol, TypeVar
 
 from sqlalchemy import ColumnElement, Connection, Row, Select, func, select
 from sqlalchemy.dialects.postgresql import insert
-from trackmod.core.notes.pitch import Note
 from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
@@ -15,10 +14,11 @@ from samplecore.models.annotation import SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSelection, SampleSort, SampleSummary
 from samplecore.models.thumbnail import SampleThumbnail
-from samplecore.naming import choose_dominant_name, choose_dominant_rate
+from samplecore.naming import choose_dominant_name
+from samplecore.pitch import choose_playback_rate
 from samplecore.storage.curation import sample_annotation
 from samplecore.storage.database import HASH_CHUNK_SIZE, module_instrument, sample, sample_properties
-from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
+from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
 
@@ -146,7 +146,7 @@ class PostgresSampleRepository:
         hashes = [row.hash for row in rows]
         names_by_hash, rates_by_hash = self.names_and_rates_by_hash(hashes)
         instrument_names_by_hash = self.instrument_names_by_hash(hashes)
-        dominant_note_by_hash = PostgresNoteEventRepository(self._connection).dominant_note_by_hash(hashes)
+        playback_rate_by_hash = PostgresSamplePlaybackRateRepository(self._connection).get_many(hashes)
         thumbnails_by_hash = PostgresSampleThumbnailRepository(self._connection).get_many(hashes)
         annotation_by_hash = PostgresSampleAnnotationRepository(self._connection).annotations_by_hash(hashes)
         return tuple(
@@ -155,7 +155,7 @@ class PostgresSampleRepository:
                 names=names_by_hash.get(row.hash, ()),
                 instrument_names=instrument_names_by_hash.get(row.hash, ()),
                 rates=rates_by_hash.get(row.hash, ()),
-                dominant_note=dominant_note_by_hash.get(row.hash),
+                recorded_playback_rate=playback_rate_by_hash.get(row.hash),
                 thumbnail=thumbnails_by_hash.get(row.hash),
                 equivalence_class=class_by_hash.get(row.hash),
                 annotation=annotation_by_hash.get(row.hash),
@@ -275,7 +275,7 @@ def _row_to_sample_summary(
     names: tuple[str, ...],
     instrument_names: tuple[str, ...],
     rates: tuple[Rate, ...],
-    dominant_note: Note | None,
+    recorded_playback_rate: Rate | None,
     thumbnail: SampleThumbnail | None,
     equivalence_class: EquivalenceClass | None,
     annotation: SampleAnnotation | None,
@@ -298,8 +298,7 @@ def _row_to_sample_summary(
         category=classify_sample_category(names + instrument_names),
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),
-        dominant_rate_hz=choose_dominant_rate(rates),
-        dominant_note=dominant_note,
+        playback_rate_hz=choose_playback_rate(note_event_rate=recorded_playback_rate, occurrence_rates=rates),
         equivalence_class_hash=equivalence_class.class_hash if equivalence_class is not None else None,
         equivalence_member_count=len(equivalence_class.member_hashes) if equivalence_class is not None else 1,
         hand_label=annotation.label if annotation is not None else None,

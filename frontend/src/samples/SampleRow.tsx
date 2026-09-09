@@ -9,18 +9,8 @@ import { OptionalLabel } from "../shared/OptionalLabel";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
 import { decisionsOf, useSampleAnnotation } from "./annotationStore";
 import { CategoryBadge } from "./CategoryBadge";
-import { REFERENCE_NOTE } from "./nominalRate";
 import { ratingGlyphs } from "./rating";
 import { Thumbnail } from "./Thumbnail";
-import type { PreviewPitch } from "./useAudioPreview";
-
-/** The pitch a listing row previews at: the rate this sample is mostly declared at, sounded at
- * the note the library mostly plays it at. */
-function previewPitchFor(sample: SampleSummary): PreviewPitch | null {
-    return sample.dominant_rate_hz === null
-        ? null
-        : { rateHz: sample.dominant_rate_hz, soundedNote: sample.dominant_note ?? REFERENCE_NOTE };
-}
 
 /** What a rating reads as to a screen reader, where the stars alone would say nothing. */
 function ratingLabel(rating: number | null): string {
@@ -45,7 +35,7 @@ export function SampleRow({ sample }: SampleRowProps): ReactElement {
             onDoubleClick={onDoubleClick}
         >
             <td>
-                <Thumbnail sampleHash={sample.hash} peaks={sample.thumbnail} pitch={previewPitchFor(sample)} />
+                <Thumbnail sampleHash={sample.hash} peaks={sample.thumbnail} playbackRateHz={sample.playback_rate_hz} />
             </td>
             <td className="cell-name">
                 <Link to={href} className="cell-name-stack">

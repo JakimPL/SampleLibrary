@@ -2,22 +2,39 @@ from __future__ import annotations
 
 from pydantic import BaseModel, model_validator
 from trackmod.core.notes.pitch import Note
+from trackmod.schema.scalars import Rate
 
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import Count, Index, SampleHash
 
 
 class SampleNoteUsage(BaseModel):
-    """How often one sample is heard at one note, counted across every module that plays it.
+    """How often one sample is heard at one note struck against one occurrence rate.
 
-    A sample-hash carries no pitch of its own; what it is heard at is decided per note event. Read
-    together, these say which pitches a waveform is actually used at and how much each is leaned on,
-    which is what grounds a preview in the way the library really plays it.
+    A sample-hash carries no pitch of its own: what a waveform sounds at is decided per note event,
+    against the rate of the occurrence that event reaches. Both halves travel together because both
+    are needed -- the rate carries the tuning and transpose a tracker folded into it, the note says
+    how far the key moves it -- and only the pair says how fast the frames are really read.
     """
 
     model_config = FROZEN
 
+    reference_rate_hz: Rate
     sounded_note: Note
+    event_count: Count
+
+
+class SamplePlaybackRate(BaseModel):
+    """How often one sample is heard at one effective playback rate, across every module playing it.
+
+    This is the rate a waveform's frames are really read at: one number standing for an occurrence
+    rate and a pressed key together. Read as a group, these say which speeds a sample is used at and
+    how much each is leaned on, which is what lets a preview sound it the way the library does.
+    """
+
+    model_config = FROZEN
+
+    rate_hz: Rate
     event_count: Count
 
 

@@ -9,8 +9,8 @@ export interface CloudEntityPoint {
     // "uncategorized"), and absent for a module-cloud point -- modules carry no category concept.
     readonly category?: SampleCategory;
     // The rate to hear a clicked sample point at. Absent for a module point, and for a sample the
-    // catalog holds no occurrence of.
-    readonly dominantRateHz?: number;
+    // catalog knows no rate for.
+    readonly playbackRateHz?: number;
 }
 
 const NORMALIZED_MIN = -1;

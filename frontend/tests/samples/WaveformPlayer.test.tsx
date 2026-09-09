@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { NOMINAL_WAV_RATE_HZ, REFERENCE_NOTE } from "../../src/samples/nominalRate";
-import type { NoteOption, RateOption } from "../../src/samples/WaveformPlayer";
+import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
+import type { RateOption } from "../../src/samples/WaveformPlayer";
 import { WaveformPlayer } from "../../src/samples/WaveformPlayer";
 
 const { instances, createMock } = vi.hoisted(() => {
@@ -54,9 +54,6 @@ interface PlayerOverrides {
     readonly rateHz?: number;
     readonly rateOptions?: readonly RateOption[];
     readonly onRateChange?: (rateHz: number) => void;
-    readonly soundedNote?: number;
-    readonly noteOptions?: readonly NoteOption[];
-    readonly onNoteChange?: (soundedNote: number) => void;
 }
 
 function renderPlayer(overrides: PlayerOverrides = {}): void {
@@ -64,11 +61,8 @@ function renderPlayer(overrides: PlayerOverrides = {}): void {
         <WaveformPlayer
             sampleHash="abc"
             rateHz={overrides.rateHz ?? 8363}
-            rateOptions={overrides.rateOptions ?? [{ rateHz: 8363, occurrenceCount: 1 }]}
+            rateOptions={overrides.rateOptions ?? [{ rateHz: 8363, eventCount: 1 }]}
             onRateChange={overrides.onRateChange ?? vi.fn()}
-            soundedNote={overrides.soundedNote ?? REFERENCE_NOTE}
-            noteOptions={overrides.noteOptions ?? []}
-            onNoteChange={overrides.onNoteChange ?? vi.fn()}
         />,
     );
 }
@@ -104,33 +98,32 @@ describe("WaveformPlayer", () => {
         expect(latestInstance().pause).toHaveBeenCalled();
     });
 
-    it("annotates each rate option with how many occurrences use it", () => {
+    it("annotates each rate option with how often the library plays it there", () => {
         renderPlayer({
             rateOptions: [
-                { rateHz: 8363, occurrenceCount: 1 },
-                { rateHz: NOMINAL_WAV_RATE_HZ, occurrenceCount: 2 },
+                { rateHz: 8363, eventCount: 1 },
+                { rateHz: NOMINAL_WAV_RATE_HZ, eventCount: 2 },
             ],
         });
 
-        expect(screen.getByRole("option", { name: "8363 Hz · used in 1 occurrence" })).toBeInTheDocument();
+        expect(screen.getByRole("option", { name: "8363 Hz · played 1 time" })).toBeInTheDocument();
         expect(
-            screen.getByRole("option", { name: `${String(NOMINAL_WAV_RATE_HZ)} Hz · used in 2 occurrences` }),
+            screen.getByRole("option", { name: `${String(NOMINAL_WAV_RATE_HZ)} Hz · played 2 times` }),
         ).toBeInTheDocument();
     });
 
-    it("explains why pitch tracks the selected rate for a sample no pattern plays", () => {
+    it("offers no choice for a sample the library plays at one rate throughout", () => {
         renderPlayer();
 
-        expect(screen.getByText(/no fixed rate of its own/)).toBeInTheDocument();
-        expect(screen.queryByLabelText("Note")).not.toBeInTheDocument();
+        expect(screen.queryByLabelText("Rate")).not.toBeInTheDocument();
     });
 
     it("applies a newly selected rate and reports it to the caller", () => {
         const onRateChange = vi.fn();
         renderPlayer({
             rateOptions: [
-                { rateHz: 8363, occurrenceCount: 1 },
-                { rateHz: NOMINAL_WAV_RATE_HZ, occurrenceCount: 2 },
+                { rateHz: 8363, eventCount: 1 },
+                { rateHz: NOMINAL_WAV_RATE_HZ, eventCount: 2 },
             ],
             onRateChange,
         });
@@ -141,40 +134,10 @@ describe("WaveformPlayer", () => {
         expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(1, false);
     });
 
-    it("annotates each note option with how often the library plays it", () => {
-        renderPlayer({
-            noteOptions: [
-                { soundedNote: REFERENCE_NOTE, noteName: "C-5", eventCount: 1 },
-                { soundedNote: REFERENCE_NOTE + 12, noteName: "C-6", eventCount: 4 },
-            ],
-        });
+    it("opens at the rate it was handed, against the stored file's own", () => {
+        renderPlayer({ rateHz: 16726 });
 
-        expect(screen.getByRole("option", { name: "C-5 · played 1 time" })).toBeInTheDocument();
-        expect(screen.getByRole("option", { name: "C-6 · played 4 times" })).toBeInTheDocument();
-    });
-
-    it("sounds a newly selected note against the selected rate", () => {
-        const onNoteChange = vi.fn();
-        renderPlayer({
-            rateHz: 8363,
-            noteOptions: [
-                { soundedNote: REFERENCE_NOTE, noteName: "C-5", eventCount: 1 },
-                { soundedNote: REFERENCE_NOTE + 12, noteName: "C-6", eventCount: 4 },
-            ],
-            onNoteChange,
-        });
-
-        fireEvent.change(screen.getByLabelText("Note"), { target: { value: String(REFERENCE_NOTE + 12) } });
-
-        expect(onNoteChange).toHaveBeenCalledWith(REFERENCE_NOTE + 12);
-        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith((8363 * 2) / NOMINAL_WAV_RATE_HZ, false);
-    });
-
-    it("says playback follows the note once the library's own notes are known", () => {
-        renderPlayer({
-            noteOptions: [{ soundedNote: REFERENCE_NOTE, noteName: "C-5", eventCount: 1 }],
-        });
-
-        expect(screen.getByText(/the way the library really plays this sample/)).toBeInTheDocument();
+        expect(createMock).toHaveBeenLastCalledWith(expect.objectContaining({ url: "/api/samples/abc/audio" }));
+        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(16726 / NOMINAL_WAV_RATE_HZ, false);
     });
 });

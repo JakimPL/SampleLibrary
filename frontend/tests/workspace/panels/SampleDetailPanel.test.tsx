@@ -40,7 +40,7 @@ const SAMPLE_DETAIL = {
     category: "kick",
     size_bytes: 8192,
     duration_seconds: 0.09,
-    dominant_rate_hz: 8363,
+    playback_rate_hz: 8363,
     occurrences: [
         {
             properties: {

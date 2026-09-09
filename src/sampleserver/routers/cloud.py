@@ -8,11 +8,12 @@ from samplecore.categorization import classify_sample_category
 from samplecore.models.annotation import SampleAnnotation
 from samplecore.models.category import SampleCategory
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
-from samplecore.naming import choose_dominant_rate
+from samplecore.pitch import choose_playback_rate
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
     PostgresModuleCloudCoordinateRepository,
 )
+from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from sampleserver.dependencies import get_connection
@@ -25,15 +26,16 @@ class SampleCloudPoint(SampleCloudCoordinate):
 
     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
     sample's own occurrence names together with the names of the instruments reaching it -- rather
-    than stored alongside the coordinate itself. ``dominant_rate_hz`` travels with the point so
-    clicking one plays it at a real tracker rate; it is ``None`` for a sample with no occurrences.
+    than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
+    clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
+    the catalog knows no rate for.
     ``hand_label`` carries what a person decided this sample is, for a viewer inspecting a point;
     the cloud keeps coloring by ``category``, whose fourteen roles hold a fixed hue each.
     """
 
     category: SampleCategory
     hand_label: str | None
-    dominant_rate_hz: Rate | None
+    playback_rate_hz: Rate | None
 
 
 @router.get("")
@@ -45,6 +47,7 @@ def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleC
     names_by_hash, rates_by_hash = repository.names_and_rates_by_hash(hashes)
     instrument_names_by_hash = repository.instrument_names_by_hash(hashes)
     annotation_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(hashes)
+    playback_rate_by_hash = PostgresSamplePlaybackRateRepository(connection).list_all()
     return tuple(
         SampleCloudPoint(
             sample_hash=coordinate.sample_hash,
@@ -55,7 +58,10 @@ def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleC
                 names_by_hash.get(coordinate.sample_hash, ()) + instrument_names_by_hash.get(coordinate.sample_hash, ())
             ),
             hand_label=_label_of(annotation_by_hash.get(coordinate.sample_hash)),
-            dominant_rate_hz=choose_dominant_rate(rates_by_hash.get(coordinate.sample_hash, ())),
+            playback_rate_hz=choose_playback_rate(
+                note_event_rate=playback_rate_by_hash.get(coordinate.sample_hash),
+                occurrence_rates=rates_by_hash.get(coordinate.sample_hash, ()),
+            ),
         )
         for coordinate in coordinates
     )
