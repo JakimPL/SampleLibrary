@@ -13,7 +13,7 @@ describe("getCloud", () => {
 
         await getCloud();
 
-        expect(fetchMock).toHaveBeenCalledWith("/cloud");
+        expect(fetchMock).toHaveBeenCalledWith("/api/cloud");
     });
 });
 
@@ -24,6 +24,6 @@ describe("getModuleCloud", () => {
 
         await getModuleCloud();
 
-        expect(fetchMock).toHaveBeenCalledWith("/cloud/modules");
+        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/modules");
     });
 });

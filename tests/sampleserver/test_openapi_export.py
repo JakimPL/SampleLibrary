@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from sampleserver.app import API_PREFIX
 from sampleserver.openapi_export import main
 
 
@@ -13,4 +14,4 @@ def test_main_prints_a_valid_openapi_document(capsys: pytest.CaptureFixture[str]
     schema = json.loads(capsys.readouterr().out)
 
     assert "openapi" in schema
-    assert "/modules" in schema["paths"]
+    assert f"{API_PREFIX}/modules" in schema["paths"]

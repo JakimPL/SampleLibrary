@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 
-from sampleserver.app import create_app
+from sampleserver.app import API_PREFIX, create_app
 from sampleserver.dependencies import get_connection, get_curation_connection
 
 
@@ -23,6 +23,10 @@ def client(connection: Connection, _database_url: str, tmp_path: Path) -> Iterat
     Both the reading and the curation dependency resolve to the same connection here, which lets a
     test seed the catalog and read back what a label write did in one place. Production keeps them
     apart, and `test_app.py` is where that separation is asserted.
+
+    The base URL carries `API_PREFIX`, so a test names a route the way the router declares it and
+    the client resolves it to where the app actually serves it. `test_app.py` pins the prefix
+    itself, against a client built without one.
     """
     application = create_app(_database_url, tmp_path)
 
@@ -31,5 +35,5 @@ def client(connection: Connection, _database_url: str, tmp_path: Path) -> Iterat
 
     application.dependency_overrides[get_connection] = override_get_connection
     application.dependency_overrides[get_curation_connection] = override_get_connection
-    with TestClient(application) as test_client:
+    with TestClient(application, base_url=f"http://testserver{API_PREFIX}") as test_client:
         yield test_client

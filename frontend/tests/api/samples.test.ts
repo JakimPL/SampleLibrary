@@ -27,7 +27,7 @@ describe("listSamples", () => {
         await listSamples({ limit: 50, offset: 0, groupByEquivalence: false, selection: WHOLE_CATALOG });
 
         expect(fetchMock).toHaveBeenCalledWith(
-            "/samples?limit=50&offset=0&group_by_equivalence=false&favorites_only=false&sort=occurrences",
+            "/api/samples?limit=50&offset=0&group_by_equivalence=false&favorites_only=false&sort=occurrences",
         );
     });
 
@@ -42,7 +42,7 @@ describe("listSamples", () => {
         });
 
         expect(fetchMock).toHaveBeenCalledWith(
-            "/samples?limit=50&offset=0&group_by_equivalence=false&favorites_only=true&sort=rating&minimum_rating=4",
+            "/api/samples?limit=50&offset=0&group_by_equivalence=false&favorites_only=true&sort=rating&minimum_rating=4",
         );
     });
 
@@ -52,7 +52,7 @@ describe("listSamples", () => {
         await listSamples({ limit: 50, offset: 0, groupByEquivalence: true, selection: WHOLE_CATALOG });
 
         expect(fetchMock).toHaveBeenCalledWith(
-            "/samples?limit=50&offset=0&group_by_equivalence=true&favorites_only=false&sort=occurrences",
+            "/api/samples?limit=50&offset=0&group_by_equivalence=true&favorites_only=false&sort=occurrences",
         );
     });
 });
@@ -63,7 +63,7 @@ describe("getSample", () => {
 
         await getSample("abc");
 
-        expect(fetchMock).toHaveBeenCalledWith("/samples/abc");
+        expect(fetchMock).toHaveBeenCalledWith("/api/samples/abc");
     });
 });
 
@@ -73,7 +73,7 @@ describe("getSampleRelations", () => {
 
         await getSampleRelations("abc");
 
-        expect(fetchMock).toHaveBeenCalledWith("/samples/abc/relations");
+        expect(fetchMock).toHaveBeenCalledWith("/api/samples/abc/relations");
     });
 });
 
@@ -83,7 +83,7 @@ describe("getSampleDistance", () => {
 
         await getSampleDistance("abc", "def");
 
-        expect(fetchMock).toHaveBeenCalledWith("/samples/abc/distance/def");
+        expect(fetchMock).toHaveBeenCalledWith("/api/samples/abc/distance/def");
     });
 });
 
@@ -93,12 +93,12 @@ describe("getSimilarSamples", () => {
 
         await getSimilarSamples("abc");
 
-        expect(fetchMock).toHaveBeenCalledWith("/samples/abc/similar");
+        expect(fetchMock).toHaveBeenCalledWith("/api/samples/abc/similar");
     });
 });
 
 describe("sampleAudioUrl", () => {
     it("builds the audio URL without fetching anything", () => {
-        expect(sampleAudioUrl("abc")).toBe("/samples/abc/audio");
+        expect(sampleAudioUrl("abc")).toBe("/api/samples/abc/audio");
     });
 });

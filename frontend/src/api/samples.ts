@@ -1,4 +1,4 @@
-import { requestJson } from "./client";
+import { apiUrl, requestJson } from "./client";
 import type { components } from "./schema";
 
 export type SampleDetail = components["schemas"]["SampleDetail"];
@@ -61,5 +61,5 @@ export async function getSampleWaveform(sampleHash: string): Promise<readonly Wa
 }
 
 export function sampleAudioUrl(sampleHash: string): string {
-    return `/samples/${sampleHash}/audio`;
+    return apiUrl(`/samples/${sampleHash}/audio`);
 }

@@ -3,11 +3,14 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Final
 
 from fastapi import FastAPI
 
 from samplecore.storage.database import connect_for_curation
 from sampleserver.routers import cloud, curation, modules, samples, stats
+
+API_PREFIX: Final[str] = "/api"
 
 
 def create_app(database_url: str, library_root: Path) -> FastAPI:
@@ -17,6 +20,10 @@ def create_app(database_url: str, library_root: Path) -> FastAPI:
     curation routes are the one exception, and they reach only a person's own decisions about
     samples, in a schema of their own: what this application records is what a listener decided, and
     the catalog stays the offline pipelines' to build.
+
+    Every route is served under `API_PREFIX`, which keeps the whole API inside one path segment
+    the single-page application's own routes stay clear of: the frontend reaches `/api/samples`
+    while a person's browser holds `/samples/{hash}`, so one path always names one thing.
 
     A pure factory, deliberately without any module-level instance built from real
     configuration -- that belongs to `sampleserver.main`, the actual ASGI entry point, so that
@@ -44,9 +51,6 @@ def create_app(database_url: str, library_root: Path) -> FastAPI:
     )
     application.state.database_url = database_url
     application.state.library_root = library_root
-    application.include_router(modules.router)
-    application.include_router(samples.router)
-    application.include_router(stats.router)
-    application.include_router(cloud.router)
-    application.include_router(curation.router)
+    for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.router):
+        application.include_router(api_router, prefix=API_PREFIX)
     return application
