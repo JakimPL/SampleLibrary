@@ -8,25 +8,35 @@ import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
 import { decisionsOf, useSampleAnnotation } from "./annotationStore";
-import { CategoryBadge } from "./CategoryBadge";
-import { ratingGlyphs } from "./rating";
+import { CategoryCell } from "./CategoryCell";
+import { FavoriteToggle } from "./FavoriteToggle";
+import { RatingStars } from "./RatingStars";
 import { Thumbnail } from "./Thumbnail";
-
-/** What a rating reads as to a screen reader, where the stars alone would say nothing. */
-function ratingLabel(rating: number | null): string {
-    return rating === null ? "Unrated" : `Rated ${String(rating)}`;
-}
+import { useAnnotationWriter } from "./useAnnotationWriter";
 
 interface SampleRowProps {
     readonly sample: SampleSummary;
+    /** Whether this row stands for a whole equivalence class, which is how far an edit reaches. */
+    readonly groupByEquivalence: boolean;
 }
 
-export function SampleRow({ sample }: SampleRowProps): ReactElement {
+/**
+ * One sample as the listing shows it, and as a person decides about it.
+ *
+ * The category, the rating and the favorite mark are all editable here, so working through a
+ * library is one pass down the list rather than a detour into each sample in turn. An edit reaches
+ * exactly what the row stands for: the whole equivalence class while the listing groups them, and
+ * this one sample otherwise.
+ */
+export function SampleRow({ sample, groupByEquivalence }: SampleRowProps): ReactElement {
     const { href, isHighlighted, isFocused, onClick, onDoubleClick } = useEntityRowInteractions({
         kind: "sample",
         hash: sample.hash,
     });
-    const annotation = useSampleAnnotation(sample.hash, decisionsOf(sample));
+    const sent = decisionsOf(sample);
+    const annotation = useSampleAnnotation(sample.hash, sent);
+    const decisions = annotation ?? { label: null, rating: null, favorite: false };
+    const { write, isSaving } = useAnnotationWriter(sample.hash, groupByEquivalence ? "equivalence_class" : "sample");
 
     return (
         <tr
@@ -51,17 +61,23 @@ export function SampleRow({ sample }: SampleRowProps): ReactElement {
                 </Link>
             </td>
             <td className="cell-muted">
-                <CategoryBadge sampleHash={sample.hash} category={sample.category} handLabel={sample.hand_label} />
+                <CategoryCell sample={sample} decisions={decisions} isSaving={isSaving} onCommit={write} />
             </td>
-            <td className="cell-muted cell-verdict">
-                {annotation?.favorite === true && (
-                    <span className="favorite-mark" title="Favorite" aria-label="Favorite">
-                        ♥
-                    </span>
-                )}
-                <span className="rating-mark" aria-label={ratingLabel(annotation?.rating ?? null)}>
-                    {ratingGlyphs(annotation?.rating ?? null)}
-                </span>
+            <td className="cell-verdict">
+                <RatingStars
+                    rating={decisions.rating}
+                    isSaving={isSaving}
+                    onRatingChange={(rating) => {
+                        write({ ...decisions, rating });
+                    }}
+                />
+                <FavoriteToggle
+                    favorite={decisions.favorite}
+                    isSaving={isSaving}
+                    onFavoriteChange={(favorite) => {
+                        write({ ...decisions, favorite });
+                    }}
+                />
             </td>
             <td className="cell-muted mono">{formatBytes(sample.size_bytes)}</td>
             <td className="cell-muted mono">{sample.occurrence_count}</td>

@@ -1,12 +1,26 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type * as CurationApi from "../../src/api/curation";
 import type { SampleSummary } from "../../src/api/samples";
 import { SampleRow } from "../../src/samples/SampleRow";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 
-function buildSample(): SampleSummary {
+const { setSampleAnnotation, getLabelVocabulary } = vi.hoisted(() => ({
+    setSampleAnnotation: vi.fn(),
+    getLabelVocabulary: vi.fn(),
+}));
+
+vi.mock("../../src/api/curation", async () => {
+    const actual = await vi.importActual<typeof CurationApi>("../../src/api/curation");
+    return { ...actual, setSampleAnnotation, getLabelVocabulary };
+});
+
+const NOTHING = { label: null, rating: null, favorite: false };
+
+function buildSample(overrides: Partial<SampleSummary> = {}): SampleSummary {
     return {
         hash: "abc123",
         display_name: "kick",
@@ -23,10 +37,17 @@ function buildSample(): SampleSummary {
         playback_rate_hz: null,
         equivalence_class_hash: null,
         equivalence_member_count: 1,
+        ...overrides,
     };
 }
 
-function renderRow(): ReturnType<typeof render> {
+interface RowOverrides {
+    readonly sample?: SampleSummary;
+    readonly groupByEquivalence?: boolean;
+}
+
+function renderRow(overrides: RowOverrides = {}): ReturnType<typeof render> {
+    getLabelVocabulary.mockResolvedValue([]);
     return render(
         <MemoryRouter initialEntries={["/"]}>
             <Routes>
@@ -35,7 +56,10 @@ function renderRow(): ReturnType<typeof render> {
                     element={
                         <table>
                             <tbody>
-                                <SampleRow sample={buildSample()} />
+                                <SampleRow
+                                    sample={overrides.sample ?? buildSample()}
+                                    groupByEquivalence={overrides.groupByEquivalence ?? false}
+                                />
                             </tbody>
                         </table>
                     }
@@ -71,5 +95,87 @@ describe("SampleRow", () => {
         fireEvent.doubleClick(screen.getByRole("link", { name: /kick/ }));
 
         expect(await screen.findByText("sample route")).toBeInTheDocument();
+    });
+
+    it("names a sample from the listing itself, without opening it first", async () => {
+        setSampleAnnotation.mockResolvedValue({
+            annotation: { ...NOTHING, label: "warm pad" },
+            sample_hashes: ["abc123"],
+        });
+        renderRow();
+
+        await userEvent.click(screen.getByRole("button", { name: "Edit category" }));
+        await userEvent.type(screen.getByLabelText("Hand label"), "warm pad{Enter}");
+
+        await waitFor(() => {
+            expect(setSampleAnnotation).toHaveBeenCalledWith("abc123", { ...NOTHING, label: "warm pad" }, "sample");
+        });
+    });
+
+    it("takes a hand label back when the field is emptied, leaving the guess showing", async () => {
+        setSampleAnnotation.mockResolvedValue({ annotation: null, sample_hashes: ["abc123"] });
+        renderRow({ sample: buildSample({ hand_label: "warm pad" }) });
+
+        await userEvent.click(screen.getByRole("button", { name: "Edit category" }));
+        await userEvent.clear(screen.getByLabelText("Hand label"));
+        await userEvent.keyboard("{Enter}");
+
+        await waitFor(() => {
+            expect(setSampleAnnotation).toHaveBeenCalledWith("abc123", NOTHING, "sample");
+        });
+        expect(await screen.findByText("Kick")).toBeInTheDocument();
+    });
+
+    it("rates a sample from the listing, keeping the wording it already carries", async () => {
+        setSampleAnnotation.mockResolvedValue({
+            annotation: { label: "warm pad", rating: 4, favorite: false },
+            sample_hashes: ["abc123"],
+        });
+        renderRow({ sample: buildSample({ hand_label: "warm pad" }) });
+
+        await userEvent.click(screen.getByRole("button", { name: "Rate 4" }));
+
+        await waitFor(() => {
+            expect(setSampleAnnotation).toHaveBeenCalledWith(
+                "abc123",
+                { label: "warm pad", rating: 4, favorite: false },
+                "sample",
+            );
+        });
+    });
+
+    it("marks a favorite from the listing", async () => {
+        setSampleAnnotation.mockResolvedValue({
+            annotation: { ...NOTHING, favorite: true },
+            sample_hashes: ["abc123"],
+        });
+        renderRow();
+
+        await userEvent.click(screen.getByRole("button", { name: "Favorite" }));
+
+        await waitFor(() => {
+            expect(setSampleAnnotation).toHaveBeenCalledWith("abc123", { ...NOTHING, favorite: true }, "sample");
+        });
+    });
+
+    it("reaches every near-duplicate while the listing groups them", async () => {
+        setSampleAnnotation.mockResolvedValue({ annotation: { ...NOTHING, rating: 2 }, sample_hashes: ["abc123"] });
+        renderRow({ sample: buildSample({ equivalence_member_count: 3 }), groupByEquivalence: true });
+
+        await userEvent.click(screen.getByRole("button", { name: "Rate 2" }));
+
+        await waitFor(() => {
+            expect(setSampleAnnotation).toHaveBeenCalledWith("abc123", { ...NOTHING, rating: 2 }, "equivalence_class");
+        });
+    });
+
+    it("fills every star up to the one being pointed at", async () => {
+        renderRow();
+
+        await userEvent.hover(screen.getByRole("button", { name: "Rate 4" }));
+
+        expect(screen.getByRole("button", { name: "Rate 1" })).toHaveClass("is-filled");
+        expect(screen.getByRole("button", { name: "Rate 4" })).toHaveClass("is-filled");
+        expect(screen.getByRole("button", { name: "Rate 5" })).not.toHaveClass("is-filled");
     });
 });

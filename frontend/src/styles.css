@@ -611,12 +611,13 @@ tr.is-focused {
     cursor: pointer;
 }
 
-.rating-star:hover,
 .favorite-toggle:hover {
     color: var(--accent);
 }
 
-.rating-star[aria-pressed="true"],
+/* `is-filled` covers the star being pointed at and every star before it, which is the rating a
+   click would leave behind; `aria-pressed` stays with the rating actually recorded. */
+.rating-star.is-filled,
 .favorite-toggle[aria-pressed="true"] {
     color: var(--accent);
 }
@@ -628,15 +629,32 @@ tr.is-focused {
 
 .cell-verdict {
     white-space: nowrap;
-    color: var(--accent);
 }
 
-.favorite-mark {
-    margin-right: 4px;
+/* A listing row's own controls sit closer together than the detail panel's, the whole row being
+   one line tall. */
+.cell-verdict .rating-star,
+.cell-verdict .favorite-toggle {
+    font-size: 13px;
 }
 
-.rating-mark {
-    letter-spacing: -1px;
+/* The detail panel gives the field room to grow into; a listing cell hands it the column's own
+   width, which the fixed layout has already settled. */
+table.data td .annotation-editor-input {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+}
+
+.category-cell-button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 /* Class names below echo the backend's RelationType/TrackerFormat enum values verbatim (snake_case

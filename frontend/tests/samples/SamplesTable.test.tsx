@@ -180,7 +180,7 @@ describe("SamplesTable columns", () => {
             (column) => (column as HTMLElement).style.width,
         );
 
-        expect(widths).toEqual(["92px", "", "110px", "120px", "72px", "64px"]);
+        expect(widths).toEqual(["92px", "", "140px", "104px", "72px", "64px"]);
     });
 
     it("leaves narrowing by rating to the favorites and order controls", () => {

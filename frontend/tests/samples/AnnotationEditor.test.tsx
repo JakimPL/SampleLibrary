@@ -52,8 +52,7 @@ describe("AnnotationEditor", () => {
         resolvesTo({ ...NOTHING, label: "warm pad" }, [SAMPLE_HASH]);
         render(<AnnotationEditor sample={buildSample()} />);
 
-        await userEvent.type(screen.getByLabelText("Hand label"), "warm pad");
-        await userEvent.click(screen.getByRole("button", { name: "Save" }));
+        await userEvent.type(screen.getByLabelText("Hand label"), "warm pad{Enter}");
 
         await waitFor(() => {
             expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, label: "warm pad" }, "sample");
@@ -65,8 +64,7 @@ describe("AnnotationEditor", () => {
         resolvesTo({ ...NOTHING, label: "snare" }, [SAMPLE_HASH, OTHER_HASH]);
         render(<AnnotationEditor sample={buildSample({ equivalence_member_count: 2 })} />);
 
-        await userEvent.type(screen.getByLabelText("Hand label"), "snare");
-        await userEvent.click(screen.getByRole("button", { name: "Save" }));
+        await userEvent.type(screen.getByLabelText("Hand label"), "snare{Enter}");
 
         await waitFor(() => {
             expect(useAnnotationStore.getState().annotationBySampleHash[OTHER_HASH]?.label).toBe("snare");
@@ -137,8 +135,7 @@ describe("AnnotationEditor", () => {
         resolvesTo({ ...NOTHING, label: "snare" }, [SAMPLE_HASH]);
         render(<AnnotationEditor sample={buildSample({ equivalence_member_count: 3 })} />);
 
-        await userEvent.type(screen.getByLabelText("Hand label"), "snare");
-        await userEvent.click(screen.getByRole("button", { name: "Save" }));
+        await userEvent.type(screen.getByLabelText("Hand label"), "snare{Enter}");
 
         await waitFor(() => {
             expect(setSampleAnnotation).toHaveBeenCalledWith(
@@ -171,8 +168,7 @@ describe("AnnotationEditor", () => {
         render(<AnnotationEditor sample={buildSample({ equivalence_member_count: 3 })} />);
 
         await userEvent.click(screen.getByRole("checkbox"));
-        await userEvent.type(screen.getByLabelText("Hand label"), "snare");
-        await userEvent.click(screen.getByRole("button", { name: "Save" }));
+        await userEvent.type(screen.getByLabelText("Hand label"), "snare{Enter}");
 
         await waitFor(() => {
             expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, label: "snare" }, "sample");
@@ -186,11 +182,37 @@ describe("AnnotationEditor", () => {
         expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     });
 
-    it("refuses to save wording that says nothing", () => {
+    it("records the wording when the field is left, so a thought finished is a thought saved", async () => {
         getLabelVocabulary.mockResolvedValue([]);
+        resolvesTo({ ...NOTHING, label: "warm pad" }, [SAMPLE_HASH]);
         render(<AnnotationEditor sample={buildSample()} />);
 
-        expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+        await userEvent.type(screen.getByLabelText("Hand label"), "warm pad");
+        await userEvent.tab();
+
+        await waitFor(() => {
+            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, label: "warm pad" }, "sample");
+        });
+    });
+
+    it("writes nothing for a field left as it was found", async () => {
+        getLabelVocabulary.mockResolvedValue([]);
+        render(<AnnotationEditor sample={buildSample({ hand_label: "warm pad" })} />);
+
+        await userEvent.click(screen.getByLabelText("Hand label"));
+        await userEvent.tab();
+
+        expect(setSampleAnnotation).not.toHaveBeenCalled();
+    });
+
+    it("puts back the wording a sample already carries when a draft is abandoned", async () => {
+        getLabelVocabulary.mockResolvedValue([]);
+        render(<AnnotationEditor sample={buildSample({ hand_label: "warm pad" })} />);
+
+        await userEvent.type(screen.getByLabelText("Hand label"), " and bright{Escape}");
+
+        expect(screen.getByLabelText("Hand label")).toHaveValue("warm pad");
+        expect(setSampleAnnotation).not.toHaveBeenCalled();
     });
 
     it("offers clearing only once there is something to clear", () => {
@@ -217,8 +239,7 @@ describe("AnnotationEditor", () => {
         setSampleAnnotation.mockRejectedValue(new Error("request failed with status 404"));
         render(<AnnotationEditor sample={buildSample()} />);
 
-        await userEvent.type(screen.getByLabelText("Hand label"), "warm pad");
-        await userEvent.click(screen.getByRole("button", { name: "Save" }));
+        await userEvent.type(screen.getByLabelText("Hand label"), "warm pad{Enter}");
 
         expect(await screen.findByText(/request failed with status 404/)).toBeInTheDocument();
     });

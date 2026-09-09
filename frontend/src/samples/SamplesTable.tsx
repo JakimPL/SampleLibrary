@@ -36,8 +36,8 @@ const COLUMNS = [
             meta: { flexible: true },
         },
     ),
-    columnHelper.display({ id: "category", header: "Category", size: 110 }),
-    columnHelper.display({ id: "verdict", header: "Rating", size: 120 }),
+    columnHelper.display({ id: "category", header: "Category", size: 140 }),
+    columnHelper.display({ id: "verdict", header: "Rating", size: 104 }),
     columnHelper.accessor("size_bytes", { header: "Size", size: 72 }),
     columnHelper.accessor("occurrence_count", { header: "Occurrences", size: 64 }),
 ];
@@ -191,7 +191,13 @@ export function SamplesTable({
                         )}
                         {virtualRows.map((virtualRow) => {
                             const row = rows[virtualRow.index];
-                            return row ? <SampleRow key={row.original.hash} sample={row.original} /> : null;
+                            return row ? (
+                                <SampleRow
+                                    key={row.original.hash}
+                                    sample={row.original}
+                                    groupByEquivalence={groupByEquivalence}
+                                />
+                            ) : null;
                         })}
                         {paddingBottom > 0 && (
                             <tr aria-hidden="true" style={{ height: paddingBottom }}>
