@@ -4,9 +4,10 @@ from collections.abc import Callable
 from typing import Final
 
 from samplemorph.canonicalizers import Canonicalizer
-from samplemorph.canonicalizers.constant_q import build_constant_q_canonicalizer
-from samplemorph.canonicalizers.log_frequency import build_log_frequency_canonicalizer
-from samplemorph.canonicalizers.mel import build_mel_canonicalizer
+from samplemorph.canonicalizers.constant_q import ConstantQCanonicalizer, build_constant_q_canonicalizer
+from samplemorph.canonicalizers.log_frequency import LogFrequencyCanonicalizer, build_log_frequency_canonicalizer
+from samplemorph.canonicalizers.mel import MelCanonicalizer, build_mel_canonicalizer
+from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
 from samplemorph.morphers import Morpher
 from samplemorph.morphers.linear import LinearMorpher
 from samplemorph.vocoders import Vocoder
@@ -45,3 +46,14 @@ root, so the caller supplies where to read it from rather than a factory guessin
 MORPHER_REGISTRY: Final[dict[str, Callable[[], Morpher]]] = {
     DEFAULT_MORPHER_NAME: LinearMorpher,
 }
+
+
+def canonicalizer_for_geometry(geometry: Geometry) -> Canonicalizer:
+    """The canonicalizer that reads exactly this geometry, for rebuilding the axis a stored model was fitted on."""
+    match geometry:
+        case LogFrequencyGeometry():
+            return LogFrequencyCanonicalizer(geometry)
+        case MelGeometry():
+            return MelCanonicalizer(geometry)
+        case ConstantQGeometry():
+            return ConstantQCanonicalizer(geometry)

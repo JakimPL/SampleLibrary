@@ -15,6 +15,7 @@ from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 
@@ -126,3 +127,12 @@ def test_resolve_experiment_resumes_an_existing_experiment(connection: Connectio
 def test_resolve_experiment_against_an_unknown_id_fails(connection: Connection) -> None:
     with pytest.raises(ValueError, match="No experiment"):
         resolve_experiment(connection, backend_name="stub", experiment_id=999_999)
+
+
+def test_resolve_experiment_records_the_parameters_it_was_given(connection: Connection) -> None:
+    experiment_id = resolve_experiment(connection, backend_name="learned", params={"model": "tiny"}, label="one")
+
+    experiment = PostgresExperimentRepository(connection).get(experiment_id)
+    assert experiment is not None
+    assert experiment.params == {"model": "tiny"}
+    assert experiment.label == "one"

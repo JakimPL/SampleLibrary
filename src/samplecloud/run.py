@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import Connection
@@ -10,7 +9,6 @@ from samplecloud.backends import FeatureExtractor
 from samplecloud.features import FeatureExtractionSummary, extract_features
 from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
 from samplecore.config import LibraryConfig
-from samplecore.models.experiment import Experiment
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 
 
@@ -60,18 +58,7 @@ def resolve_experiment(
             raise ValueError(f"No experiment with id {experiment_id} exists to resume.")
         return experiment_id
 
-    new_experiment_id = experiment_repository.next_id()
-    experiment_repository.insert(
-        Experiment(
-            id=new_experiment_id,
-            backend_name=backend_name,
-            params=params or {},
-            created_at=datetime.now(UTC),
-            label=label,
-        )
-    )
-    connection.commit()
-    return new_experiment_id
+    return experiment_repository.create(backend_name=backend_name, label=label, params=params or {})
 
 
 def run_embedding(

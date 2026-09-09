@@ -8,7 +8,8 @@ from numpy.typing import NDArray
 
 from samplecloud.evaluation.corpus import EvaluationCorpus
 from samplecloud.evaluation.settings import EvaluationSettings
-from samplecore.labeling.labels import LabelPath, SampleLabel, format_path, label_agreement
+from samplecore.labeling.labels import LabelPath, SampleLabel, format_path
+from samplecore.labeling.ranking import agreement_matrix, ndcg_per_query, nearest_first
 
 MINIMUM_LABELED_SAMPLES: Final[int] = 10
 MINIMUM_TAG_SUPPORT: Final[int] = 5
@@ -84,12 +85,17 @@ def hand_label_agreement(corpus: EvaluationCorpus, *, settings: EvaluationSettin
             f"{subset.count} labeled samples carry a vector, and at least {MINIMUM_LABELED_SAMPLES} are needed"
         )
 
-    agreements = _agreements(subset)
-    ranking = _ranking(subset)
-    per_query_ndcg = _ndcg_per_query(agreements, ranking)
+    agreements = agreement_matrix(subset.labels)
+    ranking = nearest_first(subset.vectors, groups=subset.groups)
+    per_query_ndcg = ndcg_per_query(agreements, ranking, neighborhood=NEIGHBORHOOD_SIZE)
     generator = np.random.default_rng(settings.random_seed)
     chance_ndcg = float(
-        np.mean([np.nanmean(_ndcg_per_query(agreements, _shuffled(ranking, generator))) for _ in range(CHANCE_DRAWS)])
+        np.mean(
+            [
+                np.nanmean(ndcg_per_query(agreements, _shuffled(ranking, generator), neighborhood=NEIGHBORHOOD_SIZE))
+                for _ in range(CHANCE_DRAWS)
+            ]
+        )
     )
     per_tag = _per_tag(subset, ranking)
     return HandLabelAgreement(
@@ -122,26 +128,6 @@ def _labeled_subset(corpus: EvaluationCorpus, *, depth: int | None) -> _LabeledS
     )
 
 
-def _agreements(subset: _LabeledSubset) -> NDArray[np.float64]:
-    """Pairwise label agreement, with nothing on the diagonal."""
-    agreements = np.zeros((subset.count, subset.count), dtype=np.float64)
-    for first, first_label in enumerate(subset.labels):
-        for second in range(first + 1, subset.count):
-            agreements[first, second] = agreements[second, first] = label_agreement(first_label, subset.labels[second])
-    return agreements
-
-
-def _ranking(subset: _LabeledSubset) -> NDArray[np.int64]:
-    """Each sample's other samples, nearest first, with itself and its near-duplicates marked -1 at the end."""
-    squared_norms = (subset.vectors**2).sum(axis=1)
-    distances = squared_norms[:, None] - 2.0 * subset.vectors @ subset.vectors.T + squared_norms[None, :]
-    excluded = subset.groups[:, None] == subset.groups[None, :]
-    distances[excluded] = np.inf
-    order = np.argsort(distances, axis=1, kind="stable")
-    ranking = np.where(np.take_along_axis(excluded, order, axis=1), -1, order)
-    return ranking[:, : subset.count - 1] if subset.count > 1 else ranking[:, :0]
-
-
 def _precision_at_one(agreements: NDArray[np.float64], candidates: NDArray[np.int64]) -> float:
     """The share of the given candidate pairs sharing any tag; over the nearest alone it is precision at one."""
     rows = np.nonzero(candidates >= 0)[0]
@@ -155,18 +141,6 @@ def _shuffled(ranking: NDArray[np.int64], generator: np.random.Generator) -> NDA
         candidates = row[row >= 0]
         row[: len(candidates)] = generator.permutation(candidates)
     return shuffled
-
-
-def _ndcg_per_query(agreements: NDArray[np.float64], ranking: NDArray[np.int64]) -> NDArray[np.float64]:
-    """Graded gain over the nearest `NEIGHBORHOOD_SIZE`, against the best ordering; NaN where nothing agrees."""
-    count = ranking.shape[0]
-    neighborhood = ranking[:, :NEIGHBORHOOD_SIZE]
-    gains = np.where(neighborhood >= 0, agreements[np.arange(count)[:, None], np.maximum(neighborhood, 0)], 0.0)
-    discounts = 1.0 / np.log2(np.arange(2, neighborhood.shape[1] + 2))
-    reached = (gains * discounts).sum(axis=1)
-    ideal_gains = -np.sort(-np.where(ranking >= 0, agreements[np.arange(count)[:, None], np.maximum(ranking, 0)], 0.0))
-    ideal = (ideal_gains[:, : neighborhood.shape[1]] * discounts).sum(axis=1)
-    return np.where(ideal > 0.0, reached / np.where(ideal > 0.0, ideal, 1.0), np.nan)
 
 
 def _bootstrap_interval(per_query: NDArray[np.float64], generator: np.random.Generator) -> tuple[float, float]:

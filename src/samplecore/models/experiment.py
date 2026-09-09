@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Final
 
 from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import Index, SampleHash
+
+# An experiment extracted by a descriptor this project trained names the stored model it read,
+# so the extractor that produced its vectors can be rebuilt from the row alone.
+LEARNED_BACKEND_NAME: Final[str] = "learned"
+MODEL_PARAMETER: Final[str] = "model"
 
 
 class Experiment(BaseModel):

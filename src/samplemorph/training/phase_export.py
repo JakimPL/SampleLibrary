@@ -1,11 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
-from lightning.pytorch import Callback, LightningModule, Trainer
-
-from samplecore.tracking import TrackedRun
-from samplemorph.training.metrics import MONITORED_METRIC
 from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_module import PhaseTrainingModule
 from samplemorph.vocoders.learned import PhaseModelDescription, save_phase_model
@@ -41,62 +38,28 @@ def describe_phase_model(
     )
 
 
-class PhaseExport(Callback):
-    """Writes the weights a vocoder reads, each time an epoch beats every epoch before it.
+@dataclass(frozen=True)
+class PhaseModelWriter:
+    """Writes the weights a vocoder reads: the network and the description that rebuilds it.
 
-    This is the run's deliverable rather than its resume point: the file holds the network and the
-    description that rebuilds it, and nothing about the optimizer or the schedule. A run being
-    listened to while it is still going reads this, and the trainer's own checkpoint carries what
-    resuming needs.
-
-    The module is held rather than taken from the call, so the weights written are known to be the
-    ones this export was built for. Each write also reaches the run's record, so the weights an
-    epoch's numbers describe are the ones stored beside them.
+    The module is held rather than taken from the trainer, so the weights written are known to be
+    the ones this writer was built for.
     """
 
-    def __init__(
-        self,
-        module: PhaseTrainingModule,
-        *,
-        path: Path,
-        corpus: PhaseCorpus,
-        trained_sample_count: int,
-        tracker: TrackedRun,
-    ) -> None:
-        super().__init__()
-        self._module = module
-        self._path = path
-        self._corpus = corpus
-        self._trained_sample_count = trained_sample_count
-        self._tracker = tracker
-        self._best_loss = float("inf")
+    module: PhaseTrainingModule
+    path: Path
+    corpus: PhaseCorpus
+    trained_sample_count: int
 
-    @property
-    def best_loss(self) -> float:
-        return self._best_loss
-
-    @property
-    def path(self) -> Path:
-        return self._path
-
-    def on_validation_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
-        if trainer.sanity_checking:
-            return
-
-        reached = trainer.callback_metrics.get(MONITORED_METRIC)
-        if reached is None or float(reached) >= self._best_loss:
-            return
-
-        self._best_loss = float(reached)
+    def __call__(self, *, epochs: int, best_validation_loss: float) -> None:
         save_phase_model(
-            self._path,
-            self._module.model,
+            self.path,
+            self.module.model,
             describe_phase_model(
-                self._module.model,
-                corpus=self._corpus,
-                epochs=trainer.current_epoch + 1,
-                trained_sample_count=self._trained_sample_count,
-                best_validation_loss=self._best_loss,
+                self.module.model,
+                corpus=self.corpus,
+                epochs=epochs,
+                trained_sample_count=self.trained_sample_count,
+                best_validation_loss=best_validation_loss,
             ),
         )
-        self._tracker.log_artifact(self._path)

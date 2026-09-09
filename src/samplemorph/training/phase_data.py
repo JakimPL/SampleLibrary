@@ -12,7 +12,6 @@ from samplecore.models.sample import Sample
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.training.phase_dataset import PhaseBatchItem, PhaseTrainingSet, limit_worker_threads
 
-DEFAULT_WORKER_COUNT: Final[int] = 8
 DEFAULT_VALIDATION_SHARE: Final[float] = 0.05
 PREFETCH_BATCHES: Final[int] = 2
 WORKER_START_METHOD: Final[str] = "spawn"

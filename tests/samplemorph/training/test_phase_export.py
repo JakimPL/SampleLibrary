@@ -8,9 +8,11 @@ from torch.utils.data import DataLoader
 
 from samplecore.tracking.silent import SilentRun
 from samplemorph.registries import CANONICALIZER_REGISTRY
+from samplemorph.training.export import BestEpochExport
+from samplemorph.training.metrics import MONITORED_METRIC
 from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_dataset import PhaseBatchItem
-from samplemorph.training.phase_export import PhaseExport, describe_phase_model
+from samplemorph.training.phase_export import PhaseModelWriter, describe_phase_model
 from samplemorph.training.phase_module import PhaseTrainingModule
 from samplemorph.vocoders.learned import load_phase_model
 from tests.samplemorph.training.conftest import CHANNELS
@@ -28,13 +30,12 @@ def _corpus(library_root: Path) -> PhaseCorpus:
     )
 
 
-def _export(module: PhaseTrainingModule, path: Path) -> PhaseExport:
-    return PhaseExport(
-        module,
+def _export(module: PhaseTrainingModule, path: Path) -> BestEpochExport:
+    return BestEpochExport(
         path=path,
-        corpus=_corpus(path.parent),
-        trained_sample_count=TRAINED_SAMPLE_COUNT,
+        monitored=MONITORED_METRIC,
         tracker=SilentRun(),
+        writer=PhaseModelWriter(module, path, _corpus(path.parent), TRAINED_SAMPLE_COUNT),
     )
 
 

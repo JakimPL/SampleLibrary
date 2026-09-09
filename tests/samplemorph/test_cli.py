@@ -3,25 +3,33 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import numpy as np
 import pytest
 import soundfile
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
+from samplecloud.run import resolve_experiment
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.models.channels import ChannelLayout
+from samplecore.models.experiment import LEARNED_BACKEND_NAME, SampleFeatureVector
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplemorph.cli import main
+from samplemorph.descriptors.grid_descriptor import DESCRIPTOR_SIZE
+from samplemorph.descriptors.learned import descriptor_path
 from samplemorph.model_store import model_path
+from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
 from samplemorph.vocoders.learned import phase_model_path
 from tests.samplemorph.conftest import harmonic_tone
 
@@ -33,6 +41,7 @@ MODEL_NAME = "under-test"
 PHASE_MODEL_NAME = "phase-under-test"
 PHASE_CHANNELS = 16
 PHASE_CROP_FRAMES = 8
+DESCRIPTOR_NAME = "descriptor-under-test"
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
@@ -320,3 +329,62 @@ def test_rendering_through_a_phase_model_that_was_never_trained_says_so(
                 str(tmp_path / "render"),
             ]
         )
+
+
+def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The three passes end to end at the smallest size that still exercises them, on the processor."""
+    hashes = _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    teacher_id = resolve_experiment(connection, backend_name="stub", label="teacher")
+    generator = np.random.default_rng(0)
+    PostgresSampleFeatureVectorRepository(connection).insert_many(
+        [
+            SampleFeatureVector(
+                experiment_id=teacher_id,
+                sample_hash=sample_hash,
+                vector=tuple(generator.normal(size=DESCRIPTOR_SIZE).tolist()),
+                computed_at=datetime.now(UTC),
+            )
+            for sample_hash in hashes
+        ]
+    )
+    connection.commit()
+
+    main(["cache-grids", "--cache", "under-test", "--views", "1", "--workers", "0"])
+    main(
+        [
+            "train-descriptor",
+            "--cache",
+            "under-test",
+            "--teacher-experiment",
+            str(teacher_id),
+            "--descriptor",
+            DESCRIPTOR_NAME,
+            "--width",
+            "4",
+            "--epochs",
+            "1",
+            "--batch",
+            "4",
+            "--labeled-per-batch",
+            "1",
+            "--workers",
+            "0",
+            "--device",
+            "cpu",
+            "--no-tracking",
+        ]
+    )
+    main(["embed", "--cache", "under-test", "--descriptor", DESCRIPTOR_NAME, "--device", "cpu"])
+
+    assert open_grid_cache(grid_cache_directory(tmp_path, name="under-test")).sample_count == CATALOG_SIZE
+    assert descriptor_path(tmp_path, name=DESCRIPTOR_NAME).exists()
+    experiments = [PostgresExperimentRepository(connection).get(teacher_id + offset) for offset in (1,)]
+    assert experiments[0] is not None
+    assert experiments[0].backend_name == LEARNED_BACKEND_NAME
+    assert len(PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiments[0].id)) == CATALOG_SIZE

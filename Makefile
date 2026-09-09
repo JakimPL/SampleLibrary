@@ -3,6 +3,12 @@
 # nothing. Naming the shell make itself uses keeps these targets working, on Windows and elsewhere.
 NPM := npm --script-shell=$(SHELL)
 
+# A long pass runs under a memory ceiling with swap closed off, so a run that grows past what the
+# machine can spare is stopped by the kernel's accounting rather than taking the machine down with
+# it. Set MEMORY_CAP to raise the ceiling, or CAPPED to nothing to run a pass bare.
+MEMORY_CAP ?= 16G
+CAPPED ?= systemd-run --user --scope -p MemoryMax=$(MEMORY_CAP) -p MemorySwapMax=0 -q --
+
 .PHONY: install
 install:
 	uv sync --all-extras --all-groups
@@ -95,6 +101,17 @@ evaluate:
 evaluate-fast:
 	uv run samplecloud-evaluate --experiment-id $(EXPERIMENT) --skip-transposition $(if $(OUTPUT),--output $(OUTPUT),)
 
+# Describes every sample with the pretrained listening model, as an experiment kept for measuring
+# and for teaching the descriptor; it leaves the cloud as it is. About an hour over the catalog.
+.PHONY: cloud-teacher
+cloud-teacher:
+	$(CAPPED) uv run samplecloud --backend clap --extract-only $(if $(LABEL),--label "$(LABEL)",)
+
+# Serves the run store beside the library, where every training and evaluation pass is recorded.
+.PHONY: mlflow-ui
+mlflow-ui:
+	uv run python -c "from samplecore.config import load_config; from samplecore.tracking.store import tracking_uri; print(tracking_uri(load_config().library_root))" | xargs -I {} uv run mlflow ui --backend-store-uri {}
+
 # The decodable representation. `morph-fit` learns a codec over a draw of the library and writes it
 # under the configured library root; `morph-render` writes a listening set between two sample
 # hashes. FIRST and SECOND are hashes from the real library: the dev sandbox has no counterpart
@@ -108,7 +125,25 @@ morph-fit:
 # GPU, so its length follows the sample count times the epoch count.
 .PHONY: morph-train-phase
 morph-train-phase:
-	uv run samplemorph train-phase $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(PHASE_MODEL),--phase-model $(PHASE_MODEL),)
+	$(CAPPED) uv run samplemorph train-phase $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(PHASE_MODEL),--phase-model $(PHASE_MODEL),)
+
+# The descriptor, in three passes. `morph-cache-grids` canonicalizes the catalog once, with retuned
+# views, into a memory-mapped cache under the library root (about half an hour on twelve workers);
+# `morph-train-descriptor` teaches a descriptor over that cache from a teacher experiment's vectors
+# and the hand labels; `morph-embed` writes the descriptor's vector for every cached sample as a new
+# experiment, which `evaluate` scores and `samplecloud --backend learned --model NAME
+# --experiment-id ID` promotes to the cloud.
+.PHONY: morph-cache-grids
+morph-cache-grids:
+	$(CAPPED) uv run samplemorph cache-grids $(if $(CACHE),--cache $(CACHE),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(WORKERS),--workers $(WORKERS),)
+
+.PHONY: morph-train-descriptor
+morph-train-descriptor:
+	$(CAPPED) uv run samplemorph train-descriptor --teacher-experiment $(TEACHER) $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(EPOCHS),--epochs $(EPOCHS),)
+
+.PHONY: morph-embed
+morph-embed:
+	$(CAPPED) uv run samplemorph embed $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(LABEL),--label "$(LABEL)",)
 
 .PHONY: morph-render
 morph-render:

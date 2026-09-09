@@ -15,6 +15,8 @@ from samplecore.models.sample import Sample
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.tracking.session import open_run
 from samplemorph.canonicalizers import Canonicalizer
+from samplemorph.commands import cache_grids, embed, train_descriptor
+from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from
 from samplemorph.measurement.corpus import (
     DEFAULT_PROBE_FRAME_CEILING,
     DEFAULT_PROBE_FRAME_FLOOR,
@@ -38,7 +40,7 @@ from samplemorph.registries import (
     MORPHER_REGISTRY,
     VOCODER_REGISTRY,
 )
-from samplemorph.training.phase_data import DEFAULT_WORKER_COUNT, PhaseCorpus
+from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_dataset import DEFAULT_CROP_FRAMES
 from samplemorph.training.phase_run import run_phase_training
 from samplemorph.training.principal_components import (
@@ -46,15 +48,9 @@ from samplemorph.training.principal_components import (
     DEFAULT_RANDOM_SEED,
     PrincipalComponentTrainer,
 )
-from samplemorph.training.settings import (
-    DEFAULT_ACCELERATOR,
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_EPOCHS,
-    DEFAULT_LEARNING_RATE,
-    DEFAULT_PRECISION,
-    TRAINING_PRECISIONS,
-    TrainingSettings,
-)
+from samplemorph.training.run_settings import DEFAULT_ACCELERATOR
+from samplemorph.training.runs import RunPlacement
+from samplemorph.training.settings import PhaseTrainingSettings
 from samplemorph.vocoders import Vocoder
 from samplemorph.vocoders.learned import DEFAULT_PHASE_MODEL_NAME, load_phase_model, phase_model_path
 from samplemorph.vocoders.phase_model import DEFAULT_CHANNELS
@@ -75,6 +71,9 @@ class MorphCommand(StrEnum):
 
     FIT = "fit"
     TRAIN_PHASE = "train-phase"
+    CACHE_GRIDS = "cache-grids"
+    TRAIN_DESCRIPTOR = "train-descriptor"
+    EMBED = "embed"
     RENDER = "render"
 
 
@@ -88,6 +87,12 @@ def main(argv: list[str] | None = None) -> None:
                 _fit(connection, config, arguments)
             case MorphCommand.TRAIN_PHASE:
                 _train_phase(connection, config, arguments)
+            case MorphCommand.CACHE_GRIDS:
+                cache_grids.run(connection, config, arguments)
+            case MorphCommand.TRAIN_DESCRIPTOR:
+                train_descriptor.run(connection, config, arguments)
+            case MorphCommand.EMBED:
+                embed.run(connection, config, arguments)
             case MorphCommand.RENDER:
                 _render(connection, config, arguments)
 
@@ -224,8 +229,6 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         help="Which frequency axis the magnitudes are produced on.",
     )
     train.add_argument("--samples", type=int, default=DEFAULT_TRAIN_SAMPLE_COUNT, help="How many samples to train on.")
-    train.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS, help="How many passes over the training samples.")
-    train.add_argument("--batch", type=int, default=DEFAULT_BATCH_SIZE, help="How many crops make up one step.")
     train.add_argument(
         "--channels", type=int, default=DEFAULT_CHANNELS, help="How much capacity the network spends per layer."
     )
@@ -233,27 +236,13 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         "--crop", type=int, default=DEFAULT_CROP_FRAMES, help="How many analysis frames one training crop spans."
     )
     train.add_argument(
-        "--learning-rate", type=float, default=DEFAULT_LEARNING_RATE, help="The rate the optimizer starts at."
-    )
-    train.add_argument(
-        "--workers", type=int, default=DEFAULT_WORKER_COUNT, help="How many processes derive training examples."
-    )
-    train.add_argument(
-        "--precision",
-        type=str,
-        default=DEFAULT_PRECISION,
-        choices=TRAINING_PRECISIONS,
-        help="The arithmetic a training step is computed in.",
-    )
-    train.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed the draw and the split use.")
-    train.add_argument("--device", type=str, default=DEFAULT_DEVICE, help="Which device to train on.")
-    train.add_argument(
         "--phase-model", type=str, default=DEFAULT_PHASE_MODEL_NAME, help="The name to store the phase model under."
     )
-    train.add_argument(
-        "--resume", action="store_true", help="Continue the run of this name from where it last stopped."
-    )
-    train.add_argument("--no-tracking", action="store_true", help="Run without keeping a record of it.")
+    add_run_arguments(train)
+
+    cache_grids.add_parser(commands)
+    train_descriptor.add_parser(commands)
+    embed.add_parser(commands)
 
     render = commands.add_parser(MorphCommand.RENDER.value, help="Render a listening set between two samples.")
     render.add_argument("--first", type=str, required=True, help="The sample hash the morph starts from.")
@@ -297,16 +286,10 @@ def _train_phase(connection: Connection, config: LibraryConfig, arguments: argpa
         canonicalizer=canonicalizer,
         canonicalizer_name=arguments.canonicalizer,
     )
-    settings = TrainingSettings(
-        epochs=arguments.epochs,
-        batch_size=arguments.batch,
+    settings = PhaseTrainingSettings(
+        run=run_settings_from(arguments),
         channels=arguments.channels,
         crop_frames=arguments.crop,
-        learning_rate=arguments.learning_rate,
-        worker_count=arguments.workers,
-        precision=arguments.precision,
-        accelerator=arguments.device,
-        random_seed=arguments.seed,
     )
     with open_run(
         config.library_root,
@@ -317,9 +300,12 @@ def _train_phase(connection: Connection, config: LibraryConfig, arguments: argpa
         outcome = run_phase_training(
             corpus,
             settings=settings,
-            model_name=arguments.phase_model,
-            resume=arguments.resume,
-            tracker=tracker,
+            placement=RunPlacement(
+                library_root=config.library_root,
+                model_name=arguments.phase_model,
+                tracker=tracker,
+                resume=arguments.resume,
+            ),
         )
 
     _logger.info(

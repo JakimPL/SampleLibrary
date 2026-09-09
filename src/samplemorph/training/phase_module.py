@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 from lightning.pytorch import LightningModule
-from lightning.pytorch.utilities.types import LRSchedulerConfigType, OptimizerLRSchedulerConfig
+from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig
 from torch import Tensor
 
 from samplemorph.training.metrics import (
@@ -11,6 +11,7 @@ from samplemorph.training.metrics import (
     VALIDATION_LOSS,
     VALIDATION_SPECTRAL,
 )
+from samplemorph.training.optimizers import cosine_optimizer
 from samplemorph.training.phase_losses import AnalysisWindow, LossParts, LossWeights, phase_loss
 from samplemorph.vocoders.phase_model import PhaseModel, PhaseModelShape
 
@@ -66,17 +67,10 @@ class PhaseTrainingModule(LightningModule):
         return parts.total
 
     def configure_optimizers(self) -> OptimizerLRSchedulerConfig:
-        """The optimizer, and a rate that falls over the whole run rather than over each epoch.
-
-        The schedule is told how many steps the run will take, so a rate reaching its floor at the
-        end holds whatever the corpus size and batch size work out to.
-        """
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self._learning_rate)
-        schedule = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=max(int(self.trainer.estimated_stepping_batches), 1)
-        )
-        return OptimizerLRSchedulerConfig(
-            optimizer=optimizer, lr_scheduler=LRSchedulerConfigType(scheduler=schedule, interval="step")
+        return cosine_optimizer(
+            self.parameters(),
+            learning_rate=self._learning_rate,
+            total_steps=int(self.trainer.estimated_stepping_batches),
         )
 
     def _loss_parts(self, batch: PhaseBatch) -> LossParts:

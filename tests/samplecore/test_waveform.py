@@ -149,6 +149,16 @@ def test_resample_to_fraction_points_holds_the_output_size_across_differing_inpu
     assert short.shape == long.shape == (32,)
 
 
+def test_average_to_fraction_points_reads_a_single_frame_as_the_whole_span() -> None:
+    """A retuned reading of a very short sample can analyze to one frame, which then covers everything."""
+    single = np.array([[3.0], [5.0]])
+
+    averaged = average_to_fraction_points(single, point_count=4, axis=1)
+
+    assert np.isfinite(averaged).all()
+    np.testing.assert_array_equal(averaged, [[3.0] * 4, [5.0] * 4])
+
+
 def test_average_to_fraction_points_holds_a_constant_series_flat() -> None:
     averaged = average_to_fraction_points(np.full(400, 3.0), point_count=16)
 

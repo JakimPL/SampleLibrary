@@ -156,6 +156,17 @@ source_modules = ["sampleserver"]
 forbidden_modules = ["sampleextract", "samplecloud", "samplemorph"]
 
 [[tool.importlinter.contracts]]
-name = "the offline pipelines stay independent of each other"
+name = "extraction stays independent of the embedding pipelines"
 type = "independence"
-modules = ["sampleextract", "samplecloud", "samplemorph"]
+modules = ["sampleextract", "samplecloud"]
+
+[[tool.importlinter.contracts]]
+name = "extraction stays independent of the morph pipeline"
+type = "independence"
+modules = ["sampleextract", "samplemorph"]
+
+[[tool.importlinter.contracts]]
+name = "the morph pipeline never imports the cloud, which is the layer over it"
+type = "forbidden"
+source_modules = ["samplemorph"]
+forbidden_modules = ["samplecloud"]

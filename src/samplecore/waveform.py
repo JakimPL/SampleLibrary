@@ -112,9 +112,12 @@ def average_to_fraction_points(values: NDArray[np.float64], *, point_count: int,
     points carries the whole of what those points cover -- which holds a spectrogram's frames in
     the time order the analysis found them.
 
-    `axis` selects which axis carries the frames; every other axis is preserved in place.
+    `axis` selects which axis carries the frames; every other axis is preserved in place. A series
+    of one frame is that frame throughout, since one reading covers the whole span.
     """
     frame_count = values.shape[axis]
+    if frame_count == 1:
+        return np.repeat(values, point_count, axis=axis)
     source_positions = np.linspace(0.0, 1.0, frame_count)
     target_positions = np.linspace(0.0, 1.0, point_count)
     source_spacing = 1.0 / max(frame_count - 1, 1)

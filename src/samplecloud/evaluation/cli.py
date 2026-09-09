@@ -7,6 +7,7 @@ from pathlib import Path
 from sqlalchemy import Connection
 
 from samplecloud.backends import FeatureExtractor
+from samplecloud.backends.learned_backend import DEFAULT_LEARNED_DEVICE, build_learned_extractor
 from samplecloud.evaluation.categories import CategoryAgreement
 from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.harness import evaluate_experiment
@@ -22,7 +23,8 @@ from samplecloud.evaluation.settings import (
 from samplecloud.evaluation.transposition import TranspositionRetrieval
 from samplecloud.registries import BACKEND_REGISTRY
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
-from samplecore.models.experiment import Experiment
+from samplecore.config import LibraryConfig
+from samplecore.models.experiment import LEARNED_BACKEND_NAME, MODEL_PARAMETER, Experiment
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.tracking.session import open_run
 
@@ -45,7 +47,7 @@ def main(argv: list[str] | None = None) -> None:
                 connection,
                 experiment_id=experiment.id,
                 library_root=config.library_root,
-                feature_extractor=_extractor_for(experiment, skip_transposition=arguments.skip_transposition),
+                feature_extractor=_extractor_for(experiment, config=config, arguments=arguments),
                 settings=EvaluationSettings(
                     random_seed=arguments.seed, probe_count=arguments.probes, label_depth=arguments.label_depth
                 ),
@@ -73,14 +75,23 @@ def _experiment(connection: Connection, experiment_id: int) -> Experiment:
     return experiment
 
 
-def _extractor_for(experiment: Experiment, *, skip_transposition: bool) -> FeatureExtractor | None:
+def _extractor_for(
+    experiment: Experiment, *, config: LibraryConfig, arguments: argparse.Namespace
+) -> FeatureExtractor | None:
     """The extractor that produced this experiment, which retrieval needs to describe audio again.
 
+    A learned descriptor is found by the model name the experiment recorded when it was extracted.
+
     Raises:
-        ValueError: the experiment names a backend this build lacks.
+        ValueError: the experiment names a backend this build lacks, or a learned one without its model.
     """
-    if skip_transposition:
+    if arguments.skip_transposition:
         return None
+    if experiment.backend_name == LEARNED_BACKEND_NAME:
+        model_name = experiment.params.get(MODEL_PARAMETER)
+        if not isinstance(model_name, str):
+            raise ValueError(f"experiment {experiment.id} was extracted by a learned descriptor it does not name")
+        return build_learned_extractor(config.library_root, model_name=model_name, device=arguments.device)
     if experiment.backend_name not in BACKEND_REGISTRY:
         raise ValueError(f"experiment {experiment.id} was extracted by the unknown {experiment.backend_name} backend")
 
@@ -197,5 +208,8 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         "--no-tracking",
         action="store_true",
         help="Leave this pass out of the run store, for a quick look that is not worth keeping.",
+    )
+    parser.add_argument(
+        "--device", type=str, default=DEFAULT_LEARNED_DEVICE, help="Which device a learned descriptor runs on."
     )
     return parser.parse_args(argv)
