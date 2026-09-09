@@ -11,6 +11,8 @@ library.
 - [uv](https://docs.astral.sh/uv/)
 - PostgreSQL 17 or later
 - Node.js and npm, for the frontend
+- An NVIDIA GPU, to train the vocoder that turns a morph back into sound. Everything else in the
+  project runs on the processor alone.
 
 ## Setup
 
@@ -51,6 +53,10 @@ The `Makefile` lists the rest of the pipeline: `make embed`, `make thumbnails` a
 Work on generating audio from a point between two samples lives in the `samplemorph` package,
 and the research behind it is documented separately under `docs/morphing/`, starting from
 `docs/morphing/00-handover.md`.
+
+That package installs PyTorch built for CUDA 12.8, which is a large download and the reason
+`make install` takes a while the first time. It needs a card new enough for that build; an older one
+installs cleanly and then fails the moment it is first asked to compute.
 
 ## Labeling and rating samples
 
