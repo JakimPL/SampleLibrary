@@ -3,14 +3,25 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as ModulesApi from "../../src/api/modules";
+import type * as SamplesApi from "../../src/api/samples";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 import { WorkspaceShell } from "../../src/workspace/WorkspaceShell";
 
 const { getModule } = vi.hoisted(() => ({ getModule: vi.fn() }));
+const { getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => ({
+    getSample: vi.fn(),
+    getSampleRelations: vi.fn(),
+    getSimilarSamples: vi.fn(),
+}));
 
 vi.mock("../../src/api/modules", async () => {
     const actual = await vi.importActual<typeof ModulesApi>("../../src/api/modules");
     return { ...actual, getModule };
+});
+
+vi.mock("../../src/api/samples", async () => {
+    const actual = await vi.importActual<typeof SamplesApi>("../../src/api/samples");
+    return { ...actual, getSample, getSampleRelations, getSimilarSamples };
 });
 
 function renderShellAt(initialPath: string): ReturnType<typeof render> {
@@ -32,6 +43,13 @@ function renderShellAt(initialPath: string): ReturnType<typeof render> {
  */
 function panelTabTitles(): string[] {
     return Array.from(document.querySelectorAll(".dv-default-tab-content")).map((element) => element.textContent);
+}
+
+/** The title of whichever panel is in front of each of the shell's tab groups. */
+function activeTabTitles(): string[] {
+    return Array.from(document.querySelectorAll(".dv-active-tab .dv-default-tab-content")).map(
+        (element) => element.textContent,
+    );
 }
 
 describe("WorkspaceShell", () => {
@@ -64,6 +82,18 @@ describe("WorkspaceShell", () => {
 
         await waitFor(() => {
             expect(useSelectionStore.getState().focusedModuleHash).toBe("abc");
+        });
+    });
+
+    it("brings Sample Detail forward when a sample is opened", async () => {
+        getSample.mockRejectedValue(new Error("no catalog behind this test"));
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+
+        renderShellAt("/samples/abc");
+
+        await waitFor(() => {
+            expect(activeTabTitles()).toContain("Sample Detail");
         });
     });
 
