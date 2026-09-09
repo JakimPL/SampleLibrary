@@ -62,8 +62,15 @@ learned phase vocoder from [`12-learned-vocoder.md`](12-learned-vocoder.md). Unr
 
 **The conditioned codec reconstructs 1.3 dB worse than the linear one.** The gate in the plan
 asked for parity, and it is not met: a 64-dimensional residual under a prior carries less of a
-particular grid than 256 free components fitted to carry exactly that. This is the fidelity the
-prior costs, and it is what the residual size and the prior's weight trade against.
+particular grid than 256 free components fitted to carry exactly that.
+
+A second run with a 128-dimensional residual, everything else the same, says the residual's size
+is not the lever: its validation error on the grid fell from 0.0234 to 0.0208, and on the held-out
+probes it reconstructs at 7.24 dB with its own phase and 9.25 dB through the learned vocoder --
+the same as the 64-dimensional codec within a tenth of a decibel. The gap to the linear codec is
+structural, the smoothing a decoder scored by absolute error applies to what it is unsure of, and
+it is the prior's weight and the decoder's own loss that trade against it, which is where the
+follow-up below starts.
 
 What the linear codec cannot do is the reason the conditioned one exists. Four labeled pairs,
 morphed at five weights through each codec, measured by `samplemorph.measurement.plausibility`
@@ -98,8 +105,8 @@ reconstructions and the three morphs in each. That is the set to judge this stag
 
 ## What stays open
 
-- **Fidelity against the linear codec.** The 1.3 dB gap is where the residual size and the
-  prior's weight trade; a wider residual is the first thing to measure.
+- **Fidelity against the linear codec.** The 1.3 dB gap stayed put under a wider residual, so
+  the prior's weight and the decoder's loss are the next things to move.
 - **The decoder's sharpness.** A decoder scored by absolute error produces the average of what it
   is unsure of; if listening finds the reconstructions or the midpoints smeared, an adversarial
   term on the grid is the named follow-up, on the same interface.
