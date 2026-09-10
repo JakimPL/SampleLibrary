@@ -131,10 +131,120 @@ probes for gargle severity and for "quieter", in the same sitting as the ladder 
 reading in `metrics.csv` is rank-correlated against those labels, overall and per sound type. That
 table completes this document.
 
+## The night of 2026-09-11: the round trip taken apart, and a candidate fix rendered
+
+With the ladder verdict still waiting on the ear, the night went to the one lever the numbers had
+already named — the log-frequency round trip — and to a bounded check of a pretrained vocoder as a
+ceiling. No training. Everything below is CPU except the ceiling, which was one GPU inference job.
+
+### The band matrix discards half the magnitude, and its inverse was a heuristic
+
+The forward map from Fourier bins to log-frequency bands is a fixed matrix of triangular weights,
+and the way back was `np.interp` between band centers. Two facts about that matrix decide the
+gargle:
+
+| window | bands per octave | bands × bins | rank | share of the bins |
+|---|---|---|---|---|
+| 2048 | 144 (production) | 1355 × 1025 | 540 | **53%** |
+| 2048 | 288 | 2708 × 1025 | 791 | 77% |
+| 2048 | 576 | 5414 × 1025 | 1005 | 98% |
+| 1024 | 144 | 1355 × 513 | 397 | 77% |
+| 1024 | 288 | 2708 × 513 | 504 | 98% |
+| 1024 | 576 | 5414 × 513 | 513 | 100% |
+
+At 144 bands per octave over a 2048-point window a band at the top of the range averages forty
+Fourier bins, and the matrix has rank 540 of 1025: **the production grid discards 47% of the linear
+magnitude's degrees of freedom by construction.** The restored magnitude is smooth across bins where
+the true one ripples, and no phase estimator can find a consistent phase for that — which is the
+gargle's root cause stated exactly. No inverse recovers what the forward map threw away; the grid
+sets the ceiling.
+
+The inverse, though, was leaving fidelity on the table. On forty probes, a clean Gaussian STFT
+magnitude was carried through each matrix and back by interpolation and by the least-squares inverse
+of the same matrix, then made audible with PGHI (medians, against the original at the heard rate):
+
+| window / bands | inverse | modulation distance | fluctuation excess | loudness, LU |
+|---|---|---|---|---|
+| 2048 clean (no round trip) | — | 0.079 | +0.0005 | −0.06 |
+| 2048 / 144 | interp (production) | **0.119** | +0.0065 | **−0.37** |
+| 2048 / 144 | least squares | 0.105 | +0.0021 | −0.09 |
+| 2048 / 288 | least squares | 0.088 | +0.0007 | −0.07 |
+| 2048 / 576 | least squares | **0.079** | +0.0006 | −0.06 |
+| 1024 clean | — | 0.056 | +0.0007 | −0.03 |
+| 1024 / 288 | least squares | **0.056** | +0.0007 | −0.03 |
+
+The least-squares inverse wins on every configuration and every sound type, and with enough bands
+the round trip reads *identical* to the clean rung — the corruption is gone and only the phase
+estimate's own cost remains. **The least-squares inverse is now the log-frequency axis's reading
+back onto the Fourier grid** (`samplemorph.canonicalizers.log_frequency.linear_axis_inverse`, cached
+per geometry); on the production grid alone it cuts Griffin-Lim's flutter from +0.134 to +0.088.
+
+Two readings from the same sweep belong beside it. The loudness loss here is −0.03 to −0.37 LU,
+against the −1 to −4 LU the ladder read: the ladder's files are peak-normalized, and an estimated
+phase makes a waveform *peakier* far more than it drains its energy, so at matched peak it plays
+quieter. And a 1024-point window reads better for PGHI on the band round trip alone (0.056 against
+0.079) — a lead the full pipeline below puts in its place.
+
+### A pretrained mel vocoder is not a ceiling for this material
+
+BigVGAN-v2 (44.1 kHz, 128-band mel, NVIDIA's pretrained weights, inference only) regenerated the
+forty probes from its own clean mel, beside Griffin-Lim on the identical mel, read against the heard
+original at 44.1 kHz:
+
+| vocoder | held-out dB | modulation distance | flutter | roughness excess | loudness, LU | CDPAM |
+|---|---|---|---|---|---|---|
+| BigVGAN-v2 | 7.21 | 0.227 | +0.045 | +0.003 | −0.95 | 0.143 |
+| Griffin-Lim, same mel | 8.12 | 0.275 | +0.239 | +0.024 | −0.29 | 0.120 |
+
+BigVGAN buys its freedom from the gargle (flutter a fifth of Griffin-Lim's, roughness near zero) by
+regenerating the sound wholesale from a 128-band mel — 7 dB from the original and a decibel quieter
+— where the deterministic path above sits at 2.7 dB with PGHI on a clean analysis. For a pipeline
+whose goal is a faithful, decodable representation, the learned regeneration is the wrong trade,
+and the direction closes with numbers rather than a night of training.
+
+### What landed
+
+- The least-squares inverse, as above.
+- The analysis window is a geometry choice (`AnalysisWindow.HANN`, the default, or `GAUSSIAN`),
+  read by every analysis and inversion through `analysis_taper`, so a Gaussian analysis and the
+  phase-gradient constant PGHI needs (`phase_gradient_spread`) travel with the geometry.
+- **PGHI as a registered vocoder** (`samplemorph.vocoders.pghi.PghiVocoder`, `--vocoder pghi`,
+  the `pghi` extra), which reads a Gaussian log-frequency analysis and refuses any other by name.
+
+### The candidates for tomorrow, through the whole pipeline
+
+Twelve ladder probes were rendered again at their heard rates under
+`listening/candidates-2026-09-11/`, every reconstruction taken through canonicalize → restore →
+vocoder — time squeeze and dynamic range included, so each file is what would ship under that
+geometry — in a `peak-matched/` folder like the ladder and a `loudness-matched/` folder under one
+shared headroom. Read against the original (medians over the twelve, peak-matched):
+
+| file | geometry | loudness, LU | modulation distance | flutter | held-out dB |
+|---|---|---|---|---|---|
+| 2 production Griffin-Lim | Hann 2048/256, 144, least squares | −1.29 | 0.224 | +0.088 | 6.41 |
+| 3 Gaussian PGHI | 2048/128, 144 | −1.06 | 0.159 | +0.028 | 6.98 |
+| **4 Gaussian PGHI** | **2048/128, 288** | **−0.78** | **0.144** | **−0.020** | **4.87** |
+| 5 Gaussian PGHI | 1024/64, 288 | −1.38 | 0.156 | +0.019 | 6.02 |
+| 6 clean PGHI, ceiling of that analysis | 1024/64, no grid | −1.05 | 0.082 | +0.021 | 2.83 |
+
+Through the full pipeline the 2048-point window at 288 bands per octave is the candidate on every
+reading: the smallest modulation distance, a flutter on the smooth side of zero — the gargle gone
+by this instrument — a decibel and a half closer in spectrum, and the least loudness lost. It costs
+twice today's grid height. The 1024-point window's lead on the band round trip does not survive the
+time squeeze, and it loses three LU on percussive material, so it stays a registered option.
+
+What to listen for, in one sitting with the ladder verdict: **4 against 1** — is the gargle gone,
+and is anything else lost; **4 against 2** — what the fix buys over shipping; the same pair in
+`loudness-matched/` — is "quieter" still there once level is matched, or was it the peak. Severity
+and "quieter" labels on these five files per probe extend `labels.csv` and the calibration study.
+
 ## How to re-derive any of this
 
 `runs/night-2026-09-10/scripts/ladder_measure.py` (beside the library, outside the repository)
 reads the rendered set and writes `listening/ladder-2026-09-10/metrics.csv`; the readings it calls
 are `samplemorph.measurement.loudness`, `samplemorph.measurement.modulation_spectrum` and
 `samplecore.auditory.sound_type`, committed and tested. The keyword calibration is
-`sound_type_calibration.py` in the same folder, a read-only draw of seed 11.
+`sound_type_calibration.py` in the same folder, a read-only draw of seed 11. The night's sweep is
+`runs/night-2026-09-11/scripts/roundtrip_sweep.py` (`roundtrip_sweep.csv`), the ceiling
+`bigvgan_ceiling.py` (`bigvgan_ceiling.csv`, the model cloned beside it), and the candidate set
+`candidates_listen.py`.
