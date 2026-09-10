@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import cache
+
 import librosa
 import numpy as np
 from numpy.typing import NDArray
@@ -14,7 +16,7 @@ class LogFrequencyCanonicalizer:
     """Canonicalizes onto an exactly logarithmic reading of the short-time Fourier magnitude.
 
     Each band averages the linear Fourier bins across its own width, and synthesis reads the bands
-    back onto that grid by interpolation, so the return path to audio is an ordinary magnitude
+    back onto that grid by least squares, so the return path to audio is an ordinary magnitude
     inversion on the grid the analysis started from. That keeps an exact log axis -- where a rate
     change is a whole-band translation -- and a well-behaved inverse at once.
     """
@@ -61,6 +63,31 @@ def band_weights(geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
         target_positions=band_frequencies,
         half_widths=np.maximum(band_frequencies * (step - 1.0 / step) / 2.0, bin_spacing),
     )
+
+
+@cache
+def linear_axis_inverse(geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
+    """The least-squares inverse of `band_weights`, computed once per geometry.
+
+    Every band is a weighted mean of the bins it covers, so the bins that best reproduce a set of
+    bands are the least-squares solution of that averaging. A magnitude the bands were read from
+    comes back exactly wherever the bands resolve it, and where several bins were averaged into
+    one band the solution spreads that band evenly over them. Measured across the round trip on
+    forty probes, this halves the modulation a phase estimate then adds over the interpolation it
+    replaces, on every kind of sound; `18-perceptual-readings.md` holds the table.
+    """
+    inverse: NDArray[np.float64] = np.linalg.pinv(band_weights(geometry))
+    return inverse
+
+
+def onto_linear_axis(magnitude: NDArray[np.float64], *, geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
+    """Read a band magnitude spectrogram back onto the linear Fourier grid it was averaged from.
+
+    The reading is the least-squares one, held at zero from below since a magnitude is one; a bin
+    no band touches reads as silence.
+    """
+    linear: NDArray[np.float64] = np.maximum(linear_axis_inverse(geometry) @ magnitude, 0.0)
+    return linear
 
 
 def build_log_frequency_canonicalizer(*, anchor: Anchor = DEFAULT_ANCHOR) -> LogFrequencyCanonicalizer:
