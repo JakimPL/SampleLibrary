@@ -294,3 +294,8 @@ and the gargle enters at the log-frequency round trip, the representation fix le
 directions (S3) recede; if the time-squeeze is heard to cost percussive transients, that reopens the
 grid width as a variable. The calibration study (the evaluating gate) and the modulation-spectrum build
 are the two pieces of work that can start the moment the ear has spoken.
+
+**What has landed since.** The auditory front end (`samplecore.auditory`), the two readings
+(`samplemorph.measurement.modulation_spectrum`, `samplemorph.measurement.loudness`), the sound-type
+reading, and the subsonic high-pass at the canonicalizer's ingest are built and committed; what they
+read on the rendered ladder, before any listening, is [`18-perceptual-readings.md`](18-perceptual-readings.md).
