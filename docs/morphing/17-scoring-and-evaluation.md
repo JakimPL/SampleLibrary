@@ -67,8 +67,10 @@ Two consequences run through everything below:
 | `comparison.py` | log-magnitude grid distance (dB) | no — magnitude only |
 | `equivariance.py` | transposition retrieval / retuning | measures the descriptor, not quality |
 | `plausibility.py` | morph-path monotonicity, energy, spread | measures the morph, not quality |
-| `phase_quality.py` | `modulation_excess` (signed frame-to-frame flutter) | **partly** — a coarse subband AM-excess screen |
+| `phase_quality.py` | `modulation_excess` (signed frame-to-frame flutter) | **partly** — a fluctuation-lobe screen; its frame-rate envelope stops short of roughness |
 | `perceptual_distance.py` | CDPAM (learned, full-reference) | over-penalizes phase; below chance per probe |
+| `modulation_spectrum.py` | `fluctuation_excess`, `roughness_excess` (signed), `distance` — through the `samplecore.auditory` gammatone front end at the heard rate | **yes, on both lobes** — the principled form of the flutter screen |
+| `loudness.py` | `delta_lu` — BS.1770 K-weighted integrated loudness, reconstruction minus reference | measures level, the axis every shape reading normalizes away |
 
 **Scoring**, in `samplemorph.training`:
 

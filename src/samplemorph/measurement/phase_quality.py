@@ -7,6 +7,8 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 
+from samplemorph.measurement.weighting import loudness_weight
+
 PHASE_FFT_LENGTH: Final[int] = 1024
 PHASE_HOP_LENGTH: Final[int] = 256
 LOG_FLOOR: Final[float] = 1e-5
@@ -36,13 +38,6 @@ def _log_magnitude(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
     return np.log(np.maximum(spectrum, LOG_FLOOR))
 
 
-def _loudness_weight(reference_log_magnitude: NDArray[np.float64]) -> NDArray[np.float64]:
-    """A per-bin weight that counts a bin by how loud the reference is there, summing to one."""
-    above_floor = np.maximum(reference_log_magnitude - np.log(LOG_FLOOR), 0.0)
-    total = float(above_floor.sum())
-    return above_floor / total if total > 0.0 else np.full_like(above_floor, 1.0 / above_floor.size)
-
-
 def _frame_flutter(log_magnitude: NDArray[np.float64]) -> NDArray[np.float64]:
     """How much each bin's magnitude moves from one frame to the next, as a per-bin mean.
 
@@ -70,7 +65,7 @@ def phase_quality(
     frames = min(reconstruction_log.shape[1], reference_log.shape[1])
     reconstruction_log = reconstruction_log[:, :frames]
     reference_log = reference_log[:, :frames]
-    weight = _loudness_weight(reference_log)
+    weight = loudness_weight(reference_log, floor=float(np.log(LOG_FLOOR)))
 
     bin_weight = weight.mean(axis=1)
     magnitude_distance = float(np.sqrt((weight * (reconstruction_log - reference_log) ** 2).sum()))

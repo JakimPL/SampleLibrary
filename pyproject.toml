@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 server = ["fastapi>=0.120", "uvicorn>=0.35"]
 cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9"]
-morph = ["librosa>=0.11", "scikit-learn>=1.9", "torch>=2.9", "lightning>=2.5", "threadpoolctl>=3.6"]
+morph = ["librosa>=0.11", "scikit-learn>=1.9", "torch>=2.9", "lightning>=2.5", "threadpoolctl>=3.6", "pyloudnorm>=0.2"]
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]
 perceptual = ["torch>=2.9", "cdpam>=0.0.4", "resampy>=0.4"]
