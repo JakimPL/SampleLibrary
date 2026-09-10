@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
 from samplemorph.canonicalizers.linear_axis import onto_linear_axis
+from samplemorph.geometry import analysis_taper
 from samplemorph.images import AnalysisSpectrogram
 from samplemorph.vocoders.phase_model import PhaseModel, PhaseModelShape
 
@@ -63,6 +64,7 @@ class LearnedPhaseVocoder:
             spectrum.cpu().numpy(),
             n_fft=spectrogram.geometry.fft_length,
             hop_length=spectrogram.geometry.hop_length,
+            window=analysis_taper(spectrogram.geometry),
             length=spectrogram.frame_count,
         ).astype(np.float64)
         return waveform

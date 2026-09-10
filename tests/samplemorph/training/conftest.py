@@ -25,7 +25,7 @@ from samplemorph.training.descriptor_data import NO_LABEL, DescriptorCorpus
 from samplemorph.training.descriptor_losses import DescriptorLossWeights
 from samplemorph.training.descriptor_module import DescriptorTrainingModule, TeachingMaterial
 from samplemorph.training.phase_dataset import PhaseBatchItem
-from samplemorph.training.phase_losses import LossWeights
+from samplemorph.training.phase_losses import FrameAnalysis, LossWeights
 from samplemorph.training.phase_module import PhaseTrainingModule
 from samplemorph.vocoders.phase_model import PhaseModelShape
 
@@ -67,8 +67,9 @@ def fixture_phase_module() -> PhaseTrainingModule:
     torch.manual_seed(0)
     return PhaseTrainingModule(
         PhaseModelShape(bin_count=BIN_COUNT, channels=CHANNELS),
-        fft_length=FFT_LENGTH,
-        hop_length=HOP_LENGTH,
+        analysis=FrameAnalysis(
+            fft_length=FFT_LENGTH, hop_length=HOP_LENGTH, taper=torch.hann_window(FFT_LENGTH).numpy()
+        ),
         learning_rate=LEARNING_RATE,
         weights=LossWeights(),
     )

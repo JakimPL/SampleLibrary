@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+import numpy as np
 import torch
+from numpy.typing import NDArray
 from torch import Tensor
 
 MULTI_RESOLUTION_WINDOWS: Final[tuple[int, ...]] = (512, 1024, 2048)
@@ -23,6 +25,19 @@ class LossWeights:
 
     gradient: float = DEFAULT_GRADIENT_WEIGHT
     spectral: float = DEFAULT_SPECTRAL_WEIGHT
+
+
+@dataclass(frozen=True)
+class FrameAnalysis:
+    """How a geometry frames its analysis, as a module receives it: the transform length, the hop, and the taper.
+
+    The taper arrives as an array so the module can register it as a buffer of its own, which is
+    what carries it to the step's device.
+    """
+
+    fft_length: int
+    hop_length: int
+    taper: NDArray[np.float64]
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,8 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
+from scipy.signal import get_window
+from scipy.signal.windows import gaussian
 
 from samplecore.models.base import FROZEN
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
@@ -22,6 +24,23 @@ DEFAULT_MAXIMUM_SHIFT_SEMITONES: Final[float] = 48.0
 DEFAULT_BINS_PER_OCTAVE: Final[int] = 144
 DEFAULT_MEL_BAND_COUNT: Final[int] = 128
 DEFAULT_CONSTANT_Q_BINS_PER_OCTAVE: Final[int] = 36
+GAUSSIAN_EDGE_LEVEL: Final[float] = 0.01
+
+
+@unique
+class AnalysisWindow(StrEnum):
+    """The taper a short-time Fourier analysis reads each frame through.
+
+    `HANN` is the ordinary analysis every magnitude inversion accepts. `GAUSSIAN` is the one taper
+    whose phase gradient is a closed form of its magnitude gradient, which is what lets phase
+    gradient heap integration recover a phase from the magnitude alone.
+    """
+
+    HANN = "hann"
+    GAUSSIAN = "gaussian"
+
+
+DEFAULT_ANALYSIS_WINDOW: Final[AnalysisWindow] = AnalysisWindow.HANN
 
 
 @unique
@@ -66,6 +85,7 @@ class LogFrequencyGeometry(BaseModel):
 
     kind: Literal["log_frequency"] = "log_frequency"
     anchor: Anchor = DEFAULT_ANCHOR
+    analysis_window: AnalysisWindow = DEFAULT_ANALYSIS_WINDOW
     analysis_rate_hz: int
     fft_length: int
     hop_length: int
@@ -89,6 +109,16 @@ class LogFrequencyGeometry(BaseModel):
     @property
     def bands_per_semitone(self) -> float:
         return self.bins_per_octave / SEMITONES_PER_OCTAVE
+
+    @property
+    def gaussian_spread(self) -> float:
+        """The time spread of the Gaussian taper, chosen so it falls to `GAUSSIAN_EDGE_LEVEL` at the frame's edge."""
+        return float(np.sqrt(-(self.fft_length**2) / (8.0 * np.log(GAUSSIAN_EDGE_LEVEL))))
+
+    @property
+    def phase_gradient_spread(self) -> float:
+        """The constant relating a Gaussian analysis's phase gradient to its magnitude gradient, ``2 pi spread^2``."""
+        return float(2.0 * np.pi * self.gaussian_spread**2)
 
     @property
     def band_frequencies(self) -> NDArray[np.float64]:
@@ -220,6 +250,24 @@ class ConstantQGeometry(BaseModel):
 Geometry = Annotated[LogFrequencyGeometry | MelGeometry | ConstantQGeometry, Field(discriminator="kind")]
 
 
+def analysis_taper(geometry: Geometry) -> NDArray[np.float64]:
+    """The taper one frame of this geometry's analysis is read through, one point per transform sample.
+
+    The Hann taper is the periodic one an overlapped analysis sums cleanly. The Gaussian is drawn
+    at twice the length and every other point kept, so its peak lands between two samples -- the
+    sampling phase gradient heap integration is derived for. An axis with no taper of its own reads
+    through the Hann.
+    """
+    match geometry:
+        case LogFrequencyGeometry(analysis_window=AnalysisWindow.GAUSSIAN):
+            length = geometry.fft_length
+            taper: NDArray[np.float64] = gaussian(2 * length + 1, 2.0 * geometry.gaussian_spread, sym=False)
+            return taper[1 : 2 * length + 1 : 2]
+        case _:
+            hann: NDArray[np.float64] = get_window("hann", geometry.fft_length, fftbins=True)
+            return hann
+
+
 def fourier_bin_count(*, fft_length: int) -> int:
     """How many Fourier bins one analysis window produces.
 
@@ -259,10 +307,14 @@ def bands_below_nyquist(*, analysis_rate_hz: int, minimum_frequency_hz: float, b
 
 
 def log_frequency_geometry(
-    *, bins_per_octave: int = DEFAULT_BINS_PER_OCTAVE, anchor: Anchor = DEFAULT_ANCHOR
+    *,
+    bins_per_octave: int = DEFAULT_BINS_PER_OCTAVE,
+    anchor: Anchor = DEFAULT_ANCHOR,
+    analysis_window: AnalysisWindow = DEFAULT_ANALYSIS_WINDOW,
 ) -> LogFrequencyGeometry:
     return LogFrequencyGeometry(
         anchor=anchor,
+        analysis_window=analysis_window,
         analysis_rate_hz=NOMINAL_WAV_RATE,
         fft_length=DEFAULT_FFT_LENGTH,
         hop_length=DEFAULT_HOP_LENGTH,

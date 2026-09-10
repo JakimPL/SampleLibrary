@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 
 from samplecore.waveform import triangular_weights
 from samplemorph.canonicalizers.common import prepare_mono, restore_spectrogram, to_sound_image
-from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, LogFrequencyGeometry, log_frequency_geometry
+from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, LogFrequencyGeometry, analysis_taper, log_frequency_geometry
 from samplemorph.images import AnalysisSpectrogram, SoundImage
 
 
@@ -30,7 +30,14 @@ class LogFrequencyCanonicalizer:
 
     def canonicalize(self, waveform: NDArray[np.float64]) -> SoundImage:
         mono = prepare_mono(waveform)
-        linear = np.abs(librosa.stft(mono, n_fft=self._geometry.fft_length, hop_length=self._geometry.hop_length))
+        linear = np.abs(
+            librosa.stft(
+                mono,
+                n_fft=self._geometry.fft_length,
+                hop_length=self._geometry.hop_length,
+                window=analysis_taper(self._geometry),
+            )
+        )
         return to_sound_image(
             _onto_log_axis(linear, geometry=self._geometry), geometry=self._geometry, frame_count=mono.shape[0]
         )

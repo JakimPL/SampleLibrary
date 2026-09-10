@@ -12,7 +12,7 @@ from samplemorph.training.metrics import (
     VALIDATION_SPECTRAL,
 )
 from samplemorph.training.optimizers import cosine_optimizer
-from samplemorph.training.phase_losses import AnalysisWindow, LossParts, LossWeights, phase_loss
+from samplemorph.training.phase_losses import AnalysisWindow, FrameAnalysis, LossParts, LossWeights, phase_loss
 from samplemorph.vocoders.phase_model import PhaseModel, PhaseModelShape
 
 PhaseBatch = tuple[Tensor, Tensor, Tensor, Tensor]
@@ -37,18 +37,17 @@ class PhaseTrainingModule(LightningModule):
         self,
         shape: PhaseModelShape,
         *,
-        fft_length: int,
-        hop_length: int,
+        analysis: FrameAnalysis,
         learning_rate: float,
         weights: LossWeights,
     ) -> None:
         super().__init__()
         self.model = PhaseModel(shape)
-        self._fft_length = fft_length
-        self._hop_length = hop_length
+        self._fft_length = analysis.fft_length
+        self._hop_length = analysis.hop_length
         self._learning_rate = learning_rate
         self._weights = weights
-        self.register_buffer("taper", torch.hann_window(fft_length))
+        self.register_buffer("taper", torch.as_tensor(analysis.taper, dtype=torch.float32))
 
     def forward(self, magnitude: Tensor, *, frame_offset: Tensor | None = None) -> Tensor:
         phase: Tensor = self.model(magnitude, frame_offset=frame_offset)

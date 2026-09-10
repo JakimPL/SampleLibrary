@@ -2921,6 +2921,17 @@ wheels = [
 ]
 
 [[package]]
+name = "pghipy"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numba" },
+    { name = "numpy" },
+    { name = "scipy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/16/d2/eba3364362a29c8e10df6b2b6351a698fc7dff6f514abaa1a9a33a19df4f/pghipy-0.1.1.tar.gz", hash = "sha256:0b44d157324ade4913a5eaf6055f164609bb67b160fa27e4d7fa97bbc1e7f164", size = 3971, upload-time = "2021-11-04T21:26:59.589Z" }
+
+[[package]]
 name = "pillow"
 version = "12.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3964,6 +3975,9 @@ perceptual = [
     { name = "resampy" },
     { name = "torch" },
 ]
+pghi = [
+    { name = "pghipy" },
+]
 server = [
     { name = "fastapi" },
     { name = "uvicorn" },
@@ -4002,6 +4016,7 @@ requires-dist = [
     { name = "lightning", marker = "extra == 'morph'", specifier = ">=2.5" },
     { name = "mlflow", marker = "extra == 'tracking'", specifier = ">=3.6" },
     { name = "numpy", specifier = ">=2.1" },
+    { name = "pghipy", marker = "extra == 'pghi'", specifier = ">=0.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pyloudnorm", marker = "extra == 'morph'", specifier = ">=0.2" },
@@ -4022,7 +4037,7 @@ requires-dist = [
     { name = "umap-learn", marker = "extra == 'cloud'", specifier = ">=0.5" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.35" },
 ]
-provides-extras = ["server", "cloud", "morph", "tracking", "teacher", "perceptual"]
+provides-extras = ["server", "cloud", "morph", "tracking", "teacher", "perceptual", "pghi"]
 
 [package.metadata.requires-dev]
 dev = [

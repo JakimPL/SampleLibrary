@@ -16,7 +16,7 @@ from samplecore.storage import audio_store
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.canonicalizers.linear_axis import onto_linear_axis
-from samplemorph.geometry import Geometry
+from samplemorph.geometry import Geometry, analysis_taper
 
 DEFAULT_CROP_FRAMES: Final[int] = 128
 SILENT_LEVEL: Final[float] = 1e-8
@@ -58,7 +58,9 @@ def phase_example(
 
     spectrogram = canonicalizer.restore(canonicalizer.canonicalize(mono))
     magnitude = onto_linear_axis(spectrogram.magnitude, geometry=geometry)
-    truth = librosa.stft(mono, n_fft=geometry.fft_length, hop_length=geometry.hop_length)
+    truth = librosa.stft(
+        mono, n_fft=geometry.fft_length, hop_length=geometry.hop_length, window=analysis_taper(geometry)
+    )
     frames = min(magnitude.shape[1], truth.shape[1])
     if frames < 1:
         return None

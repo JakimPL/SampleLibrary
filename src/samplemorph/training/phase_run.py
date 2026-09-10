@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from lightning.pytorch import seed_everything
 
-from samplemorph.geometry import fourier_bin_count
+from samplemorph.geometry import analysis_taper, fourier_bin_count
 from samplemorph.training.export import BestEpochExport
 from samplemorph.training.metrics import MONITORED_METRIC
 from samplemorph.training.phase_data import PhaseCorpus, PhaseDataModule
 from samplemorph.training.phase_export import PhaseModelWriter
+from samplemorph.training.phase_losses import FrameAnalysis
 from samplemorph.training.phase_module import PhaseTrainingModule
 from samplemorph.training.runs import RunPlacement, TrainingOutcome, fit_and_export
 from samplemorph.training.settings import PhaseTrainingSettings
@@ -37,8 +38,9 @@ def run_phase_training(
     )
     module = PhaseTrainingModule(
         PhaseModelShape(bin_count=fourier_bin_count(fft_length=geometry.fft_length), channels=settings.channels),
-        fft_length=geometry.fft_length,
-        hop_length=geometry.hop_length,
+        analysis=FrameAnalysis(
+            fft_length=geometry.fft_length, hop_length=geometry.hop_length, taper=analysis_taper(geometry)
+        ),
         learning_rate=settings.run.learning_rate,
         weights=settings.weights,
     )

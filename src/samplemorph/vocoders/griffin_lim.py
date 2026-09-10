@@ -7,6 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplemorph.canonicalizers.linear_axis import onto_linear_axis
+from samplemorph.geometry import analysis_taper
 from samplemorph.images import AnalysisSpectrogram
 
 GRIFFIN_LIM_ITERATIONS: Final[int] = 32
@@ -30,6 +31,7 @@ class GriffinLimVocoder:
             n_iter=self._iterations,
             hop_length=spectrogram.geometry.hop_length,
             n_fft=spectrogram.geometry.fft_length,
+            window=analysis_taper(spectrogram.geometry),
             length=spectrogram.frame_count,
         )
         return waveform
@@ -50,13 +52,17 @@ class OraclePhaseVocoder:
     def synthesize(self, spectrogram: AnalysisSpectrogram) -> NDArray[np.float64]:
         geometry = spectrogram.geometry
         linear = onto_linear_axis(spectrogram.magnitude, geometry=geometry)
-        reference = librosa.stft(self._reference, n_fft=geometry.fft_length, hop_length=geometry.hop_length)
+        taper = analysis_taper(geometry)
+        reference = librosa.stft(
+            self._reference, n_fft=geometry.fft_length, hop_length=geometry.hop_length, window=taper
+        )
         frames = min(linear.shape[1], reference.shape[1])
         phase = np.exp(1j * np.angle(reference[:, :frames]))
         waveform: NDArray[np.float64] = librosa.istft(
             linear[:, :frames] * phase,
             hop_length=geometry.hop_length,
             n_fft=geometry.fft_length,
+            window=taper,
             length=spectrogram.frame_count,
         )
         return waveform
