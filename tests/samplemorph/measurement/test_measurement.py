@@ -3,8 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from samplecore.auditory.sound_type import sound_type_reading
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
+from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.canonicalizers.log_frequency import build_log_frequency_canonicalizer
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.measurement.comparison import grid_distance, held_out_distance_db, held_out_spectrum
@@ -36,7 +38,9 @@ def _probe(index: int, mono: np.ndarray) -> ProbeSample:
         channels=ChannelLayout.MONO,
         frames=mono.shape[0],
     )
-    return ProbeSample(sample=sample, mono=mono)
+    return ProbeSample(
+        sample=sample, mono=mono, sound_type=sound_type_reading(mono, sample_rate_hz=NOMINAL_WAV_RATE).sound_type
+    )
 
 
 @pytest.fixture(name="probes")
