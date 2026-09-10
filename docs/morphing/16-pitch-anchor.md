@@ -68,6 +68,17 @@ but the octave-below one, where it costs two percent. The reference is a median 
 that itself errs on some chip material, so the percentages are a comparison between rules rather
 than absolute accuracy.
 
+## The path as a reading
+
+`samplemorph.measurement.plausibility` now reads pitch along a morph beside the energy share and
+the spread: each step's pitch, found the way the alignment finds a fundamental on the grid restored
+from the decoded image, against the line between the endpoints' pitches, and
+`largest_pitch_deviation` is the worst step. The playback rate a render is written at moves in a
+straight line with the weight too, so a deviation measured on the grids is the one heard. A
+lossless morph between two notes an octave apart, one with a loud second harmonic, deviates by
+more than three semitones on the loudest-band anchor and under one on the fundamental anchor,
+which `tests/samplemorph/test_morphers.py` holds to.
+
 ## What it costs, and what stays open
 
 The anchor is a property of the grid, so a change to it is a change to every grid: the grid

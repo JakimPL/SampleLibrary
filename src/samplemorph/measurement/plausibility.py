@@ -6,8 +6,10 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
+from samplemorph.canonicalizers.common import fundamental_band, restore_columns, to_normalized_decibels
 from samplemorph.codecs import SampleCodec
-from samplemorph.images import SampleLatent
+from samplemorph.geometry import REFERENCE_FREQUENCY_HZ, SEMITONES_PER_OCTAVE
+from samplemorph.images import SampleLatent, SoundImage
 from samplemorph.measurement.comparison import grid_distance
 from samplemorph.morphers import Morpher, MorphWeights
 
@@ -15,6 +17,9 @@ DEFAULT_MORPH_WEIGHTS: Final[tuple[float, ...]] = (0.0, 0.25, 0.5, 0.75, 1.0)
 # The grid spans this many decibels between its floor and its peak, which is what turns a cell
 # back into a magnitude a spread can be read from.
 GRID_DYNAMIC_RANGE_DB: Final[float] = 100.0
+# The lowest frequency a pitch is read at: an axis whose first band sits at zero hertz reads there
+# as this, which keeps the reading finite where nothing audible is pitched.
+PITCH_FLOOR_HZ: Final[float] = 20.0
 
 
 @dataclass(frozen=True)
@@ -27,14 +32,17 @@ class MorphEndpoint:
 
 @dataclass(frozen=True)
 class MorphStep:
-    """One point along a morph: how far its decoded grid sits from each endpoint, and how spread its spectrum is.
+    """One point along a morph: how far its decoded grid sits from each endpoint, and what kind of sound it is.
 
-    Two readings guard against the two ways a path can fail to be a sound. `spread_excess` is the
-    step's spectral spread over the larger of the two endpoints' own: two sounds played at once
-    carry both patterns and spread wider than either. `energy_share` is the step's energy over the
-    mean of the endpoints': a straight line through a grid of decibels thins out whatever the two
-    sounds do not share, so a step carrying a fraction of the energy is the shadow of both rather
-    than a sound between them. A sound holds its energy and spreads no wider.
+    Three readings guard against the ways a path can fail to be a sound between two others.
+    `spread_excess` is the step's spectral spread over the larger of the two endpoints' own: two
+    sounds played at once carry both patterns and spread wider than either. `energy_share` is the
+    step's energy over the mean of the endpoints': a straight line through a grid of decibels thins
+    out whatever the two sounds do not share, so a step carrying a fraction of the energy is the
+    shadow of both rather than a sound between them. `pitch_deviation_semitones` is how far the
+    step's pitch sits from the line between the endpoints' pitches: a morph between two notes
+    glides from one to the other, and a step off that line plays a note neither endpoint asked for.
+    A sound holds its energy, spreads no wider, and keeps its pitch on the line.
     """
 
     weight: float
@@ -42,6 +50,7 @@ class MorphStep:
     distance_to_second: float
     spread_excess: float
     energy_share: float
+    pitch_deviation_semitones: float
 
 
 @dataclass(frozen=True)
@@ -83,6 +92,16 @@ class MorphPlausibility:
         return min(step.energy_share for step in self.steps)
 
     @property
+    def largest_pitch_deviation(self) -> float:
+        """How far off the line between the endpoints' pitches the path strays, at its worst step.
+
+        Read the way the alignment reads a fundamental, so it says what a listener hears of the
+        path's pitch on a pair that has one; a pair of unpitched sounds gets a reading too, of
+        wherever their energy sits lowest, which says nothing about them.
+        """
+        return max(abs(step.pitch_deviation_semitones) for step in self.steps)
+
+    @property
     def furthest_excursion(self) -> float:
         """How far past both endpoints the path strays, at its worst step.
 
@@ -110,14 +129,19 @@ def morph_plausibility(
     if len(weights) < 2:
         raise ValueError(f"a morph path asks for at least two weights, got {len(weights)}")
 
-    first_grid = codec.decode(first.latent).grid
-    second_grid = codec.decode(second.latent).grid
+    first_image = codec.decode(first.latent)
+    second_image = codec.decode(second.latent)
+    first_grid = first_image.grid
+    second_grid = second_image.grid
     endpoint_spread = max(spectral_spread(first_grid), spectral_spread(second_grid))
     endpoint_energy = 0.5 * (grid_energy(first_grid) + grid_energy(second_grid))
+    first_pitch = heard_pitch_semitones(first_image)
+    second_pitch = heard_pitch_semitones(second_image)
     steps = []
     for weight in weights:
         morphed = morpher.morph(first.latent, second.latent, weights=MorphWeights.uniform(weight))
-        decoded = codec.decode(morphed).grid
+        image = codec.decode(morphed)
+        decoded = image.grid
         steps.append(
             MorphStep(
                 weight=weight,
@@ -125,9 +149,29 @@ def morph_plausibility(
                 distance_to_second=grid_distance(decoded, second_grid),
                 spread_excess=spectral_spread(decoded) - endpoint_spread,
                 energy_share=grid_energy(decoded) / endpoint_energy if endpoint_energy > 0.0 else 0.0,
+                pitch_deviation_semitones=heard_pitch_semitones(image)
+                - ((1.0 - weight) * first_pitch + weight * second_pitch),
             )
         )
     return MorphPlausibility(first_hash=first.sample_hash, second_hash=second.sample_hash, steps=tuple(steps))
+
+
+def heard_pitch_semitones(image: SoundImage) -> float:
+    """Where an image's harmonic series is built, in semitones from the reference frequency, as it is heard.
+
+    The reading is taken on the analysis grid restored from the image, so the alignment's
+    translation is back in it and the pitch is the one a vocoder hands on. The playback rate a
+    rendered file is written at multiplies every step of one morph by a factor that moves in a
+    straight line with the weight, so a path measured here and the heard one differ by a line and
+    a deviation from the line is the same in both. The series is found the way the alignment finds
+    a fundamental (`fundamental_band`), which is what makes a morph on that anchor accountable to
+    this reading.
+    """
+    columns = restore_columns(image.grid, geometry=image.geometry, conditioners=image.conditioners)
+    normalized, _ = to_normalized_decibels(columns, dynamic_range_db=image.geometry.dynamic_range_db)
+    band = fundamental_band(normalized, geometry=image.geometry)
+    frequency = max(float(image.geometry.band_frequencies[band]), PITCH_FLOOR_HZ)
+    return SEMITONES_PER_OCTAVE * float(np.log2(frequency / REFERENCE_FREQUENCY_HZ))
 
 
 def grid_magnitudes(grid: NDArray[np.float64]) -> NDArray[np.float64]:

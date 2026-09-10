@@ -4,9 +4,15 @@ import numpy as np
 import pytest
 
 from samplemorph.codecs.identity import IdentityCodec
-from samplemorph.geometry import log_frequency_geometry, mel_geometry
+from samplemorph.geometry import Anchor, log_frequency_geometry, mel_geometry
 from samplemorph.images import Conditioners, SampleLatent
-from samplemorph.measurement.plausibility import MorphEndpoint, grid_energy, morph_plausibility, spectral_spread
+from samplemorph.measurement.plausibility import (
+    MorphEndpoint,
+    grid_energy,
+    heard_pitch_semitones,
+    morph_plausibility,
+    spectral_spread,
+)
 from samplemorph.morphers import MorphWeights
 from samplemorph.morphers.linear import LinearMorpher
 from samplemorph.registries import CANONICALIZER_REGISTRY
@@ -111,6 +117,46 @@ def test_a_lossless_morph_travels_from_one_endpoint_to_the_other() -> None:
     assert plausibility.is_monotone
     assert plausibility.steps[0].distance_to_first == pytest.approx(0.0)
     assert plausibility.steps[-1].distance_to_second == pytest.approx(0.0)
+
+
+SECOND_HARMONIC_LOUDEST = (0.3, 1.0, 0.5, 0.25)
+PITCH_TOLERANCE_SEMITONES = 1.0
+PITCH_SWING_SEMITONES = 3.0
+
+
+def _pitch_path(anchor: Anchor) -> float:
+    """The worst pitch deviation of a lossless morph between two notes an octave apart, one anchored on
+    a loud second harmonic and the other on its fundamental."""
+    canonicalizer = CANONICALIZER_REGISTRY["log_frequency"](anchor=anchor)
+    codec = IdentityCodec(canonicalizer.geometry)
+    first = codec.encode(
+        canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0, weights=SECOND_HARMONIC_LOUDEST))
+    )
+    second = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0)))
+    return morph_plausibility(
+        MorphEndpoint(sample_hash=FIRST_HASH, latent=first),
+        MorphEndpoint(sample_hash=SECOND_HASH, latent=second),
+        codec=codec,
+        morpher=LinearMorpher(),
+    ).largest_pitch_deviation
+
+
+def test_a_morph_anchored_on_the_fundamental_keeps_its_pitch_on_the_line_between_the_notes() -> None:
+    assert _pitch_path(Anchor.FUNDAMENTAL) < PITCH_TOLERANCE_SEMITONES
+
+
+def test_a_morph_anchored_on_the_loudest_band_swings_off_the_line_when_the_anchors_are_different_partials() -> None:
+    """The finding behind the fundamental anchor, as a lossless path: an octave between the two
+    anchors puts the midpoint's note off the line by half of it."""
+    assert _pitch_path(Anchor.LOUDEST) > PITCH_SWING_SEMITONES
+
+
+def test_the_heard_pitch_reads_the_note_an_image_was_made_from() -> None:
+    canonicalizer = CANONICALIZER_REGISTRY["log_frequency"]()
+
+    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=880.0))
+
+    assert heard_pitch_semitones(image) == pytest.approx(12.0, abs=PITCH_TOLERANCE_SEMITONES)
 
 
 def test_measuring_a_morph_path_asks_for_at_least_two_weights() -> None:
