@@ -13,6 +13,22 @@ DISPLAY_LEVEL_SEPARATOR: Final[str] = ": "
 LabelPath = tuple[str, ...]
 
 
+def written_paths(text: str) -> tuple[LabelPath, ...]:
+    """The tag paths a label names, in the order the person wrote them.
+
+    The order is the one reading of a label the set of its tags loses: a person writes the tag they
+    think of first ahead of the qualifiers, so a reader that can show one tag per sample shows the
+    first. A path written twice is kept once, at its first position.
+    """
+    paths: list[LabelPath] = []
+    for tag in text.upper().split(TAG_SEPARATOR):
+        levels = tuple(level.strip() for level in tag.split(LEVEL_SEPARATOR))
+        path = tuple(level for level in levels if level)
+        if path and path not in paths:
+            paths.append(path)
+    return tuple(paths)
+
+
 class SampleLabel(BaseModel):
     """What a label says about a sample: the set of tag paths it names.
 
@@ -31,13 +47,7 @@ class SampleLabel(BaseModel):
     @classmethod
     def parse(cls, text: str) -> Self:
         """Read a label as a person typed it, in the upper case labels are stored in."""
-        paths: set[LabelPath] = set()
-        for tag in text.upper().split(TAG_SEPARATOR):
-            levels = tuple(level.strip() for level in tag.split(LEVEL_SEPARATOR))
-            path = tuple(level for level in levels if level)
-            if path:
-                paths.add(path)
-        return cls(paths=frozenset(paths))
+        return cls(paths=frozenset(written_paths(text)))
 
     @property
     def closure(self) -> frozenset[LabelPath]:

@@ -7,6 +7,7 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
+from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.module import Module
@@ -18,9 +19,16 @@ from samplecore.storage.repositories.cloud import (
     PostgresModuleCloudCoordinateRepository,
 )
 from samplecore.storage.repositories.module import PostgresModuleRepository
-from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
+from samplecore.storage.repositories.playback_rate import (
+    PostgresSamplePlaybackRateRepository,
+)
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from samplecore.storage.repositories.sample_annotation import (
+    PostgresSampleAnnotationRepository,
+)
+from samplecore.storage.repositories.sample_properties import (
+    PostgresSamplePropertiesRepository,
+)
 
 SAMPLE_HASH = "a" * 64
 MODULE_HASH = "c" * 64
@@ -144,3 +152,42 @@ def test_get_module_cloud_on_an_empty_catalog_returns_nothing(client: TestClient
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_get_cloud_labels_carries_each_labeled_sample_s_tags_in_the_order_written(
+    client: TestClient, connection: Connection
+) -> None:
+    """A rating alone names no tag, so only the labeled sample comes back."""
+    for sample_hash in (SAMPLE_HASH, "b" * 64):
+        PostgresSampleRepository(connection).upsert(
+            Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
+        )
+    PostgresSampleAnnotationRepository(connection).replace_many(
+        (
+            _annotation(SAMPLE_HASH, label="SYNTH: PULSE, CHIPTUNE", rating=None),
+            _annotation("b" * 64, label=None, rating=4),
+        )
+    )
+
+    response = client.get("/cloud/labels")
+
+    assert response.status_code == 200
+    assert response.json() == [{"sample_hash": SAMPLE_HASH, "paths": [["SYNTH", "PULSE"], ["CHIPTUNE"]]}]
+
+
+def test_get_cloud_labels_on_an_unlabeled_catalog_returns_nothing(client: TestClient) -> None:
+    assert client.get("/cloud/labels").json() == []
+
+
+def _annotation(sample_hash: str, *, label: str | None, rating: int | None) -> SampleAnnotation:
+    return SampleAnnotation(
+        label=label,
+        rating=rating,
+        favorite=False,
+        sample_hash=sample_hash,
+        occurrence=SampleOccurrence(module_hash=MODULE_HASH, instrument_index=0, sample_slot=0),
+        module_filename="song.xm",
+        sample_name="a sample",
+        source=AnnotationSource.SAMPLE,
+        annotated_at=datetime.now(UTC),
+    )

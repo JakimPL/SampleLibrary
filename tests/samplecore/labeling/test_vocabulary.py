@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from samplecore.labeling.labels import SampleLabel
-from samplecore.labeling.vocabulary import LabelVocabulary, TagUsage
+from samplecore.labeling.vocabulary import LabelVocabulary, TagUsage, first_use_ranks
+from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.sample_properties import SampleOccurrence
 
 LABELS = (
     "HI-HAT: CLOSED, LO-FI",
@@ -53,3 +57,31 @@ def test_an_empty_vocabulary_has_no_findings() -> None:
     assert vocabulary.usages == ()
     assert vocabulary.names_used_at_two_depths == ()
     assert vocabulary.singletons == ()
+
+
+def _annotation(label: str | None, *, days_ago: int, sample_hash: str) -> SampleAnnotation:
+    return SampleAnnotation(
+        label=label,
+        rating=None if label is not None else 3,
+        favorite=False,
+        sample_hash=sample_hash,
+        occurrence=SampleOccurrence(module_hash="c" * 64, instrument_index=0, sample_slot=0),
+        module_filename="song.xm",
+        sample_name="a sample",
+        source=AnnotationSource.SAMPLE,
+        annotated_at=datetime.now(UTC) - timedelta(days=days_ago),
+    )
+
+
+def test_tags_rank_by_first_use_with_the_categories_above_them_and_the_written_order() -> None:
+    """The earliest annotation ranks first however the list arrives, and a rating alone names no tag."""
+    ranks = first_use_ranks(
+        [
+            _annotation("SNARE, LO-FI", days_ago=1, sample_hash="a" * 64),
+            _annotation(None, days_ago=5, sample_hash="b" * 64),
+            _annotation("HI-HAT: CLOSED", days_ago=3, sample_hash="c" * 64),
+            _annotation("LO-FI, SNARE", days_ago=2, sample_hash="d" * 64),
+        ]
+    )
+
+    assert ranks == {("HI-HAT",): 0, ("HI-HAT", "CLOSED"): 1, ("LO-FI",): 2, ("SNARE",): 3}

@@ -28,7 +28,7 @@ export function SampleDetailPanel(): ReactElement {
     const focusedSampleHash = useSelectionStore((state) => state.focusedSampleHash);
 
     if (focusedSampleHash === null) {
-        return <p className="no-selection">No sample focused yet — double-click a sample to see it here.</p>;
+        return <p className="no-selection">No sample selected yet — double-click a sample to see it here.</p>;
     }
 
     return <FocusedSampleDetail sampleHash={focusedSampleHash} />;

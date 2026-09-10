@@ -61,7 +61,7 @@ describe("SampleDetailPanel", () => {
     it("shows a placeholder when no sample is focused", () => {
         renderPanel();
 
-        expect(screen.getByText(/No sample focused yet/)).toBeInTheDocument();
+        expect(screen.getByText(/No sample selected yet/)).toBeInTheDocument();
     });
 
     it("shows the focused sample's detail once loaded", async () => {

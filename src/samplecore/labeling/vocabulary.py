@@ -5,7 +5,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Self
 
-from samplecore.labeling.labels import LabelPath, SampleLabel
+from samplecore.labeling.labels import LabelPath, SampleLabel, written_paths
+from samplecore.models.annotation import SampleAnnotation
 
 
 @dataclass(frozen=True)
@@ -68,3 +69,20 @@ class LabelVocabulary:
     def singletons(self) -> tuple[LabelPath, ...]:
         """Tags carried by exactly one sample, which no metric can yet read anything from."""
         return tuple(usage.path for usage in self.usages if usage.sample_count == 1)
+
+
+def first_use_ranks(annotations: Iterable[SampleAnnotation]) -> dict[LabelPath, int]:
+    """Every tag's rank by the moment a person first used it, the categories above a tag included.
+
+    A rank is what a reader hangs something lasting on, such as a color: it stays with a tag as the
+    vocabulary grows, and a tag used for the first time takes the rank after the last. Two tags first
+    used in one annotation rank in the order they were written.
+    """
+    first_uses: dict[LabelPath, None] = {}
+    for annotation in sorted(annotations, key=lambda candidate: candidate.annotated_at):
+        if annotation.label is None:
+            continue
+        for path in written_paths(annotation.label):
+            for depth in range(1, len(path) + 1):
+                first_uses.setdefault(path[:depth], None)
+    return {path: rank for rank, path in enumerate(first_uses)}

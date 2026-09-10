@@ -52,6 +52,12 @@
     --category-loop: #6d5ce8;
     --category-uncategorized: #7a7972;
     --cloud-point-uncategorized: #d5d4ce;
+
+    /* The lightness and chroma (OKLCH) every hand-label color is painted at, by
+       frontend/src/theme/labelPalette.ts: the hues follow the tags' own ranks, so the theme decides
+       only how heavy they sit on its ground. */
+    --label-lightness: 0.58;
+    --label-chroma: 0.17;
     --mini-waveform-color: var(--text-faint);
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
@@ -105,6 +111,8 @@
         --category-loop: #8f82f0;
         --category-uncategorized: #a3a196;
         --cloud-point-uncategorized: #6e6d64;
+        --label-lightness: 0.74;
+        --label-chroma: 0.15;
     }
 }
 
@@ -148,6 +156,8 @@
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
     --cloud-point-uncategorized: #6e6d64;
+    --label-lightness: 0.74;
+    --label-chroma: 0.15;
 }
 
 /* Palette sampled from a real OpenMPT 1.32 window on Windows 11, not the classic Win98 3D-bevel
@@ -204,6 +214,8 @@
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
     --cloud-point-uncategorized: #63625a;
+    --label-lightness: 0.74;
+    --label-chroma: 0.15;
     --mini-waveform-color: var(--wave-fill);
     --font-body: "Segoe UI", "Tahoma", sans-serif;
     --font-mono: var(--font-body);
@@ -935,6 +947,71 @@ table.data td .annotation-editor-input {
     color: var(--text-muted);
     border-bottom: 1px solid var(--border);
     background: var(--surface-1);
+}
+
+.panel-filter-separator {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+}
+
+.panel-filter-caption {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* The legend that is also the picker for the cloud's hand-label coloring: one entry per top-level
+   tag, its swatch in the color the cloud paints that tag, pressed where the tag is painted. It
+   wraps, since a vocabulary has as many entries as a person has written. */
+.tag-legend {
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-1);
+}
+
+.tag-legend-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 22px;
+    padding: 0 8px 0 6px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface-0);
+    font-size: 11px;
+    color: var(--text-faint);
+    cursor: pointer;
+}
+
+.tag-legend-entry:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.tag-legend-entry[aria-pressed="true"] {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+    background: var(--surface-1);
+}
+
+.tag-legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    opacity: 0.35;
+}
+
+.tag-legend-entry[aria-pressed="true"] .tag-legend-swatch {
+    opacity: 1;
+}
+
+.tag-legend-count {
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
 }
 
 .cloud-empty {

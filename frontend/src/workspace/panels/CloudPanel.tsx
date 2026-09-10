@@ -4,9 +4,19 @@ import { useNavigate } from "react-router-dom";
 import type { CloudPoint, ModuleCloudPoint } from "../../api/cloud";
 import { CloudView } from "../../cloud/CloudView";
 import type { CloudEntityPoint } from "../../cloud/geometry";
+import {
+    defaultPaintedTags,
+    labelColoring,
+    type PointColoring,
+    type TopLevelTag,
+    topLevelTags,
+} from "../../cloud/labelColoring";
+import { TagLegend } from "../../cloud/TagLegend";
 import { useCloud } from "../../cloud/useCloud";
+import { useCloudLabels } from "../../cloud/useCloudLabels";
 import { useModuleCloud } from "../../cloud/useModuleCloud";
 import { useAudioPreview } from "../../samples/useAudioPreview";
+import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
 import { Loading } from "../../shared/Loading";
@@ -15,6 +25,10 @@ import { entityRoute } from "../useEntityRowInteractions";
 import { CloudHoverTooltip } from "./CloudHoverTooltip";
 
 type CloudTab = "samples" | "modules";
+type ColoringMode = "category" | "label";
+
+const CATEGORY_COLORING: PointColoring = { kind: "category" };
+const NO_TAGS: readonly TopLevelTag[] = [];
 
 interface HoveredPoint {
     readonly entity: EntityRef;
@@ -76,10 +90,45 @@ function useActiveCloudPoints(tab: CloudTab): FetchState<readonly CloudEntityPoi
     return tab === "samples" ? samplePointsState : modulePointsState;
 }
 
+/**
+ * How the sample points are colored. Under the label mode, the tags a person has painted are their
+ * own choice once they touch the legend, and the most used ones until then -- so a vocabulary that
+ * grows during a labeling session keeps showing whatever was chosen, and a fresh session shows
+ * the tags with the most to show. The labels and the tag tree are fetched from the first render,
+ * so switching modes never waits on a request.
+ */
+function useSampleColoring(mode: ColoringMode): {
+    readonly coloring: PointColoring;
+    readonly tags: readonly TopLevelTag[];
+    readonly painted: readonly string[];
+    readonly togglePainted: (name: string) => void;
+} {
+    const labelsState = useCloudLabels();
+    const tagsState = useLabelTags();
+    const [chosen, setChosen] = useState<readonly string[] | null>(null);
+    const tags = useMemo(() => (tagsState.status === "success" ? topLevelTags(tagsState.data) : NO_TAGS), [tagsState]);
+    const painted = useMemo(() => chosen ?? defaultPaintedTags(tags), [chosen, tags]);
+    const coloring = useMemo(
+        (): PointColoring =>
+            mode === "label" && labelsState.status === "success"
+                ? labelColoring(labelsState.data, tags, painted)
+                : CATEGORY_COLORING,
+        [mode, labelsState, tags, painted],
+    );
+
+    function togglePainted(name: string): void {
+        setChosen(painted.includes(name) ? painted.filter((candidate) => candidate !== name) : [...painted, name]);
+    }
+
+    return { coloring, tags, painted, togglePainted };
+}
+
 export function CloudPanel(): ReactElement {
     const [tab, setTab] = useState<CloudTab>("samples");
+    const [mode, setMode] = useState<ColoringMode>("category");
     const [hovered, setHovered] = useState<HoveredPoint | null>(null);
     const state = useActiveCloudPoints(tab);
+    const { coloring, tags, painted, togglePainted } = useSampleColoring(mode);
     const navigate = useNavigate();
     const highlighted = useSelectionStore((selection) => selection.highlighted);
     const highlightEntity = useSelectionStore((selection) => selection.highlightEntity);
@@ -153,8 +202,35 @@ export function CloudPanel(): ReactElement {
                 >
                     Modules
                 </button>
+                {tab === "samples" && (
+                    <>
+                        <span className="panel-filter-separator" aria-hidden />
+                        <span className="panel-filter-caption">Color by</span>
+                        <button
+                            type="button"
+                            aria-pressed={mode === "category"}
+                            onClick={() => {
+                                setMode("category");
+                            }}
+                        >
+                            Category
+                        </button>
+                        <button
+                            type="button"
+                            aria-pressed={mode === "label"}
+                            onClick={() => {
+                                setMode("label");
+                            }}
+                        >
+                            Labels
+                        </button>
+                    </>
+                )}
             </div>
             {tab === "modules" && <p className="cloud-caption">{MODULE_TAB_CAPTION}</p>}
+            {tab === "samples" && mode === "label" && (
+                <TagLegend tags={tags} painted={painted} onToggle={togglePainted} />
+            )}
             <div className="panel-body">
                 {state.status === "loading" && <Loading />}
                 {state.status === "error" && <ErrorNotice message={state.message} />}
@@ -162,6 +238,7 @@ export function CloudPanel(): ReactElement {
                     <>
                         <CloudView
                             points={state.data}
+                            coloring={coloring}
                             highlighted={highlighted}
                             onSelect={handleSelect}
                             onFocus={handleFocus}

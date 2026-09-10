@@ -18,8 +18,12 @@ from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from samplecore.storage.repositories.sample_annotation import (
+    PostgresSampleAnnotationRepository,
+)
+from samplecore.storage.repositories.sample_properties import (
+    PostgresSamplePropertiesRepository,
+)
 
 SAMPLE_HASH_A = "a" * 64
 SAMPLE_HASH_B = "b" * 64
@@ -383,3 +387,31 @@ def test_a_listing_sorted_by_rating_puts_the_best_first(client: TestClient, conn
 
 def test_a_rating_floor_outside_the_scale_is_refused(client: TestClient) -> None:
     assert client.get("/samples", params={"minimum_rating": 9}).status_code == 422
+
+
+def test_the_tags_read_the_paths_inside_the_labels_and_rank_them_by_first_use(
+    client: TestClient, connection: Connection
+) -> None:
+    _seed_a_pair_of_near_duplicates(connection)
+    client.put(f"/curation/annotations/{SAMPLE_HASH_A}", json=_state(label="hi-hat: closed, lo-fi", scope="sample"))
+    client.put(f"/curation/annotations/{SAMPLE_HASH_B}", json=_state(label="lo-fi, snare", scope="sample"))
+
+    tags = client.get("/curation/annotations/tags").json()
+
+    assert [tag["path"] for tag in tags] == [["LO-FI"], ["HI-HAT"], ["HI-HAT", "CLOSED"], ["SNARE"]]
+    assert {tuple(tag["path"]): tag["sample_count"] for tag in tags} == {
+        ("LO-FI",): 2,
+        ("HI-HAT",): 1,
+        ("HI-HAT", "CLOSED"): 1,
+        ("SNARE",): 1,
+    }
+    assert {tuple(tag["path"]): tag["rank"] for tag in tags} == {
+        ("HI-HAT",): 0,
+        ("HI-HAT", "CLOSED"): 1,
+        ("LO-FI",): 2,
+        ("SNARE",): 3,
+    }
+
+
+def test_the_tags_of_an_unlabeled_library_are_none(client: TestClient) -> None:
+    assert client.get("/curation/annotations/tags").json() == []

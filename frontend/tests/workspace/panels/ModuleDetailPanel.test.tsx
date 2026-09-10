@@ -56,7 +56,7 @@ describe("ModuleDetailPanel", () => {
     it("shows a placeholder when no module is focused", () => {
         renderPanel();
 
-        expect(screen.getByText(/No module focused yet/)).toBeInTheDocument();
+        expect(screen.getByText(/No module selected yet/)).toBeInTheDocument();
     });
 
     it("shows the focused module's detail once loaded", async () => {

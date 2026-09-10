@@ -1,9 +1,11 @@
 import { useCallback, useState } from "react";
 
 import { type AnnotationDecisions, type AnnotationScope, setSampleAnnotation } from "../api/curation";
+import { CLOUD_LABELS_CACHE_KEY } from "../cloud/useCloudLabels";
 import { describeError } from "../shared/fetchState";
 import { invalidateRequest } from "../shared/requestCache";
 import { useAnnotationStore } from "./annotationStore";
+import { LABEL_TAGS_CACHE_KEY } from "./useLabelTags";
 import { sampleDetailCacheKey } from "./useSampleDetail";
 import { sampleHoverCacheKey } from "./useSampleHoverPreview";
 
@@ -32,7 +34,8 @@ function forgetCachedSamples(sampleHashes: readonly string[]): void {
  * A write reaches as far as ``scope`` says and then tells the session store what it recorded, so
  * every row, badge and panel showing that sample follows at once. The cached requests behind them
  * are dropped in the same breath, which is what lets a later remount read the server's own answer,
- * and the vocabulary is dropped with them so a newly used wording joins the list it is offered from.
+ * and the vocabulary, the tag tree and the cloud's labels are dropped with them, so a newly used
+ * wording joins the list it is offered from and the cloud paints the sample by what was just said.
  */
 export function useAnnotationWriter(sampleHash: string, scope: AnnotationScope): AnnotationWriter {
     const applyAnnotation = useAnnotationStore((state) => state.applyAnnotation);
@@ -48,6 +51,8 @@ export function useAnnotationWriter(sampleHash: string, scope: AnnotationScope):
                     applyAnnotation(written.sample_hashes, written.annotation);
                     forgetCachedSamples(written.sample_hashes);
                     invalidateRequest(VOCABULARY_CACHE_KEY);
+                    invalidateRequest(LABEL_TAGS_CACHE_KEY);
+                    invalidateRequest(CLOUD_LABELS_CACHE_KEY);
                 })
                 .catch((error: unknown) => {
                     setMessage(describeError(error));

@@ -261,6 +261,31 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/cloud/labels": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Cloud Labels
+         * @description Every labeled sample's tags, for coloring the cloud by what a person decided.
+         *
+         *     These travel apart from the points on purpose: the labels are a few hundred rows against a
+         *     hundred thousand points, and they change with every label a person writes while the points
+         *     change only when the embedding is recomputed. A viewer joins the two by hash, so a labeled
+         *     sample the current embedding holds no point for is simply not painted.
+         */
+        readonly get: operations["get_cloud_labels_api_cloud_labels_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/cloud/modules": {
         readonly parameters: {
             readonly query?: never;
@@ -332,6 +357,30 @@ export interface paths {
          * @description Every label already in use, most-used first, for offering a person their own wording back.
          */
         readonly get: operations["get_label_vocabulary_api_curation_annotations_vocabulary_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/curation/annotations/tags": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Label Tags
+         * @description Every tag in use, read out of the labels as paths, most used first.
+         *
+         *     Where `get_label_vocabulary` offers whole wordings back to the person typing one, this reads the
+         *     tags inside them -- ``HI-HAT: CLOSED, LO-FI`` names three -- for a viewer that colors or filters
+         *     by what the labels say. The tree comes whole; a viewer takes the depth it wants.
+         */
+        readonly get: operations["get_label_tags_api_curation_annotations_tags_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -420,6 +469,19 @@ export interface components {
          * @enum {integer}
          */
         readonly ChannelLayout: 1 | 2;
+        /**
+         * CloudLabel
+         * @description What a person decided one sample is, as the tag paths they wrote, in the order they wrote them.
+         *
+         *     The order is kept because a point can show one color: the tag a person wrote first is the one
+         *     they thought of first, so it is the one a viewer paints the point with.
+         */
+        readonly CloudLabel: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            /** Paths */
+            readonly paths: readonly (readonly string[])[];
+        };
         /** HTTPValidationError */
         readonly HTTPValidationError: {
             /** Detail */
@@ -972,6 +1034,22 @@ export interface components {
             readonly playback_rate_hz: number | null;
         };
         /**
+         * TagSummary
+         * @description One tag a person has used: its path, how many samples carry it, and a rank that stays with it.
+         *
+         *     The count includes every sample labeled with a specification below the tag. The rank is the
+         *     order the tag was first used in, which is what a viewer hangs a lasting color on: it keeps its
+         *     value as the vocabulary grows, where a place in a most-used ordering changes with every label.
+         */
+        readonly TagSummary: {
+            /** Path */
+            readonly path: readonly string[];
+            /** Sample Count */
+            readonly sample_count: number;
+            /** Rank */
+            readonly rank: number;
+        };
+        /**
          * TrackerFormat
          * @description Which tracker format a module or a sample occurrence belongs to.
          * @enum {string}
@@ -1408,6 +1486,26 @@ export interface operations {
             };
         };
     };
+    readonly get_cloud_labels_api_cloud_labels_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["CloudLabel"][];
+                };
+            };
+        };
+    };
     readonly get_module_cloud_api_cloud_modules_get: {
         readonly parameters: {
             readonly query?: never;
@@ -1479,6 +1577,26 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": readonly string[];
+                };
+            };
+        };
+    };
+    readonly get_label_tags_api_curation_annotations_tags_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["TagSummary"][];
                 };
             };
         };

@@ -4,7 +4,12 @@ from dataclasses import dataclass
 
 import pytest
 
-from samplecore.labeling.labels import SampleLabel, format_path, label_agreement
+from samplecore.labeling.labels import (
+    SampleLabel,
+    format_path,
+    label_agreement,
+    written_paths,
+)
 
 
 @dataclass(frozen=True)
@@ -81,3 +86,11 @@ def test_agreement_gives_graded_credit_along_the_hierarchy(case: AgreementCase) 
 
 def test_a_path_formats_the_way_a_person_writes_it() -> None:
     assert format_path(("PIANO", "ELECTRIC", "RHODES")) == "PIANO: ELECTRIC: RHODES"
+
+
+def test_the_written_order_of_a_label_is_kept_and_a_repeated_tag_counted_once() -> None:
+    assert written_paths("synth: pulse, chiptune, SYNTH: PULSE, , bass") == (
+        ("SYNTH", "PULSE"),
+        ("CHIPTUNE",),
+        ("BASS",),
+    )

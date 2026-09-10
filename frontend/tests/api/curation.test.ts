@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { clearSampleAnnotation, getLabelVocabulary, setSampleAnnotation } from "../../src/api/curation";
+import { clearSampleAnnotation, getLabelTags, getLabelVocabulary, setSampleAnnotation } from "../../src/api/curation";
 
 const SAMPLE_HASH = "a".repeat(64);
 const NOTHING = { label: null, rating: null, favorite: false };
@@ -71,5 +71,15 @@ describe("getLabelVocabulary", () => {
         await getLabelVocabulary();
 
         expect(fetchMock).toHaveBeenCalledWith("/api/curation/annotations/vocabulary");
+    });
+});
+
+describe("getLabelTags", () => {
+    it("requests the tags endpoint", async () => {
+        const fetchMock = stubFetch([]);
+
+        await getLabelTags();
+
+        expect(fetchMock).toHaveBeenCalledWith("/api/curation/annotations/tags");
     });
 });

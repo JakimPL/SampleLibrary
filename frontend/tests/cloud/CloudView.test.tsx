@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CloudView } from "../../src/cloud/CloudView";
 import type { CloudEntityPoint } from "../../src/cloud/geometry";
+import type { PointColoring } from "../../src/cloud/labelColoring";
 import { useThemeStore } from "../../src/theme/themeStore";
 import type { EntityRef } from "../../src/workspace/selectionStore";
 
@@ -74,6 +75,7 @@ function point(ref: EntityRef, x: number, y: number, category?: CloudEntityPoint
 
 interface RenderOverrides {
     readonly points?: readonly CloudEntityPoint[];
+    readonly coloring?: PointColoring;
     readonly highlighted?: EntityRef | null;
     readonly onSelect?: (entity: EntityRef) => void;
     readonly onFocus?: (entity: EntityRef) => void;
@@ -95,6 +97,7 @@ async function flushDraw(): Promise<void> {
 async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnType<typeof render>> {
     const result = render(
         <CloudView
+            coloring={overrides.coloring ?? CATEGORY_COLORING}
             points={overrides.points ?? []}
             highlighted={overrides.highlighted ?? null}
             onSelect={overrides.onSelect ?? vi.fn()}
@@ -109,6 +112,7 @@ async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnT
     return result;
 }
 
+const CATEGORY_COLORING: PointColoring = { kind: "category" };
 const SAMPLE_REF: EntityRef = { kind: "sample", hash: "a".repeat(64) };
 const MODULE_REF: EntityRef = { kind: "module", hash: "b".repeat(64) };
 
@@ -160,6 +164,7 @@ describe("CloudView", () => {
         // highlighted state, which flows back into this same view as its next `highlighted` prop.
         rerender(
             <CloudView
+                coloring={CATEGORY_COLORING}
                 points={[point(SAMPLE_REF, 0, 0)]}
                 highlighted={SAMPLE_REF}
                 onSelect={vi.fn()}
@@ -256,6 +261,7 @@ describe("CloudView", () => {
     it("waits for the scatterplot's draw to resolve before selecting the highlighted point", async () => {
         render(
             <CloudView
+                coloring={CATEGORY_COLORING}
                 points={[point(SAMPLE_REF, 0, 0)]}
                 highlighted={SAMPLE_REF}
                 onSelect={vi.fn()}
@@ -299,6 +305,7 @@ describe("CloudView", () => {
         function rerenderWithHighlight(highlighted: EntityRef): void {
             rerender(
                 <CloudView
+                    coloring={CATEGORY_COLORING}
                     points={[point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)]}
                     highlighted={highlighted}
                     onSelect={vi.fn()}
@@ -373,6 +380,7 @@ describe("CloudView", () => {
 
         rerender(
             <CloudView
+                coloring={CATEGORY_COLORING}
                 points={[point(SAMPLE_REF, 0, 0)]}
                 highlighted={SAMPLE_REF}
                 onSelect={vi.fn()}
@@ -397,6 +405,7 @@ describe("CloudView", () => {
 
         rerender(
             <CloudView
+                coloring={CATEGORY_COLORING}
                 points={[point(SAMPLE_REF, 0, 0)]}
                 highlighted={{ kind: SAMPLE_REF.kind, hash: SAMPLE_REF.hash }}
                 onSelect={vi.fn()}
@@ -466,6 +475,27 @@ describe("CloudView", () => {
         const drawnPoints = instance.draw.mock.calls[0]?.[0] as number[][];
         expect(drawnPoints[0]).toHaveLength(3);
         expect(drawnPoints[1]).toHaveLength(3);
+        expect(instance.draw.mock.calls[0]?.[1]).toEqual({ zDataType: "categorical" });
+    });
+
+    it("draws each point's painted-tag slot and a palette of one color per painted tag under a label coloring", async () => {
+        const coloring: PointColoring = {
+            kind: "label",
+            slotByHash: new Map([[SAMPLE_REF.hash, 2]]),
+            ranks: [5, 0],
+        };
+        await renderCloudView({
+            points: [point(SAMPLE_REF, 0, 0, "kick"), point(MODULE_REF, 1, 1, "snare")],
+            coloring,
+        });
+        const instance = latestInstance();
+
+        const setCall = instance.set.mock.calls[0]?.[0] as { colorBy?: string; pointColor?: string[] };
+        expect(setCall.colorBy).toBe("category");
+        expect(setCall.pointColor).toHaveLength(3);
+        const drawnPoints = instance.draw.mock.calls[0]?.[0] as number[][];
+        expect(drawnPoints[0]?.[2]).toBe(2);
+        expect(drawnPoints[1]?.[2]).toBe(0);
         expect(instance.draw.mock.calls[0]?.[1]).toEqual({ zDataType: "categorical" });
     });
 

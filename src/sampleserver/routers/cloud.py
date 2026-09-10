@@ -6,6 +6,7 @@ from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
 from samplecore.categorization import classify_sample_category
+from samplecore.labeling.labels import written_paths
 from samplecore.models.annotation import SampleAnnotation
 from samplecore.models.base import FROZEN
 from samplecore.models.category import SampleCategory
@@ -16,9 +17,13 @@ from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
     PostgresModuleCloudCoordinateRepository,
 )
-from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
+from samplecore.storage.repositories.playback_rate import (
+    PostgresSamplePlaybackRateRepository,
+)
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_annotation import (
+    PostgresSampleAnnotationRepository,
+)
 from sampleserver.dependencies import get_connection
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
@@ -81,6 +86,35 @@ def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleC
             ),
         )
         for coordinate in coordinates
+    )
+
+
+class CloudLabel(BaseModel):
+    """What a person decided one sample is, as the tag paths they wrote, in the order they wrote them.
+
+    The order is kept because a point can show one color: the tag a person wrote first is the one
+    they thought of first, so it is the one a viewer paints the point with.
+    """
+
+    model_config = FROZEN
+
+    sample_hash: SampleHash
+    paths: tuple[tuple[str, ...], ...]
+
+
+@router.get("/labels")
+def get_cloud_labels(connection: Connection = Depends(get_connection)) -> tuple[CloudLabel, ...]:
+    """Every labeled sample's tags, for coloring the cloud by what a person decided.
+
+    These travel apart from the points on purpose: the labels are a few hundred rows against a
+    hundred thousand points, and they change with every label a person writes while the points
+    change only when the embedding is recomputed. A viewer joins the two by hash, so a labeled
+    sample the current embedding holds no point for is simply not painted.
+    """
+    return tuple(
+        CloudLabel(sample_hash=annotation.sample_hash, paths=written_paths(annotation.label))
+        for annotation in PostgresSampleAnnotationRepository(connection).list_all()
+        if annotation.label is not None
     )
 
 

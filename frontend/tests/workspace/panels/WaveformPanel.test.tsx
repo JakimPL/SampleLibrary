@@ -87,10 +87,10 @@ describe("WaveformPanel", () => {
     it("shows a placeholder when no sample is focused", () => {
         render(<WaveformPanel />);
 
-        expect(screen.getByText(/No sample focused yet/)).toBeInTheDocument();
+        expect(screen.getByText(/No sample selected yet/)).toBeInTheDocument();
     });
 
-    it("plays the focused sample at the rate the library really sounds it at", async () => {
+    it("plays the selected sample at the rate the library really sounds it at", async () => {
         getSample.mockResolvedValue(
             buildSampleDetail({
                 playbackRateHz: 22050,

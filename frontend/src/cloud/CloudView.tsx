@@ -3,10 +3,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import createScatterplot from "regl-scatterplot";
 
 import { CATEGORY_ORDER, categoryColorProperty, categoryIndex } from "../samples/category";
+import { labelColor, readLabelPaletteParameters } from "../theme/labelPalette";
 import { readThemeColor } from "../theme/readThemeColor";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import type { EntityRef } from "../workspace/selectionStore";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
+import { type PointColoring, SUBSTRATE_SLOT } from "./labelColoring";
 
 type Scatterplot = ReturnType<typeof createScatterplot>;
 type ScreenPosition = readonly [number, number];
@@ -49,6 +51,16 @@ function readCategoryPalette(): string[] {
     );
 }
 
+// The tags a person chose to paint sit on the same recessive ground the uncategorized points do,
+// so the labeled samples stand out of a catalog that is mostly unlabeled.
+function readLabelPalette(ranks: readonly number[]): string[] {
+    const parameters = readLabelPaletteParameters();
+    return [
+        readThemeColor(UNCATEGORIZED_COLOR_PROPERTY, UNCATEGORIZED_COLOR_FALLBACK),
+        ...ranks.map((rank) => labelColor(rank, parameters)),
+    ];
+}
+
 interface DrawSpec {
     readonly positions: number[][];
     readonly categorized: boolean;
@@ -59,25 +71,42 @@ interface DrawSpec {
 /**
  * Builds both the point positions and the color configuration a draw call needs from one pass over
  * `points`, since the two must agree: a sample-cloud point always carries a `category` (worst case
- * "uncategorized"), so a batch where every point has one gets a `[x, y, categoryIndex]` triple and
+ * "uncategorized"), so a batch where every point has one gets a `[x, y, slot]` triple and
  * regl-scatterplot's own categorical coloring (`colorBy: 'category'`, one `pointColor` entry per
- * `CATEGORY_ORDER` slot); a module-cloud point carries none, so its batch stays a plain `[x, y]`
- * pair under the shell's single flat point color -- the two tabs share one scatterplot instance
- * (see `CloudPanel`), so this decides per draw call which of the two point kinds is on screen.
+ * slot) -- the slot being the point's `CATEGORY_ORDER` index, or under a label `coloring` the slot
+ * its painted tag holds; a module-cloud point carries no category, so its batch stays a plain
+ * `[x, y]` pair under the shell's single flat point color -- the two tabs share one scatterplot
+ * instance (see `CloudPanel`), so this decides per draw call which of the two point kinds is on
+ * screen.
  */
-function buildDrawSpec(points: readonly CloudEntityPoint[]): DrawSpec {
+function buildDrawSpec(points: readonly CloudEntityPoint[], coloring: PointColoring): DrawSpec {
     const categorized = points.length > 0 && points.every((point) => point.category !== undefined);
-    const positions = points.map((point) =>
-        point.category === undefined ? [point.x, point.y] : [point.x, point.y, categoryIndex(point.category)],
-    );
-    return categorized
-        ? { positions, categorized, colorBy: CATEGORICAL_COLOR_BY, pointColor: readCategoryPalette() }
-        : {
-              positions,
-              categorized,
-              colorBy: null,
-              pointColor: readThemeColor(POINT_COLOR_PROPERTY, POINT_COLOR_FALLBACK),
-          };
+    if (!categorized) {
+        return {
+            positions: points.map((point) => [point.x, point.y]),
+            categorized,
+            colorBy: null,
+            pointColor: readThemeColor(POINT_COLOR_PROPERTY, POINT_COLOR_FALLBACK),
+        };
+    }
+    if (coloring.kind === "label") {
+        return {
+            positions: points.map((point) => [
+                point.x,
+                point.y,
+                coloring.slotByHash.get(point.ref.hash) ?? SUBSTRATE_SLOT,
+            ]),
+            categorized,
+            colorBy: CATEGORICAL_COLOR_BY,
+            pointColor: readLabelPalette(coloring.ranks),
+        };
+    }
+    return {
+        positions: points.map((point) => [point.x, point.y, categoryIndex(point.category ?? UNCATEGORIZED_CATEGORY)]),
+        categorized,
+        colorBy: CATEGORICAL_COLOR_BY,
+        pointColor: readCategoryPalette(),
+    };
 }
 
 // Kept in step with the ring animations' own total duration in styles.css (two staggered 1400ms
@@ -86,6 +115,7 @@ const PING_LIFETIME_MS = 1900;
 
 interface CloudViewProps {
     readonly points: readonly CloudEntityPoint[];
+    readonly coloring: PointColoring;
     readonly highlighted: EntityRef | null;
     readonly onSelect: (entity: EntityRef) => void;
     readonly onFocus: (entity: EntityRef) => void;
@@ -128,8 +158,9 @@ function drawSerialized(
     scatterplot: Scatterplot,
     chain: DrawChain,
     points: readonly CloudEntityPoint[],
+    coloring: PointColoring,
 ): Promise<void> {
-    const spec = buildDrawSpec(points);
+    const spec = buildDrawSpec(points, coloring);
     const runDraw = (): Promise<void> =>
         scatterplot
             .set({ colorBy: spec.colorBy, pointColor: spec.pointColor })
@@ -165,11 +196,12 @@ async function applyPoints(
     scatterplot: Scatterplot,
     drawChain: DrawChain,
     points: readonly CloudEntityPoint[],
+    coloring: PointColoring,
     highlighted: EntityRef | null,
     isCanceled: () => boolean,
 ): Promise<number> {
     try {
-        await drawSerialized(scatterplot, drawChain, points);
+        await drawSerialized(scatterplot, drawChain, points, coloring);
     } catch (error) {
         if (isCanceled()) {
             return -1;
@@ -225,6 +257,7 @@ async function applyPoints(
  */
 export function CloudView({
     points: rawPoints,
+    coloring,
     highlighted,
     onSelect,
     onFocus,
@@ -244,6 +277,8 @@ export function CloudView({
     // calling it rather than risk that throw crashing an unrelated passive-effect commit.
     const pointsDrawnRef = useRef(false);
     const pointsRef = useRef<readonly CloudEntityPoint[]>([]);
+    const coloringRef = useRef<PointColoring>(coloring);
+    coloringRef.current = coloring;
     const hoveredIndexRef = useRef<number | null>(null);
     const previousHighlightedRef = useRef<EntityRef | null>(null);
     const pingCounterRef = useRef(0);
@@ -293,7 +328,14 @@ export function CloudView({
         pointsDrawnRef.current = false;
         drawChainRef.current = Promise.resolve();
         let canceled = false;
-        void applyPoints(scatterplot, drawChainRef, pointsRef.current, highlighted, () => canceled).then(() => {
+        void applyPoints(
+            scatterplot,
+            drawChainRef,
+            pointsRef.current,
+            coloringRef.current,
+            highlighted,
+            () => canceled,
+        ).then(() => {
             if (!canceled) {
                 pointsDrawnRef.current = true;
             }
@@ -395,25 +437,27 @@ export function CloudView({
         // draw (or any other run's) through `drawChainRef` regardless of this cancellation, since a
         // canceled run's `draw` call was already issued and the scatterplot has no way to retract it.
         let canceled = false;
-        void applyPoints(scatterplot, drawChainRef, points, highlighted, () => canceled).then((highlightedIndex) => {
-            if (canceled) {
-                return;
-            }
-
-            pointsDrawnRef.current = true;
-            if (highlightedIndex >= 0 && !sameHighlight(highlighted, previousHighlightedRef.current)) {
-                const position = scatterplot.getScreenPosition(highlightedIndex);
-                if (position !== undefined) {
-                    pingCounterRef.current += 1;
-                    setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
+        void applyPoints(scatterplot, drawChainRef, points, coloring, highlighted, () => canceled).then(
+            (highlightedIndex) => {
+                if (canceled) {
+                    return;
                 }
-            }
-            previousHighlightedRef.current = highlighted;
-        });
+
+                pointsDrawnRef.current = true;
+                if (highlightedIndex >= 0 && !sameHighlight(highlighted, previousHighlightedRef.current)) {
+                    const position = scatterplot.getScreenPosition(highlightedIndex);
+                    if (position !== undefined) {
+                        pingCounterRef.current += 1;
+                        setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
+                    }
+                }
+                previousHighlightedRef.current = highlighted;
+            },
+        );
         return (): void => {
             canceled = true;
         };
-    }, [points, highlighted]);
+    }, [points, coloring, highlighted]);
 
     useEffect(() => {
         // Redundantly re-applies the colors the mount effect above just set on the first render.
@@ -422,7 +466,7 @@ export function CloudView({
         // theme switch while viewing the categorized Samples tab keeps every category's own color
         // instead of collapsing them all back to one.
         const { pointColorActive, backgroundColor } = readCloudColors();
-        const spec = buildDrawSpec(pointsRef.current);
+        const spec = buildDrawSpec(pointsRef.current, coloringRef.current);
         void scatterplotRef.current?.set({
             pointColorActive,
             backgroundColor,

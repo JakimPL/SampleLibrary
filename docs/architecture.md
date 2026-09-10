@@ -392,9 +392,21 @@ the single place that rule is applied. The frontend colors the sample cloud by c
 (`regl-scatterplot`'s own categorical coloring, one fixed hue per `SampleCategory` declared as a CSS
 custom property per theme in `styles.css`) and shows the category as a badge everywhere a sample's
 name appears; the same color and label always travel together, since fourteen categories are too
-many to stay reliably distinguishable by hue alone for every viewer. The cloud keeps coloring by
-the guessed category for that same reason: a hand label is free text, so it belongs to an unbounded
-set of hues, and it wears one style of its own in the badge instead.
+many to stay reliably distinguishable by hue alone for every viewer. In the badge a hand label
+wears one style of its own, being free text.
+
+The cloud can also color by the hand labels' own tags, with nothing about any tag known to the
+frontend. `GET /curation/annotations/tags` reads the tag tree out of the labels through
+`samplecore.labeling`, each tag with its count and a rank by the order it was first used, and
+`GET /cloud/labels` carries every labeled sample's tags in the order the person wrote them, apart
+from the points because a few hundred labels change with every label written while a hundred
+thousand points change only with the embedding. The frontend paints a tag in a color that is a
+function of its rank alone (`labelPalette.ts`: hues a golden angle apart, at the lightness and
+chroma each theme declares), so a tag keeps its color as the vocabulary grows and a new one takes
+the next hue; the legend is the picker, painting the most used top-level tags until a person
+chooses their own, and a sample carrying several painted tags takes the first it was given
+(`labelColoring.ts`). Everything a painted tag does not reach stays on the recessive tone the
+uncategorized points use.
 
 ## Extending to new tracker formats
 
