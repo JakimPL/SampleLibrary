@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 
 from samplecore.models.sample import Sample
 from samplecore.storage import audio_store
-from samplecore.waveform import fold_to_mono
+from samplemorph.canonicalizers.common import prepare_mono
 
 DEFAULT_PROBE_FRAME_FLOOR: Final[int] = 4_000
 DEFAULT_PROBE_FRAME_CEILING: Final[int] = 200_000
@@ -24,9 +24,13 @@ class ProbeSample:
 
 
 def read_probe_samples(library_root: Path, samples: tuple[Sample, ...]) -> tuple[ProbeSample, ...]:
-    """Read each sample's stored audio, folded to the one channel every frequency axis analyzes."""
+    """Read each sample's stored audio, prepared exactly as every frequency axis analyzes it.
+
+    A probe's mono is the reference every reconstruction of it is measured against, so it takes
+    the same way in as the analysis and the two compare the same content.
+    """
     return tuple(
-        ProbeSample(sample=sample, mono=fold_to_mono(audio_store.read(library_root, sample).pcm)) for sample in samples
+        ProbeSample(sample=sample, mono=prepare_mono(audio_store.read(library_root, sample).pcm)) for sample in samples
     )
 
 

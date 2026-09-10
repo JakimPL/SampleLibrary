@@ -14,6 +14,7 @@ from samplecore.naming import choose_dominant_rate
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplemorph.canonicalizers import Canonicalizer
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.codecs import SampleCodec
 from samplemorph.images import SampleLatent
 from samplemorph.model_store import MorphModelDescription
@@ -77,7 +78,7 @@ def encode_sample(
     Raises:
         ValueError: the catalog holds no occurrence of this sample, so no playback rate is known.
     """
-    mono = audio_store.read(library_root, sample).pcm.mean(axis=1)
+    mono = prepare_mono(audio_store.read(library_root, sample).pcm)
     rates_by_hash = PostgresSampleRepository(connection).names_and_rates_by_hash([sample.hash])[1]
     dominant_rate = choose_dominant_rate(rates_by_hash.get(sample.hash, ()))
     if dominant_rate is None:

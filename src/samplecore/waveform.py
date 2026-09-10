@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from functools import cache
 from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
-from scipy.signal import resample_poly
+from scipy.signal import butter, buttord, resample_poly, sosfiltfilt
 
 from samplecore.models.base import FROZEN
 
@@ -14,6 +15,12 @@ DEFAULT_WAVEFORM_BUCKET_COUNT: Final[int] = 200
 DEFAULT_THUMBNAIL_BUCKET_COUNT: Final[int] = 32
 SEMITONES_PER_OCTAVE: Final[int] = 12
 DEFAULT_RESAMPLING_DENOMINATOR: Final[int] = 200
+SUBSONIC_PASSBAND_HZ: Final[float] = 30.0
+SUBSONIC_STOPBAND_HZ: Final[float] = 10.0
+SUBSONIC_PASSBAND_RIPPLE_DB: Final[float] = 1.0
+SUBSONIC_STOPBAND_ATTENUATION_DB: Final[float] = 60.0
+SUBSONIC_FILTER_PASSES: Final[int] = 2
+SUBSONIC_SETTLE_PERIODS: Final[float] = 3.0
 
 
 class WaveformPeak(BaseModel):
@@ -38,6 +45,50 @@ def remove_dc_offset(mono: NDArray[np.float64]) -> NDArray[np.float64]:
     its mean already sits at or near zero.
     """
     return mono - mono.mean()
+
+
+@cache
+def subsonic_sections(sample_rate_hz: int) -> NDArray[np.float64]:
+    """The second-order sections of the high-pass `remove_subsonic` applies at one sample rate.
+
+    The order is solved for the shallowest Butterworth that holds `SUBSONIC_PASSBAND_HZ` within
+    `SUBSONIC_PASSBAND_RIPPLE_DB` and pushes `SUBSONIC_STOPBAND_HZ` down by
+    `SUBSONIC_STOPBAND_ATTENUATION_DB`, so the filter is as gentle as that specification allows at
+    every rate it is designed for. The filter runs `SUBSONIC_FILTER_PASSES` times over a signal, so
+    each pass is designed to its share of both figures and the two together meet them. Sections
+    keep a cutoff this far below the rate numerically stable.
+    """
+    order, natural_frequency_hz = buttord(
+        SUBSONIC_PASSBAND_HZ,
+        SUBSONIC_STOPBAND_HZ,
+        SUBSONIC_PASSBAND_RIPPLE_DB / SUBSONIC_FILTER_PASSES,
+        SUBSONIC_STOPBAND_ATTENUATION_DB / SUBSONIC_FILTER_PASSES,
+        fs=sample_rate_hz,
+    )
+    sections: NDArray[np.float64] = butter(
+        order, natural_frequency_hz, btype="highpass", output="sos", fs=sample_rate_hz
+    )
+    return sections
+
+
+def remove_subsonic(mono: NDArray[np.float64], *, sample_rate_hz: int) -> NDArray[np.float64]:
+    """Keep the band a listener hears from a mono signal, removing the rumble and offset below it.
+
+    The filter runs forward and then back over the signal, so every frequency keeps its timing and
+    a transient's onset stays where it was. Each pass settles over an extension of
+    `SUBSONIC_SETTLE_PERIODS` cutoff periods at either end that mirrors the signal within its own
+    range of values, so a signal that starts or stops mid-cycle keeps its edges: the extension
+    carries the same level the signal does, which is what lets a high-pass settle there quietly. It
+    is designed at `sample_rate_hz`, the rate the frames are read at: a sample stored at the nominal
+    container rate and heard above it sees the cutoff scale up by the same ratio, which keeps the
+    cutoff conservative for tracker material, whose heard rates sit at or below the container rate.
+    A signal shorter than the settling span is read with the extension it can afford.
+    """
+    settle_length = min(int(SUBSONIC_SETTLE_PERIODS * sample_rate_hz / SUBSONIC_PASSBAND_HZ), mono.shape[0] - 1)
+    filtered: NDArray[np.float64] = sosfiltfilt(
+        subsonic_sections(sample_rate_hz), mono, padtype="even", padlen=settle_length
+    )
+    return filtered
 
 
 def resample_by_semitones(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import pytest
 
@@ -8,10 +10,94 @@ from samplecore.waveform import (
     compute_waveform_peaks,
     fold_to_mono,
     remove_dc_offset,
+    remove_subsonic,
     resample_to_fraction_points,
+    subsonic_sections,
     triangular_weights,
     trim_trailing_silence,
 )
+
+CONTAINER_RATE_HZ = 44100
+LOW_HEARD_RATE_HZ = 8363
+TONE_SECONDS = 2.0
+TONE_AMPLITUDE = 0.1
+CLICK_SECONDS = 0.001
+DC_OFFSET = 0.25
+
+
+@dataclass(frozen=True)
+class SubsonicToneCase:
+    frequency_hz: float
+    sample_rate_hz: int
+    lowest_gain_db: float
+    highest_gain_db: float
+
+
+SUBSONIC_TONE_CASES = (
+    SubsonicToneCase(frequency_hz=10.0, sample_rate_hz=CONTAINER_RATE_HZ, lowest_gain_db=-200.0, highest_gain_db=-50.0),
+    SubsonicToneCase(frequency_hz=100.0, sample_rate_hz=CONTAINER_RATE_HZ, lowest_gain_db=-0.5, highest_gain_db=0.5),
+    SubsonicToneCase(frequency_hz=100.0, sample_rate_hz=LOW_HEARD_RATE_HZ, lowest_gain_db=-0.5, highest_gain_db=0.5),
+)
+
+
+def _tone(frequency_hz: float, *, sample_rate_hz: int) -> np.ndarray:
+    times = np.arange(int(TONE_SECONDS * sample_rate_hz)) / sample_rate_hz
+    return TONE_AMPLITUDE * np.sin(2.0 * np.pi * frequency_hz * times)
+
+
+def _middle_rms(signal: np.ndarray) -> float:
+    quarter = signal.shape[0] // 4
+    return float(np.sqrt(np.mean(signal[quarter:-quarter] ** 2)))
+
+
+def _energy_centroid(signal: np.ndarray) -> float:
+    energy = signal**2
+    return float((np.arange(signal.shape[0]) * energy).sum() / energy.sum())
+
+
+@pytest.mark.parametrize("case", SUBSONIC_TONE_CASES)
+def test_remove_subsonic_rejects_rumble_and_passes_the_audible_band(case: SubsonicToneCase) -> None:
+    tone = _tone(case.frequency_hz, sample_rate_hz=case.sample_rate_hz)
+
+    filtered = remove_subsonic(tone, sample_rate_hz=case.sample_rate_hz)
+
+    gain_db = 20.0 * np.log10(_middle_rms(filtered) / _middle_rms(tone))
+    assert case.lowest_gain_db <= gain_db <= case.highest_gain_db
+
+
+def test_remove_subsonic_removes_a_constant_offset() -> None:
+    offset = np.full(int(TONE_SECONDS * CONTAINER_RATE_HZ), DC_OFFSET)
+
+    filtered = remove_subsonic(offset, sample_rate_hz=CONTAINER_RATE_HZ)
+
+    assert _middle_rms(filtered) < DC_OFFSET * 1e-3
+
+
+def test_remove_subsonic_keeps_a_click_where_it_was() -> None:
+    click_length = int(CLICK_SECONDS * CONTAINER_RATE_HZ)
+    signal = np.zeros(int(TONE_SECONDS * CONTAINER_RATE_HZ))
+    start = signal.shape[0] // 2
+    signal[start : start + click_length] = np.hanning(click_length)
+
+    filtered = remove_subsonic(signal, sample_rate_hz=CONTAINER_RATE_HZ)
+
+    assert abs(_energy_centroid(filtered) - _energy_centroid(signal)) < 2.0
+
+
+def test_remove_subsonic_reads_a_signal_shorter_than_its_settling_span() -> None:
+    short = np.array([0.1, -0.2, 0.3, -0.1, 0.05])
+
+    filtered = remove_subsonic(short, sample_rate_hz=CONTAINER_RATE_HZ)
+
+    assert filtered.shape == short.shape
+    assert np.isfinite(filtered).all()
+
+
+def test_subsonic_sections_stay_finite_at_a_low_heard_rate() -> None:
+    sections = subsonic_sections(LOW_HEARD_RATE_HZ)
+
+    assert np.isfinite(sections).all()
+    assert sections.shape[1] == 6
 
 
 def test_compute_waveform_peaks_returns_the_requested_bucket_count() -> None:

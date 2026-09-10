@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import torch
 
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.canonicalizers.log_frequency import build_log_frequency_canonicalizer
 from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
 from samplemorph.descriptors.learned import (
@@ -68,7 +69,9 @@ def test_a_stored_descriptor_describes_a_waveform_the_way_it_did_before_storing(
     assert described.shape == (EMBEDDING_SIZE,)
     assert described.dtype == np.float64
     np.testing.assert_allclose(np.linalg.norm(described), 1.0, rtol=1e-5)
-    np.testing.assert_allclose(loaded.describe(canonicalizer.canonicalize(waveform[:, 0])), described, rtol=1e-5)
+    np.testing.assert_allclose(
+        loaded.describe(canonicalizer.canonicalize(prepare_mono(waveform))), described, rtol=1e-5
+    )
     assert loaded.size == EMBEDDING_SIZE
 
 

@@ -9,7 +9,7 @@ from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.waveform import (
     average_to_fraction_points,
     fold_to_mono,
-    remove_dc_offset,
+    remove_subsonic,
     resample_to_fraction_points,
 )
 from samplemorph.geometry import Anchor, Geometry
@@ -22,8 +22,14 @@ HARMONIC_DECAY: Final[float] = 0.84
 
 
 def prepare_mono(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
-    """Fold a stored waveform to one centered channel, the form every frequency axis analyzes."""
-    return remove_dc_offset(fold_to_mono(waveform))
+    """Fold a stored waveform to the one audible channel every frequency axis analyzes.
+
+    The band below hearing leaves here, at the pipeline's way in, so every analysis, every
+    reconstruction and every reference a reconstruction is measured against carries the same
+    content a listener does. The filter is designed at the nominal container rate, which is the
+    rate every frequency axis reads its frames at.
+    """
+    return remove_subsonic(fold_to_mono(waveform), sample_rate_hz=NOMINAL_WAV_RATE)
 
 
 def to_normalized_decibels(
