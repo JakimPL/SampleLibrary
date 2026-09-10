@@ -170,3 +170,30 @@ model trained briefly, and the fixes above landed after it, so it says the appro
 that it is finished. What it does not say is whether the remaining distance closes with training:
 that is what the long run over the whole catalog is for, and it is a question listening answers
 rather than this table.
+
+## A number that sees the gargle
+
+The reconstruction metric everywhere else in this project is a log-magnitude distance, and it is
+blind to this artifact by construction: the magnitude is imposed by the representation, so two
+phase estimates that sound entirely different score within noise of each other. Measured on 40
+held-out probes against each probe's own-phase reconstruction, the magnitude distance reads 0.684
+for the full-catalog model, 0.691 for the short run and 0.685 for Griffin-Lim -- a flat line where
+listening hears a wide gap.
+
+`samplemorph.measurement.phase_quality` reads the gargle directly. The artifact is a comb a phase
+estimate sweeps through a held partial, which shows as frame-to-frame flutter of the re-analyzed
+magnitude that the steady own-phase reconstruction has none of. `modulation_excess` is that
+flutter over the reference's, loudness-weighted, and on the same probes it separates what the
+magnitude distance could not:
+
+| | learned, full catalog | learned, short run | Griffin-Lim |
+|---|---|---|---|
+| Magnitude distance | 0.684 | 0.691 | 0.685 |
+| Flutter excess | −0.128 | −0.129 | **+0.100** |
+
+Griffin-Lim sits well positive: it adds the comb. Both learned models sit negative: they are
+smoother than the true phase, which is heard as a loss of clarity rather than as roughness. So the
+target is flutter near zero, not merely low, and the two kinds of phase error fall on opposite
+sides of it. The reading is a screen, not a verdict -- it flags the gargle and passes both learned
+models, but it does not resolve the finer ordering listening gives between two models that both sit
+on the smooth side. That finer ranking is what a learned perceptual distance is for.
