@@ -4,15 +4,18 @@ from dataclasses import dataclass
 
 import numpy as np
 import pytest
+from pydantic import TypeAdapter
 
 from samplemorph.geometry import (
     REFERENCE_FREQUENCY_HZ,
     SEMITONES_PER_OCTAVE,
+    Anchor,
     Geometry,
     constant_q_geometry,
     log_frequency_geometry,
     mel_geometry,
 )
+from samplemorph.registries import canonicalizer_for_geometry
 
 REFERENCE_BAND_TOLERANCE_HZ = 40.0
 
@@ -113,3 +116,14 @@ def test_the_constant_q_bands_stay_below_nyquist() -> None:
     geometry = constant_q_geometry()
 
     assert geometry.band_frequencies[-1] < geometry.analysis_rate_hz / 2
+
+
+@pytest.mark.parametrize("anchor", tuple(Anchor), ids=lambda anchor: anchor.value)
+def test_the_anchor_survives_a_round_trip_and_rebuilds_the_same_canonicalizer(anchor: Anchor) -> None:
+    """A stored model names the anchor its grids were aligned by, so a rebuild aligns the same way."""
+    geometry = log_frequency_geometry(anchor=anchor)
+
+    restored = TypeAdapter(Geometry).validate_json(geometry.model_dump_json())
+
+    assert restored == geometry
+    assert canonicalizer_for_geometry(restored).geometry.anchor is anchor

@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 
 from samplecore.waveform import triangular_weights
 from samplemorph.canonicalizers.common import prepare_mono, restore_spectrogram, to_sound_image
-from samplemorph.geometry import LogFrequencyGeometry, log_frequency_geometry
+from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, LogFrequencyGeometry, log_frequency_geometry
 from samplemorph.images import AnalysisSpectrogram, SoundImage
 
 
@@ -63,5 +63,5 @@ def band_weights(geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
     )
 
 
-def build_log_frequency_canonicalizer() -> LogFrequencyCanonicalizer:
-    return LogFrequencyCanonicalizer(log_frequency_geometry())
+def build_log_frequency_canonicalizer(*, anchor: Anchor = DEFAULT_ANCHOR) -> LogFrequencyCanonicalizer:
+    return LogFrequencyCanonicalizer(log_frequency_geometry(anchor=anchor))

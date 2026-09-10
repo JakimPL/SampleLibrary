@@ -69,6 +69,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     )
     recipe = GridCacheRecipe(
         canonicalizer_name=arguments.canonicalizer,
+        anchor=arguments.anchor,
         bands_per_semitone=arguments.bands_per_semitone,
         view_count=arguments.views,
         view_range_semitones=arguments.range,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import StrEnum, unique
 from typing import Annotated, Final, Literal
 
 import librosa
@@ -21,6 +22,23 @@ DEFAULT_MAXIMUM_SHIFT_SEMITONES: Final[float] = 48.0
 DEFAULT_BINS_PER_OCTAVE: Final[int] = 144
 DEFAULT_MEL_BAND_COUNT: Final[int] = 128
 DEFAULT_CONSTANT_Q_BINS_PER_OCTAVE: Final[int] = 36
+
+
+@unique
+class Anchor(StrEnum):
+    """Which band of a sound alignment moves to the reference band.
+
+    `LOUDEST` takes the band carrying the most energy over the whole sound, which every kind of
+    material has. `FUNDAMENTAL` takes the band a harmonic series is built on, so two sounds playing
+    one note align on that note whichever of their partials is the strongest, and a morph between
+    them keeps its pitch on the line between theirs.
+    """
+
+    LOUDEST = "loudest"
+    FUNDAMENTAL = "fundamental"
+
+
+DEFAULT_ANCHOR: Final[Anchor] = Anchor.LOUDEST
 
 
 def shift_headroom_bands(*, maximum_shift_semitones: float, bands_per_semitone: float) -> int:
@@ -47,6 +65,7 @@ class LogFrequencyGeometry(BaseModel):
     model_config = FROZEN
 
     kind: Literal["log_frequency"] = "log_frequency"
+    anchor: Anchor = DEFAULT_ANCHOR
     analysis_rate_hz: int
     fft_length: int
     hop_length: int
@@ -82,7 +101,7 @@ class LogFrequencyGeometry(BaseModel):
 
     @property
     def reference_band(self) -> int:
-        """The band an aligned image's dominant partial is moved to, at `REFERENCE_FREQUENCY_HZ`."""
+        """The band an aligned image's anchor is moved to, at `REFERENCE_FREQUENCY_HZ`."""
         return int(round(self.bins_per_octave * np.log2(REFERENCE_FREQUENCY_HZ / self.minimum_frequency_hz)))
 
 
@@ -98,6 +117,7 @@ class MelGeometry(BaseModel):
     model_config = FROZEN
 
     kind: Literal["mel"] = "mel"
+    anchor: Anchor = DEFAULT_ANCHOR
     analysis_rate_hz: int
     fft_length: int
     hop_length: int
@@ -158,6 +178,7 @@ class ConstantQGeometry(BaseModel):
     model_config = FROZEN
 
     kind: Literal["constant_q"] = "constant_q"
+    anchor: Anchor = DEFAULT_ANCHOR
     analysis_rate_hz: int
     fft_length: int
     hop_length: int
@@ -237,8 +258,11 @@ def bands_below_nyquist(*, analysis_rate_hz: int, minimum_frequency_hz: float, b
     return int(np.floor(bins_per_octave * np.log2((analysis_rate_hz / 2) / minimum_frequency_hz)))
 
 
-def log_frequency_geometry(*, bins_per_octave: int = DEFAULT_BINS_PER_OCTAVE) -> LogFrequencyGeometry:
+def log_frequency_geometry(
+    *, bins_per_octave: int = DEFAULT_BINS_PER_OCTAVE, anchor: Anchor = DEFAULT_ANCHOR
+) -> LogFrequencyGeometry:
     return LogFrequencyGeometry(
+        anchor=anchor,
         analysis_rate_hz=NOMINAL_WAV_RATE,
         fft_length=DEFAULT_FFT_LENGTH,
         hop_length=DEFAULT_HOP_LENGTH,
@@ -255,8 +279,9 @@ def log_frequency_geometry(*, bins_per_octave: int = DEFAULT_BINS_PER_OCTAVE) ->
     )
 
 
-def mel_geometry(*, band_count: int = DEFAULT_MEL_BAND_COUNT) -> MelGeometry:
+def mel_geometry(*, band_count: int = DEFAULT_MEL_BAND_COUNT, anchor: Anchor = DEFAULT_ANCHOR) -> MelGeometry:
     return MelGeometry(
+        anchor=anchor,
         analysis_rate_hz=NOMINAL_WAV_RATE,
         fft_length=DEFAULT_FFT_LENGTH,
         hop_length=DEFAULT_HOP_LENGTH,
@@ -267,8 +292,11 @@ def mel_geometry(*, band_count: int = DEFAULT_MEL_BAND_COUNT) -> MelGeometry:
     )
 
 
-def constant_q_geometry(*, bins_per_octave: int = DEFAULT_CONSTANT_Q_BINS_PER_OCTAVE) -> ConstantQGeometry:
+def constant_q_geometry(
+    *, bins_per_octave: int = DEFAULT_CONSTANT_Q_BINS_PER_OCTAVE, anchor: Anchor = DEFAULT_ANCHOR
+) -> ConstantQGeometry:
     return ConstantQGeometry(
+        anchor=anchor,
         analysis_rate_hz=NOMINAL_WAV_RATE,
         fft_length=DEFAULT_FFT_LENGTH,
         hop_length=DEFAULT_HOP_LENGTH,

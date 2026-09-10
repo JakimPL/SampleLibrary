@@ -30,6 +30,7 @@ from samplemorph.cli import main
 from samplemorph.codecs.conditioned import codec_path
 from samplemorph.descriptors.grid_descriptor import DESCRIPTOR_SIZE
 from samplemorph.descriptors.learned import descriptor_path
+from samplemorph.geometry import Anchor
 from samplemorph.model_store import model_path
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
 from samplemorph.vocoders.learned import phase_model_path
@@ -358,7 +359,7 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
     )
     connection.commit()
 
-    main(["cache-grids", "--cache", "under-test", "--views", "1", "--workers", "0"])
+    main(["cache-grids", "--cache", "under-test", "--views", "1", "--workers", "0", "--anchor", "fundamental"])
     main(
         [
             "train-descriptor",
@@ -385,14 +386,30 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
     )
     main(["embed", "--cache", "under-test", "--descriptor", DESCRIPTOR_NAME, "--device", "cpu"])
 
-    assert open_grid_cache(grid_cache_directory(tmp_path, name="under-test")).sample_count == CATALOG_SIZE
+    cache = open_grid_cache(grid_cache_directory(tmp_path, name="under-test"))
+    assert cache.sample_count == CATALOG_SIZE
+    assert cache.description.geometry.anchor is Anchor.FUNDAMENTAL
     assert descriptor_path(tmp_path, name=DESCRIPTOR_NAME).exists()
     experiment = PostgresExperimentRepository(connection).get(teacher_id + 1)
     assert experiment is not None
     assert experiment.backend_name == LEARNED_BACKEND_NAME
     assert len(PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment.id)) == CATALOG_SIZE
 
-    main(["cache-grids", "--cache", "full", "--bands-per-semitone", "12", "--views", "0", "--workers", "0"])
+    main(
+        [
+            "cache-grids",
+            "--cache",
+            "full",
+            "--bands-per-semitone",
+            "12",
+            "--views",
+            "0",
+            "--workers",
+            "0",
+            "--anchor",
+            "fundamental",
+        ]
+    )
     main(
         [
             "train-codec",

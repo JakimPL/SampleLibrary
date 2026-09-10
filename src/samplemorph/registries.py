@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Final
+from typing import Final, Protocol
 
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.canonicalizers.constant_q import ConstantQCanonicalizer, build_constant_q_canonicalizer
 from samplemorph.canonicalizers.log_frequency import LogFrequencyCanonicalizer, build_log_frequency_canonicalizer
 from samplemorph.canonicalizers.mel import MelCanonicalizer, build_mel_canonicalizer
-from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
+from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
 from samplemorph.morphers import Morpher
 from samplemorph.morphers.linear import LinearMorpher
 from samplemorph.vocoders import Vocoder
@@ -18,7 +18,14 @@ DEFAULT_VOCODER_NAME: Final[str] = "griffin_lim"
 LEARNED_VOCODER_NAME: Final[str] = "learned"
 DEFAULT_MORPHER_NAME: Final[str] = "linear"
 
-CANONICALIZER_REGISTRY: Final[dict[str, Callable[[], Canonicalizer]]] = {
+
+class CanonicalizerFactory(Protocol):
+    """Builds one frequency axis's canonicalizer, on the anchor rule a run asks for."""
+
+    def __call__(self, *, anchor: Anchor = DEFAULT_ANCHOR) -> Canonicalizer: ...
+
+
+CANONICALIZER_REGISTRY: Final[dict[str, CanonicalizerFactory]] = {
     DEFAULT_CANONICALIZER_NAME: build_log_frequency_canonicalizer,
     "constant_q": build_constant_q_canonicalizer,
     "mel": build_mel_canonicalizer,

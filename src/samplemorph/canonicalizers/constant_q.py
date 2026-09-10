@@ -5,7 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplemorph.canonicalizers.common import prepare_mono, restore_spectrogram, to_sound_image
-from samplemorph.geometry import ConstantQGeometry, constant_q_geometry
+from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, ConstantQGeometry, constant_q_geometry
 from samplemorph.images import AnalysisSpectrogram, SoundImage
 
 
@@ -47,5 +47,5 @@ class ConstantQCanonicalizer:
         return restore_spectrogram(image, geometry=self._geometry)
 
 
-def build_constant_q_canonicalizer() -> ConstantQCanonicalizer:
-    return ConstantQCanonicalizer(constant_q_geometry())
+def build_constant_q_canonicalizer(*, anchor: Anchor = DEFAULT_ANCHOR) -> ConstantQCanonicalizer:
+    return ConstantQCanonicalizer(constant_q_geometry(anchor=anchor))

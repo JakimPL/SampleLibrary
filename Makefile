@@ -118,24 +118,25 @@ mlflow-ui:
 # here on purpose, since its 40-100 ms synthetic tones say nothing about how a morph sounds.
 .PHONY: morph-fit
 morph-fit:
-	uv run samplemorph fit $(if $(CANONICALIZER),--canonicalizer $(CANONICALIZER),) $(if $(LATENT),--latent-size $(LATENT),)
+	uv run samplemorph fit $(if $(CANONICALIZER),--canonicalizer $(CANONICALIZER),) $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(LATENT),--latent-size $(LATENT),)
 
 # Teaches a phase model on the magnitudes the canonicalizer produces and writes it under the library
 # root. SAMPLES and EPOCHS size the run; the pass reads audio in worker processes and trains on the
 # GPU, so its length follows the sample count times the epoch count.
 .PHONY: morph-train-phase
 morph-train-phase:
-	$(CAPPED) uv run samplemorph train-phase $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(PHASE_MODEL),--phase-model $(PHASE_MODEL),)
+	$(CAPPED) uv run samplemorph train-phase $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(PHASE_MODEL),--phase-model $(PHASE_MODEL),)
 
 # The descriptor, in three passes. `morph-cache-grids` canonicalizes the catalog once, with retuned
-# views, into a memory-mapped cache under the library root (about half an hour on twelve workers);
+# views, into a memory-mapped cache under the library root (about half an hour on twelve workers),
+# aligned on the loudest band or, with ANCHOR=fundamental, on the fundamental of each sound;
 # `morph-train-descriptor` teaches a descriptor over that cache from a teacher experiment's vectors
 # and the hand labels; `morph-embed` writes the descriptor's vector for every cached sample as a new
 # experiment, which `evaluate` scores and `samplecloud --backend learned --model NAME
 # --experiment-id ID` promotes to the cloud.
 .PHONY: morph-cache-grids
 morph-cache-grids:
-	$(CAPPED) uv run samplemorph cache-grids $(if $(CACHE),--cache $(CACHE),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(BANDS),--bands-per-semitone $(BANDS),) $(if $(VIEWS),--views $(VIEWS),) $(if $(WORKERS),--workers $(WORKERS),)
+	$(CAPPED) uv run samplemorph cache-grids $(if $(CACHE),--cache $(CACHE),) $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(BANDS),--bands-per-semitone $(BANDS),) $(if $(VIEWS),--views $(VIEWS),) $(if $(WORKERS),--workers $(WORKERS),)
 
 .PHONY: morph-train-descriptor
 morph-train-descriptor:

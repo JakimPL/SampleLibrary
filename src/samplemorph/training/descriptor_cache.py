@@ -18,8 +18,8 @@ from samplecore.storage import audio_store
 from samplecore.waveform import resample_by_semitones
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
-from samplemorph.geometry import Geometry
-from samplemorph.registries import CANONICALIZER_REGISTRY
+from samplemorph.geometry import Anchor, Geometry
+from samplemorph.registries import CANONICALIZER_REGISTRY, canonicalizer_for_geometry
 from samplemorph.training import WORKER_START_METHOD
 
 CACHE_DIRECTORY_NAME: Final[str] = "cache"
@@ -101,6 +101,7 @@ class GridCacheRecipe:
     """What one cache is built from: the axis, the pooling, and the views each sample gets."""
 
     canonicalizer_name: str
+    anchor: Anchor
     bands_per_semitone: int
     view_count: int
     view_range_semitones: float
@@ -138,7 +139,7 @@ def build_grid_cache(
     if not samples:
         raise ValueError("a grid cache needs at least one sample to hold")
 
-    geometry = CANONICALIZER_REGISTRY[recipe.canonicalizer_name]().geometry
+    geometry = CANONICALIZER_REGISTRY[recipe.canonicalizer_name](anchor=recipe.anchor).geometry
     band_count = pooled_band_count(geometry, bands_per_semitone=recipe.bands_per_semitone)
     description = GridCacheDescription(
         canonicalizer=recipe.canonicalizer_name,
@@ -169,7 +170,7 @@ def build_grid_cache(
         )
         for sample in samples
     ]
-    worker = _Worker(library_root=library_root, canonicalizer_name=recipe.canonicalizer_name, band_count=band_count)
+    worker = _Worker(library_root=library_root, geometry=geometry, band_count=band_count)
     for position, (job_grids, job_durations) in enumerate(_derived(jobs, worker=worker, worker_count=worker_count)):
         grids[position] = job_grids
         durations[position] = job_durations
@@ -228,11 +229,11 @@ class _Worker:
     """Derives one sample's stored grid and its retuned views; built once and sent to every process."""
 
     library_root: Path
-    canonicalizer_name: str
+    geometry: Geometry
     band_count: int
 
     def __call__(self, job: _Job) -> tuple[NDArray[np.float16], NDArray[np.float32]]:
-        canonicalizer = CANONICALIZER_REGISTRY[self.canonicalizer_name]()
+        canonicalizer = canonicalizer_for_geometry(self.geometry)
         mono = prepare_mono(audio_store.read(self.library_root, job.sample).pcm)
         readings = [mono] + [resample_by_semitones(mono, semitones=offset) for offset in job.offsets]
         grids = []

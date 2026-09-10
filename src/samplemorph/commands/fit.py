@@ -7,7 +7,7 @@ from typing import Final
 from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
-from samplemorph.commands.draws import add_canonicalizer_argument, draw_probe_samples
+from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
 from samplemorph.measurement.corpus import read_probe_samples
 from samplemorph.model_store import (
     PRINCIPAL_COMPONENT_CODEC_NAME,
@@ -16,7 +16,6 @@ from samplemorph.model_store import (
     model_path,
     save_model,
 )
-from samplemorph.registries import CANONICALIZER_REGISTRY
 from samplemorph.training.principal_components import (
     DEFAULT_LATENT_SIZE,
     DEFAULT_RANDOM_SEED,
@@ -43,7 +42,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
     """Fit a linear codec over a draw of the library and write it under the library root."""
-    canonicalizer = CANONICALIZER_REGISTRY[arguments.canonicalizer]()
+    canonicalizer = canonicalizer_from(arguments)
     samples = draw_probe_samples(connection, count=arguments.samples, random_seed=arguments.seed)
     _logger.info("Canonicalizing %d samples on the %s axis...", len(samples), arguments.canonicalizer)
     images = [canonicalizer.canonicalize(probe.mono) for probe in read_probe_samples(config.library_root, samples)]

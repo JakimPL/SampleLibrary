@@ -5,7 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplemorph.canonicalizers.common import prepare_mono, restore_spectrogram, to_sound_image
-from samplemorph.geometry import MelGeometry, mel_geometry
+from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, MelGeometry, mel_geometry
 from samplemorph.images import AnalysisSpectrogram, SoundImage
 
 MEL_INVERSION_POWER: float = 1.0
@@ -54,5 +54,5 @@ def onto_linear_axis(magnitude: NDArray[np.float64], *, geometry: MelGeometry) -
     return linear
 
 
-def build_mel_canonicalizer() -> MelCanonicalizer:
-    return MelCanonicalizer(mel_geometry())
+def build_mel_canonicalizer(*, anchor: Anchor = DEFAULT_ANCHOR) -> MelCanonicalizer:
+    return MelCanonicalizer(mel_geometry(anchor=anchor))

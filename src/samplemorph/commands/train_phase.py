@@ -7,9 +7,8 @@ from typing import Final
 from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
-from samplemorph.commands.draws import add_canonicalizer_argument, draw_probe_samples
+from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
 from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
-from samplemorph.registries import CANONICALIZER_REGISTRY
 from samplemorph.training.phase_dataset import DEFAULT_CROP_FRAMES
 from samplemorph.training.settings import PhaseTrainingSettings
 from samplemorph.vocoders.learned import DEFAULT_PHASE_MODEL_NAME
@@ -48,7 +47,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     from samplemorph.training.phase_run import run_phase_training
     from samplemorph.training.runs import RunPlacement
 
-    canonicalizer = CANONICALIZER_REGISTRY[arguments.canonicalizer]()
+    canonicalizer = canonicalizer_from(arguments)
     samples = draw_probe_samples(connection, count=arguments.samples, random_seed=arguments.seed)
     corpus = PhaseCorpus(
         samples=samples,

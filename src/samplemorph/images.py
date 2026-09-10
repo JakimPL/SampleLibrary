@@ -33,10 +33,11 @@ class SoundImage:
     """A sample's canonical fixed-size picture, together with what it was normalized by.
 
     `grid` holds normalized log magnitude in ``[0, 1]``, on a frequency axis by duration-fraction
-    grid whose shape is the same for every sample however long or loud it was. The dominant partial
-    is moved to the geometry's reference band, so two readings of one waveform at different rates
-    produce the same grid and differing conditioners. That separation is what lets a linear codec
-    interpolate two samples at different pitches into a single sound rather than a chord of both.
+    grid whose shape is the same for every sample however long or loud it was. The band the
+    geometry's anchor rule picks is moved to its reference band, so two readings of one waveform at
+    different rates produce the same grid and differing conditioners. That separation is what lets
+    a linear codec interpolate two samples at different pitches into a single sound rather than a
+    chord of both.
     """
 
     grid: NDArray[np.float64]

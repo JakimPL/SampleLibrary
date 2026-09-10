@@ -12,11 +12,13 @@ from samplecore.waveform import (
     remove_dc_offset,
     resample_to_fraction_points,
 )
-from samplemorph.geometry import Geometry
+from samplemorph.geometry import Anchor, Geometry
 from samplemorph.images import AnalysisSpectrogram, Conditioners, SoundImage
 
 GAIN_FLOOR: Final[float] = 2.0**-40
 MAGNITUDE_FLOOR_RATIO: Final[float] = 1e-10
+HARMONIC_COUNT: Final[int] = 8
+HARMONIC_DECAY: Final[float] = 0.84
 
 
 def prepare_mono(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -58,6 +60,40 @@ def dominant_band(grid: NDArray[np.float64]) -> int:
     return int(np.argmax(grid.mean(axis=1)))
 
 
+def fundamental_band(grid: NDArray[np.float64], *, geometry: Geometry) -> int:
+    """The band a sound's harmonic series is built on.
+
+    Every band is a candidate fundamental, scored by the magnitude found at each of its first
+    `HARMONIC_COUNT` multiples, the higher ones counting less by `HARMONIC_DECAY` a step. A
+    harmonic sound scores highest at its fundamental even when a higher partial carries more
+    energy, because that partial's own multiples miss the odd harmonics, and a sound with a weak
+    fundamental still scores highest there through the partials above it. The profile is the
+    grid's time average read back as linear magnitude, so a partial counts by how steadily it is
+    present through the sound. Material with no harmonic series scores highest at the lowest band
+    that carries its energy, which moves with a rate change exactly as a fundamental would.
+
+    Eight harmonics at a decay of 0.84 is the subharmonic summation of Hermes (1988). Measured over
+    a 400-sample draw against a time-domain pitch estimate, it places seven steady tonal samples
+    in ten on their fundamental where the loudest band places under half, and lands on a harmonic
+    a third as often; `16-pitch-anchor.md` holds the table.
+    """
+    profile = to_magnitudes(grid.mean(axis=1), dynamic_range_db=geometry.dynamic_range_db, log_gain=0.0)
+    frequencies = geometry.band_frequencies
+    total = np.zeros_like(profile)
+    for harmonic in range(1, HARMONIC_COUNT + 1):
+        total += HARMONIC_DECAY ** (harmonic - 1) * np.interp(harmonic * frequencies, frequencies, profile, right=0.0)
+    return int(np.argmax(total))
+
+
+def anchor_band(grid: NDArray[np.float64], *, geometry: Geometry) -> int:
+    """The band the geometry's anchor rule picks, which alignment moves to the reference band."""
+    match geometry.anchor:
+        case Anchor.LOUDEST:
+            return dominant_band(grid)
+        case Anchor.FUNDAMENTAL:
+            return fundamental_band(grid, geometry=geometry)
+
+
 def shift_bands(grid: NDArray[np.float64], bands: float) -> NDArray[np.float64]:
     """Translate a grid along its frequency axis, filling what moves into view with silence.
 
@@ -89,7 +125,7 @@ def align_and_describe(
     """Normalize a magnitude grid into a sound image's grid and the conditioners it removed.
 
     The grid is scaled into ``[0, 1]``, laid inside the geometry's shift headroom, then translated
-    so its strongest band sits at the geometry's reference band. The translation travels out as
+    so its anchor band sits at the geometry's reference band. The translation travels out as
     `translation_semitones`, so the picture describes timbre alone while the conditioners carry
     where that timbre sat, how long it sounded, and how loud it was. The headroom holds the largest
     translation the geometry allows, so the picture keeps every band the analysis produced.
@@ -97,7 +133,7 @@ def align_and_describe(
     normalized, log_gain = to_normalized_decibels(columns, dynamic_range_db=geometry.dynamic_range_db)
     headroom = geometry.shift_headroom_bands
     padded = np.pad(normalized, ((headroom, headroom), (0, 0)))
-    offered_shift = float(geometry.reference_band - dominant_band(normalized))
+    offered_shift = float(geometry.reference_band - anchor_band(normalized, geometry=geometry))
     applied_shift = float(np.clip(round(offered_shift), -headroom, headroom))
     conditioners = Conditioners(
         translation_semitones=-applied_shift / geometry.bands_per_semitone,
