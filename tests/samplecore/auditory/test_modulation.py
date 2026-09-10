@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
+from samplecore.auditory.envelope import COMPRESSION_EXPONENT
 from samplecore.auditory.modulation import (
     MODULATION_DEPTH_FLOOR,
     ModulationAxis,
@@ -19,7 +20,6 @@ TONE_SECONDS = 1.0
 CARRIER_HZ = 3000.0
 AUDIBLE_DEPTH = 0.5
 INAUDIBLE_DEPTH = MODULATION_DEPTH_FLOOR / 4.0
-STEADY_READING_LIMIT = 1e-3
 SHORT_CLIP_SAMPLES = 400
 
 
@@ -45,9 +45,9 @@ def _modulated(modulation_hz: float, *, depth: float, sample_rate_hz: int) -> np
 
 
 def _reading(spectrum: ModulationSpectrum, *, floor: float) -> float:
-    """The lobe's weighted depth, each channel and frame counting by how far its level sits above the floor."""
+    """The lobe's depth, each channel and frame counting by how far its level sits above the floor."""
     weight = np.maximum(spectrum.level - floor, 0.0)
-    return float(((spectrum.depth * spectrum.bin_weight).sum(axis=-1) * weight).sum() / weight.sum())
+    return float((spectrum.lobe_depth * weight).sum() / weight.sum())
 
 
 def _readings(waveform: np.ndarray, *, sample_rate_hz: int) -> dict[ModulationAxis, float]:
@@ -70,13 +70,15 @@ def test_a_modulation_lands_in_the_lobe_that_hears_it(case: LobeCase) -> None:
     assert all(readings[case.expected_axis] > readings[axis] for axis in other_axes)
 
 
-def test_a_steady_tone_reads_no_modulation_in_either_lobe() -> None:
+def test_a_steady_tone_reads_under_the_detection_floor_in_either_lobe() -> None:
+    floor = design_modulation_front_end(sample_rate_hz=CONTAINER_RATE_HZ).depth_floor
     readings = _readings(_modulated(6.0, depth=0.0, sample_rate_hz=CONTAINER_RATE_HZ), sample_rate_hz=CONTAINER_RATE_HZ)
 
-    assert all(reading < STEADY_READING_LIMIT for reading in readings.values())
+    assert all(reading < floor for reading in readings.values())
 
 
-def test_a_modulation_under_the_detection_floor_reads_as_none() -> None:
+def test_the_detection_floor_separates_an_inaudible_modulation_from_an_audible_one() -> None:
+    floor = design_modulation_front_end(sample_rate_hz=CONTAINER_RATE_HZ).depth_floor
     inaudible = _readings(
         _modulated(6.0, depth=INAUDIBLE_DEPTH, sample_rate_hz=CONTAINER_RATE_HZ), sample_rate_hz=CONTAINER_RATE_HZ
     )
@@ -84,8 +86,18 @@ def test_a_modulation_under_the_detection_floor_reads_as_none() -> None:
         _modulated(6.0, depth=AUDIBLE_DEPTH, sample_rate_hz=CONTAINER_RATE_HZ), sample_rate_hz=CONTAINER_RATE_HZ
     )
 
-    assert inaudible[ModulationAxis.FLUCTUATION] == pytest.approx(0.0, abs=STEADY_READING_LIMIT)
-    assert audible[ModulationAxis.FLUCTUATION] > 0.0
+    assert inaudible[ModulationAxis.FLUCTUATION] < floor
+    assert audible[ModulationAxis.FLUCTUATION] > floor
+
+
+def test_a_sinusoidal_modulation_at_the_lobe_peak_reads_its_own_compressed_depth() -> None:
+    front_end = design_modulation_front_end(sample_rate_hz=CONTAINER_RATE_HZ)
+    readings = _readings(
+        _modulated(front_end.lobes[0].peak_hz, depth=AUDIBLE_DEPTH, sample_rate_hz=CONTAINER_RATE_HZ),
+        sample_rate_hz=CONTAINER_RATE_HZ,
+    )
+
+    assert readings[ModulationAxis.FLUCTUATION] == pytest.approx(COMPRESSION_EXPONENT * AUDIBLE_DEPTH, rel=0.35)
 
 
 def test_a_clip_shorter_than_a_lobe_window_is_read_as_one_frame() -> None:

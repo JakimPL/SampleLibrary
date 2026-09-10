@@ -5,13 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from samplecore.auditory.modulation import (
-    ModulationAxis,
-    ModulationFrontEnd,
-    ModulationSpectrum,
-    design_modulation_front_end,
-    modulation_spectra,
-)
+from samplecore.auditory.modulation import ModulationAxis, design_modulation_front_end, modulation_spectra
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.measurement.weighting import loudness_weight
 
@@ -22,11 +16,13 @@ class ModulationSpectrumDistance:
     axes a listener hears a phase gargle on.
 
     `fluctuation_excess` (1 to 20 Hz, peaking at 4 Hz) and `roughness_excess` (20 to 150 Hz, peaking
-    at 70 Hz) are signed modulation depths: a positive value is added warble or buzz, a negative
-    value is micro-modulation the reconstruction has smoothed away, and a reconstruction that moves
-    as its reference does reads zero on both, which is the target. `distance` is the unsigned,
-    loudness-weighted deviation over every modulation bin of both lobes, so it bounds the size of
-    either excess. Every reading counts a channel and a moment by how loud the reference is there.
+    at 70 Hz) are signed modulation depths the lobe hears: a positive value is added warble or buzz,
+    a negative value is micro-modulation the reconstruction has smoothed away, and a reconstruction
+    that moves as its reference does reads zero on both, which is the target. A reading is heard
+    once it clears the front end's `depth_floor`. `distance` is the unsigned, loudness-weighted
+    deviation over every modulation bin of both lobes, so it bounds the size of either excess and
+    reads a modulation that merely moved between bins. Every reading counts a channel and a moment
+    by how loud the reference is there.
     """
 
     fluctuation_excess: float
@@ -56,19 +52,13 @@ def modulation_spectrum_distance(
     excess: dict[ModulationAxis, float] = {}
     distance = 0.0
     for read, reference_read in zip(reconstruction_spectra, reference_spectra, strict=True):
-        weight = _cell_weight(reference_read, front_end=front_end)
-        difference = read.depth - reference_read.depth
-        excess[read.lobe.axis] = float((weight * difference).sum())
-        distance += float((weight * np.abs(difference)).sum())
+        loudness = loudness_weight(reference_read.level, floor=front_end.compressed_floor)
+        excess[read.lobe.axis] = float((loudness * (read.lobe_depth - reference_read.lobe_depth)).sum())
+        distance += float(
+            (loudness[..., None] * reference_read.bin_weight * np.abs(read.depth - reference_read.depth)).sum()
+        )
     return ModulationSpectrumDistance(
         fluctuation_excess=excess[ModulationAxis.FLUCTUATION],
         roughness_excess=excess[ModulationAxis.ROUGHNESS],
         distance=distance,
     )
-
-
-def _cell_weight(reference_read: ModulationSpectrum, *, front_end: ModulationFrontEnd) -> NDArray[np.float64]:
-    """How much each channel, frame and bin counts: the reference's loudness there times the bin's share of the lobe."""
-    loudness = loudness_weight(reference_read.level, floor=front_end.compressed_floor)
-    weight: NDArray[np.float64] = loudness[..., None] * reference_read.bin_weight
-    return weight

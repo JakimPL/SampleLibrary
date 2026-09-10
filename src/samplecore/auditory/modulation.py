@@ -22,6 +22,7 @@ from samplecore.auditory.framing import frame_series, hann_taper
 
 MODULATION_DEPTH_FLOOR: Final[float] = 0.05
 MINIMUM_WINDOW_LENGTH: Final[int] = 3
+HANN_SPECTRAL_SPREAD: Final[float] = 2.0
 
 
 @unique
@@ -42,21 +43,20 @@ class ModulationLobe:
     window_seconds: float
 
     def bin_weights(self, *, envelope_rate_hz: float, window_length: int) -> NDArray[np.float64]:
-        """How much each modulation bin of a window this long counts toward the lobe, summing to one.
+        """How much of each modulation bin of a window this long the lobe hears, one at its peak.
 
         The weight is a triangle in log-frequency, rising from the lower edge to the peak and
         falling to the upper edge, so sensitivity grows and fades over octaves the way the
-        listening data describe it. A window too short to place any bin inside the lobe reads
-        every bin alike.
+        listening data describe it. Summing depths through these weights reads a sinusoidal
+        modulation at the peak as its own depth and a modulation spread over many bins -- a comb
+        sweeping through a partial -- as the whole of what it adds.
         """
         frequencies = np.fft.rfftfreq(window_length, 1.0 / envelope_rate_hz)
         octaves = np.log2(frequencies, where=frequencies > 0.0, out=np.full_like(frequencies, -np.inf))
         rising = (octaves - np.log2(self.lower_edge_hz)) / (np.log2(self.peak_hz) - np.log2(self.lower_edge_hz))
         falling = (np.log2(self.upper_edge_hz) - octaves) / (np.log2(self.upper_edge_hz) - np.log2(self.peak_hz))
-        weights = np.clip(np.minimum(rising, falling), 0.0, 1.0)
-        total = float(weights.sum())
-        normalized: NDArray[np.float64] = weights / total if total > 0.0 else np.full_like(weights, 1.0 / weights.size)
-        return normalized
+        weights: NDArray[np.float64] = np.clip(np.minimum(rising, falling), 0.0, 1.0)
+        return weights
 
 
 FLUCTUATION_LOBE: Final[ModulationLobe] = ModulationLobe(
@@ -99,10 +99,12 @@ class ModulationFrontEnd:
 
     @property
     def depth_floor(self) -> float:
-        """The modulation depth a listener first detects, read in the compressed domain.
+        """The lobe depth a listener first detects, read in the compressed domain.
 
         A depth of `MODULATION_DEPTH_FLOOR` (Viemeister, 1979) on a linear envelope reads a third as
-        deep after the cube root, so the floor follows the compression.
+        deep after the cube root, so the floor follows the compression. It is the yardstick a
+        reading is held against, so a lobe depth under it says the modulation is there and
+        inaudible.
         """
         return COMPRESSION_EXPONENT * MODULATION_DEPTH_FLOOR
 
@@ -130,15 +132,26 @@ def design_modulation_front_end(*, sample_rate_hz: int) -> ModulationFrontEnd:
 class ModulationSpectrum:
     """One lobe's reading of one waveform.
 
-    `depth` is the modulation depth per channel, frame and modulation bin, with everything under the
-    detection floor already taken out; `level` is the compressed level each frame was read at; and
-    `bin_weight` says how much each bin counts toward the lobe.
+    `depth` is the modulation depth per channel, frame and modulation bin; `level` is the compressed
+    level each frame was read at; and `bin_weight` says how much of each bin the lobe hears.
     """
 
     lobe: ModulationLobe
     depth: NDArray[np.float64]  # (channels, frames, bins)
     level: NDArray[np.float64]  # (channels, frames)
     bin_weight: NDArray[np.float64]  # (bins,)
+
+    @property
+    def lobe_depth(self) -> NDArray[np.float64]:
+        """The modulation depth the lobe hears in each channel and frame, shaped ``(channels, frames)``.
+
+        The Hann taper spreads one sinusoidal modulation over three bins whose magnitudes sum to
+        `HANN_SPECTRAL_SPREAD` times its depth, so the sum through the lobe's weights is divided by
+        that spread: a sinusoid at the peak reads its own depth, and a comb sweeping through a partial
+        reads the sum of the depths of everything it adds.
+        """
+        depth: NDArray[np.float64] = (self.depth * self.bin_weight).sum(axis=-1) / HANN_SPECTRAL_SPREAD
+        return depth
 
 
 def compressed_envelopes(waveform: NDArray[np.float64], *, front_end: ModulationFrontEnd) -> NDArray[np.float64]:
@@ -181,7 +194,7 @@ def _lobe_spectrum(
     depth = 2.0 * spectrum / np.maximum(level, front_end.compressed_floor)[..., None] / taper.sum()
     return ModulationSpectrum(
         lobe=lobe,
-        depth=np.maximum(depth - front_end.depth_floor, 0.0),
+        depth=depth,
         level=level,
         bin_weight=lobe.bin_weights(envelope_rate_hz=front_end.envelope_rate_hz, window_length=window_length),
     )
