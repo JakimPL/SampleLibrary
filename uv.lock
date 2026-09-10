@@ -313,6 +313,15 @@ wheels = [
 ]
 
 [[package]]
+name = "cdpam"
+version = "0.0.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/59/76/d4be81f695c7269e05a46c046f9af0c8eba920add735f1c50f9843545a29/cdpam-0.0.6.tar.gz", hash = "sha256:d1e8d9ba0cf49ecb226b8263e13cbabba9574997f9eefe0dce9683e57a7fe734", size = 98327546, upload-time = "2021-09-03T13:14:21.628Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/71/94/a1bb744131083b36f778864bb05338e6e4153e6cde5acf9a6767e50160f6/cdpam-0.0.6-py3-none-any.whl", hash = "sha256:abd860166a55ada94cb653997deed481b518e3a593e9b417a969f99522009eba", size = 98326874, upload-time = "2021-09-03T13:14:15.012Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.7.22"
 source = { registry = "https://pypi.org/simple" }
@@ -3858,6 +3867,19 @@ wheels = [
 ]
 
 [[package]]
+name = "resampy"
+version = "0.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numba" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/29/f1/34be702a69a5d272e844c98cee82351f880985cfbca0cc86378011078497/resampy-0.4.3.tar.gz", hash = "sha256:a0d1c28398f0e55994b739650afef4e3974115edbe96cd4bb81968425e916e47", size = 3080604, upload-time = "2024-03-05T20:36:08.119Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/b9/3b00ac340a1aab3389ebcc52c779914a44aadf7b0cb7a3bf053195735607/resampy-0.4.3-py3-none-any.whl", hash = "sha256:ad2ed64516b140a122d96704e32bc0f92b23f45419e8b8f478e5a05f83edcebd", size = 3076529, upload-time = "2024-03-05T20:36:02.439Z" },
+]
+
+[[package]]
 name = "rich"
 version = "15.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3923,6 +3945,11 @@ morph = [
     { name = "threadpoolctl" },
     { name = "torch" },
 ]
+perceptual = [
+    { name = "cdpam" },
+    { name = "resampy" },
+    { name = "torch" },
+]
 server = [
     { name = "fastapi" },
     { name = "uvicorn" },
@@ -3954,6 +3981,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cdpam", marker = "extra == 'perceptual'", specifier = ">=0.0.4" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.120" },
     { name = "librosa", marker = "extra == 'cloud'", specifier = ">=0.11" },
     { name = "librosa", marker = "extra == 'morph'", specifier = ">=0.11" },
@@ -3963,6 +3991,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "pytz", specifier = ">=2025.2" },
+    { name = "resampy", marker = "extra == 'perceptual'", specifier = ">=0.4" },
     { name = "scikit-learn", marker = "extra == 'cloud'", specifier = ">=1.9" },
     { name = "scikit-learn", marker = "extra == 'morph'", specifier = ">=1.9" },
     { name = "scipy", specifier = ">=1.16" },
@@ -3970,6 +3999,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "threadpoolctl", marker = "extra == 'morph'", specifier = ">=3.6" },
     { name = "torch", marker = "extra == 'morph'", specifier = ">=2.9", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "torch", marker = "extra == 'perceptual'", specifier = ">=2.9", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torch", marker = "extra == 'teacher'", specifier = ">=2.9", index = "https://download.pytorch.org/whl/cu128" },
     { name = "tqdm", specifier = ">=4.67" },
     { name = "trackmod", editable = "trackmod" },
@@ -3977,7 +4007,7 @@ requires-dist = [
     { name = "umap-learn", marker = "extra == 'cloud'", specifier = ">=0.5" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.35" },
 ]
-provides-extras = ["server", "cloud", "morph", "tracking", "teacher"]
+provides-extras = ["server", "cloud", "morph", "tracking", "teacher", "perceptual"]
 
 [package.metadata.requires-dev]
 dev = [

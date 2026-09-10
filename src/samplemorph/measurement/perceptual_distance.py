@@ -32,9 +32,23 @@ def _model() -> _PerceptualModel:
     try:
         # pylint: disable=import-outside-toplevel
         import cdpam
+        import torch
     except ImportError as error:
         raise ImportError(MISSING_EXTRA_MESSAGE) from error
-    model: _PerceptualModel = cdpam.CDPAM(dev=CDPAM_DEVICE)
+
+    # cdpam reads its own bundled checkpoint with torch.load and no weights_only; torch 2.6+ defaults
+    # that to True and refuses the full pickle, so force it off while cdpam loads its trusted asset.
+    original_load = torch.load
+
+    def trusting_load(*args: object, **kwargs: object) -> object:
+        kwargs.setdefault("weights_only", False)
+        return original_load(*args, **kwargs)  # type: ignore[arg-type]
+
+    torch.load = trusting_load
+    try:
+        model: _PerceptualModel = cdpam.CDPAM(dev=CDPAM_DEVICE)
+    finally:
+        torch.load = original_load
     return model
 
 
@@ -73,10 +87,14 @@ def perceptual_distance(
     default, since that is the rate every stored object and every vocoder output carries; pass a
     probe's heard rate to score the sound as a listener hears that sample.
     """
+    # pylint: disable=import-outside-toplevel
+    import torch
+
     model = _model()
     length = min(reconstruction.shape[0], reference.shape[0])
-    distance = model.forward(
-        to_cdpam_block(reference, length, source_rate_hz=source_rate_hz),
-        to_cdpam_block(reconstruction, length, source_rate_hz=source_rate_hz),
-    )
+    with torch.no_grad():
+        distance = model.forward(
+            to_cdpam_block(reference, length, source_rate_hz=source_rate_hz),
+            to_cdpam_block(reconstruction, length, source_rate_hz=source_rate_hz),
+        )
     return float(np.asarray(distance).reshape(-1)[0])

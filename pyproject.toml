@@ -24,6 +24,7 @@ cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9"]
 morph = ["librosa>=0.11", "scikit-learn>=1.9", "torch>=2.9", "lightning>=2.5", "threadpoolctl>=3.6"]
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]
+perceptual = ["torch>=2.9", "cdpam>=0.0.4", "resampy>=0.4"]
 
 [project.scripts]
 sampleextract = "sampleextract.cli:main"
