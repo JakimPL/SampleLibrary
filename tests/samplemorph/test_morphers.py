@@ -4,10 +4,11 @@ import numpy as np
 import pytest
 
 from samplemorph.codecs.identity import IdentityCodec
-from samplemorph.geometry import Anchor, log_frequency_geometry, mel_geometry
-from samplemorph.images import Conditioners, SampleLatent
+from samplemorph.geometry import Anchor, Geometry, log_frequency_geometry, mel_geometry
+from samplemorph.images import Conditioners, SampleLatent, SoundImage
 from samplemorph.measurement.plausibility import (
     MorphEndpoint,
+    blend_distance,
     grid_energy,
     heard_pitch_semitones,
     morph_plausibility,
@@ -117,6 +118,74 @@ def test_a_lossless_morph_travels_from_one_endpoint_to_the_other() -> None:
     assert plausibility.is_monotone
     assert plausibility.steps[0].distance_to_first == pytest.approx(0.0)
     assert plausibility.steps[-1].distance_to_second == pytest.approx(0.0)
+
+
+class SnappingCodec:
+    """Decodes a grid by keeping only the cells above half, so a blend of two sounds comes back as neither.
+
+    Its latent is the grid itself, like the identity codec's, which makes it the smallest codec
+    whose decoding is more than the average of what it was handed.
+    """
+
+    def __init__(self, geometry: Geometry) -> None:
+        self._geometry = geometry
+
+    @property
+    def latent_size(self) -> int:
+        band_count, time_columns = self._geometry.grid_shape
+        return band_count * time_columns
+
+    def encode(self, image: SoundImage) -> SampleLatent:
+        return SampleLatent(
+            values=image.grid.reshape(-1).copy(), conditioners=image.conditioners, geometry=self._geometry
+        )
+
+    def decode(self, latent: SampleLatent) -> SoundImage:
+        grid = np.where(latent.values.reshape(self._geometry.grid_shape) > 0.5, 1.0, 0.0)
+        return SoundImage(grid=grid, conditioners=latent.conditioners, geometry=self._geometry)
+
+
+def test_a_lossless_linear_morph_is_exactly_the_crossfade_of_its_endpoints() -> None:
+    """The identity codec under a linear morpher is the crossfade this reading exists to catch."""
+    canonicalizer = CANONICALIZER_REGISTRY["mel"]()
+    codec = IdentityCodec(canonicalizer.geometry)
+    first = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
+    second = codec.encode(canonicalizer.canonicalize(noise_burst(TEST_FRAME_COUNT, seed=1)))
+
+    plausibility = morph_plausibility(
+        MorphEndpoint(sample_hash=FIRST_HASH, latent=first),
+        MorphEndpoint(sample_hash=SECOND_HASH, latent=second),
+        codec=codec,
+        morpher=LinearMorpher(),
+    )
+
+    assert plausibility.smallest_blend_distance == pytest.approx(0.0, abs=1e-9)
+    assert all(step.blend_distance == pytest.approx(0.0, abs=1e-9) for step in plausibility.steps)
+
+
+def test_a_codec_that_states_a_sound_of_its_own_reads_above_the_crossfade() -> None:
+    canonicalizer = CANONICALIZER_REGISTRY["mel"]()
+    codec = SnappingCodec(canonicalizer.geometry)
+    first = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
+    second = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=660.0)))
+
+    plausibility = morph_plausibility(
+        MorphEndpoint(sample_hash=FIRST_HASH, latent=first),
+        MorphEndpoint(sample_hash=SECOND_HASH, latent=second),
+        codec=codec,
+        morpher=LinearMorpher(),
+    )
+
+    assert plausibility.smallest_blend_distance > 0.0
+    assert plausibility.steps[0].blend_distance == pytest.approx(0.0, abs=1e-9)
+    assert plausibility.steps[-1].blend_distance == pytest.approx(0.0, abs=1e-9)
+
+
+def test_identical_endpoints_have_no_crossfade_to_be_told_from() -> None:
+    grid = np.zeros((40, 4))
+    grid[10] = 1.0
+
+    assert blend_distance(grid, first=grid, second=grid, weight=0.5, endpoint_distance=0.0) == 0.0
 
 
 SECOND_HARMONIC_LOUDEST = (0.3, 1.0, 0.5, 0.25)

@@ -34,7 +34,7 @@ class MorphEndpoint:
 class MorphStep:
     """One point along a morph: how far its decoded grid sits from each endpoint, and what kind of sound it is.
 
-    Three readings guard against the ways a path can fail to be a sound between two others.
+    Four readings guard against the ways a path can fail to be a sound between two others.
     `spread_excess` is the step's spectral spread over the larger of the two endpoints' own: two
     sounds played at once carry both patterns and spread wider than either. `energy_share` is the
     step's energy over the mean of the endpoints': a straight line through a grid of decibels thins
@@ -42,7 +42,11 @@ class MorphStep:
     shadow of both rather than a sound between them. `pitch_deviation_semitones` is how far the
     step's pitch sits from the line between the endpoints' pitches: a morph between two notes
     glides from one to the other, and a step off that line plays a note neither endpoint asked for.
-    A sound holds its energy, spreads no wider, and keeps its pitch on the line.
+    `blend_distance` is how far the step's grid sits from the crossfade of the two endpoint grids
+    at this weight, over the endpoints' own distance: a codec that has learned to blend its inputs
+    reads zero here at every step, and a morph that states a sound of its own reads above it.
+    A sound holds its energy, spreads no wider, keeps its pitch on the line, and is more than the
+    average of its endpoints.
     """
 
     weight: float
@@ -51,6 +55,7 @@ class MorphStep:
     spread_excess: float
     energy_share: float
     pitch_deviation_semitones: float
+    blend_distance: float
 
 
 @dataclass(frozen=True)
@@ -102,6 +107,17 @@ class MorphPlausibility:
         return max(abs(step.pitch_deviation_semitones) for step in self.steps)
 
     @property
+    def smallest_blend_distance(self) -> float:
+        """How close to a plain crossfade of the endpoints the path comes, at its most blended interior step.
+
+        The endpoints themselves are their own crossfade, so only the steps between them are
+        read; a path with no interior step reads zero, since nothing about it tells it from a
+        crossfade.
+        """
+        interior = tuple(step.blend_distance for step in self.steps if 0.0 < step.weight < 1.0)
+        return min(interior) if interior else 0.0
+
+    @property
     def furthest_excursion(self) -> float:
         """How far past both endpoints the path strays, at its worst step.
 
@@ -135,6 +151,7 @@ def morph_plausibility(
     second_grid = second_image.grid
     endpoint_spread = max(spectral_spread(first_grid), spectral_spread(second_grid))
     endpoint_energy = 0.5 * (grid_energy(first_grid) + grid_energy(second_grid))
+    endpoint_distance = grid_distance(first_grid, second_grid)
     first_pitch = heard_pitch_semitones(first_image)
     second_pitch = heard_pitch_semitones(second_image)
     steps = []
@@ -151,9 +168,30 @@ def morph_plausibility(
                 energy_share=grid_energy(decoded) / endpoint_energy if endpoint_energy > 0.0 else 0.0,
                 pitch_deviation_semitones=heard_pitch_semitones(image)
                 - ((1.0 - weight) * first_pitch + weight * second_pitch),
+                blend_distance=blend_distance(
+                    decoded, first=first_grid, second=second_grid, weight=weight, endpoint_distance=endpoint_distance
+                ),
             )
         )
     return MorphPlausibility(first_hash=first.sample_hash, second_hash=second.sample_hash, steps=tuple(steps))
+
+
+def blend_distance(
+    decoded: NDArray[np.float64],
+    *,
+    first: NDArray[np.float64],
+    second: NDArray[np.float64],
+    weight: float,
+    endpoint_distance: float,
+) -> float:
+    """How far a decoded grid sits from the crossfade of the two endpoint grids at `weight`, over their own distance.
+
+    Identical endpoints have no crossfade to be told from, so the reading is zero there.
+    """
+    if endpoint_distance <= 0.0:
+        return 0.0
+    crossfade = (1.0 - weight) * first + weight * second
+    return grid_distance(decoded, crossfade) / endpoint_distance
 
 
 def heard_pitch_semitones(image: SoundImage) -> float:
