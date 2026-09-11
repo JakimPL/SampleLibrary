@@ -30,7 +30,7 @@ from samplemorph.cli import main
 from samplemorph.codecs.conditioned import codec_path
 from samplemorph.descriptors.grid_descriptor import DESCRIPTOR_SIZE
 from samplemorph.descriptors.learned import descriptor_path
-from samplemorph.geometry import Anchor
+from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.model_store import model_path
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
 from samplemorph.vocoders.learned import phase_model_path
@@ -163,6 +163,8 @@ def test_rendering_writes_a_listening_set_through_a_fitted_model(
             hashes[-1],
             "--model",
             MODEL_NAME,
+            "--vocoder",
+            "griffin_lim",
             "--output",
             str(output),
         ]
@@ -401,7 +403,7 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
             "--cache",
             "full",
             "--bands-per-semitone",
-            "12",
+            str(round(log_frequency_geometry().bands_per_semitone)),
             "--views",
             "0",
             "--workers",

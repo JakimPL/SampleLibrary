@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import cache
+from typing import Final
 
 import librosa
 import numpy as np
@@ -10,6 +11,10 @@ from samplecore.waveform import triangular_weights
 from samplemorph.canonicalizers.common import prepare_mono, restore_spectrogram, to_sound_image
 from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, LogFrequencyGeometry, analysis_taper, log_frequency_geometry
 from samplemorph.images import AnalysisSpectrogram, SoundImage
+
+# Singular values under this share of the largest are the directions the band averaging resolves
+# to nothing; the inverse leaves them at zero, which keeps its entries of the order of the weights.
+LEAST_SQUARES_CUTOFF: Final[float] = 1e-6
 
 
 class LogFrequencyCanonicalizer:
@@ -83,7 +88,7 @@ def linear_axis_inverse(geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
     forty probes, this halves the modulation a phase estimate then adds over the interpolation it
     replaces, on every kind of sound; `18-perceptual-readings.md` holds the table.
     """
-    inverse: NDArray[np.float64] = np.linalg.pinv(band_weights(geometry))
+    inverse: NDArray[np.float64] = np.linalg.pinv(band_weights(geometry), rcond=LEAST_SQUARES_CUTOFF)
     return inverse
 
 

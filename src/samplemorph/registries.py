@@ -15,8 +15,8 @@ from samplemorph.vocoders.griffin_lim import GriffinLimVocoder
 from samplemorph.vocoders.pghi import PghiVocoder
 
 DEFAULT_CANONICALIZER_NAME: Final[str] = "log_frequency"
-DEFAULT_VOCODER_NAME: Final[str] = "griffin_lim"
-PGHI_VOCODER_NAME: Final[str] = "pghi"
+DEFAULT_VOCODER_NAME: Final[str] = "pghi"
+GRIFFIN_LIM_VOCODER_NAME: Final[str] = "griffin_lim"
 LEARNED_VOCODER_NAME: Final[str] = "learned"
 DEFAULT_MORPHER_NAME: Final[str] = "linear"
 
@@ -44,8 +44,8 @@ analysis.
 """
 
 VOCODER_REGISTRY: Final[dict[str, Callable[[], Vocoder]]] = {
-    DEFAULT_VOCODER_NAME: GriffinLimVocoder,
-    PGHI_VOCODER_NAME: PghiVocoder,
+    DEFAULT_VOCODER_NAME: PghiVocoder,
+    GRIFFIN_LIM_VOCODER_NAME: GriffinLimVocoder,
 }
 """The vocoders a name alone builds.
 

@@ -11,7 +11,8 @@ from samplemorph.codecs import SampleCodec
 from samplemorph.measurement.comparison import held_out_distance_db, held_out_spectrum
 from samplemorph.measurement.corpus import ProbeSample, unrelated_pairs
 from samplemorph.vocoders import Vocoder
-from samplemorph.vocoders.griffin_lim import GriffinLimVocoder, OraclePhaseVocoder
+from samplemorph.vocoders.griffin_lim import OraclePhaseVocoder
+from samplemorph.vocoders.pghi import PghiVocoder
 
 DEFAULT_UNRELATED_PAIR_COUNT: Final[int] = 300
 
@@ -21,9 +22,8 @@ class ReconstructionRung(StrEnum):
     """The two ways a canonical image is made audible, which together split where the loss sits.
 
     `ORACLE_PHASE` hands the synthesis the source's own phase, so what it loses belongs to the
-    frequency axis and the grid. `ESTIMATED_PHASE` recovers phase iteratively, so the step between
-    the two rungs is what a phase estimate costs -- the number that decides whether a learned
-    vocoder is worth training.
+    frequency axis and the grid. `ESTIMATED_PHASE` recovers phase the way production does, by
+    gradient heap integration, so the step between the two rungs is what a phase estimate costs.
     """
 
     ORACLE_PHASE = "oracle_phase"
@@ -95,7 +95,7 @@ def reconstruction_trials(
         spectrogram = canonicalizer.restore(canonicalizer.canonicalize(probe.mono))
         for rung, vocoder in (
             (ReconstructionRung.ORACLE_PHASE, OraclePhaseVocoder(probe.mono)),
-            (ReconstructionRung.ESTIMATED_PHASE, GriffinLimVocoder()),
+            (ReconstructionRung.ESTIMATED_PHASE, PghiVocoder()),
         ):
             rebuilt = vocoder.synthesize(spectrogram)
             trials.append(

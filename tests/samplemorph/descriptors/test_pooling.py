@@ -39,12 +39,14 @@ def test_the_default_grid_pools_to_one_band_per_semitone() -> None:
 
     band_count = pooled_band_count(geometry, bands_per_semitone=1)
 
-    assert band_count == -(-geometry.grid_shape[0] // 12)
+    assert band_count == -(-geometry.grid_shape[0] // round(geometry.bands_per_semitone))
 
 
 def test_a_grid_coarser_than_the_pooling_is_refused() -> None:
+    geometry = log_frequency_geometry()
+
     with pytest.raises(ValueError, match="cannot be pooled"):
-        pooled_band_count(log_frequency_geometry(), bands_per_semitone=13)
+        pooled_band_count(geometry, bands_per_semitone=round(geometry.bands_per_semitone) + 1)
 
 
 def test_the_canonical_duration_stays_put_under_a_retuning() -> None:

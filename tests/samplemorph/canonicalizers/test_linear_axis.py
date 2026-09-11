@@ -40,7 +40,7 @@ def test_the_reading_stays_a_magnitude_and_leaves_bins_no_band_touches_silent() 
     untouched = band_weights(geometry).sum(axis=0) == 0.0
     assert np.all(linear >= 0.0)
     assert untouched.sum() > 0
-    assert np.array_equal(linear[untouched], np.zeros((int(untouched.sum()), FRAME_COUNT)))
+    np.testing.assert_allclose(linear[untouched], np.zeros((int(untouched.sum()), FRAME_COUNT)), atol=1e-12)
 
 
 def test_the_least_squares_reading_recovers_a_tone_closer_than_interpolation() -> None:

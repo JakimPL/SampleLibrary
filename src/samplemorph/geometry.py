@@ -21,10 +21,15 @@ DEFAULT_FFT_LENGTH: Final[int] = 2048
 DEFAULT_TIME_COLUMNS: Final[int] = 64
 DEFAULT_DYNAMIC_RANGE_DB: Final[float] = 100.0
 DEFAULT_MAXIMUM_SHIFT_SEMITONES: Final[float] = 48.0
-DEFAULT_BINS_PER_OCTAVE: Final[int] = 144
 DEFAULT_MEL_BAND_COUNT: Final[int] = 128
 DEFAULT_CONSTANT_Q_BINS_PER_OCTAVE: Final[int] = 36
 GAUSSIAN_EDGE_LEVEL: Final[float] = 0.01
+# 288 bands per octave keep 77% of the Fourier magnitude's degrees of freedom through the band
+# matrix (144 kept 53%), and phase gradient heap integration reads its gradients cleanly from a
+# transform at least sixteen times its hop (Prusa, Balazs and Sondergaard, 2017).
+DEFAULT_BINS_PER_OCTAVE: Final[int] = 288
+PHASE_GRADIENT_REDUNDANCY: Final[int] = 16
+DEFAULT_LOG_FREQUENCY_HOP_LENGTH: Final[int] = DEFAULT_FFT_LENGTH // PHASE_GRADIENT_REDUNDANCY
 
 
 @unique
@@ -33,14 +38,15 @@ class AnalysisWindow(StrEnum):
 
     `HANN` is the ordinary analysis every magnitude inversion accepts. `GAUSSIAN` is the one taper
     whose phase gradient is a closed form of its magnitude gradient, which is what lets phase
-    gradient heap integration recover a phase from the magnitude alone.
+    gradient heap integration recover a phase from the magnitude alone, and is the analysis the
+    production geometry reads through.
     """
 
     HANN = "hann"
     GAUSSIAN = "gaussian"
 
 
-DEFAULT_ANALYSIS_WINDOW: Final[AnalysisWindow] = AnalysisWindow.HANN
+DEFAULT_ANALYSIS_WINDOW: Final[AnalysisWindow] = AnalysisWindow.GAUSSIAN
 
 
 @unique
@@ -317,7 +323,7 @@ def log_frequency_geometry(
         analysis_window=analysis_window,
         analysis_rate_hz=NOMINAL_WAV_RATE,
         fft_length=DEFAULT_FFT_LENGTH,
-        hop_length=DEFAULT_HOP_LENGTH,
+        hop_length=DEFAULT_LOG_FREQUENCY_HOP_LENGTH,
         minimum_frequency_hz=MINIMUM_FREQUENCY_HZ,
         bins_per_octave=bins_per_octave,
         band_count=bands_reaching_nyquist(

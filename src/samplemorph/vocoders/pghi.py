@@ -13,7 +13,7 @@ from samplemorph.images import AnalysisSpectrogram
 
 PGHI_TOLERANCE: Final[float] = 1e-6
 MISSING_EXTRA_MESSAGE: Final[str] = (
-    "pghipy is not installed. Install the 'pghi' extra (uv sync --extra pghi) to estimate phase by "
+    "pghipy is not installed. Install the 'morph' extra (uv sync --extra morph) to estimate phase by "
     "gradient heap integration."
 )
 

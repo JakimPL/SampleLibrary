@@ -9,19 +9,17 @@ from samplemorph.canonicalizers.mel import build_mel_canonicalizer
 from samplemorph.geometry import AnalysisWindow, analysis_taper, log_frequency_geometry
 from samplemorph.measurement.loudness import loudness_delta
 from samplemorph.measurement.modulation_spectrum import modulation_spectrum_distance
-from samplemorph.registries import PGHI_VOCODER_NAME, VOCODER_REGISTRY
+from samplemorph.registries import DEFAULT_VOCODER_NAME, VOCODER_REGISTRY
 from samplemorph.vocoders.griffin_lim import GriffinLimVocoder
 from samplemorph.vocoders.pghi import PghiVocoder
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone
 
 TONE_FREQUENCY_HZ = 330.0
-GAUSSIAN_HOP_LENGTH = 128
 LOUDNESS_TOLERANCE_LU = 1.0
 
 
 def _gaussian_canonicalizer() -> LogFrequencyCanonicalizer:
-    geometry = log_frequency_geometry(analysis_window=AnalysisWindow.GAUSSIAN)
-    return LogFrequencyCanonicalizer(geometry.model_copy(update={"hop_length": GAUSSIAN_HOP_LENGTH}))
+    return LogFrequencyCanonicalizer(log_frequency_geometry(analysis_window=AnalysisWindow.GAUSSIAN))
 
 
 def test_the_gaussian_taper_peaks_at_the_frame_center_and_falls_to_the_edge_level() -> None:
@@ -36,7 +34,7 @@ def test_the_gaussian_taper_peaks_at_the_frame_center_and_falls_to_the_edge_leve
 
 
 def test_the_hann_taper_is_the_periodic_one_the_analysis_overlaps_cleanly() -> None:
-    geometry = log_frequency_geometry()
+    geometry = log_frequency_geometry(analysis_window=AnalysisWindow.HANN)
 
     taper = analysis_taper(geometry)
 
@@ -46,7 +44,6 @@ def test_the_hann_taper_is_the_periodic_one_the_analysis_overlaps_cleanly() -> N
 
 
 def test_the_integrated_phase_makes_a_tone_audible_close_to_its_level() -> None:
-    pytest.importorskip("pghipy")
     canonicalizer = _gaussian_canonicalizer()
     tone = harmonic_tone(4 * TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0]
     spectrogram = canonicalizer.restore(canonicalizer.canonicalize(tone))
@@ -59,7 +56,6 @@ def test_the_integrated_phase_makes_a_tone_audible_close_to_its_level() -> None:
 
 
 def test_the_integrated_phase_flutters_less_than_an_iterated_one_on_the_same_magnitude() -> None:
-    pytest.importorskip("pghipy")
     canonicalizer = _gaussian_canonicalizer()
     tone = harmonic_tone(4 * TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0]
     spectrogram = canonicalizer.restore(canonicalizer.canonicalize(tone))
@@ -71,8 +67,7 @@ def test_the_integrated_phase_flutters_less_than_an_iterated_one_on_the_same_mag
 
 
 def test_a_hann_analysis_is_refused_by_name() -> None:
-    pytest.importorskip("pghipy")
-    canonicalizer = LogFrequencyCanonicalizer(log_frequency_geometry())
+    canonicalizer = LogFrequencyCanonicalizer(log_frequency_geometry(analysis_window=AnalysisWindow.HANN))
     spectrogram = canonicalizer.restore(
         canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0])
     )
@@ -82,7 +77,6 @@ def test_a_hann_analysis_is_refused_by_name() -> None:
 
 
 def test_another_axis_is_refused_by_name() -> None:
-    pytest.importorskip("pghipy")
     canonicalizer = build_mel_canonicalizer()
     spectrogram = canonicalizer.restore(
         canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0])
@@ -92,5 +86,5 @@ def test_another_axis_is_refused_by_name() -> None:
         PghiVocoder().synthesize(spectrogram)
 
 
-def test_the_registry_builds_the_vocoder_by_name() -> None:
-    assert isinstance(VOCODER_REGISTRY[PGHI_VOCODER_NAME](), PghiVocoder)
+def test_the_registry_builds_the_default_vocoder_by_name() -> None:
+    assert isinstance(VOCODER_REGISTRY[DEFAULT_VOCODER_NAME](), PghiVocoder)
