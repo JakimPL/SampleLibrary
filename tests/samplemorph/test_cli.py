@@ -448,6 +448,8 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
             str(output),
             "--model",
             CODEC_NAME,
+            "--vocoder",
+            "pghi",
             "--device",
             "cpu",
         ]

@@ -9,7 +9,7 @@ from samplemorph.canonicalizers.mel import build_mel_canonicalizer
 from samplemorph.geometry import AnalysisWindow, analysis_taper, log_frequency_geometry
 from samplemorph.measurement.loudness import loudness_delta
 from samplemorph.measurement.modulation_spectrum import modulation_spectrum_distance
-from samplemorph.registries import DEFAULT_VOCODER_NAME, VOCODER_REGISTRY
+from samplemorph.registries import PGHI_VOCODER_NAME, VOCODER_REGISTRY
 from samplemorph.vocoders.griffin_lim import GriffinLimVocoder
 from samplemorph.vocoders.pghi import PghiVocoder
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone
@@ -86,5 +86,5 @@ def test_another_axis_is_refused_by_name() -> None:
         PghiVocoder().synthesize(spectrogram)
 
 
-def test_the_registry_builds_the_default_vocoder_by_name() -> None:
-    assert isinstance(VOCODER_REGISTRY[DEFAULT_VOCODER_NAME](), PghiVocoder)
+def test_the_registry_builds_the_vocoder_by_name() -> None:
+    assert isinstance(VOCODER_REGISTRY[PGHI_VOCODER_NAME](), PghiVocoder)
