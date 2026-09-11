@@ -18,7 +18,7 @@ from samplemorph.training.metrics import (
     CODEC_VALIDATION_PRIOR,
     CODEC_VALIDATION_RECONSTRUCTION,
 )
-from samplemorph.training.optimizers import cosine_optimizer
+from samplemorph.training.optimizers import scheduled_over_the_run
 
 # (positions, grids, canonical durations)
 CodecBatch = tuple[Tensor, Tensor, Tensor]
@@ -78,11 +78,7 @@ class CodecTrainingModule(LightningModule):
         return parts.total
 
     def configure_optimizers(self) -> OptimizerLRSchedulerConfig:
-        return cosine_optimizer(
-            self.model.parameters(),
-            learning_rate=self._learning_rate,
-            total_steps=int(self.trainer.estimated_stepping_batches),
-        )
+        return scheduled_over_the_run(self, self.model.parameters(), learning_rate=self._learning_rate)
 
     def _prior_share(self) -> float:
         if self._prior_warmup_steps == 0:

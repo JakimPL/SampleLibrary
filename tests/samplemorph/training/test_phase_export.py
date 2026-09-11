@@ -8,9 +8,9 @@ from torch.utils.data import DataLoader
 
 from samplecore.tracking.silent import SilentRun
 from samplemorph.registries import CANONICALIZER_REGISTRY
+from samplemorph.training.analysis_data import AnalysisCorpus
 from samplemorph.training.export import BestEpochExport, ExportRecord
 from samplemorph.training.metrics import MONITORED_METRIC
-from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_dataset import PhaseBatchItem
 from samplemorph.training.phase_export import PhaseModelWriter, describe_phase_model
 from samplemorph.training.phase_module import PhaseTrainingModule
@@ -21,8 +21,8 @@ CANONICALIZER_NAME = "log_frequency"
 TRAINED_SAMPLE_COUNT = 4
 
 
-def _corpus(library_root: Path) -> PhaseCorpus:
-    return PhaseCorpus(
+def _corpus(library_root: Path) -> AnalysisCorpus:
+    return AnalysisCorpus(
         samples=(),
         library_root=library_root,
         canonicalizer=CANONICALIZER_REGISTRY[CANONICALIZER_NAME](),

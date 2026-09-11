@@ -11,7 +11,7 @@ from samplemorph.training.metrics import (
     VALIDATION_LOSS,
     VALIDATION_SPECTRAL,
 )
-from samplemorph.training.optimizers import cosine_optimizer
+from samplemorph.training.optimizers import scheduled_over_the_run
 from samplemorph.training.phase_losses import AnalysisWindow, FrameAnalysis, LossParts, LossWeights, phase_loss
 from samplemorph.vocoders.phase_model import PhaseModel, PhaseModelShape
 
@@ -66,11 +66,7 @@ class PhaseTrainingModule(LightningModule):
         return parts.total
 
     def configure_optimizers(self) -> OptimizerLRSchedulerConfig:
-        return cosine_optimizer(
-            self.parameters(),
-            learning_rate=self._learning_rate,
-            total_steps=int(self.trainer.estimated_stepping_batches),
-        )
+        return scheduled_over_the_run(self, self.parameters(), learning_rate=self._learning_rate)
 
     def _loss_parts(self, batch: PhaseBatch) -> LossParts:
         magnitude, cosine, sine, frame_offset = batch

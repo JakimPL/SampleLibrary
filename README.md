@@ -11,7 +11,7 @@ library.
 - [uv](https://docs.astral.sh/uv/)
 - PostgreSQL 17 or later
 - Node.js 25.9 or later, and npm, for the frontend
-- An NVIDIA GPU, to train the vocoder that turns a morph back into sound and the descriptor that
+- An NVIDIA GPU, to train the restorer that turns a morph back into sound and the descriptor that
   lays out the cloud. Everything else in the project runs on the processor alone.
 - About a gigabyte of disk for the pretrained listening model the `clap` cloud backend downloads
   on first use. `make install` installs every extra, this one included.
@@ -55,9 +55,10 @@ speed the music does — run it after extraction, and again whenever you add mod
 lists the rest of the pipeline: `make embed`, `make thumbnails` and so on.
 
 Work on generating audio from a point between two samples lives in the `samplemorph` package,
-one module per command under `samplemorph.commands`: fitting a linear codec, teaching a phase
-vocoder, caching the canonical grids, teaching a descriptor and a codec that decodes from it,
-describing the library through a descriptor, and rendering a listening set. The research behind
+one module per command under `samplemorph.commands`: fitting a linear codec, teaching the restorer
+that puts back what the grid smooths away before a morph is made audible, caching the canonical
+grids, teaching a descriptor and a codec that decodes from it, describing the library through a
+descriptor, and rendering a listening set. The research behind
 it is documented separately under `docs/morphing/`, starting from `docs/morphing/00-handover.md`.
 
 That package installs PyTorch built for CUDA 12.8, which is a large download and the reason

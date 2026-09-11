@@ -28,7 +28,7 @@ from samplemorph.training.metrics import (
     DESCRIPTOR_VALIDATION_RETUNE_RANK_ONE,
     DESCRIPTOR_VALIDATION_TEACHER_COSINE,
 )
-from samplemorph.training.optimizers import cosine_optimizer
+from samplemorph.training.optimizers import scheduled_over_the_run
 
 # (positions, stored grids, retuned grids, stored durations, retuned durations)
 DescriptorBatch = tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
@@ -133,11 +133,7 @@ class DescriptorTrainingModule(LightningModule):
             self.log(DESCRIPTOR_VALIDATION_NDCG, self._held_out_ndcg(stored[held_out], positions[held_out]))
 
     def configure_optimizers(self) -> OptimizerLRSchedulerConfig:
-        return cosine_optimizer(
-            self.parameters(),
-            learning_rate=self._learning_rate,
-            total_steps=int(self.trainer.estimated_stepping_batches),
-        )
+        return scheduled_over_the_run(self, self.parameters(), learning_rate=self._learning_rate)
 
     def _loss_parts(self, batch: DescriptorBatch) -> DescriptorLossParts:
         """The training loss over one batch, with the label term over the taught labels it carries."""

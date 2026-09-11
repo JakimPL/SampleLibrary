@@ -2,14 +2,29 @@ from __future__ import annotations
 
 from typing import Final, TypeVar
 
+import torch
+from threadpoolctl import threadpool_limits
 from torch.utils.data import DataLoader, Dataset, Sampler
 
 from samplemorph.training import WORKER_START_METHOD
-from samplemorph.training.phase_dataset import limit_worker_threads
 
 PREFETCH_BATCHES: Final[int] = 2
 
 Item = TypeVar("Item")
+
+
+def limit_worker_threads(_worker_id: int) -> None:
+    """Hold each loader process to one compute thread.
+
+    A loader calls this in each worker it starts, handing it that worker's index, which this has no
+    use for. Every worker derives its examples through the same linear algebra, and each library
+    underneath would otherwise spread one worker's work across every core the machine has. A dozen
+    workers doing that at once spend most of their time contending rather than computing: measured
+    here, one example costs 96 ms with one thread and the pool as a whole managed 31 examples a
+    second across twelve workers, where one thread each reaches four times that.
+    """
+    threadpool_limits(limits=1)
+    torch.set_num_threads(1)
 
 
 def build_loader(

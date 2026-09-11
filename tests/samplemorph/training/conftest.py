@@ -27,7 +27,10 @@ from samplemorph.training.descriptor_module import DescriptorTrainingModule, Tea
 from samplemorph.training.phase_dataset import PhaseBatchItem
 from samplemorph.training.phase_losses import FrameAnalysis, LossWeights
 from samplemorph.training.phase_module import PhaseTrainingModule
+from samplemorph.training.restorer_dataset import RestorerBatchItem
+from samplemorph.training.restorer_module import RestorerTrainingModule
 from samplemorph.vocoders.phase_model import PhaseModelShape
+from samplemorph.vocoders.restorer_model import RestorerShape
 
 FFT_LENGTH = 256
 HOP_LENGTH = 64
@@ -84,6 +87,41 @@ def fixture_crop_loader() -> DataLoader[PhaseBatchItem]:
 def fixture_fast_trainer() -> Trainer:
     """One batch of each kind on the processor, writing nothing, so a test says only what it asks."""
     return Trainer(fast_dev_run=True, accelerator="cpu", logger=False, enable_checkpointing=False)
+
+
+RESTORER_BIN_COUNT = 65
+RESTORER_CROP_FRAMES = 32
+RESTORER_CHANNELS = 8
+
+
+class PairSet(Dataset[RestorerBatchItem]):
+    """Smooth readings beside targets that carry a line the reading lacks."""
+
+    def __init__(self, count: int = CROP_COUNT) -> None:
+        self._count = count
+
+    def __len__(self) -> int:
+        return self._count
+
+    def __getitem__(self, index: int) -> RestorerBatchItem:
+        generator = np.random.default_rng(index)
+        least_squares = -generator.random((RESTORER_BIN_COUNT, RESTORER_CROP_FRAMES)).astype(np.float32)
+        clean = least_squares.copy()
+        clean[10 + index] += 0.2
+        return least_squares, clean
+
+
+@pytest.fixture(name="restorer_module")
+def fixture_restorer_module() -> RestorerTrainingModule:
+    torch.manual_seed(0)
+    return RestorerTrainingModule(
+        RestorerShape(channels=RESTORER_CHANNELS, dilations=(1, 2)), learning_rate=LEARNING_RATE
+    )
+
+
+@pytest.fixture(name="pair_loader")
+def fixture_pair_loader() -> DataLoader[RestorerBatchItem]:
+    return DataLoader(PairSet(), batch_size=2)
 
 
 BAND_COUNT = 16

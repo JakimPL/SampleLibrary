@@ -16,7 +16,8 @@ from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplemorph.geometry import fourier_bin_count, log_frequency_geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY
-from samplemorph.training.phase_dataset import PhaseTrainingSet, crop_to, phase_example
+from samplemorph.training.derived_examples import DerivedExampleSet, ExampleFamily
+from samplemorph.training.phase_dataset import crop_item, crop_to, phase_example
 from samplemorph.vocoders.learned import (
     LearnedPhaseVocoder,
     PhaseModelDescription,
@@ -106,12 +107,12 @@ def test_a_training_set_yields_one_crop_per_sample(connection: Connection, tmp_p
         audio_store.write(tmp_path, SamplePCM(sample=sample, pcm=harmonic_tone(FRAME_COUNT, frequency=220.0)))
         samples.append(sample)
 
-    training_set = PhaseTrainingSet(
+    training_set = DerivedExampleSet(
         tuple(samples),
         library_root=tmp_path,
         canonicalizer=CANONICALIZER_REGISTRY["mel"](),
-        crop_frames=CROP_FRAMES,
         random_seed=0,
+        family=ExampleFamily(derive=phase_example, crop=crop_item, crop_frames=CROP_FRAMES),
     )
 
     magnitude, cosine, sine, frame_offset = training_set[0]

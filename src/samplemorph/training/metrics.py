@@ -36,3 +36,11 @@ CODEC_VALIDATION_PRIOR: Final[str] = "validation/prior"
 CODEC_VALIDATION_CYCLE: Final[str] = "validation/cycle"
 
 CODEC_MONITORED_METRIC: Final[str] = CODEC_VALIDATION_LOSS
+
+RESTORER_TRAINING_LOSS: Final[str] = "training/loss"
+RESTORER_VALIDATION_LOSS: Final[str] = "validation/loss"
+RESTORER_VALIDATION_FINE: Final[str] = "validation/fine"
+RESTORER_VALIDATION_COARSE: Final[str] = "validation/coarse"
+RESTORER_VALIDATION_LEAST_SQUARES: Final[str] = "validation/least_squares"
+
+RESTORER_MONITORED_METRIC: Final[str] = RESTORER_VALIDATION_LOSS

@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from samplemorph.training.analysis_data import AnalysisCorpus
 from samplemorph.training.export import ExportRecord
-from samplemorph.training.phase_data import PhaseCorpus
 from samplemorph.training.phase_module import PhaseTrainingModule
 from samplemorph.vocoders.learned import PhaseModelDescription, save_phase_model
 from samplemorph.vocoders.phase_model import PhaseModel
@@ -13,7 +13,7 @@ from samplemorph.vocoders.phase_model import PhaseModel
 def describe_phase_model(
     model: PhaseModel,
     *,
-    corpus: PhaseCorpus,
+    corpus: AnalysisCorpus,
     record: ExportRecord,
     trained_sample_count: int,
 ) -> PhaseModelDescription:
@@ -48,7 +48,7 @@ class PhaseModelWriter:
 
     module: PhaseTrainingModule
     path: Path
-    corpus: PhaseCorpus
+    corpus: AnalysisCorpus
     trained_sample_count: int
 
     def __call__(self, record: ExportRecord) -> None:

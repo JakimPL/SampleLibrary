@@ -34,6 +34,7 @@ from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.model_store import model_path
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
 from samplemorph.vocoders.learned import phase_model_path
+from samplemorph.vocoders.restored import restorer_path
 from tests.samplemorph.conftest import harmonic_tone
 
 SAMPLE_FRAME_COUNT = 4096
@@ -46,6 +47,9 @@ PHASE_CHANNELS = 16
 PHASE_CROP_FRAMES = 8
 DESCRIPTOR_NAME = "descriptor-under-test"
 CODEC_NAME = "codec-under-test"
+RESTORER_NAME = "restorer-under-test"
+RESTORER_CHANNELS = 8
+RESTORER_CROP_FRAMES = 8
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
@@ -303,6 +307,104 @@ def test_rendering_through_a_learned_vocoder_uses_the_model_it_was_pointed_at(
 
     assert (output / "morph_050.wav").exists()
     assert soundfile.info(output / "morph_050.wav").frames > 0
+
+
+def test_a_restorer_is_trained_on_the_catalog_and_rendered_through(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The production path from catalog to weights to audio, at the smallest size that still exercises it."""
+    hashes = _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+    main(
+        [
+            "train-restorer",
+            "--epochs",
+            "1",
+            "--batch",
+            "2",
+            "--workers",
+            "0",
+            "--channels",
+            str(RESTORER_CHANNELS),
+            "--crop",
+            str(RESTORER_CROP_FRAMES),
+            "--device",
+            "cpu",
+            "--restorer",
+            RESTORER_NAME,
+            "--no-tracking",
+        ]
+    )
+    output = tmp_path / "restored-render"
+
+    main(
+        [
+            "render",
+            "--first",
+            hashes[0],
+            "--second",
+            hashes[-1],
+            "--model",
+            MODEL_NAME,
+            "--restorer",
+            RESTORER_NAME,
+            "--device",
+            "cpu",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert restorer_path(tmp_path, name=RESTORER_NAME).exists()
+    assert (output / "morph_050.wav").exists()
+    assert soundfile.info(output / "morph_050.wav").frames > 0
+
+
+def test_training_a_restorer_on_an_axis_the_vocoder_never_reads_says_so(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    with pytest.raises(ValueError, match="is a mel one"):
+        main(["train-restorer", "--canonicalizer", "mel", "--workers", "0", "--device", "cpu", "--no-tracking"])
+
+
+def test_rendering_through_a_restorer_that_was_never_trained_says_so(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hashes = _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+
+    with pytest.raises(FileNotFoundError, match="no restorer is stored"):
+        main(
+            [
+                "render",
+                "--first",
+                hashes[0],
+                "--second",
+                hashes[-1],
+                "--model",
+                MODEL_NAME,
+                "--restorer",
+                "absent",
+                "--device",
+                "cpu",
+                "--output",
+                str(tmp_path / "render"),
+            ]
+        )
 
 
 def test_rendering_through_a_phase_model_that_was_never_trained_says_so(

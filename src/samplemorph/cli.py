@@ -4,7 +4,16 @@ import argparse
 from enum import StrEnum, unique
 
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
-from samplemorph.commands import cache_grids, embed, fit, render, train_codec, train_descriptor, train_phase
+from samplemorph.commands import (
+    cache_grids,
+    embed,
+    fit,
+    render,
+    train_codec,
+    train_descriptor,
+    train_phase,
+    train_restorer,
+)
 
 
 @unique
@@ -17,6 +26,7 @@ class MorphCommand(StrEnum):
     TRAIN_DESCRIPTOR = train_descriptor.COMMAND_NAME
     EMBED = embed.COMMAND_NAME
     TRAIN_CODEC = train_codec.COMMAND_NAME
+    TRAIN_RESTORER = train_restorer.COMMAND_NAME
     RENDER = render.COMMAND_NAME
 
 
@@ -38,6 +48,8 @@ def main(argv: list[str] | None = None) -> None:
                 embed.run(connection, config, arguments)
             case MorphCommand.TRAIN_CODEC:
                 train_codec.run(connection, config, arguments)
+            case MorphCommand.TRAIN_RESTORER:
+                train_restorer.run(connection, config, arguments)
             case MorphCommand.RENDER:
                 render.run(connection, config, arguments)
 
@@ -51,5 +63,6 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     train_descriptor.add_parser(commands)
     embed.add_parser(commands)
     train_codec.add_parser(commands)
+    train_restorer.add_parser(commands)
     render.add_parser(commands)
     return parser.parse_args(argv)
