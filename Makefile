@@ -118,7 +118,14 @@ mlflow-ui:
 # here on purpose, since its 40-100 ms synthetic tones say nothing about how a morph sounds.
 .PHONY: morph-fit
 morph-fit:
-	uv run samplemorph fit $(if $(CANONICALIZER),--canonicalizer $(CANONICALIZER),) $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(LATENT),--latent-size $(LATENT),)
+	uv run samplemorph fit $(if $(CANONICALIZER),--canonicalizer $(CANONICALIZER),) $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(LATENT),--latent-size $(LATENT),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(SEED),--seed $(SEED),) $(if $(MODEL),--model $(MODEL),)
+
+# Teaches the restorer that puts back what the grid smooths away, on every sample the catalog holds
+# unless SAMPLES draws fewer. The pass derives its examples in worker processes and trains on the
+# GPU; about an hour an epoch over the whole catalog.
+.PHONY: morph-train-restorer
+morph-train-restorer:
+	$(CAPPED) uv run samplemorph train-restorer $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(LEARNING_RATE),--learning-rate $(LEARNING_RATE),) $(if $(PRECISION),--precision $(PRECISION),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(RESUME),--resume,)
 
 # The descriptor, in three passes. `morph-cache-grids` canonicalizes the catalog once, with retuned
 # views, into a memory-mapped cache under the library root (about an hour on twelve workers),
@@ -133,22 +140,22 @@ morph-cache-grids:
 
 .PHONY: morph-train-descriptor
 morph-train-descriptor:
-	$(CAPPED) uv run samplemorph train-descriptor --teacher-experiment $(TEACHER) $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(EPOCHS),--epochs $(EPOCHS),)
+	$(CAPPED) uv run samplemorph train-descriptor --teacher-experiment $(TEACHER) $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
 
 .PHONY: morph-embed
 morph-embed:
-	$(CAPPED) uv run samplemorph embed $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(LABEL),--label "$(LABEL)",)
+	$(CAPPED) uv run samplemorph embed $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(LABEL),--label "$(LABEL)",) $(if $(DEVICE),--device $(DEVICE),)
 
-# The codec that decodes from the descriptor. It reads a full-resolution cache
-# (`make morph-cache-grids CACHE=codec SAMPLES=30000 BANDS=12 VIEWS=0`), and `morph-render
-# MODEL=conditioned` renders a listening set through it.
+# The codec that decodes from the descriptor. It reads a full-resolution cache, one band per band
+# of the grid (`make morph-cache-grids CACHE=codec SAMPLES=30000 BANDS=24 VIEWS=0` at 288 bands per
+# octave), and `morph-render MODEL=conditioned` renders a listening set through it.
 .PHONY: morph-train-codec
 morph-train-codec:
-	$(CAPPED) uv run samplemorph train-codec $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(CODEC),--codec $(CODEC),) $(if $(EPOCHS),--epochs $(EPOCHS),)
+	$(CAPPED) uv run samplemorph train-codec $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(CODEC),--codec $(CODEC),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
 
 .PHONY: morph-render
 morph-render:
-	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),)
+	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(DEVICE),--device $(DEVICE),)
 
 # Destructive: empties the configured library's catalog and content store. Prints what it would
 # do and changes nothing unless invoked as `make reset-library CONFIRM=1`.
