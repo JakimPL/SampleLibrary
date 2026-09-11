@@ -359,6 +359,50 @@ the share the reading orders the same way — and Spearman ρ against severity, 
 - **Comparison moves to matched loudness.** Rendering already offers it; `held_out_spectrum`'s peak
   normalization is the Phase 8 row this closes, since it charged a saturated kick 7 LU of overshoot.
 
+### What landed on the verdict (2026-09-11)
+
+The user adopted the path: "the most promising solution, from all we've got so far", with the
+note that this restorer is free to learn the library it serves rather than sounds in general. Four
+commits (`6bee2fe`, `5d84477`, `bad9143`, and the write-up):
+
+- **The production geometry is the Gaussian analysis at 288 bands per octave**, hop a sixteenth of
+  the 2048-point window (`DEFAULT_BINS_PER_OCTAVE`, `DEFAULT_ANALYSIS_WINDOW`,
+  `DEFAULT_LOG_FREQUENCY_HOP_LENGTH`), PGHI the estimated-phase rung of every reconstruction table,
+  `pghipy` part of the `morph` extra. Two corrections found on the way: the rank table above is right
+  and the night's memory of it was not -- 288 bands keep 77% of the bins, the deficit sitting in the
+  top analysis octave (288 bands for 512 bins), which at the usual playback rate is heard at 2–4 kHz
+  and is exactly what the restorer puts back; and numpy's default pseudo-inverse cutoff inverted
+  singular values near machine precision into entries of order 10¹³ -- neutral on real material
+  (measured on three probes to the fourth decimal) but now cut at 10⁻⁶ of the largest, so the inverse
+  is of the order of the weights and a bin no band touches reads exactly silent.
+- **The restorer is a vocoder** (`samplemorph.vocoders.restored.RestoredPghiVocoder`, `--vocoder
+  restored`, the default): the least-squares reading, compressed to decibels over the grid's own
+  dynamic range, through the network (`samplemorph.vocoders.restorer_model.Restorer`), expanded, and
+  integrated. It refuses a spectrogram from another analysis by name and reads either anchor. The
+  integration itself now holds every magnitude at the grid's dynamic range below its peak, since
+  pghipy differentiates the log magnitude and an exact zero next to a loud bin handed it a garbage
+  gradient; measured neutral at −100 dB on all twelve probes (`pghi_floor_check.py`), and it is what
+  makes an untrained restorer read exactly as PGHI alone, which is a test.
+- **`train-restorer`** teaches it on the whole catalog by default (every sample within the probe
+  bounds), through the same derived-example machinery as `train-phase`, now shared: one
+  `AnalysisCorpus` and `AnalysisDataModule`, one `DerivedExampleSet` a family parameterizes with how
+  it derives and crops, one `pipeline_analysis` that carries a waveform through the grid and pairs it
+  with its own analysis, one settings type and one command body. The validation log carries the
+  least-squares baseline beside the loss, so an epoch reads as an improvement only under it.
+- **The night's checkpoint is the stored restorer** (`models/restorer.pt`, converted by
+  `convert_restorer.py` with its layers renamed and its log recorded in the description). Through the
+  landed vocoder it reproduces file 7 of the candidate set on all twelve probes: every reading within
+  a few hundredths, waveform correlation above 0.98 on ten, and on two a polarity or island-phase
+  choice inside the integration that carries no sound (`landed_path_check.py`).
+
+Open, and heavy: the restorer retrained on the whole catalog (the stored one saw 20,000 samples), the
+grid caches rebuilt on the new geometry (twice the height), and the descriptor and codec chain after
+them. Registered for later, at the user's request: a light alignment between the morph
+representation and the hand labels, in either direction, once morphing itself is solved; and a
+guard that a morph is more than a convex blend of its endpoints -- a reading that compares the
+midpoint's grid with the mean of the two endpoint grids, so a codec that had learned to crossfade
+would be caught by a number before an ear.
+
 ## How to re-derive any of this
 
 `runs/night-2026-09-10/scripts/ladder_measure.py` (beside the library, outside the repository)
@@ -372,4 +416,6 @@ are `samplemorph.measurement.loudness`, `samplemorph.measurement.modulation_spec
 `restorer_train.py` (checkpoint `restorer_final.pt`, log `restorer_train.log`) and its held-out
 readings `restorer_evaluate.py`. The verdict study is `candidates_measure.py`, which writes
 `listening/candidates-2026-09-11/metrics.csv` for both matchings, and `calibration_study.py`, which
-joins it with `labels.csv` and prints every table of the verdict section.
+joins it with `labels.csv` and prints every table of the verdict section. After the verdict:
+`pghi_floor_check.py` (the integration floor), `convert_restorer.py` (the checkpoint into the
+store) and `landed_path_check.py` (the landed vocoder against file 7).
