@@ -238,6 +238,44 @@ and is anything else lost; **4 against 2** — what the fix buys over shipping; 
 `loudness-matched/` — is "quieter" still there once level is matched, or was it the peak. Severity
 and "quieter" labels on these five files per probe extend `labels.csv` and the calibration study.
 
+### The one training that fits the diagnosis: a restorer for what the grid discards
+
+With the vocoder problem reduced to a magnitude problem, the learnable thing is the fine structure
+the grid throws away: a network that reads the least-squares magnitude and predicts, from what the
+corpus says such sounds carry, the structure the band averaging removed — with PGHI reading the
+phase afterwards. It has a strong baseline built into its input, a supervised target for every
+catalog sample, and a gate the readings can score without an ear.
+
+The experiment (scratch, `runs/night-2026-09-11/scripts/restorer_train.py`): a two-dimensional
+residual network of 0.17 M parameters over the decibel magnitude, dilations widening along
+frequency (the axis the grid smoothed) to eight bins, kernels spanning neighboring frames, its
+output layer initialized at zero so it starts *at* the least-squares baseline; L1 in decibels at
+native resolution and two coarser poolings; 20,000 training samples from the seed-0 training split,
+128-frame crops, eight epochs, ~12 minutes an epoch on the GPU. Its validation loss fell to 38%
+below least squares alone. Two operational lessons on the way: a forked loader worker died of
+heap corruption after ninety thousand examples (the parent held multithreaded BLAS pools at fork —
+the cure is one thread everywhere before the first worker starts), and spawned workers, each
+importing torch afresh, are too heavy for this machine in numbers.
+
+On the forty validation probes the training never saw, each made audible through PGHI (medians):
+
+| reading | clean ceiling | least squares | **restorer** |
+|---|---|---|---|
+| magnitude error, linear | 0 | 0.039 | **0.035** — percussive 0.071 → 0.040 |
+| held-out dB | 2.95 | 4.97 | **4.40** — tonal 4.82 → 3.93 |
+| modulation distance | 0.083 | 0.135 | **0.110** — percussive 0.220 → 0.138 |
+| loudness, LU | −0.02 | −0.15 | **−0.035** — percussive −0.43 → −0.035 |
+| fluctuation excess | +0.0003 | −0.0024 | +0.0012 |
+| flutter, the old screen | −0.002 | −0.014 | +0.012 |
+
+The learned prior recovers about a third of what the grid discards on spectrum, a third of the
+percussive modulation deviation, and nearly all of the percussive energy loss. The one reading that
+moves the other way is the old flutter screen: the restorer adds ripple, and some of it is ripple
+the reference does not have — the principled fluctuation reading sits at the clean level. Its
+reconstruction is the seventh file in every candidate folder (`7_gauss2048_288_restored_pghi`), so
+tomorrow's sitting hears it beside candidate 4. It lands in the repository as a vocoder with a
+training command of its own only if the ear agrees with the numbers.
+
 ## How to re-derive any of this
 
 `runs/night-2026-09-10/scripts/ladder_measure.py` (beside the library, outside the repository)
