@@ -63,7 +63,7 @@ class Anchor(StrEnum):
     FUNDAMENTAL = "fundamental"
 
 
-DEFAULT_ANCHOR: Final[Anchor] = Anchor.LOUDEST
+DEFAULT_ANCHOR: Final[Anchor] = Anchor.FUNDAMENTAL
 
 
 def shift_headroom_bands(*, maximum_shift_semitones: float, bands_per_semitone: float) -> int:

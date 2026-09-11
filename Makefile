@@ -128,8 +128,8 @@ morph-train-phase:
 	$(CAPPED) uv run samplemorph train-phase $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(PHASE_MODEL),--phase-model $(PHASE_MODEL),)
 
 # The descriptor, in three passes. `morph-cache-grids` canonicalizes the catalog once, with retuned
-# views, into a memory-mapped cache under the library root (about half an hour on twelve workers),
-# aligned on the loudest band or, with ANCHOR=fundamental, on the fundamental of each sound;
+# views, into a memory-mapped cache under the library root (about an hour on twelve workers),
+# aligned on the fundamental of each sound or, with ANCHOR=loudest, on its loudest band;
 # `morph-train-descriptor` teaches a descriptor over that cache from a teacher experiment's vectors
 # and the hand labels; `morph-embed` writes the descriptor's vector for every cached sample as a new
 # experiment, which `evaluate` scores and `samplecloud --backend learned --model NAME
