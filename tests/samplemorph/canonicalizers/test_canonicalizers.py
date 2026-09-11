@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
 import pytest
 
 from samplemorph.canonicalizers import Canonicalizer
-from samplemorph.canonicalizers.common import bands_onto_linear_axis
+from samplemorph.canonicalizers.common import analysis_transform, bands_onto_linear_axis
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_burst
@@ -46,6 +47,18 @@ def test_canonicalize_returns_one_shape_whatever_the_input_length(case: Canonica
     long = canonicalizer.canonicalize(harmonic_tone(16 * 2048, frequency=440.0))
 
     assert short.grid.shape == long.grid.shape
+
+
+def test_a_hit_shorter_than_one_transform_is_analyzed_without_a_warning() -> None:
+    geometry = log_frequency_geometry()
+    hit = np.zeros(geometry.fft_length // 4)
+    hit[0] = 1.0
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        transform = analysis_transform(hit, geometry=geometry)
+
+    assert transform.shape == (geometry.fft_length // 2 + 1, 1 + hit.shape[0] // geometry.hop_length)
 
 
 @pytest.mark.parametrize("case", CANONICALIZER_CASES, ids=lambda case: case.name)

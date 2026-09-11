@@ -3,14 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-import librosa
 import numpy as np
 from numpy.typing import NDArray
 
 from samplemorph.canonicalizers import Canonicalizer
-from samplemorph.canonicalizers.common import prepare_mono
+from samplemorph.canonicalizers.common import analysis_transform, prepare_mono
 from samplemorph.canonicalizers.linear_axis import onto_linear_axis
-from samplemorph.geometry import Geometry, analysis_taper
+from samplemorph.geometry import Geometry
 
 SILENT_LEVEL: Final[float] = 1e-8
 
@@ -51,9 +50,7 @@ def analyze_through_pipeline(
 
     spectrogram = canonicalizer.restore(canonicalizer.canonicalize(mono))
     magnitude = onto_linear_axis(spectrogram.magnitude, geometry=geometry)
-    analysis = librosa.stft(
-        mono, n_fft=geometry.fft_length, hop_length=geometry.hop_length, window=analysis_taper(geometry)
-    )
+    analysis = analysis_transform(mono, geometry=geometry)
     frames = min(magnitude.shape[1], analysis.shape[1])
     if frames < 1:
         return None

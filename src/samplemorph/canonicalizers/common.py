@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import warnings
 from typing import Final
 
+import librosa
 import numpy as np
 from numpy.typing import NDArray
 
@@ -12,13 +14,14 @@ from samplecore.waveform import (
     remove_subsonic,
     resample_to_fraction_points,
 )
-from samplemorph.geometry import Anchor, Geometry
+from samplemorph.geometry import Anchor, Geometry, analysis_taper
 from samplemorph.images import AnalysisSpectrogram, Conditioners, SoundImage
 
 GAIN_FLOOR: Final[float] = 2.0**-40
 MAGNITUDE_FLOOR_RATIO: Final[float] = 1e-10
 HARMONIC_COUNT: Final[int] = 8
 HARMONIC_DECAY: Final[float] = 0.84
+SHORT_SIGNAL_WARNING: Final[str] = r"n_fft=\d+ is too large for input signal"
 
 
 def prepare_mono(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -30,6 +33,23 @@ def prepare_mono(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
     rate every frequency axis reads its frames at.
     """
     return remove_subsonic(fold_to_mono(waveform), sample_rate_hz=NOMINAL_WAV_RATE)
+
+
+def analysis_transform(mono: NDArray[np.float64], *, geometry: Geometry) -> NDArray[np.complex128]:
+    """The short-time Fourier transform a prepared waveform is read through on this geometry.
+
+    One frame per hop through the geometry's taper, centered so the first frame sits on the
+    waveform's start. A hit shorter than one transform is read the same way: librosa pads half a
+    transform of silence on each side before framing, so the hit fills the few frames its length
+    gives it, and the length warning librosa raises on the way stays out of the logs.
+    """
+    with warnings.catch_warnings():
+        # librosa warns about a signal shorter than n_fft and analyzes it regardless.
+        warnings.filterwarnings("ignore", message=SHORT_SIGNAL_WARNING, category=UserWarning)
+        transform: NDArray[np.complex128] = librosa.stft(
+            mono, n_fft=geometry.fft_length, hop_length=geometry.hop_length, window=analysis_taper(geometry)
+        )
+    return transform
 
 
 def to_normalized_decibels(
