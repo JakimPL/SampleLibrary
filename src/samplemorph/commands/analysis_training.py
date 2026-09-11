@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
+from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
 from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
 from samplemorph.training.settings import DEFAULT_CROP_FRAMES, AnalysisTrainingSettings
@@ -22,10 +23,15 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class AnalysisTrainingFlags:
-    """What one family's training command says for itself: its axis wording, its defaults, and the flag naming its model."""
+    """What one family's training command says for itself: its axis wording, its defaults, and the flag naming its model.
+
+    A `sample_count` of `None` trains on every sample the catalog holds, which is what a model of
+    this library's own sounds is taught from; a count draws that many reproducibly within the
+    probe bounds.
+    """
 
     axis_help: str
-    sample_count: int
+    sample_count: int | None
     channels: int
     model_flag: str
     model_name: str
@@ -43,7 +49,12 @@ class AnalysisTrainer:
 def add_analysis_training_arguments(parser: argparse.ArgumentParser, flags: AnalysisTrainingFlags) -> None:
     """The flags every trainer taught on the pipeline's own magnitudes shares, declared once so each reads the same."""
     add_canonicalizer_argument(parser, help_text=flags.axis_help)
-    parser.add_argument("--samples", type=int, default=flags.sample_count, help="How many samples to train on.")
+    parser.add_argument(
+        "--samples",
+        type=int,
+        default=flags.sample_count,
+        help="How many samples to train on; every sample the catalog holds when left out.",
+    )
     parser.add_argument(
         "--channels", type=int, default=flags.channels, help="How much capacity the network spends per layer."
     )
@@ -65,7 +76,11 @@ def train_on_analysis_corpus(
     from samplemorph.training.analysis_data import AnalysisCorpus
     from samplemorph.training.runs import RunPlacement
 
-    samples = draw_probe_samples(connection, count=arguments.samples, random_seed=arguments.seed)
+    samples = (
+        PostgresSampleRepository(connection).list_all()
+        if arguments.samples is None
+        else draw_probe_samples(connection, count=arguments.samples, random_seed=arguments.seed)
+    )
     corpus = AnalysisCorpus(
         samples=samples,
         library_root=config.library_root,

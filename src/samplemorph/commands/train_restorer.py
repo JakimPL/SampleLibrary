@@ -17,12 +17,10 @@ from samplemorph.vocoders.restorer_model import DEFAULT_CHANNELS
 
 COMMAND_NAME: Final[str] = "train-restorer"
 RESTORER_EXPERIMENT_NAME: Final[str] = "restorer"
-# The restorer is taught what this library's own sounds carry, so the default draw reaches every
-# sample within the probe bounds.
-WHOLE_CATALOG: Final[int] = 2**31 - 1
+# The restorer is taught what this library's own sounds carry, so it reads every sample by default.
 FLAGS: Final[AnalysisTrainingFlags] = AnalysisTrainingFlags(
     axis_help="Which frequency axis the magnitudes are read back from.",
-    sample_count=WHOLE_CATALOG,
+    sample_count=None,
     channels=DEFAULT_CHANNELS,
     model_flag="--restorer",
     model_name=DEFAULT_RESTORER_NAME,
