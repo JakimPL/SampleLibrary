@@ -120,13 +120,6 @@ mlflow-ui:
 morph-fit:
 	uv run samplemorph fit $(if $(CANONICALIZER),--canonicalizer $(CANONICALIZER),) $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(LATENT),--latent-size $(LATENT),)
 
-# Teaches a phase model on the magnitudes the canonicalizer produces and writes it under the library
-# root. SAMPLES and EPOCHS size the run; the pass reads audio in worker processes and trains on the
-# GPU, so its length follows the sample count times the epoch count.
-.PHONY: morph-train-phase
-morph-train-phase:
-	$(CAPPED) uv run samplemorph train-phase $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(PHASE_MODEL),--phase-model $(PHASE_MODEL),)
-
 # The descriptor, in three passes. `morph-cache-grids` canonicalizes the catalog once, with retuned
 # views, into a memory-mapped cache under the library root (about an hour on twelve workers),
 # aligned on the fundamental of each sound or, with ANCHOR=loudest, on its loudest band;
@@ -155,7 +148,7 @@ morph-train-codec:
 
 .PHONY: morph-render
 morph-render:
-	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(PHASE_MODEL),--phase-model $(PHASE_MODEL),)
+	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),)
 
 # Destructive: empties the configured library's catalog and content store. Prints what it would
 # do and changes nothing unless invoked as `make reset-library CONFIRM=1`.

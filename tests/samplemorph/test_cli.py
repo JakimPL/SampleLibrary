@@ -33,7 +33,6 @@ from samplemorph.descriptors.learned import descriptor_path
 from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.model_store import model_path
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
-from samplemorph.vocoders.learned import phase_model_path
 from samplemorph.vocoders.restored import restorer_path
 from tests.samplemorph.conftest import harmonic_tone
 
@@ -42,9 +41,6 @@ CATALOG_SIZE = 12
 LATENT_SIZE = 4
 SAMPLE_RATE_HZ = 8_363
 MODEL_NAME = "under-test"
-PHASE_MODEL_NAME = "phase-under-test"
-PHASE_CHANNELS = 16
-PHASE_CROP_FRAMES = 8
 DESCRIPTOR_NAME = "descriptor-under-test"
 CODEC_NAME = "codec-under-test"
 RESTORER_NAME = "restorer-under-test"
@@ -214,101 +210,6 @@ def test_rendering_a_sample_the_catalog_lacks_says_so(
         )
 
 
-def test_training_a_phase_model_writes_it_under_the_library_root(
-    connection: Connection,
-    _database_url: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The whole path from catalog to weights, at the smallest size that still exercises it."""
-    _seed_catalog(connection, tmp_path)
-    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-
-    main(
-        [
-            "train-phase",
-            "--canonicalizer",
-            "mel",
-            "--samples",
-            str(CATALOG_SIZE),
-            "--epochs",
-            "1",
-            "--batch",
-            "2",
-            "--workers",
-            "0",
-            "--channels",
-            str(PHASE_CHANNELS),
-            "--crop",
-            str(PHASE_CROP_FRAMES),
-            "--device",
-            "cpu",
-            "--phase-model",
-            PHASE_MODEL_NAME,
-        ]
-    )
-
-    assert phase_model_path(tmp_path, name=PHASE_MODEL_NAME).exists()
-
-
-def test_rendering_through_a_learned_vocoder_uses_the_model_it_was_pointed_at(
-    connection: Connection,
-    _database_url: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    hashes = _seed_catalog(connection, tmp_path)
-    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
-    main(
-        [
-            "train-phase",
-            "--canonicalizer",
-            "mel",
-            "--samples",
-            str(CATALOG_SIZE),
-            "--epochs",
-            "1",
-            "--batch",
-            "2",
-            "--workers",
-            "0",
-            "--channels",
-            str(PHASE_CHANNELS),
-            "--crop",
-            str(PHASE_CROP_FRAMES),
-            "--device",
-            "cpu",
-            "--phase-model",
-            PHASE_MODEL_NAME,
-        ]
-    )
-    output = tmp_path / "learned-render"
-
-    main(
-        [
-            "render",
-            "--first",
-            hashes[0],
-            "--second",
-            hashes[-1],
-            "--model",
-            MODEL_NAME,
-            "--vocoder",
-            "learned",
-            "--phase-model",
-            PHASE_MODEL_NAME,
-            "--device",
-            "cpu",
-            "--output",
-            str(output),
-        ]
-    )
-
-    assert (output / "morph_050.wav").exists()
-    assert soundfile.info(output / "morph_050.wav").frames > 0
-
-
 def test_a_restorer_is_trained_on_the_catalog_and_rendered_through(
     connection: Connection,
     _database_url: str,
@@ -398,38 +299,6 @@ def test_rendering_through_a_restorer_that_was_never_trained_says_so(
                 "--model",
                 MODEL_NAME,
                 "--restorer",
-                "absent",
-                "--device",
-                "cpu",
-                "--output",
-                str(tmp_path / "render"),
-            ]
-        )
-
-
-def test_rendering_through_a_phase_model_that_was_never_trained_says_so(
-    connection: Connection,
-    _database_url: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    hashes = _seed_catalog(connection, tmp_path)
-    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
-
-    with pytest.raises(FileNotFoundError, match="no phase model is stored"):
-        main(
-            [
-                "render",
-                "--first",
-                hashes[0],
-                "--second",
-                hashes[-1],
-                "--model",
-                MODEL_NAME,
-                "--vocoder",
-                "learned",
-                "--phase-model",
                 "absent",
                 "--device",
                 "cpu",

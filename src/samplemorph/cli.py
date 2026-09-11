@@ -11,7 +11,6 @@ from samplemorph.commands import (
     render,
     train_codec,
     train_descriptor,
-    train_phase,
     train_restorer,
 )
 
@@ -21,7 +20,6 @@ class MorphCommand(StrEnum):
     """What this pipeline does from a shell, one module per command under `samplemorph.commands`."""
 
     FIT = fit.COMMAND_NAME
-    TRAIN_PHASE = train_phase.COMMAND_NAME
     CACHE_GRIDS = cache_grids.COMMAND_NAME
     TRAIN_DESCRIPTOR = train_descriptor.COMMAND_NAME
     EMBED = embed.COMMAND_NAME
@@ -38,8 +36,6 @@ def main(argv: list[str] | None = None) -> None:
         match MorphCommand(arguments.command):
             case MorphCommand.FIT:
                 fit.run(connection, config, arguments)
-            case MorphCommand.TRAIN_PHASE:
-                train_phase.run(connection, config, arguments)
             case MorphCommand.CACHE_GRIDS:
                 cache_grids.run(connection, config, arguments)
             case MorphCommand.TRAIN_DESCRIPTOR:
@@ -58,7 +54,6 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fit a decodable sample codec, and render morphs through it.")
     commands = parser.add_subparsers(dest="command", required=True)
     fit.add_parser(commands)
-    train_phase.add_parser(commands)
     cache_grids.add_parser(commands)
     train_descriptor.add_parser(commands)
     embed.add_parser(commands)

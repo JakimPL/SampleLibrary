@@ -12,9 +12,8 @@ DEFAULT_CROP_FRAMES: Final[int] = 128
 class AnalysisTrainingSettings:
     """What a model of the pipeline's magnitudes is taught with, beside how the run that teaches it is driven.
 
-    Both families taught on derived examples, the phase model and the restorer, read a crop of
-    analysis frames through a network of some width; `channels` carries no default because each
-    family spends a different capacity.
+    A model taught on derived examples reads a crop of analysis frames through a network of some
+    width; `channels` carries no default because each family spends a different capacity.
     """
 
     channels: int

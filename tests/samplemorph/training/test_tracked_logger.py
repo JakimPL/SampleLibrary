@@ -7,9 +7,9 @@ from lightning.pytorch import Trainer
 from torch.utils.data import DataLoader
 
 from samplecore.tracking import TrackedRun
-from samplemorph.training.metrics import VALIDATION_LOSS
-from samplemorph.training.phase_dataset import PhaseBatchItem
-from samplemorph.training.phase_module import PhaseTrainingModule
+from samplemorph.training.metrics import RESTORER_VALIDATION_LOSS
+from samplemorph.training.restorer_dataset import RestorerBatchItem
+from samplemorph.training.restorer_module import RestorerTrainingModule
 from samplemorph.training.tracked_logger import TrackedRunLogger
 
 RUN_ID = "a-run"
@@ -44,7 +44,7 @@ def test_a_recording_run_is_a_tracked_run() -> None:
 
 
 def test_the_trainer_reports_what_it_measures_to_the_run(
-    phase_module: PhaseTrainingModule, crop_loader: DataLoader[PhaseBatchItem]
+    restorer_module: RestorerTrainingModule, pair_loader: DataLoader[RestorerBatchItem]
 ) -> None:
     """The run the command opened is where a pass's numbers belong, however the trainer names them."""
     run = RecordingRun()
@@ -59,9 +59,9 @@ def test_the_trainer_reports_what_it_measures_to_the_run(
         enable_progress_bar=False,
     )
 
-    trainer.fit(phase_module, train_dataloaders=crop_loader, val_dataloaders=crop_loader)
+    trainer.fit(restorer_module, train_dataloaders=pair_loader, val_dataloaders=pair_loader)
 
-    assert VALIDATION_LOSS in run.metrics
+    assert RESTORER_VALIDATION_LOSS in run.metrics
 
 
 def test_a_logger_reports_the_run_it_writes_to_as_its_version() -> None:

@@ -17,7 +17,6 @@ from samplemorph.pipeline import MorphRoute, encode_sample, listening_set_manife
 from samplemorph.registries import (
     DEFAULT_MORPHER_NAME,
     DEFAULT_VOCODER_NAME,
-    LEARNED_VOCODER_NAME,
     MORPHER_REGISTRY,
     RESTORED_VOCODER_NAME,
     VOCODER_REGISTRY,
@@ -25,7 +24,6 @@ from samplemorph.registries import (
 )
 from samplemorph.training.run_settings import DEFAULT_ACCELERATOR
 from samplemorph.vocoders import Vocoder
-from samplemorph.vocoders.learned import DEFAULT_PHASE_MODEL_NAME, load_phase_model, phase_model_path
 from samplemorph.vocoders.restored import DEFAULT_RESTORER_NAME, load_restorer, restorer_path
 
 COMMAND_NAME: Final[str] = "render"
@@ -42,7 +40,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL_NAME, help="Which stored model to render through.")
     parser.add_argument(
         "--vocoder",
-        choices=sorted({*VOCODER_REGISTRY, LEARNED_VOCODER_NAME, RESTORED_VOCODER_NAME}),
+        choices=sorted({*VOCODER_REGISTRY, RESTORED_VOCODER_NAME}),
         default=DEFAULT_VOCODER_NAME,
         help="Which vocoder makes a magnitude spectrogram audible.",
     )
@@ -53,13 +51,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Which stored restorer the restored vocoder reads through.",
     )
     parser.add_argument(
-        "--phase-model",
-        type=str,
-        default=DEFAULT_PHASE_MODEL_NAME,
-        help="Which stored phase model the learned vocoder reads.",
-    )
-    parser.add_argument(
-        "--device", type=str, default=DEFAULT_ACCELERATOR, help="Which device the learned models run on."
+        "--device", type=str, default=DEFAULT_ACCELERATOR, help="Which device the fitted models run on."
     )
     parser.add_argument(
         "--morpher",
@@ -136,7 +128,5 @@ def _vocoder_for(config: LibraryConfig, arguments: argparse.Namespace) -> Vocode
     match arguments.vocoder:
         case name if name == RESTORED_VOCODER_NAME:
             return load_restorer(restorer_path(config.library_root, name=arguments.restorer), device=device)
-        case name if name == LEARNED_VOCODER_NAME:
-            return load_phase_model(phase_model_path(config.library_root, name=arguments.phase_model), device=device)
         case name:
             return VOCODER_REGISTRY[name]()
