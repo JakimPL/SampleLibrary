@@ -9,7 +9,7 @@ from samplemorph.training.metrics import RESTORER_MONITORED_METRIC
 from samplemorph.training.restorer_dataset import RestorerBatchItem, RestorerExample, crop_item, restorer_example
 from samplemorph.training.restorer_export import RestorerWriter
 from samplemorph.training.restorer_module import RestorerTrainingModule
-from samplemorph.training.runs import RunPlacement, TrainingOutcome, fit_and_export
+from samplemorph.training.runs import RunPlacement, TrainingOutcome, fit_and_export, geometry_parameters
 from samplemorph.training.settings import AnalysisTrainingSettings
 from samplemorph.vocoders.pghi import gaussian_log_frequency
 from samplemorph.vocoders.restored import restorer_path
@@ -32,7 +32,11 @@ def run_restorer_training(
     """
     gaussian_log_frequency(corpus.canonicalizer.geometry)
     seed_everything(settings.run.random_seed, workers=True)
-    placement.tracker.log_parameters(settings.as_parameters() | {"canonicalizer": corpus.canonicalizer_name})
+    placement.tracker.log_parameters(
+        settings.as_parameters()
+        | {"canonicalizer": corpus.canonicalizer_name}
+        | geometry_parameters(corpus.canonicalizer.geometry)
+    )
 
     data: AnalysisDataModule[RestorerExample, RestorerBatchItem] = AnalysisDataModule(
         corpus,

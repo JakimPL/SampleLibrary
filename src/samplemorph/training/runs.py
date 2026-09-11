@@ -9,6 +9,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
 
 from samplecore.tracking import TrackedRun
+from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
 from samplemorph.training.descriptor_cache import GridCache
 from samplemorph.training.export import BestEpochExport
 from samplemorph.training.run_settings import GRADIENT_CLIP, RunSettings
@@ -113,5 +114,32 @@ def begin_cached_run(
     """
     seed_everything(settings.random_seed, workers=True)
     placement.tracker.log_parameters(
-        parameters | {"cache": cache.directory.name, "canonicalizer": cache.description.canonicalizer}
+        parameters
+        | {"cache": cache.directory.name, "canonicalizer": cache.description.canonicalizer}
+        | geometry_parameters(cache.description.geometry)
     )
+
+
+def geometry_parameters(geometry: Geometry) -> dict[str, str]:
+    """The analysis a run was made on, in the form a tracker records.
+
+    Two runs on two grids are then told apart in the record by the grid itself: its axis, its
+    anchor, its window and hop, and how finely it reads frequency.
+    """
+    shared = {
+        "geometry": geometry.kind,
+        "anchor": geometry.anchor.value,
+        "fft_length": str(geometry.fft_length),
+        "hop_length": str(geometry.hop_length),
+        "band_count": str(geometry.band_count),
+    }
+    match geometry:
+        case LogFrequencyGeometry():
+            return shared | {
+                "analysis_window": geometry.analysis_window.value,
+                "bins_per_octave": str(geometry.bins_per_octave),
+            }
+        case ConstantQGeometry():
+            return shared | {"bins_per_octave": str(geometry.bins_per_octave)}
+        case MelGeometry():
+            return shared
