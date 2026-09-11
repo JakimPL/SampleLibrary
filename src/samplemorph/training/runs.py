@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -12,6 +13,7 @@ from samplecore.tracking import TrackedRun
 from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
 from samplemorph.training.descriptor_cache import GridCache
 from samplemorph.training.export import BestEpochExport
+from samplemorph.training.progress import ProgressLines
 from samplemorph.training.run_settings import GRADIENT_CLIP, RunSettings
 from samplemorph.training.tracked_logger import TrackedRunLogger
 
@@ -83,6 +85,7 @@ def fit_and_export(
     Two files come out, for two different purposes. The trainer's own checkpoint carries the
     optimizer, the schedule and the epoch reached, so a run cut short continues from where it
     stopped. The export carries the network alone, which is what a reader of the model loads.
+    Progress reaches the log as lines throughout, and the progress bar draws on a terminal.
     """
     trainer = Trainer(
         max_epochs=settings.epochs,
@@ -91,7 +94,8 @@ def fit_and_export(
         gradient_clip_val=GRADIENT_CLIP,
         default_root_dir=placement.directory,
         logger=[CSVLogger(save_dir=placement.directory, name=""), TrackedRunLogger(placement.tracker)],
-        callbacks=[export, last_checkpoint(placement.directory, monitored=export.monitored)],
+        callbacks=[export, last_checkpoint(placement.directory, monitored=export.monitored), ProgressLines()],
+        enable_progress_bar=sys.stdout.isatty(),
     )
     started_from = placement.resume_path
     trainer.fit(
