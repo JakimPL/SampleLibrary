@@ -126,10 +126,10 @@ sanity-checked here, with its three readings kept beside the verdict so a disagr
 - **The old flutter screen is retained** for continuity; its frame-rate envelope at the typical
   8363 Hz heard rate has a Nyquist near 16 Hz, so it is a fluctuation-lobe screen by arithmetic.
 
-The study itself needs listening: the user rates the five reconstructions of each of the twelve
-probes for gargle severity and for "quieter", in the same sitting as the ladder verdict, and every
-reading in `metrics.csv` is rank-correlated against those labels, overall and per sound type. That
-table completes this document.
+The study itself needs listening: the user rates the reconstructions of each probe for gargle
+severity and for "quieter", and every reading is rank-correlated against those labels, overall and
+per sound type. The ear judged the candidate set rather than the ladder; that verdict and the
+correlation table are the section "The ear's verdict on the candidate set" below.
 
 ## The night of 2026-09-11: the round trip taken apart, and a candidate fix rendered
 
@@ -276,6 +276,89 @@ reconstruction is the seventh file in every candidate folder (`7_gauss2048_288_r
 tomorrow's sitting hears it beside candidate 4. It lands in the repository as a vocoder with a
 training command of its own only if the ear agrees with the numbers.
 
+## The ear's verdict on the candidate set (2026-09-11)
+
+The user listened to the `loudness-matched/` folder and judged it the fair stage; the peak-matched
+folder was set aside as unbalanced, and one probe (`tonal_f39948450418`) as too close to call. The
+words are kept verbatim in `listening/candidates-2026-09-11/verdicts.md`. For the study, `labels.csv`
+codes every file of the eleven judged probes 0–3 — 0 in the indistinguishable group or praised, 1 a
+subtle remark that still passes, 2 a named artifact or a lost feature, 3 a plain failure — plus
+"louder" or "quieter" where the ear said so. The coding is ours, from the prose, and two readings of
+it are inferences: on the riser `c110ba83c95f`, "6–7 pass the quality bar" is taken to place files
+2–4 below it; on `1884be2a55e2`, the files the ear did not mention (3–5) are coded 0.
+
+### Each variant under the house rule
+
+Two bad examples dismiss a method; four good ones promise it.
+
+| file | geometry | fails (2–3) | subtle (1) | reading |
+|---|---|---|---|---|
+| 2 production Griffin-Lim | Hann 2048/256, 144 | 6 of 11 | 0 | dismissed: "not that bad after all, but it does not pass the quality bar" |
+| 3 Gaussian PGHI | 2048/128, 144 | 2 | 2 | dismissed |
+| 4 Gaussian PGHI | 2048/128, 288 | 2 | 1 | dismissed on its own: the slap-bass transient (`72bc`) and the riser (`c110`) |
+| 5 Gaussian PGHI | 1024/64, 288 | 2 | 2 | dismissed; the riser's strongest flanger |
+| 6 clean PGHI, no grid | 1024/64 | 1 | 2 | the ceiling holds; PGHI on its own can chorus (`1884`) |
+| **7 restorer + PGHI** | **2048/128, 288** | **0** | **3** | **the only variant with no bad example** |
+
+The restorer is the one grid-based variant that keeps the slap-bass transient and passes the riser —
+the two probes where candidate 4 fails — and its three subtle remarks are "loses a little but still
+very faithful" (`a5f4`), "a little flanger but good" (`1884`) and "noticeably quieter" (`1ce0`).
+Candidate 4's two failures are exactly what the restorer was trained to put back, and the ear's
+ordering matches the numbers' (held-out 4.97 → 4.40 dB, percussive modulation distance 0.220 → 0.138).
+
+### Where the readings agree with the ear, and where they do not
+
+Within-probe pairwise concordance — over every pair of files of one probe the ear ranked differently,
+the share the reading orders the same way — and Spearman ρ against severity, per sound-type tag:
+
+| reading | all pairs | other | percussive | tonal | ρ other | ρ percussive | ρ tonal |
+|---|---|---|---|---|---|---|---|
+| \|fluctuation excess\| | 44/66 | 7/22 | **16/17** | **21/27** | −0.07 | **+0.74** | **+0.57** |
+| modulation distance | 42/66 | 7/22 | 14/17 | 21/27 | −0.13 | +0.73 | +0.23 |
+| \|roughness excess\| | 40/66 | 8/22 | 14/17 | 18/27 | −0.21 | +0.65 | +0.39 |
+| held-out dB | 41/66 | 8/22 | 12/17 | 21/27 | +0.07 | +0.34 | +0.46 |
+| the old flutter screen | 37/66 | 7/22 | 11/17 | 19/27 | +0.05 | +0.18 | +0.47 |
+| lower peak at matched loudness | 41/66 | 10/22 | **17/17** | 14/27 | −0.11 | +0.30 | +0.01 |
+
+- **On percussive and tonal material the fluctuation reading tracks the ear.** The slap-bass
+  transient loss reads as erased fluctuation and roughness (−0.02 to −0.03 on files 2–5, within
+  0.008 of zero on 6 and 7); the riser's flanger reads as erased fluctuation in the ear's order (file
+  5 at −0.039, files 3–4 at −0.015, file 7 at +0.005). The plan's adoption bar (|ρ| ≥ 0.6, right sign)
+  is met on percussive material and approached on tonal.
+- **A lower peak at matched loudness is the best percussive reading of all** (17 of 17 pairs). At
+  equal loudness, a lower crest factor is a smeared transient. That is the crest-factor reading in
+  its natural form, and it costs nothing.
+- **On the "other" tag every reading is below chance** (7–10 of 22 pairs). Two causes are visible.
+  A chorus (file 6 on `1884`) is invisible to the envelope readings — a spectral sweep near 1 Hz sits
+  under the fluctuation lobe's lower edge — while the same probe's files 3–5 read as the most erased
+  modulation in the whole set (fluctuation −0.04, the old screen −0.15) and the ear passed over them.
+  On the kick loop `a5f4` the ear prized Griffin-Lim's transient prominence where every reading
+  charges it for the gargle it adds (the old screen +0.126). Erased modulation is heard on a riser and
+  a slap bass and forgiven on a loop; the readings cannot yet tell which.
+- **Level.** At matched BS.1770 loudness the ear still called five files louder or quieter — files 3,
+  6 and 7 on three probes, each a file with more fine structure than candidate 4. The meter reads all
+  five at 0.00 LU and no headroom clamp touched them (the clamp held one file in the set, `1884`'s
+  file 7, 1.76 LU under; the ear called that one good). On the kick `1ce0` every reconstruction at
+  matched *peak* reads 7–10 LU under the original: a saturated, flat-topped original against a
+  reconstruction whose onset overshoot sets the peak. That is what "quieter" was in the first ladder,
+  and why the loudness-matched stage is the fair one.
+
+### What the verdict decides
+
+- **Production Griffin-Lim is dismissed by ear** (six of eleven probes), which closes the ladder
+  verdict it stood in for. The path that passes — a Gaussian analysis, the least-squares reading back,
+  the restorer, PGHI — needs no trained phase model, so the modulation-domain loss on the phase model
+  (the plan's Phase 7) is moot.
+- **The representation fix alone is not enough.** Candidate 4 fails two probes on lost fine
+  structure; the restorer recovers both with no bad example of its own. Adopting the geometry means
+  adopting the restorer with it.
+- **Readings adopted:** the loudness delta (already); |fluctuation excess| as the screen on tonal and
+  percussive material; the peak at matched loudness for percussive transients; the unsigned
+  modulation distance as the ordering instrument on percussive material. No reading is trusted on the
+  "other" tag, where a chorus goes unseen.
+- **Comparison moves to matched loudness.** Rendering already offers it; `held_out_spectrum`'s peak
+  normalization is the Phase 8 row this closes, since it charged a saturated kick 7 LU of overshoot.
+
 ## How to re-derive any of this
 
 `runs/night-2026-09-10/scripts/ladder_measure.py` (beside the library, outside the repository)
@@ -285,4 +368,8 @@ are `samplemorph.measurement.loudness`, `samplemorph.measurement.modulation_spec
 `sound_type_calibration.py` in the same folder, a read-only draw of seed 11. The night's sweep is
 `runs/night-2026-09-11/scripts/roundtrip_sweep.py` (`roundtrip_sweep.csv`), the ceiling
 `bigvgan_ceiling.py` (`bigvgan_ceiling.csv`, the model cloned beside it), and the candidate set
-`candidates_listen.py`.
+`candidates_listen.py` with the restorer's file added by `candidates_restored.py`. The restorer is
+`restorer_train.py` (checkpoint `restorer_final.pt`, log `restorer_train.log`) and its held-out
+readings `restorer_evaluate.py`. The verdict study is `candidates_measure.py`, which writes
+`listening/candidates-2026-09-11/metrics.csv` for both matchings, and `calibration_study.py`, which
+joins it with `labels.csv` and prints every table of the verdict section.
