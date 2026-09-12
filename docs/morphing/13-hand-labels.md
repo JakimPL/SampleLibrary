@@ -207,4 +207,41 @@ are the same thing.
 
 ### At the playback rate
 
-The heard-rate scoring follows its run and is recorded here against the same table.
+`make cloud-teacher HEARD=1` described the catalog again with every sample resampled to the rate
+it is played at (experiment 10, 55 minutes), and `make cloud-suggest EXPERIMENT=10` scored it as
+experiment 11. Against the same 216 hand labels the first pick agrees exactly on 87 (40.3%) and
+by category on 141 (65.3%): thirteen points more than the nominal reading on both counts. The
+same table, with the nominal reading beside it:
+
+| Hand tag | Labeled | By category, nominal | By category, playback rate | Where the rest went |
+|---|---|---|---|---|
+| `BRASS` | 5 | 60% | **100%** | |
+| `BASS DRUM` | 21 | 33% | **95%** | |
+| `BASS` | 12 | 75% | **92%** | |
+| `HI-HAT` | 27 | 78% | **89%** | `PERCUSSION: SHAKER` 2 |
+| `SNARE` | 18 | 89% | 89% | |
+| `LO-FI` | 34 | 56% | **88%** | |
+| `REVERSE` | 7 | 57% | **86%** | |
+| `CYMBAL` | 26 | 62% | **85%** | `HI-HAT: OPEN` 3 |
+| `PIANO` | 12 | 67% | **83%** | |
+| `FX` | 5 | 80% | 80% | |
+| `CHIPTUNE` | 10 | 30% | **70%** | |
+| `SYNTH` | 47 | 66% | 68% | `BASS: SYNTH` 5, `BRASS` 3 |
+| `CHORD` | 11 | 64% | 64% | `SYNTH: PAD` 3 |
+| `PAD` | 6 | 67% | 50% | |
+| `REVERB` | 9 | 33% | 44% | |
+| `PLUCK` | 10 | 30% | 40% | `BASS: SYNTH` 5 |
+| `STRINGS` | 31 | 23% | 19% | `SYNTH: LEAD` 7, `SYNTH: PAD` 6, `BRASS` 5 |
+
+Heard at its rate, a bass drum is a bass drum for 20 of 21, and the treatments follow the
+instruments they sit on. Over the whole catalog `FX` falls from 23.7% of first picks to 12.1%,
+`BASS DRUM` and `BASS: ELECTRIC` double, and the first picks spread over the vocabulary the way a
+tracker library is made up. What stays wrong is `STRINGS`, at 0.2% of the catalog and one in five
+of the labeled ones: what a tracker calls strings is a synthesized ensemble, which the model hears
+as a synth lead, a synth pad or a brass section, and the prompt "strings" asks it for an
+orchestra. A wording closer to that material, `STRINGS: SYNTH` read as "synth strings", is the
+first thing to try, and `make cloud-suggest EXPERIMENT=10 VOCABULARY=<file>` scores any wording in
+minutes. `PLUCK` is the other open case: five of ten are named a synth bass, which for a low pluck
+is a reading rather than a mistake.
+
+Experiment 11 is what the application shows, on whichever cloud is promoted.
