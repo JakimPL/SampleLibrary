@@ -28,6 +28,7 @@ from samplecore.pitch import (
 )
 from samplecore.spectral_distance import SpectralVectors, euclidean_distance, nearest_neighbors
 from samplecore.storage import audio_store
+from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
@@ -91,17 +92,29 @@ class SimilarSample(BaseModel):
     playback_rate_hz: Rate | None
 
 
+class SuggestedLabel(BaseModel):
+    """One tag a listening model suggests for a sample, in the hand-label grammar, and how sure it was."""
+
+    model_config = FROZEN
+
+    label: str
+    score: float
+
+
 class SampleDetail(DescribedSample):
     """A sample together with every module occurrence that references it, and the rates it is heard at.
 
     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
+    ``suggested_labels`` are what the newest scoring of the listening model hears the sample as,
+    closest first, for a person to accept into the hand label or pass over.
     """
 
     occurrences: tuple[SampleOccurrenceDetail, ...]
     duration_seconds: float
     playback_rates: tuple[SamplePlaybackRate, ...]
     equivalence_member_count: Count
+    suggested_labels: tuple[SuggestedLabel, ...]
 
 
 def get_selection(
@@ -220,6 +233,19 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
         playback_rates=playback_rates_of(tally),
         equivalence_member_count=len(equivalence_class_members(connection, sample_hash)),
+        suggested_labels=_suggested_labels(connection, sample_hash),
+    )
+
+
+def _suggested_labels(connection: Connection, sample_hash: str) -> tuple[SuggestedLabel, ...]:
+    """The newest scoring's suggestions for one sample, closest first; none for a sample it did not reach."""
+    repository = PostgresSampleLabelSuggestionRepository(connection)
+    latest = repository.latest_experiment_id()
+    if latest is None:
+        return ()
+    return tuple(
+        SuggestedLabel(label=suggestion.label, score=suggestion.score)
+        for suggestion in repository.get_many(latest, [sample_hash]).get(sample_hash, ())
     )
 
 

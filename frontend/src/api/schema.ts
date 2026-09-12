@@ -286,6 +286,54 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/cloud/suggestions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Cloud Suggestions
+         * @description Every sample's suggested tags from the newest scoring, for coloring the cloud by what a model hears.
+         *
+         *     These travel apart from the points the way the hand labels do: a scoring changes only when a
+         *     pass writes a new one, and a viewer joins them to the points by hash. An empty answer says no
+         *     scoring has been written.
+         */
+        readonly get: operations["get_cloud_suggestions_api_cloud_suggestions_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/cloud/suggestion-tags": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Cloud Suggestion Tags
+         * @description Every tag the newest scoring suggests first for some sample, with how many and a lasting rank.
+         *
+         *     The rank is the tag's place in the vocabulary the scoring ranked, recorded with the scoring, so
+         *     a tag keeps its color across the scorings that share a vocabulary; a tag the vocabulary leaves
+         *     unnamed ranks after the vocabulary, by name.
+         */
+        readonly get: operations["get_cloud_suggestion_tags_api_cloud_suggestion_tags_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/cloud/modules": {
         readonly parameters: {
             readonly query?: never;
@@ -481,6 +529,22 @@ export interface components {
             readonly sample_hash: string;
             /** Paths */
             readonly paths: readonly (readonly string[])[];
+        };
+        /**
+         * CloudSuggestion
+         * @description What a listening model hears one sample as: its suggested tag paths, closest first, with their scores.
+         *
+         *     The first path is the one a viewer paints the point with, the way the first written tag of a
+         *     hand label is; the scores travel beside the paths so a viewer inspecting a point sees how sure
+         *     the model was of each.
+         */
+        readonly CloudSuggestion: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            /** Paths */
+            readonly paths: readonly (readonly string[])[];
+            /** Scores */
+            readonly scores: readonly number[];
         };
         /** HTTPValidationError */
         readonly HTTPValidationError: {
@@ -843,6 +907,8 @@ export interface components {
          *
          *     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
          *     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
+         *     ``suggested_labels`` are what the newest scoring of the listening model hears the sample as,
+         *     closest first, for a person to accept into the hand label or pass over.
          */
         readonly SampleDetail: {
             /** Hash */
@@ -872,6 +938,8 @@ export interface components {
             readonly playback_rates: readonly components["schemas"]["SamplePlaybackRate"][];
             /** Equivalence Member Count */
             readonly equivalence_member_count: number;
+            /** Suggested Labels */
+            readonly suggested_labels: readonly components["schemas"]["SuggestedLabel"][];
         };
         /**
          * SampleDistance
@@ -1032,6 +1100,16 @@ export interface components {
             readonly distance: number;
             /** Playback Rate Hz */
             readonly playback_rate_hz: number | null;
+        };
+        /**
+         * SuggestedLabel
+         * @description One tag a listening model suggests for a sample, in the hand-label grammar, and how sure it was.
+         */
+        readonly SuggestedLabel: {
+            /** Label */
+            readonly label: string;
+            /** Score */
+            readonly score: number;
         };
         /**
          * TagSummary
@@ -1502,6 +1580,46 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": readonly components["schemas"]["CloudLabel"][];
+                };
+            };
+        };
+    };
+    readonly get_cloud_suggestions_api_cloud_suggestions_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["CloudSuggestion"][];
+                };
+            };
+        };
+    };
+    readonly get_cloud_suggestion_tags_api_cloud_suggestion_tags_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["TagSummary"][];
                 };
             };
         };

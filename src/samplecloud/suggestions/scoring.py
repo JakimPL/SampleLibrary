@@ -11,7 +11,7 @@ from sqlalchemy import Connection
 
 from samplecloud.suggestions.vocabulary import PROMPT_TEMPLATE
 from samplecore.labeling.labels import SampleLabel, written_paths
-from samplecore.models.experiment import ZERO_SHOT_BACKEND_NAME
+from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
 from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
@@ -23,7 +23,6 @@ INSERT_CHUNK_SIZE: Final[int] = 5_000
 SOURCE_EXPERIMENT_PARAMETER: Final[str] = "source_experiment_id"
 CHECKPOINT_PARAMETER: Final[str] = "checkpoint"
 TEMPLATE_PARAMETER: Final[str] = "template"
-VOCABULARY_PARAMETER: Final[str] = "vocabulary"
 SUGGESTION_COUNT_PARAMETER: Final[str] = "top"
 
 

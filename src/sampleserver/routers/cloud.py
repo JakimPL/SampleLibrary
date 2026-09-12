@@ -1,22 +1,28 @@
 from __future__ import annotations
 
+from collections import Counter, defaultdict
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
 from samplecore.categorization import classify_sample_category
-from samplecore.labeling.labels import written_paths
+from samplecore.labeling.labels import LabelPath, written_paths
 from samplecore.models.annotation import SampleAnnotation
 from samplecore.models.base import FROZEN
 from samplecore.models.category import SampleCategory
 from samplecore.models.cloud import ModuleCloudCoordinate
+from samplecore.models.experiment import VOCABULARY_PARAMETER
+from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.models.scalars import SampleHash
 from samplecore.pitch import choose_playback_rate
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
     PostgresModuleCloudCoordinateRepository,
 )
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.playback_rate import (
     PostgresSamplePlaybackRateRepository,
 )
@@ -25,6 +31,7 @@ from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
 from sampleserver.dependencies import get_connection
+from sampleserver.routers.curation import TagSummary
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
 
@@ -118,6 +125,65 @@ def get_cloud_labels(connection: Connection = Depends(get_connection)) -> tuple[
     )
 
 
+class CloudSuggestion(BaseModel):
+    """What a listening model hears one sample as: its suggested tag paths, closest first, with their scores.
+
+    The first path is the one a viewer paints the point with, the way the first written tag of a
+    hand label is; the scores travel beside the paths so a viewer inspecting a point sees how sure
+    the model was of each.
+    """
+
+    model_config = FROZEN
+
+    sample_hash: SampleHash
+    paths: tuple[tuple[str, ...], ...]
+    scores: tuple[float, ...]
+
+
+@router.get("/suggestions")
+def get_cloud_suggestions(connection: Connection = Depends(get_connection)) -> tuple[CloudSuggestion, ...]:
+    """Every sample's suggested tags from the newest scoring, for coloring the cloud by what a model hears.
+
+    These travel apart from the points the way the hand labels do: a scoring changes only when a
+    pass writes a new one, and a viewer joins them to the points by hash. An empty answer says no
+    scoring has been written.
+    """
+    grouped: dict[str, list[SampleLabelSuggestion]] = defaultdict(list)
+    for suggestion in _latest_suggestions(connection):
+        grouped[suggestion.sample_hash].append(suggestion)
+    return tuple(
+        CloudSuggestion(
+            sample_hash=sample_hash,
+            paths=tuple(_path_of(suggestion) for suggestion in suggestions),
+            scores=tuple(suggestion.score for suggestion in suggestions),
+        )
+        for sample_hash, suggestions in grouped.items()
+    )
+
+
+@router.get("/suggestion-tags")
+def get_cloud_suggestion_tags(connection: Connection = Depends(get_connection)) -> tuple[TagSummary, ...]:
+    """Every tag the newest scoring suggests first for some sample, with how many and a lasting rank.
+
+    The rank is the tag's place in the vocabulary the scoring ranked, recorded with the scoring, so
+    a tag keeps its color across the scorings that share a vocabulary; a tag the vocabulary leaves
+    unnamed ranks after the vocabulary, by name.
+    """
+    repository = PostgresSampleLabelSuggestionRepository(connection)
+    latest = repository.latest_experiment_id()
+    if latest is None:
+        return ()
+
+    first_picks = Counter(
+        _path_of(suggestion) for suggestion in repository.list_for_experiment(latest) if suggestion.rank == 0
+    )
+    ranks = _vocabulary_ranks(connection, latest, first_picks)
+    return tuple(
+        TagSummary(path=path, sample_count=count, rank=ranks[path])
+        for path, count in sorted(first_picks.items(), key=lambda item: ranks[item[0]])
+    )
+
+
 @router.get("/modules")
 def get_module_cloud(connection: Connection = Depends(get_connection)) -> tuple[ModuleCloudCoordinate, ...]:
     """Every module's placeholder position in the library's 2D embedding space.
@@ -131,3 +197,28 @@ def get_module_cloud(connection: Connection = Depends(get_connection)) -> tuple[
 def _label_of(annotation: SampleAnnotation | None) -> str | None:
     """The wording a person gave this sample, where they gave one."""
     return annotation.label if annotation is not None else None
+
+
+def _latest_suggestions(connection: Connection) -> tuple[SampleLabelSuggestion, ...]:
+    repository = PostgresSampleLabelSuggestionRepository(connection)
+    latest = repository.latest_experiment_id()
+    return repository.list_for_experiment(latest) if latest is not None else ()
+
+
+def _path_of(suggestion: SampleLabelSuggestion) -> LabelPath:
+    """A suggestion's label as one tag path, the way a written label's first tag is read."""
+    path, *_ = written_paths(suggestion.label)
+    return path
+
+
+def _vocabulary_ranks(connection: Connection, experiment_id: int, picked: Counter[LabelPath]) -> dict[LabelPath, int]:
+    """Each picked tag's rank: its place in the scoring's vocabulary, the rest after it by name."""
+    experiment = PostgresExperimentRepository(connection).get(experiment_id)
+    recorded = experiment.params.get(VOCABULARY_PARAMETER, []) if experiment is not None else []
+    ranks: dict[LabelPath, int] = {}
+    for label in recorded if isinstance(recorded, list) else []:
+        path, *_ = written_paths(str(label))
+        ranks.setdefault(path, len(ranks))
+    for path in sorted(picked):
+        ranks.setdefault(path, len(ranks))
+    return ranks

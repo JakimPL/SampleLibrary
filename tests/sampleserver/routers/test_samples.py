@@ -29,6 +29,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
+from tests.sampleserver.routers.test_cloud import seed_scoring
 
 SAMPLE_HASH_A = "a" * 64
 SAMPLE_HASH_B = "b" * 64
@@ -301,6 +302,20 @@ def test_get_sample_returns_detail_with_occurrences_and_module_context(
         "title": "a song",
         "tracker": "xm",
     }
+
+
+def test_get_sample_carries_the_newest_scoring_s_suggestions_closest_first(
+    client: TestClient, connection: Connection
+) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    _insert_sample(connection, SAMPLE_HASH_B)
+    seed_scoring(connection, {sample.hash: (("BASS DRUM", 0.8), ("SNARE", 0.3))})
+
+    body = client.get(f"/samples/{sample.hash}").json()
+    other = client.get(f"/samples/{SAMPLE_HASH_B}").json()
+
+    assert body["suggested_labels"] == [{"label": "BASS DRUM", "score": 0.8}, {"label": "SNARE", "score": 0.3}]
+    assert other["suggested_labels"] == []
 
 
 def test_get_sample_falls_back_to_the_dominant_occurrence_rate(client: TestClient, connection: Connection) -> None:

@@ -10,6 +10,8 @@ from trackmod.trackers.xm.tuning import Tuning
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
+from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
+from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
@@ -18,6 +20,8 @@ from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
     PostgresModuleCloudCoordinateRepository,
 )
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.playback_rate import (
     PostgresSamplePlaybackRateRepository,
@@ -177,6 +181,92 @@ def test_get_cloud_labels_carries_each_labeled_sample_s_tags_in_the_order_writte
 
 def test_get_cloud_labels_on_an_unlabeled_catalog_returns_nothing(client: TestClient) -> None:
     assert client.get("/cloud/labels").json() == []
+
+
+VOCABULARY = ("SNARE", "BASS DRUM", "HI-HAT: CLOSED")
+
+
+def seed_scoring(connection: Connection, picks: dict[str, tuple[tuple[str, float], ...]]) -> int:
+    """A scoring over the catalog: each sample's suggested labels with scores, closest first, under one experiment."""
+    experiment_id = PostgresExperimentRepository(connection).create(
+        backend_name=ZERO_SHOT_BACKEND_NAME, label=None, params={VOCABULARY_PARAMETER: list(VOCABULARY)}
+    )
+    PostgresSampleLabelSuggestionRepository(connection).insert_many(
+        [
+            SampleLabelSuggestion(
+                experiment_id=experiment_id,
+                sample_hash=sample_hash,
+                rank=rank,
+                label=label,
+                score=score,
+                computed_at=datetime.now(UTC),
+            )
+            for sample_hash, suggestions in picks.items()
+            for rank, (label, score) in enumerate(suggestions)
+        ]
+    )
+    return experiment_id
+
+
+def _store_samples(connection: Connection, *hashes: str) -> None:
+    for sample_hash in hashes:
+        PostgresSampleRepository(connection).upsert(
+            Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
+        )
+
+
+def test_get_cloud_suggestions_carries_each_sample_s_paths_and_scores_closest_first(
+    client: TestClient, connection: Connection
+) -> None:
+    _store_samples(connection, SAMPLE_HASH)
+    seed_scoring(connection, {SAMPLE_HASH: (("HI-HAT: CLOSED", 0.7), ("SNARE", 0.4))})
+
+    response = client.get("/cloud/suggestions")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"sample_hash": SAMPLE_HASH, "paths": [["HI-HAT", "CLOSED"], ["SNARE"]], "scores": [0.7, 0.4]}
+    ]
+
+
+def test_get_cloud_suggestions_reads_the_newest_scoring_alone(client: TestClient, connection: Connection) -> None:
+    _store_samples(connection, SAMPLE_HASH)
+    seed_scoring(connection, {SAMPLE_HASH: (("SNARE", 0.5),)})
+    seed_scoring(connection, {SAMPLE_HASH: (("BASS DRUM", 0.6),)})
+
+    body = client.get("/cloud/suggestions").json()
+
+    assert [entry["paths"] for entry in body] == [[["BASS DRUM"]]]
+
+
+def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_first_picks(
+    client: TestClient, connection: Connection
+) -> None:
+    """The hat is picked first twice and the snare once; a tag outside the vocabulary ranks after it."""
+    _store_samples(connection, SAMPLE_HASH, "b" * 64, "d" * 64, "e" * 64)
+    seed_scoring(
+        connection,
+        {
+            SAMPLE_HASH: (("HI-HAT: CLOSED", 0.7), ("SNARE", 0.4)),
+            "b" * 64: (("HI-HAT: CLOSED", 0.6),),
+            "d" * 64: (("SNARE", 0.9),),
+            "e" * 64: (("PIANO", 0.9),),
+        },
+    )
+
+    response = client.get("/cloud/suggestion-tags")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"path": ["SNARE"], "sample_count": 1, "rank": 0},
+        {"path": ["HI-HAT", "CLOSED"], "sample_count": 2, "rank": 2},
+        {"path": ["PIANO"], "sample_count": 1, "rank": 3},
+    ]
+
+
+def test_cloud_suggestions_on_a_catalog_without_a_scoring_return_nothing(client: TestClient) -> None:
+    assert client.get("/cloud/suggestions").json() == []
+    assert client.get("/cloud/suggestion-tags").json() == []
 
 
 def _annotation(sample_hash: str, *, label: str | None, rating: int | None) -> SampleAnnotation:

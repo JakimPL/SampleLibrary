@@ -10,10 +10,12 @@ from samplecore.models.scalars import Index, SampleHash
 
 # An experiment extracted by a descriptor this project trained names the stored model it read,
 # so the extractor that produced its vectors can be rebuilt from the row alone. A scoring of
-# label suggestions is an experiment too, holding suggestions in place of vectors.
+# label suggestions is an experiment too, holding suggestions in place of vectors, and it names
+# the vocabulary it ranked in order, which is what gives each suggested tag a lasting rank.
 LEARNED_BACKEND_NAME: Final[str] = "learned"
 ZERO_SHOT_BACKEND_NAME: Final[str] = "zero_shot"
 MODEL_PARAMETER: Final[str] = "model"
+VOCABULARY_PARAMETER: Final[str] = "vocabulary"
 
 
 class Experiment(BaseModel):
