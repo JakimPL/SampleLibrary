@@ -490,12 +490,15 @@ apart from the shell's focus and comparison slots: comparing two samples and mor
 are different acts, and clearing one leaves the other. The cloud fills the pair with the gesture
 it already had, a click on one point and a Shift-click on another (`CloudView` takes the Shift
 press and click in the capture phase, so the library neither selects nor plays the second point
-and the highlight that anchors the pair stays), then draws a dashed line between the two with a
-marker that is the weight (`frontend/src/cloud/MorphLink.tsx`), pinned through pan and zoom the
-way the ping is. The Morph panel mirrors the same weight as a slider, names both ends, and plays
-the render on release through the one preview element every sample plays through
-(`useAudioPreview`, whose sources carry a URL and a key, so a morph is keyed by its own render's
-address). The render arrives at the nominal header rate every stored object carries, and the
+and the highlight that anchors the pair stays). While Shift is held, a band runs from that anchor
+to the cursor and snaps to the point under it (`frontend/src/cloud/MorphBand.tsx`), so the pair a
+click would join is visible before it lands; the click then draws a dashed line between the two
+with a marker that is the weight (`frontend/src/cloud/MorphLink.tsx`), pinned through pan and zoom
+the way the ping is. The Morph panel mirrors the same weight as a slider, names both ends with the
+link every listing row carries (a click highlights the end, a double-click opens it in the Sample
+Detail), and plays the render on release through the one preview element every sample plays
+through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is keyed by its own
+render's address). The render arrives at the nominal header rate every stored object carries, and the
 frontend plays it at the geometric interpolation of the two ends' playback rates
 (`frontend/src/morph/morphRate.ts`, mirroring `samplemorph.rendering.rate_between`), which every
 cloud point and detail already states. Weights lie on a grid of sixteenths on both sides, so a

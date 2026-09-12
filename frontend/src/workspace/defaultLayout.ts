@@ -1,5 +1,6 @@
 import type { DockviewApi } from "dockview-react";
 
+import { addRegisteredPanel } from "./addPanel";
 import { PANEL_REGISTRY } from "./panelRegistry";
 
 /**
@@ -10,11 +11,6 @@ import { PANEL_REGISTRY } from "./panelRegistry";
  */
 export function buildDefaultLayout(api: DockviewApi): void {
     for (const definition of Object.values(PANEL_REGISTRY)) {
-        api.addPanel({
-            id: definition.id,
-            component: definition.id,
-            title: definition.title,
-            ...(definition.placement !== null ? { position: definition.placement } : {}),
-        });
+        addRegisteredPanel(api, definition);
     }
 }

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as MorphApi from "../../../src/api/morph";
@@ -50,6 +51,17 @@ const SERVICE = {
     weight_steps: 16,
 };
 
+function renderPanel(): ReturnType<typeof render> {
+    return render(
+        <MemoryRouter initialEntries={["/"]}>
+            <Routes>
+                <Route path="/" element={<MorphPanel />} />
+                <Route path="/samples/:sampleHash" element={<p>sample route</p>} />
+            </Routes>
+        </MemoryRouter>,
+    );
+}
+
 function serveSamples(): void {
     getSample.mockImplementation((hash: string) =>
         Promise.resolve(
@@ -63,7 +75,7 @@ function serveSamples(): void {
 describe("MorphPanel", () => {
     it("asks for a pair when none is joined, and offers the selection once it holds two samples", () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
-        render(<MorphPanel />);
+        renderPanel();
 
         expect(screen.getByText(/No morph pair yet/)).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Use selection" })).toBeDisabled();
@@ -82,7 +94,7 @@ describe("MorphPanel", () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
         useMorphStore.getState().setPair(FIRST, SECOND);
-        render(<MorphPanel />);
+        renderPanel();
 
         expect(await screen.findByText("kick_808")).toBeInTheDocument();
         expect(screen.getByText(UNNAMED_SAMPLE_LABEL)).toBeInTheDocument();
@@ -94,7 +106,7 @@ describe("MorphPanel", () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
         useMorphStore.getState().setPair(FIRST, SECOND);
-        render(<MorphPanel />);
+        renderPanel();
         await screen.findByText("kick_808");
         await waitFor(() => {
             expect(screen.getByRole("button", { name: "▶ Play morph" })).toBeEnabled();
@@ -111,12 +123,37 @@ describe("MorphPanel", () => {
         });
     });
 
+    it("highlights an end on a click of its hash, staying on the panel", async () => {
+        getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
+        serveSamples();
+        useMorphStore.getState().setPair(FIRST, SECOND);
+        renderPanel();
+        await screen.findByText("kick_808");
+
+        fireEvent.click(screen.getByText(FIRST.slice(0, 8)));
+
+        expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: FIRST });
+        expect(screen.getByText("kick_808")).toBeInTheDocument();
+    });
+
+    it("opens an end in the sample detail on a double-click of its hash", async () => {
+        getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
+        serveSamples();
+        useMorphStore.getState().setPair(FIRST, SECOND);
+        renderPanel();
+        await screen.findByText("kick_808");
+
+        fireEvent.dblClick(screen.getByText(SECOND.slice(0, 8)));
+
+        expect(await screen.findByText("sample route")).toBeInTheDocument();
+    });
+
     it("swaps the ends with the weight mirrored, and clears the pair", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
         useMorphStore.getState().setPair(FIRST, SECOND);
         useMorphStore.getState().setWeight(0.25);
-        render(<MorphPanel />);
+        renderPanel();
         await screen.findByText("kick_808");
 
         fireEvent.click(screen.getByRole("button", { name: "Swap the two ends" }));
@@ -131,7 +168,7 @@ describe("MorphPanel", () => {
         getMorphStatus.mockResolvedValue({ available: false, service: null });
         serveSamples();
         useMorphStore.getState().setPair(FIRST, SECOND);
-        render(<MorphPanel />);
+        renderPanel();
 
         expect(await screen.findByRole("status")).toHaveTextContent("Morphing is offline");
         expect(screen.getByRole("button", { name: "▶ Play morph" })).toBeDisabled();

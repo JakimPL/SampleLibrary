@@ -84,6 +84,7 @@ interface RenderOverrides {
     readonly onCompare?: (entity: EntityRef) => void;
     readonly onActivate?: (entity: EntityRef) => void;
     readonly link?: CloudLink | null;
+    readonly anchor?: string | null;
 }
 
 // CloudView awaits the fake scatterplot's `draw` promise (mirroring the real library, which
@@ -110,6 +111,7 @@ async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnT
             link={overrides.link ?? null}
             onWeightChange={vi.fn()}
             onWeightCommit={vi.fn()}
+            anchor={overrides.anchor ?? null}
         />,
     );
     await flushDraw();
@@ -180,6 +182,7 @@ describe("CloudView", () => {
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
+                anchor={null}
             />,
         );
         await flushDraw();
@@ -280,6 +283,7 @@ describe("CloudView", () => {
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
+                anchor={null}
             />,
         );
 
@@ -327,6 +331,7 @@ describe("CloudView", () => {
                     link={null}
                     onWeightChange={vi.fn()}
                     onWeightCommit={vi.fn()}
+                    anchor={null}
                 />,
             );
         }
@@ -405,6 +410,7 @@ describe("CloudView", () => {
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
+                anchor={null}
             />,
         );
         await flushDraw();
@@ -433,6 +439,7 @@ describe("CloudView", () => {
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
+                anchor={null}
             />,
         );
         await flushDraw();
@@ -584,5 +591,63 @@ describe("CloudView morph link", () => {
         expect(onCompare).toHaveBeenCalledWith(SAMPLE_REF);
         expect(onClear).not.toHaveBeenCalled();
         expect(later).not.toHaveBeenCalled();
+    });
+});
+
+describe("CloudView morph band", () => {
+    const TWO_POINTS: readonly CloudEntityPoint[] = [point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)];
+
+    function bandLine(container: HTMLElement): SVGLineElement | null {
+        return container.querySelector<SVGLineElement>(".morph-band-line");
+    }
+
+    it("stretches a band from the anchor to the cursor while Shift is held over the canvas", async () => {
+        const { container } = await renderCloudView({ points: TWO_POINTS, anchor: SAMPLE_REF.hash });
+
+        fireEvent.mouseMove(latestCanvas(), { shiftKey: true, clientX: 50, clientY: 60 });
+
+        const line = bandLine(container);
+        expect(line).toHaveAttribute("x1", "10");
+        expect(line).toHaveAttribute("y1", "20");
+        expect(line).toHaveAttribute("x2", "50");
+        expect(line).toHaveAttribute("y2", "60");
+    });
+
+    it("snaps the band's far end to the point under the cursor", async () => {
+        const { container } = await renderCloudView({ points: TWO_POINTS, anchor: SAMPLE_REF.hash });
+        fireEvent.mouseMove(latestCanvas(), { shiftKey: true, clientX: 50, clientY: 60 });
+
+        act(() => {
+            latestInstance().emit("pointOver", 1);
+        });
+
+        expect(bandLine(container)).toHaveAttribute("x2", "11");
+        expect(bandLine(container)).toHaveAttribute("y2", "21");
+    });
+
+    it("drops the band once Shift is released", async () => {
+        const { container } = await renderCloudView({ points: TWO_POINTS, anchor: SAMPLE_REF.hash });
+        fireEvent.mouseMove(latestCanvas(), { shiftKey: true, clientX: 50, clientY: 60 });
+        expect(bandLine(container)).toBeInTheDocument();
+
+        fireEvent.keyUp(window, { key: "Shift" });
+
+        expect(bandLine(container)).not.toBeInTheDocument();
+    });
+
+    it("draws no band on a plain move", async () => {
+        const { container } = await renderCloudView({ points: TWO_POINTS, anchor: SAMPLE_REF.hash });
+
+        fireEvent.mouseMove(latestCanvas(), { clientX: 50, clientY: 60 });
+
+        expect(bandLine(container)).not.toBeInTheDocument();
+    });
+
+    it("draws no band while no sample anchors the next morph", async () => {
+        const { container } = await renderCloudView({ points: TWO_POINTS });
+
+        fireEvent.mouseMove(latestCanvas(), { shiftKey: true, clientX: 50, clientY: 60 });
+
+        expect(bandLine(container)).not.toBeInTheDocument();
     });
 });

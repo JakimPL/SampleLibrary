@@ -94,11 +94,13 @@ stay suggestions.
 
 The app can play a sound between any two samples. Start the morph renderer beside the API
 (`make serve-inference`; it reads the fitted models under your library root, which the `samplemorph`
-pipeline writes), then click one sample in the cloud and Shift-click another: a dashed line joins
-them, and the marker on it is how far from the first sample toward the second you stand. Drag the
-marker, or move the slider in the Morph panel, and the morph plays when you let go. The two ends
-play as the model reconstructs them, with each original one click away beside its name. Without the
-renderer running, the panel says so and offers to check again.
+pipeline writes), then click one sample in the cloud, hold Shift, and click another: while Shift is
+down a line runs from the first sample to your cursor, and the click joins the two with a dashed
+line whose marker is how far from the first sample toward the second you stand. Drag the marker,
+or move the slider in the Morph panel, and the morph plays when you let go. The two ends play as
+the model reconstructs them, with each original one click away beside its name, and a double-click
+on either name opens it in the Sample Detail. Without the renderer running, the panel says so and
+offers to check again.
 
 ## Development
 

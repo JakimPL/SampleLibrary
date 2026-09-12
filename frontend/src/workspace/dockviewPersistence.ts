@@ -1,45 +1,79 @@
 import type { DockviewApi } from "dockview-react";
 
+import { addRegisteredPanel } from "./addPanel";
 import { buildDefaultLayout } from "./defaultLayout";
+import { PANEL_REGISTRY } from "./panelRegistry";
 
-const STORAGE_KEY = "samplelibrary-workspace-layout";
+export const LAYOUT_STORAGE_KEY = "samplelibrary-workspace-layout";
+export const KNOWN_PANELS_STORAGE_KEY = "samplelibrary-workspace-panels";
 
-function readSavedLayout(): unknown {
+function readStored(key: string): unknown {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(key);
         return raw === null ? null : (JSON.parse(raw) as unknown);
     } catch {
         return null;
     }
 }
 
-function saveLayout(api: DockviewApi): void {
+/** The panels the registry held when the arrangement was saved; an arrangement saved before this was recorded knows none. */
+function readKnownPanelIds(): ReadonlySet<string> {
+    const stored = readStored(KNOWN_PANELS_STORAGE_KEY);
+    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : []);
+}
+
+function saveWorkspace(api: DockviewApi): void {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(api.toJSON()));
+        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(api.toJSON()));
+        localStorage.setItem(KNOWN_PANELS_STORAGE_KEY, JSON.stringify(Object.keys(PANEL_REGISTRY)));
     } catch {
         // localStorage can be unavailable (private browsing, a full quota) -- losing layout
         // persistence for this session is an acceptable degradation, not a reason to crash the shell.
     }
 }
 
+function restoreSavedLayout(api: DockviewApi, saved: unknown): boolean {
+    try {
+        api.fromJSON(saved as Parameters<DockviewApi["fromJSON"]>[0]);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /**
- * Restores the shell's last saved panel arrangement, or builds the default one on first run, then
- * keeps saving every subsequent layout change -- resizing, rearranging, or adding a panel.
+ * Opens every panel registered after the arrangement was saved, so a panel the shell gains shows
+ * up for a person who arranged the shell before it existed, while a panel they closed themselves
+ * stays closed. Reports whether any was opened.
+ */
+function addPanelsRegisteredSince(api: DockviewApi, knownPanelIds: ReadonlySet<string>): boolean {
+    let added = false;
+    for (const definition of Object.values(PANEL_REGISTRY)) {
+        if (!knownPanelIds.has(definition.id) && api.getPanel(definition.id) === undefined) {
+            addRegisteredPanel(api, definition);
+            added = true;
+        }
+    }
+    return added;
+}
+
+/**
+ * Restores the shell's last saved panel arrangement, completed with any panel registered since it
+ * was saved, or builds the default one on first run, then keeps saving every subsequent layout
+ * change -- resizing, rearranging, or adding a panel.
  */
 export function restoreOrBuildLayout(api: DockviewApi): void {
-    const saved = readSavedLayout();
-    if (saved === null) {
-        buildDefaultLayout(api);
-    } else {
-        try {
-            api.fromJSON(saved as Parameters<DockviewApi["fromJSON"]>[0]);
-        } catch {
-            buildDefaultLayout(api);
+    const saved = readStored(LAYOUT_STORAGE_KEY);
+    if (saved !== null && restoreSavedLayout(api, saved)) {
+        if (addPanelsRegisteredSince(api, readKnownPanelIds())) {
+            saveWorkspace(api);
         }
+    } else {
+        buildDefaultLayout(api);
     }
 
     api.onDidLayoutChange(() => {
-        saveLayout(api);
+        saveWorkspace(api);
     });
 }
 
@@ -49,7 +83,8 @@ export function restoreOrBuildLayout(api: DockviewApi): void {
  */
 export function resetLayout(api: DockviewApi): void {
     try {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(LAYOUT_STORAGE_KEY);
+        localStorage.removeItem(KNOWN_PANELS_STORAGE_KEY);
     } catch {
         // localStorage can be unavailable (private browsing, a full quota) -- the in-memory rebuild
         // below still succeeds even though this run won't remember it past a reload.

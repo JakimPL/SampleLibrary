@@ -1,4 +1,5 @@
 import type { ChangeEvent, ReactElement } from "react";
+import { Link } from "react-router-dom";
 
 import { morphPreview } from "../../morph/morphPreview";
 import { morphPlaybackRateHz } from "../../morph/morphRate";
@@ -7,10 +8,12 @@ import { type MorphStatus, useMorphStatus } from "../../morph/useMorphStatus";
 import { PlayButton } from "../../samples/PlayButton";
 import { useAudioPreview } from "../../samples/useAudioPreview";
 import { useSampleDetail } from "../../samples/useSampleDetail";
+import { classNames } from "../../shared/classNames";
 import { shortHash } from "../../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../../shared/labels";
 import { OptionalLabel } from "../../shared/OptionalLabel";
 import { useSelectionStore } from "../selectionStore";
+import { useEntityRowInteractions } from "../useEntityRowInteractions";
 
 const WEIGHT_DECIMAL_PLACES = 2;
 const NO_PAIR_HINT = "No morph pair yet — click a sample, then Shift-click another in the Cloud.";
@@ -35,16 +38,32 @@ interface MorphEndpointProps {
     readonly reading: EndpointReading;
 }
 
+/**
+ * One end of the pair: the original one click away at its own rate, and its hash and name as the
+ * link every listing row carries, so a click highlights the sample wherever the shell shows it, a
+ * Shift-click compares it, and a double-click opens it in the Sample Detail.
+ */
 function MorphEndpoint({ sampleHash, reading }: MorphEndpointProps): ReactElement {
+    const { href, isHighlighted, onClick, onDoubleClick } = useEntityRowInteractions({
+        kind: "sample",
+        hash: sampleHash,
+    });
     return (
         <div className="morph-endpoint">
             <PlayButton sampleHash={sampleHash} playbackRateHz={reading.rateHz}>
                 ▶
             </PlayButton>
-            <span className="entity-hash mono">{shortHash(sampleHash)}</span>
-            <span className="morph-endpoint-name">
-                <OptionalLabel value={reading.name} placeholder={UNNAMED_SAMPLE_LABEL} />
-            </span>
+            <Link
+                to={href}
+                className={classNames("morph-endpoint-identity", isHighlighted && "is-highlighted")}
+                onClickCapture={onClick}
+                onDoubleClick={onDoubleClick}
+            >
+                <span className="entity-hash mono">{shortHash(sampleHash)}</span>
+                <span className="morph-endpoint-name">
+                    <OptionalLabel value={reading.name} placeholder={UNNAMED_SAMPLE_LABEL} />
+                </span>
+            </Link>
         </div>
     );
 }

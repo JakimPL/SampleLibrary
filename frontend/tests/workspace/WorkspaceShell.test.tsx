@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type * as ModulesApi from "../../src/api/modules";
 import type * as SamplesApi from "../../src/api/samples";
+import { KNOWN_PANELS_STORAGE_KEY, LAYOUT_STORAGE_KEY } from "../../src/workspace/dockviewPersistence";
+import { PANEL_REGISTRY } from "../../src/workspace/panelRegistry";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 import { WorkspaceShell } from "../../src/workspace/WorkspaceShell";
 
@@ -43,6 +45,17 @@ function renderShellAt(initialPath: string): ReturnType<typeof render> {
  */
 function panelTabTitles(): string[] {
     return Array.from(document.querySelectorAll(".dv-default-tab-content")).map((element) => element.textContent);
+}
+
+/**
+ * Closes one panel through its tab and waits for the shell to save the arrangement without it,
+ * which dockview reports a moment after the close rather than within it.
+ */
+async function closePanelAndSave(title: string): Promise<void> {
+    fireEvent.click(screen.getByRole("button", { name: `Close ${title}` }));
+    await waitFor(() => {
+        expect(localStorage.getItem(LAYOUT_STORAGE_KEY)).not.toBeNull();
+    });
 }
 
 /** The title of whichever panel is in front of each of the shell's tab groups. */
@@ -110,6 +123,30 @@ describe("WorkspaceShell", () => {
         renderShellAt("/");
 
         expect(screen.getByLabelText("Theme")).toBeInTheDocument();
+    });
+
+    it("keeps a panel closed across a reload once a person closed it", async () => {
+        const first = renderShellAt("/");
+        await closePanelAndSave("Morph");
+        expect(panelTabTitles()).not.toContain("Morph");
+        first.unmount();
+
+        renderShellAt("/");
+
+        expect(panelTabTitles()).not.toContain("Morph");
+    });
+
+    it("opens a panel registered since the arrangement was saved", async () => {
+        const first = renderShellAt("/");
+        await closePanelAndSave("Morph");
+        first.unmount();
+        // An arrangement saved before the Morph panel existed knows every panel but that one.
+        const knownBefore = Object.keys(PANEL_REGISTRY).filter((id) => id !== "morph");
+        localStorage.setItem(KNOWN_PANELS_STORAGE_KEY, JSON.stringify(knownBefore));
+
+        renderShellAt("/");
+
+        expect(panelTabTitles()).toContain("Morph");
     });
 
     it("lets a closed panel be reopened through the Add panel menu", async () => {

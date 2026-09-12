@@ -9,6 +9,7 @@ import { useThemeSignal } from "../theme/useThemeSignal";
 import type { EntityRef } from "../workspace/selectionStore";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
 import { type PointColoring, SUBSTRATE_SLOT } from "./labelColoring";
+import { MorphBand } from "./MorphBand";
 import { MorphLink } from "./MorphLink";
 
 type Scatterplot = ReturnType<typeof createScatterplot>;
@@ -134,6 +135,8 @@ interface CloudViewProps {
     readonly link: CloudLink | null;
     readonly onWeightChange: (weight: number) => void;
     readonly onWeightCommit: () => void;
+    /** The sample a Shift-click would morph from, by hash, which the band follows the cursor from. */
+    readonly anchor: string | null;
 }
 
 interface Ping {
@@ -142,7 +145,7 @@ interface Ping {
     readonly position: ScreenPosition;
 }
 
-interface LinkScreen {
+interface ScreenSegment {
     readonly first: ScreenPosition;
     readonly second: ScreenPosition;
 }
@@ -151,7 +154,7 @@ function samePosition(a: ScreenPosition, b: ScreenPosition): boolean {
     return a[0] === b[0] && a[1] === b[1];
 }
 
-function sameLinkScreen(a: LinkScreen | null, b: LinkScreen | null): boolean {
+function sameSegment(a: ScreenSegment | null, b: ScreenSegment | null): boolean {
     return a === null || b === null ? a === b : samePosition(a.first, b.first) && samePosition(a.second, b.second);
 }
 
@@ -268,10 +271,13 @@ async function applyPoints(
  * straight at it, so the locate cue is reserved for a highlight arriving from somewhere else in the
  * shell. A Shift-click over a point reports it through `onCompare` alone: capture-phase listeners
  * take the press and the click before the library's own, so the point is neither selected nor
- * played, and the highlight that anchors a morph stays where it was. When `link` names two points
- * in view, a dashed line joins them and its marker is the weight, kept pinned through the
- * library's `view` event the way the ping is and re-read when the container resizes; the hover
- * tracking pauses while the marker is dragged, since the library keeps hit-testing beneath it.
+ * played, and the highlight that anchors a morph stays where it was. While Shift is held over the
+ * canvas and `anchor` names a point in view, a band runs from that point to the cursor, snapping
+ * to the point under it, so the pair a Shift-click would join is visible before it lands. When
+ * `link` names two points in view, a dashed line joins them and its marker is the weight, kept
+ * pinned through the library's `view` event the way the ping is and re-read when the container
+ * resizes; the hover tracking pauses while the marker is dragged, since the library keeps
+ * hit-testing beneath it.
  * Point, active-point,
  * and background colors are read from the theme's CSS custom properties at creation, and re-applied
  * through the library's own `set` whenever `useThemeSignal` reports the resolved theme could have
@@ -296,6 +302,7 @@ export function CloudView({
     link,
     onWeightChange,
     onWeightCommit,
+    anchor,
 }: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
@@ -333,10 +340,17 @@ export function CloudView({
     onWeightChangeRef.current = onWeightChange;
     onWeightCommitRef.current = onWeightCommit;
     const linkDraggingRef = useRef(false);
+    const anchorRef = useRef<string | null>(anchor);
+    anchorRef.current = anchor;
+    // Where the cursor last stood over the canvas, and whether Shift is down: the two facts the
+    // band is drawn from, kept as refs so listeners on the canvas and the window share them.
+    const cursorRef = useRef<ScreenPosition | null>(null);
+    const shiftHeldRef = useRef(false);
 
     const [ping, setPing] = useState<Ping | null>(null);
     pingRef.current = ping;
-    const [linkScreen, setLinkScreen] = useState<LinkScreen | null>(null);
+    const [linkScreen, setLinkScreen] = useState<ScreenSegment | null>(null);
+    const [band, setBand] = useState<ScreenSegment | null>(null);
 
     // Stable on `rawPoints` alone, not recomputed on every render, since it feeds the draw effect's
     // dependency array below -- an identity that changed on every render (including ones this view
@@ -369,8 +383,39 @@ export function CloudView({
             setLinkScreen(null);
             return;
         }
-        const next: LinkScreen = { first, second };
-        setLinkScreen((current) => (sameLinkScreen(current, next) ? current : next));
+        const next: ScreenSegment = { first, second };
+        setLinkScreen((current) => (sameSegment(current, next) ? current : next));
+    }, []);
+
+    // The band from the anchor to the cursor while Shift is held, its far end snapped to the point
+    // under the cursor; refs alone, so the mount effect's listeners and the effects below share it.
+    const repinBand = useCallback((): void => {
+        const scatterplot = scatterplotRef.current;
+        const anchorHash = anchorRef.current;
+        const cursor = cursorRef.current;
+        if (
+            scatterplot === null ||
+            anchorHash === null ||
+            cursor === null ||
+            !shiftHeldRef.current ||
+            !pointsDrawnRef.current
+        ) {
+            setBand(null);
+            return;
+        }
+        const anchorIndex = indexByHashRef.current.get(anchorHash);
+        const anchorPosition = anchorIndex === undefined ? undefined : scatterplot.getScreenPosition(anchorIndex);
+        if (anchorPosition === undefined) {
+            setBand(null);
+            return;
+        }
+        const hoveredIndex = hoveredIndexRef.current;
+        const hoveredPosition =
+            hoveredIndex === null || hoveredIndex === anchorIndex
+                ? undefined
+                : scatterplot.getScreenPosition(hoveredIndex);
+        const next: ScreenSegment = { first: anchorPosition, second: hoveredPosition ?? cursor };
+        setBand((current) => (sameSegment(current, next) ? current : next));
     }, []);
 
     const themeSignal = useThemeSignal();
@@ -430,16 +475,19 @@ export function CloudView({
             if (entity !== undefined && position !== undefined) {
                 onHoverRef.current(entity, position);
             }
+            repinBand();
         });
         const pointOutSubscription = scatterplot.subscribe("pointOut", () => {
             hoveredIndexRef.current = null;
             onHoverRef.current(null, null);
+            repinBand();
         });
         const deselectSubscription = scatterplot.subscribe("deselect", () => {
             onClearRef.current();
         });
         const viewSubscription = scatterplot.subscribe("view", () => {
             repinLink();
+            repinBand();
             const activePing = pingRef.current;
             if (activePing === null || !pointsDrawnRef.current) {
                 return;
@@ -483,10 +531,35 @@ export function CloudView({
             }
         }
 
+        function handleMouseMove(event: MouseEvent): void {
+            const bounds = canvas.getBoundingClientRect();
+            cursorRef.current = [event.clientX - bounds.left, event.clientY - bounds.top];
+            shiftHeldRef.current = event.shiftKey;
+            repinBand();
+        }
+
+        function handleMouseLeave(): void {
+            cursorRef.current = null;
+            repinBand();
+        }
+
+        // Read on the window, so Shift pressed or released while the cursor rests over the canvas
+        // shows or drops the band without a move.
+        function handleShiftKey(event: KeyboardEvent): void {
+            if (event.key === "Shift") {
+                shiftHeldRef.current = event.type === "keydown";
+                repinBand();
+            }
+        }
+
         canvas.addEventListener("mousedown", handleShiftPress, { capture: true });
         canvas.addEventListener("click", handleShiftClick, { capture: true });
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("dblclick", handleDoubleClick);
+        canvas.addEventListener("mousemove", handleMouseMove);
+        canvas.addEventListener("mouseleave", handleMouseLeave);
+        window.addEventListener("keydown", handleShiftKey);
+        window.addEventListener("keyup", handleShiftKey);
 
         return (): void => {
             canceled = true;
@@ -494,6 +567,10 @@ export function CloudView({
             canvas.removeEventListener("click", handleShiftClick, { capture: true });
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("dblclick", handleDoubleClick);
+            canvas.removeEventListener("mousemove", handleMouseMove);
+            canvas.removeEventListener("mouseleave", handleMouseLeave);
+            window.removeEventListener("keydown", handleShiftKey);
+            window.removeEventListener("keyup", handleShiftKey);
             scatterplot.unsubscribe(selectSubscription);
             scatterplot.unsubscribe(pointOverSubscription);
             scatterplot.unsubscribe(pointOutSubscription);
@@ -551,6 +628,10 @@ export function CloudView({
     }, [link, repinLink]);
 
     useEffect(() => {
+        repinBand();
+    }, [anchor, repinBand]);
+
+    useEffect(() => {
         const container = containerRef.current;
         if (container === null) {
             return undefined;
@@ -602,6 +683,7 @@ export function CloudView({
                     <span className="cloud-ping-ring cloud-ping-ring-delayed" />
                 </span>
             )}
+            {band !== null && <MorphBand anchor={band.first} cursor={band.second} />}
             {link !== null && linkScreen !== null && (
                 <MorphLink
                     first={linkScreen.first}

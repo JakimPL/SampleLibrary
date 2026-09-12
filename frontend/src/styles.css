@@ -1580,6 +1580,24 @@ table.data td .annotation-editor-input {
     min-width: 0;
 }
 
+/* The hash and the name are one link, the way a listing row's name cell is: a click highlights
+   the sample, a double-click opens it, and the highlight paints it the way a row is painted. */
+.morph-endpoint-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: 4px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.morph-endpoint-identity.is-highlighted {
+    background: var(--accent-soft);
+}
+
 .morph-endpoint-name {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1709,6 +1727,33 @@ table.data td .annotation-editor-input {
 
 .morph-link-marker:active {
     cursor: grabbing;
+}
+
+/* The band a held Shift stretches from the sample anchoring the next morph to the cursor: a cue
+   alone, so every pointer passes through it, and lighter than the line a click leaves behind. */
+.morph-band {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.morph-band-line {
+    stroke: var(--cloud-link-color);
+    stroke-width: 1.5;
+    stroke-dasharray: 2 4;
+    opacity: 0.75;
+    fill: none;
+}
+
+.morph-band-anchor {
+    fill: none;
+    stroke: var(--cloud-link-color);
+    stroke-width: 2;
+    opacity: 0.75;
 }
 
 :root[data-theme="openmpt"] .morph-weight input[type="range"] {
