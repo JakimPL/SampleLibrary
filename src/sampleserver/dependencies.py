@@ -8,7 +8,8 @@ from fastapi import Depends, Request
 from sqlalchemy import Connection
 
 from samplecore.spectral_distance import SpectralVectors
-from samplecore.storage.database import connect, connect_for_curation
+from samplecore.storage.database import checkout_read_only, connect_for_curation
+from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.spectral_cache import SpectralVectorCache
 
 
@@ -24,15 +25,15 @@ def get_inference_client(request: Request) -> httpx.AsyncClient:
 
 
 def get_connection(request: Request) -> Iterator[Connection]:
-    """A fresh read-only connection to the app's configured catalog, closed after the request.
+    """A read-only connection to the app's configured catalog, checked out of the pool for one request.
 
     A single SQLAlchemy ``Connection`` is not safe to use concurrently from the thread pool
-    FastAPI's synchronous route handlers run in -- opening one per request sidesteps that entirely,
-    at a cost negligible next to an HTTP round trip at this project's personal-library scale.
-    Postgres itself handles many concurrent connections natively, so this per-request pattern needs
-    no extra coordination to stay safe.
+    FastAPI's synchronous route handlers run in, so each request holds one of its own and returns
+    it when done; the pool keeps the connection open for the next request, which is what makes a
+    sound or a hover cost a query rather than a handshake. Postgres itself refuses any write on
+    the transaction, the same as a role-level grant would.
     """
-    connection = connect(request.app.state.database_url, read_only=True)
+    connection = checkout_read_only(request.app.state.engine)
     try:
         yield connection
     finally:
@@ -57,3 +58,15 @@ def get_spectral_vectors(request: Request, connection: Connection = Depends(get_
     """The catalog's spectral vectors as one matrix, parsed once per embedding rather than per request."""
     cache: SpectralVectorCache = request.app.state.spectral_vectors
     return cache.vectors(connection)
+
+
+def get_cloud_cache(request: Request) -> RevisionedJsonCache:
+    """The finished answer to the cloud's points, kept per application across requests."""
+    cache: RevisionedJsonCache = request.app.state.cloud_cache
+    return cache
+
+
+def get_suggestions_cache(request: Request) -> RevisionedJsonCache:
+    """The finished answer to the cloud's suggestions, kept per application across requests."""
+    cache: RevisionedJsonCache = request.app.state.suggestions_cache
+    return cache

@@ -8,20 +8,22 @@ from typing import Final
 from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
-from samplecore.storage.database import connect_for_curation
+from samplecore.storage.database import connect_for_curation, create_pooled_engine
 from sampleserver.inference_client import build_inference_client
+from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers import cloud, curation, modules, morph, samples, stats
 from sampleserver.spectral_cache import SpectralVectorCache
 
 API_PREFIX: Final[str] = "/api"
 GZIP_MINIMUM_SIZE: Final[int] = 1024
 GZIP_COMPRESSION_LEVEL: Final[int] = 1
+READ_POOL_SIZE: Final[int] = 5
 
 
 def create_app(database_url: str, library_root: Path, inference_url: str) -> FastAPI:
     """Build the FastAPI app serving the catalog at the given database URL.
 
-    Every route reads the catalog through a connection Postgres itself refuses a write on. The
+    Every route reads the catalog through a pooled connection Postgres itself refuses a write on. The
     curation routes are the one exception, and they reach only a person's own decisions about
     samples, in a schema of their own: what this application records is what a listener decided, and
     the catalog stays the offline pipelines' to build. Morphs are rendered by a separate inference
@@ -45,20 +47,22 @@ def create_app(database_url: str, library_root: Path, inference_url: str) -> Fas
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-        """Prepare the curation schema and open the inference client before the first request.
+        """Prepare the curation schema, the catalog's pool and the inference client before the first request.
 
         The samples listing reads a sample's hand annotation as part of its own query, and the
         read-only connection every route uses can create nothing. Preparing the schema once at
         startup is what lets a database the offline pipelines have never written to still serve a
-        listing. The inference client lives as long as the app, so its connections are reused
-        across morph requests, and is closed when the app stops.
+        listing. The pool and the inference client live as long as the app, so their connections
+        are reused across requests, and both are closed when the app stops.
         """
         connect_for_curation(application.state.database_url).close()
+        application.state.engine = create_pooled_engine(application.state.database_url, pool_size=READ_POOL_SIZE)
         application.state.inference_client = build_inference_client(application.state.inference_url)
         try:
             yield
         finally:
             await application.state.inference_client.aclose()
+            application.state.engine.dispose()
 
     application = FastAPI(
         title="SampleLibrary",
@@ -70,6 +74,8 @@ def create_app(database_url: str, library_root: Path, inference_url: str) -> Fas
     application.state.library_root = library_root
     application.state.inference_url = inference_url
     application.state.spectral_vectors = SpectralVectorCache()
+    application.state.cloud_cache = RevisionedJsonCache()
+    application.state.suggestions_cache = RevisionedJsonCache()
     for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.router, morph.router):
         application.include_router(api_router, prefix=API_PREFIX)
     return application

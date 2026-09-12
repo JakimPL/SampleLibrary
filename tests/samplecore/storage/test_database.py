@@ -6,9 +6,17 @@ from collections.abc import Iterator
 import pytest
 from sqlalchemy import Connection, create_engine, func, inspect, select, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError
 
 from samplecore.storage.curation import CURATION_SCHEMA
-from samplecore.storage.database import SCHEMA_LOCK_KEY, connect, connect_for_curation, create_schema
+from samplecore.storage.database import (
+    SCHEMA_LOCK_KEY,
+    checkout_read_only,
+    connect,
+    connect_for_curation,
+    create_pooled_engine,
+    create_schema,
+)
 
 EXPECTED_TABLES = frozenset(
     {
@@ -110,3 +118,19 @@ def test_creating_the_schema_holds_a_claim_no_other_run_can_take(connection: Con
 
     assert not while_creating
     assert once_created
+
+
+def test_a_pooled_checkout_refuses_a_write_on_every_use(connection: Connection, _database_url: str) -> None:
+    """The read-only rule travels with each checkout, so a connection back from the pool is as safe as a fresh one."""
+    engine = create_pooled_engine(_database_url, pool_size=1)
+    try:
+        for _ in range(2):
+            checked_out = checkout_read_only(engine)
+            try:
+                assert checked_out.execute(text("SELECT 1")).scalar_one() == 1
+                with pytest.raises(DBAPIError, match="read-only"):
+                    checked_out.execute(text("INSERT INTO sample_playback_rate (sample_hash, rate) VALUES ('a', 1)"))
+            finally:
+                checked_out.close()
+    finally:
+        engine.dispose()

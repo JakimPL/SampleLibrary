@@ -131,6 +131,41 @@ def test_get_cloud_carries_the_rate_a_point_is_heard_at(client: TestClient, conn
     assert response.json()[0]["playback_rate_hz"] == 16726
 
 
+def test_the_cloud_follows_a_fresh_embedding_and_a_replaced_rate(client: TestClient, connection: Connection) -> None:
+    """The answer is served from memory until the rows behind it move, and every kind of move reaches the next answer."""
+    _store_samples(connection, SAMPLE_HASH, "b" * 64)
+    PostgresCloudCoordinateRepository(connection).upsert(
+        SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
+    )
+    assert len(client.get("/cloud").json()) == 1
+    assert client.get("/cloud").json()[0]["playback_rate_hz"] is None
+
+    PostgresCloudCoordinateRepository(connection).upsert(
+        SampleCloudCoordinate(sample_hash="b" * 64, x=0.5, y=0.5, computed_at=datetime.now(UTC))
+    )
+    assert len(client.get("/cloud").json()) == 2
+
+    PostgresSamplePlaybackRateRepository(connection).replace_all({SAMPLE_HASH: 8363})
+    by_hash = {point["sample_hash"]: point for point in client.get("/cloud").json()}
+
+    assert by_hash[SAMPLE_HASH]["playback_rate_hz"] == 8363
+
+
+def test_the_cloud_goes_out_gzipped_only_when_the_caller_accepts_it(client: TestClient, connection: Connection) -> None:
+    _store_samples(connection, SAMPLE_HASH)
+    PostgresCloudCoordinateRepository(connection).upsert(
+        SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
+    )
+
+    compressed = client.get("/cloud", headers={"Accept-Encoding": "gzip"})
+    plain = client.get("/cloud", headers={"Accept-Encoding": "identity"})
+
+    assert compressed.headers["content-encoding"] == "gzip"
+    assert "content-encoding" not in plain.headers
+    assert compressed.json() == plain.json()
+    assert plain.headers["vary"] == "Accept-Encoding"
+
+
 def test_get_cloud_on_an_empty_catalog_returns_nothing(client: TestClient) -> None:
     response = client.get("/cloud")
 
@@ -245,10 +280,12 @@ def test_get_cloud_suggestions_carries_each_sample_s_closest_pick(client: TestCl
 
 
 def test_get_cloud_suggestions_reads_the_newest_scoring_alone(client: TestClient, connection: Connection) -> None:
+    """A scoring written after the first answer reaches the next one: the newest scoring is the revision."""
     _store_samples(connection, SAMPLE_HASH)
     seed_scoring(connection, {SAMPLE_HASH: (("SNARE", 0.5),)})
-    seed_scoring(connection, {SAMPLE_HASH: (("BASS DRUM", 0.6),)})
+    assert [entry["path"] for entry in client.get("/cloud/suggestions").json()] == [["SNARE"]]
 
+    seed_scoring(connection, {SAMPLE_HASH: (("BASS DRUM", 0.6),)})
     body = client.get("/cloud/suggestions").json()
 
     assert [entry["path"] for entry in body] == [["BASS DRUM"]]

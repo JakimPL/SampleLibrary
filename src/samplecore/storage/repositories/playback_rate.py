@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Final, Protocol
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection, func, select
 from trackmod.schema.scalars import Rate
 
 from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, sample_playback_rate
@@ -19,6 +19,8 @@ class SamplePlaybackRateRepository(Protocol):
     def get_many(self, sample_hashes: list[str]) -> dict[str, Rate]: ...
 
     def list_all(self) -> dict[str, Rate]: ...
+
+    def count(self) -> int: ...
 
 
 class PostgresSamplePlaybackRateRepository:
@@ -57,3 +59,9 @@ class PostgresSamplePlaybackRateRepository:
     def list_all(self) -> dict[str, Rate]:
         """Every recorded rate at once, which is what a whole-catalog view needs to sound a click."""
         return {row.sample_hash: row.rate for row in self._connection.execute(select(sample_playback_rate))}
+
+    def count(self) -> int:
+        """How many rates are on file, which moves only when a whole pass replaces them all."""
+        # pylint: disable-next=not-callable
+        counted = self._connection.execute(select(func.count()).select_from(sample_playback_rate)).scalar_one()
+        return int(counted)

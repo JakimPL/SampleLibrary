@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable, Hashable
+from datetime import datetime
 from typing import Final
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Request, Response
+from pydantic import BaseModel, TypeAdapter
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
@@ -21,6 +23,7 @@ from samplecore.storage.repositories.cloud import (
 )
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
+from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.playback_rate import (
     PostgresSamplePlaybackRateRepository,
 )
@@ -28,7 +31,8 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
-from sampleserver.dependencies import get_connection
+from sampleserver.dependencies import get_cloud_cache, get_connection, get_suggestions_cache
+from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers.curation import TagSummary
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
@@ -36,6 +40,10 @@ router = APIRouter(prefix="/cloud", tags=["cloud"])
 # The viewer rescales every coordinate onto its own unit square, so four decimals place a point
 # far finer than any pixel at any zoom while a full-precision float would cost twice the digits.
 COORDINATE_DECIMALS: Final[int] = 4
+JSON_MEDIA_TYPE: Final[str] = "application/json"
+GZIP_ENCODING: Final[str] = "gzip"
+
+CloudRevision = tuple[tuple[int, datetime | None], int, int]
 
 
 class SampleCloudPoint(BaseModel):
@@ -72,14 +80,32 @@ class ModuleCloudPoint(BaseModel):
     y: float
 
 
-@router.get("")
-def get_cloud(connection: Connection = Depends(get_connection)) -> tuple[SampleCloudPoint, ...]:
+CLOUD_POINTS: Final = TypeAdapter(tuple[SampleCloudPoint, ...])
+
+
+@router.get("", response_model=tuple[SampleCloudPoint, ...])
+def get_cloud(
+    request: Request,
+    connection: Connection = Depends(get_connection),
+    cache: RevisionedJsonCache = Depends(get_cloud_cache),
+) -> Response:
     """Every sample's position in the library's 2D embedding space, as of the latest embedding run.
 
-    Every lookup behind a point is read whole rather than per hash: this route answers for the entire
-    catalog, and asking Postgres about a hundred thousand named hashes costs it more than reading
-    each table outright.
+    The answer is built once per revision of what it reads and served from memory after that: the
+    coordinates' count and last write, the playback rates on file and the modules cataloged are
+    what a pipeline moves, and three scalar queries say whether any has. A caller that accepts
+    gzip receives the body compressed once at the best level rather than per request.
     """
+    revision: CloudRevision = (
+        PostgresCloudCoordinateRepository(connection).revision(),
+        PostgresSamplePlaybackRateRepository(connection).count(),
+        PostgresModuleRepository(connection).count(),
+    )
+    return _cached_json(request, cache, revision, lambda: CLOUD_POINTS.dump_json(_cloud_points(connection)))
+
+
+def _cloud_points(connection: Connection) -> tuple[SampleCloudPoint, ...]:
+    """Every lookup behind a point is read whole rather than per hash: asking Postgres about a hundred thousand named hashes costs it more than reading each table outright."""
     coordinates = PostgresCloudCoordinateRepository(connection).list_all()
     repository = PostgresSampleRepository(connection)
     names_by_hash, rates_by_hash = repository.names_and_rates_for_every_sample()
@@ -145,23 +171,48 @@ class CloudSuggestion(BaseModel):
     score: float
 
 
-@router.get("/suggestions")
-def get_cloud_suggestions(connection: Connection = Depends(get_connection)) -> tuple[CloudSuggestion, ...]:
+CLOUD_SUGGESTIONS: Final = TypeAdapter(tuple[CloudSuggestion, ...])
+
+
+@router.get("/suggestions", response_model=tuple[CloudSuggestion, ...])
+def get_cloud_suggestions(
+    request: Request,
+    connection: Connection = Depends(get_connection),
+    cache: RevisionedJsonCache = Depends(get_suggestions_cache),
+) -> Response:
     """Every sample's first suggested tag from the newest scoring, for coloring the cloud by what a model hears.
 
     These travel apart from the points the way the hand labels do: a scoring changes only when a
-    pass writes a new one, and a viewer joins them to the points by hash. An empty answer says no
-    scoring has been written.
+    pass writes a new one, so the newest scoring's id is the whole revision, and a viewer joins
+    them to the points by hash. An empty answer says no scoring has been written.
     """
     repository = PostgresSampleLabelSuggestionRepository(connection)
     latest = repository.latest_experiment_id()
-    if latest is None:
+    return _cached_json(request, cache, latest, lambda: CLOUD_SUGGESTIONS.dump_json(_first_picks(repository, latest)))
+
+
+def _first_picks(
+    repository: PostgresSampleLabelSuggestionRepository, experiment_id: int | None
+) -> tuple[CloudSuggestion, ...]:
+    if experiment_id is None:
         return ()
 
     return tuple(
         CloudSuggestion(sample_hash=pick.sample_hash, path=_path_of(pick.label), score=pick.score)
-        for pick in repository.first_picks_for_experiment(latest)
+        for pick in repository.first_picks_for_experiment(experiment_id)
     )
+
+
+def _cached_json(
+    request: Request, cache: RevisionedJsonCache, revision: Hashable, build: Callable[[], bytes]
+) -> Response:
+    """The cached answer in the encoding the caller takes, marked so the middleware and the caches downstream read it right."""
+    accepts_gzip = GZIP_ENCODING in request.headers.get("accept-encoding", "")
+    body = cache.body(revision, build, gzipped=accepts_gzip)
+    headers = {"Vary": "Accept-Encoding"}
+    if accepts_gzip:
+        headers["Content-Encoding"] = GZIP_ENCODING
+    return Response(content=body, media_type=JSON_MEDIA_TYPE, headers=headers)
 
 
 @router.get("/suggestion-tags")

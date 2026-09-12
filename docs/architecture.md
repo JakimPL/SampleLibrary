@@ -287,7 +287,7 @@ whatever Postgres instance it actually runs against, container or otherwise. Loc
 against a Postgres installed on the machine directly, which the test suite and both library
 databases share. The container runs multiple
 `uvicorn` worker processes (`--workers`, not `--reload`) rather than the single-process dev server
-`make serve` starts: each worker opens its own read-only Postgres connection per request
+`make serve` starts: each worker holds a small pool of read-only Postgres connections, checked out per request
 (`sampleserver.dependencies.get_connection`), which Postgres's own concurrent-connection handling
 supports natively, so multiple people browsing the library through one deployed server works
 correctly with no shared state between workers. The library's data directory and a `config.toml`
@@ -328,7 +328,7 @@ with no server running; `measure_routes.sh` beside it reads wire bytes and times
 |---|---|---|---|
 | `/api/cloud` wire bytes | 25.1 MB, plain | | |
 | `/api/cloud` time to first byte | 2.7 s | | |
-| `/api/cloud` server build | 2.7 s (reads 1.5, classification 0.66, models 0.55, serialization 0.23) | | |
+| `/api/cloud` server build | 2.7 s (reads 1.5, classification 0.66, models 0.55, serialization 0.23) | 2.1 s (reads 1.0, classification 0.48, models 0.45, serialization 0.17), once per revision after the cache | |
 | `/api/cloud/suggestions` wire bytes and time | 26 MB, 4.0 s | | |
 | `/api/cloud/suggestion-tags` time | 2.7 s | | |
 | Cloud panel mount, category mode | 6 requests, 53 MB | | |

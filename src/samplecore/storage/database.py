@@ -131,6 +131,7 @@ sample_properties = Table(
     CheckConstraint(column("volume").between(0, 64), name="sample_properties_volume_check"),
     CheckConstraint(column("panning").between(0, 255), name="sample_properties_panning_check"),
     CheckConstraint(column("loop_mode").in_(_LOOP_MODE_VALUES), name="sample_properties_loop_mode_check"),
+    Index("sample_properties_sample_hash_index", "sample_hash"),
     CheckConstraint(
         all_null_together("loop_begin", "loop_end", "loop_mode"), name="sample_properties_loop_conull_check"
     ),
@@ -433,6 +434,22 @@ def connect_for_curation(database_url: str) -> Connection:
 
 def _open(database_url: str) -> Connection:
     return create_engine(database_url, poolclass=NullPool).connect()
+
+
+def create_pooled_engine(database_url: str, *, pool_size: int) -> Engine:
+    """An engine that keeps up to `pool_size` connections open between uses, for a process answering many short requests.
+
+    A served request costs a query or two, and opening a connection for each costs Postgres a
+    handshake that outweighs them; a small pool keeps a few connections warm and checks each one
+    before handing it out, so a connection the server dropped is replaced rather than failing a
+    request.
+    """
+    return create_engine(database_url, pool_size=pool_size, pool_pre_ping=True)
+
+
+def checkout_read_only(engine: Engine) -> Connection:
+    """A pooled connection whose transaction Postgres refuses a write on, back in the pool once closed."""
+    return engine.connect().execution_options(postgresql_readonly=True)
 
 
 def create_schema(bind: Connection | Engine) -> None:
