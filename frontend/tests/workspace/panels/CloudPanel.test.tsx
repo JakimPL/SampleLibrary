@@ -92,6 +92,8 @@ vi.mock("../../../src/api/modules", async () => {
     return { ...actual, getModule };
 });
 
+const RIGHT_BUTTON = 2;
+
 function latestInstance(): (typeof instances)[number] {
     const instance = instances[instances.length - 1];
     if (instance === undefined) {
@@ -296,7 +298,7 @@ describe("CloudPanel", () => {
         });
     });
 
-    it("joins the highlighted sample and a Shift-clicked one into the morph pair", async () => {
+    it("joins the highlighted sample and a right-clicked one into the morph pair", async () => {
         const anchor = "4".repeat(64);
         const other = "5".repeat(64);
         getCloud.mockResolvedValue([
@@ -313,11 +315,35 @@ describe("CloudPanel", () => {
         });
         latestInstance().emit("pointOver", 1);
 
-        fireEvent.click(latestCanvas(), { shiftKey: true });
+        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON });
+        fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
 
         expect(useMorphStore.getState()).toMatchObject({ first: anchor, second: other });
         expect(useSelectionStore.getState().comparisonSampleHash).toBe(other);
         expect(play).not.toHaveBeenCalled();
+    });
+
+    it("joins two samples dragged from one to the other with the right button", async () => {
+        const first = "9".repeat(64);
+        const second = "0".repeat(64);
+        getCloud.mockResolvedValue([
+            { sample_hash: first, x: 0, y: 0, category: "uncategorized", playback_rate_hz: 8363 },
+            { sample_hash: second, x: 1, y: 1, category: "uncategorized", playback_rate_hz: 16726 },
+        ]);
+        getModuleCloud.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas")).toBeInTheDocument();
+        });
+        latestInstance().emit("pointOver", 0);
+
+        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON });
+        latestInstance().emit("pointOver", 1);
+        fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
+
+        expect(useMorphStore.getState()).toMatchObject({ first, second });
+        expect(useSelectionStore.getState().comparisonSampleHash).toBe(second);
+        expect(useSelectionStore.getState().highlighted).toBeNull();
     });
 
     it("plays the morph at the points' own rates when the marker is released", async () => {

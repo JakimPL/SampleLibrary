@@ -1580,8 +1580,6 @@ table.data td .annotation-editor-input {
     min-width: 0;
 }
 
-/* The hash and the name are one link, the way a listing row's name cell is: a click highlights
-   the sample, a double-click opens it, and the highlight paints it the way a row is painted. */
 .morph-endpoint-identity {
     display: flex;
     align-items: center;
@@ -1729,8 +1727,6 @@ table.data td .annotation-editor-input {
     cursor: grabbing;
 }
 
-/* The band a held Shift stretches from the sample anchoring the next morph to the cursor: a cue
-   alone, so every pointer passes through it, and lighter than the line a click leaves behind. */
 .morph-band {
     position: absolute;
     inset: 0;
@@ -1749,7 +1745,7 @@ table.data td .annotation-editor-input {
     fill: none;
 }
 
-.morph-band-anchor {
+.morph-band-origin {
     fill: none;
     stroke: var(--cloud-link-color);
     stroke-width: 2;

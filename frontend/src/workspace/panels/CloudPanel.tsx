@@ -169,8 +169,6 @@ export function CloudPanel(): ReactElement {
             morphFirst !== null && morphSecond !== null ? { first: morphFirst, second: morphSecond, weight } : null,
         [morphFirst, morphSecond, weight],
     );
-    // The near end of the next morph: the highlighted sample, or the focused one when the
-    // highlight sits elsewhere.
     const morphAnchor = highlighted?.kind === "sample" ? highlighted.hash : focusedSampleHash;
     const rateByHash = useMemo(() => {
         const rates = new Map<string, number>();
@@ -206,12 +204,17 @@ export function CloudPanel(): ReactElement {
         void navigate(entityRoute(entity));
     }
 
-    // A Shift-click names a second sample twice over: the comparison the detail panel reads, and
-    // the far end of a morph whose near end is the anchor the band was drawn from.
     function handleCompare(entity: EntityRef): void {
         if (entity.kind === "sample") {
             setComparisonSample(entity.hash);
             join(morphAnchor, entity.hash);
+        }
+    }
+
+    function handleJoin(first: EntityRef, second: EntityRef): void {
+        if (first.kind === "sample" && second.kind === "sample") {
+            setComparisonSample(second.hash);
+            join(first.hash, second.hash);
         }
     }
 
@@ -308,6 +311,7 @@ export function CloudPanel(): ReactElement {
                             onClear={clearHighlight}
                             onHover={handleHover}
                             onCompare={handleCompare}
+                            onJoin={handleJoin}
                             onActivate={handleActivate}
                             link={tab === "samples" ? link : null}
                             onWeightChange={setWeight}

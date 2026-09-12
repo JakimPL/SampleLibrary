@@ -140,7 +140,6 @@ describe("WorkspaceShell", () => {
         const first = renderShellAt("/");
         await closePanelAndSave("Morph");
         first.unmount();
-        // An arrangement saved before the Morph panel existed knows every panel but that one.
         const knownBefore = Object.keys(PANEL_REGISTRY).filter((id) => id !== "morph");
         localStorage.setItem(KNOWN_PANELS_STORAGE_KEY, JSON.stringify(knownBefore));
 

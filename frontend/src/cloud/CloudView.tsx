@@ -27,6 +27,7 @@ const UNCATEGORIZED_CATEGORY = "uncategorized";
 const UNCATEGORIZED_COLOR_PROPERTY = "--cloud-point-uncategorized";
 const UNCATEGORIZED_COLOR_FALLBACK = "#d5d4ce";
 const CATEGORICAL_COLOR_BY = "category";
+const RIGHT_BUTTON = 2;
 
 interface CloudColors {
     readonly pointColor: string;
@@ -131,11 +132,12 @@ interface CloudViewProps {
     readonly onClear: () => void;
     readonly onHover: (entity: EntityRef | null, screenPosition: ScreenPosition | null) => void;
     readonly onCompare: (entity: EntityRef) => void;
+    readonly onJoin: (first: EntityRef, second: EntityRef) => void;
     readonly onActivate: (entity: EntityRef) => void;
     readonly link: CloudLink | null;
     readonly onWeightChange: (weight: number) => void;
     readonly onWeightCommit: () => void;
-    /** The sample a Shift-click would morph from, by hash, which the band follows the cursor from. */
+    /** The sample, by hash, a right-drag runs from when the press lands on empty space. */
     readonly anchor: string | null;
 }
 
@@ -148,6 +150,11 @@ interface Ping {
 interface ScreenSegment {
     readonly first: ScreenPosition;
     readonly second: ScreenPosition;
+}
+
+interface DragOrigin {
+    readonly index: number;
+    readonly pressedOnPoint: boolean;
 }
 
 function samePosition(a: ScreenPosition, b: ScreenPosition): boolean {
@@ -269,11 +276,13 @@ async function applyPoints(
  * this way also reports it through `onActivate` (a sample tab's caller uses this to start playback),
  * but skips its own ping for that one transition: the click that just selected it is already looking
  * straight at it, so the locate cue is reserved for a highlight arriving from somewhere else in the
- * shell. A Shift-click over a point reports it through `onCompare` alone: capture-phase listeners
- * take the press and the click before the library's own, so the point is neither selected nor
- * played, and the highlight that anchors a morph stays where it was. While Shift is held over the
- * canvas and `anchor` names a point in view, a band runs from that point to the cursor, snapping
- * to the point under it, so the pair a Shift-click would join is visible before it lands. When
+ * shell. The right button is the pairing gesture, which the library leaves alone (it pans, selects
+ * and lassos on the left button only), so the browser's menu is the one thing kept off the canvas:
+ * a right-drag from one point to another reports both through `onJoin`, and a right-click on a
+ * point, pressed and released in place, reports that point through `onCompare` for the caller to
+ * join from its own anchor. While the button is held, a band runs from the point pressed, or from
+ * `anchor` when the press landed on empty space, to the cursor, snapping to the point under it,
+ * so the pair a release would join is visible before it lands. When
  * `link` names two points in view, a dashed line joins them and its marker is the weight, kept
  * pinned through the library's `view` event the way the ping is and re-read when the container
  * resizes; the hover tracking pauses while the marker is dragged, since the library keeps
@@ -298,6 +307,7 @@ export function CloudView({
     onClear,
     onHover,
     onCompare,
+    onJoin,
     onActivate,
     link,
     onWeightChange,
@@ -326,12 +336,14 @@ export function CloudView({
     const onClearRef = useRef(onClear);
     const onHoverRef = useRef(onHover);
     const onCompareRef = useRef(onCompare);
+    const onJoinRef = useRef(onJoin);
     const onActivateRef = useRef(onActivate);
     onSelectRef.current = onSelect;
     onFocusRef.current = onFocus;
     onClearRef.current = onClear;
     onHoverRef.current = onHover;
     onCompareRef.current = onCompare;
+    onJoinRef.current = onJoin;
     onActivateRef.current = onActivate;
     const linkRef = useRef<CloudLink | null>(link);
     linkRef.current = link;
@@ -342,10 +354,8 @@ export function CloudView({
     const linkDraggingRef = useRef(false);
     const anchorRef = useRef<string | null>(anchor);
     anchorRef.current = anchor;
-    // Where the cursor last stood over the canvas, and whether Shift is down: the two facts the
-    // band is drawn from, kept as refs so listeners on the canvas and the window share them.
+    const dragOriginRef = useRef<DragOrigin | null>(null);
     const cursorRef = useRef<ScreenPosition | null>(null);
-    const shiftHeldRef = useRef(false);
 
     const [ping, setPing] = useState<Ping | null>(null);
     pingRef.current = ping;
@@ -387,34 +397,25 @@ export function CloudView({
         setLinkScreen((current) => (sameSegment(current, next) ? current : next));
     }, []);
 
-    // The band from the anchor to the cursor while Shift is held, its far end snapped to the point
-    // under the cursor; refs alone, so the mount effect's listeners and the effects below share it.
     const repinBand = useCallback((): void => {
         const scatterplot = scatterplotRef.current;
-        const anchorHash = anchorRef.current;
+        const origin = dragOriginRef.current;
         const cursor = cursorRef.current;
-        if (
-            scatterplot === null ||
-            anchorHash === null ||
-            cursor === null ||
-            !shiftHeldRef.current ||
-            !pointsDrawnRef.current
-        ) {
+        if (scatterplot === null || origin === null || cursor === null || !pointsDrawnRef.current) {
             setBand(null);
             return;
         }
-        const anchorIndex = indexByHashRef.current.get(anchorHash);
-        const anchorPosition = anchorIndex === undefined ? undefined : scatterplot.getScreenPosition(anchorIndex);
-        if (anchorPosition === undefined) {
+        const originPosition = scatterplot.getScreenPosition(origin.index);
+        if (originPosition === undefined) {
             setBand(null);
             return;
         }
         const hoveredIndex = hoveredIndexRef.current;
         const hoveredPosition =
-            hoveredIndex === null || hoveredIndex === anchorIndex
+            hoveredIndex === null || hoveredIndex === origin.index
                 ? undefined
                 : scatterplot.getScreenPosition(hoveredIndex);
-        const next: ScreenSegment = { first: anchorPosition, second: hoveredPosition ?? cursor };
+        const next: ScreenSegment = { first: originPosition, second: hoveredPosition ?? cursor };
         setBand((current) => (sameSegment(current, next) ? current : next));
     }, []);
 
@@ -498,23 +499,49 @@ export function CloudView({
             }
         });
 
-        // Taken in the capture phase, before the library's own listeners on this same canvas: a
-        // Shift press over a point would otherwise start its lasso, whose release deselects the
-        // point already highlighted, and the click would select and so play the point pressed.
-        function handleShiftPress(event: MouseEvent): void {
-            if (event.shiftKey && hoveredIndexRef.current !== null) {
-                event.stopImmediatePropagation();
+        function cursorOf(event: MouseEvent): ScreenPosition {
+            const bounds = canvas.getBoundingClientRect();
+            return [event.clientX - bounds.left, event.clientY - bounds.top];
+        }
+
+        function handleRightPress(event: MouseEvent): void {
+            if (event.button !== RIGHT_BUTTON) {
+                return;
+            }
+            const hoveredIndex = hoveredIndexRef.current;
+            const anchorHash = anchorRef.current;
+            const anchorIndex = anchorHash === null ? undefined : indexByHashRef.current.get(anchorHash);
+            const index = hoveredIndex ?? anchorIndex;
+            if (index === undefined) {
+                return;
+            }
+            dragOriginRef.current = { index, pressedOnPoint: hoveredIndex !== null };
+            cursorRef.current = cursorOf(event);
+            repinBand();
+        }
+
+        function handleRightRelease(event: MouseEvent): void {
+            const origin = dragOriginRef.current;
+            if (event.button !== RIGHT_BUTTON || origin === null) {
+                return;
+            }
+            dragOriginRef.current = null;
+            repinBand();
+            const targetIndex = hoveredIndexRef.current;
+            const first = pointsRef.current[origin.index]?.ref;
+            const second = targetIndex === null ? undefined : pointsRef.current[targetIndex]?.ref;
+            if (first === undefined || second === undefined) {
+                return;
+            }
+            if (targetIndex !== origin.index) {
+                onJoinRef.current(first, second);
+            } else if (origin.pressedOnPoint) {
+                onCompareRef.current(second);
             }
         }
 
-        function handleShiftClick(event: MouseEvent): void {
-            const index = hoveredIndexRef.current;
-            const entity = index === null ? undefined : pointsRef.current[index]?.ref;
-            if (!event.shiftKey || entity === undefined) {
-                return;
-            }
-            event.stopImmediatePropagation();
-            onCompareRef.current(entity);
+        function handleContextMenu(event: MouseEvent): void {
+            event.preventDefault();
         }
 
         function handleClick(): void {
@@ -532,9 +559,7 @@ export function CloudView({
         }
 
         function handleMouseMove(event: MouseEvent): void {
-            const bounds = canvas.getBoundingClientRect();
-            cursorRef.current = [event.clientX - bounds.left, event.clientY - bounds.top];
-            shiftHeldRef.current = event.shiftKey;
+            cursorRef.current = cursorOf(event);
             repinBand();
         }
 
@@ -543,34 +568,23 @@ export function CloudView({
             repinBand();
         }
 
-        // Read on the window, so Shift pressed or released while the cursor rests over the canvas
-        // shows or drops the band without a move.
-        function handleShiftKey(event: KeyboardEvent): void {
-            if (event.key === "Shift") {
-                shiftHeldRef.current = event.type === "keydown";
-                repinBand();
-            }
-        }
-
-        canvas.addEventListener("mousedown", handleShiftPress, { capture: true });
-        canvas.addEventListener("click", handleShiftClick, { capture: true });
+        canvas.addEventListener("mousedown", handleRightPress);
+        canvas.addEventListener("contextmenu", handleContextMenu);
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("dblclick", handleDoubleClick);
         canvas.addEventListener("mousemove", handleMouseMove);
         canvas.addEventListener("mouseleave", handleMouseLeave);
-        window.addEventListener("keydown", handleShiftKey);
-        window.addEventListener("keyup", handleShiftKey);
+        window.addEventListener("mouseup", handleRightRelease);
 
         return (): void => {
             canceled = true;
-            canvas.removeEventListener("mousedown", handleShiftPress, { capture: true });
-            canvas.removeEventListener("click", handleShiftClick, { capture: true });
+            canvas.removeEventListener("mousedown", handleRightPress);
+            canvas.removeEventListener("contextmenu", handleContextMenu);
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("dblclick", handleDoubleClick);
             canvas.removeEventListener("mousemove", handleMouseMove);
             canvas.removeEventListener("mouseleave", handleMouseLeave);
-            window.removeEventListener("keydown", handleShiftKey);
-            window.removeEventListener("keyup", handleShiftKey);
+            window.removeEventListener("mouseup", handleRightRelease);
             scatterplot.unsubscribe(selectSubscription);
             scatterplot.unsubscribe(pointOverSubscription);
             scatterplot.unsubscribe(pointOutSubscription);
@@ -628,10 +642,6 @@ export function CloudView({
     }, [link, repinLink]);
 
     useEffect(() => {
-        repinBand();
-    }, [anchor, repinBand]);
-
-    useEffect(() => {
         const container = containerRef.current;
         if (container === null) {
             return undefined;
@@ -683,7 +693,7 @@ export function CloudView({
                     <span className="cloud-ping-ring cloud-ping-ring-delayed" />
                 </span>
             )}
-            {band !== null && <MorphBand anchor={band.first} cursor={band.second} />}
+            {band !== null && <MorphBand origin={band.first} cursor={band.second} />}
             {link !== null && linkScreen !== null && (
                 <MorphLink
                     first={linkScreen.first}

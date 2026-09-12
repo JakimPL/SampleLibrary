@@ -265,7 +265,7 @@ frontend-install:
 
 .PHONY: frontend-dev
 frontend-dev:
-	cd frontend && $(NPM) run dev
+	cd frontend && $(NPM) run dev -- --host
 
 .PHONY: frontend-build
 frontend-build:

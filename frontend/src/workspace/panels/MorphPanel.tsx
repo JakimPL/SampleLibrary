@@ -16,7 +16,8 @@ import { useSelectionStore } from "../selectionStore";
 import { useEntityRowInteractions } from "../useEntityRowInteractions";
 
 const WEIGHT_DECIMAL_PLACES = 2;
-const NO_PAIR_HINT = "No morph pair yet — click a sample, then Shift-click another in the Cloud.";
+const NO_PAIR_HINT =
+    "No morph pair yet — in the Cloud, drag from one sample to another with the right mouse button, or click one and right-click another.";
 const OFFLINE_NOTICE = "Morphing is offline: the inference service is not reachable.";
 const RATE_UNKNOWN = "rate unknown";
 
@@ -176,7 +177,7 @@ function MorphPair({ first, second, status }: MorphPairProps): ReactElement {
 
 /**
  * Two samples, a weight between them, and the morph that weight names: the pair comes from the
- * cloud's Shift-click or from the shell's own focus and comparison slots, the slider mirrors the
+ * cloud's right-button gesture or from the shell's own focus and comparison slots, the slider mirrors the
  * marker on the cloud, and Play sounds the render through the shared preview element. The panel
  * says so when no inference process answers, and offers to look again.
  */
