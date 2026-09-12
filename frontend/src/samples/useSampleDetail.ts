@@ -56,5 +56,5 @@ export function useSampleDetail(sampleHash: string): FetchState<SampleDetailWith
         ]);
         return { sample, relations, similar };
     }, [sampleHash]);
-    return useFetch(loader, [sampleHash], sampleDetailCacheKey(sampleHash));
+    return useFetch(loader, [sampleHash], { cacheKey: sampleDetailCacheKey(sampleHash) });
 }

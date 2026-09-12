@@ -6,7 +6,7 @@ export const LABEL_TAGS_CACHE_KEY = "label-tags";
 
 const NO_DEPENDENCIES: readonly unknown[] = [];
 
-/** The tag tree inside the labels, shared through the request cache and dropped whenever a label is written. */
-export function useLabelTags(): FetchState<readonly TagSummary[]> {
-    return useFetch(getLabelTags, NO_DEPENDENCIES, LABEL_TAGS_CACHE_KEY);
+/** The tag tree inside the labels, shared through the request cache and dropped whenever a label is written; asked for once wanted. */
+export function useLabelTags(enabled: boolean): FetchState<readonly TagSummary[]> {
+    return useFetch(getLabelTags, NO_DEPENDENCIES, { cacheKey: LABEL_TAGS_CACHE_KEY, enabled });
 }

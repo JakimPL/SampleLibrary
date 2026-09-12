@@ -316,6 +316,38 @@ accordingly). `samplecloud` in particular writes into its own experiment
 until `reduce_and_persist_coordinates`'s own explicit promotion step, so an in-progress extraction
 run has no visible effect on what the server or other experiments see until that promotion happens.
 
+### What the cloud costs
+
+Measured on the real catalog of 127,588 samples over localhost on 2026-09-12, one uvicorn worker,
+before and after each tier of the network work. The stages script
+(`runs/cloud-2026-09-12/measure_stages.py` under the library root) times the server's own work
+with no server running; `measure_routes.sh` beside it reads wire bytes and times off a running
+`make serve`; the browser's parse time is `JSON.parse` over the fetched text in the console.
+
+| Route or event | Before | After the trims | After the cache |
+|---|---|---|---|
+| `/api/cloud` wire bytes | 25.1 MB, plain | | |
+| `/api/cloud` time to first byte | 2.7 s | | |
+| `/api/cloud` server build | 2.7 s (reads 1.5, classification 0.66, models 0.55, serialization 0.23) | | |
+| `/api/cloud/suggestions` wire bytes and time | 26 MB, 4.0 s | | |
+| `/api/cloud/suggestion-tags` time | 2.7 s | | |
+| Cloud panel mount, category mode | 6 requests, 53 MB | | |
+| Cloud panel reopen | 6 requests again | | |
+| A hover | 2 requests, 2 connections, 120 ms | | |
+| A replay of one sample | full download again | | |
+| Browser parse of `/api/cloud` | 66 ms | | |
+
+The trims: gzip on every response past a kilobyte; the audio route answering from the store with
+an immutable cache lifetime and no catalog round trip; the suggestion tags counted in SQL; the
+cloud's points without the hand label a viewer never read and with coordinates rounded to four
+decimals; the module points without a timestamp each; the suggestions as each sample's first pick
+alone; a hover served by one preview route reading the stored thumbnail; the points cached for
+the session in the browser and the label and suggestion sources fetched only in the mode that
+paints by them. Measured on the same body, gzip alone takes the cloud's response to 9 MB and the
+trims together to 6.7 MB; a binary columnar layout would reach 5.2 MB, most of it the hashes, and
+is worth its own format only if the gzipped body passes 10 MB or the download and parse pass a
+second on a real link.
+
 ## Sample cloud embeddings
 
 `samplecloud.backends.FeatureExtractor` is a protocol, not a fixed implementation: anything
@@ -440,8 +472,8 @@ most three rows, and a sample carrying several painted tags takes the first it w
 uncategorized points use.
 
 A third kind of label travels beside the two: what the listening model hears a sample as, the
-suggestions a `zero_shot` scoring wrote. `GET /cloud/suggestions` carries every sample's suggested
-tag paths, closest first, with their scores, apart from the points like the hand labels, and
+suggestions a `zero_shot` scoring wrote. `GET /cloud/suggestions` carries each sample's first
+suggested tag path with its score, apart from the points like the hand labels, and
 `GET /cloud/suggestion-tags` the tags suggested first with their counts, each counting toward its
 category and ranked by its place in the scoring's vocabulary, so the same legend and palette paint
 the cloud by suggestion. A sample's detail carries `suggested_labels`, and `SuggestedLabels` shows

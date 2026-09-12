@@ -1,7 +1,7 @@
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { CloudPoint, ModuleCloudPoint } from "../../api/cloud";
+import type { CloudLabel, CloudPoint, CloudSuggestion, ModuleCloudPoint } from "../../api/cloud";
 import { type CloudLink, CloudView } from "../../cloud/CloudView";
 import type { CloudEntityPoint } from "../../cloud/geometry";
 import {
@@ -94,14 +94,20 @@ function useActiveCloudPoints(tab: CloudTab): FetchState<readonly CloudEntityPoi
     return tab === "samples" ? samplePointsState : modulePointsState;
 }
 
+/** A sample's first suggestion in the shape the label coloring paints by: one path, the way a written label's first tag is. */
+function suggestionsAsLabels(suggestions: readonly CloudSuggestion[]): readonly CloudLabel[] {
+    return suggestions.map((suggestion) => ({ sample_hash: suggestion.sample_hash, paths: [suggestion.path] }));
+}
+
 /**
  * How the sample points are colored. Under the label mode the tags a person has painted are their
  * own choice once they touch the legend, and the most used ones until then -- so a vocabulary that
  * grows during a labeling session keeps showing whatever was chosen, and a fresh session shows
  * the tags with the most to show. The suggestion mode paints the same way from what the listening
  * model heard, its own legend drawn from the scoring's vocabulary; a chosen set belongs to one mode,
- * so switching starts the other from its own most-used tags. Every source is fetched from the first
- * render, so switching modes never waits on a request.
+ * so switching starts the other from its own most-used tags. A mode's sources are fetched the first
+ * time it is chosen and kept for the session, so the category mode, which needs none of them,
+ * costs nothing beyond the points.
  */
 function useSampleColoring(mode: ColoringMode): {
     readonly coloring: PointColoring;
@@ -109,10 +115,10 @@ function useSampleColoring(mode: ColoringMode): {
     readonly painted: readonly string[];
     readonly togglePainted: (name: string) => void;
 } {
-    const labelsState = useCloudLabels();
-    const tagsState = useLabelTags();
-    const suggestionsState = useCloudSuggestions();
-    const suggestionTagsState = useSuggestionTags();
+    const labelsState = useCloudLabels(mode === "label");
+    const tagsState = useLabelTags(mode === "label");
+    const suggestionsState = useCloudSuggestions(mode === "suggestion");
+    const suggestionTagsState = useSuggestionTags(mode === "suggestion");
     const [chosen, setChosen] = useState<readonly string[] | null>(null);
     useEffect(() => {
         setChosen(null);
@@ -127,7 +133,7 @@ function useSampleColoring(mode: ColoringMode): {
             return labelColoring(labelsState.data, tags, painted);
         }
         if (mode === "suggestion" && suggestionsState.status === "success") {
-            return labelColoring(suggestionsState.data, tags, painted);
+            return labelColoring(suggestionsAsLabels(suggestionsState.data), tags, painted);
         }
         return CATEGORY_COLORING;
     }, [mode, labelsState, suggestionsState, tags, painted]);

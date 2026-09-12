@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     getSample,
     getSampleDistance,
+    getSamplePreview,
     getSampleRelations,
     getSimilarSamples,
     listSamples,
@@ -100,5 +101,16 @@ describe("getSimilarSamples", () => {
 describe("sampleAudioUrl", () => {
     it("builds the audio URL without fetching anything", () => {
         expect(sampleAudioUrl("abc")).toBe("/api/samples/abc/audio");
+    });
+});
+
+describe("getSamplePreview", () => {
+    it("requests the sample's preview by hash", async () => {
+        const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+        vi.stubGlobal("fetch", fetchMock);
+
+        await getSamplePreview("a".repeat(64));
+
+        expect(fetchMock).toHaveBeenCalledWith(`/api/samples/${"a".repeat(64)}/preview`);
     });
 });

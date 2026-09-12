@@ -428,22 +428,40 @@ def test_get_sample_audio_refuses_a_path_that_is_no_hash(client: TestClient) -> 
     assert response.status_code == 422
 
 
-def test_get_sample_waveform_returns_peaks(client: TestClient, connection: Connection, tmp_path: Path) -> None:
-    sample = Sample(hash=SAMPLE_HASH_A, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=4)
-    PostgresSampleRepository(connection).upsert(sample)
-    pcm = np.array([[0.5], [-0.5], [0.25], [-0.25]], dtype=np.float64)
-    audio_store.write(tmp_path, SamplePCM(sample=sample, pcm=pcm))
+def test_get_sample_preview_reads_the_name_the_category_and_the_stored_thumbnail(
+    client: TestClient, connection: Connection
+) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=sample, module=module, slot=0, name="kick")
+    PostgresSampleThumbnailRepository(connection).upsert(
+        SampleThumbnail(sample_hash=sample.hash, bucket_count=2, minimums=(-0.5, -0.25), maximums=(0.5, 0.25))
+    )
 
-    response = client.get(f"/samples/{sample.hash}/waveform")
+    response = client.get(f"/samples/{sample.hash}/preview")
 
     assert response.status_code == 200
-    peaks = response.json()
-    assert len(peaks) == 4
-    assert all({"minimum", "maximum"} == set(peak) for peak in peaks)
+    assert response.json() == {
+        "display_name": "kick",
+        "category": "kick",
+        "hand_label": None,
+        "thumbnail": [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}],
+    }
 
 
-def test_get_sample_waveform_404s_for_an_unknown_hash(client: TestClient) -> None:
-    response = client.get(f"/samples/{'f' * 64}/waveform")
+def test_get_sample_preview_has_no_thumbnail_before_the_pass_reaches_the_sample(
+    client: TestClient, connection: Connection
+) -> None:
+    _insert_sample(connection, SAMPLE_HASH_A)
+
+    body = client.get(f"/samples/{SAMPLE_HASH_A}/preview").json()
+
+    assert body["thumbnail"] is None
+    assert body["category"] == "uncategorized"
+
+
+def test_get_sample_preview_404s_for_an_unknown_hash(client: TestClient) -> None:
+    response = client.get(f"/samples/{'f' * 64}/preview")
 
     assert response.status_code == 404
 

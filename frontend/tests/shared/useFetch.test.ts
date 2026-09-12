@@ -26,7 +26,9 @@ describe("useFetch", () => {
     it("seeds directly from a cache hit under cacheKey, skipping the loading state entirely", async () => {
         await cachedRequest("sample-a", () => Promise.resolve("cached data"));
 
-        const { result } = renderHook(() => useFetch(() => Promise.resolve("fresh data"), [], "sample-a"));
+        const { result } = renderHook(() =>
+            useFetch(() => Promise.resolve("fresh data"), [], { cacheKey: "sample-a" }),
+        );
 
         expect(result.current).toEqual({ status: "success", data: "cached data" });
     });
@@ -34,9 +36,27 @@ describe("useFetch", () => {
     it("shares one request across two hooks mounted with the same cacheKey", () => {
         const loader = vi.fn().mockReturnValue(new Promise(() => undefined));
 
-        renderHook(() => useFetch(loader, [], "shared-key"));
-        renderHook(() => useFetch(loader, [], "shared-key"));
+        renderHook(() => useFetch(loader, [], { cacheKey: "shared-key" }));
+        renderHook(() => useFetch(loader, [], { cacheKey: "shared-key" }));
 
+        expect(loader).toHaveBeenCalledTimes(1);
+    });
+
+    it("runs nothing while it is not enabled, and once enabled runs the loader once", async () => {
+        const loader = vi.fn().mockResolvedValue("data");
+
+        const { result, rerender } = renderHook(({ enabled }) => useFetch(loader, [], { enabled }), {
+            initialProps: { enabled: false },
+        });
+
+        expect(loader).not.toHaveBeenCalled();
+        expect(result.current).toEqual({ status: "loading" });
+
+        rerender({ enabled: true });
+
+        await waitFor(() => {
+            expect(result.current).toEqual({ status: "success", data: "data" });
+        });
         expect(loader).toHaveBeenCalledTimes(1);
     });
 });

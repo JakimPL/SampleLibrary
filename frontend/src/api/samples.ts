@@ -8,6 +8,7 @@ export type SampleRelation = components["schemas"]["SampleRelation"];
 export type SampleDistance = components["schemas"]["SampleDistance"];
 export type SimilarSample = components["schemas"]["SimilarSample"];
 export type WaveformPeak = components["schemas"]["WaveformPeak"];
+export type SamplePreview = components["schemas"]["SamplePreview"];
 export type SampleSort = components["schemas"]["SampleSort"];
 
 /** Which samples a listing walks, and the order it walks them in. */
@@ -52,8 +53,9 @@ export async function getSimilarSamples(sampleHash: string): Promise<readonly Si
     return requestJson<readonly SimilarSample[]>(`/samples/${sampleHash}/similar`);
 }
 
-export async function getSampleWaveform(sampleHash: string): Promise<readonly WaveformPeak[]> {
-    return requestJson<readonly WaveformPeak[]>(`/samples/${sampleHash}/waveform`);
+/** A sample as a hover shows it: name, category, hand label and the stored thumbnail, in one light request. */
+export async function getSamplePreview(sampleHash: string): Promise<SamplePreview> {
+    return requestJson<SamplePreview>(`/samples/${sampleHash}/preview`);
 }
 
 export function sampleAudioUrl(sampleHash: string): string {

@@ -55,6 +55,24 @@ def test_get_cloud_returns_every_stored_coordinate(client: TestClient, connectio
     assert body[0]["x"] == 1.5
     assert body[0]["y"] == -2.5
     assert body[0]["category"] == "uncategorized"
+    assert "hand_label" not in body[0]
+    assert "computed_at" not in body[0]
+
+
+def test_get_cloud_rounds_each_coordinate_to_what_a_viewer_can_place(
+    client: TestClient, connection: Connection
+) -> None:
+    PostgresSampleRepository(connection).upsert(
+        Sample(hash=SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
+    )
+    PostgresCloudCoordinateRepository(connection).upsert(
+        SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.23456789, y=-2.98765432, computed_at=datetime.now(UTC))
+    )
+
+    body = client.get("/cloud").json()
+
+    assert body[0]["x"] == 1.2346
+    assert body[0]["y"] == -2.9877
 
 
 def test_get_cloud_resolves_each_point_s_category_from_its_occurrence_names(
@@ -149,6 +167,7 @@ def test_get_module_cloud_returns_every_stored_coordinate(client: TestClient, co
     assert body[0]["module_hash"] == MODULE_HASH
     assert body[0]["x"] == 1.5
     assert body[0]["y"] == -2.5
+    assert "computed_at" not in body[0]
 
 
 def test_get_module_cloud_on_an_empty_catalog_returns_nothing(client: TestClient) -> None:
@@ -215,18 +234,14 @@ def _store_samples(connection: Connection, *hashes: str) -> None:
         )
 
 
-def test_get_cloud_suggestions_carries_each_sample_s_paths_and_scores_closest_first(
-    client: TestClient, connection: Connection
-) -> None:
+def test_get_cloud_suggestions_carries_each_sample_s_closest_pick(client: TestClient, connection: Connection) -> None:
     _store_samples(connection, SAMPLE_HASH)
     seed_scoring(connection, {SAMPLE_HASH: (("HI-HAT: CLOSED", 0.7), ("SNARE", 0.4))})
 
     response = client.get("/cloud/suggestions")
 
     assert response.status_code == 200
-    assert response.json() == [
-        {"sample_hash": SAMPLE_HASH, "paths": [["HI-HAT", "CLOSED"], ["SNARE"]], "scores": [0.7, 0.4]}
-    ]
+    assert response.json() == [{"sample_hash": SAMPLE_HASH, "path": ["HI-HAT", "CLOSED"], "score": 0.7}]
 
 
 def test_get_cloud_suggestions_reads_the_newest_scoring_alone(client: TestClient, connection: Connection) -> None:
@@ -236,7 +251,7 @@ def test_get_cloud_suggestions_reads_the_newest_scoring_alone(client: TestClient
 
     body = client.get("/cloud/suggestions").json()
 
-    assert [entry["paths"] for entry in body] == [[["BASS DRUM"]]]
+    assert [entry["path"] for entry in body] == [["BASS DRUM"]]
 
 
 def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_first_picks(

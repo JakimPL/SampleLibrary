@@ -5,7 +5,7 @@ from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import Path as RoutePath
-from fastapi import Query, Response
+from fastapi import Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import Connection
@@ -14,6 +14,7 @@ from trackmod.schema.scalars import Rate
 from samplecore.categorization import classify_sample_category
 from samplecore.equivalence_classes import classes_by_member_hash, compute_equivalence_classes
 from samplecore.models.base import FROZEN
+from samplecore.models.category import SampleCategory
 from samplecore.models.module import Module
 from samplecore.models.note_event import SamplePlaybackRate
 from samplecore.models.relation import SampleRelation
@@ -46,7 +47,8 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
-from samplecore.waveform import DEFAULT_WAVEFORM_BUCKET_COUNT, WaveformPeak, compute_waveform_peaks
+from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
+from samplecore.waveform import WaveformPeak
 from sampleserver.caching import IMMUTABLE_CACHE_CONTROL
 from sampleserver.dependencies import get_connection, get_library_root, get_spectral_vectors
 from sampleserver.equivalence import equivalence_class_members
@@ -280,25 +282,46 @@ def get_sample_audio(
     return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
 
 
-@router.get("/{sample_hash}/waveform")
-def get_sample_waveform(
-    sample_hash: str,
-    response: Response,
-    connection: Connection = Depends(get_connection),
-    library_root: Path = Depends(get_library_root),
-) -> tuple[WaveformPeak, ...]:
-    """A compact amplitude-envelope preview of the sample's own waveform, immutable like the object it reads.
+class SamplePreview(BaseModel):
+    """What a glance at a sample shows: its name, category and hand label, and the stored thumbnail of its waveform.
+
+    ``thumbnail`` is ``None`` for a sample the thumbnail pass has not reached, since a preview
+    with nothing to draw is still a preview with a name.
+    """
+
+    model_config = FROZEN
+
+    display_name: str
+    category: SampleCategory
+    hand_label: str | None
+    thumbnail: tuple[WaveformPeak, ...] | None
+
+
+@router.get("/{sample_hash}/preview")
+def get_sample_preview(sample_hash: str, connection: Connection = Depends(get_connection)) -> SamplePreview:
+    """A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
+
+    Four narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
+    point a cursor crosses, so it costs what a glance is worth.
 
     Raises:
         HTTPException: 404 when no sample is cataloged under this hash.
     """
-    sample = PostgresSampleRepository(connection).get(sample_hash)
-    if sample is None:
+    repository = PostgresSampleRepository(connection)
+    if repository.get(sample_hash) is None:
         raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
-    response.headers["Cache-Control"] = IMMUTABLE_CACHE_CONTROL
-    pcm = audio_store.read(library_root, sample).pcm
-    return compute_waveform_peaks(pcm, bucket_count=DEFAULT_WAVEFORM_BUCKET_COUNT)
+    names_by_hash, _ = repository.names_and_rates_by_hash([sample_hash])
+    names = names_by_hash.get(sample_hash, ())
+    annotation = PostgresSampleAnnotationRepository(connection).get(sample_hash)
+    return SamplePreview(
+        display_name=choose_dominant_name(names),
+        category=classify_sample_category(
+            names + repository.instrument_names_by_hash([sample_hash]).get(sample_hash, ())
+        ),
+        hand_label=annotation.label if annotation is not None else None,
+        thumbnail=peaks_from_thumbnail(PostgresSampleThumbnailRepository(connection).get(sample_hash)),
+    )
 
 
 @router.get("/{sample_hash}/relations")

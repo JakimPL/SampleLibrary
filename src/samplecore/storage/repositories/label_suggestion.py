@@ -6,7 +6,7 @@ from typing import Any, Final, Protocol
 
 from sqlalchemy import Connection, Row, func, select
 
-from samplecore.models.label_suggestion import SampleLabelSuggestion
+from samplecore.models.label_suggestion import SampleFirstPick, SampleLabelSuggestion
 from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, sample_label_suggestion
 
 _COLUMN_NAMES: Final[tuple[str, ...]] = ("experiment_id", "sample_hash", "rank", "label", "score", "computed_at")
@@ -22,6 +22,8 @@ class SampleLabelSuggestionRepository(Protocol):
     def get_many(
         self, experiment_id: int, sample_hashes: list[str]
     ) -> dict[str, tuple[SampleLabelSuggestion, ...]]: ...
+
+    def first_picks_for_experiment(self, experiment_id: int) -> tuple[SampleFirstPick, ...]: ...
 
     def first_pick_counts(self, experiment_id: int) -> dict[str, int]: ...
 
@@ -88,6 +90,21 @@ class PostgresSampleLabelSuggestionRepository:
                 by_hash[row.sample_hash].append(_row_to_suggestion(row))
 
         return {sample_hash: tuple(suggestions) for sample_hash, suggestions in by_hash.items()}
+
+    def first_picks_for_experiment(self, experiment_id: int) -> tuple[SampleFirstPick, ...]:
+        """One scoring's closest suggestion per sample: the three columns a whole-catalog view paints by."""
+        statement = (
+            select(
+                sample_label_suggestion.c.sample_hash, sample_label_suggestion.c.label, sample_label_suggestion.c.score
+            )
+            .where(sample_label_suggestion.c.experiment_id == experiment_id)
+            .where(sample_label_suggestion.c.rank == 0)
+            .order_by(sample_label_suggestion.c.sample_hash)
+        )
+        return tuple(
+            SampleFirstPick(sample_hash=row.sample_hash, label=row.label, score=row.score)
+            for row in self._connection.execute(statement)
+        )
 
     def first_pick_counts(self, experiment_id: int) -> dict[str, int]:
         """How many samples one scoring suggests each label for first, counted where the rows are."""

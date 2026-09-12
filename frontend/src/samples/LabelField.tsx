@@ -29,7 +29,7 @@ interface LabelFieldProps {
  */
 export function LabelField({ label, isSaving, onCommit, onLeave, takesFocus }: LabelFieldProps): ReactElement {
     const vocabularyListId = useId();
-    const vocabulary = useFetch(getLabelVocabulary, [], VOCABULARY_CACHE_KEY);
+    const vocabulary = useFetch(getLabelVocabulary, [], { cacheKey: VOCABULARY_CACHE_KEY });
     const [text, setText] = useState(label ?? "");
     const inputRef = useRef<HTMLInputElement | null>(null);
 

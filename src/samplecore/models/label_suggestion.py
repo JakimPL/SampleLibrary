@@ -28,3 +28,13 @@ class SampleLabelSuggestion(BaseModel):
     label: LabelText
     score: float
     computed_at: datetime
+
+
+class SampleFirstPick(BaseModel):
+    """One sample's closest suggestion in a scoring: the three columns a view of the whole catalog paints by."""
+
+    model_config = FROZEN
+
+    sample_hash: SampleHash
+    label: LabelText
+    score: float

@@ -5,15 +5,14 @@ import type * as ModulesApi from "../../../src/api/modules";
 import type * as SamplesApi from "../../../src/api/samples";
 import { CloudHoverTooltip } from "../../../src/workspace/panels/CloudHoverTooltip";
 
-const { getSample, getSampleWaveform, getModule } = vi.hoisted(() => ({
-    getSample: vi.fn(),
-    getSampleWaveform: vi.fn(),
+const { getSamplePreview, getModule } = vi.hoisted(() => ({
+    getSamplePreview: vi.fn(),
     getModule: vi.fn(),
 }));
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleWaveform };
+    return { ...actual, getSamplePreview };
 });
 
 vi.mock("../../../src/api/modules", async () => {
@@ -26,8 +25,7 @@ const MODULE_HASH = "b".repeat(64);
 
 describe("CloudHoverTooltip", () => {
     it("shows nothing while the sample preview is still loading", () => {
-        getSample.mockReturnValue(new Promise(() => undefined));
-        getSampleWaveform.mockReturnValue(new Promise(() => undefined));
+        getSamplePreview.mockReturnValue(new Promise(() => undefined));
 
         const { container } = render(
             <CloudHoverTooltip entity={{ kind: "sample", hash: SAMPLE_HASH }} x={10} y={20} />,
@@ -36,21 +34,13 @@ describe("CloudHoverTooltip", () => {
         expect(container).toBeEmptyDOMElement();
     });
 
-    it("shows the sample's display name and short hash once loaded", async () => {
-        getSample.mockResolvedValue({
-            hash: SAMPLE_HASH,
-            depth: 16,
-            channels: 1,
-            frames: 4096,
-            occurrences: [],
-            size_bytes: 8192,
+    it("shows the sample's display name and short hash once the one preview request lands", async () => {
+        getSamplePreview.mockResolvedValue({
             display_name: "kick",
             category: "kick",
             hand_label: null,
-            playback_rate_hz: 8363,
-            duration_seconds: 0.09,
+            thumbnail: [{ minimum: -0.5, maximum: 0.5 }],
         });
-        getSampleWaveform.mockResolvedValue([{ minimum: -0.5, maximum: 0.5 }]);
 
         render(<CloudHoverTooltip entity={{ kind: "sample", hash: SAMPLE_HASH }} x={10} y={20} />);
 
@@ -59,23 +49,16 @@ describe("CloudHoverTooltip", () => {
         });
         expect(screen.getByText(SAMPLE_HASH.slice(0, 8))).toBeInTheDocument();
         expect(screen.getByText("Kick")).toBeInTheDocument();
+        expect(getSamplePreview).toHaveBeenCalledWith(SAMPLE_HASH);
     });
 
-    it("falls back to the unnamed-sample placeholder for an empty display name", async () => {
-        getSample.mockResolvedValue({
-            hash: SAMPLE_HASH,
-            depth: 16,
-            channels: 1,
-            frames: 4096,
-            occurrences: [],
-            size_bytes: 8192,
+    it("falls back to the unnamed-sample placeholder for an empty display name, with no thumbnail yet", async () => {
+        getSamplePreview.mockResolvedValue({
             display_name: "",
             category: "uncategorized",
             hand_label: null,
-            playback_rate_hz: null,
-            duration_seconds: 0.09,
+            thumbnail: null,
         });
-        getSampleWaveform.mockResolvedValue([]);
 
         render(<CloudHoverTooltip entity={{ kind: "sample", hash: SAMPLE_HASH }} x={10} y={20} />);
 

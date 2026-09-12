@@ -3,7 +3,7 @@ import type { TagSummary } from "./curation";
 import type { components } from "./schema";
 
 export type CloudPoint = components["schemas"]["SampleCloudPoint"];
-export type ModuleCloudPoint = components["schemas"]["ModuleCloudCoordinate"];
+export type ModuleCloudPoint = components["schemas"]["ModuleCloudPoint"];
 /** What a person decided one sample is: its tag paths, in the order they wrote them. */
 export type CloudLabel = components["schemas"]["CloudLabel"];
 /** What the listening model hears one sample as: its suggested tag paths, closest first, with scores. */

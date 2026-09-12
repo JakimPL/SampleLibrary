@@ -109,8 +109,12 @@ export interface paths {
          * Get Sample Audio
          * @description The sample's own canonical audio, as stored in the content-addressable store.
          *
+         *     The object is content-addressed, so it is served with a cache lifetime of a year and read
+         *     straight off the store by its hash, with no catalog round trip on the way to a sound: the
+         *     hash's own shape is checked on the path, which is what keeps a request inside the store.
+         *
          *     Raises:
-         *         HTTPException: 404 when no sample is cataloged under this hash.
+         *         HTTPException: 404 when the store holds no object under this hash.
          */
         readonly get: operations["get_sample_audio_api_samples__sample_hash__audio_get"];
         readonly put?: never;
@@ -121,7 +125,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/api/samples/{sample_hash}/waveform": {
+    readonly "/api/samples/{sample_hash}/preview": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -129,13 +133,16 @@ export interface paths {
             readonly cookie?: never;
         };
         /**
-         * Get Sample Waveform
-         * @description A compact amplitude-envelope preview of the sample's own waveform.
+         * Get Sample Preview
+         * @description A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
+         *
+         *     Four narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
+         *     point a cursor crosses, so it costs what a glance is worth.
          *
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly get: operations["get_sample_waveform_api_samples__sample_hash__waveform_get"];
+        readonly get: operations["get_sample_preview_api_samples__sample_hash__preview_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -295,7 +302,7 @@ export interface paths {
         };
         /**
          * Get Cloud Suggestions
-         * @description Every sample's suggested tags from the newest scoring, for coloring the cloud by what a model hears.
+         * @description Every sample's first suggested tag from the newest scoring, for coloring the cloud by what a model hears.
          *
          *     These travel apart from the points the way the hand labels do: a scoring changes only when a
          *     pass writes a new one, and a viewer joins them to the points by hash. An empty answer says no
@@ -582,19 +589,18 @@ export interface components {
         };
         /**
          * CloudSuggestion
-         * @description What a listening model hears one sample as: its suggested tag paths, closest first, with their scores.
+         * @description What a listening model hears one sample as first: its closest suggested tag path, and how sure it was.
          *
-         *     The first path is the one a viewer paints the point with, the way the first written tag of a
-         *     hand label is; the scores travel beside the paths so a viewer inspecting a point sees how sure
-         *     the model was of each.
+         *     The first pick is the one a viewer paints the point with, the way the first written tag of a
+         *     hand label is, and the one the legend counts; a sample's detail lists the picks behind it.
          */
         readonly CloudSuggestion: {
             /** Sample Hash */
             readonly sample_hash: string;
-            /** Paths */
-            readonly paths: readonly (readonly string[])[];
-            /** Scores */
-            readonly scores: readonly number[];
+            /** Path */
+            readonly path: readonly string[];
+            /** Score */
+            readonly score: number;
         };
         /** HTTPValidationError */
         readonly HTTPValidationError: {
@@ -753,26 +759,16 @@ export interface components {
             readonly ingested_at: string;
         };
         /**
-         * ModuleCloudCoordinate
-         * @description Where one Module sits in the library's 2D embedding space, as of one embedding run.
-         *
-         *     Today's positions come from `samplecloud.placeholder_modules`, seeded from a module's own hash
-         *     rather than a genuine similarity fit -- standing in until a spectral-distance metric makes a
-         *     real per-module embedding possible. A later run's coordinate for a given hash entirely replaces
-         *     an earlier one, mirroring SampleCloudCoordinate's own replacement semantics.
+         * ModuleCloudPoint
+         * @description One module's place in the embedding: the coordinate alone, for the same reason a sample's point is.
          */
-        readonly ModuleCloudCoordinate: {
+        readonly ModuleCloudPoint: {
             /** Module Hash */
             readonly module_hash: string;
             /** X */
             readonly x: number;
             /** Y */
             readonly y: number;
-            /**
-             * Computed At
-             * Format: date-time
-             */
-            readonly computed_at: string;
         };
         /**
          * ModuleDetail
@@ -966,13 +962,12 @@ export interface components {
          *     sample's own occurrence names together with the names of the instruments reaching it -- rather
          *     than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
          *     clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
-         *     the catalog knows no rate for. ``hand_label`` carries what a person decided this sample is, for a
-         *     viewer inspecting a point; the cloud keeps coloring by ``category``, whose fourteen roles hold a
-         *     fixed hue each.
+         *     the catalog knows no rate for.
          *
          *     This carries the coordinate's own fields rather than inheriting them, since a view of the whole
          *     catalog is a hundred thousand of these at once: when the run that placed them was computed says
-         *     nothing about any one point, and a timestamp per point is several megabytes over the wire.
+         *     nothing about any one point, and a timestamp per point is several megabytes over the wire. The
+         *     hand labels travel apart, through `/cloud/labels`, for the same reason.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -982,8 +977,6 @@ export interface components {
             /** Y */
             readonly y: number;
             readonly category: components["schemas"]["SampleCategory"];
-            /** Hand Label */
-            readonly hand_label: string | null;
             /** Playback Rate Hz */
             readonly playback_rate_hz: number | null;
         };
@@ -1090,6 +1083,22 @@ export interface components {
             readonly rate_hz: number;
             /** Event Count */
             readonly event_count: number;
+        };
+        /**
+         * SamplePreview
+         * @description What a glance at a sample shows: its name, category and hand label, and the stored thumbnail of its waveform.
+         *
+         *     ``thumbnail`` is ``None`` for a sample the thumbnail pass has not reached, since a preview
+         *     with nothing to draw is still a preview with a name.
+         */
+        readonly SamplePreview: {
+            /** Display Name */
+            readonly display_name: string;
+            readonly category: components["schemas"]["SampleCategory"];
+            /** Hand Label */
+            readonly hand_label: string | null;
+            /** Thumbnail */
+            readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
         };
         /**
          * SampleRelation
@@ -1468,9 +1477,7 @@ export interface operations {
                 headers: {
                     readonly [name: string]: unknown;
                 };
-                content: {
-                    readonly "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             readonly 422: {
@@ -1483,7 +1490,7 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_waveform_api_samples__sample_hash__waveform_get: {
+    readonly get_sample_preview_api_samples__sample_hash__preview_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1500,7 +1507,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": readonly components["schemas"]["WaveformPeak"][];
+                    readonly "application/json": components["schemas"]["SamplePreview"];
                 };
             };
             /** @description Validation Error */
@@ -1725,7 +1732,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": readonly components["schemas"]["ModuleCloudCoordinate"][];
+                    readonly "application/json": readonly components["schemas"]["ModuleCloudPoint"][];
                 };
             };
         };
