@@ -1,10 +1,13 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as CloudApi from "../../../src/api/cloud";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as SamplesApi from "../../../src/api/samples";
+import { rateBetween } from "../../../src/morph/morphRate";
+import { useMorphStore } from "../../../src/morph/morphStore";
+import type * as AudioPreview from "../../../src/samples/useAudioPreview";
 import { CloudPanel } from "../../../src/workspace/panels/CloudPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
@@ -18,6 +21,7 @@ const {
     getSample,
     getSampleWaveform,
     getModule,
+    play,
 } = vi.hoisted(() => {
     class FakeScatterplot {
         readonly draw = vi.fn().mockResolvedValue(undefined);
@@ -62,6 +66,7 @@ const {
         getSample: vi.fn(),
         getSampleWaveform: vi.fn(),
         getModule: vi.fn(),
+        play: vi.fn(),
     };
 });
 
@@ -77,6 +82,11 @@ vi.mock("../../../src/api/cloud", async () => {
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
     return { ...actual, getSample, getSampleWaveform };
+});
+
+vi.mock("../../../src/samples/useAudioPreview", async () => {
+    const actual = await vi.importActual<typeof AudioPreview>("../../../src/samples/useAudioPreview");
+    return { ...actual, useAudioPreview: () => ({ play, playingKey: null }) };
 });
 
 vi.mock("../../../src/api/modules", async () => {
@@ -318,6 +328,57 @@ describe("CloudPanel", () => {
 
         await waitFor(() => {
             expect(screen.queryByText("snare")).not.toBeInTheDocument();
+        });
+    });
+
+    it("joins the highlighted sample and a Shift-clicked one into the morph pair", async () => {
+        const anchor = "4".repeat(64);
+        const other = "5".repeat(64);
+        getCloud.mockResolvedValue([
+            { sample_hash: anchor, x: 0, y: 0, category: "uncategorized", playback_rate_hz: 8363 },
+            { sample_hash: other, x: 1, y: 1, category: "uncategorized", playback_rate_hz: 16726 },
+        ]);
+        getModuleCloud.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas")).toBeInTheDocument();
+        });
+        act(() => {
+            useSelectionStore.getState().highlightEntity({ kind: "sample", hash: anchor });
+        });
+        latestInstance().emit("pointOver", 1);
+
+        fireEvent.click(latestCanvas(), { shiftKey: true });
+
+        expect(useMorphStore.getState()).toMatchObject({ first: anchor, second: other });
+        expect(useSelectionStore.getState().comparisonSampleHash).toBe(other);
+        expect(play).not.toHaveBeenCalled();
+    });
+
+    it("plays the morph at the points' own rates when the marker is released", async () => {
+        const first = "6".repeat(64);
+        const second = "7".repeat(64);
+        getCloud.mockResolvedValue([
+            { sample_hash: first, x: 0, y: 0, category: "uncategorized", playback_rate_hz: 8363 },
+            { sample_hash: second, x: 1, y: 1, category: "uncategorized", playback_rate_hz: 16726 },
+        ]);
+        getModuleCloud.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas")).toBeInTheDocument();
+        });
+        act(() => {
+            useMorphStore.getState().setPair(first, second);
+        });
+        const marker = await screen.findByRole("slider", { name: "Morph weight" });
+
+        fireEvent.pointerDown(marker, { pointerId: 1, clientX: 10, clientY: 20 });
+        fireEvent.pointerUp(marker, { pointerId: 1, clientX: 10, clientY: 20 });
+
+        expect(play).toHaveBeenCalledWith({
+            key: `/api/morph/audio?first=${first}&second=${second}&weight=0.5`,
+            url: `/api/morph/audio?first=${first}&second=${second}&weight=0.5`,
+            playbackRateHz: rateBetween(8363, 16726, 0.5),
         });
     });
 });

@@ -3,6 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+import { INITIAL_MORPH_STATE, useMorphStore } from "../src/morph/morphStore";
 import { INITIAL_ANNOTATION_STATE, useAnnotationStore } from "../src/samples/annotationStore";
 import { clearRequestCache } from "../src/shared/requestCache";
 import { DEFAULT_THEME_PREFERENCE } from "../src/theme/themeOptions";
@@ -39,6 +40,35 @@ afterEach(() => {
 afterEach(() => {
     useAnnotationStore.setState(INITIAL_ANNOTATION_STATE);
 });
+
+// morphStore is a module-level singleton too, written by the cloud panel's Shift-click and read by
+// the Morph panel, so a pair one test joined would otherwise show up in the next test's panel.
+afterEach(() => {
+    useMorphStore.setState(INITIAL_MORPH_STATE);
+});
+
+// jsdom implements no pointer capture, which the morph marker takes while it is dragged; a no-op
+// pair is enough for a test to drive a drag through pointer events.
+for (const name of ["setPointerCapture", "releasePointerCapture"] as const) {
+    if (!(name in Element.prototype)) {
+        Object.defineProperty(Element.prototype, name, { configurable: true, value: () => undefined });
+    }
+}
+
+// jsdom defines no PointerEvent either, and a pointer event fired without one carries no
+// coordinates; a mouse event with a pointer id is what the marker's drag reads.
+if (!("PointerEvent" in window)) {
+    class PointerEventStub extends MouseEvent {
+        readonly pointerId: number;
+
+        constructor(type: string, init: PointerEventInit = {}) {
+            super(type, init);
+            this.pointerId = init.pointerId ?? 0;
+        }
+    }
+
+    vi.stubGlobal("PointerEvent", PointerEventStub);
+}
 
 // jsdom's localStorage persists across tests in the same file; without clearing it, a test that
 // exercises the shell's own layout persistence (closing/reopening a panel) would leak a saved

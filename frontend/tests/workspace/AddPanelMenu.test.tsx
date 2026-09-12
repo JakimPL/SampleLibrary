@@ -10,6 +10,7 @@ const ALL_PANEL_IDS: readonly PanelId[] = [
     "samples-list",
     "cloud",
     "waveform",
+    "morph",
     "module-detail",
     "sample-detail",
     "stats",

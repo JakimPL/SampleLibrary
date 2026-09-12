@@ -3,13 +3,14 @@ import type { ComponentType } from "react";
 import { CloudPanel } from "./panels/CloudPanel";
 import { ModuleDetailPanel } from "./panels/ModuleDetailPanel";
 import { ModulesListPanel } from "./panels/ModulesListPanel";
+import { MorphPanel } from "./panels/MorphPanel";
 import { SampleDetailPanel } from "./panels/SampleDetailPanel";
 import { SamplesListPanel } from "./panels/SamplesListPanel";
 import { StatsPanel } from "./panels/StatsPanel";
 import { WaveformPanel } from "./panels/WaveformPanel";
 
 export type PanelId =
-    "modules-list" | "samples-list" | "cloud" | "waveform" | "module-detail" | "sample-detail" | "stats";
+    "modules-list" | "samples-list" | "cloud" | "waveform" | "morph" | "module-detail" | "sample-detail" | "stats";
 
 export interface PanelPlacement {
     readonly direction: "right" | "below" | "within";
@@ -52,6 +53,12 @@ export const PANEL_REGISTRY: Readonly<Record<PanelId, PanelDefinition>> = {
         title: "Waveform",
         component: WaveformPanel,
         placement: { direction: "below", referencePanel: "cloud" },
+    },
+    morph: {
+        id: "morph",
+        title: "Morph",
+        component: MorphPanel,
+        placement: { direction: "within", referencePanel: "waveform" },
     },
     "module-detail": {
         id: "module-detail",

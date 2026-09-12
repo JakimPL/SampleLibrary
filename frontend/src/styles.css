@@ -30,6 +30,7 @@
     --cloud-point: var(--text-primary);
     --cloud-point-selected: var(--accent);
     --cloud-ping-color: var(--accent);
+    --cloud-link-color: var(--accent);
 
     /* One fixed hue per SampleCategory (see frontend/src/samples/category.ts's CATEGORY_ORDER),
        shared by the cloud's per-category point coloring and the samples table/detail badge -- the
@@ -195,6 +196,7 @@
     --cloud-point: #fff;
     --cloud-point-selected: var(--wave-fill);
     --cloud-ping-color: #ff0;
+    --cloud-link-color: #ff0;
 
     /* Reuses the dark theme's own category steps rather than this theme's own light chrome
        colors: they were tuned for legibility against a near-black surface, which this theme's
@@ -916,7 +918,8 @@ table.data td .annotation-editor-input {
    would have without the exception. */
 .panel-filter button,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
-.spectral-distance-readout button {
+.spectral-distance-readout button,
+.morph-panel button:not(.thumbnail-button) {
     border: 1px solid var(--border);
     background: var(--surface-0);
     border-radius: 5px;
@@ -1552,4 +1555,163 @@ table.data td .annotation-editor-input {
 :root[data-theme="openmpt"] tr.is-focused .rating-star.is-filled,
 :root[data-theme="openmpt"] tr.is-focused .favorite-toggle.is-filled {
     color: var(--accent-ink);
+}
+
+/* ---------- Morph panel ---------- */
+
+.morph-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px;
+}
+
+.morph-endpoints {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+}
+
+.morph-endpoint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.morph-endpoint-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.morph-weight {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* The one range input in the app, drawn from the same tokens every other control is: a thin track
+   on the strong border tone and an accent thumb, in place of a browser's own chrome. */
+.morph-weight input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 24px;
+    margin: 0;
+    appearance: none;
+    background: transparent;
+}
+
+.morph-weight input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+}
+
+.morph-weight input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+}
+
+.morph-weight input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface-1);
+}
+
+.morph-weight input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface-1);
+}
+
+.morph-readout {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.morph-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.morph-actions label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+
+.morph-offline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+/* The line joining a morph's two ends on the cloud, and the marker that is the weight: the wrapper
+   lets every pointer through to the points, the marker alone takes them. */
+.morph-link {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.morph-link svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.morph-link-line {
+    stroke: var(--cloud-link-color);
+    stroke-width: 2;
+    stroke-dasharray: 4 3;
+    fill: none;
+}
+
+.morph-link-end {
+    fill: none;
+    stroke: var(--cloud-link-color);
+    stroke-width: 2;
+}
+
+.morph-link-marker {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border-radius: 50%;
+    background: var(--cloud-link-color);
+    border: 2px solid var(--surface-1);
+    box-shadow: var(--shadow);
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+}
+
+.morph-link-marker:active {
+    cursor: grabbing;
+}
+
+:root[data-theme="openmpt"] .morph-weight input[type="range"] {
+    border: none;
+    background: transparent;
 }

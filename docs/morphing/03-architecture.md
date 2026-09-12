@@ -176,6 +176,9 @@ The two-sample selection this feature needs was built for the spectral-distance 
   two slots fill independently and neither steals the other.
 - `frontend/src/workspace/panels/SpectralDistanceReadout.tsx` renders only once both slots are
   filled, and already shows the pair and their distance. A weight slider belongs beside it.
+  (Shipped 2026-09-12 in its own Morph panel and as a marker on the cloud, over a pair the morph
+  store holds apart from the comparison slot; `useAudioPreview.play` now takes a source with its
+  own URL, key and rate, which is the generalization named below.)
 
 One coupling has to be generalized. Both players build their URL from a hash:
 `useWaveformPlayer(sampleAudioUrl(sampleHash), ...)` at `frontend/src/samples/WaveformPlayer.tsx:48`,

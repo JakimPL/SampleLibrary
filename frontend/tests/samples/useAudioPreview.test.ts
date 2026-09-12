@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
-import { previewPlaybackRate, useAudioPreview } from "../../src/samples/useAudioPreview";
+import { previewPlaybackRate, samplePreview, useAudioPreview } from "../../src/samples/useAudioPreview";
 
 describe("previewPlaybackRate", () => {
     it("plays the stored file as it stands when no rate is known", () => {
@@ -18,39 +18,53 @@ describe("previewPlaybackRate", () => {
     });
 });
 
+describe("samplePreview", () => {
+    it("keys a sample's preview by its hash and points it at the sample's audio route", () => {
+        const source = samplePreview("a".repeat(64), 8363);
+
+        expect(source.key).toBe("a".repeat(64));
+        expect(source.url).toBe(`/api/samples/${"a".repeat(64)}/audio`);
+        expect(source.playbackRateHz).toBe(8363);
+    });
+});
+
 describe("useAudioPreview", () => {
-    it("tracks the most recently played sample as playing", () => {
+    it("tracks the most recently played source as playing", () => {
         const { result } = renderHook(() => useAudioPreview());
 
         act(() => {
-            result.current.play("sample-preview-a", null);
+            result.current.play(samplePreview("sample-preview-a", null));
         });
 
-        expect(result.current.playingHash).toBe("sample-preview-a");
+        expect(result.current.playingKey).toBe("sample-preview-a");
     });
 
-    it("playing a different sample replaces which one is tracked as playing", () => {
+    it("playing a different source replaces which one is tracked as playing", () => {
         const { result } = renderHook(() => useAudioPreview());
 
         act(() => {
-            result.current.play("sample-preview-b", null);
+            result.current.play(samplePreview("sample-preview-b", null));
         });
         act(() => {
-            result.current.play("sample-preview-c", null);
+            result.current.play({
+                key: "/api/morph/audio?first=b&second=c&weight=0.5",
+                url: "/morph",
+                playbackRateHz: null,
+            });
         });
 
-        expect(result.current.playingHash).toBe("sample-preview-c");
+        expect(result.current.playingKey).toBe("/api/morph/audio?first=b&second=c&weight=0.5");
     });
 
-    it("two hook instances observe the same playing sample", () => {
+    it("two hook instances observe the same playing source", () => {
         const first = renderHook(() => useAudioPreview());
         const second = renderHook(() => useAudioPreview());
 
         act(() => {
-            first.result.current.play("sample-preview-d", null);
+            first.result.current.play(samplePreview("sample-preview-d", null));
         });
 
-        expect(second.result.current.playingHash).toBe("sample-preview-d");
+        expect(second.result.current.playingKey).toBe("sample-preview-d");
     });
 });
 
@@ -106,11 +120,12 @@ describe("the shared preview element", () => {
 
         vi.stubGlobal("Audio", audioConstructorStub);
         vi.resetModules();
-        const { useAudioPreview: freshUseAudioPreview } = await import("../../src/samples/useAudioPreview");
+        const { useAudioPreview: freshUseAudioPreview, samplePreview: freshSamplePreview } =
+            await import("../../src/samples/useAudioPreview");
         const { result } = renderHook(() => freshUseAudioPreview());
 
         act(() => {
-            result.current.play("sample-preview-e", 8363);
+            result.current.play(freshSamplePreview("sample-preview-e", 8363));
         });
 
         expect(writes).toEqual(["src", "playbackRate"]);

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CloudView } from "../../src/cloud/CloudView";
+import { type CloudLink, CloudView } from "../../src/cloud/CloudView";
 import type { CloudEntityPoint } from "../../src/cloud/geometry";
 import type { PointColoring } from "../../src/cloud/labelColoring";
 import { useThemeStore } from "../../src/theme/themeStore";
@@ -83,6 +83,7 @@ interface RenderOverrides {
     readonly onHover?: (entity: EntityRef | null, screenPosition: readonly [number, number] | null) => void;
     readonly onCompare?: (entity: EntityRef) => void;
     readonly onActivate?: (entity: EntityRef) => void;
+    readonly link?: CloudLink | null;
 }
 
 // CloudView awaits the fake scatterplot's `draw` promise (mirroring the real library, which
@@ -106,6 +107,9 @@ async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnT
             onHover={overrides.onHover ?? vi.fn()}
             onCompare={overrides.onCompare ?? vi.fn()}
             onActivate={overrides.onActivate ?? vi.fn()}
+            link={overrides.link ?? null}
+            onWeightChange={vi.fn()}
+            onWeightCommit={vi.fn()}
         />,
     );
     await flushDraw();
@@ -173,6 +177,9 @@ describe("CloudView", () => {
                 onHover={vi.fn()}
                 onCompare={vi.fn()}
                 onActivate={vi.fn()}
+                link={null}
+                onWeightChange={vi.fn()}
+                onWeightCommit={vi.fn()}
             />,
         );
         await flushDraw();
@@ -270,6 +277,9 @@ describe("CloudView", () => {
                 onHover={vi.fn()}
                 onCompare={vi.fn()}
                 onActivate={vi.fn()}
+                link={null}
+                onWeightChange={vi.fn()}
+                onWeightCommit={vi.fn()}
             />,
         );
 
@@ -314,6 +324,9 @@ describe("CloudView", () => {
                     onHover={vi.fn()}
                     onCompare={vi.fn()}
                     onActivate={vi.fn()}
+                    link={null}
+                    onWeightChange={vi.fn()}
+                    onWeightCommit={vi.fn()}
                 />,
             );
         }
@@ -389,6 +402,9 @@ describe("CloudView", () => {
                 onHover={vi.fn()}
                 onCompare={vi.fn()}
                 onActivate={vi.fn()}
+                link={null}
+                onWeightChange={vi.fn()}
+                onWeightCommit={vi.fn()}
             />,
         );
         await flushDraw();
@@ -414,6 +430,9 @@ describe("CloudView", () => {
                 onHover={vi.fn()}
                 onCompare={vi.fn()}
                 onActivate={vi.fn()}
+                link={null}
+                onWeightChange={vi.fn()}
+                onWeightCommit={vi.fn()}
             />,
         );
         await flushDraw();
@@ -518,5 +537,52 @@ describe("CloudView", () => {
 
         const setCall = instance.set.mock.calls[0]?.[0] as { colorBy?: string | null };
         expect(setCall.colorBy).toBeNull();
+    });
+});
+
+describe("CloudView morph link", () => {
+    const LINK: CloudLink = { first: SAMPLE_REF.hash, second: MODULE_REF.hash, weight: 0.5 };
+
+    it("joins two points in view with a line whose marker sits at the weight", async () => {
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)], link: LINK });
+
+        const marker = screen.getByRole("slider", { name: "Morph weight" });
+        expect(marker.style.left).toBe("10.5px");
+        expect(marker.style.top).toBe("20.5px");
+    });
+
+    it("keeps the link pinned to its points through a pan or zoom", async () => {
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)], link: LINK });
+
+        latestInstance().getScreenPosition.mockReturnValue([120, 340]);
+        act(() => {
+            latestInstance().emit("view");
+        });
+
+        const marker = screen.getByRole("slider", { name: "Morph weight" });
+        expect(marker.style.left).toBe("120px");
+        expect(marker.style.top).toBe("340px");
+    });
+
+    it("shows no link while an end is out of this view", async () => {
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], link: LINK });
+
+        expect(screen.queryByRole("slider", { name: "Morph weight" })).not.toBeInTheDocument();
+    });
+
+    it("takes a Shift-click over a point before any later listener on the canvas sees it", async () => {
+        const onCompare = vi.fn();
+        const onClear = vi.fn();
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onCompare, onClear });
+        const later = vi.fn();
+        latestCanvas().addEventListener("click", later);
+        latestInstance().emit("pointOver", 0);
+
+        fireEvent.mouseDown(latestCanvas(), { shiftKey: true });
+        fireEvent.click(latestCanvas(), { shiftKey: true });
+
+        expect(onCompare).toHaveBeenCalledWith(SAMPLE_REF);
+        expect(onClear).not.toHaveBeenCalled();
+        expect(later).not.toHaveBeenCalled();
     });
 });

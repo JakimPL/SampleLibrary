@@ -57,7 +57,16 @@ describe("WorkspaceShell", () => {
         renderShellAt("/");
 
         const titles = panelTabTitles();
-        for (const title of ["Modules", "Samples", "Cloud", "Waveform", "Module Detail", "Sample Detail", "Stats"]) {
+        for (const title of [
+            "Modules",
+            "Samples",
+            "Cloud",
+            "Waveform",
+            "Morph",
+            "Module Detail",
+            "Sample Detail",
+            "Stats",
+        ]) {
             expect(titles).toContain(title);
         }
     });

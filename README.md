@@ -90,6 +90,16 @@ file with one label per line works too. The cloud then colors by suggestion, and
 lists its suggestions with the model's confidence: a click adds one to the label, and the rest
 stay suggestions.
 
+## Morphing two samples
+
+The app can play a sound between any two samples. Start the morph renderer beside the API
+(`make serve-inference`; it reads the fitted models under your library root, which the `samplemorph`
+pipeline writes), then click one sample in the cloud and Shift-click another: a dashed line joins
+them, and the marker on it is how far from the first sample toward the second you stand. Drag the
+marker, or move the slider in the Morph panel, and the morph plays when you let go. The two ends
+play as the model reconstructs them, with each original one click away beside its name. Without the
+renderer running, the panel says so and offers to check again.
+
 ## Development
 
 Read `docs/guidelines.md` before making changes. `make check` runs formatting, linting and tests;

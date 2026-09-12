@@ -451,6 +451,24 @@ near-duplicates the way the editor's own default does, and a tag the label alrea
 taken. The suggestion stays a suggestion until a person accepts it: the hand label wins wherever
 one exists, and the badge that names a sample never shows a suggestion.
 
+## Morphs in the application
+
+A morph is a pair of samples and a weight between them, held in `frontend/src/morph/morphStore.ts`
+apart from the shell's focus and comparison slots: comparing two samples and morphing between two
+are different acts, and clearing one leaves the other. The cloud fills the pair with the gesture
+it already had, a click on one point and a Shift-click on another (`CloudView` takes the Shift
+press and click in the capture phase, so the library neither selects nor plays the second point
+and the highlight that anchors the pair stays), then draws a dashed line between the two with a
+marker that is the weight (`frontend/src/cloud/MorphLink.tsx`), pinned through pan and zoom the
+way the ping is. The Morph panel mirrors the same weight as a slider, names both ends, and plays
+the render on release through the one preview element every sample plays through
+(`useAudioPreview`, whose sources carry a URL and a key, so a morph is keyed by its own render's
+address). The render arrives at the nominal header rate every stored object carries, and the
+frontend plays it at the geometric interpolation of the two ends' playback rates
+(`frontend/src/morph/morphRate.ts`, mirroring `samplemorph.rendering.rate_between`), which every
+cloud point and detail already states. Weights lie on a grid of sixteenths on both sides, so a
+weight names one render and one cache entry wherever it goes.
+
 ## Extending to new tracker formats
 
 `sampleextract`'s format dispatch is a small registry (module suffix → loader function), not

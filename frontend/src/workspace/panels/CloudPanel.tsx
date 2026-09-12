@@ -2,7 +2,7 @@ import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { CloudPoint, ModuleCloudPoint } from "../../api/cloud";
-import { CloudView } from "../../cloud/CloudView";
+import { type CloudLink, CloudView } from "../../cloud/CloudView";
 import type { CloudEntityPoint } from "../../cloud/geometry";
 import {
     defaultPaintedTags,
@@ -17,7 +17,9 @@ import { useCloudLabels } from "../../cloud/useCloudLabels";
 import { useCloudSuggestions } from "../../cloud/useCloudSuggestions";
 import { useModuleCloud } from "../../cloud/useModuleCloud";
 import { useSuggestionTags } from "../../cloud/useSuggestionTags";
-import { useAudioPreview } from "../../samples/useAudioPreview";
+import { morphPreview } from "../../morph/morphPreview";
+import { useMorphStore } from "../../morph/morphStore";
+import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
 import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
@@ -145,10 +147,22 @@ export function CloudPanel(): ReactElement {
     const { coloring, tags, painted, togglePainted } = useSampleColoring(mode);
     const navigate = useNavigate();
     const highlighted = useSelectionStore((selection) => selection.highlighted);
+    const focusedSampleHash = useSelectionStore((selection) => selection.focusedSampleHash);
     const highlightEntity = useSelectionStore((selection) => selection.highlightEntity);
     const clearHighlight = useSelectionStore((selection) => selection.clearHighlight);
     const setComparisonSample = useSelectionStore((selection) => selection.setComparisonSample);
+    const morphFirst = useMorphStore((morph) => morph.first);
+    const morphSecond = useMorphStore((morph) => morph.second);
+    const weight = useMorphStore((morph) => morph.weight);
+    const playOnRelease = useMorphStore((morph) => morph.playOnRelease);
+    const join = useMorphStore((morph) => morph.join);
+    const setWeight = useMorphStore((morph) => morph.setWeight);
     const { play } = useAudioPreview();
+    const link = useMemo(
+        (): CloudLink | null =>
+            morphFirst !== null && morphSecond !== null ? { first: morphFirst, second: morphSecond, weight } : null,
+        [morphFirst, morphSecond, weight],
+    );
     const rateByHash = useMemo(() => {
         const rates = new Map<string, number>();
         if (state.status === "success") {
@@ -175,7 +189,7 @@ export function CloudPanel(): ReactElement {
     // without doing anything else.
     function handleActivate(entity: EntityRef): void {
         if (entity.kind === "sample") {
-            play(entity.hash, rateByHash.get(entity.hash) ?? null);
+            play(samplePreview(entity.hash, rateByHash.get(entity.hash) ?? null));
         }
     }
 
@@ -183,9 +197,27 @@ export function CloudPanel(): ReactElement {
         void navigate(entityRoute(entity));
     }
 
+    // A Shift-click names a second sample twice over: the comparison the detail panel reads, and
+    // the far end of a morph whose near end is the sample already in view -- the highlighted one,
+    // or the focused one when the highlight sits elsewhere.
     function handleCompare(entity: EntityRef): void {
         if (entity.kind === "sample") {
             setComparisonSample(entity.hash);
+            join(highlighted?.kind === "sample" ? highlighted.hash : focusedSampleHash, entity.hash);
+        }
+    }
+
+    function handleWeightCommit(): void {
+        if (playOnRelease && link !== null) {
+            play(
+                morphPreview(
+                    link.first,
+                    link.second,
+                    link.weight,
+                    rateByHash.get(link.first) ?? null,
+                    rateByHash.get(link.second) ?? null,
+                ),
+            );
         }
     }
 
@@ -269,6 +301,9 @@ export function CloudPanel(): ReactElement {
                             onHover={handleHover}
                             onCompare={handleCompare}
                             onActivate={handleActivate}
+                            link={tab === "samples" ? link : null}
+                            onWeightChange={setWeight}
+                            onWeightCommit={handleWeightCommit}
                         />
                         {hovered !== null && <CloudHoverTooltip entity={hovered.entity} x={hovered.x} y={hovered.y} />}
                     </>

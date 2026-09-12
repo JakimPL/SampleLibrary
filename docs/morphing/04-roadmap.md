@@ -141,6 +141,11 @@ then whether to stream or to cache content-addressed.
 
 **Gate:** the user can pick two samples, drag a weight, and hear the result.
 
+Reached on 2026-09-12: `samplemorph.service` renders on request and the API relays, the pair is
+joined on the cloud by click and Shift-click, and the weight is a marker on the line between the
+two as well as a slider in the Morph panel ([`19-unaligned-grids.md`](19-unaligned-grids.md) for the
+codec it renders through).
+
 ---
 
 ## Standing rules that apply throughout

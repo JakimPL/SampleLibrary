@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import createScatterplot from "regl-scatterplot";
 
 import { CATEGORY_ORDER, categoryColorProperty, categoryIndex } from "../samples/category";
@@ -9,6 +9,7 @@ import { useThemeSignal } from "../theme/useThemeSignal";
 import type { EntityRef } from "../workspace/selectionStore";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
 import { type PointColoring, SUBSTRATE_SLOT } from "./labelColoring";
+import { MorphLink } from "./MorphLink";
 
 type Scatterplot = ReturnType<typeof createScatterplot>;
 type ScreenPosition = readonly [number, number];
@@ -113,6 +114,13 @@ function buildDrawSpec(points: readonly CloudEntityPoint[], coloring: PointColor
 // rings, the second delayed by 300ms) so the marker element is dropped only once both have faded.
 const PING_LIFETIME_MS = 1900;
 
+/** A morph pair drawn over the cloud: its two ends by hash, and the weight its marker sits at. */
+export interface CloudLink {
+    readonly first: string;
+    readonly second: string;
+    readonly weight: number;
+}
+
 interface CloudViewProps {
     readonly points: readonly CloudEntityPoint[];
     readonly coloring: PointColoring;
@@ -123,12 +131,28 @@ interface CloudViewProps {
     readonly onHover: (entity: EntityRef | null, screenPosition: ScreenPosition | null) => void;
     readonly onCompare: (entity: EntityRef) => void;
     readonly onActivate: (entity: EntityRef) => void;
+    readonly link: CloudLink | null;
+    readonly onWeightChange: (weight: number) => void;
+    readonly onWeightCommit: () => void;
 }
 
 interface Ping {
     readonly key: number;
     readonly pointIndex: number;
     readonly position: ScreenPosition;
+}
+
+interface LinkScreen {
+    readonly first: ScreenPosition;
+    readonly second: ScreenPosition;
+}
+
+function samePosition(a: ScreenPosition, b: ScreenPosition): boolean {
+    return a[0] === b[0] && a[1] === b[1];
+}
+
+function sameLinkScreen(a: LinkScreen | null, b: LinkScreen | null): boolean {
+    return a === null || b === null ? a === b : samePosition(a.first, b.first) && samePosition(a.second, b.second);
 }
 
 function sameEntity(a: EntityRef, b: EntityRef): boolean {
@@ -242,9 +266,13 @@ async function applyPoints(
  * this way also reports it through `onActivate` (a sample tab's caller uses this to start playback),
  * but skips its own ping for that one transition: the click that just selected it is already looking
  * straight at it, so the locate cue is reserved for a highlight arriving from somewhere else in the
- * shell. A Shift-click over a point reports it through `onCompare` alongside regl-scatterplot's own
- * unavoidable normal select -- the library has no way to suppress its own hit-testing from our own
- * listener, so `onActivate` fires for a Shift-click too. Point, active-point,
+ * shell. A Shift-click over a point reports it through `onCompare` alone: capture-phase listeners
+ * take the press and the click before the library's own, so the point is neither selected nor
+ * played, and the highlight that anchors a morph stays where it was. When `link` names two points
+ * in view, a dashed line joins them and its marker is the weight, kept pinned through the
+ * library's `view` event the way the ping is and re-read when the container resizes; the hover
+ * tracking pauses while the marker is dragged, since the library keeps hit-testing beneath it.
+ * Point, active-point,
  * and background colors are read from the theme's CSS custom properties at creation, and re-applied
  * through the library's own `set` whenever `useThemeSignal` reports the resolved theme could have
  * changed, mirroring how `useWaveformPlayer.ts` keeps wavesurfer's own canvas in step. Points draw
@@ -265,6 +293,9 @@ export function CloudView({
     onHover,
     onCompare,
     onActivate,
+    link,
+    onWeightChange,
+    onWeightCommit,
 }: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
@@ -295,9 +326,17 @@ export function CloudView({
     onHoverRef.current = onHover;
     onCompareRef.current = onCompare;
     onActivateRef.current = onActivate;
+    const linkRef = useRef<CloudLink | null>(link);
+    linkRef.current = link;
+    const onWeightChangeRef = useRef(onWeightChange);
+    const onWeightCommitRef = useRef(onWeightCommit);
+    onWeightChangeRef.current = onWeightChange;
+    onWeightCommitRef.current = onWeightCommit;
+    const linkDraggingRef = useRef(false);
 
     const [ping, setPing] = useState<Ping | null>(null);
     pingRef.current = ping;
+    const [linkScreen, setLinkScreen] = useState<LinkScreen | null>(null);
 
     // Stable on `rawPoints` alone, not recomputed on every render, since it feeds the draw effect's
     // dependency array below -- an identity that changed on every render (including ones this view
@@ -305,6 +344,34 @@ export function CloudView({
     // often than `rawPoints` actually changes.
     const points = useMemo(() => normalizePoints(rawPoints), [rawPoints]);
     pointsRef.current = points;
+    const indexByHash = useMemo(
+        () => new Map(points.map((point, index) => [point.ref.hash, index] as const)),
+        [points],
+    );
+    const indexByHashRef = useRef(indexByHash);
+    indexByHashRef.current = indexByHash;
+
+    // Reads both ends' screen positions afresh; stable, so the mount effect's subscriptions and the
+    // effects below share one function. The link goes unshown while either end is out of this
+    // view (the other tab, a pair joined before the points arrived) or the first draw is pending.
+    const repinLink = useCallback((): void => {
+        const scatterplot = scatterplotRef.current;
+        const currentLink = linkRef.current;
+        if (scatterplot === null || currentLink === null || !pointsDrawnRef.current) {
+            setLinkScreen(null);
+            return;
+        }
+        const firstIndex = indexByHashRef.current.get(currentLink.first);
+        const secondIndex = indexByHashRef.current.get(currentLink.second);
+        const first = firstIndex === undefined ? undefined : scatterplot.getScreenPosition(firstIndex);
+        const second = secondIndex === undefined ? undefined : scatterplot.getScreenPosition(secondIndex);
+        if (first === undefined || second === undefined) {
+            setLinkScreen(null);
+            return;
+        }
+        const next: LinkScreen = { first, second };
+        setLinkScreen((current) => (sameLinkScreen(current, next) ? current : next));
+    }, []);
 
     const themeSignal = useThemeSignal();
 
@@ -354,6 +421,9 @@ export function CloudView({
             }
         });
         const pointOverSubscription = scatterplot.subscribe("pointOver", (index) => {
+            if (linkDraggingRef.current) {
+                return;
+            }
             hoveredIndexRef.current = index;
             const entity = pointsRef.current[index]?.ref;
             const position = pointsDrawnRef.current ? scatterplot.getScreenPosition(index) : undefined;
@@ -369,6 +439,7 @@ export function CloudView({
             onClearRef.current();
         });
         const viewSubscription = scatterplot.subscribe("view", () => {
+            repinLink();
             const activePing = pingRef.current;
             if (activePing === null || !pointsDrawnRef.current) {
                 return;
@@ -379,17 +450,28 @@ export function CloudView({
             }
         });
 
-        function handleClick(event: MouseEvent): void {
+        // Taken in the capture phase, before the library's own listeners on this same canvas: a
+        // Shift press over a point would otherwise start its lasso, whose release deselects the
+        // point already highlighted, and the click would select and so play the point pressed.
+        function handleShiftPress(event: MouseEvent): void {
+            if (event.shiftKey && hoveredIndexRef.current !== null) {
+                event.stopImmediatePropagation();
+            }
+        }
+
+        function handleShiftClick(event: MouseEvent): void {
             const index = hoveredIndexRef.current;
-            if (index === null) {
-                onClearRef.current();
+            const entity = index === null ? undefined : pointsRef.current[index]?.ref;
+            if (!event.shiftKey || entity === undefined) {
                 return;
             }
-            if (event.shiftKey) {
-                const entity = pointsRef.current[index]?.ref;
-                if (entity !== undefined) {
-                    onCompareRef.current(entity);
-                }
+            event.stopImmediatePropagation();
+            onCompareRef.current(entity);
+        }
+
+        function handleClick(): void {
+            if (hoveredIndexRef.current === null) {
+                onClearRef.current();
             }
         }
 
@@ -401,11 +483,15 @@ export function CloudView({
             }
         }
 
+        canvas.addEventListener("mousedown", handleShiftPress, { capture: true });
+        canvas.addEventListener("click", handleShiftClick, { capture: true });
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("dblclick", handleDoubleClick);
 
         return (): void => {
             canceled = true;
+            canvas.removeEventListener("mousedown", handleShiftPress, { capture: true });
+            canvas.removeEventListener("click", handleShiftClick, { capture: true });
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("dblclick", handleDoubleClick);
             scatterplot.unsubscribe(selectSubscription);
@@ -444,6 +530,7 @@ export function CloudView({
                 }
 
                 pointsDrawnRef.current = true;
+                repinLink();
                 if (highlightedIndex >= 0 && !sameHighlight(highlighted, previousHighlightedRef.current)) {
                     const position = scatterplot.getScreenPosition(highlightedIndex);
                     if (position !== undefined) {
@@ -457,7 +544,25 @@ export function CloudView({
         return (): void => {
             canceled = true;
         };
-    }, [points, coloring, highlighted]);
+    }, [points, coloring, highlighted, repinLink]);
+
+    useEffect(() => {
+        repinLink();
+    }, [link, repinLink]);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (container === null) {
+            return undefined;
+        }
+        const observer = new ResizeObserver(() => {
+            repinLink();
+        });
+        observer.observe(container);
+        return (): void => {
+            observer.disconnect();
+        };
+    }, [repinLink]);
 
     useEffect(() => {
         // Redundantly re-applies the colors the mount effect above just set on the first render.
@@ -496,6 +601,22 @@ export function CloudView({
                     <span className="cloud-ping-ring" />
                     <span className="cloud-ping-ring cloud-ping-ring-delayed" />
                 </span>
+            )}
+            {link !== null && linkScreen !== null && (
+                <MorphLink
+                    first={linkScreen.first}
+                    second={linkScreen.second}
+                    weight={link.weight}
+                    onWeightChange={(weight) => {
+                        onWeightChangeRef.current(weight);
+                    }}
+                    onWeightCommit={() => {
+                        onWeightCommitRef.current();
+                    }}
+                    onDragChange={(dragging) => {
+                        linkDraggingRef.current = dragging;
+                    }}
+                />
             )}
             {points.length === 0 && (
                 <div className="cloud-empty">

@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
-import { useAudioPreview } from "./useAudioPreview";
+import { samplePreview, useAudioPreview } from "./useAudioPreview";
 
 interface PlayButtonProps {
     readonly sampleHash: string;
@@ -10,17 +10,17 @@ interface PlayButtonProps {
 
 /** A bare, chrome-free button that plays one sample by hash, outlined while it's the one playing. */
 export function PlayButton({ sampleHash, playbackRateHz, children }: PlayButtonProps): ReactElement {
-    const { play, playingHash } = useAudioPreview();
+    const { play, playingKey } = useAudioPreview();
 
     return (
         <button
             type="button"
             className="thumbnail-button"
             onClick={() => {
-                play(sampleHash, playbackRateHz);
+                play(samplePreview(sampleHash, playbackRateHz));
             }}
             aria-label="Play sample preview"
-            aria-pressed={playingHash === sampleHash}
+            aria-pressed={playingKey === sampleHash}
         >
             {children}
         </button>
