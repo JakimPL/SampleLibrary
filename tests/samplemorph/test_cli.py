@@ -155,7 +155,7 @@ def test_rendering_writes_a_listening_set_through_a_fitted_model(
 ) -> None:
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
     output = tmp_path / "render"
 
     main(
@@ -168,7 +168,7 @@ def test_rendering_writes_a_listening_set_through_a_fitted_model(
             "--model",
             MODEL_NAME,
             "--vocoder",
-            "griffin_lim",
+            "pghi",
             "--output",
             str(output),
         ]

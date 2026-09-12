@@ -96,6 +96,11 @@ inverse later, if the listening test says phase is the bottleneck.
 Keeping this axis separate from the codec is what makes the Griffin-Lim question answerable at all:
 hold the codec fixed, swap the vocoder, and the difference is attributable.
 
+Answered: the ear dismissed Griffin-Lim ([`10-listening-corrections.md`](10-listening-corrections.md),
+[`18-perceptual-readings.md`](18-perceptual-readings.md)), phase gradient heap integration on the
+restored magnitude is the vocoder, and the Griffin-Lim code left the tree on 2026-09-12. The
+oracle that reuses a source's own phase stays, as `samplemorph.vocoders.oracle`, for measurement.
+
 ### `Morpher` — two representations and a weight → one
 
 `morph(a, b, weight)`. The default is linear interpolation of the latent; spherical interpolation
@@ -149,7 +154,8 @@ Two options, to be decided when the audio is worth serving:
 
 - **Stream it.** A route taking two hashes and a weight, synthesizing and returning bytes. Simple,
   stateless, and it costs a synthesis per request — Griffin-Lim at 32 iterations measured 531 ms per
-  sample, so this is interactive but not instant.
+  sample, so this is interactive but not instant. (The restorer with heap integration, which
+  replaced it, renders a seven-file listening folder in under a second on the card.)
 - **Cache it content-addressed.** Hash the rendered bytes and write into the same object store, so
   the second request for the same morph is a static file. It gives the result an identity that the
   existing player and preview hooks already know how to handle, at the cost of the first write path

@@ -11,7 +11,7 @@ from samplemorph.codecs import SampleCodec
 from samplemorph.measurement.comparison import held_out_distance_db, held_out_spectrum
 from samplemorph.measurement.corpus import ProbeSample, unrelated_pairs
 from samplemorph.vocoders import Vocoder
-from samplemorph.vocoders.griffin_lim import OraclePhaseVocoder
+from samplemorph.vocoders.oracle import OraclePhaseVocoder
 from samplemorph.vocoders.pghi import PghiVocoder
 
 DEFAULT_UNRELATED_PAIR_COUNT: Final[int] = 300

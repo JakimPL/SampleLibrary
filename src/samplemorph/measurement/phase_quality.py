@@ -24,7 +24,7 @@ class PhaseQuality:
     already reports, kept here to show what it sees of a phase artifact. `modulation_excess` is how
     much frame-to-frame magnitude flutter the reconstruction carries over the reference, and its
     sign names the fault: a positive value is a comb a phase estimate sweeps through a held note
-    that the steady reference has none of, the Griffin-Lim gargle; a negative value is a
+    that the steady reference has none of, the gargle of an estimated phase; a negative value is a
     reconstruction smoother than the true phase, heard as a loss of clarity. A reconstruction that
     moves as the reference does reads near zero, so zero is the target rather than the floor.
     """

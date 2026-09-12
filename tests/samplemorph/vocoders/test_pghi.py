@@ -10,12 +10,14 @@ from samplemorph.geometry import AnalysisWindow, analysis_taper, log_frequency_g
 from samplemorph.measurement.loudness import loudness_delta
 from samplemorph.measurement.modulation_spectrum import modulation_spectrum_distance
 from samplemorph.registries import PGHI_VOCODER_NAME, VOCODER_REGISTRY
-from samplemorph.vocoders.griffin_lim import GriffinLimVocoder
 from samplemorph.vocoders.pghi import PghiVocoder
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone
 
 TONE_FREQUENCY_HZ = 330.0
 LOUDNESS_TOLERANCE_LU = 1.0
+# The integrated phase reads about 0.03 of modulation distance on a held tone, where the source's
+# own phase reads under 0.003 and an iterated estimate read 0.25 on the same rung of the ladder.
+TONE_FLUTTER_CEILING = 0.05
 
 
 def _gaussian_canonicalizer() -> LogFrequencyCanonicalizer:
@@ -55,15 +57,14 @@ def test_the_integrated_phase_makes_a_tone_audible_close_to_its_level() -> None:
     assert abs(loudness_delta(reconstruction, tone, source_rate_hz=NOMINAL_WAV_RATE).delta_lu) < LOUDNESS_TOLERANCE_LU
 
 
-def test_the_integrated_phase_flutters_less_than_an_iterated_one_on_the_same_magnitude() -> None:
+def test_the_integrated_phase_holds_a_tone_steady() -> None:
     canonicalizer = _gaussian_canonicalizer()
     tone = harmonic_tone(4 * TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0]
     spectrogram = canonicalizer.restore(canonicalizer.canonicalize(tone))
 
     integrated = modulation_spectrum_distance(PghiVocoder().synthesize(spectrogram), tone)
-    iterated = modulation_spectrum_distance(GriffinLimVocoder().synthesize(spectrogram), tone)
 
-    assert integrated.distance < iterated.distance
+    assert integrated.distance < TONE_FLUTTER_CEILING
 
 
 def test_a_hann_analysis_is_refused_by_name() -> None:

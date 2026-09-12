@@ -6,48 +6,24 @@ import numpy as np
 import pytest
 
 from samplemorph.registries import CANONICALIZER_REGISTRY, SYNTHESIS_CANONICALIZER_NAMES
-from samplemorph.vocoders.griffin_lim import GriffinLimVocoder, OraclePhaseVocoder
+from samplemorph.vocoders.oracle import OraclePhaseVocoder
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone
 
-FAST_ITERATIONS = 4
 TONE_FREQUENCY_HZ = 440.0
 
 
 @dataclass(frozen=True)
-class VocoderCase:
-    """One registered frequency axis, synthesized back to audio through the shared vocoder."""
+class SynthesisCase:
+    """One registered frequency axis audio is rendered from, handed its source's own phase."""
 
     name: str
 
 
-VOCODER_CASES = tuple(VocoderCase(name=name) for name in sorted(CANONICALIZER_REGISTRY))
-SYNTHESIS_CASES = tuple(VocoderCase(name=name) for name in sorted(SYNTHESIS_CANONICALIZER_NAMES))
-
-
-@pytest.mark.parametrize("case", VOCODER_CASES, ids=lambda case: case.name)
-def test_synthesize_returns_the_frame_count_the_spectrogram_asks_for(case: VocoderCase) -> None:
-    canonicalizer = CANONICALIZER_REGISTRY[case.name]()
-    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ))
-    spectrogram = canonicalizer.restore(image)
-
-    waveform = GriffinLimVocoder(iterations=FAST_ITERATIONS).synthesize(spectrogram)
-
-    assert waveform.shape == (spectrogram.frame_count,)
-    assert np.all(np.isfinite(waveform))
-
-
-@pytest.mark.parametrize("case", VOCODER_CASES, ids=lambda case: case.name)
-def test_synthesize_produces_audible_content_rather_than_silence(case: VocoderCase) -> None:
-    canonicalizer = CANONICALIZER_REGISTRY[case.name]()
-    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ))
-
-    waveform = GriffinLimVocoder(iterations=FAST_ITERATIONS).synthesize(canonicalizer.restore(image))
-
-    assert float(np.abs(waveform).max()) > 0.0
+SYNTHESIS_CASES = tuple(SynthesisCase(name=name) for name in sorted(SYNTHESIS_CANONICALIZER_NAMES))
 
 
 @pytest.mark.parametrize("case", SYNTHESIS_CASES, ids=lambda case: case.name)
-def test_a_synthesis_axis_lands_nearer_the_reference_than_unrelated_content_does(case: VocoderCase) -> None:
+def test_a_synthesis_axis_lands_nearer_the_reference_than_unrelated_content_does(case: SynthesisCase) -> None:
     """The property that makes an axis one audio is rendered from.
 
     Handed the source's own phase, a round trip through the axis reproduces that source. An axis
@@ -62,6 +38,7 @@ def test_a_synthesis_axis_lands_nearer_the_reference_than_unrelated_content_does
 
     oracle = OraclePhaseVocoder(reference).synthesize(spectrogram)
 
+    assert oracle.shape == (spectrogram.frame_count,)
     assert _spectral_distance(reference, oracle) < _spectral_distance(reference, unrelated)
 
 

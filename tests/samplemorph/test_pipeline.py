@@ -33,15 +33,14 @@ from samplemorph.pipeline import (
     listening_set_manifest,
     render_listening_set,
 )
-from samplemorph.registries import CANONICALIZER_REGISTRY
+from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
 from samplemorph.rendering import RenderedFile, RenderKind, rate_between, write_rendering
-from samplemorph.vocoders.griffin_lim import GriffinLimVocoder
+from samplemorph.vocoders.pghi import PghiVocoder
 from tests.samplemorph.conftest import harmonic_tone
 
 FIRST_RATE_HZ = 8_363
 SECOND_RATE_HZ = 16_726
 SAMPLE_FRAME_COUNT = 4096
-FAST_ITERATIONS = 2
 EXPECTED_FILE_COUNT = 7
 
 
@@ -90,7 +89,7 @@ def test_a_rendered_listening_set_writes_both_ends_and_every_morph(connection: C
     library_root = tmp_path / "library"
     first_sample = _store_sample(connection, library_root, index=1, frequency=220.0, rate_hz=FIRST_RATE_HZ)
     second_sample = _store_sample(connection, library_root, index=2, frequency=660.0, rate_hz=SECOND_RATE_HZ)
-    canonicalizer = CANONICALIZER_REGISTRY["mel"]()
+    canonicalizer = CANONICALIZER_REGISTRY[DEFAULT_CANONICALIZER_NAME]()
     codec = IdentityCodec(canonicalizer.geometry)
 
     first = encode_sample(connection, library_root, first_sample, canonicalizer=canonicalizer, codec=codec)
@@ -98,12 +97,7 @@ def test_a_rendered_listening_set_writes_both_ends_and_every_morph(connection: C
     summary = render_listening_set(
         first,
         second,
-        route=MorphRoute(
-            canonicalizer=canonicalizer,
-            codec=codec,
-            vocoder=GriffinLimVocoder(iterations=FAST_ITERATIONS),
-            morpher=LinearMorpher(),
-        ),
+        route=MorphRoute(canonicalizer=canonicalizer, codec=codec, vocoder=PghiVocoder(), morpher=LinearMorpher()),
         output_directory=tmp_path / "render",
     )
 
@@ -118,7 +112,7 @@ def test_a_rendered_file_states_the_rate_its_content_is_heard_at(connection: Con
     library_root = tmp_path / "library"
     first_sample = _store_sample(connection, library_root, index=1, frequency=220.0, rate_hz=FIRST_RATE_HZ)
     second_sample = _store_sample(connection, library_root, index=2, frequency=660.0, rate_hz=SECOND_RATE_HZ)
-    canonicalizer = CANONICALIZER_REGISTRY["mel"]()
+    canonicalizer = CANONICALIZER_REGISTRY[DEFAULT_CANONICALIZER_NAME]()
     codec = IdentityCodec(canonicalizer.geometry)
 
     first = encode_sample(connection, library_root, first_sample, canonicalizer=canonicalizer, codec=codec)
@@ -126,12 +120,7 @@ def test_a_rendered_file_states_the_rate_its_content_is_heard_at(connection: Con
     summary = render_listening_set(
         first,
         second,
-        route=MorphRoute(
-            canonicalizer=canonicalizer,
-            codec=codec,
-            vocoder=GriffinLimVocoder(iterations=FAST_ITERATIONS),
-            morpher=LinearMorpher(),
-        ),
+        route=MorphRoute(canonicalizer=canonicalizer, codec=codec, vocoder=PghiVocoder(), morpher=LinearMorpher()),
         output_directory=tmp_path / "render",
     )
 

@@ -11,12 +11,10 @@ from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, ConstantQGeometry, Geom
 from samplemorph.morphers import Morpher
 from samplemorph.morphers.linear import LinearMorpher
 from samplemorph.vocoders import Vocoder
-from samplemorph.vocoders.griffin_lim import GriffinLimVocoder
 from samplemorph.vocoders.pghi import PghiVocoder
 
 DEFAULT_CANONICALIZER_NAME: Final[str] = "log_frequency"
 PGHI_VOCODER_NAME: Final[str] = "pghi"
-GRIFFIN_LIM_VOCODER_NAME: Final[str] = "griffin_lim"
 RESTORED_VOCODER_NAME: Final[str] = "restored"
 DEFAULT_VOCODER_NAME: Final[str] = RESTORED_VOCODER_NAME
 DEFAULT_MORPHER_NAME: Final[str] = "linear"
@@ -46,9 +44,8 @@ analysis.
 
 VOCODER_REGISTRY: Final[dict[str, Callable[[], Vocoder]]] = {
     PGHI_VOCODER_NAME: PghiVocoder,
-    GRIFFIN_LIM_VOCODER_NAME: GriffinLimVocoder,
 }
-"""The vocoders a name alone builds.
+"""The vocoders a name alone builds: phase gradient heap integration on the grid as it is.
 
 `RESTORED_VOCODER_NAME`, the production path, stays out of it: it reads a fitted restorer from a
 file under the library root, so the caller supplies where to read it from rather than a factory

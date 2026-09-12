@@ -24,7 +24,7 @@ from samplemorph.measurement.reconstruction import (
     summarize_reconstruction,
     unrelated_distance_db,
 )
-from samplemorph.vocoders.griffin_lim import OraclePhaseVocoder
+from samplemorph.vocoders.oracle import OraclePhaseVocoder
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_burst
 
 PROBE_OFFSETS = (-7.0, 7.0)
