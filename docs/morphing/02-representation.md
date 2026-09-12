@@ -137,7 +137,9 @@ the stored waveform:
 | Log gain | the level, having peak-normalized the image |
 
 Translation and duration move together under resampling and move independently under trimming, so
-both are carried. Absolute rate never appears.
+both are carried. Absolute rate never appears. Since [`19-unaligned-grids.md`](19-unaligned-grids.md)
+the grids are unaligned by default, so the translation reads zero and the picture itself moves
+with the rate; an anchoring rule chosen on the command fills the translation as described here.
 
 The corpus states its own realistic range for the translation: an octave at the median, seventeen
 semitones at p90. That is the range to draw training augmentations and transposition-retrieval

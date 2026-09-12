@@ -176,6 +176,15 @@ reader improvement. Re-ingesting those 8 would close it.
 The write path is narrow by construction rather than by permission. Real enforcement needs a second
 role. Deferred by the user.
 
+### Aligning the grid on a pitch anchor
+
+The loudest-band alignment made a morph's pitch swing ([`16-pitch-anchor.md`](16-pitch-anchor.md)),
+the fundamental anchor put the swing right, and the listening review of the codec on that chain
+put the codec's fidelity ahead of it: percussive material is as important as tonal, and an anchor
+serves tonal sounds alone. The grids are unaligned by default since
+[`19-unaligned-grids.md`](19-unaligned-grids.md), both anchors stay as options on every command,
+and the pitch along a morph returns as its own question once the reconstruction passes the ear.
+
 ### Morphing between more than two points
 
 The user's instruction is explicit: two points and a weight first, and extend only if that succeeds.
