@@ -991,9 +991,12 @@ table.data td .annotation-editor-input {
     background: var(--surface-1);
 }
 
+/* Pushed to the right, so the cloud's tabs sit at one end of the strip and its "Color by" group at
+   the other. */
 .panel-filter-separator {
     width: 1px;
     height: 16px;
+    margin-left: auto;
     background: var(--border);
 }
 
@@ -1002,24 +1005,37 @@ table.data td .annotation-editor-input {
     color: var(--text-muted);
 }
 
-/* The legend that is also the picker for the cloud's hand-label coloring: one entry per top-level
-   tag, its swatch in the color the cloud paints that tag, pressed where the tag is painted. It
-   wraps, since a vocabulary has as many entries as a person has written. */
+/* The legend that is also the picker for the cloud's hand-label coloring: one entry per painted
+   top-level tag, its swatch in the color the cloud paints that tag, and a toggle that lists the
+   rest. It wraps, since a person may paint as many tags as they like, and stops at three rows
+   whatever is listed, scrolling past that, so the plot underneath keeps its height. */
 .tag-legend {
+    --legend-rows: 3;
+    --legend-chip-height: 22px;
+    --legend-row-gap: 4px;
+    --legend-padding: 6px;
+
     flex: 0 0 auto;
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 6px;
-    padding: 6px 8px;
+    gap: var(--legend-row-gap) 6px;
+    padding: var(--legend-padding) 8px;
+    max-height: calc(
+        var(--legend-rows) * var(--legend-chip-height) + (var(--legend-rows) - 1) * var(--legend-row-gap) + 2 *
+            var(--legend-padding)
+    );
+    overflow-y: auto;
+    scrollbar-gutter: stable;
     border-bottom: 1px solid var(--border);
     background: var(--surface-1);
 }
 
-.tag-legend-entry {
+.tag-legend-entry,
+.tag-legend-toggle {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    height: 22px;
+    height: var(--legend-chip-height);
     padding: 0 8px 0 6px;
     border: 1px solid var(--border);
     border-radius: 11px;
@@ -1027,6 +1043,17 @@ table.data td .annotation-editor-input {
     font-size: 11px;
     color: var(--text-faint);
     cursor: pointer;
+}
+
+.tag-legend-toggle {
+    padding: 0 8px;
+    border-style: dashed;
+    color: var(--text-muted);
+}
+
+.tag-legend-toggle:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
 }
 
 .tag-legend-entry:hover {

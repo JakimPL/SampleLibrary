@@ -420,7 +420,8 @@ thousand points change only with the embedding. The frontend paints a tag in a c
 function of its rank alone (`labelPalette.ts`: hues a golden angle apart, at the lightness and
 chroma each theme declares), so a tag keeps its color as the vocabulary grows and a new one takes
 the next hue; the legend is the picker, painting the most used top-level tags until a person
-chooses their own, and a sample carrying several painted tags takes the first it was given
+chooses their own, listing the painted ones with the rest behind a toggle inside a strip of at
+most three rows, and a sample carrying several painted tags takes the first it was given
 (`labelColoring.ts`). Everything a painted tag does not reach stays on the recessive tone the
 uncategorized points use.
 
