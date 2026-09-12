@@ -89,36 +89,79 @@ tonal:
 | Identity, the vocoder alone | 4.40 · 4.22 · 4.59 | 0.125 · 0.147 · 0.103 | +0.010 · +0.012 · +0.005 | +0.002 · +0.002 · +0.000 |
 | Linear, 256 components | **10.78** · **10.91** · 10.64 | 0.378 · 0.415 · **0.291** | **+0.062** · **+0.100** · **+0.009** | **+0.027** · +0.049 · +0.010 |
 | Conditioned, 512-dimensional residual | 13.07 · 14.70 · **10.20** | **0.369** · 0.445 · 0.310 | +0.185 · +0.214 · +0.115 | +0.038 · **+0.041** · +0.010 |
+| Conditioned, map residual, 8 per cell | 12.44 · 13.20 · 11.45 | 0.438 · 0.461 · 0.378 | +0.223 · +0.245 · +0.200 | +0.051 · +0.053 · +0.037 |
+| The same, cycle term at 0.01 | 13.65 · 14.10 · 12.61 | 0.460 · 0.497 · 0.388 | +0.243 · +0.259 · +0.127 | +0.066 · +0.067 · +0.058 |
 
-**The conditioned codec loses to the linear one, and where the ear said it does.** On the held-out
-distance it is behind on eleven of the twelve probes, by four decibels at the percussive median,
-and level with it at the tonal median. Its modulation excess is three times the linear codec's
-overall and twelve times on tonal material: the decoded grids carry a modulation the originals
-lack, which is the vocoder-like effect the review heard. The bar for this stage was a codec at
-least as good as the linear one on percussive and tonal material both, and the vector residual at
-512 dimensions under a light prior clears neither. [`15-conditioned-codec.md`](15-conditioned-codec.md)
-found the residual's size was not the lever at 64 against 128; at 512 it still is not.
+**Every conditioned codec loses to the linear one, and where the ear said it does.** The vector
+residual is behind on the held-out distance on eleven of the twelve probes, by four decibels at
+the percussive median, and level at the tonal median. Its modulation excess is three times the
+linear codec's overall and twelve times on tonal material: the decoded grids carry a modulation
+the originals lack, which is the vocoder-like effect the review heard. The bar for this stage was
+a codec at least as good as the linear one on percussive and tonal material both, and none of the
+three clears it. [`15-conditioned-codec.md`](15-conditioned-codec.md) found the residual's size
+was not the lever at 64 against 128; at 512 it still is not.
 
-What the layout of that residual does explains the readings better than its size. The bottleneck
-holds 128 channels over 11 bands and 8 columns, and the vector residual reads the whole map
-through one linear layer into 512 numbers and writes it back through another: every residual
-number speaks for every band at every moment, and a decoder rebuilding a transient or a chord's
-voicing from that has to put it back where the descriptor suggests. The follow-up is a residual
-that keeps the map, `--layout map` on `train-codec` (`LAYOUT=map`): a few numbers at each of the
-88 bottleneck cells, read and written through 1×1 convolutions with the descriptor laid over
-every cell, so a residual number speaks for the bands and the moment it sits at. Eight numbers
-per cell make a residual of 704, close to the vector's 512, with the locality the vector lacks.
-Beside it, the cycle term at a tenth of its weight, since a decoder asked to describe as its
-descriptor is a decoder pulled toward its category's prototype. Both are queued in
-`runs/unaligned-2026-09-12/run_c2.sh`, measured on the same probes, and their rows belong in the
-table above.
+The second turn moved the residual's layout instead of its size. The bottleneck holds 128
+channels over 11 bands and 8 columns, and the vector residual reads the whole map through one
+linear layer into 512 numbers and writes it back through another, so every residual number
+speaks for every band at every moment. `--layout map` on `train-codec` (`LAYOUT=map`) keeps the
+map: a few numbers at each of the 88 bottleneck cells, read and written through 1×1 convolutions
+with the descriptor laid over every cell, so a residual number speaks for the bands and the
+moment it sits at. Eight per cell make 704 numbers, close to the vector's 512, with the locality
+the vector lacks. Measured, the map buys a decibel and a half on percussive material and costs
+one on tonal, loses to the linear codec on all twelve probes, and adds more modulation than the
+vector did; its validation error on the grid is higher too (0.026 against 0.021). The cycle term
+at a tenth of its weight, tried on the map in the same run, makes every reading worse. Locality
+at the bottleneck is not what the decoder lacks either.
+
+What the three runs have in common is the shape of the decoder: eight columns rebuilt to
+sixty-four through transposed convolutions whose kernels equal their strides, with nothing from
+the encoder's finer stages reaching them, and a loss that scores the grid by absolute error. A
+decoder like that puts a transient where its block boundary falls and paints what it is unsure
+of as the average of its kind; the modulation excess, which rises with every variant that
+reconstructs worse, is the sound of that. The linear codec has no such decoder: its
+reconstruction is the grid projected onto 256 directions, exact where those directions reach and
+smooth elsewhere, and it never adds what the grid lacks.
+
+## The standard pairs
+
+The review had asked for plainer pairs than the first set's: two sounds of one kind at one
+rate, so that a morph has only the sound to change. `runs/unaligned-2026-09-12/pairs.json` holds
+eight, two each of basses, kicks, snares and chord stabs, drawn by name and by kind from
+different modules with a guard against copies of one sample. They are rendered through the
+vector codec, the map codec and the linear one into `listening/pairs-2026-09-12/<pair>/<model>/`,
+with the originals, the reconstructions and the morphs at 0.25, 0.5 and 0.75, and the readings of
+[`15`](15-conditioned-codec.md) on the decoded grids. The least share of the endpoints' energy an
+interior step keeps, and the smallest distance of a step from the crossfade of the endpoint grids:
+
+| Pair | Linear, energy | Vector, energy | Map, energy | Vector, blend | Map, blend |
+|---|---|---|---|---|---|
+| Two slap basses | 0.42 | 0.43 | 0.45 | 0.05 | 0.07 |
+| Two short basses | 0.89 | 0.99 | 1.01 | 0.11 | 0.15 |
+| Two kicks | 0.19 | 0.58 | 0.99 | 0.09 | 0.14 |
+| Two more kicks | 0.48 | 0.60 | 0.64 | 0.05 | 0.06 |
+| Two snares | 0.21 | 0.29 | 0.32 | 0.14 | 0.18 |
+| Two more snares | 0.40 | 0.52 | 0.57 | 0.07 | 0.10 |
+| Two chord stabs | 0.60 | 0.56 | 0.82 | 0.07 | 0.11 |
+| Two more chord stabs | 0.56 | 0.85 | 1.04 | 0.08 | 0.11 |
+
+Every path is monotone through every codec, and no step spreads wider than its endpoints. The
+linear codec's paths are crossfades, as they are by construction, and thin out in the middle
+where the two sounds differ, to a fifth of the endpoints' energy between the two kicks; the
+conditioned codecs keep the middle full, the map codec most of all, and stand a tenth of the
+endpoints' own distance away from the crossfade at their closest. That is the case for a learned
+decoder, made on material where the linear codec's midpoint is the shadow of both sounds. What
+each codec costs the endpoints is what the fidelity table says, and whether a full middle at
+that cost is a sound worth having is the user's verdict, in `verdicts.csv` beside the files.
 
 ## What follows
 
-- The map layout's and the cycle knob's readings, on the same twelve probes, against the bar.
-- Eight standard pairs (`runs/unaligned-2026-09-12/pairs.json`: two pairs each of basses, kicks,
-  snares and chords, the two of a pair heard at the same rate), rendered through the best codec
-  and the linear one into `listening/pairs-2026-09-12/`, with the blend, energy, spread and pitch
-  readings per step, for the user's verdict.
+- The user's verdict on the standard pairs, and on the reconstructions in the fidelity set.
+- The decoder's shape is where the fidelity readings point, and the linear codec is the one
+  reconstruction that never adds what the grid lacks. A learned decoder that starts from the
+  linear reconstruction and corrects it, the way the restorer corrects the band inverse, keeps
+  the linear codec's fidelity as its floor and puts the learning where the crossfade thins out.
+  Before that, the linear codec's own ceiling is a five-minute fit away: `make morph-fit
+  LATENT=1024` says how much of the gap to the vocoder is the 256 components.
 - Promotion of experiment 9 to the cloud is the user's call; the cloud shows experiment 7 until
   then, and the two are level on every measured row.
