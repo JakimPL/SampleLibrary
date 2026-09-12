@@ -59,9 +59,9 @@ class GridCache:
     """Every sample of a draw as its pooled canonical grid, stored once and read every epoch.
 
     `grids` is `(samples, 1 + views, bands, columns)`: the stored waveform's grid first, then the
-    same sound read at each of its retunings. `durations` holds each grid's canonical duration in
-    the same order. The retuned views are what teach a descriptor that a retuning changes nothing,
-    and they are drawn once so every epoch and every run reads the same views.
+    same sound read at each of its retunings. `durations` holds each sample's canonical duration
+    beside every one of its grids. The retuned views are what teach a descriptor that a retuning
+    changes nothing, and they are drawn once so every epoch and every run reads the same views.
     """
 
     directory: Path
@@ -226,7 +226,12 @@ def _limit_threads() -> None:
 
 @dataclass(frozen=True)
 class _Worker:
-    """Derives one sample's stored grid and its retuned views; built once and sent to every process."""
+    """Derives one sample's stored grid and its retuned views; built once and sent to every process.
+
+    Every view records the sample's own duration. A view is the same sound read at another rate,
+    and the duration a descriptor hears beside it is the sound's, so the two readings of one sound
+    differ in their grids alone.
+    """
 
     library_root: Path
     geometry: Geometry
@@ -235,11 +240,8 @@ class _Worker:
     def __call__(self, job: _Job) -> tuple[NDArray[np.float16], NDArray[np.float32]]:
         canonicalizer = canonicalizer_for_geometry(self.geometry)
         mono = prepare_mono(audio_store.read(self.library_root, job.sample).pcm)
-        readings = [mono] + [resample_by_semitones(mono, semitones=offset) for offset in job.offsets]
-        grids = []
-        durations = []
-        for reading in readings:
-            image = canonicalizer.canonicalize(reading)
-            grids.append(pool_bands(image.grid, band_count=self.band_count).astype(np.float16))
-            durations.append(canonical_duration(image.conditioners))
-        return np.stack(grids), np.asarray(durations, dtype=np.float32)
+        stored = canonicalizer.canonicalize(mono)
+        views = [canonicalizer.canonicalize(resample_by_semitones(mono, semitones=offset)) for offset in job.offsets]
+        grids = [pool_bands(image.grid, band_count=self.band_count).astype(np.float16) for image in (stored, *views)]
+        duration = canonical_duration(stored.conditioners)
+        return np.stack(grids), np.full(1 + len(views), duration, dtype=np.float32)

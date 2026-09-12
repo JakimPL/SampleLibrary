@@ -308,6 +308,24 @@ def test_rendering_through_a_restorer_that_was_never_trained_says_so(
         )
 
 
+def test_a_retuned_view_records_its_samples_own_duration(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A view differs from the stored reading in its grid alone, so the duration beside it is the sample's."""
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    main(["cache-grids", "--cache", "views-under-test", "--views", "2", "--workers", "0"])
+
+    cache = open_grid_cache(grid_cache_directory(tmp_path, name="views-under-test"))
+    assert cache.durations.shape == (CATALOG_SIZE, 3)
+    assert np.array_equal(cache.durations, np.repeat(cache.durations[:, :1], 3, axis=1))
+    assert not np.array_equal(cache.grids[:, 0], cache.grids[:, 1])
+
+
 def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
     connection: Connection,
     _database_url: str,
