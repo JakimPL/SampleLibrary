@@ -25,14 +25,15 @@ from samplemorph.commands.draws import (
     draw_probe_samples,
     require_sample,
 )
-from samplemorph.commands.fit import DEFAULT_MODEL_NAME
-from samplemorph.commands.vocoders import add_vocoder_arguments, vocoder_from
+from samplemorph.commands.vocoders import vocoder_from
 from samplemorph.measurement.loudness import match_loudness
 from samplemorph.measurement.readings import ReconstructionReadings, read_reconstruction
-from samplemorph.model_store import load_named_model
+from samplemorph.model_store import DEFAULT_MODEL_NAME, load_named_model
 from samplemorph.pipeline import encode_sample
 from samplemorph.registries import canonicalizer_for_geometry
+from samplemorph.route_arguments import add_vocoder_arguments
 from samplemorph.training.principal_components import DEFAULT_RANDOM_SEED
+from samplemorph.training.run_settings import DEFAULT_ACCELERATOR
 from samplemorph.vocoders import Vocoder
 
 COMMAND_NAME: Final[str] = "measure"
@@ -96,7 +97,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     add_canonicalizer_argument(
         parser, help_text=f"The axis the {IDENTITY_MODEL_NAME} model reads; a stored model brings its own."
     )
-    add_vocoder_arguments(parser)
+    add_vocoder_arguments(parser, device_default=DEFAULT_ACCELERATOR)
     parser.add_argument(
         "--samples", type=int, default=DEFAULT_MEASURE_SAMPLE_COUNT, help="How many probes the seeded draw reads."
     )

@@ -10,6 +10,7 @@ from samplecore.config import LibraryConfig
 from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
 from samplemorph.measurement.corpus import read_probe_samples
 from samplemorph.model_store import (
+    DEFAULT_MODEL_NAME,
     PRINCIPAL_COMPONENT_CODEC_NAME,
     MorphModel,
     MorphModelDescription,
@@ -23,7 +24,6 @@ from samplemorph.training.principal_components import (
 )
 
 COMMAND_NAME: Final[str] = "fit"
-DEFAULT_MODEL_NAME: Final[str] = "principal_components"
 DEFAULT_FIT_SAMPLE_COUNT: Final[int] = 4_000
 
 _logger = logging.getLogger(__name__)

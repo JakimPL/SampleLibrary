@@ -13,6 +13,8 @@ EXAMPLE_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
 DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_DATABASE_URL"
 DEFAULT_MINIMUM_SAMPLE_FRAMES: Final[int] = 512
+DEFAULT_INFERENCE_URL: Final[str] = "http://127.0.0.1:8010"
+INFERENCE_TABLE: Final[str] = "inference"
 
 # The example file's own stand-in paths. A config still carrying one has been copied but not yet
 # filled in, and saying so is far more use than whatever the first pipeline to walk that path would
@@ -24,13 +26,22 @@ class ConfigurationError(Exception):
     """Raised when the local library configuration cannot be found or does not validate."""
 
 
+class InferenceConfig(BaseModel):
+    """Where the morph inference process listens: the process binds this address and the API dials it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    url: str = DEFAULT_INFERENCE_URL
+
+
 class LibraryConfig(BaseModel):
     """Local, machine-specific configuration this project reads at startup.
 
     Nothing here is checked into the repository. ``module_source_directory``, ``library_root``, and
     ``database_url`` are required with no default, since fabricating a plausible-looking value would
     point the library at the wrong place, or the wrong database, silently rather than failing loudly
-    when configuration is missing.
+    when configuration is missing. The inference address has a default, since one machine running
+    both processes is the common case and the port is free to choose.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -39,6 +50,7 @@ class LibraryConfig(BaseModel):
     library_root: Path
     database_url: str
     minimum_sample_frames: int = DEFAULT_MINIMUM_SAMPLE_FRAMES
+    inference: InferenceConfig = InferenceConfig()
 
 
 def load_config(path: Path | None = None) -> LibraryConfig:
@@ -68,6 +80,7 @@ def load_config(path: Path | None = None) -> LibraryConfig:
     database_url_from_environment = os.environ.get(DATABASE_URL_ENVIRONMENT_VARIABLE)
     if database_url_from_environment is not None:
         library_data["database_url"] = database_url_from_environment
+    library_data[INFERENCE_TABLE] = dict(data.get(INFERENCE_TABLE, {}))
     config = LibraryConfig.model_validate(library_data)
     _reject_placeholder_paths(config, resolved_path)
     return config

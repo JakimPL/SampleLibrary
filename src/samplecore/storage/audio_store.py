@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import wave
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Final
@@ -11,13 +12,23 @@ from numpy.typing import NDArray
 from trackmod.binary.pcm.quantize import dequantize, quantize
 from trackmod.core.samples.depth import BitDepth
 
+from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 
 NOMINAL_WAV_RATE: Final[int] = 44100
 OBJECTS_DIRECTORY_NAME: Final[str] = "objects"
+BITS_PER_BYTE: Final[int] = 8
 _PARTIAL_SUFFIX: Final[str] = ".partial"
 _UNSIGNED_EIGHT_BIT_OFFSET: Final[int] = 128
+
+
+@dataclass(frozen=True)
+class _StoredFrames:
+    sample_width: int
+    channels: int
+    frames: int
+    frame_bytes: bytes
 
 
 def object_path(library_root: Path, sample_hash: str) -> Path:
@@ -81,12 +92,43 @@ def _write_partial(directory: Path, sample_pcm: SamplePCM) -> Path:
 
 def read(library_root: Path, sample: Sample) -> SamplePCM:
     """Read a Sample's waveform back from the content-addressable store."""
-    path = object_path(library_root, sample.hash)
-    with wave.open(str(path), "rb") as wav_file:
-        frame_bytes = wav_file.readframes(wav_file.getnframes())
-
-    quantized = _decode_frames(frame_bytes, sample.depth, sample.channels.value)
+    stored = _read_frames(object_path(library_root, sample.hash))
+    quantized = _decode_frames(stored.frame_bytes, sample.depth, sample.channels.value)
     return SamplePCM(sample=sample, pcm=dequantize(quantized, sample.depth))
+
+
+def read_object(library_root: Path, sample_hash: str) -> SamplePCM:
+    """Read a stored object by its hash alone, its frame layout taken from the WAV header.
+
+    A process holding the library root and no catalog reads through here: the header states the
+    channel count and the sample width the store wrote, which is everything the decoding needs.
+
+    Raises:
+        FileNotFoundError: no object is stored under that hash.
+    """
+    path = object_path(library_root, sample_hash)
+    if not path.is_file():
+        raise FileNotFoundError(f"no object is stored for sample {sample_hash}")
+
+    stored = _read_frames(path)
+    sample = Sample(
+        hash=sample_hash,
+        depth=BitDepth(stored.sample_width * BITS_PER_BYTE),
+        channels=ChannelLayout(stored.channels),
+        frames=stored.frames,
+    )
+    quantized = _decode_frames(stored.frame_bytes, sample.depth, sample.channels.value)
+    return SamplePCM(sample=sample, pcm=dequantize(quantized, sample.depth))
+
+
+def _read_frames(path: Path) -> _StoredFrames:
+    with wave.open(str(path), "rb") as wav_file:
+        return _StoredFrames(
+            sample_width=wav_file.getsampwidth(),
+            channels=wav_file.getnchannels(),
+            frames=wav_file.getnframes(),
+            frame_bytes=wav_file.readframes(wav_file.getnframes()),
+        )
 
 
 def _encode_frames(quantized: NDArray[np.int64], depth: BitDepth) -> bytes:

@@ -18,6 +18,7 @@ MODEL_SUFFIX: Final[str] = ".npz"
 DESCRIPTION_KEY: Final[str] = "description"
 IDENTITY_CODEC_NAME: Final[str] = "identity"
 PRINCIPAL_COMPONENT_CODEC_NAME: Final[str] = "principal_components"
+DEFAULT_MODEL_NAME: Final[str] = "principal_components"
 
 
 class MorphModelDescription(BaseModel):

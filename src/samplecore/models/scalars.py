@@ -4,8 +4,10 @@ from typing import Annotated, Final
 
 from pydantic import Field, StringConstraints
 
-SampleHash = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
-ModuleHash = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+SAMPLE_HASH_PATTERN: Final[str] = r"^[0-9a-f]{64}$"
+
+SampleHash = Annotated[str, StringConstraints(pattern=SAMPLE_HASH_PATTERN)]
+ModuleHash = Annotated[str, StringConstraints(pattern=SAMPLE_HASH_PATTERN)]
 
 Frames = Annotated[int, Field(gt=0)]
 Index = Annotated[int, Field(ge=0)]

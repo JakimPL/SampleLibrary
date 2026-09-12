@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass
 from enum import StrEnum, unique
 from pathlib import Path
@@ -10,6 +11,7 @@ import soundfile
 from numpy.typing import NDArray
 
 RENDERED_SUBTYPE: Final[str] = "PCM_16"
+RENDERED_FORMAT: Final[str] = "WAV"
 SILENT_LEVEL: Final[float] = 1e-10
 HEADROOM: Final[float] = 0.98
 
@@ -49,6 +51,19 @@ def write_rendering(file: RenderedFile, waveform: NDArray[np.float64]) -> Render
     file.path.parent.mkdir(parents=True, exist_ok=True)
     soundfile.write(file.path, _with_headroom(waveform), int(round(file.rate_hz)), subtype=RENDERED_SUBTYPE)
     return file
+
+
+def wav_bytes(waveform: NDArray[np.float64], *, rate_hz: float) -> bytes:
+    """One waveform as a WAV file in memory, at the stated rate and under the headroom a written file carries.
+
+    A process that answers a request with audio hands these bytes over as they are, so the file a
+    listener receives is the one `write_rendering` would have put on disk.
+    """
+    buffer = io.BytesIO()
+    soundfile.write(
+        buffer, _with_headroom(waveform), int(round(rate_hz)), subtype=RENDERED_SUBTYPE, format=RENDERED_FORMAT
+    )
+    return buffer.getvalue()
 
 
 def _with_headroom(waveform: NDArray[np.float64]) -> NDArray[np.float64]:

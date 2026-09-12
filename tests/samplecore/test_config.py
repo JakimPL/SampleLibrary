@@ -11,6 +11,7 @@ from samplecore.config import (
     DEFAULT_CONFIG_PATH,
     EXAMPLE_CONFIG_PATH,
     ConfigurationError,
+    InferenceConfig,
     LibraryConfig,
     create_config_file,
     load_config,
@@ -41,6 +42,31 @@ def test_a_config_file_round_trips_through_load_config(tmp_path: Path) -> None:
         library_root=library_root,
         database_url="postgresql+psycopg://user:pass@host/db",
     )
+
+
+def test_the_inference_address_is_read_from_its_own_table(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nmodule_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        'database_url = "postgresql+psycopg://user:pass@host/db"\n'
+        '[inference]\nurl = "http://render.local:9000"\n',
+        encoding="utf-8",
+    )
+
+    assert load_config(config_path).inference.url == "http://render.local:9000"
+
+
+def test_the_inference_address_has_a_default_when_the_table_is_absent(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nmodule_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        'database_url = "postgresql+psycopg://user:pass@host/db"\n',
+        encoding="utf-8",
+    )
+
+    assert load_config(config_path).inference == InferenceConfig()
 
 
 def test_database_url_is_required(tmp_path: Path) -> None:

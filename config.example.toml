@@ -18,3 +18,8 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 
 # Samples shorter than this many frames are skipped at ingest time. Defaults to 512.
 # minimum_sample_frames = 512
+
+[inference]
+# Where the morph inference process listens: `make serve-inference` binds this address and the API
+# dials it for morphs. Defaults to http://127.0.0.1:8010.
+# url = "http://127.0.0.1:8010"

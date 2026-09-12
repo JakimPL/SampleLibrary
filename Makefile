@@ -229,6 +229,13 @@ serve-dev:
 serve:
 	uv run uvicorn sampleserver.main:app --reload
 
+# The morph inference process: the pipeline over HTTP at the address `[inference] url` names,
+# which `make serve` dials for morphs. Long-lived and small, so it runs bare; DEVICE=cuda puts the
+# restorer on the card, and the processor is the default so the card stays free for training.
+.PHONY: serve-inference
+serve-inference:
+	uv run samplemorph-serve $(if $(DEVICE),--device $(DEVICE),) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),)
+
 .PHONY: docker-build
 docker-build:
 	docker build -t samplelibrary-server .

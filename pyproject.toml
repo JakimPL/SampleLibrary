@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-server = ["fastapi>=0.120", "uvicorn>=0.35"]
+server = ["fastapi>=0.120", "uvicorn>=0.35", "httpx>=0.28"]
 cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9"]
 morph = [
     "librosa>=0.11",
@@ -29,6 +29,8 @@ morph = [
     "threadpoolctl>=3.6",
     "pyloudnorm>=0.2",
     "pghipy>=0.1",
+    "fastapi>=0.120",
+    "uvicorn>=0.35",
 ]
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]
@@ -45,6 +47,7 @@ samplecloud-modules-placeholder = "samplecloud.placeholder_modules:main"
 samplecloud-evaluate = "samplecloud.evaluation.cli:main"
 samplecloud-suggest = "samplecloud.suggestions.cli:main"
 samplemorph = "samplemorph.cli:main"
+samplemorph-serve = "samplemorph.service.cli:main"
 sampleserver-schema = "sampleserver.openapi_export:main"
 
 # The card is sm_120, which needs a CUDA 12.8 or newer build; an older wheel imports cleanly and
@@ -180,3 +183,14 @@ name = "the morph pipeline never imports the cloud, which is the layer over it"
 type = "forbidden"
 source_modules = ["samplemorph"]
 forbidden_modules = ["samplecloud"]
+
+[[tool.importlinter.contracts]]
+name = "the morph service is the pipeline over HTTP, clear of training and of every other package"
+type = "forbidden"
+source_modules = ["samplemorph.service"]
+forbidden_modules = ["samplemorph.training", "samplemorph.commands", "sampleextract", "samplecloud", "sampleserver"]
+
+[[tool.importlinter.contracts]]
+name = "the morph shell and the morph service are two skins over one pipeline"
+type = "independence"
+modules = ["samplemorph.commands", "samplemorph.service"]

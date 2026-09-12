@@ -153,3 +153,31 @@ def test_a_leftover_partial_file_is_never_mistaken_for_a_stored_sample(tmp_path:
     audio_store.write(tmp_path, sample_pcm)
 
     assert audio_store.read(tmp_path, sample_pcm.sample).sample.hash == sample_pcm.sample.hash
+
+
+@pytest.mark.parametrize(
+    ("depth", "channels"),
+    [
+        (BitDepth.EIGHT, ChannelLayout.MONO),
+        (BitDepth.SIXTEEN, ChannelLayout.MONO),
+        (BitDepth.SIXTEEN, ChannelLayout.STEREO),
+    ],
+    ids=("eight-bit mono", "sixteen-bit mono", "sixteen-bit stereo"),
+)
+def test_an_object_reads_by_its_hash_alone_exactly_as_by_its_sample(
+    tmp_path: Path, depth: BitDepth, channels: ChannelLayout
+) -> None:
+    """A process holding the store and no catalog decodes the same frames the catalog's reader does."""
+    pcm = np.linspace(-1.0, 0.999, 24, dtype=np.float64).reshape(-1, channels.value)
+    sample_pcm = _sample_pcm(depth, channels, pcm)
+    audio_store.write(tmp_path, sample_pcm)
+
+    by_hash = audio_store.read_object(tmp_path, sample_pcm.sample.hash)
+
+    assert by_hash.sample == sample_pcm.sample
+    assert np.array_equal(by_hash.pcm, audio_store.read(tmp_path, sample_pcm.sample).pcm)
+
+
+def test_an_object_the_store_lacks_is_reported_by_hash(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="no object is stored"):
+        audio_store.read_object(tmp_path, "f" * 64)
