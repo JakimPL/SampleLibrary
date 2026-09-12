@@ -160,7 +160,7 @@ morph-embed:
 # octave), and `morph-render MODEL=conditioned` renders a listening set through it.
 .PHONY: morph-train-codec
 morph-train-codec:
-	$(CAPPED) uv run samplemorph train-codec $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(CODEC),--codec $(CODEC),) $(if $(RESIDUAL),--residual-size $(RESIDUAL),) $(if $(WIDTH),--width $(WIDTH),) $(if $(PRIOR),--prior-weight $(PRIOR),) $(if $(CYCLE),--cycle-weight $(CYCLE),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
+	$(CAPPED) uv run samplemorph train-codec $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(CODEC),--codec $(CODEC),) $(if $(RESIDUAL),--residual-size $(RESIDUAL),) $(if $(LAYOUT),--layout $(LAYOUT),) $(if $(WIDTH),--width $(WIDTH),) $(if $(PRIOR),--prior-weight $(PRIOR),) $(if $(CYCLE),--cycle-weight $(CYCLE),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
 
 .PHONY: morph-render
 morph-render:

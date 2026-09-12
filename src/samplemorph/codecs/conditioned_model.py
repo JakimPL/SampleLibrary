@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+from enum import StrEnum
 from typing import Final
 
 import torch
@@ -8,7 +10,21 @@ from torch import Tensor, nn
 
 from samplecore.models.base import FROZEN
 
+
+class ResidualLayout(StrEnum):
+    """How the residual is laid out at the bottleneck.
+
+    `VECTOR` reads the whole bottleneck into one vector, so every residual number can speak for any
+    band at any moment. `MAP` keeps the bottleneck's map and holds a few numbers at each of its
+    cells, so a residual number speaks for the bands and the moment of the cell it sits in.
+    """
+
+    VECTOR = "vector"
+    MAP = "map"
+
+
 DEFAULT_RESIDUAL_SIZE: Final[int] = 64
+DEFAULT_RESIDUAL_LAYOUT: Final[ResidualLayout] = ResidualLayout.VECTOR
 DEFAULT_CODEC_WIDTH: Final[int] = 16
 STAGE_COUNT: Final[int] = 4
 BAND_STRIDE: Final[int] = 4
@@ -18,7 +34,11 @@ CHANNELS_PER_GROUP: Final[int] = 4
 
 
 class ConditionedCodecShape(BaseModel):
-    """The dimensions that fix a conditioned codec, recorded beside its weights."""
+    """The dimensions that fix a conditioned codec, recorded beside its weights.
+
+    `residual_size` counts the numbers the residual holds at each of its positions: the vector
+    layout has one position, the map layout one per bottleneck cell.
+    """
 
     model_config = FROZEN
 
@@ -27,6 +47,7 @@ class ConditionedCodecShape(BaseModel):
     descriptor_size: int
     residual_size: int = DEFAULT_RESIDUAL_SIZE
     width: int = DEFAULT_CODEC_WIDTH
+    layout: ResidualLayout = DEFAULT_RESIDUAL_LAYOUT
 
     @property
     def band_stride(self) -> int:
@@ -44,6 +65,19 @@ class ConditionedCodecShape(BaseModel):
         for stride in TIME_STRIDES:
             columns //= stride
         return self.width * 2 ** (STAGE_COUNT - 1), self.padded_band_count // self.band_stride, columns
+
+    @property
+    def residual_shape(self) -> tuple[int, ...]:
+        """The residual's own axes: `(residual_size,)` as a vector, `(residual_size, bands, columns)` as a map."""
+        if self.layout is ResidualLayout.MAP:
+            _channels, bands, columns = self.bottleneck_shape
+            return self.residual_size, bands, columns
+        return (self.residual_size,)
+
+    @property
+    def residual_length(self) -> int:
+        """How many numbers the residual holds once flattened, which is what a latent carries."""
+        return math.prod(self.residual_shape)
 
 
 class FeatureModulation(nn.Module):
@@ -103,9 +137,15 @@ class ConditionedCodecModel(nn.Module):
             )
             incoming = outgoing
         bottleneck_channels, bottleneck_bands, bottleneck_columns = shape.bottleneck_shape
-        flat = bottleneck_channels * bottleneck_bands * bottleneck_columns
-        self.to_residual = nn.Linear(flat, 2 * shape.residual_size)
-        self.from_residual = nn.Linear(shape.residual_size + shape.descriptor_size, flat)
+        self.to_residual: nn.Module
+        self.from_residual: nn.Module
+        if shape.layout is ResidualLayout.MAP:
+            self.to_residual = nn.Conv2d(bottleneck_channels, 2 * shape.residual_size, 1)
+            self.from_residual = nn.Conv2d(shape.residual_size + shape.descriptor_size, bottleneck_channels, 1)
+        else:
+            flat = bottleneck_channels * bottleneck_bands * bottleneck_columns
+            self.to_residual = nn.Linear(flat, 2 * shape.residual_size)
+            self.from_residual = nn.Linear(shape.residual_size + shape.descriptor_size, flat)
         self.decoder_stages = nn.ModuleList()
         incoming = bottleneck_channels
         for stage in reversed(range(STAGE_COUNT)):
@@ -124,19 +164,16 @@ class ConditionedCodecModel(nn.Module):
         self.to_grid = nn.Conv2d(shape.width, 1, KERNEL, padding=(KERNEL[0] // 2, KERNEL[1] // 2))
 
     def encode(self, grid: Tensor, descriptor: Tensor) -> tuple[Tensor, Tensor]:
-        """The residual's mean and log-variance for each grid, read beside its descriptor."""
+        """The residual's mean and log-variance for each grid, read beside its descriptor, in the residual's own shape."""
         # grid: (batch, bands, columns) -> (batch, 1, padded bands, columns)
         features = nn.functional.pad(grid, (0, 0, 0, self.shape.padded_band_count - self.shape.band_count))[:, None]
         for stage in self.encoder_stages:
             features = stage(features, descriptor)
-        mean, log_variance = self.to_residual(features.flatten(1)).chunk(2, dim=-1)
-        return mean, log_variance
+        return self._read_residual(features)
 
     def decode(self, residual: Tensor, descriptor: Tensor) -> Tensor:
         """The grid a residual and a descriptor describe, in the grid's own unit interval."""
-        bottleneck_channels, bottleneck_bands, bottleneck_columns = self.shape.bottleneck_shape
-        features = self.from_residual(torch.cat([residual, descriptor], dim=-1))
-        features = features.view(-1, bottleneck_channels, bottleneck_bands, bottleneck_columns)
+        features = self._write_bottleneck(residual, descriptor)
         for stage in self.decoder_stages:
             features = stage(features, descriptor)
         grid: Tensor = torch.sigmoid(self.to_grid(features))[:, 0, : self.shape.band_count]
@@ -147,3 +184,21 @@ class ConditionedCodecModel(nn.Module):
         mean, log_variance = self.encode(grid, descriptor)
         residual = mean + torch.randn_like(mean) * torch.exp(0.5 * log_variance) if self.training else mean
         return self.decode(residual, descriptor), mean, log_variance
+
+    def _read_residual(self, features: Tensor) -> tuple[Tensor, Tensor]:
+        if self.shape.layout is ResidualLayout.MAP:
+            # (batch, 2 * residual, bands, columns) -> two maps of (batch, residual, bands, columns)
+            mean, log_variance = self.to_residual(features).chunk(2, dim=1)
+            return mean, log_variance
+        mean, log_variance = self.to_residual(features.flatten(1)).chunk(2, dim=-1)
+        return mean, log_variance
+
+    def _write_bottleneck(self, residual: Tensor, descriptor: Tensor) -> Tensor:
+        bottleneck_channels, bottleneck_bands, bottleneck_columns = self.shape.bottleneck_shape
+        if self.shape.layout is ResidualLayout.MAP:
+            # descriptor: (batch, size) laid over every cell -> (batch, size, bands, columns)
+            spread = descriptor[:, :, None, None].expand(-1, -1, bottleneck_bands, bottleneck_columns)
+            features: Tensor = self.from_residual(torch.cat([residual, spread], dim=1))
+            return features
+        features = self.from_residual(torch.cat([residual, descriptor], dim=-1))
+        return features.view(-1, bottleneck_channels, bottleneck_bands, bottleneck_columns)

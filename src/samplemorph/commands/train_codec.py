@@ -9,7 +9,12 @@ from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
 from samplemorph.codecs.conditioned import DEFAULT_CODEC_NAME
-from samplemorph.codecs.conditioned_model import DEFAULT_CODEC_WIDTH, DEFAULT_RESIDUAL_SIZE
+from samplemorph.codecs.conditioned_model import (
+    DEFAULT_CODEC_WIDTH,
+    DEFAULT_RESIDUAL_LAYOUT,
+    DEFAULT_RESIDUAL_SIZE,
+    ResidualLayout,
+)
 from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
 from samplemorph.descriptors.learned import DEFAULT_DESCRIPTOR_NAME, descriptor_path, load_descriptor
 from samplemorph.training.codec_losses import (
@@ -46,7 +51,17 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     parser.add_argument("--codec", type=str, default=DEFAULT_CODEC_NAME, help="The name to store the codec under.")
     parser.add_argument(
-        "--residual-size", type=int, default=DEFAULT_RESIDUAL_SIZE, help="How many numbers the residual holds."
+        "--residual-size",
+        type=int,
+        default=DEFAULT_RESIDUAL_SIZE,
+        help="How many numbers the residual holds at each of its positions.",
+    )
+    parser.add_argument(
+        "--layout",
+        type=ResidualLayout,
+        choices=tuple(ResidualLayout),
+        default=DEFAULT_RESIDUAL_LAYOUT,
+        help="Whether the residual is one vector or a map with a residual at every bottleneck cell.",
     )
     parser.add_argument("--width", type=int, default=DEFAULT_CODEC_WIDTH, help="How many channels the first stage has.")
     parser.add_argument(
@@ -100,6 +115,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
             reconstruction=arguments.reconstruction_weight, prior=arguments.prior_weight, cycle=arguments.cycle_weight
         ),
         residual_size=arguments.residual_size,
+        layout=arguments.layout,
         width=arguments.width,
         prior_warmup_steps=arguments.prior_warmup,
     )

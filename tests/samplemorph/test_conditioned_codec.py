@@ -14,7 +14,7 @@ from samplemorph.codecs.conditioned import (
     load_conditioned_codec,
     save_conditioned_codec,
 )
-from samplemorph.codecs.conditioned_model import ConditionedCodecModel, ConditionedCodecShape
+from samplemorph.codecs.conditioned_model import ConditionedCodecModel, ConditionedCodecShape, ResidualLayout
 from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
 from samplemorph.descriptors.learned import DescriptorDescription, descriptor_path, save_descriptor
 from samplemorph.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE, pooled_band_count
@@ -39,7 +39,7 @@ def _descriptor_shape() -> DescriptorShape:
     )
 
 
-def _codec_shape() -> ConditionedCodecShape:
+def _codec_shape(layout: ResidualLayout = ResidualLayout.VECTOR) -> ConditionedCodecShape:
     geometry = log_frequency_geometry()
     return ConditionedCodecShape(
         band_count=geometry.grid_shape[0],
@@ -47,6 +47,7 @@ def _codec_shape() -> ConditionedCodecShape:
         descriptor_size=DESCRIPTOR_SIZE,
         residual_size=RESIDUAL_SIZE,
         width=4,
+        layout=layout,
     )
 
 
@@ -67,12 +68,13 @@ def _store_descriptor(library_root: Path) -> None:
     )
 
 
-def _store_codec(library_root: Path) -> Path:
+def _store_codec(library_root: Path, layout: ResidualLayout = ResidualLayout.VECTOR) -> Path:
     torch.manual_seed(1)
+    shape = _codec_shape(layout)
     description = ConditionedCodecDescription(
         canonicalizer="log_frequency",
         geometry=log_frequency_geometry(),
-        shape=_codec_shape(),
+        shape=shape,
         descriptor=DESCRIPTOR_NAME,
         epochs=1,
         trained_sample_count=8,
@@ -80,7 +82,7 @@ def _store_codec(library_root: Path) -> Path:
         best_validation_loss=0.5,
     )
     path = codec_path(library_root, name="tiny-codec")
-    save_conditioned_codec(path, ConditionedCodecModel(_codec_shape()), description)
+    save_conditioned_codec(path, ConditionedCodecModel(shape), description)
     return path
 
 
@@ -95,6 +97,31 @@ def test_the_network_rebuilds_a_grid_of_the_shape_it_was_given() -> None:
     assert rebuilt.shape == grid.shape
     assert mean.shape == log_variance.shape == (2, RESIDUAL_SIZE)
     assert float(rebuilt.min()) >= 0.0 and float(rebuilt.max()) <= 1.0
+
+
+def test_the_map_layout_holds_a_residual_at_every_bottleneck_cell() -> None:
+    shape = _codec_shape(ResidualLayout.MAP)
+    model = ConditionedCodecModel(shape).eval()
+    grid = torch.rand(2, shape.band_count, shape.time_columns)
+    descriptor = torch.nn.functional.normalize(torch.randn(2, DESCRIPTOR_SIZE), dim=-1)
+
+    rebuilt, mean, log_variance = model(grid, descriptor)
+
+    _channels, bands, columns = shape.bottleneck_shape
+    assert mean.shape == log_variance.shape == (2, RESIDUAL_SIZE, bands, columns)
+    assert shape.residual_shape == (RESIDUAL_SIZE, bands, columns)
+    assert shape.residual_length == RESIDUAL_SIZE * bands * columns
+    assert rebuilt.shape == grid.shape
+
+
+def test_a_description_without_a_layout_reads_as_a_vector_residual() -> None:
+    stored = _codec_shape().model_dump_json(exclude={"layout"})
+
+    shape = ConditionedCodecShape.model_validate_json(stored)
+
+    assert shape.layout is ResidualLayout.VECTOR
+    assert shape.residual_shape == (RESIDUAL_SIZE,)
+    assert shape.residual_length == RESIDUAL_SIZE
 
 
 def test_training_draws_the_residual_and_evaluation_reads_its_mean() -> None:
@@ -131,9 +158,26 @@ def test_a_stored_codec_encodes_and_decodes_an_image_beside_its_descriptor(tmp_p
     assert 0.0 <= decoded.grid.min() and decoded.grid.max() <= 1.0
 
 
-def test_a_morph_between_two_latents_decodes_to_a_grid(tmp_path: Path) -> None:
+def test_a_map_codec_carries_its_residual_flattened_in_the_latent(tmp_path: Path) -> None:
     _store_descriptor(tmp_path)
-    codec = load_conditioned_codec(_store_codec(tmp_path), library_root=tmp_path, device=torch.device("cpu"))
+    path = _store_codec(tmp_path, ResidualLayout.MAP)
+    canonicalizer = build_log_frequency_canonicalizer()
+    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))
+
+    codec = load_conditioned_codec(path, library_root=tmp_path, device=torch.device("cpu"))
+    latent = codec.encode(image)
+    decoded = codec.decode(latent)
+
+    assert codec.latent_size == latent.latent_size == DESCRIPTOR_SIZE + codec.model.shape.residual_length
+    assert codec.model.shape.residual_length > RESIDUAL_SIZE
+    assert decoded.grid.shape == image.grid.shape
+    assert np.isfinite(decoded.grid).all()
+
+
+@pytest.mark.parametrize("layout", tuple(ResidualLayout))
+def test_a_morph_between_two_latents_decodes_to_a_grid(tmp_path: Path, layout: ResidualLayout) -> None:
+    _store_descriptor(tmp_path)
+    codec = load_conditioned_codec(_store_codec(tmp_path, layout), library_root=tmp_path, device=torch.device("cpu"))
     canonicalizer = build_log_frequency_canonicalizer()
     first = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
     second = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=330.0)))

@@ -55,25 +55,28 @@ class ConditionedCodec:
 
     @property
     def latent_size(self) -> int:
-        return self.model.shape.descriptor_size + self.model.shape.residual_size
+        return self.model.shape.descriptor_size + self.model.shape.residual_length
 
     def encode(self, image: SoundImage) -> SampleLatent:
+        """The descriptor followed by the residual's mean, flattened whatever its layout."""
         described = self.descriptor.describe(image)
         grid = torch.from_numpy(image.grid.astype(np.float32))[None].to(self.device)
         with torch.no_grad():
             mean, _ = self.model.encode(grid, torch.from_numpy(described.astype(np.float32))[None].to(self.device))
-        values = np.concatenate([described, mean[0].cpu().numpy().astype(np.float64)])
+        values = np.concatenate([described, mean[0].cpu().numpy().astype(np.float64).reshape(-1)])
         return SampleLatent(values=values, conditioners=image.conditioners, geometry=image.geometry)
 
     def decode(self, latent: SampleLatent) -> SoundImage:
         described, residual = self.split(torch.from_numpy(latent.values.astype(np.float32))[None].to(self.device))
         with torch.no_grad():
-            grid = self.model.decode(residual, torch.nn.functional.normalize(described, dim=-1))
+            grid = self.model.decode(
+                residual.view(-1, *self.model.shape.residual_shape), torch.nn.functional.normalize(described, dim=-1)
+            )
         restored: NDArray[np.float64] = np.clip(grid[0].cpu().numpy().astype(np.float64), 0.0, 1.0)
         return SoundImage(grid=restored, conditioners=latent.conditioners, geometry=latent.geometry)
 
     def split(self, values: Tensor) -> tuple[Tensor, Tensor]:
-        """A latent's two halves: the descriptor it was encoded beside, and the residual."""
+        """A latent's two halves: the descriptor it was encoded beside, and the residual flattened."""
         return values[:, : self.model.shape.descriptor_size], values[:, self.model.shape.descriptor_size :]
 
 

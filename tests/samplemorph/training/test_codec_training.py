@@ -8,7 +8,7 @@ import torch
 from lightning.pytorch import Trainer
 
 from samplemorph.codecs.conditioned import load_conditioned_codec
-from samplemorph.codecs.conditioned_model import ConditionedCodecShape
+from samplemorph.codecs.conditioned_model import ConditionedCodecShape, ResidualLayout
 from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
 from samplemorph.descriptors.learned import DescriptorDescription, LearnedDescriptor, descriptor_path, save_descriptor
 from samplemorph.geometry import log_frequency_geometry
@@ -109,10 +109,11 @@ def _corpus(tmp_path: Path) -> CodecCorpus:
     )
 
 
-def _settings() -> CodecTrainingSettings:
+def _settings(layout: ResidualLayout = ResidualLayout.VECTOR) -> CodecTrainingSettings:
     return CodecTrainingSettings(
         run=RunSettings(epochs=2, batch_size=4, learning_rate=1e-3, worker_count=0, random_seed=0),
         residual_size=4,
+        layout=layout,
         width=4,
         prior_warmup_steps=2,
         validation_share=0.25,
@@ -128,6 +129,7 @@ def _module(corpus: CodecCorpus, settings: CodecTrainingSettings) -> CodecTraini
             descriptor_size=DESCRIPTOR_SIZE,
             residual_size=settings.residual_size,
             width=settings.width,
+            layout=settings.layout,
         ),
         descriptor=corpus.descriptor.model,
         learning_rate=settings.run.learning_rate,
@@ -175,9 +177,12 @@ def test_a_pooled_cache_is_refused_as_a_codec_corpus(tmp_path: Path) -> None:
         )
 
 
-def test_a_short_run_logs_the_watched_metric_and_writes_a_codec_that_loads(tmp_path: Path) -> None:
+@pytest.mark.parametrize("layout", tuple(ResidualLayout))
+def test_a_short_run_logs_the_watched_metric_and_writes_a_codec_that_loads(
+    tmp_path: Path, layout: ResidualLayout
+) -> None:
     corpus = _corpus(tmp_path)
-    settings = _settings()
+    settings = _settings(layout)
     module = _module(corpus, settings)
     data = CodecDataModule(corpus, settings=settings)
     run = RecordingRun()
@@ -205,7 +210,9 @@ def test_a_short_run_logs_the_watched_metric_and_writes_a_codec_that_loads(tmp_p
     assert run.artifacts and set(run.artifacts) == {path}
     codec = load_conditioned_codec(path, library_root=tmp_path, device=torch.device("cpu"))
     assert codec.description.descriptor == DESCRIPTOR_NAME
-    assert codec.latent_size == DESCRIPTOR_SIZE + settings.residual_size
+    assert codec.model.shape.layout is layout
+    assert codec.latent_size == DESCRIPTOR_SIZE + codec.model.shape.residual_length
+    assert settings.as_parameters()["layout"] == layout.value
 
 
 def test_the_descriptor_rides_along_frozen(tmp_path: Path) -> None:

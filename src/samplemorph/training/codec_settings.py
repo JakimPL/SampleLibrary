@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Final
 
-from samplemorph.codecs.conditioned_model import DEFAULT_CODEC_WIDTH, DEFAULT_RESIDUAL_SIZE
+from samplemorph.codecs.conditioned_model import (
+    DEFAULT_CODEC_WIDTH,
+    DEFAULT_RESIDUAL_LAYOUT,
+    DEFAULT_RESIDUAL_SIZE,
+    ResidualLayout,
+)
 from samplemorph.training.codec_losses import CodecLossWeights
 from samplemorph.training.run_settings import RunSettings
 
@@ -33,6 +38,7 @@ class CodecTrainingSettings:
     run: RunSettings = field(default_factory=default_run_settings)
     weights: CodecLossWeights = field(default_factory=CodecLossWeights)
     residual_size: int = DEFAULT_RESIDUAL_SIZE
+    layout: ResidualLayout = DEFAULT_RESIDUAL_LAYOUT
     width: int = DEFAULT_CODEC_WIDTH
     prior_warmup_steps: int = DEFAULT_PRIOR_WARMUP_STEPS
     validation_share: float = DEFAULT_CODEC_VALIDATION_SHARE
@@ -47,6 +53,7 @@ class CodecTrainingSettings:
         """What this run was asked to do, in the form a tracker records."""
         return self.run.as_parameters() | {
             "residual_size": str(self.residual_size),
+            "layout": self.layout.value,
             "width": str(self.width),
             "reconstruction_weight": str(self.weights.reconstruction),
             "prior_weight": str(self.weights.prior),

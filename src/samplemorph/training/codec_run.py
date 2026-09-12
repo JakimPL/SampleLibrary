@@ -29,6 +29,7 @@ def run_codec_training(
             descriptor_size=corpus.descriptor.size,
             residual_size=settings.residual_size,
             width=settings.width,
+            layout=settings.layout,
         ),
         descriptor=corpus.descriptor.model,
         learning_rate=settings.run.learning_rate,

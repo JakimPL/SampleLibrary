@@ -79,7 +79,7 @@ def load_named_model(library_root: Path, *, name: str, device: str) -> MorphMode
         codec=CONDITIONED_CODEC_NAME,
         canonicalizer=codec.description.canonicalizer,
         geometry=codec.geometry,
-        latent_size=stored.descriptor_size + stored.residual_size,
+        latent_size=stored.descriptor_size + stored.residual_length,
         fitted_sample_count=codec.description.trained_sample_count,
         random_seed=codec.description.random_seed,
         explained_variance=None,
