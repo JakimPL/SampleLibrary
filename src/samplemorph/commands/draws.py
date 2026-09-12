@@ -39,3 +39,16 @@ def draw_probe_samples(connection: Connection, *, count: int, random_seed: int) 
         frame_floor=DEFAULT_PROBE_FRAME_FLOOR,
         frame_ceiling=DEFAULT_PROBE_FRAME_CEILING,
     )
+
+
+def require_sample(connection: Connection, sample_hash: str) -> Sample:
+    """Look one sample up by hash.
+
+    Raises:
+        ValueError: the catalog holds no sample under that hash.
+    """
+    sample = PostgresSampleRepository(connection).get(sample_hash)
+    if sample is None:
+        raise ValueError(f"the catalog holds no sample {sample_hash}")
+
+    return sample

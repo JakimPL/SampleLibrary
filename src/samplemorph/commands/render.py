@@ -5,26 +5,15 @@ import logging
 from pathlib import Path
 from typing import Final
 
-import torch
 from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
-from samplecore.models.sample import Sample
-from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplemorph.commands.draws import require_sample
 from samplemorph.commands.fit import DEFAULT_MODEL_NAME
+from samplemorph.commands.vocoders import add_vocoder_arguments, vocoder_from
 from samplemorph.model_store import load_named_model
 from samplemorph.pipeline import MorphRoute, encode_sample, listening_set_manifest, render_listening_set
-from samplemorph.registries import (
-    DEFAULT_MORPHER_NAME,
-    DEFAULT_VOCODER_NAME,
-    MORPHER_REGISTRY,
-    RESTORED_VOCODER_NAME,
-    VOCODER_REGISTRY,
-    canonicalizer_for_geometry,
-)
-from samplemorph.training.run_settings import DEFAULT_ACCELERATOR
-from samplemorph.vocoders import Vocoder
-from samplemorph.vocoders.restored import DEFAULT_RESTORER_NAME, load_restorer, restorer_path
+from samplemorph.registries import DEFAULT_MORPHER_NAME, MORPHER_REGISTRY, canonicalizer_for_geometry
 
 COMMAND_NAME: Final[str] = "render"
 MANIFEST_NAME: Final[str] = "manifest.json"
@@ -38,21 +27,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument("--second", type=str, required=True, help="The sample hash the morph arrives at.")
     parser.add_argument("--output", type=str, required=True, help="The directory to write the audio into.")
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL_NAME, help="Which stored model to render through.")
-    parser.add_argument(
-        "--vocoder",
-        choices=sorted({*VOCODER_REGISTRY, RESTORED_VOCODER_NAME}),
-        default=DEFAULT_VOCODER_NAME,
-        help="Which vocoder makes a magnitude spectrogram audible.",
-    )
-    parser.add_argument(
-        "--restorer",
-        type=str,
-        default=DEFAULT_RESTORER_NAME,
-        help="Which stored restorer the restored vocoder reads through.",
-    )
-    parser.add_argument(
-        "--device", type=str, default=DEFAULT_ACCELERATOR, help="Which device the fitted models run on."
-    )
+    add_vocoder_arguments(parser)
     parser.add_argument(
         "--morpher",
         choices=sorted(MORPHER_REGISTRY),
@@ -69,14 +44,14 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     first = encode_sample(
         connection,
         config.library_root,
-        _require_sample(connection, arguments.first),
+        require_sample(connection, arguments.first),
         canonicalizer=canonicalizer,
         codec=codec,
     )
     second = encode_sample(
         connection,
         config.library_root,
-        _require_sample(connection, arguments.second),
+        require_sample(connection, arguments.second),
         canonicalizer=canonicalizer,
         codec=codec,
     )
@@ -88,7 +63,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         route=MorphRoute(
             canonicalizer=canonicalizer,
             codec=codec,
-            vocoder=_vocoder_for(config, arguments),
+            vocoder=vocoder_from(arguments, library_root=config.library_root),
             morpher=MORPHER_REGISTRY[arguments.morpher](),
         ),
         output_directory=output_directory,
@@ -103,30 +78,3 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         summary.morph_count,
         output_directory,
     )
-
-
-def _require_sample(connection: Connection, sample_hash: str) -> Sample:
-    """Look one sample up by hash.
-
-    Raises:
-        ValueError: the catalog holds no sample under that hash.
-    """
-    sample = PostgresSampleRepository(connection).get(sample_hash)
-    if sample is None:
-        raise ValueError(f"the catalog holds no sample {sample_hash}")
-
-    return sample
-
-
-def _vocoder_for(config: LibraryConfig, arguments: argparse.Namespace) -> Vocoder:
-    """Build the vocoder a render was asked for, loading a fitted model when the vocoder reads one.
-
-    Raises:
-        FileNotFoundError: a vocoder that reads a model was asked for and none is stored under that name.
-    """
-    device = torch.device(arguments.device)
-    match arguments.vocoder:
-        case name if name == RESTORED_VOCODER_NAME:
-            return load_restorer(restorer_path(config.library_root, name=arguments.restorer), device=device)
-        case name:
-            return VOCODER_REGISTRY[name]()

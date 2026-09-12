@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -59,12 +60,15 @@ def _write_config(tmp_path: Path, database_url: str) -> Path:
 
 
 def _seed_catalog(connection: Connection, library_root: Path) -> list[str]:
-    """A small catalog of distinct tones, each with one occurrence naming its playback rate."""
+    """A small catalog of distinct tones, each with one occurrence naming its playback rate.
+
+    A hash repeats one byte, so the prefixes that name files and folders differ between samples.
+    """
     module_repository = PostgresModuleRepository(connection)
     hashes = []
     for index in range(CATALOG_SIZE):
         sample = Sample(
-            hash=format(index + 1, "064x"),
+            hash=f"{index + 1:02x}" * 32,
             depth=BitDepth.SIXTEEN,
             channels=ChannelLayout.MONO,
             frames=SAMPLE_FRAME_COUNT,
@@ -263,6 +267,55 @@ def test_a_restorer_is_trained_on_the_catalog_and_rendered_through(
     assert restorer_path(tmp_path, name=RESTORER_NAME).exists()
     assert (output / "morph_050.wav").exists()
     assert soundfile.info(output / "morph_050.wav").frames > 0
+
+
+def test_probes_are_measured_through_the_representation_and_through_a_fitted_model(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each probe comes back beside its reconstruction at matched loudness, with one row of readings."""
+    hashes = _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+    identity_output = tmp_path / "measure-identity"
+    model_output = tmp_path / "measure-model"
+    named = tmp_path / "probes.txt"
+    named.write_text(f"{hashes[0]}\n", encoding="utf-8")
+
+    main(["measure", "--model", "identity", "--vocoder", "pghi", "--samples", "2", "--output", str(identity_output)])
+    main(
+        [
+            "measure",
+            "--model",
+            MODEL_NAME,
+            "--vocoder",
+            "pghi",
+            "--hashes",
+            str(named),
+            "--device",
+            "cpu",
+            "--output",
+            str(model_output),
+        ]
+    )
+
+    identity_folders = sorted(path for path in identity_output.iterdir() if path.is_dir())
+    assert len(identity_folders) == 2
+    assert all(
+        (folder / "original.wav").exists() and (folder / "reconstruction.wav").exists() for folder in identity_folders
+    )
+    with (identity_output / "readings.csv").open(encoding="utf-8") as handle:
+        identity_rows = list(csv.DictReader(handle))
+    assert len(identity_rows) == 2
+    assert {"hash", "sound_type", "model", "held_out_db", "fluctuation_excess", "peak_dbfs"} <= set(identity_rows[0])
+    with (model_output / "readings.csv").open(encoding="utf-8") as handle:
+        model_rows = list(csv.DictReader(handle))
+    assert [row["hash"] for row in model_rows] == [hashes[0]]
+    assert model_rows[0]["model"] == MODEL_NAME
+    (model_folder,) = (path for path in model_output.iterdir() if path.is_dir())
+    assert model_folder.name.endswith(hashes[0][:12])
 
 
 def test_training_a_restorer_on_an_axis_the_vocoder_never_reads_says_so(

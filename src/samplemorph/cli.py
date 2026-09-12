@@ -8,6 +8,7 @@ from samplemorph.commands import (
     cache_grids,
     embed,
     fit,
+    measure,
     render,
     train_codec,
     train_descriptor,
@@ -26,6 +27,7 @@ class MorphCommand(StrEnum):
     TRAIN_CODEC = train_codec.COMMAND_NAME
     TRAIN_RESTORER = train_restorer.COMMAND_NAME
     RENDER = render.COMMAND_NAME
+    MEASURE = measure.COMMAND_NAME
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -48,6 +50,8 @@ def main(argv: list[str] | None = None) -> None:
                 train_restorer.run(connection, config, arguments)
             case MorphCommand.RENDER:
                 render.run(connection, config, arguments)
+            case MorphCommand.MEASURE:
+                measure.run(connection, config, arguments)
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
@@ -60,4 +64,5 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     train_codec.add_parser(commands)
     train_restorer.add_parser(commands)
     render.add_parser(commands)
+    measure.add_parser(commands)
     return parser.parse_args(argv)

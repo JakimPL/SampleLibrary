@@ -152,11 +152,19 @@ morph-embed:
 # octave), and `morph-render MODEL=conditioned` renders a listening set through it.
 .PHONY: morph-train-codec
 morph-train-codec:
-	$(CAPPED) uv run samplemorph train-codec $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(CODEC),--codec $(CODEC),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
+	$(CAPPED) uv run samplemorph train-codec $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(CODEC),--codec $(CODEC),) $(if $(RESIDUAL),--residual-size $(RESIDUAL),) $(if $(WIDTH),--width $(WIDTH),) $(if $(PRIOR),--prior-weight $(PRIOR),) $(if $(CYCLE),--cycle-weight $(CYCLE),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
 
 .PHONY: morph-render
 morph-render:
 	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(DEVICE),--device $(DEVICE),)
+
+# Reconstructs probe samples through a stored model (MODEL=identity reads the representation
+# alone, the bar every codec is measured against) and the restored vocoder, writes each beside its
+# original at matched loudness under OUTPUT, and reads what the reconstruction costs. HASHES names
+# a file with one sample hash per line, read in place of the seeded draw of SAMPLES probes.
+.PHONY: morph-measure
+morph-measure:
+	uv run samplemorph measure --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(HASHES),--hashes $(HASHES),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(SEED),--seed $(SEED),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(DEVICE),--device $(DEVICE),)
 
 # Destructive: empties the configured library's catalog and content store. Prints what it would
 # do and changes nothing unless invoked as `make reset-library CONFIRM=1`.
