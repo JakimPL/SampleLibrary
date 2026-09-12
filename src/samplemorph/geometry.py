@@ -51,29 +51,35 @@ DEFAULT_ANALYSIS_WINDOW: Final[AnalysisWindow] = AnalysisWindow.GAUSSIAN
 
 @unique
 class Anchor(StrEnum):
-    """Which band of a sound alignment moves to the reference band.
+    """Which band of a sound alignment moves to the reference band, if any.
 
-    `LOUDEST` takes the band carrying the most energy over the whole sound, which every kind of
-    material has. `FUNDAMENTAL` takes the band a harmonic series is built on, so two sounds playing
-    one note align on that note whichever of their partials is the strongest, and a morph between
-    them keeps its pitch on the line between theirs.
+    `NONE` keeps the picture where the analysis read it: every band holds the frequency it measured,
+    a kick and a pad alike, and the grid is exactly as tall as the analysis range. `LOUDEST` moves
+    the band carrying the most energy over the whole sound, which every kind of material has.
+    `FUNDAMENTAL` moves the band a harmonic series is built on, so two sounds playing one note align
+    on that note whichever of their partials is the strongest, and a morph between them keeps its
+    pitch on the line between theirs.
     """
 
+    NONE = "none"
     LOUDEST = "loudest"
     FUNDAMENTAL = "fundamental"
 
 
-DEFAULT_ANCHOR: Final[Anchor] = Anchor.FUNDAMENTAL
+DEFAULT_ANCHOR: Final[Anchor] = Anchor.NONE
 
 
-def shift_headroom_bands(*, maximum_shift_semitones: float, bands_per_semitone: float) -> int:
-    """How many empty bands a grid carries at each end, so alignment moves content without losing it.
+def shift_headroom_bands(*, anchor: Anchor, maximum_shift_semitones: float, bands_per_semitone: float) -> int:
+    """How many empty bands a grid carries at each end, so an anchoring rule moves content without losing it.
 
     Alignment translates the whole picture along the frequency axis, and a grid exactly as tall as
     the analysis range would push whatever passes its edge out of the picture. Reserving the largest
     shift at both ends keeps every band that entered the grid inside it, whatever pitch a sample sat
     at -- which matters most for bass material, whose distance from the reference band is greatest.
+    A picture nothing moves needs no room to move in, so it stays as tall as the analysis.
     """
+    if anchor is Anchor.NONE:
+        return 0
     return int(round(maximum_shift_semitones * bands_per_semitone))
 
 
@@ -105,7 +111,9 @@ class LogFrequencyGeometry(BaseModel):
     @property
     def shift_headroom_bands(self) -> int:
         return shift_headroom_bands(
-            maximum_shift_semitones=self.maximum_shift_semitones, bands_per_semitone=self.bands_per_semitone
+            anchor=self.anchor,
+            maximum_shift_semitones=self.maximum_shift_semitones,
+            bands_per_semitone=self.bands_per_semitone,
         )
 
     @property
@@ -165,7 +173,9 @@ class MelGeometry(BaseModel):
     @property
     def shift_headroom_bands(self) -> int:
         return shift_headroom_bands(
-            maximum_shift_semitones=self.maximum_shift_semitones, bands_per_semitone=self.bands_per_semitone
+            anchor=self.anchor,
+            maximum_shift_semitones=self.maximum_shift_semitones,
+            bands_per_semitone=self.bands_per_semitone,
         )
 
     @property
@@ -228,7 +238,9 @@ class ConstantQGeometry(BaseModel):
     @property
     def shift_headroom_bands(self) -> int:
         return shift_headroom_bands(
-            maximum_shift_semitones=self.maximum_shift_semitones, bands_per_semitone=self.bands_per_semitone
+            anchor=self.anchor,
+            maximum_shift_semitones=self.maximum_shift_semitones,
+            bands_per_semitone=self.bands_per_semitone,
         )
 
     @property

@@ -49,11 +49,22 @@ def test_the_grid_shape_pairs_the_analyzed_bands_and_their_headroom_with_the_tim
 
 
 @pytest.mark.parametrize("case", GEOMETRY_CASES, ids=lambda case: case.name)
-def test_the_headroom_holds_the_largest_translation_the_geometry_allows(case: GeometryCase) -> None:
+@pytest.mark.parametrize("anchor", (Anchor.LOUDEST, Anchor.FUNDAMENTAL), ids=lambda anchor: anchor.value)
+def test_the_headroom_holds_the_largest_translation_an_anchoring_rule_allows(
+    case: GeometryCase, anchor: Anchor
+) -> None:
     """Alignment moves content by at most this much, so the picture keeps every band it analyzed."""
-    geometry = case.geometry
+    geometry = case.geometry.model_copy(update={"anchor": anchor})
 
     assert geometry.shift_headroom_bands == round(geometry.maximum_shift_semitones * geometry.bands_per_semitone)
+
+
+@pytest.mark.parametrize("case", GEOMETRY_CASES, ids=lambda case: case.name)
+def test_a_grid_nothing_moves_is_exactly_as_tall_as_the_analysis(case: GeometryCase) -> None:
+    geometry = case.geometry.model_copy(update={"anchor": Anchor.NONE})
+
+    assert geometry.shift_headroom_bands == 0
+    assert geometry.grid_shape == (geometry.band_count, geometry.time_columns)
 
 
 @pytest.mark.parametrize("case", GEOMETRY_CASES, ids=lambda case: case.name)

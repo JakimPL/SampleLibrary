@@ -112,8 +112,13 @@ def fundamental_band(grid: NDArray[np.float64], *, geometry: Geometry) -> int:
 
 
 def anchor_band(grid: NDArray[np.float64], *, geometry: Geometry) -> int:
-    """The band the geometry's anchor rule picks, which alignment moves to the reference band."""
+    """The band the geometry's anchor rule picks, which alignment moves to the reference band.
+
+    With no rule the reference band is its own anchor, so the picture stays where it is.
+    """
     match geometry.anchor:
+        case Anchor.NONE:
+            return geometry.reference_band
         case Anchor.LOUDEST:
             return dominant_band(grid)
         case Anchor.FUNDAMENTAL:
@@ -150,11 +155,14 @@ def align_and_describe(
 ) -> tuple[NDArray[np.float64], Conditioners]:
     """Normalize a magnitude grid into a sound image's grid and the conditioners it removed.
 
-    The grid is scaled into ``[0, 1]``, laid inside the geometry's shift headroom, then translated
-    so its anchor band sits at the geometry's reference band. The translation travels out as
-    `translation_semitones`, so the picture describes timbre alone while the conditioners carry
-    where that timbre sat, how long it sounded, and how loud it was. The headroom holds the largest
-    translation the geometry allows, so the picture keeps every band the analysis produced.
+    The grid is scaled into ``[0, 1]`` and laid inside the geometry's shift headroom; under an
+    anchoring rule it is then translated so its anchor band sits at the geometry's reference band,
+    and the translation travels out as `translation_semitones`, so the picture describes timbre
+    alone while the conditioners carry where that timbre sat, how long it sounded, and how loud it
+    was. With no rule the picture holds every band at the frequency the analysis measured, the
+    translation reads zero, and the conditioners carry the duration and the level. The headroom
+    holds the largest translation the geometry allows, so the picture keeps every band the
+    analysis produced.
     """
     normalized, log_gain = to_normalized_decibels(columns, dynamic_range_db=geometry.dynamic_range_db)
     headroom = geometry.shift_headroom_bands

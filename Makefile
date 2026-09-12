@@ -129,7 +129,8 @@ morph-train-restorer:
 
 # The descriptor, in three passes. `morph-cache-grids` canonicalizes the catalog once, with retuned
 # views, into a memory-mapped cache under the library root (about an hour on twelve workers),
-# aligned on the fundamental of each sound or, with ANCHOR=loudest, on its loudest band;
+# every band where the analysis read it or, with ANCHOR=fundamental or ANCHOR=loudest, aligned
+# on that band of each sound;
 # `morph-train-descriptor` teaches a descriptor over that cache from a teacher experiment's vectors
 # and the hand labels; `morph-embed` writes the descriptor's vector for every cached sample as a new
 # experiment, which `evaluate` scores and `samplecloud --backend learned --model NAME

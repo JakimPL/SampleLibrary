@@ -22,7 +22,7 @@ MISSING_FUNDAMENTAL = (0.0, 1.0, 0.8, 0.6, 0.5)
 
 @dataclass(frozen=True)
 class AnchorCase:
-    """One registered axis, built under either anchor rule."""
+    """One registered axis, built under any anchor rule."""
 
     name: str
 
@@ -41,6 +41,21 @@ def assert_anchored_at(image: SoundImage, frequency_hz: float) -> None:
     assert image.conditioners.translation_semitones == pytest.approx(
         expected, abs=TOLERANCE_BANDS / geometry.bands_per_semitone
     )
+
+
+@pytest.mark.parametrize("case", ANCHOR_CASES, ids=lambda case: case.name)
+def test_no_anchor_keeps_the_picture_where_the_analysis_read_it(case: AnchorCase) -> None:
+    """Every band holds its own frequency, the grid is as tall as the analysis, and nothing is recorded as moved."""
+    tone = harmonic_tone(TEST_FRAME_COUNT, frequency=REFERENCE_FREQUENCY_HZ, weights=SECOND_HARMONIC_LOUDEST)
+
+    image = case.build(Anchor.NONE).canonicalize(tone)
+
+    geometry = image.geometry
+    loudest_band = int(np.argmax(image.grid.mean(axis=1)))
+    second_harmonic_band = int(np.argmin(np.abs(geometry.band_frequencies - 2 * REFERENCE_FREQUENCY_HZ)))
+    assert image.grid.shape == (geometry.band_count, geometry.time_columns)
+    assert image.conditioners.translation_semitones == 0.0
+    assert abs(loudest_band - second_harmonic_band) <= TOLERANCE_BANDS
 
 
 @pytest.mark.parametrize("case", ANCHOR_CASES, ids=lambda case: case.name)

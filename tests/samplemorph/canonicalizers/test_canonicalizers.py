@@ -8,7 +8,7 @@ import pytest
 
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.canonicalizers.common import analysis_transform, bands_onto_linear_axis
-from samplemorph.geometry import log_frequency_geometry
+from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_burst
 
@@ -130,7 +130,7 @@ def test_restoring_an_unmodified_image_recovers_the_peak_magnitude(case: Canonic
 @pytest.mark.parametrize("case", CANONICALIZER_CASES, ids=lambda case: case.name)
 def test_a_transposed_tone_lands_closer_than_unrelated_content(case: CanonicalizerCase) -> None:
     """Aligning the picture is what makes one instrument at two pitches read as one instrument."""
-    canonicalizer = case.build()
+    canonicalizer = CANONICALIZER_REGISTRY[case.name](anchor=Anchor.FUNDAMENTAL)
 
     low = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))
     high = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0))

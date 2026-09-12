@@ -77,8 +77,8 @@ class ConditionedCodecModel(nn.Module):
     The descriptor enters both halves, so the residual only has to carry what the descriptor does
     not say -- the particular realization of a sound whose kind is already known. The residual is
     read as a Gaussian, mean and log-variance, so that a point between two residuals still decodes
-    to something. The band axis is padded up to what the strides divide, in rows the alignment
-    already fills with silence, and cropped back on the way out.
+    to something. The band axis is padded with silence up to what the strides divide, and cropped
+    back on the way out.
     """
 
     def __init__(self, shape: ConditionedCodecShape) -> None:

@@ -22,7 +22,7 @@ def add_canonicalizer_argument(parser: argparse.ArgumentParser, *, help_text: st
         type=Anchor,
         choices=tuple(Anchor),
         default=DEFAULT_ANCHOR,
-        help="Which band alignment moves to the reference band: the loudest, or the fundamental.",
+        help="Which band alignment moves to the reference band: none, the loudest, or the fundamental.",
     )
 
 
