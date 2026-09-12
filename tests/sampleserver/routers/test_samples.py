@@ -412,12 +412,20 @@ def test_get_sample_audio_serves_the_stored_wav_file(
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/wav"
+    assert "immutable" in response.headers["cache-control"]
 
 
 def test_get_sample_audio_404s_for_an_unknown_hash(client: TestClient) -> None:
     response = client.get(f"/samples/{'f' * 64}/audio")
 
     assert response.status_code == 404
+
+
+def test_get_sample_audio_refuses_a_path_that_is_no_hash(client: TestClient) -> None:
+    """The object path is built from the hash alone, so only a hash's own shape reaches the store."""
+    response = client.get("/samples/not-a-hash/audio")
+
+    assert response.status_code == 422
 
 
 def test_get_sample_waveform_returns_peaks(client: TestClient, connection: Connection, tmp_path: Path) -> None:

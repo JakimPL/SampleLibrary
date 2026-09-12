@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi import Path as RoutePath
+from fastapi import Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import Connection
@@ -17,7 +19,14 @@ from samplecore.models.note_event import SamplePlaybackRate
 from samplecore.models.relation import SampleRelation
 from samplecore.models.sample import DescribedSample, SampleSelection, SampleSort, SampleSummary
 from samplecore.models.sample_properties import TrackerSampleProperties
-from samplecore.models.scalars import MAXIMUM_RATING, MINIMUM_RATING, Count, ModuleHash, SampleHash
+from samplecore.models.scalars import (
+    MAXIMUM_RATING,
+    MINIMUM_RATING,
+    SAMPLE_HASH_PATTERN,
+    Count,
+    ModuleHash,
+    SampleHash,
+)
 from samplecore.models.tracker import TrackerFormat
 from samplecore.naming import choose_dominant_name
 from samplecore.pitch import (
@@ -38,6 +47,7 @@ from samplecore.storage.repositories.sample_annotation import PostgresSampleAnno
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.waveform import DEFAULT_WAVEFORM_BUCKET_COUNT, WaveformPeak, compute_waveform_peaks
+from sampleserver.caching import IMMUTABLE_CACHE_CONTROL
 from sampleserver.dependencies import get_connection, get_library_root, get_spectral_vectors
 from sampleserver.equivalence import equivalence_class_members
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
@@ -249,30 +259,35 @@ def _suggested_labels(connection: Connection, sample_hash: str) -> tuple[Suggest
     )
 
 
-@router.get("/{sample_hash}/audio")
+@router.get("/{sample_hash}/audio", response_class=FileResponse)
 def get_sample_audio(
-    sample_hash: str,
-    connection: Connection = Depends(get_connection),
+    sample_hash: Annotated[str, RoutePath(pattern=SAMPLE_HASH_PATTERN)],
     library_root: Path = Depends(get_library_root),
 ) -> FileResponse:
     """The sample's own canonical audio, as stored in the content-addressable store.
 
-    Raises:
-        HTTPException: 404 when no sample is cataloged under this hash.
-    """
-    if PostgresSampleRepository(connection).get(sample_hash) is None:
-        raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
+    The object is content-addressed, so it is served with a cache lifetime of a year and read
+    straight off the store by its hash, with no catalog round trip on the way to a sound: the
+    hash's own shape is checked on the path, which is what keeps a request inside the store.
 
-    return FileResponse(audio_store.object_path(library_root, sample_hash), media_type="audio/wav")
+    Raises:
+        HTTPException: 404 when the store holds no object under this hash.
+    """
+    path = audio_store.object_path(library_root, sample_hash)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"no sample stored with hash {sample_hash!r}")
+
+    return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
 
 
 @router.get("/{sample_hash}/waveform")
 def get_sample_waveform(
     sample_hash: str,
+    response: Response,
     connection: Connection = Depends(get_connection),
     library_root: Path = Depends(get_library_root),
 ) -> tuple[WaveformPeak, ...]:
-    """A compact amplitude-envelope preview of the sample's own waveform.
+    """A compact amplitude-envelope preview of the sample's own waveform, immutable like the object it reads.
 
     Raises:
         HTTPException: 404 when no sample is cataloged under this hash.
@@ -281,6 +296,7 @@ def get_sample_waveform(
     if sample is None:
         raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
+    response.headers["Cache-Control"] = IMMUTABLE_CACHE_CONTROL
     pcm = audio_store.read(library_root, sample).pcm
     return compute_waveform_peaks(pcm, bucket_count=DEFAULT_WAVEFORM_BUCKET_COUNT)
 

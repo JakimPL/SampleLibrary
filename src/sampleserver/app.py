@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Final
 
 from fastapi import FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 
 from samplecore.storage.database import connect_for_curation
 from sampleserver.inference_client import build_inference_client
@@ -13,6 +14,8 @@ from sampleserver.routers import cloud, curation, modules, morph, samples, stats
 from sampleserver.spectral_cache import SpectralVectorCache
 
 API_PREFIX: Final[str] = "/api"
+GZIP_MINIMUM_SIZE: Final[int] = 1024
+GZIP_COMPRESSION_LEVEL: Final[int] = 1
 
 
 def create_app(database_url: str, library_root: Path, inference_url: str) -> FastAPI:
@@ -27,7 +30,11 @@ def create_app(database_url: str, library_root: Path, inference_url: str) -> Fas
 
     Every route is served under `API_PREFIX`, which keeps the whole API inside one path segment
     the single-page application's own routes stay clear of: the frontend reaches `/api/samples`
-    while a person's browser holds `/samples/{hash}`, so one path always names one thing.
+    while a person's browser holds `/samples/{hash}`, so one path always names one thing. A
+    response past a kilobyte goes out gzipped when the caller accepts it: the cloud's hundred
+    thousand points are text that compresses several-fold, and the lightest level costs a fraction
+    of a second per request against tens of megabytes saved on the wire; audio and byte ranges
+    pass through as they are.
 
     A pure factory, deliberately without any module-level instance built from real
     configuration -- that belongs to `sampleserver.main`, the actual ASGI entry point, so that
@@ -58,6 +65,7 @@ def create_app(database_url: str, library_root: Path, inference_url: str) -> Fas
         description="Read access to the sample catalog, with hand annotation and morphs between samples.",
         lifespan=lifespan,
     )
+    application.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_SIZE, compresslevel=GZIP_COMPRESSION_LEVEL)
     application.state.database_url = database_url
     application.state.library_root = library_root
     application.state.inference_url = inference_url

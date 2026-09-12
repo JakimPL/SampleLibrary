@@ -23,6 +23,8 @@ class SampleLabelSuggestionRepository(Protocol):
         self, experiment_id: int, sample_hashes: list[str]
     ) -> dict[str, tuple[SampleLabelSuggestion, ...]]: ...
 
+    def first_pick_counts(self, experiment_id: int) -> dict[str, int]: ...
+
     def latest_experiment_id(self) -> int | None: ...
 
 
@@ -86,6 +88,18 @@ class PostgresSampleLabelSuggestionRepository:
                 by_hash[row.sample_hash].append(_row_to_suggestion(row))
 
         return {sample_hash: tuple(suggestions) for sample_hash, suggestions in by_hash.items()}
+
+    def first_pick_counts(self, experiment_id: int) -> dict[str, int]:
+        """How many samples one scoring suggests each label for first, counted where the rows are."""
+        # pylint: disable-next=not-callable
+        counted = func.count().label("sample_count")
+        statement = (
+            select(sample_label_suggestion.c.label, counted)
+            .where(sample_label_suggestion.c.experiment_id == experiment_id)
+            .where(sample_label_suggestion.c.rank == 0)
+            .group_by(sample_label_suggestion.c.label)
+        )
+        return {str(row.label): int(row.sample_count) for row in self._connection.execute(statement)}
 
     def latest_experiment_id(self) -> int | None:
         """The newest scoring's experiment id, or nothing when no scoring has been written."""

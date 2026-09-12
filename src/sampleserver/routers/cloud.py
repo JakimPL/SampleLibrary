@@ -177,9 +177,10 @@ def get_cloud_suggestion_tags(connection: Connection = Depends(get_connection)) 
         return ()
 
     first_picks: Counter[LabelPath] = Counter()
-    for suggestion in repository.list_for_experiment(latest):
-        if suggestion.rank == 0:
-            first_picks.update(_prefixes(_path_of(suggestion)))
+    for label, sample_count in repository.first_pick_counts(latest).items():
+        path, *_ = written_paths(label)
+        for prefix in _prefixes(path):
+            first_picks[prefix] += sample_count
     ranks = _vocabulary_ranks(connection, latest, first_picks)
     return tuple(
         TagSummary(path=path, sample_count=count, rank=ranks[path])

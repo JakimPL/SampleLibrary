@@ -78,3 +78,20 @@ def test_a_suggestion_for_an_uncataloged_sample_is_refused(connection: Connectio
         PostgresSampleLabelSuggestionRepository(connection).insert_many(
             [_suggestion(experiment_id, "f" * 64, rank=0, label="PIANO", score=0.5)]
         )
+
+
+def test_first_pick_counts_count_each_label_s_first_picks_where_the_rows_are(
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    experiment_id = _create_experiment(connection)
+    repository = PostgresSampleLabelSuggestionRepository(connection)
+    repository.insert_many(
+        [
+            _suggestion(experiment_id, stored_sample.hash, rank=0, label="SNARE", score=0.9),
+            _suggestion(experiment_id, stored_sample.hash, rank=1, label="CLAP", score=0.4),
+            _suggestion(experiment_id, stored_sample_b.hash, rank=0, label="SNARE", score=0.8),
+        ]
+    )
+
+    assert repository.first_pick_counts(experiment_id) == {"SNARE": 2}
+    assert repository.first_pick_counts(_create_experiment(connection)) == {}

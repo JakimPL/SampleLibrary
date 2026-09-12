@@ -47,6 +47,17 @@ def test_starting_the_app_prepares_the_curation_schema_a_listing_reads_through(
     assert schema is not None
 
 
+def test_a_response_past_a_kilobyte_goes_out_gzipped_when_the_caller_accepts_it(
+    connection: Connection, _database_url: str, tmp_path: Path
+) -> None:
+    """The cloud's payload is text that compresses several-fold, and every route shares the middleware."""
+    with TestClient(create_app(_database_url, tmp_path, INFERENCE_URL)) as client:
+        response = client.get("/openapi.json", headers={"Accept-Encoding": "gzip"})
+
+    assert response.headers["content-encoding"] == "gzip"
+    assert "paths" in response.json()
+
+
 def test_every_route_is_served_under_the_api_prefix(connection: Connection, _database_url: str, tmp_path: Path) -> None:
     """The API occupies one path segment of its own, leaving `/samples/{hash}` to the frontend.
 
