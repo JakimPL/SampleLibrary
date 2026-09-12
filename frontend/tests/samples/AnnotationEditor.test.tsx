@@ -38,6 +38,7 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         duration_seconds: 0.1,
         playback_rates: [],
         equivalence_member_count: 1,
+        suggested_labels: [],
         ...overrides,
     };
 }

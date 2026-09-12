@@ -8,51 +8,62 @@ import type * as SamplesApi from "../../../src/api/samples";
 import { CloudPanel } from "../../../src/workspace/panels/CloudPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { instances, createScatterplotMock, getCloud, getModuleCloud, getSample, getSampleWaveform, getModule } =
-    vi.hoisted(() => {
-        class FakeScatterplot {
-            readonly draw = vi.fn().mockResolvedValue(undefined);
-            readonly select = vi.fn();
-            readonly deselect = vi.fn();
-            readonly destroy = vi.fn();
-            readonly set = vi.fn().mockResolvedValue(undefined);
-            readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
-            private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
+const {
+    instances,
+    createScatterplotMock,
+    getCloud,
+    getModuleCloud,
+    getCloudSuggestions,
+    getSuggestionTags,
+    getSample,
+    getSampleWaveform,
+    getModule,
+} = vi.hoisted(() => {
+    class FakeScatterplot {
+        readonly draw = vi.fn().mockResolvedValue(undefined);
+        readonly select = vi.fn();
+        readonly deselect = vi.fn();
+        readonly destroy = vi.fn();
+        readonly set = vi.fn().mockResolvedValue(undefined);
+        readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
+        private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 
-            subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
-                const handlers = this.listeners.get(event) ?? [];
-                handlers.push(handler);
-                this.listeners.set(event, handlers);
-                return { event, handler };
-            }
-
-            unsubscribe(): void {
-                // subscriptions are torn down together with the instance in these tests
-            }
-
-            emit(event: string, payload?: unknown): void {
-                for (const handler of this.listeners.get(event) ?? []) {
-                    handler(payload);
-                }
-            }
+        subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
+            const handlers = this.listeners.get(event) ?? [];
+            handlers.push(handler);
+            this.listeners.set(event, handlers);
+            return { event, handler };
         }
 
-        const instances: FakeScatterplot[] = [];
-        const createScatterplotMock = vi.fn(() => {
-            const instance = new FakeScatterplot();
-            instances.push(instance);
-            return instance;
-        });
-        return {
-            instances,
-            createScatterplotMock,
-            getCloud: vi.fn(),
-            getModuleCloud: vi.fn(),
-            getSample: vi.fn(),
-            getSampleWaveform: vi.fn(),
-            getModule: vi.fn(),
-        };
+        unsubscribe(): void {
+            // subscriptions are torn down together with the instance in these tests
+        }
+
+        emit(event: string, payload?: unknown): void {
+            for (const handler of this.listeners.get(event) ?? []) {
+                handler(payload);
+            }
+        }
+    }
+
+    const instances: FakeScatterplot[] = [];
+    const createScatterplotMock = vi.fn(() => {
+        const instance = new FakeScatterplot();
+        instances.push(instance);
+        return instance;
     });
+    return {
+        instances,
+        createScatterplotMock,
+        getCloud: vi.fn(),
+        getModuleCloud: vi.fn(),
+        getCloudSuggestions: vi.fn().mockResolvedValue([]),
+        getSuggestionTags: vi.fn().mockResolvedValue([]),
+        getSample: vi.fn(),
+        getSampleWaveform: vi.fn(),
+        getModule: vi.fn(),
+    };
+});
 
 vi.mock("regl-scatterplot", () => ({
     default: createScatterplotMock,
@@ -60,7 +71,7 @@ vi.mock("regl-scatterplot", () => ({
 
 vi.mock("../../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
-    return { ...actual, getCloud, getModuleCloud };
+    return { ...actual, getCloud, getModuleCloud, getCloudSuggestions, getSuggestionTags };
 });
 
 vi.mock("../../../src/api/samples", async () => {
@@ -252,6 +263,29 @@ describe("CloudPanel", () => {
 
         expect(await screen.findByText("kick")).toBeInTheDocument();
         expect(screen.getByText(sampleHash.slice(0, 8))).toBeInTheDocument();
+    });
+
+    it("colors by the listening model's suggestions, with a legend of the tags it suggests first", async () => {
+        const sampleHash = "3".repeat(64);
+        getCloud.mockResolvedValue([
+            { sample_hash: sampleHash, x: 0, y: 0, computed_at: "2026-01-01T00:00:00Z", category: "uncategorized" },
+        ]);
+        getModuleCloud.mockResolvedValue([]);
+        getCloudSuggestions.mockResolvedValue([{ sample_hash: sampleHash, paths: [["BASS DRUM"]], scores: [0.8] }]);
+        getSuggestionTags.mockResolvedValue([{ path: ["BASS DRUM"], sample_count: 1, rank: 0 }]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas")).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: "Suggestions" }));
+
+        expect(await screen.findByRole("button", { name: /BASS DRUM/ })).toHaveAttribute("aria-pressed", "true");
+        await waitFor(() => {
+            expect(latestInstance().draw).toHaveBeenCalledWith([[expect.any(Number), expect.any(Number), 1]], {
+                zDataType: "categorical",
+            });
+        });
     });
 
     it("hides the hover tooltip once the cursor leaves the point", async () => {

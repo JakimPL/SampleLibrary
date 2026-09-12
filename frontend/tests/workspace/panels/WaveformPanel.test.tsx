@@ -79,6 +79,7 @@ function buildSampleDetail(overrides: SampleDetailOverrides): unknown {
         duration_seconds: 0.09,
         playback_rate_hz: overrides.playbackRateHz,
         playback_rates: overrides.playbackRates ?? [],
+        suggested_labels: [],
         occurrences: [],
     };
 }

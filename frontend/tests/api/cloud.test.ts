@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getCloud, getCloudLabels, getModuleCloud } from "../../src/api/cloud";
+import { getCloud, getCloudLabels, getCloudSuggestions, getModuleCloud, getSuggestionTags } from "../../src/api/cloud";
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -36,5 +36,27 @@ describe("getCloudLabels", () => {
         await getCloudLabels();
 
         expect(fetchMock).toHaveBeenCalledWith("/api/cloud/labels");
+    });
+});
+
+describe("getCloudSuggestions", () => {
+    it("requests the cloud's suggestions endpoint", async () => {
+        const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+        vi.stubGlobal("fetch", fetchMock);
+
+        await getCloudSuggestions();
+
+        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/suggestions");
+    });
+});
+
+describe("getSuggestionTags", () => {
+    it("requests the suggested tags endpoint", async () => {
+        const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
+        vi.stubGlobal("fetch", fetchMock);
+
+        await getSuggestionTags();
+
+        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/suggestion-tags");
     });
 });

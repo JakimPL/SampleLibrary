@@ -10,6 +10,7 @@ import { CategoryBadge } from "./CategoryBadge";
 import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { SampleRelationRow } from "./SampleRelationRow";
 import { SimilarSampleRow } from "./SimilarSampleRow";
+import { SuggestedLabels } from "./SuggestedLabels";
 
 interface SampleDetailViewProps {
     readonly sample: SampleDetail;
@@ -33,6 +34,10 @@ export function SampleDetailView({ sample, relations, similar }: SampleDetailVie
                 <dt>Label</dt>
                 <dd>
                     <AnnotationEditor key={sample.hash} sample={sample} />
+                </dd>
+                <dt>Suggested</dt>
+                <dd>
+                    <SuggestedLabels key={sample.hash} sample={sample} />
                 </dd>
                 <dt>Size</dt>
                 <dd className="mono">{formatBytes(sample.size_bytes)}</dd>

@@ -1,5 +1,6 @@
 import { type ReactElement, useState } from "react";
 
+import type { AnnotationScope } from "../api/curation";
 import type { SampleDetail } from "../api/samples";
 import { decisionsOf, useSampleAnnotation } from "./annotationStore";
 import { FavoriteToggle } from "./FavoriteToggle";
@@ -11,6 +12,11 @@ const SMALLEST_GROUP = 1;
 
 interface AnnotationEditorProps {
     readonly sample: SampleDetail;
+}
+
+/** How far a decision about this sample reaches by default: its whole group of near-duplicates, where it has one. */
+export function defaultScopeFor(sample: SampleDetail): AnnotationScope {
+    return sample.equivalence_member_count > SMALLEST_GROUP ? "equivalence_class" : "sample";
 }
 
 /**

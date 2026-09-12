@@ -14,7 +14,9 @@ import {
 import { TagLegend } from "../../cloud/TagLegend";
 import { useCloud } from "../../cloud/useCloud";
 import { useCloudLabels } from "../../cloud/useCloudLabels";
+import { useCloudSuggestions } from "../../cloud/useCloudSuggestions";
 import { useModuleCloud } from "../../cloud/useModuleCloud";
+import { useSuggestionTags } from "../../cloud/useSuggestionTags";
 import { useAudioPreview } from "../../samples/useAudioPreview";
 import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
@@ -25,7 +27,7 @@ import { entityRoute } from "../useEntityRowInteractions";
 import { CloudHoverTooltip } from "./CloudHoverTooltip";
 
 type CloudTab = "samples" | "modules";
-type ColoringMode = "category" | "label";
+type ColoringMode = "category" | "label" | "suggestion";
 
 const CATEGORY_COLORING: PointColoring = { kind: "category" };
 const NO_TAGS: readonly TopLevelTag[] = [];
@@ -91,11 +93,13 @@ function useActiveCloudPoints(tab: CloudTab): FetchState<readonly CloudEntityPoi
 }
 
 /**
- * How the sample points are colored. Under the label mode, the tags a person has painted are their
+ * How the sample points are colored. Under the label mode the tags a person has painted are their
  * own choice once they touch the legend, and the most used ones until then -- so a vocabulary that
  * grows during a labeling session keeps showing whatever was chosen, and a fresh session shows
- * the tags with the most to show. The labels and the tag tree are fetched from the first render,
- * so switching modes never waits on a request.
+ * the tags with the most to show. The suggestion mode paints the same way from what the listening
+ * model heard, its own legend drawn from the scoring's vocabulary; a chosen set belongs to one mode,
+ * so switching starts the other from its own most-used tags. Every source is fetched from the first
+ * render, so switching modes never waits on a request.
  */
 function useSampleColoring(mode: ColoringMode): {
     readonly coloring: PointColoring;
@@ -105,16 +109,26 @@ function useSampleColoring(mode: ColoringMode): {
 } {
     const labelsState = useCloudLabels();
     const tagsState = useLabelTags();
+    const suggestionsState = useCloudSuggestions();
+    const suggestionTagsState = useSuggestionTags();
     const [chosen, setChosen] = useState<readonly string[] | null>(null);
-    const tags = useMemo(() => (tagsState.status === "success" ? topLevelTags(tagsState.data) : NO_TAGS), [tagsState]);
+    useEffect(() => {
+        setChosen(null);
+    }, [mode]);
+    const tags = useMemo(() => {
+        const source = mode === "suggestion" ? suggestionTagsState : tagsState;
+        return source.status === "success" ? topLevelTags(source.data) : NO_TAGS;
+    }, [mode, tagsState, suggestionTagsState]);
     const painted = useMemo(() => chosen ?? defaultPaintedTags(tags), [chosen, tags]);
-    const coloring = useMemo(
-        (): PointColoring =>
-            mode === "label" && labelsState.status === "success"
-                ? labelColoring(labelsState.data, tags, painted)
-                : CATEGORY_COLORING,
-        [mode, labelsState, tags, painted],
-    );
+    const coloring = useMemo((): PointColoring => {
+        if (mode === "label" && labelsState.status === "success") {
+            return labelColoring(labelsState.data, tags, painted);
+        }
+        if (mode === "suggestion" && suggestionsState.status === "success") {
+            return labelColoring(suggestionsState.data, tags, painted);
+        }
+        return CATEGORY_COLORING;
+    }, [mode, labelsState, suggestionsState, tags, painted]);
 
     function togglePainted(name: string): void {
         setChosen(painted.includes(name) ? painted.filter((candidate) => candidate !== name) : [...painted, name]);
@@ -224,11 +238,20 @@ export function CloudPanel(): ReactElement {
                         >
                             Labels
                         </button>
+                        <button
+                            type="button"
+                            aria-pressed={mode === "suggestion"}
+                            onClick={() => {
+                                setMode("suggestion");
+                            }}
+                        >
+                            Suggestions
+                        </button>
                     </>
                 )}
             </div>
             {tab === "modules" && <p className="cloud-caption">{MODULE_TAB_CAPTION}</p>}
-            {tab === "samples" && mode === "label" && (
+            {tab === "samples" && mode !== "category" && (
                 <TagLegend tags={tags} painted={painted} onToggle={togglePainted} />
             )}
             <div className="panel-body">
