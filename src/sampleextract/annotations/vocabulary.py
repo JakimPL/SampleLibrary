@@ -2,21 +2,10 @@ from __future__ import annotations
 
 from typing import Final
 
-from sqlalchemy import Connection
-
-from samplecore.labeling.labels import SampleLabel, format_path
+from samplecore.labeling.labels import format_path
 from samplecore.labeling.vocabulary import LabelVocabulary, TagUsage
-from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
 INDENT: Final[str] = "    "
-
-
-def read_vocabulary(connection: Connection) -> LabelVocabulary:
-    """The tags in use across every annotation carrying a label, read and never written back."""
-    annotations = PostgresSampleAnnotationRepository(connection).list_all()
-    return LabelVocabulary.from_labels(
-        SampleLabel.parse(annotation.label) for annotation in annotations if annotation.label is not None
-    )
 
 
 def vocabulary_lines(vocabulary: LabelVocabulary) -> tuple[str, ...]:

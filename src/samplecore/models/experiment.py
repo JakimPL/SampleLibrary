@@ -9,8 +9,10 @@ from samplecore.models.base import FROZEN
 from samplecore.models.scalars import Index, SampleHash
 
 # An experiment extracted by a descriptor this project trained names the stored model it read,
-# so the extractor that produced its vectors can be rebuilt from the row alone.
+# so the extractor that produced its vectors can be rebuilt from the row alone. A scoring of
+# label suggestions is an experiment too, holding suggestions in place of vectors.
 LEARNED_BACKEND_NAME: Final[str] = "learned"
+ZERO_SHOT_BACKEND_NAME: Final[str] = "zero_shot"
 MODEL_PARAMETER: Final[str] = "model"
 
 

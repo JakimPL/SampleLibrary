@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import Connection
+
 from samplecore.labeling.labels import SampleLabel
-from samplecore.labeling.vocabulary import LabelVocabulary, TagUsage, first_use_ranks
+from samplecore.labeling.vocabulary import LabelVocabulary, TagUsage, first_use_ranks, read_vocabulary
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.sample_properties import SampleOccurrence
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
 LABELS = (
     "HI-HAT: CLOSED, LO-FI",
@@ -85,3 +88,21 @@ def test_tags_rank_by_first_use_with_the_categories_above_them_and_the_written_o
     )
 
     assert ranks == {("HI-HAT",): 0, ("HI-HAT", "CLOSED"): 1, ("LO-FI",): 2, ("SNARE",): 3}
+
+
+def test_the_vocabulary_is_read_from_every_labeled_annotation(connection: Connection) -> None:
+    """A rating without a label names no tag, and a specification counts toward its category."""
+    PostgresSampleAnnotationRepository(connection).replace_many(
+        (
+            _annotation("HI-HAT: CLOSED", days_ago=1, sample_hash="a" * 64),
+            _annotation("HI-HAT: OPEN, LO-FI", days_ago=2, sample_hash="b" * 64),
+            _annotation(None, days_ago=3, sample_hash="c" * 64),
+        )
+    )
+
+    vocabulary = read_vocabulary(connection)
+
+    assert vocabulary.top_level == (
+        TagUsage(path=("HI-HAT",), sample_count=2),
+        TagUsage(path=("LO-FI",), sample_count=1),
+    )

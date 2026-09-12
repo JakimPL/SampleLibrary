@@ -295,6 +295,20 @@ sample_feature_vector = Table(
     PrimaryKeyConstraint("experiment_id", "sample_hash"),
 )
 
+sample_label_suggestion = Table(
+    "sample_label_suggestion",
+    metadata,
+    Column("experiment_id", Integer, ForeignKey("experiment.id"), nullable=False),
+    Column("sample_hash", String(64), ForeignKey("sample.hash"), nullable=False),
+    Column("rank", UTinyInt, nullable=False),
+    Column("label", String, nullable=False),
+    Column("score", Double, nullable=False),
+    Column("computed_at", DateTime(timezone=True), nullable=False),
+    PrimaryKeyConstraint("experiment_id", "sample_hash", "rank"),
+    CheckConstraint(non_negative("rank"), name="sample_label_suggestion_rank_check"),
+    CheckConstraint(column("label") != "", name="sample_label_suggestion_label_check"),
+)
+
 module_instrument = Table(
     "module_instrument",
     metadata,

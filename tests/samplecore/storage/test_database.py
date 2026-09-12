@@ -11,7 +11,15 @@ from samplecore.storage.curation import CURATION_SCHEMA
 from samplecore.storage.database import SCHEMA_LOCK_KEY, connect, connect_for_curation, create_schema
 
 EXPECTED_TABLES = frozenset(
-    {"sample", "module", "sample_properties", "xm_sample_properties", "it_sample_properties", "sample_relation"}
+    {
+        "sample",
+        "module",
+        "sample_properties",
+        "xm_sample_properties",
+        "it_sample_properties",
+        "sample_relation",
+        "sample_label_suggestion",
+    }
 )
 
 

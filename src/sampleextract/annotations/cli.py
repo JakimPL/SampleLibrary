@@ -9,10 +9,11 @@ from pathlib import Path
 from sqlalchemy import Connection
 
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.labeling.vocabulary import read_vocabulary
 from samplecore.models.annotation import SampleAnnotation
 from sampleextract.annotations.relink import RelinkSummary, relink_annotations
 from sampleextract.annotations.transfer import DEFAULT_ANNOTATION_FILE, export_annotations, import_annotations
-from sampleextract.annotations.vocabulary import read_vocabulary, vocabulary_lines
+from sampleextract.annotations.vocabulary import vocabulary_lines
 
 _logger = logging.getLogger(__name__)
 

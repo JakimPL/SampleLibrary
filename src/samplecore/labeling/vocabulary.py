@@ -5,8 +5,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Self
 
+from sqlalchemy import Connection
+
 from samplecore.labeling.labels import LabelPath, SampleLabel, written_paths
 from samplecore.models.annotation import SampleAnnotation
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
 
 @dataclass(frozen=True)
@@ -86,3 +89,11 @@ def first_use_ranks(annotations: Iterable[SampleAnnotation]) -> dict[LabelPath, 
             for depth in range(1, len(path) + 1):
                 first_uses.setdefault(path[:depth], None)
     return {path: rank for rank, path in enumerate(first_uses)}
+
+
+def read_vocabulary(connection: Connection) -> LabelVocabulary:
+    """The tags in use across every annotation carrying a label, read and never written back."""
+    annotations = PostgresSampleAnnotationRepository(connection).list_all()
+    return LabelVocabulary.from_labels(
+        SampleLabel.parse(annotation.label) for annotation in annotations if annotation.label is not None
+    )
