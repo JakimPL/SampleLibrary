@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 import sampleserver.main as main_module
-from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DEFAULT_INFERENCE_URL
 
 
 def test_main_builds_the_app_from_the_configured_database_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -22,3 +22,4 @@ def test_main_builds_the_app_from_the_configured_database_url(tmp_path: Path, mo
 
     assert main_module.app.state.database_url == "postgresql+psycopg://user:pass@host/db"
     assert main_module.app.state.library_root == tmp_path
+    assert main_module.app.state.inference_url == DEFAULT_INFERENCE_URL

@@ -10,6 +10,8 @@ from sqlalchemy import Connection
 from sampleserver.app import API_PREFIX, create_app
 from sampleserver.dependencies import get_connection, get_curation_connection
 
+INFERENCE_URL = "http://inference.test"
+
 
 @pytest.fixture
 def client(connection: Connection, _database_url: str, tmp_path: Path) -> Iterator[TestClient]:
@@ -28,7 +30,7 @@ def client(connection: Connection, _database_url: str, tmp_path: Path) -> Iterat
     the client resolves it to where the app actually serves it. `test_app.py` pins the prefix
     itself, against a client built without one.
     """
-    application = create_app(_database_url, tmp_path)
+    application = create_app(_database_url, tmp_path, INFERENCE_URL)
 
     def override_get_connection() -> Iterator[Connection]:
         yield connection

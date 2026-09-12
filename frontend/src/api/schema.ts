@@ -321,9 +321,11 @@ export interface paths {
          * Get Cloud Suggestion Tags
          * @description Every tag the newest scoring suggests first for some sample, with how many and a lasting rank.
          *
-         *     The rank is the tag's place in the vocabulary the scoring ranked, recorded with the scoring, so
-         *     a tag keeps its color across the scorings that share a vocabulary; a tag the vocabulary leaves
-         *     unnamed ranks after the vocabulary, by name.
+         *     A specification counts toward its category the way a written label's does, so the legend can
+         *     paint by category while the suggestions name what is under it. The rank is the tag's place in
+         *     the vocabulary the scoring ranked, recorded with the scoring, a category taking the place of
+         *     its first entry, so a tag keeps its color across the scorings that share a vocabulary; a tag
+         *     the vocabulary leaves unnamed ranks after the vocabulary, by name.
          */
         readonly get: operations["get_cloud_suggestion_tags_api_cloud_suggestion_tags_get"];
         readonly put?: never;
@@ -429,6 +431,54 @@ export interface paths {
          *     by what the labels say. The tree comes whole; a viewer takes the depth it wants.
          */
         readonly get: operations["get_label_tags_api_curation_annotations_tags_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/morph/audio": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Morph Audio
+         * @description The audio at one point between two samples, rendered by the inference process and relayed as it came.
+         *
+         *     The render's validator and its caching headers pass through untouched, and so does a caller's
+         *     conditional request, so a browser that holds the render is answered with a 304 by the process
+         *     that made it.
+         *
+         *     Raises:
+         *         HTTPException: 503 when no inference process answers; the process's own 404 for a sample
+         *             it has no object for, and 422 for a weight off the grid, are relayed with their detail.
+         */
+        readonly get: operations["get_morph_audio_api_morph_audio_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/morph/status": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Morph Status
+         * @description Whether the inference process answers, and what it serves when it does.
+         */
+        readonly get: operations["get_morph_status_api_morph_status_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -784,6 +834,42 @@ export interface components {
             readonly size_bytes: number;
             /** Thumbnail */
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
+        };
+        /**
+         * MorphAvailability
+         * @description Whether morphs can be rendered right now, and by which model when they can.
+         */
+        readonly MorphAvailability: {
+            /** Available */
+            readonly available: boolean;
+            readonly service: components["schemas"]["MorphServiceStatus"] | null;
+        };
+        /**
+         * MorphServiceStatus
+         * @description What an inference process serves: the model, the route it renders through, and the device it runs on.
+         *
+         *     The fingerprint names the exact model files loaded, so a render's cache identity changes with
+         *     the model and with nothing else.
+         */
+        readonly MorphServiceStatus: {
+            /** Model */
+            readonly model: string;
+            /** Codec */
+            readonly codec: string;
+            /** Canonicalizer */
+            readonly canonicalizer: string;
+            /** Latent Size */
+            readonly latent_size: number;
+            /** Vocoder */
+            readonly vocoder: string;
+            /** Restorer */
+            readonly restorer: string | null;
+            /** Device */
+            readonly device: string;
+            /** Fingerprint */
+            readonly fingerprint: string;
+            /** Weight Steps */
+            readonly weight_steps: number;
         };
         /** Page[Module] */
         readonly Page_Module_: {
@@ -1715,6 +1801,57 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": readonly components["schemas"]["TagSummary"][];
+                };
+            };
+        };
+    };
+    readonly get_morph_audio_api_morph_audio_get: {
+        readonly parameters: {
+            readonly query: {
+                readonly first: string;
+                readonly second: string;
+                readonly weight: number;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly get_morph_status_api_morph_status_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["MorphAvailability"];
                 };
             };
         };

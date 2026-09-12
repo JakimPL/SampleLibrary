@@ -43,6 +43,7 @@ use `POSTGRES_PORT=5433` and set the same port in `config.toml`.
 ```sh
 make extract       # scan your modules and fill the library
 make serve         # start the API
+make serve-inference  # start the morph renderer the API dials, in a second terminal
 make frontend-dev  # start the frontend, then open http://localhost:5173
 ```
 

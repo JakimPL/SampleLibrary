@@ -28,10 +28,10 @@ from samplecore.pitch import (
 )
 from samplecore.spectral_distance import SpectralVectors, euclidean_distance, nearest_neighbors
 from samplecore.storage import audio_store
+from samplecore.storage.playback_rates import resolved_playback_rates
 from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
-from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
@@ -340,18 +340,9 @@ def get_similar_samples(
         raise HTTPException(status_code=404, detail=f"sample {sample_hash!r} has no spectral feature vector yet")
 
     neighbors = nearest_neighbors(sample_hash, vectors, limit=limit)
-    neighbor_hashes = [neighbor_hash for neighbor_hash, _ in neighbors]
-    _, rates_by_hash = PostgresSampleRepository(connection).names_and_rates_by_hash(neighbor_hashes)
-    playback_rate_by_hash = PostgresSamplePlaybackRateRepository(connection).get_many(neighbor_hashes)
+    playback_rate_by_hash = resolved_playback_rates(connection, [neighbor_hash for neighbor_hash, _ in neighbors])
     return tuple(
-        SimilarSample(
-            hash=neighbor_hash,
-            distance=distance,
-            playback_rate_hz=choose_playback_rate(
-                note_event_rate=playback_rate_by_hash.get(neighbor_hash),
-                occurrence_rates=rates_by_hash.get(neighbor_hash, ()),
-            ),
-        )
+        SimilarSample(hash=neighbor_hash, distance=distance, playback_rate_hz=playback_rate_by_hash[neighbor_hash])
         for neighbor_hash, distance in neighbors
     )
 

@@ -7,6 +7,7 @@ from sqlalchemy import Connection, text
 
 from samplecore.storage.curation import CURATION_SCHEMA
 from sampleserver.app import API_PREFIX, create_app
+from tests.sampleserver.conftest import INFERENCE_URL
 
 
 def test_get_connection_opens_a_real_read_only_connection_to_the_configured_database(
@@ -17,7 +18,7 @@ def test_get_connection_opens_a_real_read_only_connection_to_the_configured_data
     depended on only for this test's isolation from others sharing the same database, not used
     directly: the schema it creates on first connect is already in place by the time this runs.
     """
-    application = create_app(_database_url, tmp_path)
+    application = create_app(_database_url, tmp_path, INFERENCE_URL)
     with TestClient(application) as client:
         response = client.get(f"{API_PREFIX}/stats")
 
@@ -36,7 +37,7 @@ def test_starting_the_app_prepares_the_curation_schema_a_listing_reads_through(
     connection.execute(text(f"DROP SCHEMA IF EXISTS {CURATION_SCHEMA} CASCADE"))
     connection.commit()
 
-    with TestClient(create_app(_database_url, tmp_path)) as client:
+    with TestClient(create_app(_database_url, tmp_path, INFERENCE_URL)) as client:
         assert client.get(f"{API_PREFIX}/samples").status_code == 200
 
     schema = connection.execute(
@@ -54,8 +55,9 @@ def test_every_route_is_served_under_the_api_prefix(connection: Connection, _dat
     whole API under one prefix is what keeps the two apart, which makes it worth pinning here
     rather than leaving it to the paths the other tests happen to name.
     """
-    served = set(create_app(_database_url, tmp_path).openapi()["paths"])
+    served = set(create_app(_database_url, tmp_path, INFERENCE_URL).openapi()["paths"])
 
     assert f"{API_PREFIX}/samples" in served
     assert f"{API_PREFIX}/curation/annotations/{{sample_hash}}" in served
+    assert f"{API_PREFIX}/morph/audio" in served
     assert all(path.startswith(f"{API_PREFIX}/") for path in served)

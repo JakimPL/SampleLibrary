@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
+import httpx
 from fastapi import Depends, Request
 from sqlalchemy import Connection
 
@@ -14,6 +15,12 @@ from sampleserver.spectral_cache import SpectralVectorCache
 def get_library_root(request: Request) -> Path:
     """The content-addressable audio store's root, for routes that read a sample's own bytes."""
     return Path(request.app.state.library_root)
+
+
+def get_inference_client(request: Request) -> httpx.AsyncClient:
+    """The client the morph routes reach the inference process through, opened once for the app's lifetime."""
+    client: httpx.AsyncClient = request.app.state.inference_client
+    return client
 
 
 def get_connection(request: Request) -> Iterator[Connection]:

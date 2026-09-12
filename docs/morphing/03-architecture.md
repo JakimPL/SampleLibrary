@@ -161,6 +161,12 @@ Two options, to be decided when the audio is worth serving:
   existing player and preview hooks already know how to handle, at the cost of the first write path
   into the audio store from the server.
 
+Decided (2026-09-12) for streaming, with one refinement: the render lives in a process of its own,
+`samplemorph.service`, which loads the models once and answers a point between two samples in a
+fraction of a second; the API relays its bytes and the validator the render carries, so the
+browser's own cache holds what a listener has already heard. See
+[`19-unaligned-grids.md`](19-unaligned-grids.md) for the codec the service renders through.
+
 ## The frontend already has the gesture
 
 The two-sample selection this feature needs was built for the spectral-distance readout:
