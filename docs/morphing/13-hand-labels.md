@@ -168,5 +168,43 @@ wordings people wrote instead.
 Two readings of the catalog are scored: experiment 4, read at the nominal rate, and a `clap`
 experiment read at each sample's playback rate (`samplecloud --backend clap --heard-rate`), since
 the teacher's rate invariance ends within a whole tone and a bass played two octaves below its
-file's rate reads as a pluck at the nominal rate. The agreement figures of both scorings, overall
-and per tag, follow the runs and are recorded here beside the commands that produced them.
+file's rate reads as a pluck at the nominal rate.
+
+### At the nominal rate
+
+`make cloud-suggest EXPERIMENT=4` wrote experiment 8 over the 127,588 samples in minutes. Against
+the 216 hand labels the first pick agrees exactly on 62 (28.7%) and by category on 112 (51.9%),
+the share the scratchpad probe had promised. Per hand tag, the category agreement of the first
+pick, tags with at least five labeled samples:
+
+| Hand tag | Labeled | By category | Where the rest went |
+|---|---|---|---|
+| `SNARE` | 18 | 89% | `TOM` |
+| `FX` | 5 | 80% | |
+| `HI-HAT` | 27 | 78% | `PERCUSSION: SHAKER` 4 |
+| `BASS` | 12 | 75% | |
+| `PIANO` | 12 | 67% | |
+| `PAD` | 6 | 67% | |
+| `SYNTH` | 47 | 66% | `BASS: SYNTH` 7, `FX` 4 |
+| `CHORD` | 11 | 64% | `SYNTH: LEAD` 3 |
+| `CYMBAL` | 26 | 62% | `HI-HAT: OPEN` 7 |
+| `BRASS` | 5 | 60% | |
+| `REVERSE` | 7 | 57% | |
+| `LO-FI` | 34 | 56% | a treatment, so any instrument counts |
+| `BASS DRUM` | 21 | 33% | `TOM` 3, `FX` 2 |
+| `REVERB` | 9 | 33% | |
+| `PLUCK` | 10 | 30% | `BASS: SYNTH` 5 |
+| `CHIPTUNE` | 10 | 30% | `FX` 4 |
+| `STRINGS` | 31 | 23% | `SYNTH: LEAD` 11, `SYNTH: PAD` 3, `BRASS` 3 |
+
+Drums and bass are named; strings at the nominal rate become synth leads, and a bass drum a tom
+or an effect. Over the whole catalog the first pick is `FX` for 23.7% of the samples and
+`SYNTH: LEAD` for 11.5%, and `STRINGS` for 0.1%: at the nominal rate the model hears the library
+as a bright synthetic place, which is what reading a sample two octaves too high sounds like. Part
+of the per-tag misses is wording on both sides: the user's `CONGA`, `SHAKER` and `TAMBOURINE`
+against the vocabulary's `PERCUSSION: CONGA` and `PERCUSSION: SHAKER` count as misses here and
+are the same thing.
+
+### At the playback rate
+
+The heard-rate scoring follows its run and is recorded here against the same table.
