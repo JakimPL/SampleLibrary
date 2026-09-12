@@ -153,3 +153,20 @@ octave and costs agreement; 98 hand labels buy it back, to the best held-out sco
 variant, with the invariance kept. Self-supervision alone stays near the untrained grid on the
 labels. The recipe for the descriptor stage follows from those four rows, and the weight of the
 retuning term is the one to sweep.
+
+## Zero-shot suggestions over the catalog (2026-09-12)
+
+The 52% of the scratchpad probe above became a pass. `samplecloud-suggest` reads a `clap`
+experiment's vectors, which are unit length, against the text tower's reading of a vocabulary of
+prompts (`This is the sound of {label}.`, the label's levels read from the most specific outward,
+`HI-HAT: CLOSED` as `closed hi-hat`), keeps each sample's closest three under an experiment of the
+`zero_shot` backend, and reports two agreements against the hand labels: exact, the first pick as
+written lying in the label's closure, and by category, its category alone lying there. The shipped
+vocabulary is 34 instruments in the hand-label grammar, drums first; `hand-labels` ranks the
+wordings people wrote instead.
+
+Two readings of the catalog are scored: experiment 4, read at the nominal rate, and a `clap`
+experiment read at each sample's playback rate (`samplecloud --backend clap --heard-rate`), since
+the teacher's rate invariance ends within a whole tone and a bass played two octaves below its
+file's rate reads as a pluck at the nominal rate. The agreement figures of both scorings, overall
+and per tag, follow the runs and are recorded here beside the commands that produced them.

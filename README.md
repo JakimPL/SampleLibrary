@@ -81,6 +81,14 @@ apart from everything the pipelines generate, and `make reset-library` leaves th
 `make annotations-import` reads one back. `make annotations-relink` reattaches them if a sample's
 hash ever changes.
 
+The listening model can suggest labels for every sample. `make cloud-teacher HEARD=1` describes
+the catalog with it, hearing each sample at the rate it is played at (about an hour), and
+`make cloud-suggest EXPERIMENT=<that experiment's id>` ranks a vocabulary of instruments against
+every sample in minutes; `VOCABULARY=hand-labels` ranks the wordings you have used instead, and a
+file with one label per line works too. The cloud then colors by suggestion, and a sample's page
+lists its suggestions with the model's confidence: a click adds one to the label, and the rest
+stay suggestions.
+
 ## Development
 
 Read `docs/guidelines.md` before making changes. `make check` runs formatting, linting and tests;
