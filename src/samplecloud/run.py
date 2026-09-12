@@ -1,27 +1,36 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from sqlalchemy import Connection
 
 from samplecloud.backends import FeatureExtractor
-from samplecloud.features import FeatureExtractionSummary, extract_features
+from samplecloud.features import FeatureExtractionSummary, FeaturePass, extract_features
+from samplecloud.hearing import Reading, hearing_for
 from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
 from samplecore.config import LibraryConfig
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 
+READING_PARAMETER: Final[str] = "reading"
+
 
 @dataclass(frozen=True)
 class EmbeddingOptions:
-    """How far one embedding run goes: over how many samples, and whether it becomes the cloud shown.
+    """How one embedding run goes: how it reads a sample, over how many, and whether it becomes the cloud shown.
 
     An experiment extracted to be measured, or to teach another descriptor, keeps its vectors and
     leaves the cloud as it was.
     """
 
+    reading: Reading
     sample_limit: int | None
     promote: bool
+
+
+def reading_parameters(reading: Reading) -> dict[str, Any]:
+    """The reading an experiment was extracted under, in the form its row records it."""
+    return {READING_PARAMETER: reading.value}
 
 
 @dataclass(frozen=True)
@@ -75,7 +84,14 @@ def run_embedding(
     or validating one to resume before calling this.
     """
     extraction = extract_features(
-        connection, config.library_root, experiment_id, feature_extractor, sample_limit=options.sample_limit
+        connection,
+        config.library_root,
+        FeaturePass(
+            experiment_id=experiment_id,
+            feature_extractor=feature_extractor,
+            hearing=hearing_for(connection, options.reading),
+            sample_limit=options.sample_limit,
+        ),
     )
     reduction = reduce_and_persist_coordinates(connection, experiment_id) if options.promote else None
     return EmbeddingSummary(experiment_id=experiment_id, extraction=extraction, reduction=reduction)

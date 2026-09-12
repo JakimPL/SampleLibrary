@@ -10,6 +10,7 @@ from sqlalchemy import Connection
 from tqdm import tqdm
 
 from samplecloud.backends import FeatureExtractor
+from samplecloud.hearing import Hearing
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
@@ -29,42 +30,50 @@ class FeatureExtractionSummary:
     newly_extracted: int
 
 
-def extract_features(
-    connection: Connection,
-    library_root: Path,
-    experiment_id: int,
-    feature_extractor: FeatureExtractor,
-    *,
-    sample_limit: int | None = None,
-) -> FeatureExtractionSummary:
-    """Extract a feature vector for every cataloged sample the given experiment does not have yet.
+@dataclass(frozen=True)
+class FeaturePass:
+    """One extraction's parts: whose experiment it fills, what hears a sample, how, and over how many.
+
+    ``sample_limit``, when given, bounds how many new samples the pass extracts, for validating a
+    run over a small slice before committing to the whole catalog. ``hearing`` says how each
+    sample's frames reach the extractor: at the stored rate, or as the library plays them.
+    """
+
+    experiment_id: int
+    feature_extractor: FeatureExtractor
+    hearing: Hearing
+    sample_limit: int | None
+
+
+def extract_features(connection: Connection, library_root: Path, feature_pass: FeaturePass) -> FeatureExtractionSummary:
+    """Extract a feature vector for every cataloged sample the pass's experiment does not have yet.
 
     Idempotent within one experiment: resuming an interrupted or previously limited run only
     extracts samples the experiment has no vector for yet, matching ``run_extraction``'s and
-    ``detect_equivalences``'s own "skip what's already done" idempotence. ``sample_limit``, when
-    given, bounds how many new samples this run extracts, for validating a run over a small slice
-    before committing to the whole catalog.
+    ``detect_equivalences``'s own "skip what's already done" idempotence.
 
     Vectors are committed to the catalog every ``EXTRACTION_CHECKPOINT_INTERVAL`` samples, not only
     once at the end -- extraction is the slowest stage of an embedding run, so an interruption
     partway through a real library's pass loses at most one checkpoint's worth of work on restart,
     rather than the whole pass.
     """
+    experiment_id = feature_pass.experiment_id
     samples = PostgresSampleRepository(connection).list_all()
     feature_vector_repository = PostgresSampleFeatureVectorRepository(connection)
     already_extracted_hashes = {
         vector.sample_hash for vector in feature_vector_repository.list_for_experiment(experiment_id)
     }
     missing = [sample for sample in samples if sample.hash not in already_extracted_hashes]
-    if sample_limit is not None:
-        missing = missing[:sample_limit]
+    if feature_pass.sample_limit is not None:
+        missing = missing[: feature_pass.sample_limit]
 
     _logger.info("%d samples already extracted, %d to extract.", len(already_extracted_hashes), len(missing))
 
     pending_vectors: list[SampleFeatureVector] = []
     newly_extracted_count = 0
     for sample in tqdm(missing, desc="Extracting features"):
-        raw_vector = feature_extractor.extract(audio_store.read(library_root, sample).pcm)
+        heard = feature_pass.hearing.hear(sample.hash, audio_store.read(library_root, sample).pcm)
+        raw_vector = feature_pass.feature_extractor.extract(heard)
         pending_vectors.append(
             SampleFeatureVector(
                 experiment_id=experiment_id,

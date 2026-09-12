@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
+from samplecloud.hearing import Reading
 from samplecloud.run import EmbeddingOptions, resolve_experiment, run_embedding
 from samplecore.config import LibraryConfig
 from samplecore.models.channels import ChannelLayout
@@ -40,7 +41,7 @@ def _config(tmp_path: Path, database_url: str) -> LibraryConfig:
     return LibraryConfig(module_source_directory=tmp_path, library_root=tmp_path, database_url=database_url)
 
 
-PROMOTE = EmbeddingOptions(sample_limit=None, promote=True)
+PROMOTE = EmbeddingOptions(reading=Reading.NOMINAL, sample_limit=None, promote=True)
 
 
 def test_run_embedding_extracts_and_reduces_the_whole_catalog(
@@ -70,7 +71,7 @@ def test_run_embedding_respects_the_sample_limit(connection: Connection, _databa
         connection,
         _StubFeatureExtractor(),
         experiment_id,
-        options=EmbeddingOptions(sample_limit=1, promote=True),
+        options=EmbeddingOptions(reading=Reading.NOMINAL, sample_limit=1, promote=True),
     )
 
     assert summary.extraction.newly_extracted == 1
@@ -101,7 +102,7 @@ def test_run_embedding_keeps_the_cloud_as_it_was_when_asked_only_to_extract(
         connection,
         _StubFeatureExtractor(),
         experiment_id,
-        options=EmbeddingOptions(sample_limit=None, promote=False),
+        options=EmbeddingOptions(reading=Reading.NOMINAL, sample_limit=None, promote=False),
     )
 
     assert summary.extraction.newly_extracted == SAMPLE_COUNT

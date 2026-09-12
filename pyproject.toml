@@ -43,6 +43,7 @@ sampleannotations = "sampleextract.annotations.cli:main"
 samplecloud = "samplecloud.cli:main"
 samplecloud-modules-placeholder = "samplecloud.placeholder_modules:main"
 samplecloud-evaluate = "samplecloud.evaluation.cli:main"
+samplecloud-suggest = "samplecloud.suggestions.cli:main"
 samplemorph = "samplemorph.cli:main"
 sampleserver-schema = "sampleserver.openapi_export:main"
 

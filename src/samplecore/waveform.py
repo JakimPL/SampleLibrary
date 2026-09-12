@@ -113,6 +113,19 @@ def resample_by_semitones(
     return resampled
 
 
+def heard_at_rate(
+    waveform: NDArray[np.float64], *, playback_rate_hz: float, stored_rate_hz: float
+) -> NDArray[np.float64]:
+    """Read a waveform stored at one rate as a listener hears it played at another.
+
+    A tracker plays the stored frames at the sample's own rate, so a sample played below the rate
+    its file states sounds lower and lasts longer than the file alone says. The frames come back
+    as they sound at `stored_rate_hz`, which is what a model reading the file's rate then hears.
+    """
+    semitones = SEMITONES_PER_OCTAVE * float(np.log2(playback_rate_hz / stored_rate_hz))
+    return resample_by_semitones(waveform, semitones=semitones)
+
+
 def resample_to_fraction_points(values: NDArray[np.float64], *, point_count: int, axis: int = 0) -> NDArray[np.float64]:
     """Resample a series indexed by analysis frame onto `point_count` points of duration fraction.
 

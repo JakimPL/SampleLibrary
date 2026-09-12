@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Final
 
 import numpy as np
 import torch
 from numpy.typing import NDArray
-from transformers import ClapFeatureExtractor, ClapModel
+from transformers import AutoTokenizer, ClapFeatureExtractor, ClapModel
 
 # The audio tower reads a fixed picture: a ten-second window at the model's rate, as a log-mel
 # spectrogram of this many frames. A shorter clip is repeated to fill the window and padded with
@@ -14,23 +15,30 @@ WINDOW_SECONDS: Final[int] = 10
 LOG_MEL_FLOOR: Final[float] = 1e-10
 
 
+def preferred_device() -> str:
+    """The GPU when the machine has one, the processor otherwise."""
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
 class TransformersTeacher:
     """The pretrained audio-text model as `transformers` ships it, kept behind the `Teacher` protocol.
 
-    Only the audio tower is used, and the log-mel picture it reads is computed here on the device
-    rather than by the library's own extractor: the same window, hop, filter bank and decibel
-    floor, measured to agree within a twentieth of a decibel with vectors identical to six decimals,
-    at a quarter of the cost. The vector is unit length, so distances between two of them read as
-    cosine distances, which is the geometry the model was trained under.
+    The audio tower's log-mel picture is computed here on the device rather than by the library's
+    own extractor: the same window, hop, filter bank and decibel floor, measured to agree within a
+    twentieth of a decibel with vectors identical to six decimals, at a quarter of the cost. The
+    text tower reads a sentence into the same space. Every vector is unit length, so distances
+    between two of them read as cosine distances, which is the geometry the model was trained
+    under, and a sound's cosine against a sentence says how well the sentence describes it.
     """
 
-    def __init__(self, *, checkpoint: str, rate_hz: int) -> None:
+    def __init__(self, *, checkpoint: str, rate_hz: int, device: str) -> None:
         self._rate_hz = rate_hz
-        self._device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._device = device
         model = ClapModel.from_pretrained(checkpoint)
         # The library types the wrapped `to` as taking the model where it takes the device, so the
         # call is accepted as the library documents it.
         self._model = model.to(self._device).eval()  # type: ignore[arg-type]
+        self._tokenizer = AutoTokenizer.from_pretrained(checkpoint)
         extractor = ClapFeatureExtractor.from_pretrained(checkpoint)
         self._window_frames = WINDOW_SECONDS * rate_hz
         self._fft_length = int(extractor.fft_window_size)
@@ -49,6 +57,18 @@ class TransformersTeacher:
         tensor = pooled if isinstance(pooled, torch.Tensor) else pooled.pooler_output
         vector: NDArray[np.float32] = torch.nn.functional.normalize(tensor, dim=-1)[0].cpu().numpy()
         return vector
+
+    def embed_text(self, texts: Sequence[str]) -> NDArray[np.float32]:
+        encoded = self._tokenizer(list(texts), padding=True, return_tensors="pt")
+        with torch.no_grad():
+            pooled = self._model.get_text_features(
+                input_ids=encoded["input_ids"].to(self._device),
+                attention_mask=encoded["attention_mask"].to(self._device),
+            )
+        tensor = pooled if isinstance(pooled, torch.Tensor) else pooled.pooler_output
+        # (sentences, embedding size), one unit vector per sentence
+        vectors: NDArray[np.float32] = torch.nn.functional.normalize(tensor, dim=-1).cpu().numpy()
+        return vectors
 
     def _log_mel(self, window: torch.Tensor) -> torch.Tensor:
         """The library's log-mel picture, computed on the device: power spectrum, mel bands, decibels."""

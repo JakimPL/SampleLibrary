@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -22,13 +23,20 @@ from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 
 @dataclass
 class RecordingTeacher:
-    """A teacher that remembers what it was asked to hear and answers with a fixed vector."""
+    """A teacher that remembers what it was asked to hear and answers with a fixed vector.
+
+    A sentence reads as the unit vector of its position in the list, so a scoring against these
+    prompts picks whichever label an audio vector points at.
+    """
 
     heard: list[NDArray[np.float32]] = field(default_factory=list)
 
     def embed(self, mono: NDArray[np.float32]) -> NDArray[np.float32]:
         self.heard.append(mono)
         return np.full(TEACHER_EMBEDDING_SIZE, 1.0 / np.sqrt(TEACHER_EMBEDDING_SIZE), dtype=np.float32)
+
+    def embed_text(self, texts: Sequence[str]) -> NDArray[np.float32]:
+        return np.eye(len(texts), TEACHER_EMBEDDING_SIZE, dtype=np.float32)
 
 
 def test_a_clip_reaches_the_teacher_at_its_own_rate_at_full_scale() -> None:

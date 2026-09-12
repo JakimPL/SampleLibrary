@@ -103,9 +103,17 @@ evaluate-fast:
 
 # Describes every sample with the pretrained listening model, as an experiment kept for measuring
 # and for teaching the descriptor; it leaves the cloud as it is. About an hour over the catalog.
+# HEARD=1 reads every sample at the rate the library plays it at, the way a listener hears it.
 .PHONY: cloud-teacher
 cloud-teacher:
-	$(CAPPED) uv run samplecloud --backend clap --extract-only $(if $(LABEL),--label "$(LABEL)",)
+	$(CAPPED) uv run samplecloud --backend clap --extract-only $(if $(HEARD),--heard-rate,) $(if $(LABEL),--label "$(LABEL)",)
+
+# Suggests labels for every sample of a listening-model experiment, ranking a vocabulary of
+# prompts against its vectors; the application shows the newest scoring. VOCABULARY names
+# `instruments` (shipped), `hand-labels` (what people wrote) or a file with one label per line.
+.PHONY: cloud-suggest
+cloud-suggest:
+	uv run samplecloud-suggest --experiment-id $(EXPERIMENT) $(if $(VOCABULARY),--vocabulary $(VOCABULARY),) $(if $(TOP),--top $(TOP),) $(if $(DEVICE),--device $(DEVICE),) $(if $(LABEL),--label "$(LABEL)",)
 
 # Serves the run store beside the library, where every training and evaluation pass is recorded.
 .PHONY: mlflow-ui

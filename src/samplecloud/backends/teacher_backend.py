@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from importlib.util import find_spec
 from math import gcd
 from typing import Final, Protocol
@@ -16,12 +17,15 @@ TEACHER_CHECKPOINT: Final[str] = "laion/larger_clap_music_and_speech"
 TEACHER_RATE_HZ: Final[int] = 48_000
 TEACHER_EMBEDDING_SIZE: Final[int] = 512
 TEACHER_EXTRA: Final[str] = "teacher"
+TEACHER_DEVICE_AUTOMATIC: Final[str] = "auto"
 
 
 class Teacher(Protocol):
-    """A pretrained model that hears a clip and answers with one vector."""
+    """A pretrained model that hears a clip, or reads a sentence, and answers with one vector in one space."""
 
     def embed(self, mono: NDArray[np.float32]) -> NDArray[np.float32]: ...
+
+    def embed_text(self, texts: Sequence[str]) -> NDArray[np.float32]: ...
 
 
 class ClapFeatureExtractor:
@@ -29,10 +33,10 @@ class ClapFeatureExtractor:
 
     The model was trained on what people wrote about recordings, so what it puts near one another
     is what people would call alike: on the first hand labels it leads the hand-built descriptors by
-    a wide margin while knowing nothing about tracker samples. It reads the clip at the nominal rate
-    the store writes, which measured as well as reading it at its declared playback rate. Beside its
-    place in the cloud it is the teacher a descriptor reading this project's own canonical grid is
-    distilled from.
+    a wide margin while knowing nothing about tracker samples. It reads the clip at the rate the
+    store writes, and the pass handing it the clip decides whether the frames arrive as stored or
+    as the library plays them. Beside its place in the cloud it is the teacher a descriptor reading
+    this project's own canonical grid is distilled from.
     """
 
     def __init__(self, teacher: Teacher) -> None:
@@ -59,8 +63,11 @@ def teacher_available() -> bool:
     return find_spec("transformers") is not None and find_spec("torch") is not None
 
 
-def load_teacher() -> Teacher:
+def load_teacher(*, device: str = TEACHER_DEVICE_AUTOMATIC) -> Teacher:
     """The pretrained model, fetched into the machine's model cache on first use.
+
+    `device` names where it computes; the automatic choice takes the GPU when there is one, and
+    naming the processor keeps the model off a GPU another job holds.
 
     Raises:
         RuntimeError: the `teacher` extra is absent, so the model cannot be loaded.
@@ -70,9 +77,11 @@ def load_teacher() -> Teacher:
             f"the {TEACHER_BACKEND_NAME} backend needs the {TEACHER_EXTRA} extra: uv sync --extra {TEACHER_EXTRA}"
         )
 
-    from samplecloud.backends.transformers_teacher import TransformersTeacher  # pylint: disable=import-outside-toplevel
+    # pylint: disable-next=import-outside-toplevel
+    from samplecloud.backends.transformers_teacher import TransformersTeacher, preferred_device
 
-    return TransformersTeacher(checkpoint=TEACHER_CHECKPOINT, rate_hz=TEACHER_RATE_HZ)
+    chosen = preferred_device() if device == TEACHER_DEVICE_AUTOMATIC else device
+    return TransformersTeacher(checkpoint=TEACHER_CHECKPOINT, rate_hz=TEACHER_RATE_HZ, device=chosen)
 
 
 def build_teacher_extractor() -> ClapFeatureExtractor:
