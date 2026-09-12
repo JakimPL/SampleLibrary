@@ -242,7 +242,7 @@ def test_get_cloud_suggestions_reads_the_newest_scoring_alone(client: TestClient
 def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_first_picks(
     client: TestClient, connection: Connection
 ) -> None:
-    """The hat is picked first twice and the snare once; a tag outside the vocabulary ranks after it."""
+    """The closed hat is picked first twice, counting toward the hat category; a tag outside the vocabulary ranks last."""
     _store_samples(connection, SAMPLE_HASH, "b" * 64, "d" * 64, "e" * 64)
     seed_scoring(
         connection,
@@ -259,8 +259,9 @@ def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_fi
     assert response.status_code == 200
     assert response.json() == [
         {"path": ["SNARE"], "sample_count": 1, "rank": 0},
-        {"path": ["HI-HAT", "CLOSED"], "sample_count": 2, "rank": 2},
-        {"path": ["PIANO"], "sample_count": 1, "rank": 3},
+        {"path": ["HI-HAT"], "sample_count": 2, "rank": 2},
+        {"path": ["HI-HAT", "CLOSED"], "sample_count": 2, "rank": 3},
+        {"path": ["PIANO"], "sample_count": 1, "rank": 4},
     ]
 
 

@@ -165,18 +165,21 @@ def get_cloud_suggestions(connection: Connection = Depends(get_connection)) -> t
 def get_cloud_suggestion_tags(connection: Connection = Depends(get_connection)) -> tuple[TagSummary, ...]:
     """Every tag the newest scoring suggests first for some sample, with how many and a lasting rank.
 
-    The rank is the tag's place in the vocabulary the scoring ranked, recorded with the scoring, so
-    a tag keeps its color across the scorings that share a vocabulary; a tag the vocabulary leaves
-    unnamed ranks after the vocabulary, by name.
+    A specification counts toward its category the way a written label's does, so the legend can
+    paint by category while the suggestions name what is under it. The rank is the tag's place in
+    the vocabulary the scoring ranked, recorded with the scoring, a category taking the place of
+    its first entry, so a tag keeps its color across the scorings that share a vocabulary; a tag
+    the vocabulary leaves unnamed ranks after the vocabulary, by name.
     """
     repository = PostgresSampleLabelSuggestionRepository(connection)
     latest = repository.latest_experiment_id()
     if latest is None:
         return ()
 
-    first_picks = Counter(
-        _path_of(suggestion) for suggestion in repository.list_for_experiment(latest) if suggestion.rank == 0
-    )
+    first_picks: Counter[LabelPath] = Counter()
+    for suggestion in repository.list_for_experiment(latest):
+        if suggestion.rank == 0:
+            first_picks.update(_prefixes(_path_of(suggestion)))
     ranks = _vocabulary_ranks(connection, latest, first_picks)
     return tuple(
         TagSummary(path=path, sample_count=count, rank=ranks[path])
@@ -218,7 +221,13 @@ def _vocabulary_ranks(connection: Connection, experiment_id: int, picked: Counte
     ranks: dict[LabelPath, int] = {}
     for label in recorded if isinstance(recorded, list) else []:
         path, *_ = written_paths(str(label))
-        ranks.setdefault(path, len(ranks))
+        for prefix in _prefixes(path):
+            ranks.setdefault(prefix, len(ranks))
     for path in sorted(picked):
         ranks.setdefault(path, len(ranks))
     return ranks
+
+
+def _prefixes(path: LabelPath) -> tuple[LabelPath, ...]:
+    """A tag and every category above it, the way a written label asserts them all."""
+    return tuple(path[:depth] for depth in range(1, len(path) + 1))
