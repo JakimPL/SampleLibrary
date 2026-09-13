@@ -123,7 +123,7 @@ definition of "good" for this corpus. Stage 5 in [`04-roadmap.md`](04-roadmap.md
 a reduced batch size and gradient accumulation. The `SampleCodec` protocol was shaped so that a
 waveform-domain model implements it directly, with no canonicalizer and no vocoder.
 
-### `make equivalence` at full scale
+### `samplelibrary equivalence` at full scale
 
 **Blocked on a redesign, and worth knowing before it is attempted.** `detect_equivalences` reads
 every sample's WAV and keeps the trimmed float64 array in a dictionary that is never evicted, so a

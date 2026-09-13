@@ -7,8 +7,10 @@ import pytest
 from fastapi import FastAPI
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplemorph.cli import MorphCommand, main
 from samplemorph.service import cli
 
+PROGRAM = "samplelibrary morph"
 CONFIGURED_HOST = "0.0.0.0"
 CONFIGURED_PORT = 9010
 OVERRIDING_PORT = 9100
@@ -52,7 +54,7 @@ def test_the_process_binds_the_address_the_configuration_names(
     config_path = _write_config(tmp_path, inference_url=f"http://{CONFIGURED_HOST}:{CONFIGURED_PORT}")
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
 
-    cli.main(["--device", "cpu"])
+    main([MorphCommand.SERVE, "--device", "cpu"], prog=PROGRAM)
 
     assert (recorded.host, recorded.port) == (CONFIGURED_HOST, CONFIGURED_PORT)
     assert recorded.application is not None
@@ -65,7 +67,7 @@ def test_a_flag_overrides_the_configured_port_and_the_default_address_serves_whe
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, inference_url=None)))
 
-    cli.main(["--port", str(OVERRIDING_PORT)])
+    main([MorphCommand.SERVE, "--port", str(OVERRIDING_PORT)], prog=PROGRAM)
 
     assert recorded.host == cli.FALLBACK_HOST
     assert recorded.port == OVERRIDING_PORT
@@ -75,6 +77,6 @@ def test_a_missing_configuration_ends_the_process(tmp_path: Path, monkeypatch: p
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "absent.toml"))
 
     with pytest.raises(SystemExit) as raised:
-        cli.main([])
+        main([MorphCommand.SERVE], prog=PROGRAM)
 
     assert raised.value.code == 1

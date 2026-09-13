@@ -71,7 +71,7 @@ def load_config(path: Path | None = None) -> LibraryConfig:
     resolved_path = path or _config_path_from_environment() or DEFAULT_CONFIG_PATH
     if not resolved_path.is_file():
         raise ConfigurationError(
-            f"No config file at {resolved_path}. Run `make install` to put one there, or copy "
+            f"No config file at {resolved_path}. Run `samplelibrary setup config` to put one there, or copy "
             "config.example.toml to config.toml yourself, and fill in your paths."
         )
     with resolved_path.open("rb") as config_file:

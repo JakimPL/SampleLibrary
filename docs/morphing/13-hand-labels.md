@@ -23,7 +23,7 @@ treatment (`LO-FI` 33, `CHIPTUNE` 9, `REVERB` 7, `REVERSE` 6). A sample is `SNAR
 `SYNTH: PULSE, CHIPTUNE`: several things at once, at whichever depth the listener cared to state.
 
 Two labels had a comma typed for a colon (`BASS, ELECTRIC`, `BASS, SYNTH`); the user corrected
-both. `sampleannotations vocabulary` is what surfaced them.
+both. `samplelibrary annotations vocabulary` is what surfaced them.
 
 Against the keyword classifier, the labels agree where a keyword fires -- `cymbal` → `CYMBAL` 18
 of 21, `hi_hat` → `HI-HAT` 17 of 26, `kick` → `BASS DRUM` 14 of 21 -- and disagree often enough to
@@ -71,7 +71,7 @@ firm up only as the person labels more.
 
 ## Where the descriptors stand
 
-Measured with `samplecloud-evaluate --skip-transposition`, seed 0, labels read whole.
+Measured with `samplelibrary cloud evaluate --skip-transposition`, seed 0, labels read whole.
 
 | Embedding | NDCG@10 [90%] | mAP over 24 tags | P@1 | Category macro-F1 |
 |---|---|---|---|---|
@@ -106,9 +106,9 @@ invariance the teacher lacks.
 
 ### The teacher over the whole catalog
 
-The same model as the `clap` backend (`samplecloud --backend clap --extract-only`), 127,588
-vectors in experiment 4, scored by `samplecloud-evaluate` with 200 probes, seed 0, beside the two
-descriptors from [`11-descriptor-baselines.md`](11-descriptor-baselines.md):
+The same model as the `clap` backend (`samplelibrary cloud embed --backend clap --extract-only`),
+127,588 vectors in experiment 4, scored by `samplelibrary cloud evaluate` with 200 probes, seed 0,
+beside the two descriptors from [`11-descriptor-baselines.md`](11-descriptor-baselines.md):
 
 | | `invariant` | `librosa` | **`clap`** |
 |---|---|---|---|
@@ -156,7 +156,7 @@ retuning term is the one to sweep.
 
 ## Zero-shot suggestions over the catalog (2026-09-12)
 
-The 52% of the scratchpad probe above became a pass. `samplecloud-suggest` reads a `clap`
+The 52% of the scratchpad probe above became a pass. `samplelibrary cloud suggest` reads a `clap`
 experiment's vectors, which are unit length, against the text tower's reading of a vocabulary of
 prompts (`This is the sound of {label}.`, the label's levels read from the most specific outward,
 `HI-HAT: CLOSED` as `closed hi-hat`), keeps each sample's closest three under an experiment of the
@@ -166,16 +166,16 @@ vocabulary is 34 instruments in the hand-label grammar, drums first; `hand-label
 wordings people wrote instead.
 
 Two readings of the catalog are scored: experiment 4, read at the nominal rate, and a `clap`
-experiment read at each sample's playback rate (`samplecloud --backend clap --heard-rate`), since
-the teacher's rate invariance ends within a whole tone and a bass played two octaves below its
-file's rate reads as a pluck at the nominal rate.
+experiment read at each sample's playback rate (`samplelibrary cloud embed --backend clap
+--heard-rate`), since the teacher's rate invariance ends within a whole tone and a bass played two
+octaves below its file's rate reads as a pluck at the nominal rate.
 
 ### At the nominal rate
 
-`make cloud-suggest EXPERIMENT=4` wrote experiment 8 over the 127,588 samples in minutes. Against
-the 216 hand labels the first pick agrees exactly on 62 (28.7%) and by category on 112 (51.9%),
-the share the scratchpad probe had promised. Per hand tag, the category agreement of the first
-pick, tags with at least five labeled samples:
+`samplelibrary cloud suggest --experiment-id 4` wrote experiment 8 over the 127,588 samples in
+minutes. Against the 216 hand labels the first pick agrees exactly on 62 (28.7%) and by category on
+112 (51.9%), the share the scratchpad probe had promised. Per hand tag, the category agreement of
+the first pick, tags with at least five labeled samples:
 
 | Hand tag | Labeled | By category | Where the rest went |
 |---|---|---|---|
@@ -207,11 +207,12 @@ are the same thing.
 
 ### At the playback rate
 
-`make cloud-teacher HEARD=1` described the catalog again with every sample resampled to the rate
-it is played at (experiment 10, 55 minutes), and `make cloud-suggest EXPERIMENT=10` scored it as
-experiment 11. Against the same 216 hand labels the first pick agrees exactly on 87 (40.3%) and
-by category on 141 (65.3%): thirteen points more than the nominal reading on both counts. The
-same table, with the nominal reading beside it:
+`samplelibrary cloud embed --backend clap --extract-only --heard-rate` described the catalog again
+with every sample resampled to the rate it is played at (experiment 10, 55 minutes), and
+`samplelibrary cloud suggest --experiment-id 10` scored it as experiment 11. Against the same 216
+hand labels the first pick agrees exactly on 87 (40.3%) and by category on 141 (65.3%): thirteen
+points more than the nominal reading on both counts. The same table, with the nominal reading beside
+it:
 
 | Hand tag | Labeled | By category, nominal | By category, playback rate | Where the rest went |
 |---|---|---|---|---|
@@ -240,8 +241,8 @@ tracker library is made up. What stays wrong is `STRINGS`, at 0.2% of the catalo
 of the labeled ones: what a tracker calls strings is a synthesized ensemble, which the model hears
 as a synth lead, a synth pad or a brass section, and the prompt "strings" asks it for an
 orchestra. A wording closer to that material, `STRINGS: SYNTH` read as "synth strings", is the
-first thing to try, and `make cloud-suggest EXPERIMENT=10 VOCABULARY=<file>` scores any wording in
-minutes. `PLUCK` is the other open case: five of ten are named a synth bass, which for a low pluck
-is a reading rather than a mistake.
+first thing to try, and `samplelibrary cloud suggest --experiment-id 10 --vocabulary <file>` scores
+any wording in minutes. `PLUCK` is the other open case: five of ten are named a synth bass, which
+for a low pluck is a reading rather than a mistake.
 
 Experiment 11 is what the application shows, on whichever cloud is promoted.

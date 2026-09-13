@@ -88,9 +88,7 @@ interface RenderOverrides {
     readonly anchor?: string | null;
 }
 
-// CloudView awaits the fake scatterplot's `draw` promise (mirroring the real library, which
-// throws from `getScreenPosition` until a first draw resolves) before selecting or deselecting,
-// so every render or rerender needs one microtask flush before its result is observable.
+/** Lets the fake scatterplot's `draw` promise settle, which CloudView awaits before selecting or deselecting. */
 async function flushDraw(): Promise<void> {
     await act(async () => {
         await Promise.resolve();
@@ -162,15 +160,11 @@ describe("CloudView", () => {
         expect(onActivate).toHaveBeenCalledWith(SAMPLE_REF);
     });
 
-    // Regression guard for the ping this component's own click just selected: the user is already
-    // looking straight at a point they clicked, so the locate cue that a highlight arriving from
-    // elsewhere in the shell gets would only be redundant here.
     it("does not ping a point selected by clicking it directly in this view", async () => {
         const { container, rerender } = await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
 
         latestInstance().emit("select", { points: [0] });
-        // Mirrors what actually happens after a real click: onSelect's entity becomes the shell's
-        // highlighted state, which flows back into this same view as its next `highlighted` prop.
+        // After a real click, onSelect's entity returns to this view as its `highlighted` prop.
         rerender(
             <CloudView
                 coloring={CATEGORY_COLORING}
@@ -276,11 +270,6 @@ describe("CloudView", () => {
         expect(latestInstance().select).toHaveBeenCalledWith([0], { preventEvent: true });
     });
 
-    // Regression test for a real crash: regl-scatterplot throws "Points have not been drawn" from
-    // `getScreenPosition` (and a caller reading it right after `select`) until a first `draw` call
-    // resolves. Calling `select` synchronously, right after firing `draw` without awaiting it,
-    // reproduced this reliably on a fresh mount -- reopening the Cloud panel while a sample was
-    // already highlighted crashed the whole app with exactly this error.
     it("waits for the scatterplot's draw to resolve before selecting the highlighted point", async () => {
         render(
             <CloudView
@@ -308,12 +297,6 @@ describe("CloudView", () => {
         expect(latestInstance().select).toHaveBeenCalledWith([0], { preventEvent: true });
     });
 
-    // Regression test for a real, live-reproduced bug: regl-scatterplot rejects a `draw` call
-    // outright with "Ignoring draw call..." if it is asked to start again before the previous one
-    // has settled, and on this codebase's own reproduction the call that lost that race left the
-    // instance permanently unable to draw again. A single click highlighting an entity raced the
-    // shell's own route-focus effect writing the same highlight moments later, firing this exact
-    // burst of updates in practice; `drawSerialized` (see CloudView.tsx) is what queues them instead.
     it("never starts a new draw before the previous one has settled, even under a burst of updates", async () => {
         const { rerender } = await renderCloudView({
             points: [point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)],
@@ -351,8 +334,6 @@ describe("CloudView", () => {
             );
         }
 
-        // Three highlight changes fire in a row, none of them awaited -- the same burst a click's own
-        // highlight write and the shell's route-focus write for that same entity produced live.
         rerenderWithHighlight(SAMPLE_REF);
         rerenderWithHighlight(MODULE_REF);
         rerenderWithHighlight(SAMPLE_REF);

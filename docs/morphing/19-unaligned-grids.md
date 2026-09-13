@@ -18,7 +18,7 @@ that is now a command.
 the analysis's bands as they are: 2,708 bands by 64 columns at 288 bands per octave, where the
 aligned grid was 5,012 bands with headroom for the shift; the translation conditioner is zero and
 stays in the picture as the field an anchoring rule fills. The loudest-band and fundamental rules
-remain options on every command (`--anchor`, `ANCHOR=` on the make targets), and a stored model,
+remain options on every command (`--anchor`), and a stored model,
 cache or descriptor still names the anchor its grids were made with, so nothing built on an
 aligned grid is read as unaligned by mistake. The restorer needs no rebuild: it was trained on the
 analysis's own bands, which no anchor touches.
@@ -30,19 +30,19 @@ bass at two pitches will pass through both. That is the quirk accepted for now.
 
 ## The chain
 
-`runs/unaligned-2026-09-12/run_chain.sh`, on 2026-09-12 from 13:12 to 16:00, each step a make
-target under its memory scope:
+`runs/unaligned-2026-09-12/run_chain.sh`, on 2026-09-12 from 13:12 to 16:00, each step under its
+memory scope:
 
 | Step | Command | Time |
 |---|---|---|
-| Linear codec | `morph-fit` | 5 min |
-| Descriptor cache, 127,588 grids pooled to one band per semitone with views | `morph-cache-grids WORKERS=12` | 69 min |
-| Descriptor, distilled from experiment 4 | `morph-train-descriptor TEACHER=4` | 50 min |
-| Codec cache, 30,000 grids at full resolution | `morph-cache-grids CACHE=codec SAMPLES=30000 BANDS=24 VIEWS=0` | 5 min |
-| Codec, 512-dimensional residual, prior 0.001 | `morph-train-codec CODEC=conditioned-r512 RESIDUAL=512 PRIOR=0.001 BATCH=16` | 34 min |
-| Fidelity of the three models on the twelve probes | `morph-measure` three times | 1 min |
-| The catalog described, experiment 9 | `morph-embed` | 1 min |
-| Evaluation of experiment 9 | `evaluate-fast` | 3 min |
+| Linear codec | `morph fit` | 5 min |
+| Descriptor cache, 127,588 grids pooled to one band per semitone with views | `morph cache-grids --workers 12` | 69 min |
+| Descriptor, distilled from experiment 4 | `morph train-descriptor --teacher-experiment 4` | 50 min |
+| Codec cache, 30,000 grids at full resolution | `morph cache-grids --cache codec --samples 30000 --bands-per-semitone 24 --views 0` | 5 min |
+| Codec, 512-dimensional residual, prior 0.001 | `morph train-codec --codec conditioned-r512 --residual-size 512 --prior-weight 0.001 --batch 16` | 34 min |
+| Fidelity of the three models on the twelve probes | `morph measure` three times | 1 min |
+| The catalog described, experiment 9 | `morph embed` | 1 min |
+| Evaluation of experiment 9 | `cloud evaluate --skip-transposition` | 3 min |
 
 The descriptor cache took an hour longer than the aligned one had, because the retuned views of an
 unaligned grid are computed rather than translated. One correction rode along: a retuned view now
@@ -52,7 +52,7 @@ duration conditioner reads the same number for a sound however it is retuned.
 ## What the anchor was worth to the descriptor
 
 Experiment 9, the unaligned descriptor, beside experiment 7, the one on the fundamental anchor,
-both by `samplecloud-evaluate --skip-transposition` with 200 probes at seed 0:
+both by `samplelibrary cloud evaluate --skip-transposition` with 200 probes at seed 0:
 
 | | Experiment 7, fundamental anchor | Experiment 9, unaligned |
 |---|---|---|
@@ -71,7 +71,7 @@ pitch of a morph, deferred by decision.
 
 ## The fidelity reading
 
-`samplemorph measure` (`make morph-measure MODEL=<name> HASHES=<file> OUTPUT=<directory>`) takes
+`samplelibrary morph measure --model <name> --hashes <file> --output <directory>` takes
 a set of probes through a stored codec and the restored vocoder, matches every reconstruction's
 loudness to its original's, writes both beside each other under the output directory, and reads
 what the reconstruction costs: the held-out spectrum distance in decibels, the modulation distance
@@ -161,7 +161,7 @@ that cost is a sound worth having is the user's verdict, in `verdicts.csv` besid
   reconstruction that never adds what the grid lacks. A learned decoder that starts from the
   linear reconstruction and corrects it, the way the restorer corrects the band inverse, keeps
   the linear codec's fidelity as its floor and puts the learning where the crossfade thins out.
-  Before that, the linear codec's own ceiling is a five-minute fit away: `make morph-fit
-  LATENT=1024` says how much of the gap to the vocoder is the 256 components.
+  Before that, the linear codec's own ceiling is a five-minute fit away: `samplelibrary morph fit
+  --latent-size 1024` says how much of the gap to the vocoder is the 256 components.
 - Promotion of experiment 9 to the cloud is the user's call; the cloud shows experiment 7 until
   then, and the two are level on every measured row.

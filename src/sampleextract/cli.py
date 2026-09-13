@@ -11,9 +11,9 @@ from sampleextract.run import ExtractionSummary
 _logger = logging.getLogger(__name__)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str], *, prog: str) -> None:
     """Run one extraction pass over the configured source directory and report it."""
-    arguments = _parse_arguments(argv)
+    arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     config.library_root.mkdir(parents=True, exist_ok=True)
     _report(extract_corpus(config, workers=arguments.workers))
@@ -55,8 +55,10 @@ def _worker_count_argument(value: str) -> WorkerCount:
     return workers
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Extract every module under the configured source directory.")
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Extract every module under the configured source directory."
+    )
     parser.add_argument(
         "--workers",
         type=_worker_count_argument,

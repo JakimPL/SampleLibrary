@@ -19,8 +19,6 @@ import { ModuleRow } from "./ModuleRow";
 
 const columnHelper = createColumnHelper<Module>();
 
-// The filename takes whatever the sized columns leave over: a title is a handful of words a tracker
-// had room for, while a path is as long as a collection's own folders make it.
 const COLUMNS = [
     columnHelper.accessor((module) => (module.title.trim() === "" ? UNTITLED_MODULE_LABEL : module.title), {
         id: "title",

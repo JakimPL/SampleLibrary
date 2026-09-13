@@ -8,6 +8,8 @@ from sqlalchemy import Connection
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from sampleextract.thumbnail_cli import main
 
+PROGRAM = "samplelibrary thumbnails"
+
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
     """Points both configured paths at `tmp_path` itself, which always exists -- this CLI only
@@ -28,7 +30,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "does-not-exist.toml"))
 
     with pytest.raises(SystemExit) as raised:
-        main([])
+        main([], prog=PROGRAM)
 
     assert raised.value.code == 1
     assert "Configuration error" in capsys.readouterr().err
@@ -43,7 +45,7 @@ def test_main_reports_an_empty_catalog(
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main([])
+    main([], prog=PROGRAM)
 
     assert "0 samples cataloged: 0 thumbnail(s) computed, 0 already cached." in capsys.readouterr().out
 
@@ -57,6 +59,6 @@ def test_the_force_flag_is_accepted(
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main(["--force"])
+    main(["--force"], prog=PROGRAM)
 
     assert "0 samples cataloged" in capsys.readouterr().out

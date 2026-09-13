@@ -34,11 +34,11 @@ the weight store beside the array store the linear codecs use.
 
 ## The run
 
-`samplemorph cache-grids --cache codec --samples 30000 --bands-per-semitone 12 --views 0`
+`samplelibrary morph cache-grids --cache codec --samples 30000 --bands-per-semitone 12 --views 0`
 canonicalized a 30,000-sample draw at full resolution in three minutes, 9.6 GB.
-`samplemorph train-codec --cache codec --descriptor descriptor --epochs 15 --workers 4` ran 890
-steps of 32 per epoch, 3.5 minutes an epoch, 52 minutes in all under the 16 GB ceiling, 5% of the
-draw held out:
+`samplelibrary morph train-codec --cache codec --descriptor descriptor --epochs 15 --workers 4` ran
+890 steps of 32 per epoch, 3.5 minutes an epoch, 52 minutes in all under the 16 GB ceiling, 5% of
+the draw held out:
 
 | Epoch | Validation loss | Reconstruction | Prior, nats per dimension | Cycle |
 |---|---|---|---|---|

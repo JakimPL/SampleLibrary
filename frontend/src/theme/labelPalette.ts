@@ -4,11 +4,9 @@ const LIGHTNESS_PROPERTY = "--label-lightness";
 const CHROMA_PROPERTY = "--label-chroma";
 const LIGHTNESS_FALLBACK = 0.58;
 const CHROMA_FALLBACK = 0.17;
-// Successive hues a golden angle apart never repeat and stay as far from one another as a sequence
-// of unknown length can, which is what a vocabulary that grows one tag at a time asks for.
+// Hues a golden angle apart stay evenly spread however many tags the vocabulary grows to.
 const GOLDEN_ANGLE_DEGREES = 137.50776405;
-// Where the sequence starts, chosen so its first hues keep clear of the accent the selection ring
-// and the highlighted point are drawn in.
+// Starts the first hues clear of the accent the selection ring and the highlighted point use.
 const HUE_OFFSET_DEGREES = 200;
 const FULL_TURN_DEGREES = 360;
 const HALF_TURN_DEGREES = 180;
@@ -27,8 +25,7 @@ interface Coefficients {
 
 type Matrix = readonly [Coefficients, Coefficients, Coefficients];
 
-// Björn Ottosson's OKLab: lightness and the two opponent axes map linearly to a cone response
-// whose cube is linear light, and that in turn maps linearly to linear sRGB.
+// Björn Ottosson's OKLab matrices: lab to cone response, whose cube is linear light, then to linear sRGB.
 const LAB_TO_CONES: Matrix = [
     { first: 1, second: 0.3963377774, third: 0.2158037573 },
     { first: 1, second: -0.1055613458, third: -0.0638541728 },
@@ -40,7 +37,6 @@ const CONES_TO_LINEAR_RGB: Matrix = [
     { first: -0.0041960863, second: -0.7034186147, third: 1.707614701 },
 ];
 
-// The sRGB transfer curve: linear near black, a gamma curve above.
 const SRGB_LINEAR_LIMIT = 0.0031308;
 const SRGB_LINEAR_SLOPE = 12.92;
 const SRGB_CURVE_GAIN = 1.055;

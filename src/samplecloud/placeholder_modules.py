@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import logging
 import random
 from dataclasses import dataclass
@@ -67,10 +68,16 @@ def place_and_persist_coordinates(connection: Connection) -> PlaceholderEmbeddin
     return PlaceholderEmbeddingSummary(modules_placed=len(coordinates))
 
 
-def main() -> None:
+def main(argv: list[str], *, prog: str) -> None:
     """Place every cataloged module at a placeholder 2D coordinate and report the result."""
+    _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         summary = place_and_persist_coordinates(connection)
 
     _logger.info("Placed %d module(s) at placeholder cloud coordinates.", summary.modules_placed)
+
+
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog=prog, description="Place every cataloged module at a placeholder coordinate.")
+    return parser.parse_args(argv)

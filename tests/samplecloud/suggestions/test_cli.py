@@ -13,6 +13,8 @@ from samplecore.storage.repositories.label_suggestion import PostgresSampleLabel
 from tests.samplecloud.backends.test_teacher_backend import RecordingTeacher
 from tests.samplecloud.suggestions.test_scoring import KICK_HASH, VOCABULARY, seed_listening_experiment
 
+PROGRAM = "samplelibrary cloud suggest"
+
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
     config_path = tmp_path / "config.toml"
@@ -37,7 +39,7 @@ def test_the_command_scores_a_listening_experiment_and_reports_the_agreement(
     listing.write_text("\n".join(VOCABULARY), encoding="utf-8")
     source = seed_listening_experiment(connection)
 
-    main(["--experiment-id", str(source), "--vocabulary", str(listing), "--top", "1"])
+    main(["--experiment-id", str(source), "--vocabulary", str(listing), "--top", "1"], prog=PROGRAM)
 
     repository = PostgresSampleLabelSuggestionRepository(connection)
     latest = repository.latest_experiment_id()
@@ -56,4 +58,4 @@ def test_an_experiment_of_another_backend_is_refused(
     connection.commit()
 
     with pytest.raises(ValueError, match="librosa backend"):
-        main(["--experiment-id", str(other)])
+        main(["--experiment-id", str(other)], prog=PROGRAM)

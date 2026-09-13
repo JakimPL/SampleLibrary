@@ -34,8 +34,10 @@ from sampleextract.equivalence.detect import detect_equivalences
 from sampleextract.ingest import ingest_module
 from sampleextract.notes.playback_rates import record_playback_rates
 from sampleextract.parsing import parse_module
+from samplelibrary import reset
 
-_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "reset_library.py"
+PROGRAM = "samplelibrary reset"
+
 _BUILD_DEV_LIBRARY_PATH = Path(__file__).resolve().parents[2] / "scripts" / "build_dev_library.py"
 
 
@@ -48,7 +50,6 @@ def _load_script(path: Path, name: str) -> types.ModuleType:
     return module
 
 
-reset_library = _load_script(_SCRIPT_PATH, "reset_library")
 build_dev_library = _load_script(_BUILD_DEV_LIBRARY_PATH, "build_dev_library")
 
 
@@ -143,7 +144,7 @@ def test_reset_library_empties_every_table_and_the_content_store(connection: Con
     objects_directory = library_root / "objects"
     assert any(objects_directory.rglob("*.wav"))
 
-    reset_library.reset_library(connection, library_root)
+    reset.reset_library(connection, library_root)
     connection.commit()
 
     after = _row_counts(connection)
@@ -189,7 +190,7 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, tmp_
     )
     connection.commit()
 
-    reset_library.reset_library(connection, library_root)
+    reset.reset_library(connection, library_root)
     connection.commit()
 
     assert all(count == 0 for count in _row_counts(connection).values())
@@ -202,7 +203,7 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, tmp_
 def test_reset_library_leaves_the_schema_usable_afterward(connection: Connection, tmp_path: Path) -> None:
     library_root = _populate_library(connection, tmp_path)
 
-    reset_library.reset_library(connection, library_root)
+    reset.reset_library(connection, library_root)
     connection.commit()
 
     module_repository = PostgresModuleRepository(connection)
@@ -227,13 +228,13 @@ def test_reset_library_leaves_the_schema_usable_afterward(connection: Connection
 
 
 def test_confirm_flag_defaults_to_false() -> None:
-    arguments = reset_library._parse_arguments([])
+    arguments = reset._parse_arguments([], prog=PROGRAM)
 
     assert arguments.confirm is False
 
 
 def test_confirm_flag_can_be_set() -> None:
-    arguments = reset_library._parse_arguments(["--confirm"])
+    arguments = reset._parse_arguments(["--confirm"], prog=PROGRAM)
 
     assert arguments.confirm is True
 
@@ -242,6 +243,6 @@ def test_main_without_confirm_changes_nothing(connection: Connection, tmp_path: 
     _populate_library(connection, tmp_path)
     before = _row_counts(connection)
 
-    reset_library.main([])
+    reset.main([], prog=PROGRAM)
 
     assert _row_counts(connection) == before

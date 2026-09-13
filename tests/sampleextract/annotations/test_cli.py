@@ -11,6 +11,8 @@ from samplecore.models.annotation import SampleAnnotation
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from sampleextract.annotations.cli import main
 
+PROGRAM = "samplelibrary annotations"
+
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
     module_source_directory = tmp_path / "modules"
@@ -35,7 +37,7 @@ def configured(tmp_path: Path, _database_url: str, monkeypatch: pytest.MonkeyPat
 def test_export_reports_what_it_wrote(
     connection: Connection, stored_annotation: SampleAnnotation, configured: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    main(["export", "--path", str(configured)])
+    main(["export", "--path", str(configured)], prog=PROGRAM)
 
     assert "Wrote 1 annotation(s)" in capsys.readouterr().out
     assert configured.exists()
@@ -44,12 +46,12 @@ def test_export_reports_what_it_wrote(
 def test_import_reads_a_file_back_into_the_catalog(
     connection: Connection, stored_annotation: SampleAnnotation, configured: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    main(["export", "--path", str(configured)])
+    main(["export", "--path", str(configured)], prog=PROGRAM)
     repository = PostgresSampleAnnotationRepository(connection)
     repository.delete_many((stored_annotation.sample_hash,))
     connection.commit()
 
-    main(["import", "--path", str(configured)])
+    main(["import", "--path", str(configured)], prog=PROGRAM)
 
     assert "Read 1 annotation(s)" in capsys.readouterr().out
     assert repository.get(stored_annotation.sample_hash) == stored_annotation
@@ -64,7 +66,7 @@ def test_relink_reports_a_label_it_reattached(
 ) -> None:
     rehash_the_labeled_sample()
 
-    main(["relink"])
+    main(["relink"], prog=PROGRAM)
 
     assert "1 relinked" in capsys.readouterr().out
 
@@ -79,14 +81,14 @@ def test_relink_exits_nonzero_when_a_label_needs_a_person(
     forget_the_labeled_occurrence()
 
     with pytest.raises(SystemExit) as exit_info:
-        main(["relink"])
+        main(["relink"], prog=PROGRAM)
 
     assert exit_info.value.code == 1
 
 
 def test_a_command_is_required(configured: Path) -> None:
     with pytest.raises(SystemExit):
-        main([])
+        main([], prog=PROGRAM)
 
 
 def test_vocabulary_lists_the_tags_in_use_as_a_tree(
@@ -102,7 +104,7 @@ def test_vocabulary_lists_the_tags_in_use_as_a_tree(
     )
     connection.commit()
 
-    main(["vocabulary"])
+    main(["vocabulary"], prog=PROGRAM)
 
     reported = capsys.readouterr().out
     assert "    2  HI-HAT" in reported

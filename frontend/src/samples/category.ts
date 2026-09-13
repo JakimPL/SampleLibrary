@@ -2,9 +2,7 @@ import type { components } from "../api/schema";
 
 export type SampleCategory = components["schemas"]["SampleCategory"];
 
-// Fixed draw order for the cloud's categorical coloring (each category's index into the palette
-// CloudView.tsx builds) and the order a legend would list them in -- mirrors the CSS custom
-// property names declared per SampleCategory in styles.css (--category-kick, --category-snare, …).
+// Each category's index into the cloud's palette; every entry has a `--category-*` property in styles.css.
 export const CATEGORY_ORDER: readonly SampleCategory[] = [
     "kick",
     "snare",
@@ -40,8 +38,7 @@ export const CATEGORY_LABELS: Readonly<Record<SampleCategory, string>> = {
 };
 
 export function categoryColorProperty(category: SampleCategory): string {
-    // CSS custom property names are kebab-case by convention (enforced by stylelint), while
-    // SampleCategory's own values mirror the backend enum verbatim, snake_case included.
+    // Custom properties are kebab-case under stylelint; the categories mirror the backend's snake_case enum.
     return `--category-${category.replace(/_/g, "-")}`;
 }
 

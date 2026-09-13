@@ -33,9 +33,7 @@ export function LabelField({ label, isSaving, onCommit, onLeave, takesFocus }: L
     const [text, setText] = useState(label ?? "");
     const inputRef = useRef<HTMLInputElement | null>(null);
 
-    // Focus is moved here rather than declared with `autoFocus`, which would also claim the cursor
-    // on a field that merely happens to be on the page: a field opened by a click is the one place
-    // a person is already looking, and every other one waits to be asked for.
+    // Focus follows `takesFocus`, so the cursor lands only in the field a click opened.
     useEffect(() => {
         if (takesFocus) {
             inputRef.current?.focus();

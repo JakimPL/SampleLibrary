@@ -17,6 +17,7 @@ from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.tracking.store import TRACKING_DATABASE_NAME
 from tests.samplecloud.evaluation.conftest import SeededCatalog, label_catalog
 
+PROGRAM = "samplelibrary cloud evaluate"
 SETTINGS = EvaluationSettings(random_seed=0, fold_count=4, neighbor_count=3)
 
 
@@ -109,7 +110,8 @@ def test_the_command_writes_the_report_where_it_was_asked_to(
             "--skip-transposition",
             "--output",
             str(output),
-        ]
+        ],
+        prog=PROGRAM,
     )
 
     written = json.loads(output.read_text())
@@ -127,7 +129,9 @@ def test_the_command_leaves_no_run_behind_when_asked_not_to_track(
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main(["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition", "--no-tracking"])
+    main(
+        ["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition", "--no-tracking"], prog=PROGRAM
+    )
 
     assert not (tmp_path / TRACKING_DATABASE_NAME).exists()
 
@@ -143,7 +147,7 @@ def test_the_command_reports_an_experiment_extracted_by_an_unknown_backend(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
     with pytest.raises(ValueError, match="unknown stub backend"):
-        main(["--experiment-id", str(separable_catalog.experiment_id)])
+        main(["--experiment-id", str(separable_catalog.experiment_id)], prog=PROGRAM)
 
 
 def test_the_command_reports_every_metric_it_ran(
@@ -157,7 +161,7 @@ def test_the_command_reports_every_metric_it_ran(
     """A reader is told which part of the catalog each score describes, beside the score."""
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main(["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition"])
+    main(["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition"], prog=PROGRAM)
 
     reported = capsys.readouterr().out
     assert "Category agreement" in reported
@@ -177,7 +181,10 @@ def test_the_command_reports_the_hand_labels_tag_by_tag(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
     label_catalog(connection, separable_catalog)
 
-    main(["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition", "--label-depth", "1"])
+    main(
+        ["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition", "--label-depth", "1"],
+        prog=PROGRAM,
+    )
 
     reported = capsys.readouterr().out
     assert "Hand-label agreement over 32 labeled samples" in reported

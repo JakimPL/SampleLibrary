@@ -4,7 +4,7 @@
 
 1. Keep code modularized around clear ownership boundaries.
 1. If a function has several meaningful steps, split them into helpers with one clear responsibility.
-1. Run `make format` (isort + black, line length 120) then `make lint` (mypy strict + pylint + import-linter) after each change; the pre-commit hooks in `.pre-commit-config.yaml` enforce the same, and `make test` runs the suite.
+1. Run `just format` (isort + black, line length 120) then `just lint` (mypy strict + pylint + import-linter) after each change; the pre-commit hooks in `.pre-commit-config.yaml` enforce the same, and `just test` runs the suite.
 1. Do not abbreviate variable names. Use `note`, not `n`.
 1. Use American English everywhere: identifiers, comments, docstrings and documentation. Write `color`, `behavior`, `cataloged`, `normalize`. Names imported from a third-party package keep that package's own spelling.
 1. Avoid hardcoded semantic values. Prefer `Final` constants, and move them to a shared module when the concept is reused.
@@ -31,7 +31,7 @@
 1. Do not overload a single module with too many different responsibilities.
 1. Prefer subpackages over flattened directory structure.
 1. Wrap an external command-line tool or third-party library behind our own typed interface in the module that owns that boundary, and probe availability at runtime so callers degrade gracefully rather than branching on the environment themselves. A comment naming the third-party behavior is warranted there.
-1. Package boundaries in `pyproject.toml`'s `[tool.importlinter]` contracts are load-bearing, not advisory — `make lint` fails if `samplecore` gains a dependent-facing import, or if `sampleserver` imports either offline pipeline package.
+1. Package boundaries in `pyproject.toml`'s `[tool.importlinter]` contracts are load-bearing, not advisory — `just lint` fails if `samplecore` gains a dependent-facing import, or if `sampleserver` imports either offline pipeline package.
 
 ## Type Hints
 

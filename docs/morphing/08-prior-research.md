@@ -10,7 +10,7 @@ arbitrary and you want to see what it came from.
 
 ## The two descriptor backends, compared
 
-Both are implemented and selectable: `samplecloud --backend invariant|librosa`.
+Both are implemented and selectable: `samplelibrary cloud embed --backend invariant|librosa`.
 
 Measured against the real library:
 

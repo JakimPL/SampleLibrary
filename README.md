@@ -11,49 +11,94 @@ library.
 - [uv](https://docs.astral.sh/uv/)
 - PostgreSQL 17 or later
 - Node.js 25.9 or later, and npm, for the frontend
+- [just](https://just.systems/) 1.38 or later, which runs the setup and everyday recipes;
+  `uv tool install rust-just` installs it
 - An NVIDIA GPU, to train the restorer that turns a morph back into sound and the descriptor that
   lays out the cloud. Everything else in the project runs on the processor alone.
 - About a gigabyte of disk for the pretrained listening model the `clap` cloud backend downloads
-  on first use. `make install` installs every extra, this one included.
+  on first use. `just install` installs every extra, this one included.
 
 ## Setup
 
 ```sh
 git clone --recurse-submodules git@github.com:JakimPL/SampleLibrary.git
 cd SampleLibrary
-make install
+just install
 ```
 
-`make install` also creates `config.toml`. Open it and set two paths: where your modules are, and
-where extracted samples should go. Then create the databases:
+`just install` also creates `config.toml`. Open it and set two paths: where your modules are, and
+where extracted samples should go (see [Configuration](#configuration)). Then create the databases:
 
 ```sh
-make database
+just database
 ```
 
 If that needs something from you — a PostgreSQL superuser, usually — it prints the exact command to
-run, and you run `make database` again afterwards. It is safe to run at any time, and leaves
+run, and you run `just database` again afterwards. It is safe to run at any time, and leaves
 anything that already exists alone.
 
 No PostgreSQL on the machine? `docker compose up -d postgres` starts one. If port 5432 is taken,
 use `POSTGRES_PORT=5433` and set the same port in `config.toml`.
 
+## Configuration
+
+`config.toml` holds your own machine's settings and stays out of the repository:
+
+- `module_source_directory`: your module collection, read with every folder inside it.
+- `library_root`: where extracted audio, fitted models and recorded runs are kept.
+- `database_url`: the PostgreSQL connection. `just database` creates the role and the databases it
+  names wherever they are missing, and the `SAMPLELIBRARY_DATABASE_URL` environment variable takes
+  precedence over it.
+- `minimum_sample_frames`: the shortest sample extraction keeps, 512 frames by default.
+- `[inference] url`: the address the morph renderer listens on and the API reaches it at,
+  `http://127.0.0.1:8010` by default.
+
+Paths take forward slashes or your system's own separator; a backslash is written twice, as in
+`"C:\\Users\\you\\Modules"`.
+
 ## Usage
 
 ```sh
-make extract       # scan your modules and fill the library
-make serve         # start the API
-make serve-inference  # start the morph renderer the API dials, in a second terminal
-make frontend-dev  # start the frontend, then open http://localhost:5173
+uv run samplelibrary extract   # scan your modules and fill the library
+just serve                     # start the API
+just serve-inference           # start the morph renderer the API dials, in a second terminal
+just frontend-dev              # start the frontend, then open http://localhost:5173
 ```
 
-Extraction takes a while over a large collection, so it spreads itself across your machine's
-cores. `make extract WORKERS=2` holds it to two processes if you want the machine back while it
-runs.
+Every operation on the library is a `samplelibrary` command: `uv run samplelibrary --help` lists
+them, and each command's own `--help` lists its options. The [recipes](#recipes) cover the everyday
+work around them — serving, rebuilding the library, the development sandbox and the frontend.
 
-`make notes` reads what your modules actually play, which is what lets the app sound a sample at the
-speed the music does — run it after extraction, and again whenever you add modules. The `Makefile`
-lists the rest of the pipeline: `make embed`, `make thumbnails` and so on.
+Extraction takes a while over a large collection, so it spreads itself across your machine's
+cores. `uv run samplelibrary extract --workers 2` holds it to two processes if you want the machine
+back while it runs. On Linux, `just capped extract` runs it under a memory ceiling, so the kernel
+stops a pass that outgrows the machine and the machine stays up; any other command runs capped the
+same way.
+
+`uv run samplelibrary notes` reads what your modules actually play, which is what lets the app
+sound a sample at the speed the music does — run it after extraction, and again whenever you add
+modules. `cloud embed`, `thumbnails` and the rest of the pipeline sit beside it in the command list.
+
+## Recipes
+
+| Recipe | What it does |
+|---|---|
+| `just install` | Installs the Python and frontend dependencies and the git hooks, and puts `config.toml` in place |
+| `just database` | Creates the role and the databases `config.toml` names, wherever they are missing |
+| `just serve` | Starts the API, restarting it whenever the code changes |
+| `just serve-inference` | Starts the morph renderer the API reaches for morphs |
+| `just frontend-dev` | Starts the frontend, reachable from your local network |
+| `just rebuild` | Extracts your modules, finds near-duplicates and lays out the cloud, one pass after another |
+| `just capped <command>` | Runs a `samplelibrary` command under a 16 GB memory ceiling on Linux; `just MEMORY_CAP=24G capped …` raises it |
+| `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
+| `just reset` | Empties the library's catalog and stored audio once you confirm; labels, ratings and favorites stay |
+| `just check` | Formats, lints and tests the Python code and the frontend |
+| `just format`, `just lint`, `just test`, `just coverage` | Runs one part of the Python checks; `coverage` also reports the lines the tests leave unrun |
+| `just frontend-check`, `just frontend-build`, `just frontend-types` | Checks the frontend, builds it for production, and regenerates its API types from the schema |
+| `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Builds a 30-module sandbox, runs a `samplelibrary` command on it, serves it on port 8001, and deletes it |
+| `just docker-build`, `just docker-run <library> <config>` | Builds the API's image, and runs it over a library directory and the config describing it inside the container |
+
+To browse the sandbox, start the frontend with `VITE_BACKEND_DEV_URL=http://127.0.0.1:8001`.
 
 Work on generating audio from a point between two samples lives in the `samplemorph` package,
 one module per command under `samplemorph.commands`: fitting a linear codec, teaching the restorer
@@ -63,7 +108,7 @@ descriptor, and rendering a listening set. The research behind
 it is documented separately under `docs/morphing/`, starting from `docs/morphing/00-handover.md`.
 
 That package installs PyTorch built for CUDA 12.8, which is a large download and the reason
-`make install` takes a while the first time. It needs a card new enough for that build; an older one
+`just install` takes a while the first time. It needs a card new enough for that build; an older one
 installs cleanly and then fails the moment it is first asked to compute.
 
 ## Labeling and rating samples
@@ -77,23 +122,24 @@ samples list can then show only your favorites, or put your best-rated first, ac
 library.
 
 Labels, ratings and favorites are the one thing here that nothing can rebuild, so they are kept
-apart from everything the pipelines generate, and `make reset-library` leaves them alone.
-`make annotations-export` writes them to `annotations.jsonl` — keep a copy of your own — and
-`make annotations-import` reads one back. `make annotations-relink` reattaches them if a sample's
+apart from everything the pipelines generate, and `just reset` leaves them alone.
+`uv run samplelibrary annotations export` writes them to `annotations.jsonl` — keep a copy of your
+own — and `annotations import` reads one back. `annotations relink` reattaches them if a sample's
 hash ever changes.
 
-The listening model can suggest labels for every sample. `make cloud-teacher HEARD=1` describes
-the catalog with it, hearing each sample at the rate it is played at (about an hour), and
-`make cloud-suggest EXPERIMENT=<that experiment's id>` ranks a vocabulary of instruments against
-every sample in minutes; `VOCABULARY=hand-labels` ranks the wordings you have used instead, and a
-file with one label per line works too. The cloud then colors by suggestion, and a sample's page
-lists its suggestions with the model's confidence: a click adds one to the label, and the rest
-stay suggestions.
+The listening model can suggest labels for every sample.
+`uv run samplelibrary cloud embed --backend clap --extract-only --heard-rate` describes the catalog
+with it, hearing each sample at the rate it is played at (about an hour), and
+`uv run samplelibrary cloud suggest --experiment-id <that experiment's id>` ranks a vocabulary of
+instruments against every sample in minutes; `--vocabulary hand-labels` ranks the wordings you have
+used instead, and a file with one label per line works too. The cloud then colors by suggestion, and
+a sample's page lists its suggestions with the model's confidence: a click adds one to the label,
+and the rest stay suggestions.
 
 ## Morphing two samples
 
 The app can play a sound between any two samples. Start the morph renderer beside the API
-(`make serve-inference`; it reads the fitted models under your library root, which the `samplemorph`
+(`just serve-inference`; it reads the fitted models under your library root, which the `samplemorph`
 pipeline writes), then, in the cloud, press the right mouse button on one sample and release it on
 another: a line follows your cursor while the button is down, and the release joins the two with a
 dashed line whose marker is how far from the first sample toward the second you stand. A plain
@@ -105,6 +151,6 @@ offers to check again.
 
 ## Development
 
-Read `docs/guidelines.md` before making changes. `make check` runs formatting, linting and tests;
-`make frontend-check` does the same for the frontend. `docs/architecture.md` describes the package
+Read `docs/guidelines.md` before making changes. `just check` runs formatting, linting and tests;
+`just frontend-check` does the same for the frontend. `docs/architecture.md` describes the package
 layout and how the project uses its databases.

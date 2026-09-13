@@ -46,8 +46,8 @@ timbre can morph at constant pitch. The argument behind every part of that is in
 
 1. **Stand the machine up** — [`07-environment.md`](07-environment.md). Get the CUDA question out
    of the way first; the card needs a torch build against CUDA 12.8 or newer and fails confusingly
-   on older wheels. Confirm `make check` is green on a fresh clone.
-2. **Rebuild the library**, running extraction as four concurrent shards, and report the timings and
+   on older wheels. Confirm `just check` is green on a fresh clone.
+2. **Rebuild the library**, running extraction across four workers, and report the timings and
    counts. That path has only ever run on one machine and the project wants it exercised.
 3. **Build the evaluation harness** — [`05-evaluation.md`](05-evaluation.md) — and re-measure the
    two existing descriptor backends over the full catalog. The numbers currently guiding decisions
@@ -80,7 +80,7 @@ directly at some point.
 - **No `gh` or `glab`** without asking; they may be tied to the wrong account.
 - **`config.toml` is gitignored and holds real local paths.** It never gets committed, and its
   contents never get pasted anywhere.
-- **`make check` after each phase**, and `pre-commit run --all-files` before pushing anything large.
+- **`just check` after each phase**, and `pre-commit run --all-files` before pushing anything large.
 - **Experiments stay out of the repository.** The repository holds the machinery — protocols,
   codecs, entry points, the harness, tests. Runs, metrics and checkpoints live outside it. Clean
   repository, experimental work; the two are compatible.

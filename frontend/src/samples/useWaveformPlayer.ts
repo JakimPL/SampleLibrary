@@ -9,10 +9,6 @@ import { playbackRateFor } from "./nominalRate";
 const MIN_PIXELS_PER_SECOND = 100;
 const CURSOR_WIDTH_PX = 2;
 
-// Caps how tall the waveform is allowed to grow relative to its container's width -- a safety net
-// for a narrow, portrait-oriented panel, not a target shape: a typical wide panel is meant to use
-// most of its available height, only a container narrower than this ratio actually gets capped
-// short of its full height, centered in the remaining space rather than stretched taller still.
 const MIN_WAVEFORM_WIDTH_TO_HEIGHT_RATIO = 2;
 const MIN_WAVEFORM_HEIGHT_PX = 32;
 
@@ -119,10 +115,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         resizeObserver.observe(container);
 
         waveSurfer.on("ready", (duration) => {
-            // The rate is applied here rather than at creation: taking on a source sets a media
-            // element's rate back to its default, so a rate named before the file arrived would be
-            // gone by the time it plays -- the sample would sound at the stored file's own nominal
-            // rate instead of the one the library reads it at.
+            // Loading a source resets a media element's rate, so the rate applies once the file is ready.
             waveSurfer.setPlaybackRate(playbackRateRef.current, false);
             setIsReady(true);
             setDurationSeconds(duration);
@@ -134,8 +127,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             setIsPlaying(false);
         });
         waveSurfer.on("finish", () => {
-            // Back to the start, so a sample that has been heard reads the same as one that has
-            // not: an untouched contour with the playhead at its head.
+            // Rewinds, so a sample already heard looks the same as an untouched one.
             waveSurfer.setTime(0);
             setIsPlaying(false);
         });
@@ -148,13 +140,11 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             waveSurfer.destroy();
             waveSurferRef.current = null;
         };
-        // initialRateHz seeds only the moment this sample's instance is created; later rate changes
-        // go through setRateHz, not a recreate, so it is deliberately left out of this dependency list.
+        // initialRateHz seeds a new instance alone; setRateHz carries every later rate.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [audioUrl]);
 
     useEffect(() => {
-        // Redundantly re-applies the colors the mount effect above just set on the first render.
         waveSurferRef.current?.setOptions(readWaveformColors());
     }, [themeSignal.preference, themeSignal.systemVersion]);
 

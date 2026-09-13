@@ -8,6 +8,8 @@ from sqlalchemy import Connection
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from sampleextract.cli import main
 
+PROGRAM = "samplelibrary extract"
+
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
     module_source_directory = tmp_path / "modules"
@@ -29,7 +31,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "does-not-exist.toml"))
 
     with pytest.raises(SystemExit) as raised:
-        main([])
+        main([], prog=PROGRAM)
 
     assert raised.value.code == 1
     assert "Configuration error" in capsys.readouterr().err
@@ -44,7 +46,7 @@ def test_main_creates_the_library_root_and_reports_an_empty_corpus(
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main([])
+    main([], prog=PROGRAM)
 
     assert (tmp_path / "library").is_dir()
     assert "Discovered 0 modules" in capsys.readouterr().out
@@ -66,7 +68,7 @@ def test_main_warns_about_an_unreadable_file_and_still_finishes(
     (tmp_path / "modules" / "corrupt.xm").write_bytes(b"not a real module file")
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
 
-    main([])
+    main([], prog=PROGRAM)
 
     output = capsys.readouterr()
     assert "corrupt.xm" in output.err
@@ -88,7 +90,7 @@ def test_main_ingests_every_module_the_source_directory_holds(
     (source / "first.xm").write_bytes(xm_module_bytes)
     (source / "second.it").write_bytes(it_module_bytes)
 
-    main([])
+    main([], prog=PROGRAM)
 
     assert "Discovered 2 modules: 2 ingested" in capsys.readouterr().out
 
@@ -96,13 +98,13 @@ def test_main_ingests_every_module_the_source_directory_holds(
 def test_main_refuses_a_worker_count_below_one() -> None:
     """A run spends at least one process, so a count under that is a typo worth stopping for."""
     with pytest.raises(SystemExit) as exit_info:
-        main(["--workers", "0"])
+        main(["--workers", "0"], prog=PROGRAM)
 
     assert exit_info.value.code == 2
 
 
 def test_main_refuses_a_worker_count_that_is_not_a_whole_number() -> None:
     with pytest.raises(SystemExit) as exit_info:
-        main(["--workers", "many"])
+        main(["--workers", "many"], prog=PROGRAM)
 
     assert exit_info.value.code == 2

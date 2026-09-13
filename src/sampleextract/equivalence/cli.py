@@ -9,9 +9,9 @@ from sampleextract.equivalence.detect import detect_equivalences
 _logger = logging.getLogger(__name__)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str], *, prog: str) -> None:
     """Run one equivalence-detection pass over the catalog and report the result."""
-    arguments = _parse_arguments(argv)
+    arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         summary = detect_equivalences(connection, config.library_root, sample_limit=arguments.limit)
@@ -25,9 +25,9 @@ def main(argv: list[str] | None = None) -> None:
     )
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Detect bit-depth, amplification, and resampled equivalence classes in the catalog."
+        prog=prog, description="Detect bit-depth, amplification, and resampled equivalence classes in the catalog."
     )
     parser.add_argument(
         "--limit",

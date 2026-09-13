@@ -77,8 +77,7 @@ describe("SamplesTable", () => {
     it("sorts by a column when its header is clicked, toggling direction on a second click", () => {
         renderTable();
 
-        // Occurrences is a numeric column, and tanstack-table's default is descending-first for
-        // numeric data (`getAutoSortDir`), unlike the ascending-first default for text columns.
+        // tanstack-table sorts a numeric column descending first (`getAutoSortDir`).
         fireEvent.click(screen.getByText("Occurrences"));
         expect(nameOrder()).toEqual(["kick", "hat", "snare"]);
 

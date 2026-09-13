@@ -31,9 +31,9 @@ from samplecore.tracking.session import open_run
 _logger = logging.getLogger(__name__)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str], *, prog: str) -> None:
     """Score one experiment's descriptor, record the pass, and report what it measured."""
-    arguments = _parse_arguments(argv)
+    arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         experiment = _experiment(connection, arguments.experiment_id)
@@ -182,8 +182,10 @@ def _report_hand_labels(agreement: HandLabelAgreement) -> None:
         _logger.info("  %-28s AP %.3f over %4d samples.", score.path, score.average_precision, score.support)
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Score one experiment's descriptor against the catalog's own targets.")
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Score one experiment's descriptor against the catalog's own targets."
+    )
     parser.add_argument("--experiment-id", type=int, required=True, help="Which experiment's vectors to score.")
     parser.add_argument(
         "--probes",

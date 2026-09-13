@@ -32,12 +32,8 @@
     --cloud-ping-color: var(--accent);
     --cloud-link-color: var(--accent);
 
-    /* One fixed hue per SampleCategory (see frontend/src/samples/category.ts's CATEGORY_ORDER),
-       shared by the cloud's per-category point coloring and the samples table/detail badge -- the
-       same color names the same category everywhere in the app. Fourteen categories exceed what a
-       categorical palette can keep pairwise distinct for every full-color and color-vision-deficient
-       viewer at once, so a category's name is always shown alongside its color (the cloud's hover
-       tooltip, the table cell, the badge label) rather than color carrying identity alone. */
+    /* One hue per SampleCategory in samples/category.ts. Fourteen hues blur together for some
+       viewers, so every place a color appears also names its category. */
     --category-kick: #2a78d6;
     --category-snare: #eb6834;
     --category-clap: #1baf7a;
@@ -54,9 +50,7 @@
     --category-uncategorized: #7a7972;
     --cloud-point-uncategorized: #d5d4ce;
 
-    /* The lightness and chroma (OKLCH) every hand-label color is painted at, by
-       frontend/src/theme/labelPalette.ts: the hues follow the tags' own ranks, so the theme decides
-       only how heavy they sit on its ground. */
+    /* Read by theme/labelPalette.ts, which takes the hues from the tags' ranks. */
     --label-lightness: 0.58;
     --label-chroma: 0.17;
     --mini-waveform-color: var(--text-faint);
@@ -64,10 +58,8 @@
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
 }
 
-/* A browser paints a bare button, a select and a scrollbar from `color-scheme`, not from our own
-   tokens, so a theme a person chose by hand has to say which one it is: left to follow the
-   operating system, a light theme on a dark desktop would hand every control dark chrome and then
-   write this theme's dark text onto it. */
+/* Browsers paint native controls and scrollbars from `color-scheme`, so a hand-picked theme names
+   its own. */
 :root[data-theme="light"],
 :root[data-theme="openmpt"] {
     color-scheme: light;
@@ -161,11 +153,7 @@
     --label-chroma: 0.15;
 }
 
-/* Palette sampled from a real OpenMPT 1.32 window on Windows 11, not the classic Win98 3D-bevel
-   look: modern flat common controls (light neutral gray chrome, white content, Windows' own
-   Fluent accent blue for selection) around the black, red-on-black sample/data canvases -- see the
-   waveform and cloud panel sections below for how their wave and cloud tokens consume this block's
-   canvas-specific overrides. */
+/* Sampled from an OpenMPT 1.32 window on Windows 11. */
 :root[data-theme="openmpt"] {
     --surface-0: #f0f0f0;
     --surface-1: #fff;
@@ -198,9 +186,7 @@
     --cloud-ping-color: #ff0;
     --cloud-link-color: #ff0;
 
-    /* Reuses the dark theme's own category steps rather than this theme's own light chrome
-       colors: they were tuned for legibility against a near-black surface, which this theme's
-       cloud canvas is too, even though its table chrome stays light. */
+    /* The dark theme's category steps, since this theme's cloud canvas is near-black too. */
     --category-kick: #3987e5;
     --category-snare: #d95926;
     --category-clap: #199e70;
@@ -335,9 +321,7 @@ select:focus-visible,
     min-height: 0;
 }
 
-/* Maps our own surface/accent tokens onto dockview's theme variables. Selector specificity
-   (two classes on the shell's own root element) outranks dockview.css's single-class theme
-   rule regardless of stylesheet load order, so these overrides always win. */
+/* Two classes outrank dockview.css's single-class theme rule whatever the load order. */
 .workspace-shell.dockview-theme-abyss {
     --dv-group-view-background-color: var(--surface-1);
     --dv-tabs-and-actions-container-background-color: var(--surface-2);
@@ -393,19 +377,14 @@ p.no-selection {
     color: var(--critical);
 }
 
-/* ---------- Tables ---------- */
-
 table.data,
 table.mini {
     width: 100%;
     border-collapse: collapse;
 }
 
-/* Column widths come from the table's own <colgroup> (see TableColgroup), which a fixed layout
-   honors: a virtualized listing renders a different handful of rows at every scroll position, and
-   an automatic layout would resize its columns to fit whichever ones happen to be on screen. The
-   minimum leaves the one unsized column (a sample's name, a module's filename) readable rather than
-   squeezed to nothing: a panel narrower than this scrolls sideways to reach the rest. */
+/* A fixed layout holds the <colgroup> widths while a virtualized listing swaps its rows; the minimum
+   keeps the unsized column readable. */
 table.data {
     table-layout: fixed;
     min-width: 600px;
@@ -481,8 +460,7 @@ table.mini tbody tr {
     cursor: pointer;
 }
 
-/* Kept equal to TABLE_ROW_HEIGHT_PX in `shared/tableMetrics.ts`: a virtualized listing places its
-   rows from that number, and a row of any other height drifts away from the scrollbar. */
+/* Equal to TABLE_ROW_HEIGHT_PX in `shared/tableMetrics.ts`, which places a virtualized listing's rows. */
 table.data tbody tr {
     height: 40px;
 }
@@ -501,14 +479,12 @@ tr.is-focused {
     box-shadow: inset 2px 0 0 var(--accent);
 }
 
-/* A fixed-layout listing takes this column's width from its <colgroup> instead; the cap holds
-   the mini tables, whose layout is still measured from their own content. */
+/* The cap holds the mini tables, whose layout is measured from their content. */
 .cell-name {
     max-width: 220px;
 }
 
-/* The two lines are set tighter than the page's own rhythm so a row holding a name, a hash and a
-   near-duplicate badge still fits the height every listing row is laid out at. */
+/* Set tight so a name, a hash and a near-duplicate badge fit the listing row height. */
 .cell-name-stack {
     display: flex;
     flex-direction: column;
@@ -529,8 +505,6 @@ tr.is-focused {
     color: var(--text-muted);
 }
 
-/* ---------- Badges ---------- */
-
 .badge {
     display: inline-flex;
     align-items: center;
@@ -545,12 +519,7 @@ tr.is-focused {
     line-height: 1.5;
 }
 
-/* Each badge's background is mixed to an opaque color rather than taken from its translucent
-   `-soft` token directly: a translucent fill lets whatever sits behind the badge show through, so
-   the exact same badge reads as a different color on a plain row versus a selected row's solid
-   fill. Mixing against `--surface-1` -- the table's own background, and every badge's own resting
-   place -- reproduces that token's usual look exactly, but as a fixed color that stays put no
-   matter what row it ends up on. */
+/* Mixed opaque against `--surface-1`, so a badge keeps one color on a plain and a selected row. */
 .badge-xm {
     background: color-mix(in srgb, var(--good) var(--badge-tint-strength), var(--surface-1));
     color: var(--good);
@@ -576,18 +545,12 @@ tr.is-focused {
     color: var(--accent);
 }
 
-/* A hand label is free text, so it has no place in the fourteen fixed category hues; a filled,
-   bordered badge marks it as the different kind of statement it is -- what a person decided,
-   rather than what the keyword table guessed. */
 .badge-hand-label {
     background: var(--surface-2);
     color: var(--text-primary);
     border: 1px solid var(--border-strong);
 }
 
-/* A suggestion is what the listening model heard, a third kind of statement beside the guessed
-   category and the hand label: a dashed badge, since a click turns it into a hand label, and a
-   filled one once the label holds it. */
 .suggested-labels {
     display: flex;
     flex-direction: column;
@@ -665,8 +628,6 @@ tr.is-focused {
     color: var(--critical);
 }
 
-/* Stars and the heart are bare glyph buttons, like the sort arrows and the thumbnail preview: this
-   interface reads by its type, and one accent color marks everything a person has decided. */
 .rating-stars {
     display: inline-flex;
 }
@@ -682,8 +643,7 @@ tr.is-focused {
     cursor: pointer;
 }
 
-/* `is-filled` covers the star being pointed at and every star before it, and the heart under the
-   pointer -- the decision a click would leave behind; `aria-pressed` stays with what is recorded. */
+/* `is-filled` previews what a click would record; `aria-pressed` holds what is recorded. */
 .rating-star.is-filled,
 .favorite-toggle.is-filled {
     color: var(--accent);
@@ -702,18 +662,14 @@ tr.is-focused {
     white-space: nowrap;
 }
 
-/* A count and the rating marks are read whole or not at all: where a name that trails off into an
-   ellipsis still says something, a trimmed number says something false and a trimmed heart says
-   nothing. Their columns are sized to hold them, and what is in them stays as it is. */
+/* A trimmed number reads false, so counts and rating marks show whole in columns sized for them. */
 .cell-numeric,
 .cell-verdict {
     text-overflow: clip;
 }
 
-/* A listing row's own controls sit closer together than the detail panel's, the whole row being
-   one line tall, and each takes a slot of its own width rather than its glyph's: a star and a heart
-   are drawn from whichever font a system has for them, so a fixed slot is what lets the Rating
-   column's width be arithmetic -- six of these -- instead of a guess about a glyph. */
+/* A fixed slot per glyph keeps the Rating column six slots wide, whichever font draws the star
+   and the heart. */
 .cell-verdict .rating-star,
 .cell-verdict .favorite-toggle {
     font-size: 13px;
@@ -722,8 +678,6 @@ tr.is-focused {
     text-align: center;
 }
 
-/* The detail panel gives the field room to grow into; a listing cell hands it the column's own
-   width, which the fixed layout has already settled. */
 table.data td .annotation-editor-input {
     flex: none;
     width: 100%;
@@ -741,9 +695,7 @@ table.data td .annotation-editor-input {
     overflow: hidden;
 }
 
-/* Class names below echo the backend's RelationType/TrackerFormat enum values verbatim (snake_case
-   is their contract, not ours), so selector-class-pattern is disabled per selector rather than
-   introducing a translation layer just to satisfy kebab-case. */
+/* These class names echo the backend's snake_case enum values, so stylelint is disabled per selector. */
 /* stylelint-disable-next-line selector-class-pattern */
 .badge-bit_depth_variant {
     background: color-mix(in srgb, var(--accent) var(--badge-tint-strength), var(--surface-1));
@@ -762,9 +714,6 @@ table.data td .annotation-editor-input {
     color: var(--critical);
 }
 
-/* One rule per SampleCategory, each keyed to its own --category-* token (see the palette comment
-   in the :root block above) rather than the four status tokens the badges above share -- fourteen
-   categories need their own hues to stay visually distinct from one another. */
 .badge-category-kick {
     background: color-mix(in srgb, var(--category-kick) var(--badge-tint-strength), var(--surface-1));
     color: var(--category-kick);
@@ -836,8 +785,6 @@ table.data td .annotation-editor-input {
     color: var(--category-uncategorized);
 }
 
-/* ---------- List panels (filter bar + virtualized, scrollable body) ---------- */
-
 .panel-stack {
     display: flex;
     flex-direction: column;
@@ -851,9 +798,6 @@ table.data td .annotation-editor-input {
     position: relative;
 }
 
-/* A listing says how much of itself is on screen on a line of its own, above the filter row: the
-   filter row already carries a field, a checkbox, a button and a select, and a count read at a
-   glance belongs where nothing else competes for the space. */
 .panel-status {
     flex: 0 0 auto;
     display: flex;
@@ -911,11 +855,7 @@ table.data td .annotation-editor-input {
     padding: 0 6px;
 }
 
-/* Every plain button in the app wears this, rather than whatever chrome a browser would paint a
-   bare control in: a theme is chosen here, so a control's own surface has to come from the same
-   tokens the surface behind it does. The stars and the heart are marks rather than controls, and
-   keep the bare treatment they are given above; `:where` holds this selector at the specificity it
-   would have without the exception. */
+/* `:where` keeps the star and heart exception out of this selector's specificity. */
 .panel-filter button,
 .detail-tabs button,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
@@ -964,10 +904,7 @@ table.data td .annotation-editor-input {
     outline: 2px solid var(--accent);
 }
 
-/* ---------- Cloud panel ---------- */
-
-/* The tooltip and the morph marker sit over the points and reach past the edge near it; the body
-   is the viewport of a canvas that pans, so nothing over it is worth a scrollbar. */
+/* The canvas pans, so the overlays reaching past its edge are clipped. */
 .cloud-body {
     overflow: hidden;
 }
@@ -977,10 +914,7 @@ table.data td .annotation-editor-input {
     inset: 0;
 }
 
-/* regl-scatterplot always clears its WebGL canvas to fully transparent -- its own `backgroundColor`
-   option only feeds internal contrast math (e.g. picking a readable point outline), it never
-   actually paints anything. This element's own background is what viewers actually see through
-   that transparent canvas. */
+/* regl-scatterplot clears its canvas to transparent; this background is what shows through. */
 .cloud-canvas {
     position: absolute;
     inset: 0;
@@ -1003,8 +937,6 @@ table.data td .annotation-editor-input {
     background: var(--surface-1);
 }
 
-/* Pushed to the right, so the cloud's tabs sit at one end of the strip and its "Color by" group at
-   the other. */
 .panel-filter-separator {
     width: 1px;
     height: 16px;
@@ -1017,10 +949,7 @@ table.data td .annotation-editor-input {
     color: var(--text-muted);
 }
 
-/* The legend that is also the picker for the cloud's hand-label coloring: one entry per painted
-   top-level tag, its swatch in the color the cloud paints that tag, and a toggle that lists the
-   rest. It wraps, since a person may paint as many tags as they like, and stops at three rows
-   whatever is listed, scrolling past that, so the plot underneath keeps its height. */
+/* Capped at three rows, scrolling beyond, so the plot underneath keeps its height. */
 .tag-legend {
     --legend-rows: 3;
     --legend-chip-height: 22px;
@@ -1162,8 +1091,7 @@ table.data td .annotation-editor-input {
     pointer-events: none;
 }
 
-/* Animates width/height/margin directly, rather than a transform: scale(), so the ring's own
-   border stays a constant thickness as it expands instead of thickening along with it. */
+/* Animating the size keeps the ring's border one thickness as it expands. */
 .cloud-ping-ring {
     position: absolute;
     top: 0;
@@ -1200,8 +1128,6 @@ table.data td .annotation-editor-input {
     }
 }
 
-/* ---------- Waveform panel ---------- */
-
 .wave-panel {
     display: flex;
     flex-direction: column;
@@ -1227,11 +1153,8 @@ table.data td .annotation-editor-input {
     background: var(--wave-bg);
 }
 
-/* wavesurfer.js appends its own host element here as a plain, unstyled div; as a block-level
-   element it would naturally fill this container's width on its own, but turning this wrap into a
-   flex container (to center a shorter-than-full-height waveform) makes that child a flex item
-   instead, which shrinks to fit its content by default -- collapsing the whole waveform down to a
-   sliver on the left. Forcing its width back to 100% restores the fill without giving up centering. */
+/* wavesurfer's host div is a flex item here, which shrinks to its content; the full width keeps the
+   waveform wide. */
 .wave-canvas-wrap > div {
     width: 100%;
 }
@@ -1241,9 +1164,7 @@ table.data td .annotation-editor-input {
     color: var(--wave-fill);
 }
 
-/* wavesurfer draws its playhead inside its own shadow root, which exposes it as the `cursor` part.
-   The panel shows it while a sample is sounding and takes it away otherwise, so a waveform at rest
-   is a plain contour, with nothing on it to read as a position. */
+/* wavesurfer draws its playhead in its shadow root, exposed as the `cursor` part. */
 .wave-canvas-wrap ::part(cursor) {
     opacity: 0;
 }
@@ -1297,8 +1218,6 @@ table.data td .annotation-editor-input {
     font-family: var(--font-mono);
     font-size: 11px;
 }
-
-/* ---------- Detail panels ---------- */
 
 .detail-scroll {
     padding: 10px 12px;
@@ -1359,8 +1278,6 @@ table.data td .annotation-editor-input {
     font-weight: 600;
 }
 
-/* The readout reads left to right and its one button sits at the far end, which the gap between
-   the last reading and the button carries. */
 .spectral-distance-readout {
     display: flex;
     align-items: center;
@@ -1372,8 +1289,6 @@ table.data td .annotation-editor-input {
     background: var(--accent-soft);
     font-size: 11px;
 }
-
-/* ---------- Stats panel ---------- */
 
 .stats-grid {
     display: grid;
@@ -1436,14 +1351,7 @@ table.data td .annotation-editor-input {
     border-bottom: none;
 }
 
-/* ---------- OpenMPT chrome ---------- */
-
-/* Flat 1px borders with a slight corner radius, matching real OpenMPT's modern common controls.
-   What this sweep passes over is everything that reads as a mark rather than a control: the round
-   transport play button, the thumbnail a row plays through, the stars and the heart, and the badge
-   a category is named in -- each already carries its own shape, and a box drawn around it would say
-   "control" where the shape says what it is. Inputs and selects get an explicit white fill: they
-   read as documents floating on the theme's gray chrome, not chrome themselves. */
+/* Marks with a shape of their own (play button, thumbnail, stars, heart, category badge) keep that shape. */
 :root[data-theme="openmpt"]
     button:not(.play-btn, .thumbnail-button, .rating-star, .favorite-toggle, .category-cell-button),
 :root[data-theme="openmpt"] input,
@@ -1462,8 +1370,6 @@ table.data td .annotation-editor-input {
     background-color: var(--surface-3);
 }
 
-/* Windows' own common controls tint a field's border blue on hover, and again (more strongly) once
-   it holds focus -- not only via the generic focus-visible ring every theme already gets below. */
 :root[data-theme="openmpt"] input:hover,
 :root[data-theme="openmpt"] select:hover,
 :root[data-theme="openmpt"] input:focus,
@@ -1471,9 +1377,6 @@ table.data td .annotation-editor-input {
     border-color: var(--accent);
 }
 
-/* OpenMPT's own chrome text (table headers, field labels) is plain sans-serif in normal case; this
-   app's shared chrome styling otherwise reaches for an uppercase monospace treatment, so this theme
-   opts these labels back out of it. */
 :root[data-theme="openmpt"] table.data th,
 :root[data-theme="openmpt"] table.mini th,
 :root[data-theme="openmpt"] .detail-section h3,
@@ -1484,9 +1387,6 @@ table.data td .annotation-editor-input {
     letter-spacing: normal;
 }
 
-/* The dockview tab label and the data table's own column headers have a direct OpenMPT counterpart
-   (the document tab strip, the sample list's header row) -- both render there in a regular, not
-   bold, weight, at a size closer to the surrounding body text than this app's own compact default. */
 :root[data-theme="openmpt"] .workspace-shell .dv-default-tab-content {
     font-family: var(--font-body);
     font-size: 12px;
@@ -1495,11 +1395,6 @@ table.data td .annotation-editor-input {
     letter-spacing: normal;
 }
 
-/* OpenMPT's own list-view header row reads as plain black text at the same size as the rows below
-   it, not a smaller, separately-colored caption -- only the sort arrow marks a sorted column, per
-   the rule below. Row/header separator lines go with it: this theme's tables already drop grid
-   lines between rows (further down), and a native list view has none between header and body
-   either. */
 :root[data-theme="openmpt"] table.data th,
 :root[data-theme="openmpt"] table.mini th {
     font-weight: 400;
@@ -1515,21 +1410,15 @@ table.data td .annotation-editor-input {
     font-size: 11.5px;
 }
 
-/* A sorted column in a native Windows list view still marks itself with just the sort arrow --
-   the header label itself never recolors, unlike this app's own accent-tinted default. */
 :root[data-theme="openmpt"] table.data th.sorted {
     color: var(--text-primary);
 }
 
-/* A sample or module's name reads a little larger than the rest of its row in OpenMPT's own list
-   views, the one deliberate size step in an otherwise plain, unweighted table. */
 :root[data-theme="openmpt"] .cell-primary {
     font-weight: 400;
     font-size: 12px;
 }
 
-/* A dockview panel's own content pane reads as OpenMPT's gray document background; a table is the
-   one content type OpenMPT renders as a white document floating on top of it. */
 :root[data-theme="openmpt"] .dv-react-part,
 :root[data-theme="openmpt"] .panel-status,
 :root[data-theme="openmpt"] .panel-filter {
@@ -1541,8 +1430,6 @@ table.data td .annotation-editor-input {
     background: var(--surface-1);
 }
 
-/* OpenMPT's list views carry no cell or row grid lines at all -- only the solid selection fill
-   marks a row apart from its neighbors. */
 :root[data-theme="openmpt"] table.data td,
 :root[data-theme="openmpt"] table.mini td {
     border-bottom: none;
@@ -1560,9 +1447,7 @@ table.data td .annotation-editor-input {
     color: var(--accent-ink);
 }
 
-/* This theme fills a focused row with the accent itself, which the stars and the heart are drawn in
-   too. On that row they take the ink the rest of the row's text does, and the ones not yet given a
-   value step back to a faded shade of it, so a rating still reads as a rating while it is hovered. */
+/* A focused row is filled with the accent the stars and the heart use, so they take the row's ink. */
 :root[data-theme="openmpt"] tr.is-focused .rating-star,
 :root[data-theme="openmpt"] tr.is-focused .favorite-toggle {
     color: color-mix(in srgb, var(--accent-ink) 45%, transparent);
@@ -1572,8 +1457,6 @@ table.data td .annotation-editor-input {
 :root[data-theme="openmpt"] tr.is-focused .favorite-toggle.is-filled {
     color: var(--accent-ink);
 }
-
-/* ---------- Morph panel ---------- */
 
 .morph-panel {
     display: flex;
@@ -1624,8 +1507,6 @@ table.data td .annotation-editor-input {
     gap: 10px;
 }
 
-/* The one range input in the app, drawn from the same tokens every other control is: a thin track
-   on the strong border tone and an accent thumb, in place of a browser's own chrome. */
 .morph-weight input[type="range"] {
     flex: 1 1 auto;
     min-width: 0;
@@ -1696,8 +1577,7 @@ table.data td .annotation-editor-input {
     border: 1px solid var(--border);
 }
 
-/* The line joining a morph's two ends on the cloud, and the marker that is the weight: the wrapper
-   lets every pointer through to the points, the marker alone takes them. */
+/* The wrapper passes pointers through to the points; the marker alone takes them. */
 .morph-link {
     position: absolute;
     inset: 0;

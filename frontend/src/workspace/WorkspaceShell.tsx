@@ -34,8 +34,6 @@ export function WorkspaceShell(): ReactElement {
     const components = useMemo(buildDockviewComponents, []);
     const [api, setApi] = useState<DockviewApi | null>(null);
 
-    // Opening an entity also brings its own detail panel forward, so what a person just asked to
-    // see is what the shell shows them, whichever panel of that group they left in front.
     useEffect(() => {
         if (sampleHash !== undefined) {
             focusSample(sampleHash);

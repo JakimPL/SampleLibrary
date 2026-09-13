@@ -23,7 +23,7 @@ will differ a little, and a large divergence is worth understanding before build
 Thumbnails when you want the web UI. Notes only when Stage 1's weak-label metric is wanted.
 Equivalence stays off; see [`06-alternatives.md`](06-alternatives.md).
 
-**Gate:** `make check` green on a fresh clone, and a catalog roughly the expected size.
+**Gate:** `just check` green on a fresh clone, and a catalog roughly the expected size.
 
 ---
 

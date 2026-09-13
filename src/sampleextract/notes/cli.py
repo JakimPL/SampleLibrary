@@ -11,13 +11,13 @@ from sampleextract.notes.playback_rates import record_playback_rates
 _logger = logging.getLogger(__name__)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str], *, prog: str) -> None:
     """Run one note-extraction pass over the catalog and report the result.
 
     The pass ends by folding every note event on file into the rate each sample is really heard at,
     which is what a listener hears when they play one, so the two always describe the same catalog.
     """
-    arguments = _parse_arguments(argv)
+    arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         summary = extract_missing_notes(config, connection, force=arguments.force)
@@ -43,8 +43,10 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Read each cataloged module's patterns for the notes they play.")
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Read each cataloged module's patterns for the notes they play."
+    )
     parser.add_argument(
         "--force",
         action="store_true",

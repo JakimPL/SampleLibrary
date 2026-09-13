@@ -37,6 +37,7 @@ from samplemorph.training.descriptor_cache import grid_cache_directory, open_gri
 from samplemorph.vocoders.restored import restorer_path
 from tests.samplemorph.conftest import harmonic_tone
 
+PROGRAM = "samplelibrary morph"
 SAMPLE_FRAME_COUNT = 4096
 CATALOG_SIZE = 12
 LATENT_SIZE = 4
@@ -113,7 +114,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "does-not-exist.toml"))
 
     with pytest.raises(SystemExit) as raised:
-        main(["fit"])
+        main(["fit"], prog=PROGRAM)
 
     assert raised.value.code == 1
     assert "Configuration error" in capsys.readouterr().err
@@ -126,7 +127,7 @@ def test_an_unknown_canonicalizer_exits_before_the_catalog_is_opened(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "does-not-exist.toml"))
 
     with pytest.raises(SystemExit) as raised:
-        main(["fit", "--canonicalizer", "stargazer"])
+        main(["fit", "--canonicalizer", "stargazer"], prog=PROGRAM)
 
     assert raised.value.code == 2
 
@@ -141,7 +142,7 @@ def test_fitting_writes_a_model_under_the_library_root(
     _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
 
     assert model_path(tmp_path, name=MODEL_NAME).exists()
     assert "Fitted" in capsys.readouterr().out
@@ -155,7 +156,7 @@ def test_rendering_writes_a_listening_set_through_a_fitted_model(
 ) -> None:
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
     output = tmp_path / "render"
 
     main(
@@ -171,7 +172,8 @@ def test_rendering_writes_a_listening_set_through_a_fitted_model(
             "pghi",
             "--output",
             str(output),
-        ]
+        ],
+        prog=PROGRAM,
     )
 
     written = sorted(path.name for path in output.glob("*.wav"))
@@ -196,7 +198,7 @@ def test_rendering_a_sample_the_catalog_lacks_says_so(
 ) -> None:
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
 
     with pytest.raises(ValueError, match="holds no sample"):
         main(
@@ -210,7 +212,8 @@ def test_rendering_a_sample_the_catalog_lacks_says_so(
                 MODEL_NAME,
                 "--output",
                 str(tmp_path / "render"),
-            ]
+            ],
+            prog=PROGRAM,
         )
 
 
@@ -223,7 +226,7 @@ def test_a_restorer_is_trained_on_the_catalog_and_rendered_through(
     """The production path from catalog to weights to audio, at the smallest size that still exercises it."""
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
     main(
         [
             "train-restorer",
@@ -242,7 +245,8 @@ def test_a_restorer_is_trained_on_the_catalog_and_rendered_through(
             "--restorer",
             RESTORER_NAME,
             "--no-tracking",
-        ]
+        ],
+        prog=PROGRAM,
     )
     output = tmp_path / "restored-render"
 
@@ -261,7 +265,8 @@ def test_a_restorer_is_trained_on_the_catalog_and_rendered_through(
             "cpu",
             "--output",
             str(output),
-        ]
+        ],
+        prog=PROGRAM,
     )
 
     assert restorer_path(tmp_path, name=RESTORER_NAME).exists()
@@ -278,13 +283,16 @@ def test_probes_are_measured_through_the_representation_and_through_a_fitted_mod
     """Each probe comes back beside its reconstruction at matched loudness, with one row of readings."""
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
     identity_output = tmp_path / "measure-identity"
     model_output = tmp_path / "measure-model"
     named = tmp_path / "probes.txt"
     named.write_text(f"{hashes[0]}\n", encoding="utf-8")
 
-    main(["measure", "--model", "identity", "--vocoder", "pghi", "--samples", "2", "--output", str(identity_output)])
+    main(
+        ["measure", "--model", "identity", "--vocoder", "pghi", "--samples", "2", "--output", str(identity_output)],
+        prog=PROGRAM,
+    )
     main(
         [
             "measure",
@@ -298,7 +306,8 @@ def test_probes_are_measured_through_the_representation_and_through_a_fitted_mod
             "cpu",
             "--output",
             str(model_output),
-        ]
+        ],
+        prog=PROGRAM,
     )
 
     identity_folders = sorted(path for path in identity_output.iterdir() if path.is_dir())
@@ -328,7 +337,10 @@ def test_training_a_restorer_on_an_axis_the_vocoder_never_reads_says_so(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
     with pytest.raises(ValueError, match="is a mel one"):
-        main(["train-restorer", "--canonicalizer", "mel", "--workers", "0", "--device", "cpu", "--no-tracking"])
+        main(
+            ["train-restorer", "--canonicalizer", "mel", "--workers", "0", "--device", "cpu", "--no-tracking"],
+            prog=PROGRAM,
+        )
 
 
 def test_rendering_through_a_restorer_that_was_never_trained_says_so(
@@ -339,7 +351,7 @@ def test_rendering_through_a_restorer_that_was_never_trained_says_so(
 ) -> None:
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME])
+    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
 
     with pytest.raises(FileNotFoundError, match="no restorer is stored"):
         main(
@@ -357,7 +369,8 @@ def test_rendering_through_a_restorer_that_was_never_trained_says_so(
                 "cpu",
                 "--output",
                 str(tmp_path / "render"),
-            ]
+            ],
+            prog=PROGRAM,
         )
 
 
@@ -371,7 +384,7 @@ def test_a_retuned_view_records_its_samples_own_duration(
     _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main(["cache-grids", "--cache", "views-under-test", "--views", "2", "--workers", "0"])
+    main(["cache-grids", "--cache", "views-under-test", "--views", "2", "--workers", "0"], prog=PROGRAM)
 
     cache = open_grid_cache(grid_cache_directory(tmp_path, name="views-under-test"))
     assert cache.durations.shape == (CATALOG_SIZE, 3)
@@ -403,7 +416,10 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
     )
     connection.commit()
 
-    main(["cache-grids", "--cache", "under-test", "--views", "1", "--workers", "0", "--anchor", "fundamental"])
+    main(
+        ["cache-grids", "--cache", "under-test", "--views", "1", "--workers", "0", "--anchor", "fundamental"],
+        prog=PROGRAM,
+    )
     main(
         [
             "train-descriptor",
@@ -426,9 +442,10 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
             "--device",
             "cpu",
             "--no-tracking",
-        ]
+        ],
+        prog=PROGRAM,
     )
-    main(["embed", "--cache", "under-test", "--descriptor", DESCRIPTOR_NAME, "--device", "cpu"])
+    main(["embed", "--cache", "under-test", "--descriptor", DESCRIPTOR_NAME, "--device", "cpu"], prog=PROGRAM)
 
     cache = open_grid_cache(grid_cache_directory(tmp_path, name="under-test"))
     assert cache.sample_count == CATALOG_SIZE
@@ -452,7 +469,8 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
             "0",
             "--anchor",
             "fundamental",
-        ]
+        ],
+        prog=PROGRAM,
     )
     main(
         [
@@ -476,7 +494,8 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
             "--device",
             "cpu",
             "--no-tracking",
-        ]
+        ],
+        prog=PROGRAM,
     )
     output = tmp_path / "listening"
     main(
@@ -494,7 +513,8 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
             "pghi",
             "--device",
             "cpu",
-        ]
+        ],
+        prog=PROGRAM,
     )
 
     assert codec_path(tmp_path, name=CODEC_NAME).exists()

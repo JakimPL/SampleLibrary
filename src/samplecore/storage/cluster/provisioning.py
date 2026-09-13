@@ -18,10 +18,10 @@ from samplecore.storage.cluster.statements import create_database, create_role, 
 from samplecore.storage.database import connect
 
 # The disposable sandbox and the database the test suite bootstraps from keep names of their own,
-# matching the Makefile's `DEV_DATABASE_URL` and the suite's own default server. Naming them here
-# rather than deriving them from the configured library keeps all three in agreement whatever a
+# matching the config the dev library builder writes and the suite's own default server. Naming them
+# here rather than deriving them from the configured library keeps all three in agreement whatever a
 # person calls their own library, and keeps a URL that already names the sandbox from growing a
-# second suffix when `make database` runs inside one of the `*-dev` targets' environment.
+# second suffix when the database setup runs with the sandbox's config.
 DEVELOPMENT_DATABASE: Final[str] = "samplelibrary_dev"
 TEST_DATABASE: Final[str] = "samplelibrary_test"
 
@@ -299,7 +299,7 @@ def role_creation_remedy(url: URL, role: str, password: str) -> tuple[str, ...]:
         f"    account, give it to {ADMIN_URL_ENVIRONMENT_VARIABLE} and this command creates the",
         "    role for you. Replace <password> with that account's own:",
         f"        {ADMIN_URL_ENVIRONMENT_VARIABLE}=postgresql+psycopg://postgres:<password>@"
-        f"{describe_server(url)}/{MAINTENANCE_DATABASES[0]} make database",
+        f"{describe_server(url)}/{MAINTENANCE_DATABASES[0]} uv run samplelibrary setup database",
         "",
         *container_route(),
     )
@@ -416,7 +416,8 @@ def _claim_database(connection: Connection, *, name: str, owner: str) -> Databas
         raise ProvisioningError(
             f"Database {name!r} is missing, and role {owner!r} may not create one.",
             remedy=(
-                "Grant it at a superuser prompt, such as `sudo -u postgres psql`, then run `make database` again:",
+                "Grant it at a superuser prompt, such as `sudo -u postgres psql`, "
+                "then run `samplelibrary setup database` again:",
                 "",
                 f"    ALTER ROLE {statement_value(owner)} CREATEDB;",
             ),
@@ -441,7 +442,8 @@ def _require_ownership(outcome: DatabaseOutcome, *, role: str) -> None:
         f"Database {outcome.name!r} belongs to role {outcome.owner!r}, so role {role!r} cannot "
         "create the catalog's tables in it.",
         remedy=(
-            "Change its owner at a superuser prompt, such as `sudo -u postgres psql`, then run `make database` again:",
+            "Change its owner at a superuser prompt, such as `sudo -u postgres psql`, "
+            "then run `samplelibrary setup database` again:",
             "",
             f"    ALTER DATABASE {statement_value(outcome.name)} OWNER TO {statement_value(role)};",
         ),
@@ -464,7 +466,7 @@ def _prepare_schemas(url: URL, *, role: str) -> None:
                     f"Role {role!r} may not create this project's tables in database {url.database!r}.",
                     remedy=(
                         "Change its owner at a superuser prompt, such as `sudo -u postgres psql`, "
-                        "then run `make database` again:",
+                        "then run `samplelibrary setup database` again:",
                         "",
                         f"    ALTER DATABASE {statement_value(str(url.database))} OWNER TO {statement_value(role)};",
                     ),

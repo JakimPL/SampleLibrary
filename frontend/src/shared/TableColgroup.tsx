@@ -2,8 +2,7 @@ import type { RowData, Table } from "@tanstack/react-table";
 import type { ReactElement } from "react";
 
 declare module "@tanstack/react-table" {
-    // The table library's own extension point for per-column facts of a caller's own. Both type
-    // parameters belong to its declaration and are named here to match it.
+    // An augmentation repeats both type parameters of the library's declaration.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     interface ColumnMeta<TData extends RowData, TValue> {
         /** Marks the one column that takes whatever width the sized columns leave over. */
