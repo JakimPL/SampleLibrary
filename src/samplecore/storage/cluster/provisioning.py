@@ -15,7 +15,7 @@ from sqlalchemy.pool import NullPool
 
 from samplecore.storage.cluster.quoting import UnsafeValueError, identifier, literal
 from samplecore.storage.cluster.statements import create_database, create_role, database_owner, role_attributes
-from samplecore.storage.database import connect
+from samplecore.storage.database import CONNECT_TIMEOUT_SECONDS, connect
 
 # The disposable sandbox and the database the test suite bootstraps from keep names of their own,
 # matching the config the dev library builder writes and the suite's own default server. Naming them
@@ -338,7 +338,12 @@ def _open_admin(database_url: str) -> tuple[Engine, Connection]:
     candidates = admin_urls(database_url)
     refusal = ""
     for url in candidates:
-        engine = create_engine(url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+        engine = create_engine(
+            url,
+            isolation_level="AUTOCOMMIT",
+            poolclass=NullPool,
+            connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
+        )
         try:
             return engine, engine.connect()
         except OperationalError as error:
@@ -362,9 +367,9 @@ def server_message(error: DBAPIError) -> str:
     return str(error.orig).strip() if error.orig is not None else str(error)
 
 
-def is_connection_refusal(error: DBAPIError) -> bool:
-    """Whether the driver reports a connection it could not open, as opposed to a statement that failed."""
-    return server_message(error).startswith(_DRIVER_PREFIX)
+def is_connection_failure(error: DBAPIError) -> bool:
+    """Whether the error arose while opening a connection, which carries no statement, rather than running one."""
+    return error.statement is None
 
 
 def headline(message: str) -> str:

@@ -29,10 +29,13 @@ RUN useradd --create-home samplelibrary
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=frontend /frontend/dist /app/frontend
-ENV PATH="/app/.venv/bin:${PATH}" SAMPLELIBRARY_CONFIG=/app/config.toml
+ENV PATH="/app/.venv/bin:${PATH}" \
+    SAMPLELIBRARY_CONFIG=/app/config.toml \
+    SAMPLELIBRARY_FRONTEND_DIRECTORY=/app/frontend \
+    WEB_CONCURRENCY=4
 USER samplelibrary
 
 EXPOSE 8000
 HEALTHCHECK CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/openapi.json', timeout=5)"]
 ENTRYPOINT ["samplelibrary"]
-CMD ["serve", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--frontend", "/app/frontend"]
+CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]

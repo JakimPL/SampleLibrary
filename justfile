@@ -144,5 +144,12 @@ docker-build:
     docker build -t samplelibrary-server .
 
 [group("docker")]
+[linux]
 docker-run library_root config_path:
-    docker run --rm -p 127.0.0.1:8000:8000 --add-host=host.docker.internal:host-gateway -v "{{ absolute_path(library_root) }}:/library:ro" -v "{{ absolute_path(config_path) }}:/app/config.toml:ro" samplelibrary-server
+    docker run --rm --network host -v "{{ absolute_path(library_root) }}:/library:ro" -v "{{ absolute_path(config_path) }}:/app/config.toml:ro" samplelibrary-server serve --host 127.0.0.1 --port 8000
+
+[group("docker")]
+[macos]
+[windows]
+docker-run library_root config_path:
+    docker run --rm -p 127.0.0.1:8000:8000 -v "{{ absolute_path(library_root) }}:/library:ro" -v "{{ absolute_path(config_path) }}:/app/config.toml:ro" samplelibrary-server

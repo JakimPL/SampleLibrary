@@ -275,8 +275,11 @@ runtime image for the served app alone: a Node stage builds the frontend, and th
 install only the `server` extra (`fastapi`, `uvicorn`, `httpx`) -- `sampleextract`/`samplecloud`'s
 own heavier dependencies (`librosa`, `umap-learn`, `scikit-learn`) never reach that image, mirroring
 the `sampleserver never imports the offline batch pipelines` import-linter contract above. The
-image runs as an unprivileged user and reads its config at `/app/config.toml`
-(`SAMPLELIBRARY_CONFIG`).
+image runs as an unprivileged user (uid 1000), so a mounted library has to be readable by it. Its
+environment names the config at `/app/config.toml` (`SAMPLELIBRARY_CONFIG`), the built frontend
+(`SAMPLELIBRARY_FRONTEND_DIRECTORY`) and four workers (`WEB_CONCURRENCY`), and its command is
+`serve --host 0.0.0.0 --port 8000`, so a replacement command keeps the frontend and the workers; the
+health check probes port 8000.
 
 The inference process (`samplelibrary morph serve`) installs the `morph` extra, reads the library
 root and the fitted models, and opens no database: a morph names two stored objects and a weight,
@@ -296,7 +299,8 @@ brings back the dashboard. `samplelibrary serve --frontend <dist>` does the same
 outside `/api` with `index.html`, and the image serves its own build this way.
 
 `samplelibrary serve` loads the configuration and opens the catalog once before uvicorn starts, so a
-missing config or an unreachable database ends the start with one message and exit status 1, and
+missing or incomplete config, or a database that cannot be reached within ten seconds, ends the start
+with one message and exit status 1, and
 the catalog's schema is prepared once, under the schema lock, before any worker runs. Each worker's
 own start prepares the curation schema under the same lock (`connect_for_curation`), so workers
 starting together take turns.
@@ -308,7 +312,10 @@ container's own) at `/app/config.toml`, both read-only, supplies the database th
 `SAMPLELIBRARY_DATABASE_URL`, and publishes the app on `127.0.0.1:8000`. A real deployment points
 `database_url`/`SAMPLELIBRARY_DATABASE_URL` at whatever Postgres instance it actually runs against,
 container or otherwise. `just docker-run <library> <config>` runs the image alone against a config
-written for the container; a Postgres on the host is reachable from it as `host.docker.internal`. Local development runs
+written for the container, which names its `database_url` and, for morphs, an `[inference] url` the
+container reaches. On Linux the recipe shares the host's network and binds `127.0.0.1:8000`, so
+`localhost` in that config means the host itself; on macOS and Windows it publishes
+`127.0.0.1:8000`, and Docker Desktop names the host `host.docker.internal`. Local development runs
 against a Postgres installed on the machine directly, which the test suite and both library
 databases share. The container runs
 `samplelibrary serve` with several worker processes (`--workers`), where `just serve` starts the one

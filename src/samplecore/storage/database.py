@@ -65,6 +65,7 @@ HASH_CHUNK_SIZE: Final[int] = 20_000
 
 # An arbitrary number, needing only to be one no other advisory lock in this database picks.
 SCHEMA_LOCK_KEY: Final[int] = 6_853_197_402_115_308_001
+CONNECT_TIMEOUT_SECONDS: Final[int] = 10
 
 
 metadata = MetaData()
@@ -434,7 +435,9 @@ def connect_for_curation(database_url: str) -> Connection:
 
 
 def _open(database_url: str) -> Connection:
-    return create_engine(database_url, poolclass=NullPool).connect()
+    return create_engine(
+        database_url, poolclass=NullPool, connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS}
+    ).connect()
 
 
 def create_pooled_engine(database_url: str, *, pool_size: int) -> Engine:
@@ -445,7 +448,12 @@ def create_pooled_engine(database_url: str, *, pool_size: int) -> Engine:
     before handing it out, so a connection the server dropped is replaced rather than failing a
     request.
     """
-    return create_engine(database_url, pool_size=pool_size, pool_pre_ping=True)
+    return create_engine(
+        database_url,
+        pool_size=pool_size,
+        pool_pre_ping=True,
+        connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
+    )
 
 
 def checkout_read_only(engine: Engine) -> Connection:

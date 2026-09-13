@@ -38,16 +38,16 @@ def dispatch(argv: list[str]) -> None:
         os.environ[CONFIG_PATH_ENVIRONMENT_VARIABLE] = str(arguments.config.resolve())
         os.environ.pop(DATABASE_URL_ENVIRONMENT_VARIABLE, None)
 
-    _run_reporting_a_refused_catalog(command, command_arguments, prog=arguments.program)
+    _run_reporting_an_unreachable_catalog(command, command_arguments, prog=arguments.program)
 
 
-def _run_reporting_a_refused_catalog(command: Command, argv: list[str], *, prog: str) -> None:
-    """Run the command, ending with one message and what to run when the database refuses to connect.
+def _run_reporting_an_unreachable_catalog(command: Command, argv: list[str], *, prog: str) -> None:
+    """Run the command, ending with one message and what to check when the database cannot be reached.
 
-    A worker process's refusal reaches here too, carried back by the run that started it.
+    A worker process's failure to connect reaches here too, carried back by the run that started it.
 
     Raises:
-        SystemExit: the configured database refused the connection.
+        SystemExit: no connection to the configured database could be opened.
     """
     # pylint: disable=import-outside-toplevel
     from sqlalchemy.exc import OperationalError
@@ -55,12 +55,13 @@ def _run_reporting_a_refused_catalog(command: Command, argv: list[str], *, prog:
     try:
         command.run(argv, prog=prog)
     except OperationalError as error:
-        from samplecore.storage.cluster.provisioning import headline, is_connection_refusal, server_message
+        from samplecore.storage.cluster.provisioning import headline, is_connection_failure, server_message
 
-        if not is_connection_refusal(error):
+        if not is_connection_failure(error):
             raise
         _logger.error(
-            "Could not reach the catalog: %s\nRun `samplelibrary setup database` to create it, or correct database_url.",
+            "Could not reach the catalog: %s\nCheck that PostgreSQL is running and that database_url names it; "
+            "`samplelibrary setup database` creates a missing database.",
             headline(server_message(error)),
         )
         sys.exit(1)

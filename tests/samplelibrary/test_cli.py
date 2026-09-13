@@ -161,15 +161,18 @@ def test_the_named_configuration_supplies_the_database_over_an_exported_one(
     assert database_urls == [SANDBOX_DATABASE_URL]
 
 
-def test_a_refused_catalog_ends_the_command_with_what_to_run(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    "server", ["localhost:1", "no-such-host.invalid:5432"], ids=["a refused connection", "an unknown host"]
+)
+def test_an_unreachable_catalog_ends_the_command_with_what_to_check(
+    server: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
         "[library]\n"
         f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
         f'library_root = "{(tmp_path / "library").as_posix()}"\n'
-        'database_url = "postgresql+psycopg://samplelibrary:hidden-password@localhost:1/samplelibrary"\n',
+        f'database_url = "postgresql+psycopg://samplelibrary:hidden-password@{server}/samplelibrary"\n',
         encoding="utf-8",
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))

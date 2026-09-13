@@ -74,6 +74,24 @@ def test_database_url_is_required(tmp_path: Path) -> None:
         LibraryConfig(module_source_directory=tmp_path / "modules", library_root=tmp_path / "library")
 
 
+def test_a_config_missing_a_setting_names_it_in_a_configuration_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "[library]\n"
+        f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
+
+    with pytest.raises(ConfigurationError, match="database_url") as raised:
+        load_config(config_path)
+
+    assert DATABASE_URL_ENVIRONMENT_VARIABLE in str(raised.value)
+
+
 def test_loading_a_missing_config_file_raises_a_configuration_error(tmp_path: Path) -> None:
     with pytest.raises(ConfigurationError):
         load_config(tmp_path / "does-not-exist.toml")

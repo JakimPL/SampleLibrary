@@ -6,7 +6,7 @@ import tomllib
 from pathlib import Path
 from typing import Final
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 DEFAULT_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config.toml"
 EXAMPLE_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config.example.toml"
@@ -65,8 +65,8 @@ def load_config(path: Path | None = None) -> LibraryConfig:
     Docker secret, a CI variable) without living in a config file at all.
 
     Raises:
-        ConfigurationError: no config file exists at the resolved path, or the file still carries
-            the example's stand-in paths.
+        ConfigurationError: no config file exists at the resolved path, a setting fails validation,
+            or the file still carries the example's stand-in paths.
     """
     resolved_path = resolve_config_path(path)
     if not resolved_path.is_file():
@@ -81,7 +81,10 @@ def load_config(path: Path | None = None) -> LibraryConfig:
     if database_url_from_environment is not None:
         library_data["database_url"] = database_url_from_environment
     library_data[INFERENCE_TABLE] = dict(data.get(INFERENCE_TABLE, {}))
-    config = LibraryConfig.model_validate(library_data)
+    try:
+        config = LibraryConfig.model_validate(library_data)
+    except ValidationError as error:
+        raise ConfigurationError(_describe_invalid_fields(error, resolved_path)) from error
     _reject_placeholder_paths(config, resolved_path)
     return config
 
@@ -129,6 +132,19 @@ def _reject_placeholder_paths(config: LibraryConfig, resolved_path: Path) -> Non
             f"{resolved_path} still carries the example's stand-in path for {', '.join(placeholders)}. "
             "Open it and name your own module collection and library directories."
         )
+
+
+def _describe_invalid_fields(error: ValidationError, config_path: Path) -> str:
+    """Name every setting that failed validation, and where the database can come from besides the file."""
+    problems = "; ".join(
+        f"{'.'.join(str(part) for part in detail['loc'])}: {detail['msg']}" for detail in error.errors()
+    )
+    database_hint = (
+        f" The database can also come from {DATABASE_URL_ENVIRONMENT_VARIABLE}."
+        if any(detail["loc"][:1] == ("database_url",) for detail in error.errors())
+        else ""
+    )
+    return f"{config_path} needs correcting: {problems}.{database_hint}"
 
 
 def _config_path_from_environment() -> Path | None:
