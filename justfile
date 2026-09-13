@@ -1,11 +1,13 @@
-set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+set minimum-version := "1.56.0"
+set default-list := true
+
+[windows]
+set shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
 MEMORY_CAP := "16G"
 DEV_CONFIG := "dev-library/config.toml"
 DEV_PORT := "8001"
-
-default:
-    @{{ just_executable() }} --list --unsorted
+CAPPED_SAMPLELIBRARY := if os() == "linux" { "systemd-run --user --scope -p MemoryMax=" + MEMORY_CAP + " -p MemorySwapMax=0 -q -- uv run samplelibrary" } else { "uv run samplelibrary" }
 
 [group("setup")]
 install: && frontend-install
@@ -19,8 +21,8 @@ database:
 
 [group("quality")]
 format:
-    uv run isort src tests scripts
-    uv run black src tests scripts
+    uv run isort src tests scripts notebooks
+    uv run black src tests scripts notebooks
 
 [group("quality")]
 lint:
@@ -50,24 +52,28 @@ serve-inference:
 
 [group("library")]
 tracking-ui:
-    uv run mlflow ui --backend-store-uri "$(uv run samplelibrary tracking uri)"
+    uv run samplelibrary tracking ui
 
 [group("library")]
 rebuild:
-    uv run samplelibrary extract
-    uv run samplelibrary equivalence
-    uv run samplelibrary cloud embed
-    uv run samplelibrary cloud placeholders
+    {{ CAPPED_SAMPLELIBRARY }} extract
+    {{ CAPPED_SAMPLELIBRARY }} notes
+    {{ CAPPED_SAMPLELIBRARY }} thumbnails
+    {{ CAPPED_SAMPLELIBRARY }} cloud embed
+    {{ CAPPED_SAMPLELIBRARY }} cloud placeholders
 
 [group("library")]
 [linux]
 [positional-arguments]
 capped *arguments:
-    systemd-run --user --scope -p MemoryMax={{ MEMORY_CAP }} -p MemorySwapMax=0 -q -- uv run samplelibrary "$@"
+    {{ CAPPED_SAMPLELIBRARY }} "$@"
 
 [group("library")]
-[confirm("Empty the configured library's catalog and content store for good?")]
-reset:
+reset: && _reset-confirmed
+    uv run samplelibrary reset
+
+[confirm("Empty the library named above?")]
+_reset-confirmed:
     uv run samplelibrary reset --confirm
 
 [group("dev")]
@@ -82,22 +88,27 @@ dev *arguments:
 
 [group("dev")]
 [windows]
+[positional-arguments]
+[script("powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File")]
 dev *arguments:
-    uv run samplelibrary --config {{ DEV_CONFIG }} {{ arguments }}
+    uv run samplelibrary --config {{ DEV_CONFIG }} @args
+    exit $LASTEXITCODE
 
 [group("dev")]
 serve-dev:
     uv run samplelibrary --config {{ DEV_CONFIG }} serve --reload --port {{ DEV_PORT }}
 
 [group("dev")]
+dev-reset: dev-build && _delete-dev-library
+    uv run samplelibrary --config {{ DEV_CONFIG }} reset --confirm
+
 [unix]
-dev-reset:
+_delete-dev-library:
     rm -rf dev-library
 
-[group("dev")]
 [windows]
-dev-reset:
-    if (Test-Path dev-library) { Remove-Item -Recurse -Force dev-library }
+_delete-dev-library:
+    Remove-Item -Recurse -Force dev-library
 
 [group("frontend")]
 [working-directory("frontend")]
@@ -107,7 +118,7 @@ frontend-install:
 [group("frontend")]
 [working-directory("frontend")]
 frontend-dev:
-    npm run dev -- --host
+    npm run dev
 
 [group("frontend")]
 [working-directory("frontend")]
@@ -134,4 +145,4 @@ docker-build:
 
 [group("docker")]
 docker-run library_root config_path:
-    docker run --rm -p 8000:8000 -v "{{ library_root }}:/library" -v "{{ config_path }}:/app/config.toml" -e SAMPLELIBRARY_CONFIG=/app/config.toml samplelibrary-server
+    docker run --rm -p 127.0.0.1:8000:8000 --add-host=host.docker.internal:host-gateway -v "{{ absolute_path(library_root) }}:/library:ro" -v "{{ absolute_path(config_path) }}:/app/config.toml:ro" samplelibrary-server
