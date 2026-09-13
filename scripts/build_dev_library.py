@@ -35,6 +35,9 @@ SAMPLE_VOICES_PATTERN_ROWS: Final[int] = 64
 DEFAULT_OUTPUT_DIRECTORY: Final[Path] = Path("dev-library")
 MODULES_DIRECTORY_NAME: Final[str] = "modules"
 CATALOG_DIRECTORY_NAME: Final[str] = "catalog"
+DEVELOPMENT_DATABASE_URL: Final[str] = (
+    "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
+)
 
 # Below LibraryConfig.minimum_sample_frames' own default (512), so a sample this short is the
 # ingestion-time frame filter's own test case, not an oversight here.
@@ -353,13 +356,17 @@ def _write_config(output_directory: Path, *, modules_directory: Path, catalog_di
     config_path.write_text(
         "[library]\n"
         f'module_source_directory = "{modules_directory.resolve().as_posix()}"\n'
-        f'library_root = "{catalog_directory.resolve().as_posix()}"\n',
+        f'library_root = "{catalog_directory.resolve().as_posix()}"\n'
+        f'database_url = "{DEVELOPMENT_DATABASE_URL}"\n',
         encoding="utf-8",
     )
 
 
 def build_dev_library(output_directory: Path, *, target_module_count: int = TARGET_MODULE_COUNT) -> tuple[Path, ...]:
     """(Re)generates the deterministic dev-module corpus and its own ready-to-use ``config.toml``.
+
+    The config names the sandbox's own database on the local server, so passing it with `--config`
+    points every command at the sandbox alone.
 
     ``modules_directory`` is wiped and rewritten every call, so this stays safe to rerun whenever
     the scenarios change; ``catalog_directory`` is left untouched, since a developer may still want

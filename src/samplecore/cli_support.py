@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from typing import Final
 
 from sqlalchemy import Connection
+from sqlalchemy.engine import make_url
 
 from samplecore.config import ConfigurationError, LibraryConfig, load_config
 from samplecore.storage.database import connect
@@ -91,6 +92,16 @@ def bootstrap_cli() -> LibraryConfig:
     return load_config_or_exit()
 
 
+def redact_database_url(database_url: str) -> str:
+    """A database URL as it is safe to log, with the password masked.
+
+    Shared by every console entry point that names the database it is about to act on, so a URL
+    reaching a console or a captured shell log carries the server, the role, and the database, and
+    leaves the credential behind.
+    """
+    return make_url(database_url).render_as_string()
+
+
 @contextmanager
 def open_catalog_connection(database_url: str) -> Iterator[Connection]:
     """Open the catalog for one console entry point's operation, closing it again afterward.
@@ -115,8 +126,8 @@ def report_dry_run(description: str) -> None:
 
 
 def confirmed(
-    argv: list[str] | None,
-    parse_arguments: Callable[[list[str] | None], argparse.Namespace],
+    argv: list[str],
+    parse_arguments: Callable[[list[str]], argparse.Namespace],
     dry_run_message: str,
 ) -> bool:
     """Set up logging and parse a confirm-gated script's arguments, reporting when not confirmed.

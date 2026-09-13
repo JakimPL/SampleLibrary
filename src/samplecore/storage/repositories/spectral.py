@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any, Protocol
 
-from sqlalchemy import Connection, Row, delete, select
+import numpy as np
+from sqlalchemy import Connection, Row, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as upsert
 
 from samplecore.models.spectral import SampleSpectralFeature
+from samplecore.spectral_distance import SpectralVectors
 from samplecore.storage.database import bulk_insert, sample_spectral_feature
 
 
@@ -21,6 +24,10 @@ class SampleSpectralFeatureRepository(Protocol):
     def get(self, sample_hash: str) -> SampleSpectralFeature | None: ...
 
     def list_all(self) -> tuple[SampleSpectralFeature, ...]: ...
+
+    def vectors(self) -> SpectralVectors: ...
+
+    def revision(self) -> tuple[int, datetime | None]: ...
 
 
 class PostgresSampleSpectralFeatureRepository:
@@ -75,6 +82,36 @@ class PostgresSampleSpectralFeatureRepository:
     def list_all(self) -> tuple[SampleSpectralFeature, ...]:
         rows = self._connection.execute(select(sample_spectral_feature)).fetchall()
         return tuple(_row_to_feature(row) for row in rows)
+
+    def vectors(self) -> SpectralVectors:
+        """Every persisted vector as one matrix, for a search measuring the whole catalog at once.
+
+        Reads the stored text straight into the matrix, since a nearest-neighbor search wants the
+        numbers rather than a model per sample: building a hundred thousand of those costs more than
+        the query that fetched them.
+        """
+        rows = self._connection.execute(
+            select(sample_spectral_feature.c.sample_hash, sample_spectral_feature.c.vector)
+        ).fetchall()
+        matrix = np.array([json.loads(row.vector) for row in rows], dtype=np.float64)
+        return SpectralVectors(hashes=tuple(row.sample_hash for row in rows), matrix=matrix)
+
+    def revision(self) -> tuple[int, datetime | None]:
+        """What the vectors on file amount to right now: how many there are, and when last written.
+
+        An embedding run replaces every row and stamps them all, so a reader holding a parsed copy
+        of the vectors can tell in one cheap query whether that copy still describes the catalog.
+        """
+        row = self._connection.execute(
+            select(
+                # pylint: disable-next=not-callable
+                func.count(),
+                func.max(sample_spectral_feature.c.computed_at),
+            ).select_from(sample_spectral_feature)
+        ).one()
+        count: int = row[0]
+        computed_at: datetime | None = row[1]
+        return count, computed_at
 
 
 def _row_to_feature(row: Row[Any]) -> SampleSpectralFeature:

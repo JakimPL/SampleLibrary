@@ -3,7 +3,6 @@ from __future__ import annotations
 from enum import StrEnum, unique
 
 from pydantic import BaseModel, ConfigDict
-from trackmod.core.notes.pitch import Note
 from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
@@ -47,9 +46,10 @@ class DescribedSample(Sample):
     guess. ``rating`` and ``favorite`` carry what that person thought of the sample, which is what
     makes a collection of their own. ``size_bytes`` re-exposes ``Sample.stored_bytes`` under its own
     name: a Pydantic field cannot share a name with an inherited plain property without the property
-    silently winning on attribute access. ``dominant_rate_hz`` resolves the sample's, possibly
-    conflicting, occurrence rates via `samplecore.naming.choose_dominant_rate`, and is ``None`` for a
-    sample the catalog holds no occurrence of.
+    silently winning on attribute access. ``playback_rate_hz`` is the rate the library really sounds
+    this sample at, resolved via `samplecore.pitch.choose_playback_rate` from the note events that
+    play it and, where no pattern reaches it, from its occurrences' own rates; it is ``None`` for a
+    sample the catalog holds neither for.
     """
 
     display_name: str
@@ -58,7 +58,7 @@ class DescribedSample(Sample):
     rating: Rating | None
     favorite: bool
     size_bytes: Count
-    dominant_rate_hz: Rate | None
+    playback_rate_hz: Rate | None
 
 
 class SampleSummary(DescribedSample):
@@ -71,14 +71,11 @@ class SampleSummary(DescribedSample):
     variants this sample belongs to, resolved from the whole catalog's relation graph, and is
     ``None`` for a sample with no detected relation. ``equivalence_member_count`` is that class's
     total size (1 for a sample with no class), independent of how many of its members are present on
-    this page. ``dominant_note`` is the note the library plays this sample at most often, which with
-    ``dominant_rate_hz`` gives the pitch a preview should sound at; it is ``None`` for a sample whose
-    modules have not had their patterns read, and for one no pattern plays.
+    this page.
     """
 
     occurrence_count: Count
     thumbnail: tuple[WaveformPeak, ...] | None
-    dominant_note: Note | None
     equivalence_class_hash: str | None
     equivalence_member_count: Count
 

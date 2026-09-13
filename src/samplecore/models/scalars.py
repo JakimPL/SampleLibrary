@@ -4,17 +4,19 @@ from typing import Annotated, Final
 
 from pydantic import Field, StringConstraints
 
-SampleHash = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
-ModuleHash = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+SAMPLE_HASH_PATTERN: Final[str] = r"^[0-9a-f]{64}$"
+
+SampleHash = Annotated[str, StringConstraints(pattern=SAMPLE_HASH_PATTERN)]
+ModuleHash = Annotated[str, StringConstraints(pattern=SAMPLE_HASH_PATTERN)]
 
 Frames = Annotated[int, Field(gt=0)]
 Index = Annotated[int, Field(ge=0)]
 Count = Annotated[int, Field(ge=0)]
 BucketCount = Annotated[int, Field(gt=0)]
 
-MINIMUM_SHARD_COUNT: Final[int] = 1
+MINIMUM_WORKER_COUNT: Final[int] = 1
 
-ShardCount = Annotated[int, Field(ge=MINIMUM_SHARD_COUNT)]
+WorkerCount = Annotated[int, Field(ge=MINIMUM_WORKER_COUNT)]
 
 MINIMUM_RATING: Final[int] = 1
 MAXIMUM_RATING: Final[int] = 5

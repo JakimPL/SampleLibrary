@@ -7,12 +7,16 @@ from pydantic import BaseModel
 from sqlalchemy import Connection
 
 from samplecore.anchoring import anchored_annotations
+from samplecore.labeling.labels import SampleLabel
+from samplecore.labeling.vocabulary import LabelVocabulary, first_use_ranks
 from samplecore.models.annotation import AnnotationDecisions, AnnotationSource
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import SampleHash
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_annotation import (
+    PostgresSampleAnnotationRepository,
+)
 from sampleserver.dependencies import get_connection, get_curation_connection
 from sampleserver.equivalence import equivalence_class_members
 
@@ -28,6 +32,21 @@ class AnnotationRequest(AnnotationDecisions):
     """
 
     scope: AnnotationSource
+
+
+class TagSummary(BaseModel):
+    """One tag a person has used: its path, how many samples carry it, and a rank that stays with it.
+
+    The count includes every sample labeled with a specification below the tag. The rank is the
+    order the tag was first used in, which is what a viewer hangs a lasting color on: it keeps its
+    value as the vocabulary grows, where a place in a most-used ordering changes with every label.
+    """
+
+    model_config = FROZEN
+
+    path: tuple[str, ...]
+    sample_count: int
+    rank: int
 
 
 class AnnotationWritten(BaseModel):
@@ -95,6 +114,25 @@ def set_annotation(
 def get_label_vocabulary(curation_connection: Connection = Depends(get_curation_connection)) -> tuple[str, ...]:
     """Every label already in use, most-used first, for offering a person their own wording back."""
     return PostgresSampleAnnotationRepository(curation_connection).vocabulary()
+
+
+@router.get("/annotations/tags")
+def get_label_tags(curation_connection: Connection = Depends(get_curation_connection)) -> tuple[TagSummary, ...]:
+    """Every tag in use, read out of the labels as paths, most used first.
+
+    Where `get_label_vocabulary` offers whole wordings back to the person typing one, this reads the
+    tags inside them -- ``HI-HAT: CLOSED, LO-FI`` names three -- for a viewer that colors or filters
+    by what the labels say. The tree comes whole; a viewer takes the depth it wants.
+    """
+    annotations = PostgresSampleAnnotationRepository(curation_connection).list_all()
+    vocabulary = LabelVocabulary.from_labels(
+        SampleLabel.parse(annotation.label) for annotation in annotations if annotation.label is not None
+    )
+    ranks = first_use_ranks(annotations)
+    return tuple(
+        TagSummary(path=usage.path, sample_count=usage.sample_count, rank=ranks[usage.path])
+        for usage in vocabulary.usages
+    )
 
 
 def _require_cataloged(connection: Connection, sample_hash: str) -> None:

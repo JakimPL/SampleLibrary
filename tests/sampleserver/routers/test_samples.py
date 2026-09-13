@@ -6,11 +6,13 @@ from pathlib import Path
 import numpy as np
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
+from trackmod.core.notes.pitch import Note
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
+from samplecore.models.note_event import NoteEvent
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
@@ -20,14 +22,19 @@ from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
+from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
+from tests.sampleserver.routers.test_cloud import seed_scoring
 
 SAMPLE_HASH_A = "a" * 64
 SAMPLE_HASH_B = "b" * 64
+REFERENCE_KEY = Note(60)
+OCTAVE_ABOVE_REFERENCE_KEY = Note(72)
 
 
 def _insert_sample(connection: Connection, sample_hash: str, *, frames: int = 8) -> Sample:
@@ -76,6 +83,23 @@ def _add_occurrence(
     )
 
 
+def _play_note(connection: Connection, *, module: Module, slot: int, sounded_note: Note, row: int) -> None:
+    PostgresNoteEventRepository(connection).insert_many(
+        [
+            NoteEvent(
+                module_id=module.id,
+                pattern_index=0,
+                row_index=row,
+                channel_index=0,
+                note=REFERENCE_KEY,
+                sounded_note=sounded_note,
+                instrument_index=0,
+                sample_slot=slot,
+            )
+        ]
+    )
+
+
 def test_list_samples_returns_a_page(client: TestClient, connection: Connection) -> None:
     first = _insert_sample(connection, SAMPLE_HASH_A)
     second = _insert_sample(connection, SAMPLE_HASH_B)
@@ -104,7 +128,7 @@ def test_list_samples_ranks_by_occurrence_count(client: TestClient, connection: 
     assert body["items"][0]["category"] == "kick"
 
 
-def test_list_samples_resolves_the_dominant_occurrence_rate(client: TestClient, connection: Connection) -> None:
+def test_list_samples_falls_back_to_the_dominant_occurrence_rate(client: TestClient, connection: Connection) -> None:
     sample = _insert_sample(connection, SAMPLE_HASH_A)
     module = _insert_module(connection)
     _add_occurrence(connection, sample=sample, module=module, slot=0, name="kick", rate=8363)
@@ -114,10 +138,10 @@ def test_list_samples_resolves_the_dominant_occurrence_rate(client: TestClient, 
     response = client.get("/samples")
 
     body = response.json()
-    assert body["items"][0]["dominant_rate_hz"] == 8363
+    assert body["items"][0]["playback_rate_hz"] == 8363
 
 
-def test_list_samples_leaves_dominant_rate_null_for_a_sample_with_no_occurrences(
+def test_list_samples_leaves_the_playback_rate_null_for_a_sample_with_no_occurrences(
     client: TestClient, connection: Connection
 ) -> None:
     _insert_sample(connection, SAMPLE_HASH_A)
@@ -125,7 +149,7 @@ def test_list_samples_leaves_dominant_rate_null_for_a_sample_with_no_occurrences
     response = client.get("/samples")
 
     body = response.json()
-    assert body["items"][0]["dominant_rate_hz"] is None
+    assert body["items"][0]["playback_rate_hz"] is None
 
 
 def test_list_samples_includes_a_cached_thumbnail(client: TestClient, connection: Connection) -> None:
@@ -280,7 +304,21 @@ def test_get_sample_returns_detail_with_occurrences_and_module_context(
     }
 
 
-def test_get_sample_resolves_the_dominant_occurrence_rate(client: TestClient, connection: Connection) -> None:
+def test_get_sample_carries_the_newest_scoring_s_suggestions_closest_first(
+    client: TestClient, connection: Connection
+) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    _insert_sample(connection, SAMPLE_HASH_B)
+    seed_scoring(connection, {sample.hash: (("BASS DRUM", 0.8), ("SNARE", 0.3))})
+
+    body = client.get(f"/samples/{sample.hash}").json()
+    other = client.get(f"/samples/{SAMPLE_HASH_B}").json()
+
+    assert body["suggested_labels"] == [{"label": "BASS DRUM", "score": 0.8}, {"label": "SNARE", "score": 0.3}]
+    assert other["suggested_labels"] == []
+
+
+def test_get_sample_falls_back_to_the_dominant_occurrence_rate(client: TestClient, connection: Connection) -> None:
     sample = _insert_sample(connection, SAMPLE_HASH_A)
     module = _insert_module(connection)
     _add_occurrence(connection, sample=sample, module=module, slot=0, name="lead", rate=8363)
@@ -290,7 +328,45 @@ def test_get_sample_resolves_the_dominant_occurrence_rate(client: TestClient, co
     response = client.get(f"/samples/{sample.hash}")
 
     body = response.json()
-    assert body["dominant_rate_hz"] == 22050
+    assert body["playback_rate_hz"] == 22050
+
+
+def test_get_sample_gathers_the_rates_its_note_events_really_sound(client: TestClient, connection: Connection) -> None:
+    """Two occurrences an octave apart, played an octave apart, sound one and the same speed.
+
+    The rate an event sounds at follows from the occurrence it reaches and the key struck against
+    it, so both events here read the waveform at 16726 Hz and belong to one rate between them.
+    """
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=sample, module=module, slot=0, name="lead", rate=8363)
+    _add_occurrence(connection, sample=sample, module=module, slot=1, name="lead", rate=16726)
+    _play_note(connection, module=module, slot=0, sounded_note=OCTAVE_ABOVE_REFERENCE_KEY, row=0)
+    _play_note(connection, module=module, slot=1, sounded_note=REFERENCE_KEY, row=1)
+
+    response = client.get(f"/samples/{sample.hash}")
+
+    body = response.json()
+    assert body["playback_rates"] == [{"rate_hz": 16726, "event_count": 2}]
+    assert body["playback_rate_hz"] == 16726
+
+
+def test_get_sample_lists_the_most_played_rate_first(client: TestClient, connection: Connection) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=sample, module=module, slot=0, name="lead", rate=8363)
+    _play_note(connection, module=module, slot=0, sounded_note=REFERENCE_KEY, row=0)
+    _play_note(connection, module=module, slot=0, sounded_note=OCTAVE_ABOVE_REFERENCE_KEY, row=1)
+    _play_note(connection, module=module, slot=0, sounded_note=OCTAVE_ABOVE_REFERENCE_KEY, row=2)
+
+    response = client.get(f"/samples/{sample.hash}")
+
+    body = response.json()
+    assert body["playback_rates"] == [
+        {"rate_hz": 16726, "event_count": 2},
+        {"rate_hz": 8363, "event_count": 1},
+    ]
+    assert body["playback_rate_hz"] == 16726
 
 
 def test_get_sample_resolves_a_shared_module_only_once_across_occurrences(
@@ -336,6 +412,7 @@ def test_get_sample_audio_serves_the_stored_wav_file(
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/wav"
+    assert "immutable" in response.headers["cache-control"]
 
 
 def test_get_sample_audio_404s_for_an_unknown_hash(client: TestClient) -> None:
@@ -344,22 +421,47 @@ def test_get_sample_audio_404s_for_an_unknown_hash(client: TestClient) -> None:
     assert response.status_code == 404
 
 
-def test_get_sample_waveform_returns_peaks(client: TestClient, connection: Connection, tmp_path: Path) -> None:
-    sample = Sample(hash=SAMPLE_HASH_A, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=4)
-    PostgresSampleRepository(connection).upsert(sample)
-    pcm = np.array([[0.5], [-0.5], [0.25], [-0.25]], dtype=np.float64)
-    audio_store.write(tmp_path, SamplePCM(sample=sample, pcm=pcm))
+def test_get_sample_audio_refuses_a_path_that_is_no_hash(client: TestClient) -> None:
+    """The object path is built from the hash alone, so only a hash's own shape reaches the store."""
+    response = client.get("/samples/not-a-hash/audio")
 
-    response = client.get(f"/samples/{sample.hash}/waveform")
+    assert response.status_code == 422
+
+
+def test_get_sample_preview_reads_the_name_the_category_and_the_stored_thumbnail(
+    client: TestClient, connection: Connection
+) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=sample, module=module, slot=0, name="kick")
+    PostgresSampleThumbnailRepository(connection).upsert(
+        SampleThumbnail(sample_hash=sample.hash, bucket_count=2, minimums=(-0.5, -0.25), maximums=(0.5, 0.25))
+    )
+
+    response = client.get(f"/samples/{sample.hash}/preview")
 
     assert response.status_code == 200
-    peaks = response.json()
-    assert len(peaks) == 4
-    assert all({"minimum", "maximum"} == set(peak) for peak in peaks)
+    assert response.json() == {
+        "display_name": "kick",
+        "category": "kick",
+        "hand_label": None,
+        "thumbnail": [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}],
+    }
 
 
-def test_get_sample_waveform_404s_for_an_unknown_hash(client: TestClient) -> None:
-    response = client.get(f"/samples/{'f' * 64}/waveform")
+def test_get_sample_preview_has_no_thumbnail_before_the_pass_reaches_the_sample(
+    client: TestClient, connection: Connection
+) -> None:
+    _insert_sample(connection, SAMPLE_HASH_A)
+
+    body = client.get(f"/samples/{SAMPLE_HASH_A}/preview").json()
+
+    assert body["thumbnail"] is None
+    assert body["category"] == "uncategorized"
+
+
+def test_get_sample_preview_404s_for_an_unknown_hash(client: TestClient) -> None:
+    response = client.get(f"/samples/{'f' * 64}/preview")
 
     assert response.status_code == 404
 
@@ -451,6 +553,46 @@ def test_get_similar_samples_orders_neighbors_by_ascending_distance(client: Test
     assert [item["hash"] for item in body] == [near.hash, far.hash]
 
 
+def test_get_similar_samples_carry_the_rate_to_hear_them_at(client: TestClient, connection: Connection) -> None:
+    target = _insert_sample(connection, SAMPLE_HASH_A)
+    neighbor = _insert_sample(connection, SAMPLE_HASH_B)
+    feature_repository = PostgresSampleSpectralFeatureRepository(connection)
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=target.hash, vector=(0.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=neighbor.hash, vector=(1.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    PostgresSamplePlaybackRateRepository(connection).replace_all({neighbor.hash: 22050})
+
+    response = client.get(f"/samples/{target.hash}/similar")
+
+    assert [item["playback_rate_hz"] for item in response.json()] == [22050]
+
+
+def test_get_similar_samples_carry_what_a_glance_shows(client: TestClient, connection: Connection) -> None:
+    target = _insert_sample(connection, SAMPLE_HASH_A)
+    neighbor = _insert_sample(connection, SAMPLE_HASH_B)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=neighbor, module=module, slot=0, name="kick")
+    PostgresSampleThumbnailRepository(connection).upsert(
+        SampleThumbnail(sample_hash=neighbor.hash, bucket_count=2, minimums=(-0.5, -0.25), maximums=(0.5, 0.25))
+    )
+    feature_repository = PostgresSampleSpectralFeatureRepository(connection)
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=target.hash, vector=(0.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=neighbor.hash, vector=(1.0, 0.0), computed_at=datetime.now(UTC))
+    )
+
+    body = client.get(f"/samples/{target.hash}/similar").json()
+
+    assert [(item["display_name"], item["category"], item["hand_label"], item["thumbnail"]) for item in body] == [
+        ("kick", "kick", None, [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}])
+    ]
+
+
 def test_get_similar_samples_respects_the_limit(client: TestClient, connection: Connection) -> None:
     target = _insert_sample(connection, SAMPLE_HASH_A)
     near = _insert_sample(connection, SAMPLE_HASH_B)
@@ -470,6 +612,25 @@ def test_get_similar_samples_respects_the_limit(client: TestClient, connection: 
 
     body = response.json()
     assert [item["hash"] for item in body] == [near.hash]
+
+
+def test_get_similar_samples_answer_follows_a_fresh_embedding(client: TestClient, connection: Connection) -> None:
+    """The vectors are held parsed between requests, so a new embedding has to reach a later one."""
+    target = _insert_sample(connection, SAMPLE_HASH_A)
+    neighbor = _insert_sample(connection, SAMPLE_HASH_B)
+    feature_repository = PostgresSampleSpectralFeatureRepository(connection)
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=target.hash, vector=(0.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    client.get(f"/samples/{target.hash}/similar")
+
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=neighbor.hash, vector=(3.0, 4.0), computed_at=datetime.now(UTC))
+    )
+
+    response = client.get(f"/samples/{target.hash}/similar")
+
+    assert [(item["hash"], item["distance"]) for item in response.json()] == [(neighbor.hash, 5.0)]
 
 
 def test_get_similar_samples_404s_when_the_target_has_no_vector(client: TestClient, connection: Connection) -> None:

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 
-import { getSample, getSampleWaveform, type WaveformPeak } from "../api/samples";
+import { getSamplePreview, type WaveformPeak } from "../api/samples";
 import type { FetchState } from "../shared/fetchState";
 import { useFetch } from "../shared/useFetch";
 import type { SampleCategory } from "./category";
@@ -18,19 +18,19 @@ export function sampleHoverCacheKey(sampleHash: string): string {
 }
 
 /**
- * A sample's display name, category, and waveform peaks, fetched together for the Cloud panel's
- * hover tooltip -- deliberately lighter than `useSampleDetail`, which also loads every occurrence
- * and relation a full Sample Detail panel needs but a transient tooltip does not.
+ * A sample's display name, category, and stored waveform thumbnail, fetched as one preview for
+ * the Cloud panel's hover tooltip -- one request as light as a glance, against the detail a
+ * Sample Detail panel needs. A sample the thumbnail pass has not reached shows no bars.
  */
 export function useSampleHoverPreview(sampleHash: string): FetchState<SampleHoverPreview> {
     const loader = useCallback(async () => {
-        const [sample, peaks] = await Promise.all([getSample(sampleHash), getSampleWaveform(sampleHash)]);
+        const preview = await getSamplePreview(sampleHash);
         return {
-            displayName: sample.display_name,
-            category: sample.category,
-            handLabel: sample.hand_label,
-            peaks,
+            displayName: preview.display_name,
+            category: preview.category,
+            handLabel: preview.hand_label,
+            peaks: preview.thumbnail ?? [],
         };
     }, [sampleHash]);
-    return useFetch(loader, [sampleHash], sampleHoverCacheKey(sampleHash));
+    return useFetch(loader, [sampleHash], { cacheKey: sampleHoverCacheKey(sampleHash) });
 }

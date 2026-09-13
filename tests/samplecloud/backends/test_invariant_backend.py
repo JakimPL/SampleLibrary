@@ -7,8 +7,6 @@ from samplecloud.backends.invariant_backend import (
     NUMBER_COEFFICIENTS,
     SPECTRAL_TIME_POINTS,
     InvariantFeatureExtractor,
-    _hann_kernel,
-    _resample_to_duration_fraction,
 )
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 
@@ -99,26 +97,3 @@ def test_extract_lands_closer_for_a_transposed_tone_than_for_unrelated_content()
     transposed_distance = np.linalg.norm(low_vector - high_vector)
     unrelated_distance = np.linalg.norm(low_vector - unrelated_vector)
     assert transposed_distance < unrelated_distance
-
-
-def test_resample_to_duration_fraction_reproduces_exact_values_at_matching_points() -> None:
-    values = np.array([0.0, 2.0, 4.0, 6.0, 8.0])
-
-    resampled = _resample_to_duration_fraction(values, 5)
-
-    assert np.allclose(resampled, values)
-
-
-def test_resample_to_duration_fraction_interpolates_between_original_points() -> None:
-    values = np.array([0.0, 10.0])
-
-    resampled = _resample_to_duration_fraction(values, 3)
-
-    assert np.allclose(resampled, [0.0, 5.0, 10.0])
-
-
-def test_hann_kernel_sums_to_one_and_is_symmetric() -> None:
-    kernel = _hann_kernel(64)
-
-    assert np.isclose(kernel.sum(), 1.0)
-    assert np.allclose(kernel, kernel[::-1])

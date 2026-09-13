@@ -30,11 +30,16 @@ def _annotation(
 
 
 def test_a_label_keeps_whatever_wording_was_chosen(sample_hash_a: str) -> None:
-    assert _annotation(sample_hash=sample_hash_a, label="dirty 909 kick").label == "dirty 909 kick"
+    assert _annotation(sample_hash=sample_hash_a, label="dirty 909 kick").label == "DIRTY 909 KICK"
+
+
+def test_a_label_is_kept_in_one_case_however_it_was_typed(sample_hash_a: str) -> None:
+    """One wording is one label: the case a person happened to type in never splits it in two."""
+    assert _annotation(sample_hash=sample_hash_a, label="Warm Pad").label == "WARM PAD"
 
 
 def test_surrounding_whitespace_is_trimmed_so_one_wording_stays_one_label(sample_hash_a: str) -> None:
-    assert _annotation(sample_hash=sample_hash_a, label="  bass  ").label == "bass"
+    assert _annotation(sample_hash=sample_hash_a, label="  bass  ").label == "BASS"
 
 
 @pytest.mark.parametrize("text", ["", "   "])

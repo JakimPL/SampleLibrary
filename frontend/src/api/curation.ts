@@ -6,6 +6,8 @@ export type AnnotationWritten = components["schemas"]["AnnotationWritten"];
 
 /** How far one gesture reaches: this sample alone, or every near-duplicate grouped with it. */
 export type AnnotationScope = components["schemas"]["AnnotationSource"];
+/** One tag in use: its path, how many samples carry it, and the rank of its first use. */
+export type TagSummary = components["schemas"]["TagSummary"];
 
 /** What a sample says when nobody has decided anything about it. */
 export const NO_DECISIONS: AnnotationDecisions = { label: null, rating: null, favorite: false };
@@ -34,4 +36,9 @@ export async function clearSampleAnnotation(sampleHash: string, scope: Annotatio
 
 export async function getLabelVocabulary(): Promise<readonly string[]> {
     return requestJson<readonly string[]>("/curation/annotations/vocabulary");
+}
+
+/** Every tag inside the labels, as a tree with a count at each node, most used first. */
+export async function getLabelTags(): Promise<readonly TagSummary[]> {
+    return requestJson<readonly TagSummary[]>("/curation/annotations/tags");
 }

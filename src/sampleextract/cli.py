@@ -2,33 +2,31 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
-from samplecore.sharding import WHOLE, Shard, parse_shard
-from sampleextract.run import ExtractionSummary, run_extraction
+from samplecore.cli_support import bootstrap_cli
+from samplecore.models.scalars import MINIMUM_WORKER_COUNT, WorkerCount
+from sampleextract.parallel.supervisor import default_worker_count, extract_corpus
+from sampleextract.run import ExtractionSummary
 
 _logger = logging.getLogger(__name__)
 
 
-def main(argv: list[str] | None = None) -> None:
-    """Run one extraction pass over this run's share of the source directory and report it."""
-    arguments = _parse_arguments(argv)
+def main(argv: list[str], *, prog: str) -> None:
+    """Run one extraction pass over the configured source directory and report it."""
+    arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     config.library_root.mkdir(parents=True, exist_ok=True)
-    with open_catalog_connection(config.database_url) as connection:
-        summary = run_extraction(config, connection, shard=arguments.shard)
-
-    _report(summary)
-    if summary.failures:
-        sys.exit(1)
+    _report(extract_corpus(config, workers=arguments.workers))
 
 
 def _report(summary: ExtractionSummary) -> None:
-    """Say what the run did, naming its shard where the run was only part of the work."""
+    """Say what the pass did, then name every file it could not read.
+
+    An unreadable file describes the collection, so it goes out as a warning and the pass still
+    ends a success: what did land is cataloged, and the stages that follow extraction run on it.
+    """
     _logger.info(
-        "%s %d modules: %d ingested, %d already known, %d ingested by another run, %d failed.",
-        _describe(summary.shard),
+        "Discovered %d modules: %d ingested, %d already known, %d ingested by another worker, %d unreadable.",
         summary.discovered,
         len(summary.ingested),
         summary.skipped_existing,
@@ -36,35 +34,38 @@ def _report(summary: ExtractionSummary) -> None:
         len(summary.failures),
     )
     for failure in summary.failures:
-        _logger.info("  %s: %s", failure.path, failure.reason)
+        _logger.warning("Could not read %s: %s", failure.path, failure.reason)
 
 
-def _describe(shard: Shard) -> str:
-    """How a run names the work it covered: a whole corpus, or the share it took of one."""
-    return "Discovered" if shard.is_whole else f"Shard {shard} discovered"
-
-
-def _shard_argument(value: str) -> Shard:
-    """Read the ``--shard`` value, reporting a bad one the way argparse reports its own.
+def _worker_count_argument(value: str) -> WorkerCount:
+    """Read the ``--workers`` value, reporting a bad one the way argparse reports its own.
 
     Raises:
-        argparse.ArgumentTypeError: the value names no real share of a split.
+        argparse.ArgumentTypeError: the value is not a whole number, or names fewer processes than
+            a run can be spent on.
     """
     try:
-        return parse_shard(value)
+        workers = int(value)
     except ValueError as error:
-        raise argparse.ArgumentTypeError(str(error)) from error
+        raise argparse.ArgumentTypeError(f"a worker count reads as a whole number, not {value!r}") from error
+
+    if workers < MINIMUM_WORKER_COUNT:
+        raise argparse.ArgumentTypeError(f"a run spends at least {MINIMUM_WORKER_COUNT} process, not {workers}")
+
+    return workers
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Extract every module under the configured source directory.")
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Extract every module under the configured source directory."
+    )
     parser.add_argument(
-        "--shard",
-        type=_shard_argument,
-        default=WHOLE,
+        "--workers",
+        type=_worker_count_argument,
+        default=default_worker_count(),
         help=(
-            "This run's share of the corpus, as index/count -- 0/4 through 3/4 split it between four runs, "
-            "which may sit on different machines pointed at one catalog. Defaults to the whole corpus."
+            "How many processes to spend on the corpus. Defaults to one per core, up to a ceiling "
+            "this machine's memory carries comfortably."
         ),
     )
     return parser.parse_args(argv)

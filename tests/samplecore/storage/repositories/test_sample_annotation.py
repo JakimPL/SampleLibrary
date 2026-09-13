@@ -107,7 +107,7 @@ def test_writing_again_replaces_every_decision_including_the_ones_left_empty(
 
     stored = repository.get(sample_hash_a)
     assert stored is not None
-    assert (stored.label, stored.rating, stored.favorite) == ("pluck", None, False)
+    assert (stored.label, stored.rating, stored.favorite) == ("PLUCK", None, False)
     assert repository.count() == 1
 
 
@@ -143,8 +143,8 @@ def test_annotating_a_group_writes_one_row_per_member(
 
     stored = repository.annotations_by_hash([sample_hash_a, sample_hash_b])
     assert {hash_: item.label for hash_, item in stored.items()} == {
-        sample_hash_a: "snare",
-        sample_hash_b: "snare",
+        sample_hash_a: "SNARE",
+        sample_hash_b: "SNARE",
     }
 
 
@@ -170,8 +170,8 @@ def test_annotations_by_hash_reads_more_hashes_than_one_statement_may_bind(
 
     stored = repository.annotations_by_hash([sample_hash_a, sample_hash_b])
     assert {hash_: item.label for hash_, item in stored.items()} == {
-        sample_hash_a: "kick",
-        sample_hash_b: "hat",
+        sample_hash_a: "KICK",
+        sample_hash_b: "HAT",
     }
 
 
@@ -209,7 +209,7 @@ def test_the_vocabulary_offers_the_most_used_wording_first(
         )
     )
 
-    assert repository.vocabulary() == ("bass", "kick")
+    assert repository.vocabulary() == ("BASS", "KICK")
 
 
 def test_the_vocabulary_passes_over_a_sample_carrying_no_wording(
@@ -224,7 +224,7 @@ def test_the_vocabulary_passes_over_a_sample_carrying_no_wording(
         )
     )
 
-    assert repository.vocabulary() == ("bass",)
+    assert repository.vocabulary() == ("BASS",)
 
 
 def test_the_vocabulary_of_an_untouched_library_is_empty(connection: Connection) -> None:

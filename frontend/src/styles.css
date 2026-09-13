@@ -30,13 +30,10 @@
     --cloud-point: var(--text-primary);
     --cloud-point-selected: var(--accent);
     --cloud-ping-color: var(--accent);
+    --cloud-link-color: var(--accent);
 
-    /* One fixed hue per SampleCategory (see frontend/src/samples/category.ts's CATEGORY_ORDER),
-       shared by the cloud's per-category point coloring and the samples table/detail badge -- the
-       same color names the same category everywhere in the app. Fourteen categories exceed what a
-       categorical palette can keep pairwise distinct for every full-color and color-vision-deficient
-       viewer at once, so a category's name is always shown alongside its color (the cloud's hover
-       tooltip, the table cell, the badge label) rather than color carrying identity alone. */
+    /* One hue per SampleCategory in samples/category.ts. Fourteen hues blur together for some
+       viewers, so every place a color appears also names its category. */
     --category-kick: #2a78d6;
     --category-snare: #eb6834;
     --category-clap: #1baf7a;
@@ -52,9 +49,20 @@
     --category-loop: #6d5ce8;
     --category-uncategorized: #7a7972;
     --cloud-point-uncategorized: #d5d4ce;
+
+    /* Read by theme/labelPalette.ts, which takes the hues from the tags' ranks. */
+    --label-lightness: 0.58;
+    --label-chroma: 0.17;
     --mini-waveform-color: var(--text-faint);
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
+}
+
+/* Browsers paint native controls and scrollbars from `color-scheme`, so a hand-picked theme names
+   its own. */
+:root[data-theme="light"],
+:root[data-theme="openmpt"] {
+    color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -96,10 +104,14 @@
         --category-loop: #8f82f0;
         --category-uncategorized: #a3a196;
         --cloud-point-uncategorized: #6e6d64;
+        --label-lightness: 0.74;
+        --label-chroma: 0.15;
     }
 }
 
 :root[data-theme="dark"] {
+    color-scheme: dark;
+
     --surface-0: #14171c;
     --surface-1: #1b1f26;
     --surface-2: #232a35;
@@ -137,13 +149,11 @@
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
     --cloud-point-uncategorized: #6e6d64;
+    --label-lightness: 0.74;
+    --label-chroma: 0.15;
 }
 
-/* Palette sampled from a real OpenMPT 1.32 window on Windows 11, not the classic Win98 3D-bevel
-   look: modern flat common controls (light neutral gray chrome, white content, Windows' own
-   Fluent accent blue for selection) around the black, red-on-black sample/data canvases -- see the
-   waveform and cloud panel sections below for how their wave and cloud tokens consume this block's
-   canvas-specific overrides. */
+/* Sampled from an OpenMPT 1.32 window on Windows 11. */
 :root[data-theme="openmpt"] {
     --surface-0: #f0f0f0;
     --surface-1: #fff;
@@ -174,10 +184,9 @@
     --cloud-point: #fff;
     --cloud-point-selected: var(--wave-fill);
     --cloud-ping-color: #ff0;
+    --cloud-link-color: #ff0;
 
-    /* Reuses the dark theme's own category steps rather than this theme's own light chrome
-       colors: they were tuned for legibility against a near-black surface, which this theme's
-       cloud canvas is too, even though its table chrome stays light. */
+    /* The dark theme's category steps, since this theme's cloud canvas is near-black too. */
     --category-kick: #3987e5;
     --category-snare: #d95926;
     --category-clap: #199e70;
@@ -193,6 +202,8 @@
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
     --cloud-point-uncategorized: #63625a;
+    --label-lightness: 0.74;
+    --label-chroma: 0.15;
     --mini-waveform-color: var(--wave-fill);
     --font-body: "Segoe UI", "Tahoma", sans-serif;
     --font-mono: var(--font-body);
@@ -213,7 +224,7 @@ body {
     background: var(--surface-0);
     color: var(--text-primary);
     font-family: var(--font-body);
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
 }
@@ -310,9 +321,7 @@ select:focus-visible,
     min-height: 0;
 }
 
-/* Maps our own surface/accent tokens onto dockview's theme variables. Selector specificity
-   (two classes on the shell's own root element) outranks dockview.css's single-class theme
-   rule regardless of stylesheet load order, so these overrides always win. */
+/* Two classes outrank dockview.css's single-class theme rule whatever the load order. */
 .workspace-shell.dockview-theme-abyss {
     --dv-group-view-background-color: var(--surface-1);
     --dv-tabs-and-actions-container-background-color: var(--surface-2);
@@ -368,12 +377,17 @@ p.no-selection {
     color: var(--critical);
 }
 
-/* ---------- Tables ---------- */
-
 table.data,
 table.mini {
     width: 100%;
     border-collapse: collapse;
+}
+
+/* A fixed layout holds the <colgroup> widths while a virtualized listing swaps its rows; the minimum
+   keeps the unsized column readable. */
+table.data {
+    table-layout: fixed;
+    min-width: 600px;
 }
 
 table.data thead {
@@ -401,10 +415,12 @@ table.mini th {
 }
 
 table.data th {
-    font-size: 10px;
-    padding: 6px 8px;
+    font-size: 9.5px;
+    padding: 4px 6px;
     cursor: pointer;
     user-select: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 table.data th:hover {
@@ -427,8 +443,11 @@ table.mini td {
 }
 
 table.data td {
-    padding: 5px 8px;
+    padding: 3px 6px;
+    font-size: 11px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 table.mini td {
@@ -439,6 +458,11 @@ table.mini td {
 table.data tbody tr,
 table.mini tbody tr {
     cursor: pointer;
+}
+
+/* Equal to TABLE_ROW_HEIGHT_PX in `shared/tableMetrics.ts`, which places a virtualized listing's rows. */
+table.data tbody tr {
+    height: 40px;
 }
 
 table.data tbody tr:hover,
@@ -455,20 +479,24 @@ tr.is-focused {
     box-shadow: inset 2px 0 0 var(--accent);
 }
 
+/* The cap holds the mini tables, whose layout is measured from their content. */
 .cell-name {
     max-width: 220px;
 }
 
+/* Set tight so a name, a hash and a near-duplicate badge fit the listing row height. */
 .cell-name-stack {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
+    line-height: 1.3;
     overflow: hidden;
 }
 
 .cell-primary {
     color: var(--text-primary);
     font-weight: 600;
+    font-size: 10.5px;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -476,8 +504,6 @@ tr.is-focused {
 .cell-muted {
     color: var(--text-muted);
 }
-
-/* ---------- Badges ---------- */
 
 .badge {
     display: inline-flex;
@@ -488,17 +514,12 @@ tr.is-focused {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    padding: 2px 6px;
+    padding: 1px 5px;
     border-radius: 4px;
-    line-height: 1.6;
+    line-height: 1.5;
 }
 
-/* Each badge's background is mixed to an opaque color rather than taken from its translucent
-   `-soft` token directly: a translucent fill lets whatever sits behind the badge show through, so
-   the exact same badge reads as a different color on a plain row versus a selected row's solid
-   fill. Mixing against `--surface-1` -- the table's own background, and every badge's own resting
-   place -- reproduces that token's usual look exactly, but as a fixed color that stays put no
-   matter what row it ends up on. */
+/* Mixed opaque against `--surface-1`, so a badge keeps one color on a plain and a selected row. */
 .badge-xm {
     background: color-mix(in srgb, var(--good) var(--badge-tint-strength), var(--surface-1));
     color: var(--good);
@@ -524,15 +545,49 @@ tr.is-focused {
     color: var(--accent);
 }
 
-/* A hand label is free text, so it has no place in the fourteen fixed category hues; a filled,
-   bordered badge marks it as the different kind of statement it is -- what a person decided,
-   rather than what the keyword table guessed. */
 .badge-hand-label {
     background: var(--surface-2);
     color: var(--text-primary);
     border: 1px solid var(--border-strong);
-    text-transform: none;
-    letter-spacing: 0;
+}
+
+.suggested-labels {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.suggested-labels-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.badge-suggestion {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px dashed var(--border-strong);
+    cursor: pointer;
+}
+
+.badge-suggestion:hover:not(:disabled) {
+    background: var(--surface-2);
+}
+
+.badge-suggestion[aria-pressed="true"] {
+    background: var(--surface-2);
+    border-style: solid;
+    cursor: default;
+}
+
+.badge-suggestion:disabled:not([aria-pressed="true"]) {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.suggestion-score {
+    color: var(--text-muted);
+    font-weight: 400;
 }
 
 .annotation-editor {
@@ -552,6 +607,7 @@ tr.is-focused {
     flex: 1 1 140px;
     min-width: 120px;
     padding: 3px 6px;
+    text-transform: uppercase;
     background: var(--surface-1);
     color: var(--text-primary);
     border: 1px solid var(--border);
@@ -572,8 +628,6 @@ tr.is-focused {
     color: var(--critical);
 }
 
-/* Stars and the heart are bare glyph buttons, like the sort arrows and the thumbnail preview: this
-   interface reads by its type, and one accent color marks everything a person has decided. */
 .rating-stars {
     display: inline-flex;
 }
@@ -589,13 +643,9 @@ tr.is-focused {
     cursor: pointer;
 }
 
-.rating-star:hover,
-.favorite-toggle:hover {
-    color: var(--accent);
-}
-
-.rating-star[aria-pressed="true"],
-.favorite-toggle[aria-pressed="true"] {
+/* `is-filled` previews what a click would record; `aria-pressed` holds what is recorded. */
+.rating-star.is-filled,
+.favorite-toggle.is-filled {
     color: var(--accent);
 }
 
@@ -604,22 +654,48 @@ tr.is-focused {
     cursor: default;
 }
 
+.cell-stamp {
+    text-align: center;
+}
+
 .cell-verdict {
     white-space: nowrap;
-    color: var(--accent);
 }
 
-.favorite-mark {
-    margin-right: 4px;
+/* A trimmed number reads false, so counts and rating marks show whole in columns sized for them. */
+.cell-numeric,
+.cell-verdict {
+    text-overflow: clip;
 }
 
-.rating-mark {
-    letter-spacing: -1px;
+/* A fixed slot per glyph keeps the Rating column six slots wide, whichever font draws the star
+   and the heart. */
+.cell-verdict .rating-star,
+.cell-verdict .favorite-toggle {
+    font-size: 13px;
+    width: 16px;
+    padding: 0;
+    text-align: center;
 }
 
-/* Class names below echo the backend's RelationType/TrackerFormat enum values verbatim (snake_case
-   is their contract, not ours), so selector-class-pattern is disabled per selector rather than
-   introducing a translation layer just to satisfy kebab-case. */
+table.data td .annotation-editor-input {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+}
+
+.category-cell-button {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+/* These class names echo the backend's snake_case enum values, so stylelint is disabled per selector. */
 /* stylelint-disable-next-line selector-class-pattern */
 .badge-bit_depth_variant {
     background: color-mix(in srgb, var(--accent) var(--badge-tint-strength), var(--surface-1));
@@ -638,9 +714,6 @@ tr.is-focused {
     color: var(--critical);
 }
 
-/* One rule per SampleCategory, each keyed to its own --category-* token (see the palette comment
-   in the :root block above) rather than the four status tokens the badges above share -- fourteen
-   categories need their own hues to stay visually distinct from one another. */
 .badge-category-kick {
     background: color-mix(in srgb, var(--category-kick) var(--badge-tint-strength), var(--surface-1));
     color: var(--category-kick);
@@ -712,8 +785,6 @@ tr.is-focused {
     color: var(--category-uncategorized);
 }
 
-/* ---------- List panels (filter bar + virtualized, scrollable body) ---------- */
-
 .panel-stack {
     display: flex;
     flex-direction: column;
@@ -725,6 +796,23 @@ tr.is-focused {
     min-height: 0;
     overflow: auto;
     position: relative;
+}
+
+.panel-status {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 8px;
+    font-size: 10.5px;
+    background: var(--surface-1);
+}
+
+.panel-status span {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .panel-filter {
@@ -767,23 +855,39 @@ tr.is-focused {
     padding: 0 6px;
 }
 
-.panel-filter span {
-    flex: 0 0 auto;
-    white-space: nowrap;
-}
-
-.panel-filter button {
+/* `:where` keeps the star and heart exception out of this selector's specificity. */
+.panel-filter button,
+.detail-tabs button,
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
+.spectral-distance-readout button,
+.morph-panel button:not(.thumbnail-button) {
     border: 1px solid var(--border);
     background: var(--surface-0);
     border-radius: 5px;
     height: 24px;
     padding: 0 10px;
-    font-size: 11.5px;
+    font-size: 11px;
     cursor: pointer;
     color: var(--text-muted);
 }
 
-.panel-filter button[aria-pressed="true"] {
+.panel-filter button:disabled,
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):disabled,
+.spectral-distance-readout button:disabled {
+    color: var(--text-faint);
+    cursor: default;
+}
+
+.panel-filter button:hover:enabled,
+.detail-tabs button:hover:enabled,
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled,
+.spectral-distance-readout button:hover:enabled {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.panel-filter button[aria-pressed="true"],
+.detail-tabs button[aria-pressed="true"] {
     background: var(--accent-soft);
     color: var(--accent);
     border-color: var(--accent);
@@ -800,17 +904,17 @@ tr.is-focused {
     outline: 2px solid var(--accent);
 }
 
-/* ---------- Cloud panel ---------- */
+/* The canvas pans, so the overlays reaching past its edge are clipped. */
+.cloud-body {
+    overflow: hidden;
+}
 
 .cloud-wrap {
     position: absolute;
     inset: 0;
 }
 
-/* regl-scatterplot always clears its WebGL canvas to fully transparent -- its own `backgroundColor`
-   option only feeds internal contrast math (e.g. picking a readable point outline), it never
-   actually paints anything. This element's own background is what viewers actually see through
-   that transparent canvas. */
+/* regl-scatterplot clears its canvas to transparent; this background is what shows through. */
 .cloud-canvas {
     position: absolute;
     inset: 0;
@@ -831,6 +935,93 @@ tr.is-focused {
     color: var(--text-muted);
     border-bottom: 1px solid var(--border);
     background: var(--surface-1);
+}
+
+.panel-filter-separator {
+    width: 1px;
+    height: 16px;
+    margin-left: auto;
+    background: var(--border);
+}
+
+.panel-filter-caption {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Capped at three rows, scrolling beyond, so the plot underneath keeps its height. */
+.tag-legend {
+    --legend-rows: 3;
+    --legend-chip-height: 22px;
+    --legend-row-gap: 4px;
+    --legend-padding: 6px;
+
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--legend-row-gap) 6px;
+    padding: var(--legend-padding) 8px;
+    max-height: calc(
+        var(--legend-rows) * var(--legend-chip-height) + (var(--legend-rows) - 1) * var(--legend-row-gap) + 2 *
+            var(--legend-padding)
+    );
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-1);
+}
+
+.tag-legend-entry,
+.tag-legend-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: var(--legend-chip-height);
+    padding: 0 8px 0 6px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--surface-0);
+    font-size: 11px;
+    color: var(--text-faint);
+    cursor: pointer;
+}
+
+.tag-legend-toggle {
+    padding: 0 8px;
+    border-style: dashed;
+    color: var(--text-muted);
+}
+
+.tag-legend-toggle:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.tag-legend-entry:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.tag-legend-entry[aria-pressed="true"] {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+    background: var(--surface-1);
+}
+
+.tag-legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    opacity: 0.35;
+}
+
+.tag-legend-entry[aria-pressed="true"] .tag-legend-swatch {
+    opacity: 1;
+}
+
+.tag-legend-count {
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
 }
 
 .cloud-empty {
@@ -882,7 +1073,7 @@ tr.is-focused {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 10.5px;
+    font-size: 10px;
     color: var(--text-faint);
 }
 
@@ -900,8 +1091,7 @@ tr.is-focused {
     pointer-events: none;
 }
 
-/* Animates width/height/margin directly, rather than a transform: scale(), so the ring's own
-   border stays a constant thickness as it expands instead of thickening along with it. */
+/* Animating the size keeps the ring's border one thickness as it expands. */
 .cloud-ping-ring {
     position: absolute;
     top: 0;
@@ -938,8 +1128,6 @@ tr.is-focused {
     }
 }
 
-/* ---------- Waveform panel ---------- */
-
 .wave-panel {
     display: flex;
     flex-direction: column;
@@ -965,11 +1153,8 @@ tr.is-focused {
     background: var(--wave-bg);
 }
 
-/* wavesurfer.js appends its own host element here as a plain, unstyled div; as a block-level
-   element it would naturally fill this container's width on its own, but turning this wrap into a
-   flex container (to center a shorter-than-full-height waveform) makes that child a flex item
-   instead, which shrinks to fit its content by default -- collapsing the whole waveform down to a
-   sliver on the left. Forcing its width back to 100% restores the fill without giving up centering. */
+/* wavesurfer's host div is a flex item here, which shrinks to its content; the full width keeps the
+   waveform wide. */
 .wave-canvas-wrap > div {
     width: 100%;
 }
@@ -977,6 +1162,15 @@ tr.is-focused {
 .wave-canvas-wrap canvas {
     display: block;
     color: var(--wave-fill);
+}
+
+/* wavesurfer draws its playhead in its shadow root, exposed as the `cursor` part. */
+.wave-canvas-wrap ::part(cursor) {
+    opacity: 0;
+}
+
+.wave-canvas-wrap.is-playing ::part(cursor) {
+    opacity: 1;
 }
 
 .transport {
@@ -1025,17 +1219,6 @@ tr.is-focused {
     font-size: 11px;
 }
 
-.wave-caption {
-    flex: 0 0 auto;
-    margin: 0;
-    padding: 4px 10px 8px;
-    font-size: 10.5px;
-    color: var(--text-faint);
-    background: var(--surface-2);
-}
-
-/* ---------- Detail panels ---------- */
-
 .detail-scroll {
     padding: 10px 12px;
 }
@@ -1056,6 +1239,13 @@ tr.is-focused {
 .kv dd {
     margin: 0;
     font-size: 12px;
+}
+
+.detail-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 8px;
 }
 
 .detail-section {
@@ -1091,27 +1281,14 @@ tr.is-focused {
 .spectral-distance-readout {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     margin-bottom: 14px;
     padding: 8px 10px;
     border-radius: 8px;
     background: var(--accent-soft);
-    font-size: 11.5px;
-}
-
-.spectral-distance-readout button {
-    border: 1px solid var(--border);
-    background: var(--surface-1);
-    border-radius: 5px;
-    height: 22px;
-    padding: 0 8px;
     font-size: 11px;
-    cursor: pointer;
-    color: var(--text-muted);
-    margin-left: auto;
 }
-
-/* ---------- Stats panel ---------- */
 
 .stats-grid {
     display: grid;
@@ -1174,13 +1351,9 @@ tr.is-focused {
     border-bottom: none;
 }
 
-/* ---------- OpenMPT chrome ---------- */
-
-/* Flat 1px borders with a slight corner radius, matching real OpenMPT's modern common controls --
-   the round transport play button and the borderless thumbnail toggle keep their own dedicated
-   shapes and are excluded from this sweep. Inputs and selects get an explicit white fill: they read
-   as documents floating on the theme's gray chrome, not chrome themselves. */
-:root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button),
+/* Marks with a shape of their own (play button, thumbnail, stars, heart, category badge) keep that shape. */
+:root[data-theme="openmpt"]
+    button:not(.play-btn, .thumbnail-button, .rating-star, .favorite-toggle, .category-cell-button),
 :root[data-theme="openmpt"] input,
 :root[data-theme="openmpt"] select {
     border-radius: 2px;
@@ -1192,12 +1365,11 @@ tr.is-focused {
     background: var(--surface-1);
 }
 
-:root[data-theme="openmpt"] button:not(.play-btn, .thumbnail-button):active {
+:root[data-theme="openmpt"]
+    button:not(.play-btn, .thumbnail-button, .rating-star, .favorite-toggle, .category-cell-button):active {
     background-color: var(--surface-3);
 }
 
-/* Windows' own common controls tint a field's border blue on hover, and again (more strongly) once
-   it holds focus -- not only via the generic focus-visible ring every theme already gets below. */
 :root[data-theme="openmpt"] input:hover,
 :root[data-theme="openmpt"] select:hover,
 :root[data-theme="openmpt"] input:focus,
@@ -1205,9 +1377,6 @@ tr.is-focused {
     border-color: var(--accent);
 }
 
-/* OpenMPT's own chrome text (table headers, field labels) is plain sans-serif in normal case; this
-   app's shared chrome styling otherwise reaches for an uppercase monospace treatment, so this theme
-   opts these labels back out of it. */
 :root[data-theme="openmpt"] table.data th,
 :root[data-theme="openmpt"] table.mini th,
 :root[data-theme="openmpt"] .detail-section h3,
@@ -1218,9 +1387,6 @@ tr.is-focused {
     letter-spacing: normal;
 }
 
-/* The dockview tab label and the data table's own column headers have a direct OpenMPT counterpart
-   (the document tab strip, the sample list's header row) -- both render there in a regular, not
-   bold, weight, at a size closer to the surrounding body text than this app's own compact default. */
 :root[data-theme="openmpt"] .workspace-shell .dv-default-tab-content {
     font-family: var(--font-body);
     font-size: 12px;
@@ -1229,11 +1395,6 @@ tr.is-focused {
     letter-spacing: normal;
 }
 
-/* OpenMPT's own list-view header row reads as plain black text at the same size as the rows below
-   it, not a smaller, separately-colored caption -- only the sort arrow marks a sorted column, per
-   the rule below. Row/header separator lines go with it: this theme's tables already drop grid
-   lines between rows (further down), and a native list view has none between header and body
-   either. */
 :root[data-theme="openmpt"] table.data th,
 :root[data-theme="openmpt"] table.mini th {
     font-weight: 400;
@@ -1242,29 +1403,24 @@ tr.is-focused {
 }
 
 :root[data-theme="openmpt"] table.data th {
-    font-size: 13px;
+    font-size: 11px;
 }
 
 :root[data-theme="openmpt"] table.mini th {
     font-size: 11.5px;
 }
 
-/* A sorted column in a native Windows list view still marks itself with just the sort arrow --
-   the header label itself never recolors, unlike this app's own accent-tinted default. */
 :root[data-theme="openmpt"] table.data th.sorted {
     color: var(--text-primary);
 }
 
-/* A sample or module's name reads a little larger than the rest of its row in OpenMPT's own list
-   views, the one deliberate size step in an otherwise plain, unweighted table. */
 :root[data-theme="openmpt"] .cell-primary {
     font-weight: 400;
-    font-size: 14px;
+    font-size: 12px;
 }
 
-/* A dockview panel's own content pane reads as OpenMPT's gray document background; a table is the
-   one content type OpenMPT renders as a white document floating on top of it. */
 :root[data-theme="openmpt"] .dv-react-part,
+:root[data-theme="openmpt"] .panel-status,
 :root[data-theme="openmpt"] .panel-filter {
     background: var(--surface-2);
 }
@@ -1274,8 +1430,6 @@ tr.is-focused {
     background: var(--surface-1);
 }
 
-/* OpenMPT's list views carry no cell or row grid lines at all -- only the solid selection fill
-   marks a row apart from its neighbors. */
 :root[data-theme="openmpt"] table.data td,
 :root[data-theme="openmpt"] table.mini td {
     border-bottom: none;
@@ -1291,4 +1445,210 @@ tr.is-focused {
 :root[data-theme="openmpt"] tr.is-focused .cell-muted,
 :root[data-theme="openmpt"] tr.is-focused .entity-hash {
     color: var(--accent-ink);
+}
+
+/* A focused row is filled with the accent the stars and the heart use, so they take the row's ink. */
+:root[data-theme="openmpt"] tr.is-focused .rating-star,
+:root[data-theme="openmpt"] tr.is-focused .favorite-toggle {
+    color: color-mix(in srgb, var(--accent-ink) 45%, transparent);
+}
+
+:root[data-theme="openmpt"] tr.is-focused .rating-star.is-filled,
+:root[data-theme="openmpt"] tr.is-focused .favorite-toggle.is-filled {
+    color: var(--accent-ink);
+}
+
+.morph-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px;
+}
+
+.morph-endpoints {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 8px;
+}
+
+.morph-endpoint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.morph-endpoint-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: 4px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.morph-endpoint-identity.is-highlighted {
+    background: var(--accent-soft);
+}
+
+.morph-endpoint-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.morph-weight {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.morph-weight input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 24px;
+    margin: 0;
+    appearance: none;
+    background: transparent;
+}
+
+.morph-weight input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+}
+
+.morph-weight input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+}
+
+.morph-weight input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface-1);
+}
+
+.morph-weight input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--surface-1);
+}
+
+.morph-readout {
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.morph-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.morph-actions label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+
+.morph-offline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+/* The wrapper passes pointers through to the points; the marker alone takes them. */
+.morph-link {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.morph-link svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.morph-link-line {
+    stroke: var(--cloud-link-color);
+    stroke-width: 2;
+    stroke-dasharray: 4 3;
+    fill: none;
+}
+
+.morph-link-end {
+    fill: none;
+    stroke: var(--cloud-link-color);
+    stroke-width: 2;
+}
+
+.morph-link-marker {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border-radius: 50%;
+    background: var(--cloud-link-color);
+    border: 2px solid var(--surface-1);
+    box-shadow: var(--shadow);
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+}
+
+.morph-link-marker:active {
+    cursor: grabbing;
+}
+
+.morph-band {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.morph-band-line {
+    stroke: var(--cloud-link-color);
+    stroke-width: 1.5;
+    stroke-dasharray: 2 4;
+    opacity: 0.75;
+    fill: none;
+}
+
+.morph-band-origin {
+    fill: none;
+    stroke: var(--cloud-link-color);
+    stroke-width: 2;
+    opacity: 0.75;
+}
+
+:root[data-theme="openmpt"] .morph-weight input[type="range"] {
+    border: none;
+    background: transparent;
 }

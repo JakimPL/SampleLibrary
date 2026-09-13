@@ -5,11 +5,20 @@ import { describe, expect, it } from "vitest";
 import type { SimilarSample } from "../../src/api/samples";
 import { SimilarSampleRow } from "../../src/samples/SimilarSampleRow";
 
-function buildSimilar(): SimilarSample {
-    return { hash: "def456", distance: 0.125, dominant_rate_hz: null };
+function buildSimilar(overrides: Partial<SimilarSample> = {}): SimilarSample {
+    return {
+        hash: "def456",
+        distance: 0.125,
+        playback_rate_hz: null,
+        display_name: "kick_808",
+        category: "kick",
+        hand_label: null,
+        thumbnail: null,
+        ...overrides,
+    };
 }
 
-function renderRow(): ReturnType<typeof render> {
+function renderRow(similar: SimilarSample = buildSimilar()): ReturnType<typeof render> {
     return render(
         <MemoryRouter initialEntries={["/"]}>
             <Routes>
@@ -18,7 +27,7 @@ function renderRow(): ReturnType<typeof render> {
                     element={
                         <table>
                             <tbody>
-                                <SimilarSampleRow similar={buildSimilar()} />
+                                <SimilarSampleRow similar={similar} />
                             </tbody>
                         </table>
                     }
@@ -30,19 +39,28 @@ function renderRow(): ReturnType<typeof render> {
 }
 
 describe("SimilarSampleRow", () => {
-    it("renders the neighbor's short hash and distance", () => {
+    it("names the neighbor over its short hash, with what it is and how far it sits", () => {
         renderRow();
 
-        expect(screen.getByRole("link", { name: /def456/ })).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: /kick_808/ })).toHaveTextContent("def456");
+        expect(screen.getByText("Kick")).toBeInTheDocument();
         expect(screen.getByText("0.125")).toBeInTheDocument();
     });
 
-    it("the play button plays the row's own sample", () => {
-        renderRow();
+    it("plays the neighbor from a plain play button while no thumbnail is stored", () => {
+        const { container } = renderRow();
 
         const button = screen.getByRole("button", { name: "Play sample preview" });
         fireEvent.click(button);
 
         expect(button).toHaveAttribute("aria-pressed", "true");
+        expect(container.querySelector("canvas")).not.toBeInTheDocument();
+    });
+
+    it("draws the stored thumbnail as the play button", () => {
+        const { container } = renderRow(buildSimilar({ thumbnail: [{ minimum: -0.5, maximum: 0.5 }] }));
+
+        expect(container.querySelector("canvas")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Play sample preview" })).toBeInTheDocument();
     });
 });

@@ -12,12 +12,14 @@ from samplecore.config import LibraryConfig
 from samplecore.hashing import compute_module_hash
 from samplecore.models.module import Module
 from samplecore.models.tracker import TrackerFormat
-from samplecore.sharding import WHOLE, Shard
 from samplecore.storage.database import connect
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from sampleextract import run as run_module
-from sampleextract.run import run_extraction
+from sampleextract.discovery import discover_modules
+from sampleextract.progress import ProgressSink
+from sampleextract.run import ExtractionSummary, run_extraction
+from tests.sampleextract.conftest import CountingProgress
 
 
 def _claim(connection: Connection, *, module_hash: str, filename: str, file_size: int) -> None:
@@ -48,6 +50,11 @@ def config(tmp_path: Path) -> LibraryConfig:
     return LibraryConfig(module_source_directory=source, library_root=tmp_path / "library", database_url="unused")
 
 
+def _corpus(config: LibraryConfig) -> tuple[Path, ...]:
+    """Every module under the configured source directory, the share a lone pass covers."""
+    return discover_modules(config.module_source_directory)
+
+
 def _write_corpus(config: LibraryConfig, *, xm_module_bytes: bytes, it_module_bytes: bytes) -> None:
     (config.module_source_directory / "song.xm").write_bytes(xm_module_bytes)
     (config.module_source_directory / "song.it").write_bytes(it_module_bytes)
@@ -55,11 +62,15 @@ def _write_corpus(config: LibraryConfig, *, xm_module_bytes: bytes, it_module_by
 
 
 def test_run_extraction_ingests_valid_modules_and_reports_the_corrupt_one(
-    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, it_module_bytes: bytes
+    connection: Connection,
+    config: LibraryConfig,
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+    progress: ProgressSink,
 ) -> None:
     _write_corpus(config, xm_module_bytes=xm_module_bytes, it_module_bytes=it_module_bytes)
 
-    summary = run_extraction(config, connection, shard=WHOLE)
+    summary = run_extraction(config, connection, _corpus(config), progress=progress)
 
     assert summary.discovered == 3
     assert len(summary.ingested) == 2
@@ -69,12 +80,16 @@ def test_run_extraction_ingests_valid_modules_and_reports_the_corrupt_one(
 
 
 def test_a_second_run_skips_every_previously_ingested_module(
-    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, it_module_bytes: bytes
+    connection: Connection,
+    config: LibraryConfig,
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+    progress: ProgressSink,
 ) -> None:
     _write_corpus(config, xm_module_bytes=xm_module_bytes, it_module_bytes=it_module_bytes)
-    run_extraction(config, connection, shard=WHOLE)
+    run_extraction(config, connection, _corpus(config), progress=progress)
 
-    summary = run_extraction(config, connection, shard=WHOLE)
+    summary = run_extraction(config, connection, _corpus(config), progress=progress)
 
     assert summary.discovered == 3
     assert summary.ingested == ()
@@ -83,7 +98,7 @@ def test_a_second_run_skips_every_previously_ingested_module(
 
 
 def test_a_module_another_run_ingests_first_is_counted_rather_than_raised(
-    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, _database_url: str
+    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, _database_url: str, progress: ProgressSink
 ) -> None:
     """Two runs sharing one catalog can hold the same module under different names and collide.
 
@@ -103,7 +118,7 @@ def test_a_module_another_run_ingests_first_is_counted_rather_than_raised(
             return song
 
         with mock.patch.object(run_module, "parse_module", parse_then_let_the_other_run_claim_it):
-            summary = run_extraction(config, connection, shard=WHOLE)
+            summary = run_extraction(config, connection, _corpus(config), progress=progress)
 
     assert summary.ingested == ()
     assert summary.ingested_elsewhere == 1
@@ -112,7 +127,7 @@ def test_a_module_another_run_ingests_first_is_counted_rather_than_raised(
 
 
 def test_a_collision_leaves_nothing_of_the_losing_run_behind(
-    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, _database_url: str
+    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, _database_url: str, progress: ProgressSink
 ) -> None:
     """The loser rolls its whole module back, so the catalog holds one run's work, not a blend."""
     (config.module_source_directory / "song.xm").write_bytes(xm_module_bytes)
@@ -127,7 +142,7 @@ def test_a_collision_leaves_nothing_of_the_losing_run_behind(
             return song
 
         with mock.patch.object(run_module, "parse_module", parse_then_let_the_other_run_claim_it):
-            run_extraction(config, connection, shard=WHOLE)
+            run_extraction(config, connection, _corpus(config), progress=progress)
 
         stored = PostgresModuleRepository(connection).get(module_hash)
 
@@ -136,27 +151,52 @@ def test_a_collision_leaves_nothing_of_the_losing_run_behind(
     assert PostgresSamplePropertiesRepository(connection).list_for_module(module_hash) == ()
 
 
-def test_two_shards_between_them_ingest_the_whole_corpus_exactly_once(
-    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, it_module_bytes: bytes
+def test_two_shares_between_them_ingest_the_whole_corpus_exactly_once(
+    connection: Connection,
+    config: LibraryConfig,
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+    progress: ProgressSink,
 ) -> None:
-    """What several runs split between them has to add up to what one run would have done alone."""
+    """What several passes split between them has to add up to what one pass would have done alone."""
     _write_corpus(config, xm_module_bytes=xm_module_bytes, it_module_bytes=it_module_bytes)
+    corpus = _corpus(config)
+    shares = (corpus[0::2], corpus[1::2])
 
-    summaries = [run_extraction(config, connection, shard=Shard(index=index, count=2)) for index in range(2)]
+    summaries = [run_extraction(config, connection, share, progress=progress) for share in shares]
 
-    assert sum(summary.discovered for summary in summaries) == 3
-    ingested = [module.hash for summary in summaries for module in summary.ingested]
+    combined = ExtractionSummary.combine(summaries)
+    assert combined.discovered == 3
+    ingested = [module.hash for module in combined.ingested]
     assert sorted(ingested) == sorted({module.hash for module in PostgresModuleRepository(connection).list_all()})
     assert len(ingested) == 2
-    assert sum(len(summary.failures) for summary in summaries) == 1
+    assert len(combined.failures) == 1
 
 
-def test_a_shard_reports_only_the_modules_its_own_share_holds(
-    connection: Connection, config: LibraryConfig, xm_module_bytes: bytes, it_module_bytes: bytes
+def test_a_pass_reports_only_the_modules_its_own_share_holds(
+    connection: Connection,
+    config: LibraryConfig,
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+    progress: ProgressSink,
 ) -> None:
     _write_corpus(config, xm_module_bytes=xm_module_bytes, it_module_bytes=it_module_bytes)
 
-    summary = run_extraction(config, connection, shard=Shard(index=0, count=3))
+    summary = run_extraction(config, connection, _corpus(config)[:1], progress=progress)
 
     assert summary.discovered == 1
-    assert summary.shard == Shard(index=0, count=3)
+
+
+def test_a_pass_reports_every_module_it_covered_to_its_progress_sink(
+    connection: Connection,
+    config: LibraryConfig,
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+    progress: CountingProgress,
+) -> None:
+    """A corrupt file is covered work too, so the count reaches the corpus whatever each file did."""
+    _write_corpus(config, xm_module_bytes=xm_module_bytes, it_module_bytes=it_module_bytes)
+
+    summary = run_extraction(config, connection, _corpus(config), progress=progress)
+
+    assert progress.advanced == summary.discovered == 3

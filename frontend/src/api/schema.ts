@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    readonly "/modules": {
+    readonly "/api/modules": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -15,7 +15,7 @@ export interface paths {
          * List Modules
          * @description A page of cataloged modules, optionally filtered by tracker format.
          */
-        readonly get: operations["list_modules_modules_get"];
+        readonly get: operations["list_modules_api_modules_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -24,7 +24,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/modules/{module_hash}": {
+    readonly "/api/modules/{module_hash}": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -38,7 +38,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no module is cataloged under this hash.
          */
-        readonly get: operations["get_module_modules__module_hash__get"];
+        readonly get: operations["get_module_api_modules__module_hash__get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -47,7 +47,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples": {
+    readonly "/api/samples": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -63,7 +63,7 @@ export interface paths {
          *     ``group_by_equivalence`` collapses same-page rows sharing an equivalence class afterwards, which
          *     is why the total counts rows rather than groups.
          */
-        readonly get: operations["list_samples_samples_get"];
+        readonly get: operations["list_samples_api_samples_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -72,7 +72,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}": {
+    readonly "/api/samples/{sample_hash}": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -89,7 +89,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly get: operations["get_sample_samples__sample_hash__get"];
+        readonly get: operations["get_sample_api_samples__sample_hash__get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -98,7 +98,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/audio": {
+    readonly "/api/samples/{sample_hash}/audio": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -109,10 +109,14 @@ export interface paths {
          * Get Sample Audio
          * @description The sample's own canonical audio, as stored in the content-addressable store.
          *
+         *     The object is content-addressed, so it is served with a cache lifetime of a year and read
+         *     straight off the store by its hash, with no catalog round trip on the way to a sound: the
+         *     hash's own shape is checked on the path, which is what keeps a request inside the store.
+         *
          *     Raises:
-         *         HTTPException: 404 when no sample is cataloged under this hash.
+         *         HTTPException: 404 when the store holds no object under this hash.
          */
-        readonly get: operations["get_sample_audio_samples__sample_hash__audio_get"];
+        readonly get: operations["get_sample_audio_api_samples__sample_hash__audio_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -121,7 +125,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/waveform": {
+    readonly "/api/samples/{sample_hash}/preview": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -129,13 +133,16 @@ export interface paths {
             readonly cookie?: never;
         };
         /**
-         * Get Sample Waveform
-         * @description A compact amplitude-envelope preview of the sample's own waveform.
+         * Get Sample Preview
+         * @description A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
+         *
+         *     Four narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
+         *     point a cursor crosses, so it costs what a glance is worth.
          *
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly get: operations["get_sample_waveform_samples__sample_hash__waveform_get"];
+        readonly get: operations["get_sample_preview_api_samples__sample_hash__preview_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -144,7 +151,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/relations": {
+    readonly "/api/samples/{sample_hash}/relations": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -158,7 +165,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly get: operations["get_sample_relations_samples__sample_hash__relations_get"];
+        readonly get: operations["get_sample_relations_api_samples__sample_hash__relations_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -167,7 +174,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/distance/{other_hash}": {
+    readonly "/api/samples/{sample_hash}/distance/{other_hash}": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -182,7 +189,7 @@ export interface paths {
          *         HTTPException: 404 when either sample has no persisted spectral feature vector yet -- not
          *             yet embedded, or embedded before this metric existed.
          */
-        readonly get: operations["get_sample_distance_samples__sample_hash__distance__other_hash__get"];
+        readonly get: operations["get_sample_distance_api_samples__sample_hash__distance__other_hash__get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -191,7 +198,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/samples/{sample_hash}/similar": {
+    readonly "/api/samples/{sample_hash}/similar": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -202,10 +209,14 @@ export interface paths {
          * Get Similar Samples
          * @description The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
          *
+         *     Every neighbor is found by measuring this sample against the whole catalog at once, over the
+         *     vectors held parsed for as long as the embedding behind them stands. Each arrives with what a
+         *     glance shows, so a listing reads and plays without opening any of them.
+         *
          *     Raises:
          *         HTTPException: 404 when this sample has no persisted spectral feature vector yet.
          */
-        readonly get: operations["get_similar_samples_samples__sample_hash__similar_get"];
+        readonly get: operations["get_similar_samples_api_samples__sample_hash__similar_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -214,7 +225,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/stats": {
+    readonly "/api/stats": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -225,7 +236,7 @@ export interface paths {
          * Get Stats
          * @description A snapshot of the catalog's overall size and composition.
          */
-        readonly get: operations["get_stats_stats_get"];
+        readonly get: operations["get_stats_api_stats_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -234,7 +245,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/cloud": {
+    readonly "/api/cloud": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -244,8 +255,13 @@ export interface paths {
         /**
          * Get Cloud
          * @description Every sample's position in the library's 2D embedding space, as of the latest embedding run.
+         *
+         *     The answer is built once per revision of what it reads and served from memory after that: the
+         *     coordinates' count and last write, the playback rates on file and the modules cataloged are
+         *     what a pipeline moves, and three scalar queries say whether any has. A caller that accepts
+         *     gzip receives the body compressed once at the best level rather than per request.
          */
-        readonly get: operations["get_cloud_cloud_get"];
+        readonly get: operations["get_cloud_api_cloud_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -254,7 +270,82 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/cloud/modules": {
+    readonly "/api/cloud/labels": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Cloud Labels
+         * @description Every labeled sample's tags, for coloring the cloud by what a person decided.
+         *
+         *     These travel apart from the points on purpose: the labels are a few hundred rows against a
+         *     hundred thousand points, and they change with every label a person writes while the points
+         *     change only when the embedding is recomputed. A viewer joins the two by hash, so a labeled
+         *     sample the current embedding holds no point for is simply not painted.
+         */
+        readonly get: operations["get_cloud_labels_api_cloud_labels_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/cloud/suggestions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Cloud Suggestions
+         * @description Every sample's first suggested tag from the newest scoring, for coloring the cloud by what a model hears.
+         *
+         *     These travel apart from the points the way the hand labels do: a scoring changes only when a
+         *     pass writes a new one, so the newest scoring's id is the whole revision, and a viewer joins
+         *     them to the points by hash. An empty answer says no scoring has been written.
+         */
+        readonly get: operations["get_cloud_suggestions_api_cloud_suggestions_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/cloud/suggestion-tags": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Cloud Suggestion Tags
+         * @description Every tag the newest scoring suggests first for some sample, with how many and a lasting rank.
+         *
+         *     A specification counts toward its category the way a written label's does, so the legend can
+         *     paint by category while the suggestions name what is under it. The rank is the tag's place in
+         *     the vocabulary the scoring ranked, recorded with the scoring, a category taking the place of
+         *     its first entry, so a tag keeps its color across the scorings that share a vocabulary; a tag
+         *     the vocabulary leaves unnamed ranks after the vocabulary, by name.
+         */
+        readonly get: operations["get_cloud_suggestion_tags_api_cloud_suggestion_tags_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/cloud/modules": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -268,7 +359,7 @@ export interface paths {
          *     Placeholder until a spectral-distance-based per-module embedding replaces it -- see
          *     `samplecloud.placeholder_modules`.
          */
-        readonly get: operations["get_module_cloud_cloud_modules_get"];
+        readonly get: operations["get_module_cloud_api_cloud_modules_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -277,7 +368,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/curation/annotations/{sample_hash}": {
+    readonly "/api/curation/annotations/{sample_hash}": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -305,7 +396,7 @@ export interface paths {
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
          */
-        readonly put: operations["set_annotation_curation_annotations__sample_hash__put"];
+        readonly put: operations["set_annotation_api_curation_annotations__sample_hash__put"];
         readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
@@ -313,7 +404,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/curation/annotations/vocabulary": {
+    readonly "/api/curation/annotations/vocabulary": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -324,7 +415,80 @@ export interface paths {
          * Get Label Vocabulary
          * @description Every label already in use, most-used first, for offering a person their own wording back.
          */
-        readonly get: operations["get_label_vocabulary_curation_annotations_vocabulary_get"];
+        readonly get: operations["get_label_vocabulary_api_curation_annotations_vocabulary_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/curation/annotations/tags": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Label Tags
+         * @description Every tag in use, read out of the labels as paths, most used first.
+         *
+         *     Where `get_label_vocabulary` offers whole wordings back to the person typing one, this reads the
+         *     tags inside them -- ``HI-HAT: CLOSED, LO-FI`` names three -- for a viewer that colors or filters
+         *     by what the labels say. The tree comes whole; a viewer takes the depth it wants.
+         */
+        readonly get: operations["get_label_tags_api_curation_annotations_tags_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/morph/audio": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Morph Audio
+         * @description The audio at one point between two samples, rendered by the inference process and relayed as it came.
+         *
+         *     The catalog's rates for both ends travel with the point, so the process renders the pair in
+         *     the one frame it is heard in and the file states that rate. The render's validator and its
+         *     caching headers pass through untouched, and so does a caller's conditional request, so a
+         *     browser that holds the render is answered with a 304 by the process that made it.
+         *
+         *     Raises:
+         *         HTTPException: 503 when no inference process answers; the process's own 404 for a sample
+         *             it has no object for, and 422 for a weight off the grid, are relayed with their detail.
+         */
+        readonly get: operations["get_morph_audio_api_morph_audio_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/morph/status": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Morph Status
+         * @description Whether the inference process answers, and what it serves when it does.
+         */
+        readonly get: operations["get_morph_status_api_morph_status_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -343,7 +507,8 @@ export interface components {
          *
          *     The label says what the sample is, as free text: it records what a listener actually decided,
          *     ahead of any vocabulary being settled, so it stays unconstrained by `SampleCategory`'s fourteen
-         *     guessed roles and wins wherever it exists. The rating and the favorite mark say what the
+         *     guessed roles and wins wherever it exists. It is kept in upper case, which is the case it is
+         *     shown in, so the vocabulary a person builds by habit collects one entry per wording. The rating and the favorite mark say what the
          *     listener thought of it, which is what turns browsing the library into a collection of a person's
          *     own.
          *
@@ -412,6 +577,34 @@ export interface components {
          * @enum {integer}
          */
         readonly ChannelLayout: 1 | 2;
+        /**
+         * CloudLabel
+         * @description What a person decided one sample is, as the tag paths they wrote, in the order they wrote them.
+         *
+         *     The order is kept because a point can show one color: the tag a person wrote first is the one
+         *     they thought of first, so it is the one a viewer paints the point with.
+         */
+        readonly CloudLabel: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            /** Paths */
+            readonly paths: readonly (readonly string[])[];
+        };
+        /**
+         * CloudSuggestion
+         * @description What a listening model hears one sample as first: its closest suggested tag path, and how sure it was.
+         *
+         *     The first pick is the one a viewer paints the point with, the way the first written tag of a
+         *     hand label is, and the one the legend counts; a sample's detail lists the picks behind it.
+         */
+        readonly CloudSuggestion: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            /** Path */
+            readonly path: readonly string[];
+            /** Score */
+            readonly score: number;
+        };
         /** HTTPValidationError */
         readonly HTTPValidationError: {
             /** Detail */
@@ -569,26 +762,16 @@ export interface components {
             readonly ingested_at: string;
         };
         /**
-         * ModuleCloudCoordinate
-         * @description Where one Module sits in the library's 2D embedding space, as of one embedding run.
-         *
-         *     Today's positions come from `samplecloud.placeholder_modules`, seeded from a module's own hash
-         *     rather than a genuine similarity fit -- standing in until a spectral-distance metric makes a
-         *     real per-module embedding possible. A later run's coordinate for a given hash entirely replaces
-         *     an earlier one, mirroring SampleCloudCoordinate's own replacement semantics.
+         * ModuleCloudPoint
+         * @description One module's place in the embedding: the coordinate alone, for the same reason a sample's point is.
          */
-        readonly ModuleCloudCoordinate: {
+        readonly ModuleCloudPoint: {
             /** Module Hash */
             readonly module_hash: string;
             /** X */
             readonly x: number;
             /** Y */
             readonly y: number;
-            /**
-             * Computed At
-             * Format: date-time
-             */
-            readonly computed_at: string;
         };
         /**
          * ModuleDetail
@@ -652,14 +835,41 @@ export interface components {
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
         };
         /**
-         * Note
-         * @description A playable key, counted in semitones above C-0.
-         *
-         *     Trackers number their keyboards from C-0, and the octave a tracker prints is one above the octave the
-         *     same pitch carries in MIDI: tracker C-5 is MIDI note 72. The stored number is the tracker numbering,
-         *     which Impulse Tracker writes directly and FastTracker 2 writes offset by one.
+         * MorphAvailability
+         * @description Whether morphs can be rendered right now, and by which model when they can.
          */
-        readonly Note: number;
+        readonly MorphAvailability: {
+            /** Available */
+            readonly available: boolean;
+            readonly service: components["schemas"]["MorphServiceStatus"] | null;
+        };
+        /**
+         * MorphServiceStatus
+         * @description What an inference process serves: the model, the route it renders through, and the device it runs on.
+         *
+         *     The fingerprint names the exact model files loaded, so a render's cache identity changes with
+         *     the model and with nothing else.
+         */
+        readonly MorphServiceStatus: {
+            /** Model */
+            readonly model: string;
+            /** Codec */
+            readonly codec: string;
+            /** Canonicalizer */
+            readonly canonicalizer: string;
+            /** Latent Size */
+            readonly latent_size: number;
+            /** Vocoder */
+            readonly vocoder: string;
+            /** Restorer */
+            readonly restorer: string | null;
+            /** Device */
+            readonly device: string;
+            /** Fingerprint */
+            readonly fingerprint: string;
+            /** Weight Steps */
+            readonly weight_steps: number;
+        };
         /** Page[Module] */
         readonly Page_Module_: {
             /** Items */
@@ -749,14 +959,18 @@ export interface components {
         readonly SampleCategory: "kick" | "snare" | "clap" | "hi_hat" | "cymbal" | "percussion" | "bass" | "lead" | "pad" | "pluck" | "vocal" | "fx" | "loop" | "uncategorized";
         /**
          * SampleCloudPoint
-         * @description A SampleCloudCoordinate together with what a viewer needs to color and hear the point.
+         * @description One sample's place in the embedding, with what a viewer needs to color and hear the point.
          *
          *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
          *     sample's own occurrence names together with the names of the instruments reaching it -- rather
-         *     than stored alongside the coordinate itself. ``dominant_rate_hz`` travels with the point so
-         *     clicking one plays it at a real tracker rate; it is ``None`` for a sample with no occurrences.
-         *     ``hand_label`` carries what a person decided this sample is, for a viewer inspecting a point;
-         *     the cloud keeps coloring by ``category``, whose fourteen roles hold a fixed hue each.
+         *     than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
+         *     clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
+         *     the catalog knows no rate for.
+         *
+         *     This carries the coordinate's own fields rather than inheriting them, since a view of the whole
+         *     catalog is a hundred thousand of these at once: when the run that placed them was computed says
+         *     nothing about any one point, and a timestamp per point is several megabytes over the wire. The
+         *     hand labels travel apart, through `/cloud/labels`, for the same reason.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -765,20 +979,18 @@ export interface components {
             readonly x: number;
             /** Y */
             readonly y: number;
-            /**
-             * Computed At
-             * Format: date-time
-             */
-            readonly computed_at: string;
             readonly category: components["schemas"]["SampleCategory"];
-            /** Hand Label */
-            readonly hand_label: string | null;
-            /** Dominant Rate Hz */
-            readonly dominant_rate_hz: number | null;
+            /** Playback Rate Hz */
+            readonly playback_rate_hz: number | null;
         };
         /**
          * SampleDetail
-         * @description A sample together with every module occurrence that references it, and the notes it is played at.
+         * @description A sample together with every module occurrence that references it, and the rates it is heard at.
+         *
+         *     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
+         *     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
+         *     ``suggested_labels`` are what the newest scoring of the listening model hears the sample as,
+         *     closest first, for a person to accept into the hand label or pass over.
          */
         readonly SampleDetail: {
             /** Hash */
@@ -798,16 +1010,18 @@ export interface components {
             readonly favorite: boolean;
             /** Size Bytes */
             readonly size_bytes: number;
-            /** Dominant Rate Hz */
-            readonly dominant_rate_hz: number | null;
+            /** Playback Rate Hz */
+            readonly playback_rate_hz: number | null;
             /** Occurrences */
             readonly occurrences: readonly components["schemas"]["SampleOccurrenceDetail"][];
             /** Duration Seconds */
             readonly duration_seconds: number;
-            /** Notes Played */
-            readonly notes_played: readonly components["schemas"]["SampleNotePlayed"][];
+            /** Playback Rates */
+            readonly playback_rates: readonly components["schemas"]["SamplePlaybackRate"][];
             /** Equivalence Member Count */
             readonly equivalence_member_count: number;
+            /** Suggested Labels */
+            readonly suggested_labels: readonly components["schemas"]["SuggestedLabel"][];
         };
         /**
          * SampleDistance
@@ -820,24 +1034,6 @@ export interface components {
             readonly other_hash: string;
             /** Distance */
             readonly distance: number;
-        };
-        /**
-         * SampleNotePlayed
-         * @description One note a sample is heard at, with how often the library plays it there.
-         *
-         *     ``sounding_rate_hz`` reads the note against the sample's dominant occurrence rate, which is the
-         *     rate a preview would otherwise play at, so a caller can sound the sample as the library really
-         *     uses it rather than at its bare reference rate.
-         */
-        readonly SampleNotePlayed: {
-            /** Sounded Note */
-            readonly sounded_note: number;
-            /** Note Name */
-            readonly note_name: string;
-            /** Event Count */
-            readonly event_count: number;
-            /** Sounding Rate Hz */
-            readonly sounding_rate_hz: number | null;
         };
         /**
          * SampleOccurrence
@@ -876,6 +1072,36 @@ export interface components {
             /** Title */
             readonly title: string;
             readonly tracker: components["schemas"]["TrackerFormat"];
+        };
+        /**
+         * SamplePlaybackRate
+         * @description How often one sample is heard at one effective playback rate, across every module playing it.
+         *
+         *     This is the rate a waveform's frames are really read at: one number standing for an occurrence
+         *     rate and a pressed key together. Read as a group, these say which speeds a sample is used at and
+         *     how much each is leaned on, which is what lets a preview sound it the way the library does.
+         */
+        readonly SamplePlaybackRate: {
+            /** Rate Hz */
+            readonly rate_hz: number;
+            /** Event Count */
+            readonly event_count: number;
+        };
+        /**
+         * SamplePreview
+         * @description What a glance at a sample shows: its name, category and hand label, and the stored thumbnail of its waveform.
+         *
+         *     ``thumbnail`` is ``None`` for a sample the thumbnail pass has not reached, since a preview
+         *     with nothing to draw is still a preview with a name.
+         */
+        readonly SamplePreview: {
+            /** Display Name */
+            readonly display_name: string;
+            readonly category: components["schemas"]["SampleCategory"];
+            /** Hand Label */
+            readonly hand_label: string | null;
+            /** Thumbnail */
+            readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
         };
         /**
          * SampleRelation
@@ -927,9 +1153,7 @@ export interface components {
          *     variants this sample belongs to, resolved from the whole catalog's relation graph, and is
          *     ``None`` for a sample with no detected relation. ``equivalence_member_count`` is that class's
          *     total size (1 for a sample with no class), independent of how many of its members are present on
-         *     this page. ``dominant_note`` is the note the library plays this sample at most often, which with
-         *     ``dominant_rate_hz`` gives the pitch a preview should sound at; it is ``None`` for a sample whose
-         *     modules have not had their patterns read, and for one no pattern plays.
+         *     this page.
          */
         readonly SampleSummary: {
             /** Hash */
@@ -949,13 +1173,12 @@ export interface components {
             readonly favorite: boolean;
             /** Size Bytes */
             readonly size_bytes: number;
-            /** Dominant Rate Hz */
-            readonly dominant_rate_hz: number | null;
+            /** Playback Rate Hz */
+            readonly playback_rate_hz: number | null;
             /** Occurrence Count */
             readonly occurrence_count: number;
             /** Thumbnail */
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
-            readonly dominant_note: components["schemas"]["Note"] | null;
             /** Equivalence Class Hash */
             readonly equivalence_class_hash: string | null;
             /** Equivalence Member Count */
@@ -963,18 +1186,51 @@ export interface components {
         };
         /**
          * SimilarSample
-         * @description One neighbor in a sample's spectral-distance nearest-neighbor listing.
+         * @description One neighbor in a sample's spectral-distance nearest-neighbor listing: a glance at it, how far it sits, and the rate to hear it at.
          *
-         *     ``dominant_rate_hz`` travels with the neighbor so a listener hears it at a real tracker rate
-         *     rather than at the stored file's own header rate; it is ``None`` for a sample with no occurrences.
+         *     ``playback_rate_hz`` travels with the neighbor so a listener hears it at the speed the library
+         *     really plays it; it is ``None`` for a sample the catalog knows no rate for.
          */
         readonly SimilarSample: {
+            /** Display Name */
+            readonly display_name: string;
+            readonly category: components["schemas"]["SampleCategory"];
+            /** Hand Label */
+            readonly hand_label: string | null;
+            /** Thumbnail */
+            readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
             /** Hash */
             readonly hash: string;
             /** Distance */
             readonly distance: number;
-            /** Dominant Rate Hz */
-            readonly dominant_rate_hz: number | null;
+            /** Playback Rate Hz */
+            readonly playback_rate_hz: number | null;
+        };
+        /**
+         * SuggestedLabel
+         * @description One tag a listening model suggests for a sample, in the hand-label grammar, and how sure it was.
+         */
+        readonly SuggestedLabel: {
+            /** Label */
+            readonly label: string;
+            /** Score */
+            readonly score: number;
+        };
+        /**
+         * TagSummary
+         * @description One tag a person has used: its path, how many samples carry it, and a rank that stays with it.
+         *
+         *     The count includes every sample labeled with a specification below the tag. The rank is the
+         *     order the tag was first used in, which is what a viewer hangs a lasting color on: it keeps its
+         *     value as the vocabulary grows, where a place in a most-used ordering changes with every label.
+         */
+        readonly TagSummary: {
+            /** Path */
+            readonly path: readonly string[];
+            /** Sample Count */
+            readonly sample_count: number;
+            /** Rank */
+            readonly rank: number;
         };
         /**
          * TrackerFormat
@@ -1084,7 +1340,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    readonly list_modules_modules_get: {
+    readonly list_modules_api_modules_get: {
         readonly parameters: {
             readonly query?: {
                 readonly limit?: number;
@@ -1117,7 +1373,7 @@ export interface operations {
             };
         };
     };
-    readonly get_module_modules__module_hash__get: {
+    readonly get_module_api_modules__module_hash__get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1148,7 +1404,7 @@ export interface operations {
             };
         };
     };
-    readonly list_samples_samples_get: {
+    readonly list_samples_api_samples_get: {
         readonly parameters: {
             readonly query?: {
                 readonly limit?: number;
@@ -1184,7 +1440,7 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_samples__sample_hash__get: {
+    readonly get_sample_api_samples__sample_hash__get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1215,7 +1471,36 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_audio_samples__sample_hash__audio_get: {
+    readonly get_sample_audio_api_samples__sample_hash__audio_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly get_sample_preview_api_samples__sample_hash__preview_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1232,7 +1517,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": unknown;
+                    readonly "application/json": components["schemas"]["SamplePreview"];
                 };
             };
             /** @description Validation Error */
@@ -1246,38 +1531,7 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_waveform_samples__sample_hash__waveform_get: {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header?: never;
-            readonly path: {
-                readonly sample_hash: string;
-            };
-            readonly cookie?: never;
-        };
-        readonly requestBody?: never;
-        readonly responses: {
-            /** @description Successful Response */
-            readonly 200: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": readonly components["schemas"]["WaveformPeak"][];
-                };
-            };
-            /** @description Validation Error */
-            readonly 422: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    readonly get_sample_relations_samples__sample_hash__relations_get: {
+    readonly get_sample_relations_api_samples__sample_hash__relations_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1308,7 +1562,7 @@ export interface operations {
             };
         };
     };
-    readonly get_sample_distance_samples__sample_hash__distance__other_hash__get: {
+    readonly get_sample_distance_api_samples__sample_hash__distance__other_hash__get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1340,7 +1594,7 @@ export interface operations {
             };
         };
     };
-    readonly get_similar_samples_samples__sample_hash__similar_get: {
+    readonly get_similar_samples_api_samples__sample_hash__similar_get: {
         readonly parameters: {
             readonly query?: {
                 readonly limit?: number;
@@ -1373,7 +1627,7 @@ export interface operations {
             };
         };
     };
-    readonly get_stats_stats_get: {
+    readonly get_stats_api_stats_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1393,7 +1647,7 @@ export interface operations {
             };
         };
     };
-    readonly get_cloud_cloud_get: {
+    readonly get_cloud_api_cloud_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1413,7 +1667,7 @@ export interface operations {
             };
         };
     };
-    readonly get_module_cloud_cloud_modules_get: {
+    readonly get_cloud_labels_api_cloud_labels_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1428,12 +1682,72 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": readonly components["schemas"]["ModuleCloudCoordinate"][];
+                    readonly "application/json": readonly components["schemas"]["CloudLabel"][];
                 };
             };
         };
     };
-    readonly set_annotation_curation_annotations__sample_hash__put: {
+    readonly get_cloud_suggestions_api_cloud_suggestions_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["CloudSuggestion"][];
+                };
+            };
+        };
+    };
+    readonly get_cloud_suggestion_tags_api_cloud_suggestion_tags_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["TagSummary"][];
+                };
+            };
+        };
+    };
+    readonly get_module_cloud_api_cloud_modules_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["ModuleCloudPoint"][];
+                };
+            };
+        };
+    };
+    readonly set_annotation_api_curation_annotations__sample_hash__put: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1468,7 +1782,7 @@ export interface operations {
             };
         };
     };
-    readonly get_label_vocabulary_curation_annotations_vocabulary_get: {
+    readonly get_label_vocabulary_api_curation_annotations_vocabulary_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1484,6 +1798,77 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": readonly string[];
+                };
+            };
+        };
+    };
+    readonly get_label_tags_api_curation_annotations_tags_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": readonly components["schemas"]["TagSummary"][];
+                };
+            };
+        };
+    };
+    readonly get_morph_audio_api_morph_audio_get: {
+        readonly parameters: {
+            readonly query: {
+                readonly first: string;
+                readonly second: string;
+                readonly weight: number;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly get_morph_status_api_morph_status_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["MorphAvailability"];
                 };
             };
         };

@@ -12,6 +12,7 @@ from samplecore.models.sample import Sample
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from sampleextract.equivalence.cli import main
 
+PROGRAM = "samplelibrary equivalence"
 SAMPLE_HASH = "a" * 64
 
 
@@ -35,7 +36,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "does-not-exist.toml"))
 
     with pytest.raises(SystemExit) as raised:
-        main([])
+        main([], prog=PROGRAM)
 
     assert raised.value.code == 1
     assert "Configuration error" in capsys.readouterr().err
@@ -46,7 +47,7 @@ def test_main_reports_an_empty_catalog(
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main([])
+    main([], prog=PROGRAM)
 
     assert "Considered 0 samples" in capsys.readouterr().out
 
@@ -64,6 +65,6 @@ def test_main_passes_the_limit_argument_through(
     )
     connection.commit()
 
-    main(["--limit", "0"])
+    main(["--limit", "0"], prog=PROGRAM)
 
     assert "Considered 0 samples" in capsys.readouterr().out

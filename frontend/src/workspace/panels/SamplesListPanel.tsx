@@ -7,8 +7,6 @@ import { useWindowedSamples } from "../../samples/useWindowedSamples";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import { Loading } from "../../shared/Loading";
 
-// Grouping starts on: the equivalence class is the primary identity samples are meant to be
-// browsed by, with this toggle offered to see raw per-hash rows on demand.
 const GROUP_BY_EQUIVALENCE_DEFAULT = true;
 
 export function SamplesListPanel(): ReactElement {

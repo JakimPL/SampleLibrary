@@ -18,7 +18,7 @@ describe("listModules", () => {
 
         await listModules({ limit: 50, offset: 0, tracker: null });
 
-        expect(fetchMock).toHaveBeenCalledWith("/modules?limit=50&offset=0");
+        expect(fetchMock).toHaveBeenCalledWith("/api/modules?limit=50&offset=0");
     });
 
     it("includes the tracker filter when one is given", async () => {
@@ -26,7 +26,7 @@ describe("listModules", () => {
 
         await listModules({ limit: 50, offset: 0, tracker: "xm" });
 
-        expect(fetchMock).toHaveBeenCalledWith("/modules?limit=50&offset=0&tracker=xm");
+        expect(fetchMock).toHaveBeenCalledWith("/api/modules?limit=50&offset=0&tracker=xm");
     });
 });
 
@@ -40,6 +40,6 @@ describe("getModule", () => {
 
         await getModule("abc");
 
-        expect(fetchMock).toHaveBeenCalledWith("/modules/abc");
+        expect(fetchMock).toHaveBeenCalledWith("/api/modules/abc");
     });
 });

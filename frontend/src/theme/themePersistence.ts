@@ -15,7 +15,6 @@ export function saveThemePreference(preference: ThemePreference): void {
     try {
         localStorage.setItem(THEME_STORAGE_KEY, preference);
     } catch {
-        // localStorage can be unavailable (private browsing, a full quota) -- losing the saved
-        // preference for this session is an acceptable degradation, not a reason to crash the shell.
+        // localStorage throws in private browsing or on a full quota; the preference then lasts for this session.
     }
 }

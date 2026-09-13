@@ -1,26 +1,45 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Final
 
 from sqlalchemy import Connection
 
 from samplecloud.backends import FeatureExtractor
-from samplecloud.features import FeatureExtractionSummary, extract_features
+from samplecloud.features import FeatureExtractionSummary, FeaturePass, extract_features
+from samplecloud.hearing import Reading, hearing_for
 from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
 from samplecore.config import LibraryConfig
-from samplecore.models.experiment import Experiment
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+
+READING_PARAMETER: Final[str] = "reading"
+
+
+@dataclass(frozen=True)
+class EmbeddingOptions:
+    """How one embedding run goes: how it reads a sample, over how many, and whether it becomes the cloud shown.
+
+    An experiment extracted to be measured, or to teach another descriptor, keeps its vectors and
+    leaves the cloud as it was.
+    """
+
+    reading: Reading
+    sample_limit: int | None
+    promote: bool
+
+
+def reading_parameters(reading: Reading) -> dict[str, Any]:
+    """The reading an experiment was extracted under, in the form its row records it."""
+    return {READING_PARAMETER: reading.value}
 
 
 @dataclass(frozen=True)
 class EmbeddingSummary:
-    """What one embedding run did, across both its extraction and reduction stages."""
+    """What one embedding run did: its extraction stage, and its reduction stage when it ran one."""
 
     experiment_id: int
     extraction: FeatureExtractionSummary
-    reduction: CloudSummary
+    reduction: CloudSummary | None
 
 
 def resolve_experiment(
@@ -48,18 +67,7 @@ def resolve_experiment(
             raise ValueError(f"No experiment with id {experiment_id} exists to resume.")
         return experiment_id
 
-    new_experiment_id = experiment_repository.next_id()
-    experiment_repository.insert(
-        Experiment(
-            id=new_experiment_id,
-            backend_name=backend_name,
-            params=params or {},
-            created_at=datetime.now(UTC),
-            label=label,
-        )
-    )
-    connection.commit()
-    return new_experiment_id
+    return experiment_repository.create(backend_name=backend_name, label=label, params=params or {})
 
 
 def run_embedding(
@@ -68,7 +76,7 @@ def run_embedding(
     feature_extractor: FeatureExtractor,
     experiment_id: int,
     *,
-    sample_limit: int | None = None,
+    options: EmbeddingOptions,
 ) -> EmbeddingSummary:
     """Extract every missing sample's feature vector for the given experiment, then re-fit its 2D layout.
 
@@ -76,7 +84,14 @@ def run_embedding(
     or validating one to resume before calling this.
     """
     extraction = extract_features(
-        connection, config.library_root, experiment_id, feature_extractor, sample_limit=sample_limit
+        connection,
+        config.library_root,
+        FeaturePass(
+            experiment_id=experiment_id,
+            feature_extractor=feature_extractor,
+            hearing=hearing_for(connection, options.reading),
+            sample_limit=options.sample_limit,
+        ),
     )
-    reduction = reduce_and_persist_coordinates(connection, experiment_id)
+    reduction = reduce_and_persist_coordinates(connection, experiment_id) if options.promote else None
     return EmbeddingSummary(experiment_id=experiment_id, extraction=extraction, reduction=reduction)

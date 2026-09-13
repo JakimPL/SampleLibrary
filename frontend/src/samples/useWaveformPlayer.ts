@@ -9,10 +9,6 @@ import { playbackRateFor } from "./nominalRate";
 const MIN_PIXELS_PER_SECOND = 100;
 const CURSOR_WIDTH_PX = 2;
 
-// Caps how tall the waveform is allowed to grow relative to its container's width -- a safety net
-// for a narrow, portrait-oriented panel, not a target shape: a typical wide panel is meant to use
-// most of its available height, only a container narrower than this ratio actually gets capped
-// short of its full height, centered in the remaining space rather than stretched taller still.
 const MIN_WAVEFORM_WIDTH_TO_HEIGHT_RATIO = 2;
 const MIN_WAVEFORM_HEIGHT_PX = 32;
 
@@ -70,6 +66,7 @@ function waveformHeightFor(containerWidthPx: number, containerHeightPx: number):
 export function useWaveformPlayer(audioUrl: string, initialRateHz: number): WaveformPlayer {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const waveSurferRef = useRef<WaveSurfer | null>(null);
+    const playbackRateRef = useRef(playbackRateFor(initialRateHz));
     const [isReady, setIsReady] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
@@ -87,6 +84,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         setCurrentTimeSeconds(0);
         setDurationSeconds(0);
 
+        playbackRateRef.current = playbackRateFor(initialRateHz);
         const initialSize = container.getBoundingClientRect();
         const waveSurfer = WaveSurfer.create({
             container,
@@ -99,7 +97,6 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             autoCenter: true,
             ...readWaveformColors(),
         });
-        waveSurfer.setPlaybackRate(playbackRateFor(initialRateHz), false);
         waveSurferRef.current = waveSurfer;
 
         let lastAppliedHeightPx = waveformHeightFor(initialSize.width, initialSize.height);
@@ -118,6 +115,8 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         resizeObserver.observe(container);
 
         waveSurfer.on("ready", (duration) => {
+            // Loading a source resets a media element's rate, so the rate applies once the file is ready.
+            waveSurfer.setPlaybackRate(playbackRateRef.current, false);
             setIsReady(true);
             setDurationSeconds(duration);
         });
@@ -128,6 +127,8 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             setIsPlaying(false);
         });
         waveSurfer.on("finish", () => {
+            // Rewinds, so a sample already heard looks the same as an untouched one.
+            waveSurfer.setTime(0);
             setIsPlaying(false);
         });
         waveSurfer.on("timeupdate", (currentTime) => {
@@ -139,13 +140,11 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             waveSurfer.destroy();
             waveSurferRef.current = null;
         };
-        // initialRateHz seeds only the moment this sample's instance is created; later rate changes
-        // go through setRateHz, not a recreate, so it is deliberately left out of this dependency list.
+        // initialRateHz seeds a new instance alone; setRateHz carries every later rate.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [audioUrl]);
 
     useEffect(() => {
-        // Redundantly re-applies the colors the mount effect above just set on the first render.
         waveSurferRef.current?.setOptions(readWaveformColors());
     }, [themeSignal.preference, themeSignal.systemVersion]);
 
@@ -165,7 +164,8 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             waveSurferRef.current?.setTime(seconds);
         },
         setRateHz: (occurrenceRateHz: number) => {
-            waveSurferRef.current?.setPlaybackRate(playbackRateFor(occurrenceRateHz), false);
+            playbackRateRef.current = playbackRateFor(occurrenceRateHz);
+            waveSurferRef.current?.setPlaybackRate(playbackRateRef.current, false);
         },
     };
 }

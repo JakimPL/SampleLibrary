@@ -9,8 +9,11 @@ from samplecore.config import (
     CONFIG_PATH_ENVIRONMENT_VARIABLE,
     DATABASE_URL_ENVIRONMENT_VARIABLE,
     DEFAULT_CONFIG_PATH,
+    EXAMPLE_CONFIG_PATH,
     ConfigurationError,
+    InferenceConfig,
     LibraryConfig,
+    create_config_file,
     load_config,
 )
 
@@ -39,6 +42,31 @@ def test_a_config_file_round_trips_through_load_config(tmp_path: Path) -> None:
         library_root=library_root,
         database_url="postgresql+psycopg://user:pass@host/db",
     )
+
+
+def test_the_inference_address_is_read_from_its_own_table(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nmodule_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        'database_url = "postgresql+psycopg://user:pass@host/db"\n'
+        '[inference]\nurl = "http://render.local:9000"\n',
+        encoding="utf-8",
+    )
+
+    assert load_config(config_path).inference.url == "http://render.local:9000"
+
+
+def test_the_inference_address_has_a_default_when_the_table_is_absent(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nmodule_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        'database_url = "postgresql+psycopg://user:pass@host/db"\n',
+        encoding="utf-8",
+    )
+
+    assert load_config(config_path).inference == InferenceConfig()
 
 
 def test_database_url_is_required(tmp_path: Path) -> None:
@@ -109,3 +137,45 @@ def test_database_url_environment_variable_overrides_the_config_file(
     config = load_config(config_path)
 
     assert config.database_url == "postgresql+psycopg://from-environment/db"
+
+
+def test_create_config_file_copies_the_example_where_no_config_is_there(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    created = create_config_file(config_path)
+
+    assert created
+    assert config_path.read_text(encoding="utf-8") == EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
+
+
+def test_create_config_file_keeps_a_config_already_there(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("[library]\n", encoding="utf-8")
+
+    created = create_config_file(config_path)
+
+    assert not created
+    assert config_path.read_text(encoding="utf-8") == "[library]\n"
+
+
+def test_the_committed_example_is_a_config_a_person_still_has_to_fill_in(tmp_path: Path) -> None:
+    """Copying the example and running is what the placeholder check exists to catch."""
+    config_path = tmp_path / "config.toml"
+    create_config_file(config_path)
+
+    with pytest.raises(ConfigurationError):
+        load_config(config_path)
+
+
+def test_a_config_naming_one_stand_in_path_is_rejected(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "[library]\n"
+        'module_source_directory = "/path/to/your/module/collection"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        'database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError):
+        load_config(config_path)

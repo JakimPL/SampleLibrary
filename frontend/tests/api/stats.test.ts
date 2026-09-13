@@ -13,6 +13,6 @@ describe("getStats", () => {
 
         await getStats();
 
-        expect(fetchMock).toHaveBeenCalledWith("/stats");
+        expect(fetchMock).toHaveBeenCalledWith("/api/stats");
     });
 });

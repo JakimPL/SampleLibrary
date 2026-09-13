@@ -8,6 +8,8 @@ from sqlalchemy import Connection
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from sampleextract.notes.cli import main
 
+PROGRAM = "samplelibrary notes"
+
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
     module_source_directory = tmp_path / "modules"
@@ -32,7 +34,7 @@ def test_main_reports_an_empty_corpus(
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main([])
+    main([], prog=PROGRAM)
 
     assert "Discovered 0 files" in capsys.readouterr().out
 
@@ -49,6 +51,6 @@ def test_main_passes_over_a_file_the_catalog_never_ingested(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
     (tmp_path / "modules" / "song.xm").write_bytes(xm_module_bytes)
 
-    main([])
+    main([], prog=PROGRAM)
 
     assert "Discovered 1 files: 0 module(s) read" in capsys.readouterr().out

@@ -1,18 +1,18 @@
-# Copy this file to config.toml (gitignored) and fill in your own local paths below.
-# Paths are read by pathlib.Path, so either forward slashes or your platform's native
-# separator work: "/home/you/modules", "M:/Muzyka/Moduly", "C:\\Users\\you\\Modules".
+# Paths take forward slashes on every system; a Windows backslash is written twice: "C:\\Modules".
 
 [library]
-# Directory containing your tracker module collection, scanned recursively for .xm/.it files.
+# Your tracker module collection, folders inside it included.
 module_source_directory = "/path/to/your/module/collection"
 
-# Directory where extracted sample audio is stored.
+# Where the library keeps its extracted samples, trained models and recorded runs.
 library_root = "/path/to/your/sample/library"
 
-# The catalog's Postgres connection URL. Can instead (or additionally, taking precedence) be
-# supplied via the SAMPLELIBRARY_DATABASE_URL environment variable, so credentials never need to
-# live in this file.
-database_url = "postgresql+psycopg://user:password@localhost:5432/samplelibrary"
+# The PostgreSQL database holding the catalog. `just database` creates it with this user and password.
+database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"
 
-# Samples shorter than this many frames are skipped at ingest time. Defaults to 512.
+# The library keeps samples at least this many frames long.
 # minimum_sample_frames = 512
+
+[inference]
+# Where the morph renderer listens, and where the app reaches it.
+# url = "http://127.0.0.1:8010"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from sqlalchemy import Connection, Row, select
@@ -15,6 +16,8 @@ class ExperimentRepository(Protocol):
     def next_id(self) -> int: ...
 
     def insert(self, experiment_: Experiment) -> None: ...
+
+    def create(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int: ...
 
     def get(self, experiment_id: int) -> Experiment | None: ...
 
@@ -32,6 +35,15 @@ class PostgresExperimentRepository:
 
     def next_id(self) -> int:
         return self._connection.execute(select(experiment_id_sequence.next_value())).scalar_one()
+
+    def create(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int:
+        """Open a new experiment now, committed at once so a later resume finds it whatever happens next."""
+        new_id = self.next_id()
+        self.insert(
+            Experiment(id=new_id, backend_name=backend_name, params=params, created_at=datetime.now(UTC), label=label)
+        )
+        self._connection.commit()
+        return new_id
 
     def insert(self, experiment_: Experiment) -> None:
         self._connection.execute(

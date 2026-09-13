@@ -1,0 +1,149 @@
+from __future__ import annotations
+
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Final
+
+from lightning.pytorch import LightningDataModule, LightningModule, Trainer, seed_everything
+from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.loggers import CSVLogger
+
+from samplecore.tracking import TrackedRun
+from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
+from samplemorph.training.descriptor_cache import GridCache
+from samplemorph.training.export import BestEpochExport
+from samplemorph.training.progress import ProgressLines
+from samplemorph.training.run_settings import GRADIENT_CLIP, RunSettings
+from samplemorph.training.tracked_logger import TrackedRunLogger
+
+RUNS_DIRECTORY_NAME: Final[str] = "runs"
+LAST_CHECKPOINT_NAME: Final[str] = "last"
+
+
+@dataclass(frozen=True)
+class TrainingOutcome:
+    """What one run left behind: its best epoch, and where each of its two files sits."""
+
+    best_validation_loss: float
+    epochs_completed: int
+    model_path: Path
+    resume_path: Path
+
+
+def run_directory(library_root: Path, *, name: str) -> Path:
+    """Where one run's metrics and resume points are kept, beside the library rather than the repo."""
+    return library_root / RUNS_DIRECTORY_NAME / name
+
+
+def resume_path(library_root: Path, *, name: str) -> Path:
+    """The checkpoint an interrupted run of this name picks up from."""
+    return run_directory(library_root, name=name) / f"{LAST_CHECKPOINT_NAME}.ckpt"
+
+
+def last_checkpoint(directory: Path, *, monitored: str) -> ModelCheckpoint:
+    """The resume point, rewritten each epoch so an interrupted run loses at most that epoch."""
+    return ModelCheckpoint(
+        dirpath=directory,
+        filename=LAST_CHECKPOINT_NAME,
+        monitor=monitored,
+        mode="min",
+        save_top_k=1,
+        save_last=True,
+        enable_version_counter=False,
+    )
+
+
+@dataclass(frozen=True)
+class RunPlacement:
+    """Where one named run keeps its files, which record it reports to, and whether it picks up where it stopped."""
+
+    library_root: Path
+    model_name: str
+    tracker: TrackedRun
+    resume: bool
+
+    @property
+    def directory(self) -> Path:
+        return run_directory(self.library_root, name=self.model_name)
+
+    @property
+    def resume_path(self) -> Path:
+        return resume_path(self.library_root, name=self.model_name)
+
+
+def fit_and_export(
+    module: LightningModule,
+    data: LightningDataModule,
+    *,
+    export: BestEpochExport,
+    settings: RunSettings,
+    placement: RunPlacement,
+) -> TrainingOutcome:
+    """Drive one run to its end: the trainer, its three loggers, its resume point, and what it left behind.
+
+    Two files come out, for two different purposes. The trainer's own checkpoint carries the
+    optimizer, the schedule and the epoch reached, so a run cut short continues from where it
+    stopped. The export carries the network alone, which is what a reader of the model loads.
+    Progress reaches the log as lines throughout, and the progress bar draws on a terminal.
+    """
+    trainer = Trainer(
+        max_epochs=settings.epochs,
+        accelerator=settings.accelerator,
+        precision=settings.precision,
+        gradient_clip_val=GRADIENT_CLIP,
+        default_root_dir=placement.directory,
+        logger=[CSVLogger(save_dir=placement.directory, name=""), TrackedRunLogger(placement.tracker)],
+        callbacks=[export, last_checkpoint(placement.directory, monitored=export.monitored), ProgressLines()],
+        enable_progress_bar=sys.stdout.isatty(),
+    )
+    started_from = placement.resume_path
+    trainer.fit(
+        module, datamodule=data, ckpt_path=str(started_from) if placement.resume and started_from.is_file() else None
+    )
+    return TrainingOutcome(
+        best_validation_loss=export.best_loss,
+        epochs_completed=trainer.current_epoch,
+        model_path=export.path,
+        resume_path=started_from,
+    )
+
+
+def begin_cached_run(
+    placement: RunPlacement, *, settings: RunSettings, parameters: dict[str, str], cache: GridCache
+) -> None:
+    """Seed the run and record what it was asked to do and which cache it reads, before the first epoch.
+
+    A pass that ends badly is then still identifiable by what it ran under.
+    """
+    seed_everything(settings.random_seed, workers=True)
+    placement.tracker.log_parameters(
+        parameters
+        | {"cache": cache.directory.name, "canonicalizer": cache.description.canonicalizer}
+        | geometry_parameters(cache.description.geometry)
+    )
+
+
+def geometry_parameters(geometry: Geometry) -> dict[str, str]:
+    """The analysis a run was made on, in the form a tracker records.
+
+    Two runs on two grids are then told apart in the record by the grid itself: its axis, its
+    anchor, its window and hop, and how finely it reads frequency.
+    """
+    shared = {
+        "geometry": geometry.kind,
+        "anchor": geometry.anchor.value,
+        "fft_length": str(geometry.fft_length),
+        "hop_length": str(geometry.hop_length),
+        "band_count": str(geometry.band_count),
+    }
+    match geometry:
+        case LogFrequencyGeometry():
+            return shared | {
+                "analysis_window": geometry.analysis_window.value,
+                "bins_per_octave": str(geometry.bins_per_octave),
+            }
+        case ConstantQGeometry():
+            return shared | {"bins_per_octave": str(geometry.bins_per_octave)}
+        case MelGeometry():
+            return shared

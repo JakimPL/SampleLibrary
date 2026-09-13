@@ -10,6 +10,7 @@ const ALL_PANEL_IDS: readonly PanelId[] = [
     "samples-list",
     "cloud",
     "waveform",
+    "morph",
     "module-detail",
     "sample-detail",
     "stats",
@@ -19,10 +20,7 @@ interface FakePanel {
     readonly id: PanelId;
 }
 
-/**
- * A minimal stand-in for `DockviewApi`, covering only the surface `AddPanelMenu` reads --
- * `panels`, `onDidLayoutChange`, and `addPanel` -- rather than the whole real class.
- */
+/** A minimal stand-in for `DockviewApi`: `panels`, `onDidLayoutChange` and `addPanel`, which `AddPanelMenu` reads. */
 class FakeDockviewApi {
     panels: FakePanel[];
     readonly addPanel = vi.fn();

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Protocol
 
-from sqlalchemy import Connection, Row, delete, select
+from sqlalchemy import Connection, Row, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as upsert
 
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
@@ -18,6 +19,8 @@ class CloudCoordinateRepository(Protocol):
     def replace_all(self, coordinates: Sequence[SampleCloudCoordinate]) -> None: ...
 
     def list_all(self) -> tuple[SampleCloudCoordinate, ...]: ...
+
+    def revision(self) -> tuple[int, datetime | None]: ...
 
 
 class PostgresCloudCoordinateRepository:
@@ -69,6 +72,23 @@ class PostgresCloudCoordinateRepository:
     def list_all(self) -> tuple[SampleCloudCoordinate, ...]:
         rows = self._connection.execute(select(sample_cloud_coordinates)).fetchall()
         return tuple(_row_to_coordinate(row) for row in rows)
+
+    def revision(self) -> tuple[int, datetime | None]:
+        """What the coordinates on file amount to right now: how many there are, and when last written.
+
+        An embedding run replaces every row and stamps them all, so a reader holding an answer
+        built from the coordinates can tell in one cheap query whether it still describes them.
+        """
+        row = self._connection.execute(
+            select(
+                # pylint: disable-next=not-callable
+                func.count(),
+                func.max(sample_cloud_coordinates.c.computed_at),
+            ).select_from(sample_cloud_coordinates)
+        ).one()
+        count: int = row[0]
+        computed_at: datetime | None = row[1]
+        return count, computed_at
 
 
 def _row_to_coordinate(row: Row[tuple[str, float, float, object]]) -> SampleCloudCoordinate:

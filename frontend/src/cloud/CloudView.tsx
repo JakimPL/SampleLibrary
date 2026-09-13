@@ -1,12 +1,16 @@
 import type { ReactElement } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import createScatterplot from "regl-scatterplot";
 
 import { CATEGORY_ORDER, categoryColorProperty, categoryIndex } from "../samples/category";
+import { labelColor, readLabelPaletteParameters } from "../theme/labelPalette";
 import { readThemeColor } from "../theme/readThemeColor";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import type { EntityRef } from "../workspace/selectionStore";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
+import { type PointColoring, SUBSTRATE_SLOT } from "./labelColoring";
+import { MorphBand } from "./MorphBand";
+import { MorphLink } from "./MorphLink";
 
 type Scatterplot = ReturnType<typeof createScatterplot>;
 type ScreenPosition = readonly [number, number];
@@ -23,6 +27,7 @@ const UNCATEGORIZED_CATEGORY = "uncategorized";
 const UNCATEGORIZED_COLOR_PROPERTY = "--cloud-point-uncategorized";
 const UNCATEGORIZED_COLOR_FALLBACK = "#d5d4ce";
 const CATEGORICAL_COLOR_BY = "category";
+const RIGHT_BUTTON = 2;
 
 interface CloudColors {
     readonly pointColor: string;
@@ -38,15 +43,28 @@ function readCloudColors(): CloudColors {
     };
 }
 
-// Most of a real library's samples match no category keyword, so drawing them as strongly as the
-// classified ones buries the very structure the colors exist to show. They take a recessive tone of
-// their own instead, reading as the substrate the classified points sit in.
+/**
+ * One color per category slot. Uncategorized samples, most of a real library, take a recessive tone so the
+ * classified structure stands out.
+ */
 function readCategoryPalette(): string[] {
     return CATEGORY_ORDER.map((category) =>
         category === UNCATEGORIZED_CATEGORY
             ? readThemeColor(UNCATEGORIZED_COLOR_PROPERTY, UNCATEGORIZED_COLOR_FALLBACK)
             : readThemeColor(categoryColorProperty(category), POINT_COLOR_FALLBACK),
     );
+}
+
+/**
+ * The painted tags' colors after the recessive substrate slot, so labeled samples stand out of a mostly
+ * unlabeled catalog.
+ */
+function readLabelPalette(ranks: readonly number[]): string[] {
+    const parameters = readLabelPaletteParameters();
+    return [
+        readThemeColor(UNCATEGORIZED_COLOR_PROPERTY, UNCATEGORIZED_COLOR_FALLBACK),
+        ...ranks.map((rank) => labelColor(rank, parameters)),
+    ];
 }
 
 interface DrawSpec {
@@ -59,46 +77,94 @@ interface DrawSpec {
 /**
  * Builds both the point positions and the color configuration a draw call needs from one pass over
  * `points`, since the two must agree: a sample-cloud point always carries a `category` (worst case
- * "uncategorized"), so a batch where every point has one gets a `[x, y, categoryIndex]` triple and
+ * "uncategorized"), so a batch where every point has one gets a `[x, y, slot]` triple and
  * regl-scatterplot's own categorical coloring (`colorBy: 'category'`, one `pointColor` entry per
- * `CATEGORY_ORDER` slot); a module-cloud point carries none, so its batch stays a plain `[x, y]`
- * pair under the shell's single flat point color -- the two tabs share one scatterplot instance
- * (see `CloudPanel`), so this decides per draw call which of the two point kinds is on screen.
+ * slot) -- the slot being the point's `CATEGORY_ORDER` index, or under a label `coloring` the slot
+ * its painted tag holds; a module-cloud point carries no category, so its batch stays a plain
+ * `[x, y]` pair under the shell's single flat point color -- the two tabs share one scatterplot
+ * instance (see `CloudPanel`), so this decides per draw call which of the two point kinds is on
+ * screen.
  */
-function buildDrawSpec(points: readonly CloudEntityPoint[]): DrawSpec {
+function buildDrawSpec(points: readonly CloudEntityPoint[], coloring: PointColoring): DrawSpec {
     const categorized = points.length > 0 && points.every((point) => point.category !== undefined);
-    const positions = points.map((point) =>
-        point.category === undefined ? [point.x, point.y] : [point.x, point.y, categoryIndex(point.category)],
-    );
-    return categorized
-        ? { positions, categorized, colorBy: CATEGORICAL_COLOR_BY, pointColor: readCategoryPalette() }
-        : {
-              positions,
-              categorized,
-              colorBy: null,
-              pointColor: readThemeColor(POINT_COLOR_PROPERTY, POINT_COLOR_FALLBACK),
-          };
+    if (!categorized) {
+        return {
+            positions: points.map((point) => [point.x, point.y]),
+            categorized,
+            colorBy: null,
+            pointColor: readThemeColor(POINT_COLOR_PROPERTY, POINT_COLOR_FALLBACK),
+        };
+    }
+    if (coloring.kind === "label") {
+        return {
+            positions: points.map((point) => [
+                point.x,
+                point.y,
+                coloring.slotByHash.get(point.ref.hash) ?? SUBSTRATE_SLOT,
+            ]),
+            categorized,
+            colorBy: CATEGORICAL_COLOR_BY,
+            pointColor: readLabelPalette(coloring.ranks),
+        };
+    }
+    return {
+        positions: points.map((point) => [point.x, point.y, categoryIndex(point.category ?? UNCATEGORIZED_CATEGORY)]),
+        categorized,
+        colorBy: CATEGORICAL_COLOR_BY,
+        pointColor: readCategoryPalette(),
+    };
 }
 
-// Kept in step with the ring animations' own total duration in styles.css (two staggered 1400ms
-// rings, the second delayed by 300ms) so the marker element is dropped only once both have faded.
+// Matches the two ping rings in styles.css: 1400ms each, the second delayed by 300ms.
 const PING_LIFETIME_MS = 1900;
+
+/** A morph pair drawn over the cloud: its two ends by hash, and the weight its marker sits at. */
+export interface CloudLink {
+    readonly first: string;
+    readonly second: string;
+    readonly weight: number;
+}
 
 interface CloudViewProps {
     readonly points: readonly CloudEntityPoint[];
+    readonly coloring: PointColoring;
     readonly highlighted: EntityRef | null;
     readonly onSelect: (entity: EntityRef) => void;
     readonly onFocus: (entity: EntityRef) => void;
     readonly onClear: () => void;
     readonly onHover: (entity: EntityRef | null, screenPosition: ScreenPosition | null) => void;
     readonly onCompare: (entity: EntityRef) => void;
+    readonly onJoin: (first: EntityRef, second: EntityRef) => void;
     readonly onActivate: (entity: EntityRef) => void;
+    readonly link: CloudLink | null;
+    readonly onWeightChange: (weight: number) => void;
+    readonly onWeightCommit: () => void;
+    /** The sample, by hash, a right-drag runs from when the press lands on empty space. */
+    readonly anchor: string | null;
 }
 
 interface Ping {
     readonly key: number;
     readonly pointIndex: number;
     readonly position: ScreenPosition;
+}
+
+interface ScreenSegment {
+    readonly first: ScreenPosition;
+    readonly second: ScreenPosition;
+}
+
+interface DragOrigin {
+    readonly index: number;
+    readonly pressedOnPoint: boolean;
+}
+
+function samePosition(a: ScreenPosition, b: ScreenPosition): boolean {
+    return a[0] === b[0] && a[1] === b[1];
+}
+
+function sameSegment(a: ScreenSegment | null, b: ScreenSegment | null): boolean {
+    return a === null || b === null ? a === b : samePosition(a.first, b.first) && samePosition(a.second, b.second);
 }
 
 function sameEntity(a: EntityRef, b: EntityRef): boolean {
@@ -128,8 +194,9 @@ function drawSerialized(
     scatterplot: Scatterplot,
     chain: DrawChain,
     points: readonly CloudEntityPoint[],
+    coloring: PointColoring,
 ): Promise<void> {
-    const spec = buildDrawSpec(points);
+    const spec = buildDrawSpec(points, coloring);
     const runDraw = (): Promise<void> =>
         scatterplot
             .set({ colorBy: spec.colorBy, pointColor: spec.pointColor })
@@ -165,11 +232,12 @@ async function applyPoints(
     scatterplot: Scatterplot,
     drawChain: DrawChain,
     points: readonly CloudEntityPoint[],
+    coloring: PointColoring,
     highlighted: EntityRef | null,
     isCanceled: () => boolean,
 ): Promise<number> {
     try {
-        await drawSerialized(scatterplot, drawChain, points);
+        await drawSerialized(scatterplot, drawChain, points, coloring);
     } catch (error) {
         if (isCanceled()) {
             return -1;
@@ -210,9 +278,18 @@ async function applyPoints(
  * this way also reports it through `onActivate` (a sample tab's caller uses this to start playback),
  * but skips its own ping for that one transition: the click that just selected it is already looking
  * straight at it, so the locate cue is reserved for a highlight arriving from somewhere else in the
- * shell. A Shift-click over a point reports it through `onCompare` alongside regl-scatterplot's own
- * unavoidable normal select -- the library has no way to suppress its own hit-testing from our own
- * listener, so `onActivate` fires for a Shift-click too. Point, active-point,
+ * shell. The right button is the pairing gesture, which the library leaves alone (it pans, selects
+ * and lassos on the left button only), so the browser's menu is the one thing kept off the canvas:
+ * a right-drag from one point to another reports both through `onJoin`, and a right-click on a
+ * point, pressed and released in place, reports that point through `onCompare` for the caller to
+ * join from its own anchor. While the button is held, a band runs from the point pressed, or from
+ * `anchor` when the press landed on empty space, to the cursor, snapping to the point under it,
+ * so the pair a release would join is visible before it lands. When
+ * `link` names two points in view, a dashed line joins them and its marker is the weight, kept
+ * pinned through the library's `view` event the way the ping is and re-read when the container
+ * resizes; the hover tracking pauses while the marker is dragged, since the library keeps
+ * hit-testing beneath it.
+ * Point, active-point,
  * and background colors are read from the theme's CSS custom properties at creation, and re-applied
  * through the library's own `set` whenever `useThemeSignal` reports the resolved theme could have
  * changed, mirroring how `useWaveformPlayer.ts` keeps wavesurfer's own canvas in step. Points draw
@@ -225,25 +302,28 @@ async function applyPoints(
  */
 export function CloudView({
     points: rawPoints,
+    coloring,
     highlighted,
     onSelect,
     onFocus,
     onClear,
     onHover,
     onCompare,
+    onJoin,
     onActivate,
+    link,
+    onWeightChange,
+    onWeightCommit,
+    anchor,
 }: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
-    // Serializes every `draw` call against the current scatterplot instance -- see `drawSerialized`.
-    // Reset on each (re)creation so a chain left over from a just-destroyed instance is abandoned
-    // rather than carried into the new one.
     const drawChainRef = useRef<Promise<void>>(Promise.resolve());
-    // Tracks whether the current scatterplot's first `draw` has resolved -- `getScreenPosition`
-    // throws until it has, so the hover and ping-repositioning subscriptions check this before
-    // calling it rather than risk that throw crashing an unrelated passive-effect commit.
+    // regl-scatterplot's `getScreenPosition` throws until the first `draw` resolves.
     const pointsDrawnRef = useRef(false);
     const pointsRef = useRef<readonly CloudEntityPoint[]>([]);
+    const coloringRef = useRef<PointColoring>(coloring);
+    coloringRef.current = coloring;
     const hoveredIndexRef = useRef<number | null>(null);
     const previousHighlightedRef = useRef<EntityRef | null>(null);
     const pingCounterRef = useRef(0);
@@ -253,23 +333,85 @@ export function CloudView({
     const onClearRef = useRef(onClear);
     const onHoverRef = useRef(onHover);
     const onCompareRef = useRef(onCompare);
+    const onJoinRef = useRef(onJoin);
     const onActivateRef = useRef(onActivate);
     onSelectRef.current = onSelect;
     onFocusRef.current = onFocus;
     onClearRef.current = onClear;
     onHoverRef.current = onHover;
     onCompareRef.current = onCompare;
+    onJoinRef.current = onJoin;
     onActivateRef.current = onActivate;
+    const linkRef = useRef<CloudLink | null>(link);
+    linkRef.current = link;
+    const onWeightChangeRef = useRef(onWeightChange);
+    const onWeightCommitRef = useRef(onWeightCommit);
+    onWeightChangeRef.current = onWeightChange;
+    onWeightCommitRef.current = onWeightCommit;
+    const linkDraggingRef = useRef(false);
+    const anchorRef = useRef<string | null>(anchor);
+    anchorRef.current = anchor;
+    const dragOriginRef = useRef<DragOrigin | null>(null);
+    const cursorRef = useRef<ScreenPosition | null>(null);
 
     const [ping, setPing] = useState<Ping | null>(null);
     pingRef.current = ping;
+    const [linkScreen, setLinkScreen] = useState<ScreenSegment | null>(null);
+    const [band, setBand] = useState<ScreenSegment | null>(null);
 
-    // Stable on `rawPoints` alone, not recomputed on every render, since it feeds the draw effect's
-    // dependency array below -- an identity that changed on every render (including ones this view
-    // causes itself, like a ping's own state update) would redraw the whole scatterplot far more
-    // often than `rawPoints` actually changes.
     const points = useMemo(() => normalizePoints(rawPoints), [rawPoints]);
     pointsRef.current = points;
+    const indexByHash = useMemo(
+        () => new Map(points.map((point, index) => [point.ref.hash, index] as const)),
+        [points],
+    );
+    const indexByHashRef = useRef(indexByHash);
+    indexByHashRef.current = indexByHash;
+
+    /**
+     * Pins the link to both ends' screen positions, hiding it while an end is outside this view or the first
+     * draw is pending.
+     */
+    const repinLink = useCallback((): void => {
+        const scatterplot = scatterplotRef.current;
+        const currentLink = linkRef.current;
+        if (scatterplot === null || currentLink === null || !pointsDrawnRef.current) {
+            setLinkScreen(null);
+            return;
+        }
+        const firstIndex = indexByHashRef.current.get(currentLink.first);
+        const secondIndex = indexByHashRef.current.get(currentLink.second);
+        const first = firstIndex === undefined ? undefined : scatterplot.getScreenPosition(firstIndex);
+        const second = secondIndex === undefined ? undefined : scatterplot.getScreenPosition(secondIndex);
+        if (first === undefined || second === undefined) {
+            setLinkScreen(null);
+            return;
+        }
+        const next: ScreenSegment = { first, second };
+        setLinkScreen((current) => (sameSegment(current, next) ? current : next));
+    }, []);
+
+    const repinBand = useCallback((): void => {
+        const scatterplot = scatterplotRef.current;
+        const origin = dragOriginRef.current;
+        const cursor = cursorRef.current;
+        if (scatterplot === null || origin === null || cursor === null || !pointsDrawnRef.current) {
+            setBand(null);
+            return;
+        }
+        const originPosition = scatterplot.getScreenPosition(origin.index);
+        if (originPosition === undefined) {
+            setBand(null);
+            return;
+        }
+        const hoveredIndex = hoveredIndexRef.current;
+        const hoveredPosition =
+            hoveredIndex === null || hoveredIndex === origin.index
+                ? undefined
+                : scatterplot.getScreenPosition(hoveredIndex);
+        const next: ScreenSegment = { first: originPosition, second: hoveredPosition ?? cursor };
+        setBand((current) => (sameSegment(current, next) ? current : next));
+    }, []);
 
     const themeSignal = useThemeSignal();
 
@@ -293,7 +435,14 @@ export function CloudView({
         pointsDrawnRef.current = false;
         drawChainRef.current = Promise.resolve();
         let canceled = false;
-        void applyPoints(scatterplot, drawChainRef, pointsRef.current, highlighted, () => canceled).then(() => {
+        void applyPoints(
+            scatterplot,
+            drawChainRef,
+            pointsRef.current,
+            coloringRef.current,
+            highlighted,
+            () => canceled,
+        ).then(() => {
             if (!canceled) {
                 pointsDrawnRef.current = true;
             }
@@ -303,30 +452,35 @@ export function CloudView({
             const index = selectedIndices[0];
             const entity = index === undefined ? undefined : pointsRef.current[index]?.ref;
             if (entity !== undefined) {
-                // Recorded before `onSelect` even runs: `highlighted` catching up to this same
-                // entity is this click's own doing, not a locate request from elsewhere, so the
-                // points/highlighted effect's ping guard (comparing against this same ref) skips it.
+                // Set before `onSelect`, so the ping guard reads the highlight that follows as this click's own.
                 previousHighlightedRef.current = entity;
                 onSelectRef.current(entity);
                 onActivateRef.current(entity);
             }
         });
         const pointOverSubscription = scatterplot.subscribe("pointOver", (index) => {
+            if (linkDraggingRef.current) {
+                return;
+            }
             hoveredIndexRef.current = index;
             const entity = pointsRef.current[index]?.ref;
             const position = pointsDrawnRef.current ? scatterplot.getScreenPosition(index) : undefined;
             if (entity !== undefined && position !== undefined) {
                 onHoverRef.current(entity, position);
             }
+            repinBand();
         });
         const pointOutSubscription = scatterplot.subscribe("pointOut", () => {
             hoveredIndexRef.current = null;
             onHoverRef.current(null, null);
+            repinBand();
         });
         const deselectSubscription = scatterplot.subscribe("deselect", () => {
             onClearRef.current();
         });
         const viewSubscription = scatterplot.subscribe("view", () => {
+            repinLink();
+            repinBand();
             const activePing = pingRef.current;
             if (activePing === null || !pointsDrawnRef.current) {
                 return;
@@ -337,17 +491,54 @@ export function CloudView({
             }
         });
 
-        function handleClick(event: MouseEvent): void {
-            const index = hoveredIndexRef.current;
-            if (index === null) {
-                onClearRef.current();
+        function cursorOf(event: MouseEvent): ScreenPosition {
+            const bounds = canvas.getBoundingClientRect();
+            return [event.clientX - bounds.left, event.clientY - bounds.top];
+        }
+
+        function handleRightPress(event: MouseEvent): void {
+            if (event.button !== RIGHT_BUTTON) {
                 return;
             }
-            if (event.shiftKey) {
-                const entity = pointsRef.current[index]?.ref;
-                if (entity !== undefined) {
-                    onCompareRef.current(entity);
-                }
+            const hoveredIndex = hoveredIndexRef.current;
+            const anchorHash = anchorRef.current;
+            const anchorIndex = anchorHash === null ? undefined : indexByHashRef.current.get(anchorHash);
+            const index = hoveredIndex ?? anchorIndex;
+            if (index === undefined) {
+                return;
+            }
+            dragOriginRef.current = { index, pressedOnPoint: hoveredIndex !== null };
+            cursorRef.current = cursorOf(event);
+            repinBand();
+        }
+
+        function handleRightRelease(event: MouseEvent): void {
+            const origin = dragOriginRef.current;
+            if (event.button !== RIGHT_BUTTON || origin === null) {
+                return;
+            }
+            dragOriginRef.current = null;
+            repinBand();
+            const targetIndex = hoveredIndexRef.current;
+            const first = pointsRef.current[origin.index]?.ref;
+            const second = targetIndex === null ? undefined : pointsRef.current[targetIndex]?.ref;
+            if (first === undefined || second === undefined) {
+                return;
+            }
+            if (targetIndex !== origin.index) {
+                onJoinRef.current(first, second);
+            } else if (origin.pressedOnPoint) {
+                onCompareRef.current(second);
+            }
+        }
+
+        function handleContextMenu(event: MouseEvent): void {
+            event.preventDefault();
+        }
+
+        function handleClick(): void {
+            if (hoveredIndexRef.current === null) {
+                onClearRef.current();
             }
         }
 
@@ -359,13 +550,33 @@ export function CloudView({
             }
         }
 
+        function handleMouseMove(event: MouseEvent): void {
+            cursorRef.current = cursorOf(event);
+            repinBand();
+        }
+
+        function handleMouseLeave(): void {
+            cursorRef.current = null;
+            repinBand();
+        }
+
+        canvas.addEventListener("mousedown", handleRightPress);
+        canvas.addEventListener("contextmenu", handleContextMenu);
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("dblclick", handleDoubleClick);
+        canvas.addEventListener("mousemove", handleMouseMove);
+        canvas.addEventListener("mouseleave", handleMouseLeave);
+        window.addEventListener("mouseup", handleRightRelease);
 
         return (): void => {
             canceled = true;
+            canvas.removeEventListener("mousedown", handleRightPress);
+            canvas.removeEventListener("contextmenu", handleContextMenu);
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("dblclick", handleDoubleClick);
+            canvas.removeEventListener("mousemove", handleMouseMove);
+            canvas.removeEventListener("mouseleave", handleMouseLeave);
+            window.removeEventListener("mouseup", handleRightRelease);
             scatterplot.unsubscribe(selectSubscription);
             scatterplot.unsubscribe(pointOverSubscription);
             scatterplot.unsubscribe(pointOutSubscription);
@@ -375,10 +586,7 @@ export function CloudView({
             scatterplotRef.current = null;
             canvas.remove();
         };
-        // Created once per mount: point and highlight updates flow through the effect below, and a
-        // theme switch restyles the live instance, so neither rebuilds the WebGL context.
-        // highlighted is deliberately left out: this effect only needs its value at creation, and
-        // reading it fresh here would otherwise force a recreation on every select.
+        // Created once per mount, reading `highlighted` at creation; the effects below update the live instance.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -388,41 +596,51 @@ export function CloudView({
             return undefined;
         }
 
-        // Canceled if a newer call to this effect (points or highlighted changing again before
-        // this draw resolves) supersedes this one -- otherwise a slow, stale draw could still land
-        // its ping, or overwrite `previousHighlightedRef` with an already-outdated value, after a
-        // newer run already has. The draw itself still queues behind the mount effect's own initial
-        // draw (or any other run's) through `drawChainRef` regardless of this cancellation, since a
-        // canceled run's `draw` call was already issued and the scatterplot has no way to retract it.
         let canceled = false;
-        void applyPoints(scatterplot, drawChainRef, points, highlighted, () => canceled).then((highlightedIndex) => {
-            if (canceled) {
-                return;
-            }
-
-            pointsDrawnRef.current = true;
-            if (highlightedIndex >= 0 && !sameHighlight(highlighted, previousHighlightedRef.current)) {
-                const position = scatterplot.getScreenPosition(highlightedIndex);
-                if (position !== undefined) {
-                    pingCounterRef.current += 1;
-                    setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
+        void applyPoints(scatterplot, drawChainRef, points, coloring, highlighted, () => canceled).then(
+            (highlightedIndex) => {
+                if (canceled) {
+                    return;
                 }
-            }
-            previousHighlightedRef.current = highlighted;
-        });
+
+                pointsDrawnRef.current = true;
+                repinLink();
+                if (highlightedIndex >= 0 && !sameHighlight(highlighted, previousHighlightedRef.current)) {
+                    const position = scatterplot.getScreenPosition(highlightedIndex);
+                    if (position !== undefined) {
+                        pingCounterRef.current += 1;
+                        setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
+                    }
+                }
+                previousHighlightedRef.current = highlighted;
+            },
+        );
         return (): void => {
             canceled = true;
         };
-    }, [points, highlighted]);
+    }, [points, coloring, highlighted, repinLink]);
 
     useEffect(() => {
-        // Redundantly re-applies the colors the mount effect above just set on the first render.
-        // pointColor/colorBy specifically follow the currently-drawn points' own categorization
-        // (see buildDrawSpec) rather than always falling back to the flat point color, so a live
-        // theme switch while viewing the categorized Samples tab keeps every category's own color
-        // instead of collapsing them all back to one.
+        repinLink();
+    }, [link, repinLink]);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        if (container === null) {
+            return undefined;
+        }
+        const observer = new ResizeObserver(() => {
+            repinLink();
+        });
+        observer.observe(container);
+        return (): void => {
+            observer.disconnect();
+        };
+    }, [repinLink]);
+
+    useEffect(() => {
         const { pointColorActive, backgroundColor } = readCloudColors();
-        const spec = buildDrawSpec(pointsRef.current);
+        const spec = buildDrawSpec(pointsRef.current, coloringRef.current);
         void scatterplotRef.current?.set({
             pointColorActive,
             backgroundColor,
@@ -452,6 +670,23 @@ export function CloudView({
                     <span className="cloud-ping-ring" />
                     <span className="cloud-ping-ring cloud-ping-ring-delayed" />
                 </span>
+            )}
+            {band !== null && <MorphBand origin={band.first} cursor={band.second} />}
+            {link !== null && linkScreen !== null && (
+                <MorphLink
+                    first={linkScreen.first}
+                    second={linkScreen.second}
+                    weight={link.weight}
+                    onWeightChange={(weight) => {
+                        onWeightChangeRef.current(weight);
+                    }}
+                    onWeightCommit={() => {
+                        onWeightCommitRef.current();
+                    }}
+                    onDragChange={(dragging) => {
+                        linkDraggingRef.current = dragging;
+                    }}
+                />
             )}
             {points.length === 0 && (
                 <div className="cloud-empty">

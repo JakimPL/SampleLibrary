@@ -9,25 +9,28 @@ from pathlib import Path
 from sqlalchemy import Connection
 
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.labeling.vocabulary import read_vocabulary
 from samplecore.models.annotation import SampleAnnotation
 from sampleextract.annotations.relink import RelinkSummary, relink_annotations
 from sampleextract.annotations.transfer import DEFAULT_ANNOTATION_FILE, export_annotations, import_annotations
+from sampleextract.annotations.vocabulary import vocabulary_lines
 
 _logger = logging.getLogger(__name__)
 
 
 @unique
 class AnnotationCommand(StrEnum):
-    """The three things this command does with hand annotations."""
+    """The four things this command does with hand annotations."""
 
     EXPORT = "export"
     IMPORT = "import"
     RELINK = "relink"
+    VOCABULARY = "vocabulary"
 
 
-def main(argv: list[str] | None = None) -> None:
-    """Move hand annotations between the catalog and a file, or reattach ones whose sample moved."""
-    arguments = _parse_arguments(argv)
+def main(argv: list[str], *, prog: str) -> None:
+    """Move hand annotations between the catalog and a file, reattach ones whose sample moved, or list their wording."""
+    arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         _run(AnnotationCommand(arguments.command), arguments, connection)
@@ -43,6 +46,9 @@ def _run(command: AnnotationCommand, arguments: argparse.Namespace, connection: 
             _logger.info("Read %d annotation(s) from %s.", summary.annotations, summary.path)
         case AnnotationCommand.RELINK:
             _report_relink(relink_annotations(connection))
+        case AnnotationCommand.VOCABULARY:
+            for line in vocabulary_lines(read_vocabulary(connection)):
+                _logger.info("%s", line)
 
 
 def _report_relink(summary: RelinkSummary) -> None:
@@ -84,8 +90,10 @@ def _describe(annotation: SampleAnnotation) -> str:
     return ", ".join(decisions)
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Move hand-made sample annotations in and out of the catalog.")
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Move hand-made sample annotations in and out of the catalog."
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     export_parser = commands.add_parser(
@@ -107,5 +115,9 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     commands.add_parser(
         AnnotationCommand.RELINK.value,
         help="Reattach annotations whose sample hash the catalog no longer holds, through their anchors.",
+    )
+    commands.add_parser(
+        AnnotationCommand.VOCABULARY.value,
+        help="List every tag in use as a tree with counts, and the wording worth a second look.",
     )
     return parser.parse_args(argv)
