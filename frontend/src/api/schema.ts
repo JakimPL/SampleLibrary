@@ -284,7 +284,8 @@ export interface paths {
          *     These travel apart from the points on purpose: the labels are a few hundred rows against a
          *     hundred thousand points, and they change with every label a person writes while the points
          *     change only when the embedding is recomputed. A viewer joins the two by hash, so a labeled
-         *     sample the current embedding holds no point for is simply not painted.
+         *     sample the current embedding holds no point for is simply not painted. Labels whose sample has
+         *     left the catalog wait for relinking and stay off the cloud.
          */
         readonly get: operations["get_cloud_labels_api_cloud_labels_get"];
         readonly put?: never;
@@ -376,32 +377,39 @@ export interface paths {
             readonly cookie?: never;
         };
         readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
         /**
-         * Set Annotation
-         * @description Record what a person decided about this sample, optionally across its near-duplicates.
+         * Remove Annotation
+         * @description Take back everything a person decided about one sample, whether or not the catalog still holds it.
          *
-         *     The whole state arrives at once and replaces whatever the sample said before. A state recording
-         *     nothing removes the annotation, which is how a person takes a decision back.
-         *
-         *     A scope of ``equivalence_class`` reaches every sample the detector groups with this one, which
-         *     is the same group the listing collapses under one row, and each member is written as its own row
-         *     so the group boundary moving later leaves those decisions intact. A sample with no detected
-         *     relation forms a group of one, so both scopes behave identically for it. A member the catalog
-         *     holds no occurrence for has nowhere to anchor, so its annotation is removed rather than left
-         *     saying something the group no longer says.
-         *
-         *     The catalog is read through the read-only connection and only the annotation is written, which
-         *     keeps the one write this application performs to the schema it owns.
+         *     An annotation whose sample has left the catalog for good, and that relinking cannot place, is
+         *     removed through here.
          *
          *     Raises:
-         *         HTTPException: 404 when no sample is cataloged under this hash.
+         *         HTTPException: 404 when no annotation is held for this hash.
          */
-        readonly put: operations["set_annotation_api_curation_annotations__sample_hash__put"];
-        readonly post?: never;
-        readonly delete?: never;
+        readonly delete: operations["remove_annotation_api_curation_annotations__sample_hash__delete"];
         readonly options?: never;
         readonly head?: never;
-        readonly patch?: never;
+        /**
+         * Change Annotation
+         * @description Change what a person decided about this sample, optionally across its near-duplicates.
+         *
+         *     Every reached sample keeps the decisions the request leaves out, so a star given to a group
+         *     changes the members' ratings alone. A scope of ``equivalence_class`` reaches every sample the
+         *     detector groups with this one, the same group the listing collapses under one row, and each
+         *     member is written as its own row so the group boundary moving later leaves those decisions
+         *     intact. A sample left recording nothing has its annotation removed, which is how a person takes
+         *     a decision back.
+         *
+         *     The catalog is read through the read-only connection and only the curation schema is written,
+         *     which keeps the one write this application performs to the schema it owns.
+         *
+         *     Raises:
+         *         HTTPException: 404 when no sample is cataloged under this hash and none is annotated.
+         */
+        readonly patch: operations["change_annotation_api_curation_annotations__sample_hash__patch"];
         readonly trace?: never;
     };
     readonly "/api/curation/annotations/vocabulary": {
@@ -502,6 +510,28 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AnnotationChangeRequest
+         * @description The decisions one gesture changes about a sample, or about its whole group.
+         *
+         *     A decision left out of the request stays as the sample holds it; a decision sent as ``null``
+         *     is cleared, and a favorite is cleared by sending ``false``. Values arrive as the JSON types they
+         *     are, so a rating is a number and a favorite a boolean. An emptied label arrives as ``null``: text
+         *     naming no tag is malformed rather than a way to clear one, which keeps a slip of the keyboard
+         *     from silently discarding a decision.
+         */
+        readonly AnnotationChangeRequest: {
+            readonly scope: components["schemas"]["AnnotationSource"];
+            /** Label */
+            readonly label?: string | null;
+            /** Rating */
+            readonly rating?: number | null;
+            /**
+             * Favorite
+             * @default false
+             */
+            readonly favorite: boolean;
+        };
+        /**
          * AnnotationDecisions
          * @description The three things a person can decide about a sample.
          *
@@ -524,36 +554,23 @@ export interface components {
             readonly favorite: boolean;
         };
         /**
-         * AnnotationRequest
-         * @description The whole state a person wants a sample, or its whole group, to carry from here on.
-         *
-         *     Every decision is sent on every write, so what a person left empty is what the sample ends up
-         *     saying nothing about. An emptied label arrives as ``null``: blank text is malformed rather than
-         *     a way to clear one, which keeps a slip of the keyboard from silently discarding a decision.
-         */
-        readonly AnnotationRequest: {
-            /** Label */
-            readonly label: string | null;
-            /** Rating */
-            readonly rating: number | null;
-            /** Favorite */
-            readonly favorite: boolean;
-            readonly scope: components["schemas"]["AnnotationSource"];
-        };
-        /**
          * AnnotationSource
          * @description Whether an annotation was made for one sample or applied to a whole equivalence class.
          * @enum {string}
          */
         readonly AnnotationSource: "sample" | "equivalence_class";
         /**
-         * AnnotationWritten
+         * AnnotationsWritten
          * @description What every reached sample now says, so a caller updates exactly the rows that changed.
+         *
+         *     ``skipped`` names the group members the change would have given a first decision to while the
+         *     catalog holds nothing to anchor them to; they go on saying nothing.
          */
-        readonly AnnotationWritten: {
-            readonly annotation: components["schemas"]["AnnotationDecisions"] | null;
-            /** Sample Hashes */
-            readonly sample_hashes: readonly string[];
+        readonly AnnotationsWritten: {
+            /** Samples */
+            readonly samples: readonly components["schemas"]["WrittenAnnotation"][];
+            /** Skipped */
+            readonly skipped: readonly string[];
         };
         /**
          * BitDepth
@@ -1220,9 +1237,9 @@ export interface components {
          * TagSummary
          * @description One tag a person has used: its path, how many samples carry it, and a rank that stays with it.
          *
-         *     The count includes every sample labeled with a specification below the tag. The rank is the
-         *     order the tag was first used in, which is what a viewer hangs a lasting color on: it keeps its
-         *     value as the vocabulary grows, where a place in a most-used ordering changes with every label.
+         *     The count includes every sample labeled with a specification below the tag. The rank follows
+         *     the order tags were first used in and stays with its tag for good, which is what a viewer hangs
+         *     a lasting color on.
          */
         readonly TagSummary: {
             /** Path */
@@ -1302,6 +1319,15 @@ export interface components {
             readonly minimum: number;
             /** Maximum */
             readonly maximum: number;
+        };
+        /**
+         * WrittenAnnotation
+         * @description What one reached sample says once a write has landed, ``null`` for a sample saying nothing.
+         */
+        readonly WrittenAnnotation: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            readonly annotation: components["schemas"]["AnnotationDecisions"] | null;
         };
         /**
          * XMSampleProperties
@@ -1747,7 +1773,36 @@ export interface operations {
             };
         };
     };
-    readonly set_annotation_api_curation_annotations__sample_hash__put: {
+    readonly remove_annotation_api_curation_annotations__sample_hash__delete: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 204: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly change_annotation_api_curation_annotations__sample_hash__patch: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1758,7 +1813,7 @@ export interface operations {
         };
         readonly requestBody: {
             readonly content: {
-                readonly "application/json": components["schemas"]["AnnotationRequest"];
+                readonly "application/json": components["schemas"]["AnnotationChangeRequest"];
             };
         };
         readonly responses: {
@@ -1768,7 +1823,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": components["schemas"]["AnnotationWritten"];
+                    readonly "application/json": components["schemas"]["AnnotationsWritten"];
                 };
             };
             /** @description Validation Error */

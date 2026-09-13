@@ -1,7 +1,7 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { cachedRequest } from "../../src/shared/requestCache";
+import { cachedRequest, invalidateRequest } from "../../src/shared/requestCache";
 import { useFetch } from "../../src/shared/useFetch";
 
 describe("useFetch", () => {
@@ -58,5 +58,27 @@ describe("useFetch", () => {
             expect(result.current).toEqual({ status: "success", data: "data" });
         });
         expect(loader).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("useFetch after an invalidation", () => {
+    it("asks again for a mounted key and keeps its answer on screen meanwhile", async () => {
+        let answer = "before";
+        const loader = vi.fn(() => Promise.resolve(answer));
+        const { result } = renderHook(() => useFetch(loader, [], { cacheKey: "labels" }));
+        await waitFor(() => {
+            expect(result.current).toEqual({ status: "success", data: "before" });
+        });
+
+        answer = "after";
+        act(() => {
+            invalidateRequest("labels");
+        });
+
+        expect(result.current).toEqual({ status: "success", data: "before" });
+        await waitFor(() => {
+            expect(result.current).toEqual({ status: "success", data: "after" });
+        });
+        expect(loader).toHaveBeenCalledTimes(2);
     });
 });

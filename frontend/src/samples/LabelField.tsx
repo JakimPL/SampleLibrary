@@ -10,7 +10,6 @@ const REVERT_KEY = "Escape";
 
 interface LabelFieldProps {
     readonly label: string | null;
-    readonly isSaving: boolean;
     readonly onCommit: (label: string | null) => void;
     /** Called once the field is done being edited, whether the wording was committed or taken back. */
     readonly onLeave: () => void;
@@ -27,7 +26,7 @@ interface LabelFieldProps {
  * guessed category showing again. The wording already in use is offered as a list, so one vocabulary
  * settles by habit rather than by a schema nobody has designed yet.
  */
-export function LabelField({ label, isSaving, onCommit, onLeave, takesFocus }: LabelFieldProps): ReactElement {
+export function LabelField({ label, onCommit, onLeave, takesFocus }: LabelFieldProps): ReactElement {
     const vocabularyListId = useId();
     const vocabulary = useFetch(getLabelVocabulary, [], { cacheKey: VOCABULARY_CACHE_KEY });
     const [text, setText] = useState(label ?? "");
@@ -70,7 +69,6 @@ export function LabelField({ label, isSaving, onCommit, onLeave, takesFocus }: L
                 placeholder="Label (e.g. BASS)"
                 value={text}
                 aria-label="Hand label"
-                disabled={isSaving}
                 onChange={(event) => {
                     setText(event.target.value);
                 }}

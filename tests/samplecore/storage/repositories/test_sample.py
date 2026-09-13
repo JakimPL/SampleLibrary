@@ -315,7 +315,7 @@ def _annotate(
     rating: int | None = None,
     favorite: bool = False,
 ) -> None:
-    PostgresSampleAnnotationRepository(connection).replace_many(
+    PostgresSampleAnnotationRepository(connection).upsert_many(
         (
             SampleAnnotation(
                 sample_hash=sample.hash,

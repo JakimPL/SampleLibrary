@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any, Final, Protocol
 
 from sqlalchemy import Connection, Row, delete, func, select
@@ -8,7 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.curation import sample_annotation
-from samplecore.storage.database import HASH_CHUNK_SIZE, chunks
+from samplecore.storage.database import HASH_CHUNK_SIZE, POSTGRES_PARAMETER_LIMIT, chunks, sample
 
 # Every column but the key, read off the table itself. A write replaces a sample's whole annotation,
 # so this list is that contract rather than a copy of it: a hand-kept tuple missing a column would
@@ -16,6 +17,7 @@ from samplecore.storage.database import HASH_CHUNK_SIZE, chunks
 _REPLACED_COLUMN_NAMES: Final[tuple[str, ...]] = tuple(
     name for name in sample_annotation.c.keys() if name != "sample_hash"
 )
+ANNOTATION_ROWS_PER_STATEMENT: Final[int] = POSTGRES_PARAMETER_LIMIT // len(sample_annotation.c)
 
 
 class SampleAnnotationRepository(Protocol):
@@ -27,9 +29,11 @@ class SampleAnnotationRepository(Protocol):
 
     def list_all(self) -> tuple[SampleAnnotation, ...]: ...
 
-    def replace_many(self, annotations: tuple[SampleAnnotation, ...]) -> None: ...
+    def upsert_many(self, annotations: tuple[SampleAnnotation, ...]) -> None: ...
 
     def delete_many(self, hashes: tuple[str, ...]) -> int: ...
+
+    def cataloged_labels(self) -> dict[str, str]: ...
 
     def count(self) -> int: ...
 
@@ -39,9 +43,9 @@ class SampleAnnotationRepository(Protocol):
 class PostgresSampleAnnotationRepository:
     """A SampleAnnotationRepository backed by the ``curation.sample_annotation`` table.
 
-    ``replace_many`` writes a sample's annotation whole, since what a person last decided is what
-    the row should say, and it is the single write path for both a lone sample and a whole group --
-    a group gesture arrives here as the several rows it expands to.
+    ``upsert_many`` writes each sample's annotation whole, as the caller merged it, and it is the
+    single write path for a lone sample, a whole group and an imported file alike -- a group gesture
+    arrives here as the several rows it expands to.
     """
 
     def __init__(self, connection: Connection) -> None:
@@ -76,26 +80,46 @@ class PostgresSampleAnnotationRepository:
         )
         return tuple(_row_to_sample_annotation(row) for row in self._connection.execute(statement).fetchall())
 
-    def replace_many(self, annotations: tuple[SampleAnnotation, ...]) -> None:
-        if not annotations:
-            return
+    def upsert_many(self, annotations: tuple[SampleAnnotation, ...]) -> None:
+        """Write each annotation whole over whatever its sample held, in statements Postgres binds.
 
-        statement = insert(sample_annotation).values(
-            [_sample_annotation_to_values(annotation) for annotation in annotations]
+        Raises:
+            ValueError: two annotations name one sample, which leaves no one thing for its row to say.
+        """
+        repeated = sorted(
+            sample_hash
+            for sample_hash, occurrences in Counter(annotation.sample_hash for annotation in annotations).items()
+            if occurrences > 1
         )
-        statement = statement.on_conflict_do_update(
-            index_elements=[sample_annotation.c.sample_hash],
-            set_={name: statement.excluded[name] for name in _REPLACED_COLUMN_NAMES},
-        )
-        self._connection.execute(statement)
+        if repeated:
+            raise ValueError(f"one write names these samples more than once: {', '.join(repeated)}")
+
+        for batch in chunks(annotations, ANNOTATION_ROWS_PER_STATEMENT):
+            statement = insert(sample_annotation).values([_sample_annotation_to_values(item) for item in batch])
+            statement = statement.on_conflict_do_update(
+                index_elements=[sample_annotation.c.sample_hash],
+                set_={name: statement.excluded[name] for name in _REPLACED_COLUMN_NAMES},
+            )
+            self._connection.execute(statement)
 
     def delete_many(self, hashes: tuple[str, ...]) -> int:
         """Remove the annotations held for ``hashes``, reporting how many rows actually went."""
-        if not hashes:
-            return 0
+        removed = 0
+        for chunk in chunks(hashes, HASH_CHUNK_SIZE):
+            result = self._connection.execute(
+                delete(sample_annotation).where(sample_annotation.c.sample_hash.in_(chunk))
+            )
+            removed += result.rowcount
+        return removed
 
-        result = self._connection.execute(delete(sample_annotation).where(sample_annotation.c.sample_hash.in_(hashes)))
-        return result.rowcount
+    def cataloged_labels(self) -> dict[str, str]:
+        """Each cataloged sample's hand label, for a viewer drawing the catalog's samples alone."""
+        statement = (
+            select(sample_annotation.c.sample_hash, sample_annotation.c.label)
+            .join(sample, sample.c.hash == sample_annotation.c.sample_hash)
+            .where(sample_annotation.c.label.is_not(None))
+        )
+        return {row.sample_hash: row.label for row in self._connection.execute(statement)}
 
     def count(self) -> int:
         # pylint: disable-next=not-callable

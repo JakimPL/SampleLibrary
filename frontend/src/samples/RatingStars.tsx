@@ -6,7 +6,6 @@ import { EMPTY_STAR, FILLED_STAR, RATING_VALUES } from "./rating";
 
 interface RatingStarsProps {
     readonly rating: number | null;
-    readonly isSaving: boolean;
     readonly onRatingChange: (rating: number | null) => void;
 }
 
@@ -20,7 +19,7 @@ interface RatingStarsProps {
  * Pointing at a star fills it and every star before it, showing the rating the click would leave
  * behind -- four out of five reads as four stars, the way the committed rating does.
  */
-export function RatingStars({ rating, isSaving, onRatingChange }: RatingStarsProps): ReactElement {
+export function RatingStars({ rating, onRatingChange }: RatingStarsProps): ReactElement {
     const [previewed, setPreviewed] = useState<number | null>(null);
     const shown = previewed ?? rating;
 
@@ -38,7 +37,6 @@ export function RatingStars({ rating, isSaving, onRatingChange }: RatingStarsPro
                     key={value}
                     type="button"
                     className={classNames("rating-star", shown !== null && value <= shown && "is-filled")}
-                    disabled={isSaving}
                     aria-label={`Rate ${String(value)}`}
                     aria-pressed={rating !== null && value <= rating}
                     onMouseEnter={() => {

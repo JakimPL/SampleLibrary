@@ -95,7 +95,7 @@ def test_vocabulary_lists_the_tags_in_use_as_a_tree(
     connection: Connection, stored_annotation: SampleAnnotation, configured: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repository = PostgresSampleAnnotationRepository(connection)
-    repository.replace_many(
+    repository.upsert_many(
         (
             stored_annotation.model_copy(update={"label": "HI-HAT: CLOSED, LO-FI"}),
             stored_annotation.model_copy(update={"sample_hash": "d" * 64, "label": "HI-HAT: OPEN"}),

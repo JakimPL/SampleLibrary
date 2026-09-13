@@ -26,7 +26,7 @@ interface SampleRowProps {
  * The category, the rating and the favorite mark are all editable here, so working through a
  * library is one pass down the list rather than a detour into each sample in turn. An edit reaches
  * exactly what the row stands for: the whole equivalence class while the listing groups them, and
- * this one sample otherwise.
+ * this one sample otherwise. An edit that fails to save says so in the row, the reason in its tooltip.
  */
 export function SampleRow({ sample, groupByEquivalence }: SampleRowProps): ReactElement {
     const { href, isHighlighted, isFocused, onClick, onDoubleClick } = useEntityRowInteractions({
@@ -36,7 +36,7 @@ export function SampleRow({ sample, groupByEquivalence }: SampleRowProps): React
     const sent = decisionsOf(sample);
     const annotation = useSampleAnnotation(sample.hash, sent);
     const decisions = annotation ?? { label: null, rating: null, favorite: false };
-    const { write, isSaving } = useAnnotationWriter(sample.hash, groupByEquivalence ? "equivalence_class" : "sample");
+    const { change, message } = useAnnotationWriter(sample.hash, groupByEquivalence ? "equivalence_class" : "sample");
 
     return (
         <tr
@@ -61,23 +61,32 @@ export function SampleRow({ sample, groupByEquivalence }: SampleRowProps): React
                 </Link>
             </td>
             <td className="cell-muted cell-stamp">
-                <CategoryCell sample={sample} decisions={decisions} isSaving={isSaving} onCommit={write} />
+                <CategoryCell
+                    sample={sample}
+                    label={decisions.label}
+                    onCommit={(label) => {
+                        change({ label });
+                    }}
+                />
             </td>
             <td className="cell-verdict">
                 <RatingStars
                     rating={decisions.rating}
-                    isSaving={isSaving}
                     onRatingChange={(rating) => {
-                        write({ ...decisions, rating });
+                        change({ rating });
                     }}
                 />
                 <FavoriteToggle
                     favorite={decisions.favorite}
-                    isSaving={isSaving}
                     onFavoriteChange={(favorite) => {
-                        write({ ...decisions, favorite });
+                        change({ favorite });
                     }}
                 />
+                {message !== null && (
+                    <span className="annotation-row-message" role="alert" title={message}>
+                        Not saved
+                    </span>
+                )}
             </td>
             <td className="cell-muted mono cell-numeric">{formatBytes(sample.size_bytes)}</td>
             <td className="cell-muted mono cell-numeric">{sample.occurrence_count}</td>

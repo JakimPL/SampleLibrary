@@ -6,13 +6,13 @@ import type * as CurationApi from "../../src/api/curation";
 import type { SampleDetail } from "../../src/api/samples";
 import { NO_SUGGESTIONS, SuggestedLabels } from "../../src/samples/SuggestedLabels";
 
-const { setSampleAnnotation } = vi.hoisted(() => ({
-    setSampleAnnotation: vi.fn(),
+const { changeSampleAnnotation } = vi.hoisted(() => ({
+    changeSampleAnnotation: vi.fn(),
 }));
 
 vi.mock("../../src/api/curation", async () => {
     const actual = await vi.importActual<typeof CurationApi>("../../src/api/curation");
-    return { ...actual, setSampleAnnotation };
+    return { ...actual, changeSampleAnnotation };
 });
 
 const SAMPLE_HASH = "a".repeat(64);
@@ -44,75 +44,65 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
     };
 }
 
+function resolvesTo(label: string): void {
+    changeSampleAnnotation.mockResolvedValue({
+        samples: [{ sample_hash: SAMPLE_HASH, annotation: { ...NOTHING, label } }],
+        skipped: [],
+    });
+}
+
 describe("SuggestedLabels", () => {
     it("shows each suggestion with its score, closest first", () => {
-        render(<SuggestedLabels sample={buildSample()} />);
+        render(<SuggestedLabels sample={buildSample()} scope="sample" />);
 
         const buttons = screen.getAllByRole("button");
         expect(buttons.map((button) => button.textContent)).toEqual(["BASS DRUM0.81", "SNARE0.40"]);
     });
 
     it("writes a clicked suggestion as the label of a sample that had none", async () => {
-        setSampleAnnotation.mockResolvedValue({
-            annotation: { ...NOTHING, label: "BASS DRUM" },
-            sample_hashes: [SAMPLE_HASH],
-        });
-        render(<SuggestedLabels sample={buildSample()} />);
+        resolvesTo("BASS DRUM");
+        render(<SuggestedLabels sample={buildSample()} scope="sample" />);
 
         await userEvent.click(screen.getByRole("button", { name: /BASS DRUM/ }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, label: "BASS DRUM" }, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { label: "BASS DRUM" });
         });
     });
 
-    it("appends a clicked suggestion after the wording the sample already carries, keeping its rating", async () => {
-        setSampleAnnotation.mockResolvedValue({
-            annotation: { label: "LO-FI, BASS DRUM", rating: 4, favorite: false },
-            sample_hashes: [SAMPLE_HASH],
-        });
-        render(<SuggestedLabels sample={buildSample({ hand_label: "LO-FI", rating: 4 })} />);
+    it("appends a clicked suggestion after the wording the sample already carries, and changes the label alone", async () => {
+        resolvesTo("LO-FI, BASS DRUM");
+        render(<SuggestedLabels sample={buildSample({ hand_label: "LO-FI", rating: 4 })} scope="sample" />);
 
         await userEvent.click(screen.getByRole("button", { name: /BASS DRUM/ }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(
-                SAMPLE_HASH,
-                { label: "LO-FI, BASS DRUM", rating: 4, favorite: false },
-                "sample",
-            );
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { label: "LO-FI, BASS DRUM" });
         });
     });
 
     it("shows a suggestion the label already holds as taken, and writes nothing for it", () => {
-        render(<SuggestedLabels sample={buildSample({ hand_label: "snare" })} />);
+        render(<SuggestedLabels sample={buildSample({ hand_label: "snare" })} scope="sample" />);
 
         const taken = screen.getByRole("button", { name: /SNARE/ });
         expect(taken).toHaveAttribute("aria-pressed", "true");
         expect(taken).toBeDisabled();
-        expect(setSampleAnnotation).not.toHaveBeenCalled();
+        expect(changeSampleAnnotation).not.toHaveBeenCalled();
     });
 
-    it("reaches the whole group of near-duplicates, the way the editor's default does", async () => {
-        setSampleAnnotation.mockResolvedValue({
-            annotation: { ...NOTHING, label: "SNARE" },
-            sample_hashes: [SAMPLE_HASH],
-        });
-        render(<SuggestedLabels sample={buildSample({ equivalence_member_count: 3 })} />);
+    it("reaches as far as the scope it is given", async () => {
+        resolvesTo("SNARE");
+        render(<SuggestedLabels sample={buildSample({ equivalence_member_count: 3 })} scope="equivalence_class" />);
 
         await userEvent.click(screen.getByRole("button", { name: /SNARE/ }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(
-                SAMPLE_HASH,
-                { ...NOTHING, label: "SNARE" },
-                "equivalence_class",
-            );
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "equivalence_class", { label: "SNARE" });
         });
     });
 
     it("says so when no scoring has reached the sample", () => {
-        render(<SuggestedLabels sample={buildSample({ suggested_labels: [] })} />);
+        render(<SuggestedLabels sample={buildSample({ suggested_labels: [] })} scope="sample" />);
 
         expect(screen.getByText(NO_SUGGESTIONS)).toBeInTheDocument();
     });

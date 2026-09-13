@@ -33,18 +33,18 @@ def run_interface(command: list[str]) -> int:
     the command. An interrupt from the terminal reaches the whole foreground process group, MLflow
     included, so this process waits for MLflow to finish stopping.
     """
-    child = subprocess.Popen(command)
+    with subprocess.Popen(command) as child:
 
-    def hand_on_termination(signal_number: int, _frame: FrameType | None) -> None:
-        child.send_signal(signal_number)
+        def hand_on_termination(signal_number: int, _frame: FrameType | None) -> None:
+            child.send_signal(signal_number)
 
-    previous_termination = signal.signal(signal.SIGTERM, hand_on_termination)
-    previous_interrupt = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    try:
-        return child.wait()
-    finally:
-        signal.signal(signal.SIGTERM, previous_termination)
-        signal.signal(signal.SIGINT, previous_interrupt)
+        previous_termination = signal.signal(signal.SIGTERM, hand_on_termination)
+        previous_interrupt = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        try:
+            return child.wait()
+        finally:
+            signal.signal(signal.SIGTERM, previous_termination)
+            signal.signal(signal.SIGINT, previous_interrupt)
 
 
 def interface_command(store_uri: str, *, port: int) -> list[str]:

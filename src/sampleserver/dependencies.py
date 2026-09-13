@@ -8,7 +8,7 @@ from fastapi import Depends, Request
 from sqlalchemy import Connection
 
 from samplecore.spectral_distance import SpectralVectors
-from samplecore.storage.database import checkout_read_only, connect_for_curation
+from samplecore.storage.database import checkout_read_only
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.spectral_cache import SpectralVectorCache
 
@@ -44,10 +44,12 @@ def get_curation_connection(request: Request) -> Iterator[Connection]:
     """A writable connection for the one thing this application records: a person's own labels.
 
     Every other route reads through `get_connection`, whose transaction Postgres itself refuses a
-    write on. This is the single exception, reached only by the curation routes, and it prepares
-    just the curation schema -- building a catalog stays the offline pipelines' job.
+    write on. This is the single exception, reached only by the routes changing annotations. It is
+    checked out of the same pool, the curation schema having been prepared once as the app started;
+    the pool clears the read-only rule from a connection as it comes back, so each checkout carries
+    only the rule its own dependency sets.
     """
-    connection = connect_for_curation(request.app.state.database_url)
+    connection = request.app.state.engine.connect()
     try:
         yield connection
     finally:

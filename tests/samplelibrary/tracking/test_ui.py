@@ -47,6 +47,12 @@ class FakeInterface:
             signal.raise_signal(signal.SIGTERM)
         return INTERFACE_EXIT_STATUS
 
+    def __enter__(self) -> FakeInterface:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
 
 @pytest.fixture
 def interface(monkeypatch: pytest.MonkeyPatch) -> FakeInterface:

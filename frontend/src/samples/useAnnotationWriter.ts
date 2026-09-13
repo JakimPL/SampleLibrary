@@ -1,68 +1,58 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
-import { type AnnotationDecisions, type AnnotationScope, setSampleAnnotation } from "../api/curation";
+import type { AnnotationChanges, AnnotationScope, AnnotationsWritten } from "../api/curation";
 import { CLOUD_LABELS_CACHE_KEY } from "../cloud/useCloudLabels";
-import { describeError } from "../shared/fetchState";
 import { invalidateRequest } from "../shared/requestCache";
-import { useAnnotationStore } from "./annotationStore";
+import { useAnnotationError, useIsSavingSample } from "./annotationStore";
+import { queueAnnotationChange } from "./annotationWriteQueue";
 import { LABEL_TAGS_CACHE_KEY } from "./useLabelTags";
 import { sampleDetailCacheKey } from "./useSampleDetail";
 import { sampleHoverCacheKey } from "./useSampleHoverPreview";
 
 export const VOCABULARY_CACHE_KEY = "label-vocabulary";
 
-/** The datalist every label field offers the wording already in use through. */
-export const VOCABULARY_LIST_ID = "sample-label-vocabulary";
-
 export interface AnnotationWriter {
-    /** Record the whole state this sample should carry from here on. */
-    readonly write: (decisions: AnnotationDecisions) => void;
+    /** Change the decisions this gesture names, leaving the sample's others as they are. */
+    readonly change: (changes: AnnotationChanges) => void;
     readonly isSaving: boolean;
     readonly message: string | null;
 }
 
-function forgetCachedSamples(sampleHashes: readonly string[]): void {
-    for (const sampleHash of sampleHashes) {
-        invalidateRequest(sampleDetailCacheKey(sampleHash));
-        invalidateRequest(sampleHoverCacheKey(sampleHash));
+function forgetWhatTheWriteChanged(written: AnnotationsWritten, changes: AnnotationChanges): void {
+    for (const item of written.samples) {
+        invalidateRequest(sampleDetailCacheKey(item.sample_hash));
+        invalidateRequest(sampleHoverCacheKey(item.sample_hash));
+    }
+    if (changes.label !== undefined) {
+        invalidateRequest(VOCABULARY_CACHE_KEY);
+        invalidateRequest(LABEL_TAGS_CACHE_KEY);
+        invalidateRequest(CLOUD_LABELS_CACHE_KEY);
     }
 }
 
 /**
  * One place a decision about a sample is written from, wherever it is made.
  *
- * A write reaches as far as ``scope`` says and then tells the session store what it recorded, so
- * every row, badge and panel showing that sample follows at once. The cached requests behind them
- * are dropped in the same breath, which is what lets a later remount read the server's own answer,
- * and the vocabulary, the tag tree and the cloud's labels are dropped with them, so a newly used
- * wording joins the list it is offered from and the cloud paints the sample by what was just said.
+ * A change reaches as far as `scope` says, in turn with every other change to the same samples, and
+ * the session store shows it at once. Once the server has answered, the cached requests describing
+ * those samples are dropped, and a new wording also drops the vocabulary, the tag tree and the
+ * cloud's labels, so every mounted view asks again and paints the sample by what was just said. A
+ * failure is kept beside the sample for whichever view shows it.
  */
 export function useAnnotationWriter(sampleHash: string, scope: AnnotationScope): AnnotationWriter {
-    const applyAnnotation = useAnnotationStore((state) => state.applyAnnotation);
-    const [isSaving, setIsSaving] = useState(false);
-    const [message, setMessage] = useState<string | null>(null);
+    const isSaving = useIsSavingSample(sampleHash);
+    const message = useAnnotationError(sampleHash);
 
-    const write = useCallback(
-        (decisions: AnnotationDecisions): void => {
-            setIsSaving(true);
-            setMessage(null);
-            setSampleAnnotation(sampleHash, decisions, scope)
+    const change = useCallback(
+        (changes: AnnotationChanges): void => {
+            queueAnnotationChange(sampleHash, scope, changes)
                 .then((written) => {
-                    applyAnnotation(written.sample_hashes, written.annotation);
-                    forgetCachedSamples(written.sample_hashes);
-                    invalidateRequest(VOCABULARY_CACHE_KEY);
-                    invalidateRequest(LABEL_TAGS_CACHE_KEY);
-                    invalidateRequest(CLOUD_LABELS_CACHE_KEY);
+                    forgetWhatTheWriteChanged(written, changes);
                 })
-                .catch((error: unknown) => {
-                    setMessage(describeError(error));
-                })
-                .finally(() => {
-                    setIsSaving(false);
-                });
+                .catch(() => undefined);
         },
-        [applyAnnotation, sampleHash, scope],
+        [sampleHash, scope],
     );
 
-    return { write, isSaving, message };
+    return { change, isSaving, message };
 }

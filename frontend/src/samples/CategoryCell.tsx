@@ -1,16 +1,14 @@
 import type { ReactElement } from "react";
 import { useState } from "react";
 
-import type { AnnotationDecisions } from "../api/curation";
 import type { SampleSummary } from "../api/samples";
 import { CategoryBadge } from "./CategoryBadge";
 import { LabelField } from "./LabelField";
 
 interface CategoryCellProps {
     readonly sample: SampleSummary;
-    readonly decisions: AnnotationDecisions;
-    readonly isSaving: boolean;
-    readonly onCommit: (decisions: AnnotationDecisions) => void;
+    readonly label: string | null;
+    readonly onCommit: (label: string | null) => void;
 }
 
 /**
@@ -20,17 +18,14 @@ interface CategoryCellProps {
  * wherever it is listed. Emptying the field takes the hand label back and leaves the guessed
  * category showing, which is what makes a wrong guess one gesture to correct and one to undo.
  */
-export function CategoryCell({ sample, decisions, isSaving, onCommit }: CategoryCellProps): ReactElement {
+export function CategoryCell({ sample, label, onCommit }: CategoryCellProps): ReactElement {
     const [isEditing, setIsEditing] = useState(false);
 
     if (isEditing) {
         return (
             <LabelField
-                label={decisions.label}
-                isSaving={isSaving}
-                onCommit={(label) => {
-                    onCommit({ ...decisions, label });
-                }}
+                label={label}
+                onCommit={onCommit}
                 onLeave={() => {
                     setIsEditing(false);
                 }}

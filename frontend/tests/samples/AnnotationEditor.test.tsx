@@ -5,16 +5,17 @@ import { describe, expect, it, vi } from "vitest";
 import type * as CurationApi from "../../src/api/curation";
 import type { SampleDetail } from "../../src/api/samples";
 import { AnnotationEditor } from "../../src/samples/AnnotationEditor";
+import { AnnotationRows } from "../../src/samples/AnnotationRows";
 import { useAnnotationStore } from "../../src/samples/annotationStore";
 
-const { setSampleAnnotation, getLabelVocabulary } = vi.hoisted(() => ({
-    setSampleAnnotation: vi.fn(),
+const { changeSampleAnnotation, getLabelVocabulary } = vi.hoisted(() => ({
+    changeSampleAnnotation: vi.fn(),
     getLabelVocabulary: vi.fn(),
 }));
 
 vi.mock("../../src/api/curation", async () => {
     const actual = await vi.importActual<typeof CurationApi>("../../src/api/curation");
-    return { ...actual, setSampleAnnotation, getLabelVocabulary };
+    return { ...actual, changeSampleAnnotation, getLabelVocabulary };
 });
 
 const SAMPLE_HASH = "a".repeat(64);
@@ -44,204 +45,208 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
 }
 
 function resolvesTo(annotation: CurationApi.AnnotationDecisions | null, hashes: readonly string[]): void {
-    setSampleAnnotation.mockResolvedValue({ annotation, sample_hashes: hashes });
+    changeSampleAnnotation.mockResolvedValue({
+        samples: hashes.map((sampleHash) => ({ sample_hash: sampleHash, annotation })),
+        skipped: [],
+    });
+}
+
+function renderEditor(sample: SampleDetail, scope: CurationApi.AnnotationScope = "sample"): void {
+    render(<AnnotationEditor sample={sample} scope={scope} onScopeChange={() => undefined} />);
 }
 
 describe("AnnotationEditor", () => {
-    it("saves the wording a person typed for this sample alone", async () => {
+    it("saves the wording a person typed", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        resolvesTo({ ...NOTHING, label: "warm pad" }, [SAMPLE_HASH]);
-        render(<AnnotationEditor sample={buildSample()} />);
+        resolvesTo({ ...NOTHING, label: "WARM PAD" }, [SAMPLE_HASH]);
+        renderEditor(buildSample());
 
         await userEvent.type(screen.getByLabelText("Hand label"), "warm pad{Enter}");
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, label: "warm pad" }, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { label: "warm pad" });
         });
     });
 
     it("records what was written so every row showing those samples updates at once", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        resolvesTo({ ...NOTHING, label: "snare" }, [SAMPLE_HASH, OTHER_HASH]);
-        render(<AnnotationEditor sample={buildSample({ equivalence_member_count: 2 })} />);
+        resolvesTo({ ...NOTHING, label: "SNARE" }, [SAMPLE_HASH, OTHER_HASH]);
+        renderEditor(buildSample({ equivalence_member_count: 2 }), "equivalence_class");
 
         await userEvent.type(screen.getByLabelText("Hand label"), "snare{Enter}");
 
         await waitFor(() => {
-            expect(useAnnotationStore.getState().annotationBySampleHash[OTHER_HASH]?.label).toBe("snare");
+            expect(useAnnotationStore.getState().annotationBySampleHash[OTHER_HASH]?.label).toBe("SNARE");
         });
     });
 
-    it("writes a rating the moment a star is clicked, without waiting for a save", async () => {
+    it("sends a star click as the rating alone", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        resolvesTo({ ...NOTHING, rating: 4 }, [SAMPLE_HASH]);
-        render(<AnnotationEditor sample={buildSample()} />);
+        resolvesTo({ label: "WARM PAD", rating: 4, favorite: false }, [SAMPLE_HASH]);
+        renderEditor(buildSample({ hand_label: "WARM PAD" }));
 
         await userEvent.click(screen.getByRole("button", { name: "Rate 4" }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, rating: 4 }, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { rating: 4 });
         });
     });
 
     it("takes a rating back when the star it already sits at is clicked again", async () => {
         getLabelVocabulary.mockResolvedValue([]);
         resolvesTo(null, [SAMPLE_HASH]);
-        render(<AnnotationEditor sample={buildSample({ rating: 3 })} />);
+        renderEditor(buildSample({ rating: 3 }));
 
         await userEvent.click(screen.getByRole("button", { name: "Rate 3" }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, NOTHING, "sample");
-        });
-    });
-
-    it("keeps the wording a sample already carries when only its rating changes", async () => {
-        getLabelVocabulary.mockResolvedValue([]);
-        resolvesTo({ label: "warm pad", rating: 5, favorite: false }, [SAMPLE_HASH]);
-        render(<AnnotationEditor sample={buildSample({ hand_label: "warm pad" })} />);
-
-        await userEvent.click(screen.getByRole("button", { name: "Rate 5" }));
-
-        await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(
-                SAMPLE_HASH,
-                { label: "warm pad", rating: 5, favorite: false },
-                "sample",
-            );
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { rating: null });
         });
     });
 
     it("marks a favorite on its own click", async () => {
         getLabelVocabulary.mockResolvedValue([]);
         resolvesTo({ ...NOTHING, favorite: true }, [SAMPLE_HASH]);
-        render(<AnnotationEditor sample={buildSample()} />);
+        renderEditor(buildSample());
 
         await userEvent.click(screen.getByRole("button", { name: "Favorite" }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, favorite: true }, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { favorite: true });
         });
     });
 
     it("shows a favorite the server already knows about as pressed", () => {
         getLabelVocabulary.mockResolvedValue([]);
-        render(<AnnotationEditor sample={buildSample({ favorite: true })} />);
+        renderEditor(buildSample({ favorite: true }));
 
         expect(screen.getByRole("button", { name: "Favorite" })).toHaveAttribute("aria-pressed", "true");
     });
 
-    it("reaches a whole group by default, since that is how the listing browses them", async () => {
+    it("shows a rating the moment its star is clicked, before the server answers", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        resolvesTo({ ...NOTHING, label: "snare" }, [SAMPLE_HASH]);
-        render(<AnnotationEditor sample={buildSample({ equivalence_member_count: 3 })} />);
+        changeSampleAnnotation.mockReturnValue(new Promise(() => undefined));
+        renderEditor(buildSample());
 
-        await userEvent.type(screen.getByLabelText("Hand label"), "snare{Enter}");
+        await userEvent.click(screen.getByRole("button", { name: "Rate 2" }));
 
-        await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(
-                SAMPLE_HASH,
-                { ...NOTHING, label: "snare" },
-                "equivalence_class",
-            );
-        });
+        expect(screen.getByRole("button", { name: "Rate 2" })).toHaveAttribute("aria-pressed", "true");
     });
 
-    it("carries the group scope through a rating too, not only a label", async () => {
+    it("carries the group scope through a rating", async () => {
         getLabelVocabulary.mockResolvedValue([]);
         resolvesTo({ ...NOTHING, rating: 2 }, [SAMPLE_HASH, OTHER_HASH]);
-        render(<AnnotationEditor sample={buildSample({ equivalence_member_count: 2 })} />);
+        renderEditor(buildSample({ equivalence_member_count: 2 }), "equivalence_class");
 
         await userEvent.click(screen.getByRole("button", { name: "Rate 2" }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(
-                SAMPLE_HASH,
-                { ...NOTHING, rating: 2 },
-                "equivalence_class",
-            );
-        });
-    });
-
-    it("narrows to the one sample when the group box is unticked", async () => {
-        getLabelVocabulary.mockResolvedValue([]);
-        resolvesTo({ ...NOTHING, label: "snare" }, [SAMPLE_HASH]);
-        render(<AnnotationEditor sample={buildSample({ equivalence_member_count: 3 })} />);
-
-        await userEvent.click(screen.getByRole("checkbox"));
-        await userEvent.type(screen.getByLabelText("Hand label"), "snare{Enter}");
-
-        await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, label: "snare" }, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "equivalence_class", { rating: 2 });
         });
     });
 
     it("offers no group choice for a sample with no near-duplicates", () => {
         getLabelVocabulary.mockResolvedValue([]);
-        render(<AnnotationEditor sample={buildSample()} />);
+        renderEditor(buildSample());
 
         expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     });
 
     it("records the wording when the field is left, so a thought finished is a thought saved", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        resolvesTo({ ...NOTHING, label: "warm pad" }, [SAMPLE_HASH]);
-        render(<AnnotationEditor sample={buildSample()} />);
+        resolvesTo({ ...NOTHING, label: "WARM PAD" }, [SAMPLE_HASH]);
+        renderEditor(buildSample());
 
         await userEvent.type(screen.getByLabelText("Hand label"), "warm pad");
         await userEvent.tab();
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, label: "warm pad" }, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { label: "warm pad" });
         });
     });
 
     it("writes nothing for a field left as it was found", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        render(<AnnotationEditor sample={buildSample({ hand_label: "warm pad" })} />);
+        renderEditor(buildSample({ hand_label: "warm pad" }));
 
         await userEvent.click(screen.getByLabelText("Hand label"));
         await userEvent.tab();
 
-        expect(setSampleAnnotation).not.toHaveBeenCalled();
+        expect(changeSampleAnnotation).not.toHaveBeenCalled();
     });
 
     it("puts back the wording a sample already carries when a draft is abandoned", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        render(<AnnotationEditor sample={buildSample({ hand_label: "warm pad" })} />);
+        renderEditor(buildSample({ hand_label: "warm pad" }));
 
         await userEvent.type(screen.getByLabelText("Hand label"), " and bright{Escape}");
 
         expect(screen.getByLabelText("Hand label")).toHaveValue("warm pad");
-        expect(setSampleAnnotation).not.toHaveBeenCalled();
+        expect(changeSampleAnnotation).not.toHaveBeenCalled();
     });
 
     it("offers clearing only once there is something to clear", () => {
         getLabelVocabulary.mockResolvedValue([]);
-        render(<AnnotationEditor sample={buildSample({ hand_label: "warm pad" })} />);
+        renderEditor(buildSample({ hand_label: "warm pad" }));
 
         expect(screen.getByRole("button", { name: "Clear" })).toBeEnabled();
     });
 
-    it("clears the wording while leaving the rating standing", async () => {
+    it("clears the wording alone", async () => {
         getLabelVocabulary.mockResolvedValue([]);
         resolvesTo({ ...NOTHING, rating: 4 }, [SAMPLE_HASH]);
-        render(<AnnotationEditor sample={buildSample({ hand_label: "warm pad", rating: 4 })} />);
+        renderEditor(buildSample({ hand_label: "warm pad", rating: 4 }));
 
         await userEvent.click(screen.getByRole("button", { name: "Clear" }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, { ...NOTHING, rating: 4 }, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { label: null });
         });
     });
 
-    it("reports a refused write rather than pretending it landed", async () => {
+    it("reports a refused write and takes the change back off the screen", async () => {
         getLabelVocabulary.mockResolvedValue([]);
-        setSampleAnnotation.mockRejectedValue(new Error("request failed with status 404"));
-        render(<AnnotationEditor sample={buildSample()} />);
+        changeSampleAnnotation.mockRejectedValue(new Error("request failed with status 404"));
+        renderEditor(buildSample());
 
-        await userEvent.type(screen.getByLabelText("Hand label"), "warm pad{Enter}");
+        await userEvent.click(screen.getByRole("button", { name: "Rate 5" }));
 
         expect(await screen.findByText(/request failed with status 404/)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Rate 5" })).toHaveAttribute("aria-pressed", "false");
+    });
+});
+
+describe("AnnotationRows", () => {
+    function renderRows(sample: SampleDetail): void {
+        render(
+            <dl>
+                <AnnotationRows sample={sample} />
+            </dl>,
+        );
+    }
+
+    it("reaches a whole group by default, since that is how the listing browses them", async () => {
+        getLabelVocabulary.mockResolvedValue([]);
+        resolvesTo({ ...NOTHING, label: "SNARE" }, [SAMPLE_HASH]);
+        renderRows(buildSample({ equivalence_member_count: 3 }));
+
+        await userEvent.type(screen.getByLabelText("Hand label"), "snare{Enter}");
+
+        await waitFor(() => {
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "equivalence_class", { label: "snare" });
+        });
+    });
+
+    it("sends a clicked suggestion to this sample alone once the group box is unticked", async () => {
+        getLabelVocabulary.mockResolvedValue([]);
+        resolvesTo({ ...NOTHING, label: "SNARE" }, [SAMPLE_HASH]);
+        renderRows(buildSample({ equivalence_member_count: 3, suggested_labels: [{ label: "SNARE", score: 0.5 }] }));
+
+        await userEvent.click(screen.getByRole("checkbox"));
+        await userEvent.click(screen.getByRole("button", { name: /SNARE/ }));
+
+        await waitFor(() => {
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { label: "SNARE" });
+        });
     });
 });

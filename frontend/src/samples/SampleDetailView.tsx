@@ -5,12 +5,11 @@ import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { SpectralDistanceReadout } from "../workspace/panels/SpectralDistanceReadout";
-import { AnnotationEditor } from "./AnnotationEditor";
+import { AnnotationRows } from "./AnnotationRows";
 import { CategoryBadge } from "./CategoryBadge";
 import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { SampleRelationRow } from "./SampleRelationRow";
 import { SimilarSampleRow } from "./SimilarSampleRow";
-import { SuggestedLabels } from "./SuggestedLabels";
 
 export type DetailTab = "occurrences" | "relations" | "similar" | "cooccurrence";
 
@@ -156,14 +155,7 @@ export function SampleDetailView({
                 <dd>
                     <CategoryBadge sampleHash={sample.hash} category={sample.category} handLabel={sample.hand_label} />
                 </dd>
-                <dt>Label</dt>
-                <dd>
-                    <AnnotationEditor key={sample.hash} sample={sample} />
-                </dd>
-                <dt>Suggested</dt>
-                <dd>
-                    <SuggestedLabels key={sample.hash} sample={sample} />
-                </dd>
+                <AnnotationRows key={sample.hash} sample={sample} />
                 <dt>Size</dt>
                 <dd className="mono">{formatBytes(sample.size_bytes)}</dd>
                 <dt>Duration</dt>

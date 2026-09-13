@@ -44,7 +44,7 @@ def seed_listening_experiment(connection: Connection) -> int:
     PostgresSampleFeatureVectorRepository(connection).insert_many(
         [vector.model_copy(update={"experiment_id": experiment_id}) for vector in vectors]
     )
-    PostgresSampleAnnotationRepository(connection).replace_many(
+    PostgresSampleAnnotationRepository(connection).upsert_many(
         (
             _annotation(KICK_HASH, "BASS DRUM: KICK"),
             _annotation(HAT_HASH, "SNARE"),

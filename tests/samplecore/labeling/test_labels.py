@@ -6,6 +6,8 @@ import pytest
 
 from samplecore.labeling.labels import (
     SampleLabel,
+    canonical_label,
+    first_use_ranks,
     format_path,
     label_agreement,
     written_paths,
@@ -94,3 +96,35 @@ def test_the_written_order_of_a_label_is_kept_and_a_repeated_tag_counted_once() 
         ("CHIPTUNE",),
         ("BASS",),
     )
+
+
+@dataclass(frozen=True)
+class CanonicalCase:
+    text: str
+    canonical: str
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        CanonicalCase("hi-hat:closed", "HI-HAT: CLOSED"),
+        CanonicalCase("  Hi-Hat :  Closed ,lo-fi ", "HI-HAT: CLOSED, LO-FI"),
+        CanonicalCase("snare, lo-fi, SNARE", "SNARE, LO-FI"),
+        CanonicalCase("lo-fi, snare", "LO-FI, SNARE"),
+    ],
+    ids=("no space after the colon", "spacing and case", "a tag written twice", "the written order"),
+)
+def test_every_wording_of_one_label_is_stored_in_one_spelling(case: CanonicalCase) -> None:
+    assert canonical_label(case.text) == case.canonical
+
+
+@pytest.mark.parametrize("text", ["", "   ", ",,,", " : , :"])
+def test_text_naming_no_tag_is_no_label(text: str) -> None:
+    with pytest.raises(ValueError, match="at least one tag"):
+        canonical_label(text)
+
+
+def test_tags_rank_by_first_use_with_the_categories_above_them_and_the_written_order() -> None:
+    ranks = first_use_ranks(["HI-HAT: CLOSED", "LO-FI, SNARE", "SNARE, LO-FI"])
+
+    assert ranks == {("HI-HAT",): 0, ("HI-HAT", "CLOSED"): 1, ("LO-FI",): 2, ("SNARE",): 3}

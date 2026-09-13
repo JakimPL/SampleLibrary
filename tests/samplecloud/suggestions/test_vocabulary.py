@@ -58,7 +58,7 @@ def test_an_empty_file_says_so(tmp_path: Path, connection: Connection) -> None:
 
 
 def test_the_hand_label_vocabulary_holds_the_categories_and_their_specifications(connection: Connection) -> None:
-    PostgresSampleAnnotationRepository(connection).replace_many(
+    PostgresSampleAnnotationRepository(connection).upsert_many(
         (
             _annotation("a" * 64, "HI-HAT: CLOSED, LO-FI"),
             _annotation("b" * 64, "HI-HAT: OPEN: TIGHT"),

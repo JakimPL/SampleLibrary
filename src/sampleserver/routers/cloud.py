@@ -148,12 +148,12 @@ def get_cloud_labels(connection: Connection = Depends(get_connection)) -> tuple[
     These travel apart from the points on purpose: the labels are a few hundred rows against a
     hundred thousand points, and they change with every label a person writes while the points
     change only when the embedding is recomputed. A viewer joins the two by hash, so a labeled
-    sample the current embedding holds no point for is simply not painted.
+    sample the current embedding holds no point for is simply not painted. Labels whose sample has
+    left the catalog wait for relinking and stay off the cloud.
     """
     return tuple(
-        CloudLabel(sample_hash=annotation.sample_hash, paths=written_paths(annotation.label))
-        for annotation in PostgresSampleAnnotationRepository(connection).list_all()
-        if annotation.label is not None
+        CloudLabel(sample_hash=sample_hash, paths=written_paths(label))
+        for sample_hash, label in sorted(PostgresSampleAnnotationRepository(connection).cataloged_labels().items())
     )
 
 

@@ -4,7 +4,6 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { INITIAL_MORPH_STATE, useMorphStore } from "../src/morph/morphStore";
-import { INITIAL_ANNOTATION_STATE, useAnnotationStore } from "../src/samples/annotationStore";
 import { clearRequestCache } from "../src/shared/requestCache";
 import { DEFAULT_THEME_PREFERENCE } from "../src/theme/themeOptions";
 import { useThemeStore } from "../src/theme/themeStore";
@@ -29,8 +28,12 @@ afterEach(() => {
     clearRequestCache();
 });
 
-afterEach(() => {
+// Imported when the case ends, so a test file's mock of the API they call is the one they were loaded with.
+afterEach(async () => {
+    const { INITIAL_ANNOTATION_STATE, useAnnotationStore } = await import("../src/samples/annotationStore");
+    const { resetAnnotationWriteQueue } = await import("../src/samples/annotationWriteQueue");
     useAnnotationStore.setState(INITIAL_ANNOTATION_STATE);
+    resetAnnotationWriteQueue();
 });
 
 afterEach(() => {

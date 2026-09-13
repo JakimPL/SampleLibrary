@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from sqlalchemy import Connection
 
 from samplecore.models.annotation import SampleAnnotation
@@ -50,7 +51,7 @@ def test_importing_keeps_every_label_the_file_says_nothing_about(
     path = tmp_path / "labels.jsonl"
     other = stored_annotation.model_copy(update={"sample_hash": "d" * 64, "label": "kick"})
     repository = PostgresSampleAnnotationRepository(connection)
-    repository.replace_many((other,))
+    repository.upsert_many((other,))
     connection.commit()
     export_annotations(connection, path=path)
     repository.delete_many((other.sample_hash,))
@@ -68,3 +69,38 @@ def test_importing_a_file_with_blank_lines_reads_only_the_labels(
     path.write_text(f"\n{stored_annotation.model_dump_json()}\n\n", encoding="utf-8")
 
     assert import_annotations(connection, path=path).annotations == 1
+
+
+NEXT_LINE = chr(0x85)
+LINE_SEPARATOR = chr(0x2028)
+
+
+def test_a_sample_name_holding_a_line_separator_survives_a_round_trip(
+    connection: Connection, stored_annotation: SampleAnnotation, tmp_path: Path
+) -> None:
+    """Module text is read as Latin-1, so a sample name can carry U+0085 and its Unicode relatives."""
+    path = tmp_path / "labels.jsonl"
+    odd = stored_annotation.model_copy(update={"sample_name": f"voice{NEXT_LINE}one{LINE_SEPARATOR}two"})
+    repository = PostgresSampleAnnotationRepository(connection)
+    repository.upsert_many((odd,))
+    connection.commit()
+    export_annotations(connection, path=path)
+    repository.delete_many((odd.sample_hash,))
+    connection.commit()
+
+    import_annotations(connection, path=path)
+
+    assert repository.get(odd.sample_hash) == odd
+
+
+def test_a_file_speaking_for_one_sample_twice_is_refused_whole(
+    connection: Connection, stored_annotation: SampleAnnotation, tmp_path: Path
+) -> None:
+    path = tmp_path / "labels.jsonl"
+    changed = stored_annotation.model_copy(update={"label": "KICK"})
+    path.write_text(f"{stored_annotation.model_dump_json()}\n{changed.model_dump_json()}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="lines 1, 2"):
+        import_annotations(connection, path=path)
+
+    assert PostgresSampleAnnotationRepository(connection).get(stored_annotation.sample_hash) == stored_annotation

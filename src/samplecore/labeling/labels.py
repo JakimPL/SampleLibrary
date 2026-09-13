@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Final, Self
 
 from pydantic import BaseModel
@@ -9,6 +10,7 @@ from samplecore.models.base import FROZEN
 TAG_SEPARATOR: Final[str] = ","
 LEVEL_SEPARATOR: Final[str] = ":"
 DISPLAY_LEVEL_SEPARATOR: Final[str] = ": "
+DISPLAY_TAG_SEPARATOR: Final[str] = ", "
 
 LabelPath = tuple[str, ...]
 
@@ -27,6 +29,37 @@ def written_paths(text: str) -> tuple[LabelPath, ...]:
         if path and path not in paths:
             paths.append(path)
     return tuple(paths)
+
+
+def canonical_label(text: str) -> str:
+    """A label in the one spelling it is stored and compared in: ``HI-HAT: CLOSED, LO-FI``.
+
+    Case, the spacing around separators and a tag written twice all follow how a person happened to
+    type, and none of them changes what the label says, so every wording of one label is stored as
+    that one label. The tags keep the order they were written in.
+
+    Raises:
+        ValueError: the text names no tag.
+    """
+    paths = written_paths(text)
+    if not paths:
+        raise ValueError(f"a label names at least one tag, as in 'HI-HAT: CLOSED'; got {text!r}")
+    return DISPLAY_TAG_SEPARATOR.join(format_path(path) for path in paths)
+
+
+def first_use_ranks(labels_in_time_order: Iterable[str]) -> dict[LabelPath, int]:
+    """Every tag's rank by the moment a person first used it, the categories above a tag included.
+
+    A rank is what a reader hangs something lasting on, such as a color: a tag used for the first
+    time takes the rank after the last. Two tags first used in one label rank in the order they were
+    written.
+    """
+    first_uses: dict[LabelPath, None] = {}
+    for label in labels_in_time_order:
+        for path in written_paths(label):
+            for depth in range(1, len(path) + 1):
+                first_uses.setdefault(path[:depth], None)
+    return {path: rank for rank, path in enumerate(first_uses)}
 
 
 class SampleLabel(BaseModel):

@@ -628,6 +628,12 @@ tr.is-focused {
     color: var(--critical);
 }
 
+.annotation-row-message {
+    margin-left: 4px;
+    font-size: 11px;
+    color: var(--critical);
+}
+
 .rating-stars {
     display: inline-flex;
 }

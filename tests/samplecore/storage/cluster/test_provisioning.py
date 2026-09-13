@@ -206,7 +206,7 @@ def test_preparing_a_database_twice_keeps_the_annotations_it_holds(prepared_data
 
     connection = connect(prepared_database_url)
     try:
-        PostgresSampleAnnotationRepository(connection).replace_many((annotation,))
+        PostgresSampleAnnotationRepository(connection).upsert_many((annotation,))
         connection.commit()
     finally:
         connection.close()

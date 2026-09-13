@@ -79,8 +79,17 @@ def _report_relink(summary: RelinkSummary) -> None:
             annotation.occurrence.sample_slot,
             annotation.module_filename,
         )
+    for annotation in summary.conflicting:
+        _logger.warning(
+            "Left alone: %s on %s, whose slot %d/%d in %s now holds a sample with a decision of its own.",
+            _describe(annotation),
+            annotation.sample_hash,
+            annotation.occurrence.instrument_index,
+            annotation.occurrence.sample_slot,
+            annotation.module_filename,
+        )
 
-    if summary.unresolved:
+    if summary.needs_a_person:
         sys.exit(1)
 
 

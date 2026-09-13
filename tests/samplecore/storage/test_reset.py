@@ -169,7 +169,7 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, tmp_
     assert occurrence_row is not None
 
     annotation_repository = PostgresSampleAnnotationRepository(connection)
-    annotation_repository.replace_many(
+    annotation_repository.upsert_many(
         (
             SampleAnnotation(
                 sample_hash=occurrence_row.sample_hash,

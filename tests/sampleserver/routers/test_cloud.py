@@ -220,7 +220,7 @@ def test_get_cloud_labels_carries_each_labeled_sample_s_tags_in_the_order_writte
         PostgresSampleRepository(connection).upsert(
             Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
         )
-    PostgresSampleAnnotationRepository(connection).replace_many(
+    PostgresSampleAnnotationRepository(connection).upsert_many(
         (
             _annotation(SAMPLE_HASH, label="SYNTH: PULSE, CHIPTUNE", rating=None),
             _annotation("b" * 64, label=None, rating=4),

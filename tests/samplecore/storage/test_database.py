@@ -105,7 +105,7 @@ def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alo
         connection.close()
 
     assert catalog_tables == set()
-    assert curation_tables == {"sample_annotation"}
+    assert curation_tables == {"sample_annotation", "tag_rank"}
 
 
 def test_a_curation_connection_waits_for_the_schema_claim(connection: Connection, _database_url: str) -> None:
@@ -187,3 +187,24 @@ def test_a_module_filename_carrying_a_directory_is_refused(connection: Connectio
 )
 def test_chunks_cover_every_item_in_order(size: int, expected: list[list[int]]) -> None:
     assert [list(chunk) for chunk in chunks([1, 2, 3, 4, 5], size)] == expected
+
+
+def test_a_writable_checkout_between_read_only_ones_writes_and_leaves_the_next_read_only(
+    connection: Connection, _database_url: str
+) -> None:
+    """The curation routes write through the same pool the reading routes check read-only connections out of."""
+    engine = create_pooled_engine(_database_url, pool_size=1)
+    insert_rate = text("INSERT INTO curation.tag_rank (path, rank) VALUES ('KICK', 0)")
+    try:
+        checkout_read_only(engine).close()
+        with engine.connect() as writable:
+            writable.execute(insert_rate)
+            writable.commit()
+        checked_out = checkout_read_only(engine)
+        try:
+            with pytest.raises(DBAPIError, match="read-only"):
+                checked_out.execute(text("INSERT INTO curation.tag_rank (path, rank) VALUES ('SNARE', 1)"))
+        finally:
+            checked_out.close()
+    finally:
+        engine.dispose()

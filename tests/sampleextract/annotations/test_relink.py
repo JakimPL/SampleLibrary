@@ -55,3 +55,21 @@ def test_relinking_an_unlabeled_library_finds_nothing_to_do(connection: Connecti
 
     assert summary.checked == 0
     assert summary.unresolved == ()
+
+
+def test_a_label_whose_slot_now_holds_an_annotated_sample_is_left_for_a_person(
+    connection: Connection, stored_annotation: SampleAnnotation, rehash_the_labeled_sample: Callable[[], str]
+) -> None:
+    """The sample in the slot already says something of its own, and relinking keeps both decisions."""
+    current_hash = rehash_the_labeled_sample()
+    repository = PostgresSampleAnnotationRepository(connection)
+    newer = stored_annotation.model_copy(update={"sample_hash": current_hash, "label": "BRIGHT PAD", "rating": 2})
+    repository.upsert_many((newer,))
+    connection.commit()
+
+    summary = relink_annotations(connection)
+
+    assert [annotation.sample_hash for annotation in summary.conflicting] == [stored_annotation.sample_hash]
+    assert summary.needs_a_person
+    assert repository.get(current_hash) == newer
+    assert repository.get(stored_annotation.sample_hash) == stored_annotation
