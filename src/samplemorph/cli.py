@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from enum import StrEnum, unique
 
 from sqlalchemy import Connection
@@ -18,6 +19,8 @@ from samplemorph.commands import (
     train_restorer,
 )
 from samplemorph.service import cli as service_cli
+
+CatalogCommand = Callable[[Connection, LibraryConfig, argparse.Namespace], None]
 
 
 @unique
@@ -42,31 +45,27 @@ def main(argv: list[str], *, prog: str) -> None:
     match MorphCommand(arguments.command):
         case MorphCommand.SERVE:
             service_cli.run(config, arguments)
-        case command:
-            with open_catalog_connection(config.database_url) as connection:
-                _run_on_catalog(command, connection, config, arguments)
-
-
-def _run_on_catalog(
-    command: MorphCommand, connection: Connection, config: LibraryConfig, arguments: argparse.Namespace
-) -> None:
-    match command:
         case MorphCommand.FIT:
-            fit.run(connection, config, arguments)
+            _on_catalog(fit.run, config, arguments)
         case MorphCommand.CACHE_GRIDS:
-            cache_grids.run(connection, config, arguments)
+            _on_catalog(cache_grids.run, config, arguments)
         case MorphCommand.TRAIN_DESCRIPTOR:
-            train_descriptor.run(connection, config, arguments)
+            _on_catalog(train_descriptor.run, config, arguments)
         case MorphCommand.EMBED:
-            embed.run(connection, config, arguments)
+            _on_catalog(embed.run, config, arguments)
         case MorphCommand.TRAIN_CODEC:
-            train_codec.run(connection, config, arguments)
+            _on_catalog(train_codec.run, config, arguments)
         case MorphCommand.TRAIN_RESTORER:
-            train_restorer.run(connection, config, arguments)
+            _on_catalog(train_restorer.run, config, arguments)
         case MorphCommand.RENDER:
-            render.run(connection, config, arguments)
+            _on_catalog(render.run, config, arguments)
         case MorphCommand.MEASURE:
-            measure.run(connection, config, arguments)
+            _on_catalog(measure.run, config, arguments)
+
+
+def _on_catalog(run: CatalogCommand, config: LibraryConfig, arguments: argparse.Namespace) -> None:
+    with open_catalog_connection(config.database_url) as connection:
+        run(connection, config, arguments)
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:

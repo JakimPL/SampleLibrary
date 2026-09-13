@@ -14,6 +14,7 @@ from samplemorph.model_store import (
     MorphModel,
     MorphModelDescription,
     load_model,
+    load_named_model,
     model_path,
     save_model,
 )
@@ -104,3 +105,11 @@ def test_reading_a_model_naming_an_unknown_codec_says_so(tmp_path: Path) -> None
 
     with pytest.raises(ValueError, match="no reader is registered"):
         load_model(path)
+
+
+def test_a_missing_model_names_the_commands_that_write_one(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="samplelibrary morph fit") as raised:
+        load_named_model(tmp_path, name=MODEL_NAME, device="cpu")
+
+    assert str(model_path(tmp_path, name=MODEL_NAME)) in str(raised.value)
+    assert "samplelibrary morph train-codec" in str(raised.value)

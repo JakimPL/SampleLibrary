@@ -17,11 +17,8 @@ from samplemorph.model_store import (
     model_path,
     save_model,
 )
-from samplemorph.training.principal_components import (
-    DEFAULT_LATENT_SIZE,
-    DEFAULT_RANDOM_SEED,
-    PrincipalComponentTrainer,
-)
+from samplemorph.training.principal_components import DEFAULT_LATENT_SIZE, PrincipalComponentTrainer
+from samplemorph.training.run_settings import DEFAULT_RANDOM_SEED
 
 COMMAND_NAME: Final[str] = "fit"
 DEFAULT_FIT_SAMPLE_COUNT: Final[int] = 4_000

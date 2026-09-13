@@ -112,7 +112,10 @@ def load_restorer(path: Path, *, device: torch.device) -> RestoredPghiVocoder:
         FileNotFoundError: no restorer is stored at that path.
     """
     if not path.exists():
-        raise FileNotFoundError(f"no restorer is stored at {path}")
+        raise FileNotFoundError(
+            f"no restorer is stored at {path}: `samplelibrary morph train-restorer` writes one, "
+            "and `--vocoder pghi` renders without it"
+        )
 
     stored = torch.load(path, map_location=device, weights_only=True)
     description = RestorerDescription.model_validate_json(str(stored["description"]))

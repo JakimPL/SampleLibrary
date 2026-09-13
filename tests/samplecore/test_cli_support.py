@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from samplecore.cli_support import bootstrap_cli, configure_console_output_encoding, load_config_or_exit
+from samplecore.cli_support import (
+    bootstrap_cli,
+    configure_console_output_encoding,
+    configure_logging,
+    load_config_or_exit,
+    open_catalog_connection,
+)
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, LibraryConfig
 
 
@@ -93,3 +99,16 @@ def test_bootstrap_cli_configures_console_encoding_and_returns_the_loaded_config
         database_url="postgresql+psycopg://user:pass@host/db",
     )
     assert b"Modu" in narrow_stdout.buffer.getvalue()
+
+
+def test_an_unreachable_catalog_ends_the_command_with_what_to_run(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging()
+
+    with pytest.raises(SystemExit) as raised:
+        with open_catalog_connection("postgresql+psycopg://samplelibrary:hidden-password@localhost:1/samplelibrary"):
+            pass
+
+    report = capsys.readouterr().err
+    assert raised.value.code == 1
+    assert "samplelibrary setup database" in report
+    assert "hidden-password" not in report

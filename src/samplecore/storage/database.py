@@ -427,6 +427,7 @@ def connect_for_curation(database_url: str) -> Connection:
     the pipelines that build one. The caller owns the transaction and commits its own work.
     """
     connection = _open(database_url)
+    _claim_schema_creation(connection)
     create_curation_schema(connection)
     connection.commit()
     return connection

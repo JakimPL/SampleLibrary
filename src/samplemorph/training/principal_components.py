@@ -4,14 +4,13 @@ from collections.abc import Sequence
 from typing import Final
 
 import numpy as np
-from sklearn.decomposition import PCA
 
 from samplemorph.codecs.principal_components import PrincipalComponentCodec
 from samplemorph.geometry import Geometry
 from samplemorph.images import SoundImage
+from samplemorph.training.run_settings import DEFAULT_RANDOM_SEED
 
 DEFAULT_LATENT_SIZE: Final[int] = 256
-DEFAULT_RANDOM_SEED: Final[int] = 0
 
 
 class PrincipalComponentTrainer:
@@ -46,6 +45,9 @@ class PrincipalComponentTrainer:
             )
 
         matrix = np.stack([image.grid.reshape(-1) for image in images])
+        # pylint: disable=import-outside-toplevel
+        from sklearn.decomposition import PCA
+
         decomposition = PCA(n_components=self._latent_size, svd_solver="randomized", random_state=self._random_seed)
         decomposition.fit(matrix)
         return PrincipalComponentCodec(

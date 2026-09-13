@@ -26,6 +26,9 @@ from trackmod.trackers.mod.module import MODModule
 from trackmod.trackers.s3m.module import S3MModule
 from trackmod.trackers.xm.module import XMModule
 
+from samplecore.cli_support import load_config_or_exit
+from samplecore.storage.cluster.provisioning import development_database_url
+
 SAMPLE_RATE: Final[int] = 44100
 # Amiga ProTracker's finetune-derived rates and its pattern length are both fixed, structural
 # bounds (unlike XM/IT's own, looser ones) -- 8363 Hz is the format's own untransposed C-3 rate,
@@ -35,9 +38,7 @@ SAMPLE_VOICES_PATTERN_ROWS: Final[int] = 64
 DEFAULT_OUTPUT_DIRECTORY: Final[Path] = Path("dev-library")
 MODULES_DIRECTORY_NAME: Final[str] = "modules"
 CATALOG_DIRECTORY_NAME: Final[str] = "catalog"
-DEVELOPMENT_DATABASE_URL: Final[str] = (
-    "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
-)
+SANDBOX_INFERENCE_URL: Final[str] = "http://127.0.0.1:8011"
 
 # Below LibraryConfig.minimum_sample_frames' own default (512), so a sample this short is the
 # ingestion-time frame filter's own test case, not an oversight here.
@@ -351,22 +352,29 @@ def _all_modules(target_module_count: int = TARGET_MODULE_COUNT) -> dict[str, by
     return modules
 
 
-def _write_config(output_directory: Path, *, modules_directory: Path, catalog_directory: Path) -> None:
+def _write_config(
+    output_directory: Path, *, modules_directory: Path, catalog_directory: Path, database_url: str
+) -> None:
     config_path = output_directory / "config.toml"
     config_path.write_text(
         "[library]\n"
         f'module_source_directory = "{modules_directory.resolve().as_posix()}"\n'
         f'library_root = "{catalog_directory.resolve().as_posix()}"\n'
-        f'database_url = "{DEVELOPMENT_DATABASE_URL}"\n',
+        f'database_url = "{database_url}"\n'
+        "\n"
+        "[inference]\n"
+        f'url = "{SANDBOX_INFERENCE_URL}"\n',
         encoding="utf-8",
     )
 
 
-def build_dev_library(output_directory: Path, *, target_module_count: int = TARGET_MODULE_COUNT) -> tuple[Path, ...]:
+def build_dev_library(
+    output_directory: Path, *, database_url: str, target_module_count: int = TARGET_MODULE_COUNT
+) -> tuple[Path, ...]:
     """(Re)generates the deterministic dev-module corpus and its own ready-to-use ``config.toml``.
 
-    The config names the sandbox's own database on the local server, so passing it with `--config`
-    points every command at the sandbox alone.
+    The config names ``database_url`` and an inference address of the sandbox's own, so passing it
+    with `--config` points every command at the sandbox alone.
 
     ``modules_directory`` is wiped and rewritten every call, so this stays safe to rerun whenever
     the scenarios change; ``catalog_directory`` is left untouched, since a developer may still want
@@ -385,7 +393,12 @@ def build_dev_library(output_directory: Path, *, target_module_count: int = TARG
         path.write_bytes(data)
         written_paths.append(path)
 
-    _write_config(output_directory, modules_directory=modules_directory, catalog_directory=catalog_directory)
+    _write_config(
+        output_directory,
+        modules_directory=modules_directory,
+        catalog_directory=catalog_directory,
+        database_url=database_url,
+    )
     return tuple(written_paths)
 
 
@@ -407,8 +420,12 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Build the sandbox beside the configured library, on the same server under the sandbox's own database."""
     arguments = _parse_arguments(argv)
-    written_paths = build_dev_library(arguments.output, target_module_count=arguments.target_module_count)
+    database_url = development_database_url(load_config_or_exit().database_url)
+    written_paths = build_dev_library(
+        arguments.output, database_url=database_url, target_module_count=arguments.target_module_count
+    )
     print(f"Wrote {len(written_paths)} modules and config.toml under {arguments.output.resolve()}")
 
 

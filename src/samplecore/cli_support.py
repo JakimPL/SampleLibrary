@@ -9,8 +9,10 @@ from typing import Final
 
 from sqlalchemy import Connection
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
 
 from samplecore.config import ConfigurationError, LibraryConfig, load_config
+from samplecore.storage.cluster.provisioning import headline, server_message
 from samplecore.storage.database import connect
 
 _LOG_FORMAT: Final[str] = "%(asctime)s  %(message)s"
@@ -107,8 +109,21 @@ def open_catalog_connection(database_url: str) -> Iterator[Connection]:
 
     Shared by every console entry point that needs the catalog open for exactly the duration of
     one call, so this connect/close lifecycle reads identically regardless of which one it is.
+
+    Raises:
+        SystemExit: the server refuses the connection, after saying why and what to run.
     """
-    connection = connect(database_url)
+    try:
+        connection = connect(database_url)
+    except OperationalError as error:
+        _logger.error(
+            "Could not open the catalog at %s: %s\n"
+            "Run `samplelibrary setup database` to create it, or correct database_url.",
+            redact_database_url(database_url),
+            headline(server_message(error)),
+        )
+        sys.exit(1)
+
     try:
         yield connection
     finally:

@@ -21,6 +21,7 @@ from samplecore.storage.cluster.provisioning import (
     admin_urls,
     connection_remedy,
     connection_source,
+    development_database_url,
     library_databases,
     login_role,
     statement_value,
@@ -78,6 +79,13 @@ def test_library_databases_keeps_the_companions_of_a_sandbox_url_unsuffixed() ->
     )
 
     assert (development, test_database) == (DEVELOPMENT_DATABASE, TEST_DATABASE)
+
+
+def test_the_development_database_shares_the_library_server_role_and_password() -> None:
+    url = make_url(development_database_url("postgresql+psycopg://someone:secret@elsewhere:5433/my_own_library"))
+
+    assert (url.host, url.port, url.username, url.password) == ("elsewhere", 5433, "someone", "secret")
+    assert url.database == DEVELOPMENT_DATABASE
 
 
 def test_library_databases_reports_a_url_naming_no_database() -> None:

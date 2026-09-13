@@ -106,6 +106,11 @@ def library_databases(database_url: str) -> tuple[str, ...]:
     return (library, DEVELOPMENT_DATABASE, TEST_DATABASE)
 
 
+def development_database_url(database_url: str) -> str:
+    """The sandbox's database on the server, role and password the library's own URL names."""
+    return make_url(database_url).set(database=DEVELOPMENT_DATABASE).render_as_string(hide_password=False)
+
+
 def login_role(database_url: str) -> str:
     """The role a URL logs in as.
 
@@ -296,10 +301,9 @@ def role_creation_remedy(url: URL, role: str, password: str) -> tuple[str, ...]:
         f"PASSWORD {statement_value(password, quoted=False)};",
         "",
         "  * If you know the password of a superuser on this server, usually the `postgres`",
-        f"    account, give it to {ADMIN_URL_ENVIRONMENT_VARIABLE} and this command creates the",
-        "    role for you. Replace <password> with that account's own:",
-        f"        {ADMIN_URL_ENVIRONMENT_VARIABLE}=postgresql+psycopg://postgres:<password>@"
-        f"{describe_server(url)}/{MAINTENANCE_DATABASES[0]} uv run samplelibrary setup database",
+        f"    account, set {ADMIN_URL_ENVIRONMENT_VARIABLE} to this URL, then run `samplelibrary setup database`",
+        "    again and it creates the role for you. Replace <password> with that account's own:",
+        f"        postgresql+psycopg://postgres:<password>@{describe_server(url)}/{MAINTENANCE_DATABASES[0]}",
         "",
         *container_route(),
     )

@@ -72,9 +72,14 @@ def load_named_model(library_root: Path, *, name: str, device: str) -> MorphMode
 
     from samplemorph.codecs.conditioned import CONDITIONED_CODEC_NAME, codec_path, load_conditioned_codec
 
-    codec = load_conditioned_codec(
-        codec_path(library_root, name=name), library_root=library_root, device=torch.device(device)
-    )
+    stored_codec_path = codec_path(library_root, name=name)
+    if not stored_codec_path.exists():
+        raise FileNotFoundError(
+            f"no model named {name!r} is stored: `samplelibrary morph fit` writes {array_path}, "
+            f"and `samplelibrary morph train-codec` writes {stored_codec_path}"
+        )
+
+    codec = load_conditioned_codec(stored_codec_path, library_root=library_root, device=torch.device(device))
     stored = codec.model.shape
     description = MorphModelDescription(
         codec=CONDITIONED_CODEC_NAME,
