@@ -917,6 +917,7 @@ table.data td .annotation-editor-input {
    keep the bare treatment they are given above; `:where` holds this selector at the specificity it
    would have without the exception. */
 .panel-filter button,
+.detail-tabs button,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
 .spectral-distance-readout button,
 .morph-panel button:not(.thumbnail-button) {
@@ -938,13 +939,15 @@ table.data td .annotation-editor-input {
 }
 
 .panel-filter button:hover:enabled,
+.detail-tabs button:hover:enabled,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled,
 .spectral-distance-readout button:hover:enabled {
     color: var(--text-primary);
     border-color: var(--border-strong);
 }
 
-.panel-filter button[aria-pressed="true"] {
+.panel-filter button[aria-pressed="true"],
+.detail-tabs button[aria-pressed="true"] {
     background: var(--accent-soft);
     color: var(--accent);
     border-color: var(--accent);
@@ -962,6 +965,12 @@ table.data td .annotation-editor-input {
 }
 
 /* ---------- Cloud panel ---------- */
+
+/* The tooltip and the morph marker sit over the points and reach past the edge near it; the body
+   is the viewport of a canvas that pans, so nothing over it is worth a scrollbar. */
+.cloud-body {
+    overflow: hidden;
+}
 
 .cloud-wrap {
     position: absolute;
@@ -1311,6 +1320,13 @@ table.data td .annotation-editor-input {
 .kv dd {
     margin: 0;
     font-size: 12px;
+}
+
+.detail-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 8px;
 }
 
 .detail-section {

@@ -12,13 +12,138 @@ import { SampleRelationRow } from "./SampleRelationRow";
 import { SimilarSampleRow } from "./SimilarSampleRow";
 import { SuggestedLabels } from "./SuggestedLabels";
 
+export type DetailTab = "occurrences" | "relations" | "similar" | "cooccurrence";
+
 interface SampleDetailViewProps {
     readonly sample: SampleDetail;
     readonly relations: readonly SampleRelation[];
     readonly similar: readonly SimilarSample[];
+    readonly tab: DetailTab;
+    readonly onTabChange: (tab: DetailTab) => void;
 }
 
-export function SampleDetailView({ sample, relations, similar }: SampleDetailViewProps): ReactElement {
+interface DetailTabChoice {
+    readonly id: DetailTab;
+    readonly label: string;
+}
+
+function OccurrencesSection({ sample }: { readonly sample: SampleDetail }): ReactElement {
+    return (
+        <table className="mini">
+            <thead>
+                <tr>
+                    <th>Module</th>
+                    <th>Tracker</th>
+                    <th>Name</th>
+                    <th>Rate</th>
+                    <th>Volume</th>
+                    <th>Panning</th>
+                    <th>Loop</th>
+                </tr>
+            </thead>
+            <tbody>
+                {sample.occurrences.map((occurrence) => (
+                    <SampleOccurrenceRow
+                        key={`${occurrence.module.hash}-${String(occurrence.properties.occurrence.instrument_index)}-${String(occurrence.properties.occurrence.sample_slot)}`}
+                        occurrence={occurrence}
+                    />
+                ))}
+            </tbody>
+        </table>
+    );
+}
+
+function RelationsSection({
+    sample,
+    relations,
+}: {
+    readonly sample: SampleDetail;
+    readonly relations: readonly SampleRelation[];
+}): ReactElement {
+    if (relations.length === 0) {
+        return <p className="placeholder-box">No relations found for this sample.</p>;
+    }
+    return (
+        <table className="mini">
+            <thead>
+                <tr>
+                    <th>Sample</th>
+                    <th>Type</th>
+                    <th>Confidence</th>
+                    <th>Method</th>
+                    <th>Reviewed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {relations.map((relation) => (
+                    <SampleRelationRow key={relation.id} relation={relation} subjectHash={sample.hash} />
+                ))}
+            </tbody>
+        </table>
+    );
+}
+
+function SimilarSection({ similar }: { readonly similar: readonly SimilarSample[] }): ReactElement {
+    if (similar.length === 0) {
+        return (
+            <p className="placeholder-box">No spectral neighbors yet — run the embedding pipeline to populate this.</p>
+        );
+    }
+    return (
+        <table className="mini">
+            <thead>
+                <tr>
+                    <th>Sample</th>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Distance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {similar.map((neighbor) => (
+                    <SimilarSampleRow key={neighbor.hash} similar={neighbor} />
+                ))}
+            </tbody>
+        </table>
+    );
+}
+
+function CooccurrenceSection(): ReactElement {
+    return <p className="placeholder-box">Awaits a co-occurrence analysis across the catalog.</p>;
+}
+
+/**
+ * One sample in full: its name, identity and properties above, and beneath them one of four
+ * listings at a time, chosen by a tab that carries its count. The tab is the caller's, so the
+ * choice outlives the sample in view: a person walking a sample's neighbors keeps seeing neighbors.
+ */
+export function SampleDetailView({
+    sample,
+    relations,
+    similar,
+    tab,
+    onTabChange,
+}: SampleDetailViewProps): ReactElement {
+    const choices: readonly DetailTabChoice[] = [
+        { id: "occurrences", label: `Occurrences (${String(sample.occurrences.length)})` },
+        { id: "relations", label: `Relations (${String(relations.length)})` },
+        { id: "similar", label: `Similar (${String(similar.length)})` },
+        { id: "cooccurrence", label: "Co-occurs" },
+    ];
+
+    function section(): ReactElement {
+        switch (tab) {
+            case "occurrences":
+                return <OccurrencesSection sample={sample} />;
+            case "relations":
+                return <RelationsSection sample={sample} relations={relations} />;
+            case "similar":
+                return <SimilarSection similar={similar} />;
+            case "cooccurrence":
+                return <CooccurrenceSection />;
+        }
+    }
+
     return (
         <section className="detail-scroll">
             <h2>
@@ -49,83 +174,22 @@ export function SampleDetailView({ sample, relations, similar }: SampleDetailVie
                 <dd className="mono">{sample.channels}</dd>
                 <dt>Frames</dt>
                 <dd className="mono">{sample.frames}</dd>
-                <dt>Occurrences</dt>
-                <dd className="mono">{sample.occurrences.length}</dd>
             </dl>
-            <div className="detail-section">
-                <h3>Occurrences</h3>
-                <table className="mini">
-                    <thead>
-                        <tr>
-                            <th>Module</th>
-                            <th>Tracker</th>
-                            <th>Name</th>
-                            <th>Rate</th>
-                            <th>Volume</th>
-                            <th>Panning</th>
-                            <th>Loop</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {sample.occurrences.map((occurrence) => (
-                            <SampleOccurrenceRow
-                                key={`${occurrence.module.hash}-${String(occurrence.properties.occurrence.instrument_index)}-${String(occurrence.properties.occurrence.sample_slot)}`}
-                                occurrence={occurrence}
-                            />
-                        ))}
-                    </tbody>
-                </table>
+            <div className="detail-tabs">
+                {choices.map((choice) => (
+                    <button
+                        key={choice.id}
+                        type="button"
+                        aria-pressed={tab === choice.id}
+                        onClick={() => {
+                            onTabChange(choice.id);
+                        }}
+                    >
+                        {choice.label}
+                    </button>
+                ))}
             </div>
-            <div className="detail-section">
-                <h3>Relations</h3>
-                {relations.length === 0 ? (
-                    <p className="placeholder-box">No relations found for this sample.</p>
-                ) : (
-                    <table className="mini">
-                        <thead>
-                            <tr>
-                                <th>Sample</th>
-                                <th>Type</th>
-                                <th>Confidence</th>
-                                <th>Method</th>
-                                <th>Reviewed</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {relations.map((relation) => (
-                                <SampleRelationRow key={relation.id} relation={relation} subjectHash={sample.hash} />
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-            <div className="detail-section">
-                <h3>Similar Samples</h3>
-                {similar.length === 0 ? (
-                    <p className="placeholder-box">
-                        No spectral neighbors yet — run the embedding pipeline to populate this.
-                    </p>
-                ) : (
-                    <table className="mini">
-                        <thead>
-                            <tr>
-                                <th>Play</th>
-                                <th>Sample</th>
-                                <th>Distance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {similar.map((neighbor) => (
-                                <SimilarSampleRow key={neighbor.hash} similar={neighbor} />
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-            <div className="detail-section">
-                <h3>Frequently Co-occurs With</h3>
-                <p className="placeholder-box">Awaits a co-occurrence analysis across the catalog.</p>
-            </div>
+            <div className="detail-section">{section()}</div>
         </section>
     );
 }

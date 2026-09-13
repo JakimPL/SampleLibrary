@@ -90,14 +90,27 @@ class SampleDistance(BaseModel):
     distance: float
 
 
-class SimilarSample(BaseModel):
-    """One neighbor in a sample's spectral-distance nearest-neighbor listing.
+class SamplePreview(BaseModel):
+    """What a glance at a sample shows: its name, category and hand label, and the stored thumbnail of its waveform.
+
+    ``thumbnail`` is ``None`` for a sample the thumbnail pass has not reached, since a preview
+    with nothing to draw is still a preview with a name.
+    """
+
+    model_config = FROZEN
+
+    display_name: str
+    category: SampleCategory
+    hand_label: str | None
+    thumbnail: tuple[WaveformPeak, ...] | None
+
+
+class SimilarSample(SamplePreview):
+    """One neighbor in a sample's spectral-distance nearest-neighbor listing: a glance at it, how far it sits, and the rate to hear it at.
 
     ``playback_rate_hz`` travels with the neighbor so a listener hears it at the speed the library
     really plays it; it is ``None`` for a sample the catalog knows no rate for.
     """
-
-    model_config = FROZEN
 
     hash: SampleHash
     distance: float
@@ -282,21 +295,6 @@ def get_sample_audio(
     return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
 
 
-class SamplePreview(BaseModel):
-    """What a glance at a sample shows: its name, category and hand label, and the stored thumbnail of its waveform.
-
-    ``thumbnail`` is ``None`` for a sample the thumbnail pass has not reached, since a preview
-    with nothing to draw is still a preview with a name.
-    """
-
-    model_config = FROZEN
-
-    display_name: str
-    category: SampleCategory
-    hand_label: str | None
-    thumbnail: tuple[WaveformPeak, ...] | None
-
-
 @router.get("/{sample_hash}/preview")
 def get_sample_preview(sample_hash: str, connection: Connection = Depends(get_connection)) -> SamplePreview:
     """A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
@@ -307,21 +305,30 @@ def get_sample_preview(sample_hash: str, connection: Connection = Depends(get_co
     Raises:
         HTTPException: 404 when no sample is cataloged under this hash.
     """
-    repository = PostgresSampleRepository(connection)
-    if repository.get(sample_hash) is None:
+    if PostgresSampleRepository(connection).get(sample_hash) is None:
         raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
-    names_by_hash, _ = repository.names_and_rates_by_hash([sample_hash])
-    names = names_by_hash.get(sample_hash, ())
-    annotation = PostgresSampleAnnotationRepository(connection).get(sample_hash)
-    return SamplePreview(
-        display_name=choose_dominant_name(names),
-        category=classify_sample_category(
-            names + repository.instrument_names_by_hash([sample_hash]).get(sample_hash, ())
-        ),
-        hand_label=annotation.label if annotation is not None else None,
-        thumbnail=peaks_from_thumbnail(PostgresSampleThumbnailRepository(connection).get(sample_hash)),
-    )
+    return _previews_by_hash(connection, [sample_hash])[sample_hash]
+
+
+def _previews_by_hash(connection: Connection, sample_hashes: list[str]) -> dict[str, SamplePreview]:
+    """A glance at each given sample, from four lookups over the whole list at once."""
+    repository = PostgresSampleRepository(connection)
+    names_by_hash, _ = repository.names_and_rates_by_hash(sample_hashes)
+    instrument_names_by_hash = repository.instrument_names_by_hash(sample_hashes)
+    annotations_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(sample_hashes)
+    thumbnails_by_hash = PostgresSampleThumbnailRepository(connection).get_many(sample_hashes)
+    previews: dict[str, SamplePreview] = {}
+    for sample_hash in sample_hashes:
+        names = names_by_hash.get(sample_hash, ())
+        annotation = annotations_by_hash.get(sample_hash)
+        previews[sample_hash] = SamplePreview(
+            display_name=choose_dominant_name(names),
+            category=classify_sample_category(names + instrument_names_by_hash.get(sample_hash, ())),
+            hand_label=annotation.label if annotation is not None else None,
+            thumbnail=peaks_from_thumbnail(thumbnails_by_hash.get(sample_hash)),
+        )
+    return previews
 
 
 @router.get("/{sample_hash}/relations")
@@ -370,7 +377,8 @@ def get_similar_samples(
     """The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
 
     Every neighbor is found by measuring this sample against the whole catalog at once, over the
-    vectors held parsed for as long as the embedding behind them stands.
+    vectors held parsed for as long as the embedding behind them stands. Each arrives with what a
+    glance shows, so a listing reads and plays without opening any of them.
 
     Raises:
         HTTPException: 404 when this sample has no persisted spectral feature vector yet.
@@ -379,10 +387,31 @@ def get_similar_samples(
         raise HTTPException(status_code=404, detail=f"sample {sample_hash!r} has no spectral feature vector yet")
 
     neighbors = nearest_neighbors(sample_hash, vectors, limit=limit)
-    playback_rate_by_hash = resolved_playback_rates(connection, [neighbor_hash for neighbor_hash, _ in neighbors])
+    neighbor_hashes = [neighbor_hash for neighbor_hash, _ in neighbors]
+    previews_by_hash = _previews_by_hash(connection, neighbor_hashes)
+    playback_rate_by_hash = resolved_playback_rates(connection, neighbor_hashes)
     return tuple(
-        SimilarSample(hash=neighbor_hash, distance=distance, playback_rate_hz=playback_rate_by_hash[neighbor_hash])
+        _similar_sample(
+            previews_by_hash[neighbor_hash],
+            sample_hash=neighbor_hash,
+            distance=distance,
+            playback_rate_hz=playback_rate_by_hash[neighbor_hash],
+        )
         for neighbor_hash, distance in neighbors
+    )
+
+
+def _similar_sample(
+    preview: SamplePreview, *, sample_hash: str, distance: float, playback_rate_hz: Rate | None
+) -> SimilarSample:
+    return SimilarSample(
+        display_name=preview.display_name,
+        category=preview.category,
+        hand_label=preview.hand_label,
+        thumbnail=preview.thumbnail,
+        hash=sample_hash,
+        distance=distance,
+        playback_rate_hz=playback_rate_hz,
     )
 
 

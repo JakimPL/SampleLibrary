@@ -297,7 +297,7 @@ export function CloudPanel(): ReactElement {
             {tab === "samples" && mode !== "category" && (
                 <TagLegend tags={tags} painted={painted} onToggle={togglePainted} />
             )}
-            <div className="panel-body">
+            <div className="panel-body cloud-body">
                 {state.status === "loading" && <Loading />}
                 {state.status === "error" && <ErrorNotice message={state.message} />}
                 {state.status === "success" && (

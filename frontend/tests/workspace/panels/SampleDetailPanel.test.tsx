@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -77,20 +77,34 @@ describe("SampleDetailPanel", () => {
             expect(screen.getByRole("heading", { name: "kick" })).toBeInTheDocument();
         });
         expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/module-1");
-        expect(screen.getByRole("heading", { name: "Similar Samples" })).toBeInTheDocument();
-        expect(screen.getByRole("heading", { name: "Frequently Co-occurs With" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Occurrences (1)" })).toHaveAttribute("aria-pressed", "true");
+        expect(screen.getByRole("button", { name: "Similar (0)" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Co-occurs" })).toBeInTheDocument();
     });
 
-    it("renders the sample's spectral neighbors once they are loaded", async () => {
+    it("renders the sample's spectral neighbors on their own tab, with what a glance shows", async () => {
         getSample.mockResolvedValue(SAMPLE_DETAIL);
         getSampleRelations.mockResolvedValue([]);
-        getSimilarSamples.mockResolvedValue([{ hash: "d".repeat(64), distance: 1.5 }]);
+        getSimilarSamples.mockResolvedValue([
+            {
+                hash: "d".repeat(64),
+                distance: 1.5,
+                playback_rate_hz: null,
+                display_name: "snare_909",
+                category: "snare",
+                hand_label: null,
+                thumbnail: null,
+            },
+        ]);
         useSelectionStore.getState().focusSample("abc");
-
         renderPanel();
 
-        expect(await screen.findByText("dddddddd")).toBeInTheDocument();
+        fireEvent.click(await screen.findByRole("button", { name: "Similar (1)" }));
+
+        expect(screen.getByText("dddddddd")).toBeInTheDocument();
+        expect(screen.getByText("snare_909")).toBeInTheDocument();
         expect(screen.getByText("1.500")).toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
     });
 
     it("shows an honest empty state when the sample has no spectral neighbors yet", async () => {
@@ -98,10 +112,29 @@ describe("SampleDetailPanel", () => {
         getSampleRelations.mockResolvedValue([]);
         getSimilarSamples.mockRejectedValue(new ApiError(404, "not found"));
         useSelectionStore.getState().focusSample("abc");
-
         renderPanel();
 
-        expect(await screen.findByText(/No spectral neighbors yet/)).toBeInTheDocument();
+        fireEvent.click(await screen.findByRole("button", { name: "Similar (0)" }));
+
+        expect(screen.getByText(/No spectral neighbors yet/)).toBeInTheDocument();
+    });
+
+    it("keeps the chosen tab when the focus moves to another sample", async () => {
+        getSample.mockImplementation((hash: string) =>
+            Promise.resolve({ ...SAMPLE_DETAIL, hash, display_name: hash === "abc" ? "kick" : "snare" }),
+        );
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+        useSelectionStore.getState().focusSample("abc");
+        renderPanel();
+        fireEvent.click(await screen.findByRole("button", { name: "Similar (0)" }));
+
+        act(() => {
+            useSelectionStore.getState().focusSample("xyz");
+        });
+
+        await screen.findByRole("heading", { name: "snare" });
+        expect(screen.getByRole("button", { name: "Similar (0)" })).toHaveAttribute("aria-pressed", "true");
     });
 
     it("shows an error notice when the sample cannot be found", async () => {

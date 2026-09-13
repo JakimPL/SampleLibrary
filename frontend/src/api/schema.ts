@@ -210,7 +210,8 @@ export interface paths {
          * @description The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
          *
          *     Every neighbor is found by measuring this sample against the whole catalog at once, over the
-         *     vectors held parsed for as long as the embedding behind them stands.
+         *     vectors held parsed for as long as the embedding behind them stands. Each arrives with what a
+         *     glance shows, so a listing reads and plays without opening any of them.
          *
          *     Raises:
          *         HTTPException: 404 when this sample has no persisted spectral feature vector yet.
@@ -255,9 +256,10 @@ export interface paths {
          * Get Cloud
          * @description Every sample's position in the library's 2D embedding space, as of the latest embedding run.
          *
-         *     Every lookup behind a point is read whole rather than per hash: this route answers for the entire
-         *     catalog, and asking Postgres about a hundred thousand named hashes costs it more than reading
-         *     each table outright.
+         *     The answer is built once per revision of what it reads and served from memory after that: the
+         *     coordinates' count and last write, the playback rates on file and the modules cataloged are
+         *     what a pipeline moves, and three scalar queries say whether any has. A caller that accepts
+         *     gzip receives the body compressed once at the best level rather than per request.
          */
         readonly get: operations["get_cloud_api_cloud_get"];
         readonly put?: never;
@@ -305,8 +307,8 @@ export interface paths {
          * @description Every sample's first suggested tag from the newest scoring, for coloring the cloud by what a model hears.
          *
          *     These travel apart from the points the way the hand labels do: a scoring changes only when a
-         *     pass writes a new one, and a viewer joins them to the points by hash. An empty answer says no
-         *     scoring has been written.
+         *     pass writes a new one, so the newest scoring's id is the whole revision, and a viewer joins
+         *     them to the points by hash. An empty answer says no scoring has been written.
          */
         readonly get: operations["get_cloud_suggestions_api_cloud_suggestions_get"];
         readonly put?: never;
@@ -1183,12 +1185,19 @@ export interface components {
         };
         /**
          * SimilarSample
-         * @description One neighbor in a sample's spectral-distance nearest-neighbor listing.
+         * @description One neighbor in a sample's spectral-distance nearest-neighbor listing: a glance at it, how far it sits, and the rate to hear it at.
          *
          *     ``playback_rate_hz`` travels with the neighbor so a listener hears it at the speed the library
          *     really plays it; it is ``None`` for a sample the catalog knows no rate for.
          */
         readonly SimilarSample: {
+            /** Display Name */
+            readonly display_name: string;
+            readonly category: components["schemas"]["SampleCategory"];
+            /** Hand Label */
+            readonly hand_label: string | null;
+            /** Thumbnail */
+            readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
             /** Hash */
             readonly hash: string;
             /** Distance */

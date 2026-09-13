@@ -570,6 +570,29 @@ def test_get_similar_samples_carry_the_rate_to_hear_them_at(client: TestClient, 
     assert [item["playback_rate_hz"] for item in response.json()] == [22050]
 
 
+def test_get_similar_samples_carry_what_a_glance_shows(client: TestClient, connection: Connection) -> None:
+    target = _insert_sample(connection, SAMPLE_HASH_A)
+    neighbor = _insert_sample(connection, SAMPLE_HASH_B)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=neighbor, module=module, slot=0, name="kick")
+    PostgresSampleThumbnailRepository(connection).upsert(
+        SampleThumbnail(sample_hash=neighbor.hash, bucket_count=2, minimums=(-0.5, -0.25), maximums=(0.5, 0.25))
+    )
+    feature_repository = PostgresSampleSpectralFeatureRepository(connection)
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=target.hash, vector=(0.0, 0.0), computed_at=datetime.now(UTC))
+    )
+    feature_repository.upsert(
+        SampleSpectralFeature(sample_hash=neighbor.hash, vector=(1.0, 0.0), computed_at=datetime.now(UTC))
+    )
+
+    body = client.get(f"/samples/{target.hash}/similar").json()
+
+    assert [(item["display_name"], item["category"], item["hand_label"], item["thumbnail"]) for item in body] == [
+        ("kick", "kick", None, [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}])
+    ]
+
+
 def test_get_similar_samples_respects_the_limit(client: TestClient, connection: Connection) -> None:
     target = _insert_sample(connection, SAMPLE_HASH_A)
     near = _insert_sample(connection, SAMPLE_HASH_B)
