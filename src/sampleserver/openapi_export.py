@@ -19,7 +19,7 @@ def main(argv: list[str], *, prog: str) -> None:
     inference process, so the stand-in values here are never touched.
     """
     arguments = _parse_arguments(argv, prog=prog)
-    application = create_app(UNUSED_DATABASE_URL, UNUSED_LIBRARY_ROOT, UNUSED_INFERENCE_URL)
+    application = create_app(UNUSED_DATABASE_URL, UNUSED_LIBRARY_ROOT, UNUSED_INFERENCE_URL, frontend_directory=None)
     schema = json.dumps(application.openapi())
     if arguments.output is None:
         print(schema)

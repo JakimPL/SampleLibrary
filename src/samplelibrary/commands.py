@@ -174,7 +174,7 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
         summary="Fit, train and render the decodable representation, and serve morphs over HTTP.",
         run=_morph,
     ),
-    Command(name="serve", summary="Serve the library's API over HTTP.", run=_serve),
+    Command(name="serve", summary="Serve the library's API, and the built frontend when named, over HTTP.", run=_serve),
     Command(name="schema", summary="Print the API's OpenAPI schema as JSON, or write it to a file.", run=_schema),
     CommandGroup(
         name="tracking",

@@ -30,7 +30,7 @@ def client(connection: Connection, _database_url: str, tmp_path: Path) -> Iterat
     the client resolves it to where the app actually serves it. `test_app.py` pins the prefix
     itself, against a client built without one.
     """
-    application = create_app(_database_url, tmp_path, INFERENCE_URL)
+    application = create_app(_database_url, tmp_path, INFERENCE_URL, frontend_directory=None)
 
     def override_get_connection() -> Iterator[Connection]:
         yield connection

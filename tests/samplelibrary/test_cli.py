@@ -148,6 +148,7 @@ def test_the_named_configuration_is_the_one_the_command_reads(tmp_path: Path, mo
 def test_the_named_configuration_supplies_the_database_over_an_exported_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "elsewhere.toml"))
     monkeypatch.setenv(DATABASE_URL_ENVIRONMENT_VARIABLE, EXPORTED_DATABASE_URL)
     database_urls: list[str] = []
     monkeypatch.setattr(

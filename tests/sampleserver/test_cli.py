@@ -8,6 +8,11 @@ import pytest
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from sampleserver import cli
+from sampleserver.frontend import (
+    FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE,
+    INDEX_DOCUMENT,
+    frontend_directory_from_environment,
+)
 
 PROGRAM = "samplelibrary serve"
 PUBLIC_HOST = "0.0.0.0"
@@ -80,6 +85,31 @@ def test_reloading_and_several_workers_are_a_usage_error(
 
     assert raised.value.code == 2
     assert "not allowed with" in capsys.readouterr().err
+    assert not recorded.calls
+
+
+def test_a_named_frontend_reaches_every_worker(
+    recorded: RecordedRun, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    built = tmp_path / "dist"
+    built.mkdir()
+    (built / INDEX_DOCUMENT).write_text("<!doctype html>", encoding="utf-8")
+    monkeypatch.setenv(FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path / "elsewhere"))
+
+    cli.main(["--frontend", str(built)], prog=PROGRAM)
+
+    assert frontend_directory_from_environment() == built.resolve()
+    assert recorded.calls
+
+
+def test_a_frontend_directory_without_a_build_is_a_usage_error(
+    recorded: RecordedRun, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        cli.main(["--frontend", str(tmp_path)], prog=PROGRAM)
+
+    assert raised.value.code == 2
+    assert INDEX_DOCUMENT in capsys.readouterr().err
     assert not recorded.calls
 
 
