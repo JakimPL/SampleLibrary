@@ -148,6 +148,24 @@ def test_fitting_writes_a_model_under_the_library_root(
     assert "Fitted" in capsys.readouterr().out
 
 
+def test_a_library_smaller_than_the_codec_names_the_latent_size_that_fits(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sample_count = len(_seed_catalog(connection, tmp_path))
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    with pytest.raises(SystemExit) as raised:
+        main(["fit", "--latent-size", str(sample_count + 1), "--model", MODEL_NAME], prog=PROGRAM)
+
+    assert raised.value.code == 1
+    assert f"--latent-size {sample_count} or less" in capsys.readouterr().err
+    assert not model_path(tmp_path, name=MODEL_NAME).exists()
+
+
 def test_rendering_writes_a_listening_set_through_a_fitted_model(
     connection: Connection,
     _database_url: str,

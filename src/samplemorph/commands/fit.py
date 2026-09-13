@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from typing import Final
 
 from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
 from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
-from samplemorph.measurement.corpus import read_probe_samples
+from samplemorph.measurement.corpus import DEFAULT_PROBE_FRAME_CEILING, DEFAULT_PROBE_FRAME_FLOOR, read_probe_samples
 from samplemorph.model_store import (
     DEFAULT_MODEL_NAME,
     PRINCIPAL_COMPONENT_CODEC_NAME,
@@ -38,9 +39,25 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
 
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
-    """Fit a linear codec over a draw of the library and write it under the library root."""
+    """Fit a linear codec over a draw of the library and write it under the library root.
+
+    Raises:
+        SystemExit: the library holds fewer samples within the probe frame bounds than the codec's
+            components, after naming the `--latent-size` that fits.
+    """
     canonicalizer = canonicalizer_from(arguments)
     samples = draw_probe_samples(connection, count=arguments.samples, random_seed=arguments.seed)
+    if len(samples) < arguments.latent_size:
+        _logger.error(
+            "%d samples lie between %d and %d frames, fewer than the %d components the codec keeps. "
+            "Pass --latent-size %d or less.",
+            len(samples),
+            DEFAULT_PROBE_FRAME_FLOOR,
+            DEFAULT_PROBE_FRAME_CEILING,
+            arguments.latent_size,
+            len(samples),
+        )
+        sys.exit(1)
     _logger.info("Canonicalizing %d samples on the %s axis...", len(samples), arguments.canonicalizer)
     images = [canonicalizer.canonicalize(probe.mono) for probe in read_probe_samples(config.library_root, samples)]
 

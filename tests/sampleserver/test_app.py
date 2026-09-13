@@ -52,7 +52,7 @@ def test_a_response_past_a_kilobyte_goes_out_gzipped_when_the_caller_accepts_it(
 ) -> None:
     """The cloud's payload is text that compresses several-fold, and every route shares the middleware."""
     with TestClient(create_app(_database_url, tmp_path, INFERENCE_URL, frontend_directory=None)) as client:
-        response = client.get("/openapi.json", headers={"Accept-Encoding": "gzip"})
+        response = client.get(f"{API_PREFIX}/openapi.json", headers={"Accept-Encoding": "gzip"})
 
     assert response.headers["content-encoding"] == "gzip"
     assert "paths" in response.json()

@@ -211,8 +211,9 @@ library (`provisioning.development_database_url`), and an inference address of i
 sandbox's API never dials the real library's renderer. One role, named by `config.toml`'s `database_url`, owns all
 three.
 
-`samplelibrary setup database` (`just database`) creates whatever of those is missing and touches
-nothing that already exists, so it is safe against a populated library. `samplecore.storage.cluster`
+`samplelibrary setup database` (`just database`) creates whichever of the role and the databases
+are missing and adds any missing tables to the library and the sandbox, leaving every row in place,
+so it is safe against a populated library. `samplecore.storage.cluster`
 owns that work: `quoting` turns a name or a password into a fragment of SQL and rejects what quoting
 cannot carry (an empty identifier, or a NUL byte, which the driver would otherwise cut a name
 short at), `statements` holds every statement this project runs against the cluster rather than

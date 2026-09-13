@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final
 
 from starlette.exceptions import HTTPException
@@ -15,11 +15,12 @@ INDEX_DOCUMENT: Final[str] = "index.html"
 
 
 class SinglePageApplication(StaticFiles):
-    """The built frontend: each of its files as it is, and its index for every other path outside the API.
+    """The built frontend: each of its files as it is, and its index for every page path outside the API.
 
     The application routes in the browser, so a reload on `/samples/{hash}` asks the server for a path
     no file carries; answering it with the index lets the application take that route over again.
-    A path under the API prefix stays the API's own, and a miss there is a plain 404.
+    A path naming a file, one with an extension, and a path under the API prefix answer a miss with a
+    plain 404, so a stale asset reference fails as itself.
     """
 
     def __init__(self, directory: Path, *, api_prefix: str) -> None:
@@ -30,12 +31,13 @@ class SinglePageApplication(StaticFiles):
         try:
             return await super().get_response(path, scope)
         except HTTPException as error:
-            if error.status_code != HTTP_404_NOT_FOUND or self._is_api_path(path):
+            if error.status_code != HTTP_404_NOT_FOUND or not self._is_page_path(path):
                 raise
             return await super().get_response(INDEX_DOCUMENT, scope)
 
-    def _is_api_path(self, path: str) -> bool:
-        return path == self._api_segment or path.startswith(f"{self._api_segment}/")
+    def _is_page_path(self, path: str) -> bool:
+        under_api = path == self._api_segment or path.startswith(f"{self._api_segment}/")
+        return not under_api and not PurePosixPath(path).suffix
 
 
 def frontend_directory_from_environment() -> Path | None:

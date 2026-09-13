@@ -68,6 +68,9 @@ def create_app(
             application.state.engine.dispose()
 
     application = FastAPI(
+        openapi_url=f"{API_PREFIX}/openapi.json",
+        docs_url=f"{API_PREFIX}/docs",
+        redoc_url=f"{API_PREFIX}/redoc",
         title="SampleLibrary",
         description="Read access to the sample catalog, with hand annotation and morphs between samples.",
         lifespan=lifespan,

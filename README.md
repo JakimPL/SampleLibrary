@@ -35,9 +35,12 @@ just database
 
 That makes sure the PostgreSQL server `config.toml` names holds three databases, one role owning
 them all: your library, `samplelibrary_dev` for the development sandbox, and `samplelibrary_test`
-for the test suite. If a step needs something from you — a PostgreSQL superuser, usually — it
-prints the exact statement to run, and you run `just database` again afterwards. It is safe to run
-at any time, and leaves anything that already exists alone.
+for the test suite. It creates whichever of the role and the databases are missing, then adds any
+missing tables to the library and the sandbox; rows already there stay as they are, so it is safe
+to run at any time. If a step needs something from you — a PostgreSQL superuser, usually — it prints
+the exact statement to run, and you run `just database` again afterwards. On a server where those
+database names belong to someone else, create your library's database alone with
+`createdb -O <role> <name>`: the first extraction adds its tables.
 
 No PostgreSQL on the machine? `docker compose up -d postgres` starts one. If port 5432 is taken,
 start it on another port — `POSTGRES_PORT=5433 docker compose up -d postgres` in a POSIX shell,
@@ -100,8 +103,10 @@ app from another device, run `npm run dev -- --host` inside `frontend`; anyone o
 then change your labels, since the app asks nobody to sign in.
 
 `just frontend-build` builds the frontend for production, and
-`uv run samplelibrary serve --frontend frontend/dist` serves it together with the API at
-`http://127.0.0.1:8000`. The Docker image does the same; `docs/architecture.md` describes running it.
+`uv run samplelibrary serve --frontend frontend/dist`, run in place of `just serve`, serves it
+together with the API at `http://127.0.0.1:8000`. The Docker image does the same;
+`docs/architecture.md` describes running it. The API describes its own routes at
+`http://127.0.0.1:8000/api/docs`.
 
 ## Recipes
 
@@ -172,7 +177,9 @@ uv run samplelibrary morph fit                        # a linear codec, a few mi
 uv run samplelibrary morph serve --vocoder pghi       # the renderer, in a terminal of its own
 ```
 
-A library of fewer than 256 samples fits with `--latent-size` set below its sample count.
+The fit reads samples between 4,000 and 200,000 frames long and keeps 256 components, so a library
+holding fewer such samples fits with a smaller `--latent-size`; the command names the largest that
+fits.
 
 `just serve-inference` starts the renderer with the restored vocoder, which sounds closer to the
 original and needs a restorer trained on a GPU first: `uv run samplelibrary morph train-restorer`

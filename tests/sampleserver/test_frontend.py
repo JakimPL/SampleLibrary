@@ -48,6 +48,11 @@ def test_a_built_file_is_served_as_itself(served: TestClient) -> None:
     assert response.text == SCRIPT_BODY
 
 
+@pytest.mark.parametrize("path", ["/assets/index-stale.js", "/favicon.ico"])
+def test_a_missing_file_is_a_plain_miss(served: TestClient, path: str) -> None:
+    assert served.get(path).status_code == 404
+
+
 def test_the_api_keeps_its_own_routes_and_misses(served: TestClient) -> None:
     assert served.get(f"{API_PREFIX}/stats").json()["module_count"] == 0
 
