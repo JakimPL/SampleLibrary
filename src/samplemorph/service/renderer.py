@@ -7,12 +7,12 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
-from samplecore.models.morph import MORPH_WEIGHT_STEPS, MorphPoint, MorphServiceStatus
+from samplecore.models.morph import MORPH_WEIGHT_STEPS, HeardMorphPoint, MorphServiceStatus
 from samplecore.storage import audio_store
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.images import SampleLatent
 from samplemorph.model_store import MorphModel
-from samplemorph.pipeline import MorphRoute, encode_waveform, load_route, render_morph
+from samplemorph.pipeline import MorphRoute, common_rate, encode_heard, encode_waveform, load_route, render_morph
 from samplemorph.rendering import wav_bytes
 from samplemorph.service.caches import LruCache
 from samplemorph.service.settings import LATENT_CACHE_SIZE, RENDER_CACHE_SIZE, ServiceSettings
@@ -23,14 +23,17 @@ WARM_UP_FRAMES: Final[int] = 4096
 WARM_UP_FREQUENCY_HZ: Final[float] = 440.0
 WARM_UP_WEIGHT: Final[float] = 0.5
 
+LatentKey = tuple[str, float, float]
+
 
 class MorphRenderer:
     """Renders any point between two stored samples through one loaded route, remembering its work.
 
-    Latents are cached per sample, so a slider over one pair encodes each endpoint once and then
-    costs one decode and one synthesis per weight; renders are cached per point, so a weight asked
-    for twice is served from memory. One lock serializes rendering, since torch on the processor
-    already spreads one synthesis over every core and two at once would only contend.
+    Latents are cached per sample and per frame it is carried into, so a slider over one pair
+    encodes each endpoint once and then costs one decode and one synthesis per weight; renders are
+    cached per point, so a weight asked for twice is served from memory. One lock serializes
+    rendering, since torch on the processor already spreads one synthesis over every core and two
+    at once would only contend.
     """
 
     def __init__(self, *, settings: ServiceSettings, model: MorphModel, route: MorphRoute) -> None:
@@ -38,8 +41,8 @@ class MorphRenderer:
         self._model = model
         self._route = route
         self._fingerprint = _fingerprint(model, route)
-        self._latents: LruCache[str, SampleLatent] = LruCache(capacity=LATENT_CACHE_SIZE)
-        self._renders: LruCache[MorphPoint, bytes] = LruCache(capacity=RENDER_CACHE_SIZE)
+        self._latents: LruCache[LatentKey, SampleLatent] = LruCache(capacity=LATENT_CACHE_SIZE)
+        self._renders: LruCache[HeardMorphPoint, bytes] = LruCache(capacity=RENDER_CACHE_SIZE)
         self._lock = threading.Lock()
 
     @property
@@ -54,8 +57,8 @@ class MorphRenderer:
     def render_count(self) -> int:
         return len(self._renders)
 
-    def render(self, point: MorphPoint) -> bytes:
-        """The WAV bytes of one point, at the nominal header rate every stored object carries.
+    def render(self, point: HeardMorphPoint) -> bytes:
+        """The WAV bytes of one point, stating the rate the pair is heard at.
 
         Raises:
             FileNotFoundError: the store holds no object for one of the two samples.
@@ -65,17 +68,30 @@ class MorphRenderer:
             if cached is not None:
                 return cached
 
+            rate_hz = common_rate(float(point.first_rate_hz), float(point.second_rate_hz))
             waveform = render_morph(
-                self._latent(point.first), self._latent(point.second), weight=point.weight, route=self._route
+                self._latent(point.first, rate_hz=float(point.first_rate_hz), target_rate_hz=rate_hz),
+                self._latent(point.second, rate_hz=float(point.second_rate_hz), target_rate_hz=rate_hz),
+                weight=point.weight,
+                route=self._route,
             )
-            rendered = wav_bytes(waveform, rate_hz=NOMINAL_WAV_RATE)
+            rendered = wav_bytes(waveform, rate_hz=rate_hz)
             self._renders.put(point, rendered)
             return rendered
 
-    def etag(self, point: MorphPoint) -> str:
+    def etag(self, point: HeardMorphPoint) -> str:
         """A validator that names this point's render under the loaded model, for the caches between here and a listener."""
-        digest = hashlib.sha256(f"{self._fingerprint}|{point.first}|{point.second}|{point.weight}".encode()).hexdigest()
-        return f'"{digest[:ETAG_LENGTH]}"'
+        named = "|".join(
+            (
+                self._fingerprint,
+                point.first,
+                point.second,
+                str(point.weight),
+                str(point.first_rate_hz),
+                str(point.second_rate_hz),
+            )
+        )
+        return f'"{hashlib.sha256(named.encode()).hexdigest()[:ETAG_LENGTH]}"'
 
     def status(self) -> MorphServiceStatus:
         """What this renderer serves, for a caller deciding whether and how to ask."""
@@ -106,14 +122,21 @@ class MorphRenderer:
         encoded = encode_waveform(_warm_up_tone(), canonicalizer=self._route.canonicalizer, codec=self._route.codec)
         render_morph(encoded.latent, encoded.latent, weight=WARM_UP_WEIGHT, route=self._route)
 
-    def _latent(self, sample_hash: str) -> SampleLatent:
-        cached = self._latents.get(sample_hash)
+    def _latent(self, sample_hash: str, *, rate_hz: float, target_rate_hz: float) -> SampleLatent:
+        key: LatentKey = (sample_hash, rate_hz, target_rate_hz)
+        cached = self._latents.get(key)
         if cached is not None:
             return cached
 
         pcm = audio_store.read_object(self._settings.library_root, sample_hash).pcm
-        encoded = encode_waveform(pcm, canonicalizer=self._route.canonicalizer, codec=self._route.codec)
-        self._latents.put(sample_hash, encoded.latent)
+        encoded = encode_heard(
+            pcm,
+            rate_hz=rate_hz,
+            target_rate_hz=target_rate_hz,
+            canonicalizer=self._route.canonicalizer,
+            codec=self._route.codec,
+        )
+        self._latents.put(key, encoded.latent)
         return encoded.latent
 
 

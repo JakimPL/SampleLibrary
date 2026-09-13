@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Final
 
 from pydantic import BaseModel, Field, field_validator
+from trackmod.schema.scalars import Rate
 
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import SampleHash
@@ -39,6 +40,18 @@ class MorphPoint(BaseModel):
     def step(self) -> int:
         """Which step of the grid the weight sits on, from 0 at the first sample."""
         return int(round(self.weight * MORPH_WEIGHT_STEPS))
+
+
+class HeardMorphPoint(MorphPoint):
+    """A point between two samples with the rate each end is heard at.
+
+    A render puts both samples in one frame, which the two rates alone fix, so they travel with the
+    point: the process rendering it needs no catalog, and a render is named by them the way it is
+    named by the weight.
+    """
+
+    first_rate_hz: Rate
+    second_rate_hz: Rate
 
 
 def morph_weights() -> tuple[float, ...]:

@@ -459,9 +459,10 @@ export interface paths {
          * Get Morph Audio
          * @description The audio at one point between two samples, rendered by the inference process and relayed as it came.
          *
-         *     The render's validator and its caching headers pass through untouched, and so does a caller's
-         *     conditional request, so a browser that holds the render is answered with a 304 by the process
-         *     that made it.
+         *     The catalog's rates for both ends travel with the point, so the process renders the pair in
+         *     the one frame it is heard in and the file states that rate. The render's validator and its
+         *     caching headers pass through untouched, and so does a caller's conditional request, so a
+         *     browser that holds the render is answered with a 304 by the process that made it.
          *
          *     Raises:
          *         HTTPException: 503 when no inference process answers; the process's own 404 for a sample

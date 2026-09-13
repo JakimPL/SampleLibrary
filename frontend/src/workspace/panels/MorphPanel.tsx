@@ -2,7 +2,6 @@ import type { ChangeEvent, ReactElement } from "react";
 import { Link } from "react-router-dom";
 
 import { morphPreview } from "../../morph/morphPreview";
-import { morphPlaybackRateHz } from "../../morph/morphRate";
 import { useMorphStore, WEIGHT_STEP } from "../../morph/morphStore";
 import { type MorphStatus, useMorphStatus } from "../../morph/useMorphStatus";
 import { PlayButton } from "../../samples/PlayButton";
@@ -19,7 +18,6 @@ const WEIGHT_DECIMAL_PLACES = 2;
 const NO_PAIR_HINT =
     "No morph pair yet — in the Cloud, drag from one sample to another with the right mouse button, or click one and right-click another.";
 const OFFLINE_NOTICE = "Morphing is offline: the inference service is not reachable.";
-const RATE_UNKNOWN = "rate unknown";
 
 interface EndpointReading {
     readonly name: string;
@@ -103,8 +101,7 @@ function MorphPair({ first, second, status }: MorphPairProps): ReactElement {
     const firstReading = useEndpoint(first);
     const secondReading = useEndpoint(second);
     const { play, playingKey } = useAudioPreview();
-    const source = morphPreview(first, second, weight, firstReading.rateHz, secondReading.rateHz);
-    const rateHz = morphPlaybackRateHz(firstReading.rateHz, secondReading.rateHz, weight);
+    const source = morphPreview(first, second, weight);
 
     function playMorph(): void {
         if (status.available) {
@@ -145,10 +142,7 @@ function MorphPair({ first, second, status }: MorphPairProps): ReactElement {
                 <span className="mono cell-muted">B</span>
             </div>
             <div className="morph-actions">
-                <span className="morph-readout mono">
-                    {weight.toFixed(WEIGHT_DECIMAL_PLACES)} ·{" "}
-                    {rateHz === null ? RATE_UNKNOWN : `${String(Math.round(rateHz))} Hz`}
-                </span>
+                <span className="morph-readout mono">{weight.toFixed(WEIGHT_DECIMAL_PLACES)}</span>
                 <button
                     type="button"
                     onClick={playMorph}

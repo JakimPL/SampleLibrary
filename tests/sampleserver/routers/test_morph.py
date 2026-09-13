@@ -6,12 +6,21 @@ from dataclasses import dataclass, field
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import Connection
+from trackmod.core.samples.depth import BitDepth
 
+from samplecore.models.channels import ChannelLayout
+from samplecore.models.sample import Sample
+from samplecore.storage.audio_store import NOMINAL_WAV_RATE
+from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
 from sampleserver.dependencies import get_inference_client
 from tests.sampleserver.conftest import INFERENCE_URL
 
 FIRST = "a" * 64
 SECOND = "b" * 64
+FIRST_RATE_HZ = 8_363
+SECOND_RATE_HZ = 16_726
 RENDERED = b"RIFF...rendered..."
 ETAG = '"0123456789abcdef"'
 CACHE_CONTROL = "private, max-age=3600"
@@ -62,6 +71,7 @@ def _refusing(request: httpx.Request) -> httpx.Response:
 
 
 def test_a_render_is_relayed_with_its_caching_headers(client: TestClient) -> None:
+    """A sample the catalog holds no rate for is heard as stored, at the nominal rate its file states."""
     upstream = _serve(client, _rendered)
 
     response = client.get("/morph/audio", params={"first": FIRST, "second": SECOND, "weight": 0.5})
@@ -72,7 +82,28 @@ def test_a_render_is_relayed_with_its_caching_headers(client: TestClient) -> Non
     assert response.headers["etag"] == ETAG
     assert response.headers["cache-control"] == CACHE_CONTROL
     assert upstream.requests[0].url.path == "/morph/audio"
-    assert dict(upstream.requests[0].url.params) == {"first": FIRST, "second": SECOND, "weight": "0.5"}
+    assert dict(upstream.requests[0].url.params) == {
+        "first": FIRST,
+        "second": SECOND,
+        "weight": "0.5",
+        "first_rate_hz": str(NOMINAL_WAV_RATE),
+        "second_rate_hz": str(NOMINAL_WAV_RATE),
+    }
+
+
+def test_the_rates_the_catalog_holds_for_both_ends_travel_to_the_process(
+    client: TestClient, connection: Connection
+) -> None:
+    upstream = _serve(client, _rendered)
+    repository = PostgresSampleRepository(connection)
+    for sample_hash in (FIRST, SECOND):
+        repository.upsert(Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8))
+    PostgresSamplePlaybackRateRepository(connection).replace_all({FIRST: FIRST_RATE_HZ, SECOND: SECOND_RATE_HZ})
+
+    client.get("/morph/audio", params={"first": FIRST, "second": SECOND, "weight": 0.5})
+
+    params = dict(upstream.requests[0].url.params)
+    assert (params["first_rate_hz"], params["second_rate_hz"]) == (str(FIRST_RATE_HZ), str(SECOND_RATE_HZ))
 
 
 def test_a_caller_s_validator_is_forwarded_and_the_process_s_304_comes_back(client: TestClient) -> None:

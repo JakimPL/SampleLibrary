@@ -3,7 +3,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import { sampleAudioUrl } from "../api/samples";
 import { playbackRateFor } from "./nominalRate";
 
-/** One thing the shared preview element can play: where its audio is, the key it is reported under, and the rate to run it at. */
+/** One thing the shared preview element can play: where its audio is, the key it is reported under, and the rate to run it at, or `null` to run it at the rate the file states. */
 export interface PreviewSource {
     readonly key: string;
     readonly url: string;

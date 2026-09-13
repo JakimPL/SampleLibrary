@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import type * as MorphApi from "../../../src/api/morph";
 import type * as SamplesApi from "../../../src/api/samples";
-import { rateBetween } from "../../../src/morph/morphRate";
 import { useMorphStore } from "../../../src/morph/morphStore";
 import type * as AudioPreview from "../../../src/samples/useAudioPreview";
 import { UNNAMED_SAMPLE_LABEL } from "../../../src/shared/labels";
@@ -90,7 +89,7 @@ describe("MorphPanel", () => {
         expect(useMorphStore.getState()).toMatchObject({ first: FIRST, second: SECOND });
     });
 
-    it("names both ends and the rate the weight puts the morph at", async () => {
+    it("names both ends and states the weight", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
         useMorphStore.getState().setPair(FIRST, SECOND);
@@ -98,11 +97,10 @@ describe("MorphPanel", () => {
 
         expect(await screen.findByText("kick_808")).toBeInTheDocument();
         expect(screen.getByText(UNNAMED_SAMPLE_LABEL)).toBeInTheDocument();
-        const rateHz = Math.round(rateBetween(FIRST_RATE_HZ, SECOND_RATE_HZ, 0.5));
-        expect(screen.getByText(`0.50 · ${String(rateHz)} Hz`)).toBeInTheDocument();
+        expect(screen.getByText("0.50")).toBeInTheDocument();
     });
 
-    it("moves the shared weight from the slider and plays the morph on release", async () => {
+    it("moves the shared weight from the slider and plays the morph on release, as its file states", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
         useMorphStore.getState().setPair(FIRST, SECOND);
@@ -119,7 +117,7 @@ describe("MorphPanel", () => {
         expect(play).toHaveBeenCalledWith({
             key: `/api/morph/audio?first=${FIRST}&second=${SECOND}&weight=0.25`,
             url: `/api/morph/audio?first=${FIRST}&second=${SECOND}&weight=0.25`,
-            playbackRateHz: rateBetween(FIRST_RATE_HZ, SECOND_RATE_HZ, 0.25),
+            playbackRateHz: null,
         });
     });
 

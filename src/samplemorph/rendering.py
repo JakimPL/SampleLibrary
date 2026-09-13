@@ -70,14 +70,3 @@ def _with_headroom(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
     """Scale a waveform to sit just below full scale, so a written file carries no clipping."""
     peak = float(np.abs(waveform).max())
     return waveform * (HEADROOM / peak) if peak > SILENT_LEVEL else waveform
-
-
-def rate_between(first_rate_hz: float, second_rate_hz: float, weight: float) -> float:
-    """The playback rate a morph between two samples is heard at.
-
-    Rates are read as pitches, so the path between them runs through their logarithms: halfway
-    between 8,363 Hz and 16,726 Hz is the octave's midpoint rather than its arithmetic mean. This
-    is the frame's own speed, and it multiplies with the pitch the conditioners place the content
-    at, so interpolating both in the log domain interpolates what is heard.
-    """
-    return float(2.0 ** ((1.0 - weight) * np.log2(first_rate_hz) + weight * np.log2(second_rate_hz)))

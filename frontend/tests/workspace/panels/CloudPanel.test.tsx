@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 import type * as CloudApi from "../../../src/api/cloud";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as SamplesApi from "../../../src/api/samples";
-import { rateBetween } from "../../../src/morph/morphRate";
 import { useMorphStore } from "../../../src/morph/morphStore";
 import type * as AudioPreview from "../../../src/samples/useAudioPreview";
 import { CloudPanel } from "../../../src/workspace/panels/CloudPanel";
@@ -346,7 +345,7 @@ describe("CloudPanel", () => {
         expect(useSelectionStore.getState().highlighted).toBeNull();
     });
 
-    it("plays the morph at the points' own rates when the marker is released", async () => {
+    it("plays the morph as its file states when the marker is released", async () => {
         const first = "6".repeat(64);
         const second = "7".repeat(64);
         getCloud.mockResolvedValue([
@@ -369,7 +368,7 @@ describe("CloudPanel", () => {
         expect(play).toHaveBeenCalledWith({
             key: `/api/morph/audio?first=${first}&second=${second}&weight=0.5`,
             url: `/api/morph/audio?first=${first}&second=${second}&weight=0.5`,
-            playbackRateHz: rateBetween(8363, 16726, 0.5),
+            playbackRateHz: null,
         });
     });
     it("asks for the suggestions and their tags only once the Suggestions mode is chosen", async () => {

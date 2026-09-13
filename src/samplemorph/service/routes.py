@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
-from samplecore.models.morph import MorphPoint, MorphServiceStatus
+from samplecore.models.morph import HeardMorphPoint, MorphServiceStatus
 from samplemorph.service.dependencies import get_renderer
 from samplemorph.service.renderer import MorphRenderer
 from samplemorph.service.settings import CACHE_CONTROL, WAV_MEDIA_TYPE
@@ -15,11 +15,11 @@ router = APIRouter(prefix="/morph", tags=["morph"])
 
 @router.get("/audio", response_class=Response)
 def get_morph_audio(
-    point: Annotated[MorphPoint, Query()],
+    point: Annotated[HeardMorphPoint, Query()],
     request: Request,
     renderer: MorphRenderer = Depends(get_renderer),
 ) -> Response:
-    """The audio at one point between two samples, as a WAV at the nominal header rate.
+    """The audio at one point between two samples, as a WAV stating the rate the pair is heard at.
 
     The response names its render with a validator built from the loaded model and the point, so
     a caller that already holds it is answered with a bare 304 and no synthesis.

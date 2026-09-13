@@ -500,10 +500,14 @@ panel mirrors the same weight as a slider, names both ends with the
 link every listing row carries (a click highlights the end, a double-click opens it in the Sample
 Detail), and plays the render on release through the one preview element every sample plays
 through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is keyed by its own
-render's address). The render arrives at the nominal header rate every stored object carries, and the
-frontend plays it at the geometric interpolation of the two ends' playback rates
-(`frontend/src/morph/morphRate.ts`, mirroring `samplemorph.rendering.rate_between`), which every
-cloud point and detail already states. Weights lie on a grid of sixteenths on both sides, so a
+render's address). Both ends are carried into one frame before they blend: the API resolves the
+rate each is heard at by the one rule every reader of the catalog applies and hands both to the
+inference process, which resamples the slower sample up to the faster one's rate, the higher of
+the two, so the faster keeps its whole band and the slower loses nothing, and states that rate in
+the file it answers with. The frontend plays a morph as the file says, so a path between two
+samples an octave apart in rate holds each end at its own pitch and sounds every point between
+at the one rate, where a blend in the stored frame played at a rate sliding between the two would
+carry both ends' pitches through the gap. Weights lie on a grid of sixteenths on both sides, so a
 weight names one render and one cache entry wherever it goes.
 
 ## Extending to new tracker formats

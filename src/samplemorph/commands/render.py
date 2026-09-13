@@ -9,7 +9,13 @@ from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
 from samplemorph.commands.draws import require_sample
-from samplemorph.pipeline import encode_sample, listening_set_manifest, load_route, render_listening_set
+from samplemorph.pipeline import (
+    encode_pair,
+    listening_set_manifest,
+    load_route,
+    read_heard_sample,
+    render_listening_set,
+)
 from samplemorph.route_arguments import (
     add_model_argument,
     add_morpher_argument,
@@ -43,15 +49,15 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     first_sample = require_sample(connection, arguments.first)
     second_sample = require_sample(connection, arguments.second)
     model, route = load_route(config.library_root, route_choice_from(arguments))
-    first = encode_sample(
-        connection, config.library_root, first_sample, canonicalizer=route.canonicalizer, codec=route.codec
-    )
-    second = encode_sample(
-        connection, config.library_root, second_sample, canonicalizer=route.canonicalizer, codec=route.codec
+    pair = encode_pair(
+        read_heard_sample(connection, config.library_root, first_sample),
+        read_heard_sample(connection, config.library_root, second_sample),
+        canonicalizer=route.canonicalizer,
+        codec=route.codec,
     )
 
     output_directory = Path(arguments.output)
-    summary = render_listening_set(first, second, route=route, output_directory=output_directory)
+    summary = render_listening_set(pair, route=route, output_directory=output_directory)
     (output_directory / MANIFEST_NAME).write_text(listening_set_manifest(model.description, summary))
 
     _logger.info(

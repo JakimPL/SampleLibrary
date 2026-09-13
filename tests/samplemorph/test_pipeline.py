@@ -24,22 +24,29 @@ from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from samplemorph.canonicalizers import Canonicalizer
+from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.geometry import mel_geometry
 from samplemorph.model_store import PRINCIPAL_COMPONENT_CODEC_NAME, MorphModelDescription
 from samplemorph.morphers.linear import LinearMorpher
 from samplemorph.pipeline import (
+    EncodedPair,
+    HeardSample,
     MorphRenderSummary,
     MorphRoute,
+    common_rate,
     decode_to_audio,
+    encode_pair,
     encode_sample,
     encode_waveform,
     listening_set_manifest,
+    read_heard_sample,
     render_listening_set,
     render_morph,
 )
 from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
-from samplemorph.rendering import RenderedFile, RenderKind, rate_between, wav_bytes, write_rendering
+from samplemorph.rendering import RenderedFile, RenderKind, wav_bytes, write_rendering
 from samplemorph.vocoders.pghi import PghiVocoder
 from tests.samplemorph.conftest import harmonic_tone
 
@@ -48,6 +55,7 @@ SECOND_RATE_HZ = 16_726
 NOTE_EVENT_RATE_HZ = 4_181
 SAMPLE_FRAME_COUNT = 4096
 EXPECTED_FILE_COUNT = 7
+PITCH_WINDOW_OCTAVES = 1.0 / 12.0
 
 
 def _store_sample(connection: Connection, library_root: Path, *, index: int, frequency: float, rate_hz: int) -> Sample:
@@ -91,18 +99,49 @@ def _store_sample(connection: Connection, library_root: Path, *, index: int, fre
     return sample
 
 
-def test_a_rendered_listening_set_writes_both_ends_and_every_morph(connection: Connection, tmp_path: Path) -> None:
-    library_root = tmp_path / "library"
+def _stored_pair(
+    connection: Connection, library_root: Path, *, canonicalizer: Canonicalizer, codec: SampleCodec
+) -> EncodedPair:
     first_sample = _store_sample(connection, library_root, index=1, frequency=220.0, rate_hz=FIRST_RATE_HZ)
     second_sample = _store_sample(connection, library_root, index=2, frequency=660.0, rate_hz=SECOND_RATE_HZ)
+    return encode_pair(
+        read_heard_sample(connection, library_root, first_sample),
+        read_heard_sample(connection, library_root, second_sample),
+        canonicalizer=canonicalizer,
+        codec=codec,
+    )
+
+
+def _heard_tone(index: int, *, frequency: float, rate_hz: int) -> HeardSample:
+    sample = Sample(
+        hash=format(index, "064x"), depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=SAMPLE_FRAME_COUNT
+    )
+    return HeardSample(
+        sample=sample, pcm=harmonic_tone(SAMPLE_FRAME_COUNT, frequency=frequency), rate_hz=float(rate_hz)
+    )
+
+
+def _dominant_frequency(waveform: np.ndarray, *, rate_hz: float) -> float:
+    magnitudes = np.abs(np.fft.rfft(waveform))
+    frequencies = np.fft.rfftfreq(waveform.shape[0], d=1.0 / rate_hz)
+    return float(frequencies[np.argmax(magnitudes)])
+
+
+def _level_near(waveform: np.ndarray, *, rate_hz: float, frequency_hz: float) -> float:
+    """The strongest magnitude within a semitone of `frequency_hz`."""
+    magnitudes = np.abs(np.fft.rfft(waveform))
+    frequencies = np.fft.rfftfreq(waveform.shape[0], d=1.0 / rate_hz)
+    within = np.abs(np.log2(np.maximum(frequencies, 1e-9) / frequency_hz)) <= PITCH_WINDOW_OCTAVES
+    return float(magnitudes[within].max())
+
+
+def test_a_rendered_listening_set_writes_both_ends_and_every_morph(connection: Connection, tmp_path: Path) -> None:
+    library_root = tmp_path / "library"
     canonicalizer = CANONICALIZER_REGISTRY[DEFAULT_CANONICALIZER_NAME]()
     codec = IdentityCodec(canonicalizer.geometry)
 
-    first = encode_sample(connection, library_root, first_sample, canonicalizer=canonicalizer, codec=codec)
-    second = encode_sample(connection, library_root, second_sample, canonicalizer=canonicalizer, codec=codec)
     summary = render_listening_set(
-        first,
-        second,
+        _stored_pair(connection, library_root, canonicalizer=canonicalizer, codec=codec),
         route=MorphRoute(canonicalizer=canonicalizer, codec=codec, vocoder=PghiVocoder(), morpher=LinearMorpher()),
         output_directory=tmp_path / "render",
     )
@@ -113,19 +152,16 @@ def test_a_rendered_listening_set_writes_both_ends_and_every_morph(connection: C
     assert {file.kind for file in summary.files} == set(RenderKind)
 
 
-def test_a_rendered_file_states_the_rate_its_content_is_heard_at(connection: Connection, tmp_path: Path) -> None:
+def test_the_originals_state_their_own_rates_and_every_other_file_the_rate_the_pair_is_heard_at(
+    connection: Connection, tmp_path: Path
+) -> None:
     """Writing the nominal 44,100 Hz instead would play an 8,363 Hz sample five times too fast."""
     library_root = tmp_path / "library"
-    first_sample = _store_sample(connection, library_root, index=1, frequency=220.0, rate_hz=FIRST_RATE_HZ)
-    second_sample = _store_sample(connection, library_root, index=2, frequency=660.0, rate_hz=SECOND_RATE_HZ)
     canonicalizer = CANONICALIZER_REGISTRY[DEFAULT_CANONICALIZER_NAME]()
     codec = IdentityCodec(canonicalizer.geometry)
 
-    first = encode_sample(connection, library_root, first_sample, canonicalizer=canonicalizer, codec=codec)
-    second = encode_sample(connection, library_root, second_sample, canonicalizer=canonicalizer, codec=codec)
     summary = render_listening_set(
-        first,
-        second,
+        _stored_pair(connection, library_root, canonicalizer=canonicalizer, codec=codec),
         route=MorphRoute(canonicalizer=canonicalizer, codec=codec, vocoder=PghiVocoder(), morpher=LinearMorpher()),
         output_directory=tmp_path / "render",
     )
@@ -133,8 +169,39 @@ def test_a_rendered_file_states_the_rate_its_content_is_heard_at(connection: Con
     written = {file.path.name: soundfile.info(file.path).samplerate for file in summary.files}
     assert written["original_first.wav"] == FIRST_RATE_HZ
     assert written["original_second.wav"] == SECOND_RATE_HZ
-    assert written["morph_050.wav"] == round(rate_between(FIRST_RATE_HZ, SECOND_RATE_HZ, 0.5))
-    assert written["morph_050.wav"] != audio_store.NOMINAL_WAV_RATE
+    assert {
+        written["reconstruction_first.wav"],
+        written["morph_050.wav"],
+        written["reconstruction_second.wav"],
+    } == {SECOND_RATE_HZ}
+    assert SECOND_RATE_HZ != audio_store.NOMINAL_WAV_RATE
+
+
+def test_each_end_of_a_pair_keeps_its_heard_pitch_and_the_midpoint_holds_both() -> None:
+    """Two tones an octave apart in rate blend in one frame: neither end's pitch moves, and halfway
+    carries both pitches rather than the one a glide between the rates would pass through."""
+    canonicalizer = CANONICALIZER_REGISTRY[DEFAULT_CANONICALIZER_NAME]()
+    codec = IdentityCodec(canonicalizer.geometry)
+    route = MorphRoute(canonicalizer=canonicalizer, codec=codec, vocoder=PghiVocoder(), morpher=LinearMorpher())
+    pair = encode_pair(
+        _heard_tone(1, frequency=220.0, rate_hz=FIRST_RATE_HZ),
+        _heard_tone(2, frequency=330.0, rate_hz=SECOND_RATE_HZ),
+        canonicalizer=canonicalizer,
+        codec=codec,
+    )
+    first_pitch = 220.0 * FIRST_RATE_HZ / audio_store.NOMINAL_WAV_RATE
+    second_pitch = 330.0 * SECOND_RATE_HZ / audio_store.NOMINAL_WAV_RATE
+    glide_pitch = float(np.sqrt(first_pitch * second_pitch))
+
+    start = render_morph(pair.first_latent, pair.second_latent, weight=0.0, route=route)
+    halfway = render_morph(pair.first_latent, pair.second_latent, weight=0.5, route=route)
+    end = render_morph(pair.first_latent, pair.second_latent, weight=1.0, route=route)
+
+    assert abs(np.log2(_dominant_frequency(start, rate_hz=pair.rate_hz) / first_pitch)) < PITCH_WINDOW_OCTAVES
+    assert abs(np.log2(_dominant_frequency(end, rate_hz=pair.rate_hz) / second_pitch)) < PITCH_WINDOW_OCTAVES
+    at_glide = _level_near(halfway, rate_hz=pair.rate_hz, frequency_hz=glide_pitch)
+    assert _level_near(halfway, rate_hz=pair.rate_hz, frequency_hz=first_pitch) > at_glide
+    assert _level_near(halfway, rate_hz=pair.rate_hz, frequency_hz=second_pitch) > at_glide
 
 
 def test_encoding_a_sample_with_no_cataloged_occurrence_says_so(connection: Connection, tmp_path: Path) -> None:
@@ -200,13 +267,10 @@ def test_wav_bytes_read_back_at_the_stated_rate_under_headroom() -> None:
     assert float(np.abs(frames).max()) < 1.0
 
 
-def test_the_rate_between_two_samples_runs_through_their_pitches() -> None:
-    """Halfway between two rates an octave apart is the octave's midpoint, not its average."""
-    halfway = rate_between(FIRST_RATE_HZ, SECOND_RATE_HZ, 0.5)
-
-    assert halfway == pytest.approx(FIRST_RATE_HZ * np.sqrt(2.0))
-    assert rate_between(FIRST_RATE_HZ, SECOND_RATE_HZ, 0.0) == pytest.approx(FIRST_RATE_HZ)
-    assert rate_between(FIRST_RATE_HZ, SECOND_RATE_HZ, 1.0) == pytest.approx(SECOND_RATE_HZ)
+def test_a_pair_is_heard_at_the_higher_of_its_two_rates() -> None:
+    """The faster sample keeps its whole band, and the slower one gains frames and loses nothing."""
+    assert common_rate(FIRST_RATE_HZ, SECOND_RATE_HZ) == SECOND_RATE_HZ
+    assert common_rate(SECOND_RATE_HZ, FIRST_RATE_HZ) == SECOND_RATE_HZ
 
 
 def test_a_rendered_file_carries_headroom_below_full_scale(tmp_path: Path) -> None:

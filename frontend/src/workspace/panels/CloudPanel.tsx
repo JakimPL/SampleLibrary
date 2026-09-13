@@ -220,15 +220,7 @@ export function CloudPanel(): ReactElement {
 
     function handleWeightCommit(): void {
         if (playOnRelease && link !== null) {
-            play(
-                morphPreview(
-                    link.first,
-                    link.second,
-                    link.weight,
-                    rateByHash.get(link.first) ?? null,
-                    rateByHash.get(link.second) ?? null,
-                ),
-            );
+            play(morphPreview(link.first, link.second, link.weight));
         }
     }
 

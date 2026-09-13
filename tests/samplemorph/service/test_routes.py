@@ -3,11 +3,11 @@ from __future__ import annotations
 import io
 
 import numpy as np
+import pytest
 import soundfile
 from fastapi.testclient import TestClient
 
 from samplecore.models.morph import MORPH_WEIGHT_STEPS
-from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.model_store import DEFAULT_MODEL_NAME
 from samplemorph.registries import PGHI_VOCODER_NAME
 from samplemorph.service.app import create_app
@@ -18,6 +18,8 @@ from tests.samplemorph.service.conftest import StoredLibrary
 AUDIO_PATH = "/morph/audio"
 STATUS_PATH = "/morph/status"
 DIGEST_LENGTH = 64
+FIRST_RATE_HZ = 8_363
+SECOND_RATE_HZ = 16_726
 
 
 def _renderer(client: TestClient) -> MorphRenderer:
@@ -25,8 +27,14 @@ def _renderer(client: TestClient) -> MorphRenderer:
     return renderer
 
 
-def _params(library: StoredLibrary, weight: float) -> dict[str, str | float]:
-    return {"first": library.hashes[0], "second": library.hashes[1], "weight": weight}
+def _params(library: StoredLibrary, weight: float) -> dict[str, str | float | int]:
+    return {
+        "first": library.hashes[0],
+        "second": library.hashes[1],
+        "weight": weight,
+        "first_rate_hz": FIRST_RATE_HZ,
+        "second_rate_hz": SECOND_RATE_HZ,
+    }
 
 
 def test_the_status_names_what_the_process_serves(client: TestClient) -> None:
@@ -40,7 +48,7 @@ def test_the_status_names_what_the_process_serves(client: TestClient) -> None:
     assert len(status["fingerprint"]) == DIGEST_LENGTH
 
 
-def test_a_point_renders_as_a_wav_at_the_nominal_rate_with_its_caching_headers(
+def test_a_point_renders_as_a_wav_at_the_rate_the_pair_is_heard_at_with_its_caching_headers(
     client: TestClient, library: StoredLibrary
 ) -> None:
     response = client.get(AUDIO_PATH, params=_params(library, 0.5))
@@ -50,25 +58,32 @@ def test_a_point_renders_as_a_wav_at_the_nominal_rate_with_its_caching_headers(
     assert response.headers["etag"].startswith('"')
     assert "max-age" in response.headers["cache-control"]
     frames, rate = soundfile.read(io.BytesIO(response.content))
-    assert rate == NOMINAL_WAV_RATE
+    assert rate == SECOND_RATE_HZ
     assert frames.shape[0] > 0
     assert float(np.abs(frames).max()) < 1.0
 
 
-def test_the_endpoints_sound_for_their_own_sample_s_length(client: TestClient, library: StoredLibrary) -> None:
-    first = soundfile.read(io.BytesIO(client.get(AUDIO_PATH, params=_params(library, 0.0)).content))[0]
-    second = soundfile.read(io.BytesIO(client.get(AUDIO_PATH, params=_params(library, 1.0)).content))[0]
+def test_the_endpoints_sound_for_their_own_heard_length(client: TestClient, library: StoredLibrary) -> None:
+    """The slower sample gains frames on its way into the pair's frame, and sounds as long as before."""
+    first, first_rate = soundfile.read(io.BytesIO(client.get(AUDIO_PATH, params=_params(library, 0.0)).content))
+    second, second_rate = soundfile.read(io.BytesIO(client.get(AUDIO_PATH, params=_params(library, 1.0)).content))
 
-    assert first.shape[0] == library.frame_counts[0]
-    assert second.shape[0] == library.frame_counts[1]
+    assert first.shape[0] / first_rate == pytest.approx(library.frame_counts[0] / FIRST_RATE_HZ)
+    assert second.shape[0] / second_rate == pytest.approx(library.frame_counts[1] / SECOND_RATE_HZ)
 
 
 def test_a_weight_off_the_grid_is_refused(client: TestClient, library: StoredLibrary) -> None:
     assert client.get(AUDIO_PATH, params=_params(library, 0.3)).status_code == 422
 
 
+def test_a_point_asked_for_without_its_rates_is_refused(client: TestClient, library: StoredLibrary) -> None:
+    params = {"first": library.hashes[0], "second": library.hashes[1], "weight": 0.5}
+
+    assert client.get(AUDIO_PATH, params=params).status_code == 422
+
+
 def test_a_sample_the_store_lacks_is_reported(client: TestClient, library: StoredLibrary) -> None:
-    response = client.get(AUDIO_PATH, params={"first": library.hashes[0], "second": "f" * 64, "weight": 0.5})
+    response = client.get(AUDIO_PATH, params={**_params(library, 0.5), "second": "f" * 64})
 
     assert response.status_code == 404
     assert "no object is stored" in response.json()["detail"]
@@ -102,4 +117,4 @@ def test_the_restored_route_renders_end_to_end(restored_settings: ServiceSetting
 
     assert status["restorer"] is not None
     assert response.status_code == 200
-    assert soundfile.read(io.BytesIO(response.content))[1] == NOMINAL_WAV_RATE
+    assert soundfile.read(io.BytesIO(response.content))[1] == SECOND_RATE_HZ
