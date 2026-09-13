@@ -2,7 +2,7 @@
 
 You are building the library from scratch on a machine that already holds the tracker module
 collection. The catalog and the audio store are rebuilt locally rather than copied, which also gives
-us a real test of the sharded parallel extraction on a second machine — that path has only ever run
+us a real test of the parallel extraction on a second machine — that path has only ever run
 here, and exercising it is part of the job.
 
 ## The GPU, first, because it is the likeliest time sink
@@ -39,19 +39,20 @@ which is one reason it sits late in [`04-roadmap.md`](04-roadmap.md) rather than
 - **Python 3.12 or later**, and [uv](https://docs.astral.sh/uv/).
 - **PostgreSQL 17 or later**, running locally. Docker is deliberately absent from this project's dev
   loop; install the server natively.
-- **Node.js and npm**, for the frontend checks that `make check` runs.
+- **Node.js and npm**, for the frontend checks that `just check` runs.
+- **[just](https://just.systems/) 1.38 or later**, which runs the recipes below;
+  `uv tool install rust-just` installs it.
 - **`git clone --recurse-submodules`.** `trackmod` is vendored as a submodule and installed as an
   editable path dependency; a clone without it fails at `uv sync` rather than at import time.
 
 ```sh
 git clone --recurse-submodules <this repository>
 cd SampleLibrary
-cp config.example.toml config.toml
-make install
+just install
 ```
 
-`make install` runs `uv sync --all-extras --all-groups`, installs the pre-commit and pre-push hooks,
-and installs the frontend's npm dependencies.
+`just install` runs `uv sync --all-extras --all-groups`, installs the pre-commit and pre-push hooks,
+copies `config.example.toml` to `config.toml`, and installs the frontend's npm dependencies.
 
 ### Database
 
@@ -84,56 +85,53 @@ database_url            = "postgresql+psycopg://samplelibrary:samplelibrary@loca
 across 256 shard directories on the machine this was written from, averaging 33 KB each. Local disk
 rather than a network share — per-epoch random access over that many small files is dominated by
 filesystem overhead rather than by bytes. `SAMPLELIBRARY_DATABASE_URL` overrides `database_url` when
-set, which is how the `*-dev` Makefile targets reach the sandbox.
+set; the sandbox carries a config of its own that names its database.
 
 ## Verify the environment before building anything
 
 ```sh
-make check
+just check
 ```
 
 That runs format, lint (codespell, mypy strict, pylint, import-linter), the Python suite, and the
 frontend checks. It needs `samplelibrary_test` to exist, since the suite is a real-Postgres
-integration suite. A green `make check` on a fresh clone means the stack is sound and any later
+integration suite. A green `just check` on a fresh clone means the stack is sound and any later
 failure is yours.
 
 ## Rebuilding the library
 
-### Extraction, sharded — please actually exercise this
+### Extraction, in parallel — please actually exercise this
 
 ```sh
-make extract SHARD=0/4
-make extract SHARD=1/4
-make extract SHARD=2/4
-make extract SHARD=3/4
+just capped extract --workers 4
 ```
 
-Four terminals, concurrently, all pointed at the one database. Each run takes every fourth file of
-the sorted discovery, so between them they cover the collection exactly once, and striding rather
-than slicing keeps the shares alike in content. `make extract` with no `SHARD` takes the whole
-corpus.
+Four worker processes, all pointed at the one database. Each takes every fourth file of the sorted
+discovery, so between them they cover the collection exactly once, and striding rather than slicing
+keeps the shares alike in content. Left out, `--workers` takes one process per core, up to a ceiling
+the machine's memory carries comfortably.
 
 Budget from **~1.08 s/module, about 2.5 hours** for a full serial parse of a corpus this size; four
-shards should approach a quarter of that, bounded by disk and by the per-module write transaction.
+workers should approach a quarter of that, bounded by disk and by the per-module write transaction.
 
-**Report back, because this is the measurement we want:** wall clock per shard and overall, and each
-run's four counts — ingested, already known, ingested by another run, failed.
+**Report back, because this is the measurement we want:** wall clock overall, and the run's four
+counts — ingested, already known, ingested by another worker, unreadable.
 
 **Known correct behavior, so it is not mistaken for a bug.** Around 207 module files in a collection
-this size are byte-identical duplicates of another file. When two copies land in different shards,
-both runs try to insert the same module hash; one wins, the other catches the integrity error,
+this size are byte-identical duplicates of another file. When two copies land in different shares,
+both workers try to insert the same module hash; one wins, the other catches the integrity error,
 confirms the module is now present, rolls its own transaction back, and reports it under **"ingested
-by another run"**. Exactly one row results. Verified here by forcing the collision deliberately: a
-four-shard parallel build produced a catalog byte-identical to a serial one — same row counts, same
+by another worker"**. Exactly one row results. Verified here by forcing the collision deliberately: a
+four-share parallel build produced a catalog byte-identical to a serial one — same row counts, same
 module and sample hash digests, same stored objects, no leftover `.partial` files.
 
-A repeat pass over an already-built catalog is cheap: 68 seconds across two shards for 8,701 files,
+A repeat pass over an already-built catalog is cheap: 68 seconds across two shares for 8,701 files,
 of which 8,657 were already known and 44 unparsable.
 
 ### Thumbnails
 
 ```sh
-make thumbnails
+uv run samplelibrary thumbnails
 ```
 
 Needed only for the web UI's waveform previews. Skip it until you want to look at the app.
@@ -141,7 +139,7 @@ Needed only for the web UI's waveform previews. Skip it until you want to look a
 ### Notes — optional, expensive, memory-hungry
 
 ```sh
-make notes
+just capped notes
 ```
 
 Produces roughly 29 million `note_event` rows and about 2.8 GB of database, which is 89% of the
@@ -156,7 +154,7 @@ stopped. With more RAM this may run clean; watch it anyway.
 ### Equivalence — hold off
 
 ```sh
-make equivalence   # not yet
+uv run samplelibrary equivalence   # not yet
 ```
 
 `detect_equivalences` reads every sample's WAV and keeps the trimmed float64 array in a dictionary
@@ -183,18 +181,18 @@ pg_dump -Fc -U samplelibrary samplelibrary > <library_root>/samplelibrary.pre-<c
 The content store is separate from the database and unaffected by a catalog restore. A catalog
 backup is a large commitment — the only other way back is re-running extraction over the whole
 corpus. A backup covering feature vectors alone is disposable once the run it protected has been
-verified, because `samplecloud` regenerates them.
+verified, because `samplelibrary cloud embed` regenerates them.
 
 ## Running the app
 
 ```sh
-make serve          # uvicorn on port 8000
-make frontend-dev   # vite on 5173, in a second terminal
+just serve          # the API on port 8000
+just frontend-dev   # vite on 5173, in a second terminal
 ```
 
-For frontend work against a small disposable corpus rather than the real one, the `*-dev` targets
-build and serve a 30-module sandbox on port 8001 (`make library-dev`, `make extract-dev`,
-`make serve-dev`, and `make reset-dev` to wipe it).
+For frontend work against a small disposable corpus rather than the real one, the `dev` recipes
+build and serve a 30-module sandbox on port 8001 (`just dev-build`, `just dev extract`,
+`just serve-dev`, and `just dev-reset` to wipe it).
 
 **One standing caution about that sandbox:** its samples are 40–100 ms synthetic tones built to
 exercise equivalence detection. They are fine for testing that a pipeline runs and useless for

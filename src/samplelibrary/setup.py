@@ -79,7 +79,7 @@ def _report(summary: ProvisioningSummary) -> None:
     _logger.info("Catalog and curation schemas are ready in %s.", " and ".join(summary.schemas_prepared))
     if not summary.role_creates_databases:
         _logger.warning(
-            "Role %r may not create databases, which `make test` needs for a database per worker. Grant it that:",
+            "Role %r may not create databases, which the test suite needs for a database per worker. Grant it that:",
             summary.role,
         )
         _logger.warning('    sudo -u postgres psql -c "ALTER ROLE %s CREATEDB"', summary.role)

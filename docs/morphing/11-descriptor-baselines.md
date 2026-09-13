@@ -1,8 +1,8 @@
 # What the two descriptors actually do
 
-Measured on 2026-09-09 with `samplecloud-evaluate`, over the full catalog of 127,588 samples, seed 0.
-Both baselines hold a vector for every sample: `invariant` (experiment 2, 192 dimensions) and
-`librosa` (experiment 3, 65 dimensions).
+Measured on 2026-09-09 with `samplelibrary cloud evaluate`, over the full catalog of 127,588
+samples, seed 0. Both baselines hold a vector for every sample: `invariant` (experiment 2, 192
+dimensions) and `librosa` (experiment 3, 65 dimensions).
 
 The harness's own label counts reproduce the figures in
 [`09-measurements.md`](09-measurements.md) exactly -- 13,373 keyword-labeled samples and 124,420

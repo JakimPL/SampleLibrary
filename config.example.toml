@@ -9,17 +9,17 @@ module_source_directory = "/path/to/your/module/collection"
 # Directory where extracted sample audio is stored.
 library_root = "/path/to/your/sample/library"
 
-# The catalog's Postgres connection URL. `make database` reads the role, the password and the
-# server from here and creates whatever of them the server is missing, so these credentials are as
-# good as any on a local machine. Can instead (or additionally, taking precedence) be supplied via
-# the SAMPLELIBRARY_DATABASE_URL environment variable, so credentials never need to live in this
-# file.
+# The catalog's Postgres connection URL. `samplelibrary setup database` reads the role, the password
+# and the server from here and creates whatever of them the server is missing, so these credentials
+# are as good as any on a local machine. Can instead (or additionally, taking precedence) be
+# supplied via the SAMPLELIBRARY_DATABASE_URL environment variable, so credentials never need to
+# live in this file.
 database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"
 
 # Samples shorter than this many frames are skipped at ingest time. Defaults to 512.
 # minimum_sample_frames = 512
 
 [inference]
-# Where the morph inference process listens: `make serve-inference` binds this address and the API
-# dials it for morphs. Defaults to http://127.0.0.1:8010.
+# Where the morph inference process listens: `samplelibrary morph serve` binds this address and the
+# API dials it for morphs. Defaults to http://127.0.0.1:8010.
 # url = "http://127.0.0.1:8010"

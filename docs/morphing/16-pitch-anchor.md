@@ -82,8 +82,8 @@ which `tests/samplemorph/test_morphers.py` holds to.
 ## What it costs, and what stays open
 
 The anchor is a property of the grid, so a change to it is a change to every grid: the grid
-caches, the descriptor and the codec are rebuilt on it (`make morph-cache-grids
-ANCHOR=fundamental`, then the descriptor and codec passes as before), roughly two and a half
+caches, the descriptor and the codec are rebuilt on it (`samplelibrary morph cache-grids
+--anchor fundamental`, then the descriptor and codec passes as before), roughly two and a half
 hours of machine time in all. The phase model reads magnitudes restored to the Fourier axis,
 which the anchor leaves as they were, so it carries over.
 

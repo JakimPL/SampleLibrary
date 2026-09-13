@@ -23,13 +23,14 @@ The new package owns codes and audio synthesis. Both feed the same tables.
 
 ## Registering a fifth package
 
-More than one file has to learn about it, and `make lint` fails on any of them being missed:
+More than one file has to learn about it, and `just lint` fails on any of them being missed:
 
-- `pyproject.toml`: `[project.optional-dependencies] morph`, `[project.scripts]`,
-  `[tool.importlinter] root_packages`, a new contract (below), `[tool.isort] known_first_party`,
+- `pyproject.toml`: `[project.optional-dependencies] morph`, `[tool.importlinter] root_packages`,
+  a new contract (below), `[tool.isort] known_first_party`,
   `[tool.coverage.run] source`.
 - `docs/architecture.md`: one package-map row, one bullet under the boundaries section.
-- `Makefile`: targets in the house style, plus their `-dev` counterparts.
+- `src/samplelibrary/commands.py`: one entry per command, importing the command's module as it
+  runs. `just dev` reaches every command on the sandbox, and `just capped` under the memory ceiling.
 - `README.md`: a mention alongside the other pipelines.
 - `src/samplemorph/py.typed`, force-included in `[tool.hatch.build.targets.wheel.force-include]`.
 
@@ -127,8 +128,8 @@ The catalog already has the shape this needs.
   a codec's configuration and the identity of the checkpoint that produced the vectors.
 - **A codec adapted to `FeatureExtractor` gets the cloud for free.** `extract_features` and
   `reduce_and_persist_coordinates` take the extractor as an injected parameter and care about
-  nothing else, so `samplecloud --backend <codec>` places a learned latent in the cloud with no
-  change to the embedding pipeline.
+  nothing else, so `samplelibrary cloud embed --backend <codec>` places a learned latent in the
+  cloud with no change to the embedding pipeline.
 
 Two things do need somewhere to live:
 
@@ -250,4 +251,4 @@ through the `connection` fixture for anything touching storage. `tests/sampleclo
 is the closest model for testing a pipeline stage against a stub extractor.
 
 Coverage is gated at 90% over the packages named in `[tool.coverage.run] source`, enforced on
-`make coverage`. Adding `samplemorph` there means its code counts toward that gate.
+`just coverage`. Adding `samplemorph` there means its code counts toward that gate.

@@ -260,10 +260,10 @@ corpus, so nothing yet decides it.
    percussiveness and does not separate it; see the cross-tab above.
 6. **[`02-representation.md`](02-representation.md): the keyword categories are "the largest
    supervised signal available today".** Note events reach nine times as many samples.
-7. **[`07-environment.md`](07-environment.md) and [`04-roadmap.md`](04-roadmap.md): `make extract
-   SHARD=0/4`.** Sharding was replaced by an internal worker pool; the flag is now
-   `make extract WORKERS=n`. `make database` also now creates the role and databases that document
-   asks for by hand.
+7. **[`07-environment.md`](07-environment.md) and [`04-roadmap.md`](04-roadmap.md): sharded
+   extraction, one run per share.** Sharding was replaced by an internal worker pool, now
+   `samplelibrary extract --workers n`, and `samplelibrary setup database` creates the role and
+   databases that document asks for by hand.
 8. **[`03-architecture.md`](03-architecture.md): `Experiment.params` is "round-tripped as structured
    JSON".** It is `json.dumps` into a `String` column, so Postgres holds opaque text and no JSON
    operator reaches inside it.

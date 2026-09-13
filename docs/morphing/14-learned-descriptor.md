@@ -36,16 +36,16 @@ parameters.
 ## The cache
 
 Every epoch reads the same grids, so the catalog is canonicalized once
-(`samplemorph cache-grids`) into a memory-mapped file under the library root: the stored grid and
-two retuned views per sample, at offsets drawn uniformly within ±17 semitones, the corpus's own
-ninetieth percentile. Pooled and stored at half precision, the whole catalog is 10 GB. The
-descriptor is then described over the same cache (`samplemorph embed`), so writing its vector for
-every sample costs one forward pass rather than a second canonicalization of the catalog.
+(`samplelibrary morph cache-grids`) into a memory-mapped file under the library root: the stored
+grid and two retuned views per sample, at offsets drawn uniformly within ±17 semitones, the corpus's
+own ninetieth percentile. Pooled and stored at half precision, the whole catalog is 10 GB. The
+descriptor is then described over the same cache (`samplelibrary morph embed`), so writing its
+vector for every sample costs one forward pass rather than a second canonicalization of the catalog.
 
 ## The run
 
-`samplemorph cache-grids --workers 12` took 46 minutes over the catalog. `samplemorph
-train-descriptor --teacher-experiment 4 --epochs 12 --workers 4`, the pilot's loss weights
+`samplelibrary morph cache-grids --workers 12` took 46 minutes over the catalog. `samplelibrary
+morph train-descriptor --teacher-experiment 4 --epochs 12 --workers 4`, the pilot's loss weights
 (distillation 1.0, retuning 0.5, labels 0.5), 148 labels taught and 49 held out, 1,326 steps of 128
 per epoch, 27 minutes on the GPU under a 16 GB memory ceiling. Validation each epoch reads the 49
 held-out labels and a gallery of 1,000 other samples at a fixed retuned view:
@@ -62,8 +62,8 @@ agreement had settled by epoch 8.
 
 ## Where it stands
 
-`samplemorph embed` wrote its vector for every sample as experiment 6 in seven seconds, and
-`samplecloud-evaluate` scored it with 200 probes, seed 0, beside the earlier experiments:
+`samplelibrary morph embed` wrote its vector for every sample as experiment 6 in seven seconds, and
+`samplelibrary cloud evaluate` scored it with 200 probes, seed 0, beside the earlier experiments:
 
 | | `invariant` | `librosa` | `clap` | **`learned`** |
 |---|---|---|---|---|
@@ -101,8 +101,8 @@ What it settles:
 
 The descriptor is `models/descriptors/descriptor.pt` under the library root, the run is recorded
 under the `descriptor` experiment of the tracking store, and experiment 6 holds its vectors.
-Promoting it to the cloud is `samplecloud --backend learned --model descriptor --experiment-id 6
---limit 0`, left to the user.
+Promoting it to the cloud is `samplelibrary cloud embed --backend learned --model descriptor
+--experiment-id 6 --limit 0`, left to the user.
 
 ## What stays open
 
