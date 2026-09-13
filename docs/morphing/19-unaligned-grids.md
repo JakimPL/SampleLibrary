@@ -77,7 +77,7 @@ loudness to its original's, writes both beside each other under the output direc
 what the reconstruction costs: the held-out spectrum distance in decibels, the modulation distance
 and the signed fluctuation, roughness and modulation excesses from
 [`18-perceptual-readings.md`](18-perceptual-readings.md), and the loudness and peak after
-matching. `MODEL=identity` sends the grid through the vocoder alone, which is the floor every codec
+matching. `--model identity` sends the grid through the vocoder alone, which is the floor every codec
 sits above. The medians per sound type are logged and the rows written to `readings.csv`.
 
 The twelve probes of `runs/unaligned-2026-09-12/probes.txt` are the samples the codec review
@@ -104,7 +104,7 @@ was not the lever at 64 against 128; at 512 it still is not.
 The second turn moved the residual's layout instead of its size. The bottleneck holds 128
 channels over 11 bands and 8 columns, and the vector residual reads the whole map through one
 linear layer into 512 numbers and writes it back through another, so every residual number
-speaks for every band at every moment. `--layout map` on `train-codec` (`LAYOUT=map`) keeps the
+speaks for every band at every moment. `--layout map` on `train-codec` keeps the
 map: a few numbers at each of the 88 bottleneck cells, read and written through 1×1 convolutions
 with the descriptor laid over every cell, so a residual number speaks for the bands and the
 moment it sits at. Eight per cell make 704 numbers, close to the vector's 512, with the locality

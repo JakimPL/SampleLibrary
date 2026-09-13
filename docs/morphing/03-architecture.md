@@ -23,7 +23,8 @@ The new package owns codes and audio synthesis. Both feed the same tables.
 
 ## Registering a fifth package
 
-More than one file has to learn about it, and `just lint` fails on any of them being missed:
+More than one file has to learn about it. `just lint` catches a package missing from the import-linter
+settings; the rest rely on review:
 
 - `pyproject.toml`: `[project.optional-dependencies] morph`, `[tool.importlinter] root_packages`,
   a new contract (below), `[tool.isort] known_first_party`,
@@ -36,8 +37,8 @@ More than one file has to learn about it, and `just lint` fails on any of them b
 
 ### The import-linter contracts
 
-Three contracts exist today. `samplecore` may have no dependents among its peers; `sampleserver`
-may import neither `sampleextract` nor `samplecloud`; `sampleextract` and `samplecloud` are
+Three contracts existed when this package was proposed, and `pyproject.toml` holds eight now.
+`samplecore` may have no dependents among its peers; `sampleserver` may import neither `sampleextract` nor `samplecloud`; `sampleextract` and `samplecloud` are
 independent of each other. Guideline 11 under Shared Ownership calls these load-bearing rather than
 advisory.
 
@@ -69,7 +70,7 @@ moves to `samplecloud` and a third independence contract goes in.
 ## The four swappable axes
 
 Each is a `Protocol` in its own module, with a registry mirroring `BACKEND_REGISTRY` in
-`src/samplecloud/cli.py` — a `Final` dict from name to factory, whose keys feed argparse directly as
+`src/samplecloud/registries.py` — a `Final` dict from name to factory, whose keys feed argparse directly as
 `choices=sorted(REGISTRY)`. Adding an approach means adding a class and one registry entry.
 
 ### `Canonicalizer` — waveform ↔ sound image

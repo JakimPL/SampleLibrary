@@ -11,7 +11,7 @@ library.
 - [uv](https://docs.astral.sh/uv/)
 - PostgreSQL 17 or later
 - Node.js 25.9 or later, and npm, for the frontend
-- [just](https://just.systems/) 1.38 or later, which runs the setup and everyday recipes;
+- [just](https://just.systems/) 1.56 or later, which runs the setup and everyday recipes;
   `uv tool install rust-just` installs it
 - An NVIDIA GPU, to train the restorer that turns a morph back into sound and the descriptor that
   lays out the cloud. Everything else in the project runs on the processor alone.
@@ -21,7 +21,7 @@ library.
 ## Setup
 
 ```sh
-git clone --recurse-submodules git@github.com:JakimPL/SampleLibrary.git
+git clone --recurse-submodules https://github.com/JakimPL/SampleLibrary.git
 cd SampleLibrary
 just install
 ```
@@ -33,12 +33,16 @@ where extracted samples should go (see [Configuration](#configuration)). Then cr
 just database
 ```
 
-If that needs something from you — a PostgreSQL superuser, usually — it prints the exact command to
-run, and you run `just database` again afterwards. It is safe to run at any time, and leaves
-anything that already exists alone.
+That makes sure the PostgreSQL server `config.toml` names holds three databases, one role owning
+them all: your library, `samplelibrary_dev` for the development sandbox, and `samplelibrary_test`
+for the test suite. If a step needs something from you — a PostgreSQL superuser, usually — it
+prints the exact statement to run, and you run `just database` again afterwards. It is safe to run
+at any time, and leaves anything that already exists alone.
 
 No PostgreSQL on the machine? `docker compose up -d postgres` starts one. If port 5432 is taken,
-use `POSTGRES_PORT=5433` and set the same port in `config.toml`.
+start it on another port — `POSTGRES_PORT=5433 docker compose up -d postgres` in a POSIX shell,
+`$env:POSTGRES_PORT = "5433"; docker compose up -d postgres` in PowerShell — and set the same port in
+`config.toml`.
 
 ## Configuration
 
@@ -46,9 +50,9 @@ use `POSTGRES_PORT=5433` and set the same port in `config.toml`.
 
 - `module_source_directory`: your module collection, read with every folder inside it.
 - `library_root`: where extracted audio, fitted models and recorded runs are kept.
-- `database_url`: the PostgreSQL connection. `just database` creates the role and the databases it
-  names wherever they are missing, and the `SAMPLELIBRARY_DATABASE_URL` environment variable takes
-  precedence over it.
+- `database_url`: the PostgreSQL connection. The `SAMPLELIBRARY_DATABASE_URL` environment variable
+  takes precedence over it, except for a command given `--config`, which reads everything from the
+  file it names.
 - `minimum_sample_frames`: the shortest sample extraction keeps, 512 frames by default.
 - `[inference] url`: the address the morph renderer listens on and the API reaches it at,
   `http://127.0.0.1:8010` by default.
@@ -59,46 +63,68 @@ Paths take forward slashes or your system's own separator; a backslash is writte
 ## Usage
 
 ```sh
-uv run samplelibrary extract   # scan your modules and fill the library
-just serve                     # start the API
-just serve-inference           # start the morph renderer the API dials, in a second terminal
-just frontend-dev              # start the frontend, then open http://localhost:5173
+just rebuild         # fill the library from your modules
+just serve           # start the API
+just frontend-dev    # start the frontend in a second terminal, then open http://localhost:5173
 ```
 
+`just rebuild` runs the passes the app reads, one after another: extraction, the notes your modules
+play (which set the speed a sample sounds at), waveform thumbnails, and the cloud's layout. Run it
+again whenever you add modules: extraction, notes and thumbnails pick up the new ones, and the cloud
+is laid out afresh. Extraction takes a while over a large collection, so it spreads itself across
+your machine's cores.
+
 Every operation on the library is a `samplelibrary` command: `uv run samplelibrary --help` lists
-them, and each command's own `--help` lists its options. The [recipes](#recipes) cover the everyday
-work around them — serving, rebuilding the library, the development sandbox and the frontend.
+them, and each command's own `--help` lists its options — `uv run samplelibrary extract --workers 2`
+holds extraction to two processes, for example. On Linux, `just rebuild` and `just capped <command>`
+run under a memory ceiling, so the kernel stops a pass that outgrows the machine and the machine
+stays up; this uses a systemd user session.
 
-Extraction takes a while over a large collection, so it spreads itself across your machine's
-cores. `uv run samplelibrary extract --workers 2` holds it to two processes if you want the machine
-back while it runs. On Linux, `just capped extract` runs it under a memory ceiling, so the kernel
-stops a pass that outgrows the machine and the machine stays up; any other command runs capped the
-same way.
+Near-duplicate detection is a command of its own, `uv run samplelibrary equivalence`. It holds the
+whole decoded collection in memory — over 20 GB for a collection of a hundred thousand samples — so
+run it on a machine that can spare that.
 
-`uv run samplelibrary notes` reads what your modules actually play, which is what lets the app
-sound a sample at the speed the music does — run it after extraction, and again whenever you add
-modules. `cloud embed`, `thumbnails` and the rest of the pipeline sit beside it in the command list.
+Everything listens on this machine alone:
+
+| Service | Address | To change it |
+|---|---|---|
+| API | `127.0.0.1:8000` | `uv run samplelibrary serve --port <port>` |
+| Frontend | `localhost:5173` | Vite picks the next free port; it reaches the API through `VITE_BACKEND_DEV_URL` |
+| Morph renderer | `127.0.0.1:8010` | `[inference] url` in `config.toml` |
+| MLflow | `127.0.0.1:5000` | `uv run samplelibrary tracking ui --port <port>` |
+
+To point the frontend at an API on another port, set `VITE_BACKEND_DEV_URL` before starting it:
+`VITE_BACKEND_DEV_URL=http://127.0.0.1:8001 just frontend-dev` in a POSIX shell, or
+`$env:VITE_BACKEND_DEV_URL = "http://127.0.0.1:8001"; just frontend-dev` in PowerShell. To reach the
+app from another device, run `npm run dev -- --host` inside `frontend`; anyone on your network can
+then change your labels, since the app asks nobody to sign in.
+
+`just frontend-build` builds the frontend for production, and
+`uv run samplelibrary serve --frontend frontend/dist` serves it together with the API at
+`http://127.0.0.1:8000`. The Docker image does the same; `docs/architecture.md` describes running it.
 
 ## Recipes
 
 | Recipe | What it does |
 |---|---|
 | `just install` | Installs the Python and frontend dependencies and the git hooks, and puts `config.toml` in place |
-| `just database` | Creates the role and the databases `config.toml` names, wherever they are missing |
+| `just database` | Creates the role and the library, sandbox and test databases on the configured server, wherever they are missing |
+| `just rebuild` | Extracts your modules, reads their notes, draws thumbnails and lays out the cloud, capped on Linux |
 | `just serve` | Starts the API, restarting it whenever the code changes |
-| `just serve-inference` | Starts the morph renderer the API reaches for morphs |
-| `just frontend-dev` | Starts the frontend, reachable from your local network |
-| `just rebuild` | Extracts your modules, finds near-duplicates and lays out the cloud, one pass after another |
-| `just capped <command>` | Runs a `samplelibrary` command under a 16 GB memory ceiling on Linux; `just MEMORY_CAP=24G capped …` raises it |
+| `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
 | `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
-| `just reset` | Empties the library's catalog and stored audio once you confirm; labels, ratings and favorites stay |
+| `just capped <command>` | Runs a `samplelibrary` command under a 16 GB memory ceiling on Linux; `just MEMORY_CAP=24G capped …` raises it |
+| `just reset` | Names the library and database it would empty, then empties the catalog and stored audio once you confirm; labels, ratings and favorites stay |
 | `just check` | Formats, lints and tests the Python code and the frontend |
 | `just format`, `just lint`, `just test`, `just coverage` | Runs one part of the Python checks; `coverage` also reports the lines the tests leave unrun |
+| `just frontend-install`, `just frontend-dev` | Installs the frontend's dependencies; starts its development server |
 | `just frontend-check`, `just frontend-build`, `just frontend-types` | Checks the frontend, builds it for production, and regenerates its API types from the schema |
-| `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Builds a 30-module sandbox, runs a `samplelibrary` command on it, serves it on port 8001, and deletes it |
-| `just docker-build`, `just docker-run <library> <config>` | Builds the API's image, and runs it over a library directory and the config describing it inside the container |
+| `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Builds a 30-module sandbox beside your library, runs a `samplelibrary` command on it, serves it on port 8001, and empties its database and deletes its files |
+| `just docker-build`, `just docker-run <library> <config>` | Builds the app's image, and runs it over a library directory and a config written for the container |
 
-To browse the sandbox, start the frontend with `VITE_BACKEND_DEV_URL=http://127.0.0.1:8001`.
+The sandbox shares the PostgreSQL server `config.toml` names, under its own `samplelibrary_dev`
+database, so `just dev-build` needs your configuration in place first. To browse it, start the
+frontend with `VITE_BACKEND_DEV_URL=http://127.0.0.1:8001`.
 
 Work on generating audio from a point between two samples lives in the `samplemorph` package,
 one module per command under `samplemorph.commands`: fitting a linear codec, teaching the restorer
@@ -138,11 +164,23 @@ and the rest stay suggestions.
 
 ## Morphing two samples
 
-The app can play a sound between any two samples. Start the morph renderer beside the API
-(`just serve-inference`; it reads the fitted models under your library root, which the `samplemorph`
-pipeline writes), then, in the cloud, press the right mouse button on one sample and release it on
-another: a line follows your cursor while the button is down, and the release joins the two with a
-dashed line whose marker is how far from the first sample toward the second you stand. A plain
+The app can play a sound between any two samples, through a morph renderer running beside the API.
+The renderer reads models fitted to your library, so it needs one first:
+
+```sh
+uv run samplelibrary morph fit                        # a linear codec, a few minutes on the processor
+uv run samplelibrary morph serve --vocoder pghi       # the renderer, in a terminal of its own
+```
+
+A library of fewer than 256 samples fits with `--latent-size` set below its sample count.
+
+`just serve-inference` starts the renderer with the restored vocoder, which sounds closer to the
+original and needs a restorer trained on a GPU first: `uv run samplelibrary morph train-restorer`
+takes about an hour an epoch over a large library.
+
+With the renderer running, in the cloud, press the right mouse button on one sample and release it
+on another: a line follows your cursor while the button is down, and the release joins the two with
+a dashed line whose marker is how far from the first sample toward the second you stand. A plain
 right-click on a sample joins it to the one you last clicked instead. Drag the marker, or move the
 slider in the Morph panel, and the morph plays when you let go. The two ends play as
 the model reconstructs them, with each original one click away beside its name, and a double-click

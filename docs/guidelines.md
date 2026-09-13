@@ -31,7 +31,7 @@
 1. Do not overload a single module with too many different responsibilities.
 1. Prefer subpackages over flattened directory structure.
 1. Wrap an external command-line tool or third-party library behind our own typed interface in the module that owns that boundary, and probe availability at runtime so callers degrade gracefully rather than branching on the environment themselves. A comment naming the third-party behavior is warranted there.
-1. Package boundaries in `pyproject.toml`'s `[tool.importlinter]` contracts are load-bearing, not advisory — `just lint` fails if `samplecore` gains a dependent-facing import, or if `sampleserver` imports either offline pipeline package.
+1. Package boundaries in `pyproject.toml`'s `[tool.importlinter]` contracts are load-bearing, not advisory — `just lint` fails if `samplecore` gains a dependent-facing import, or if `sampleserver` imports any pipeline package.
 
 ## Type Hints
 

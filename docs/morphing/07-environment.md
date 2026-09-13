@@ -11,11 +11,8 @@ The card is an **RTX 5070, 12,227 MiB**. That is Blackwell, compute capability *
 
 **PyTorch wheels built against CUDA 12.1 or 12.4 will not run on it.** They carry no sm_120 kernels,
 and the failure is a confusing runtime error about no kernel image being available, rather than a
-clean "unsupported GPU" message. Install a build against **CUDA 12.8 or newer**:
-
-```sh
-uv pip install torch --index-url https://download.pytorch.org/whl/cu128
-```
+clean "unsupported GPU" message. The project pins a build against **CUDA 12.8** in
+`pyproject.toml` (`[tool.uv.sources]`), so `just install` fetches the right one.
 
 Verify before writing any model code:
 
@@ -37,10 +34,11 @@ which is one reason it sits late in [`04-roadmap.md`](04-roadmap.md) rather than
 ## Prerequisites
 
 - **Python 3.12 or later**, and [uv](https://docs.astral.sh/uv/).
-- **PostgreSQL 17 or later**, running locally. Docker is deliberately absent from this project's dev
-  loop; install the server natively.
-- **Node.js and npm**, for the frontend checks that `just check` runs.
-- **[just](https://just.systems/) 1.38 or later**, which runs the recipes below;
+- **PostgreSQL 17 or later**, running locally: installed natively, or started in a container with
+  `docker compose up -d postgres`.
+- **Node.js 25.9 or later and npm**, for the frontend checks that `just check` runs; `frontend/.npmrc`
+  holds npm to that version.
+- **[just](https://just.systems/) 1.56 or later**, which runs the recipes below;
   `uv tool install rust-just` installs it.
 - **`git clone --recurse-submodules`.** `trackmod` is vendored as a submodule and installed as an
   editable path dependency; a clone without it fails at `uv sync` rather than at import time.
@@ -106,6 +104,9 @@ failure is yours.
 just capped extract --workers 4
 ```
 
+`just capped` runs a command under a memory ceiling through a systemd user session, on Linux; on
+another system, run `uv run samplelibrary extract --workers 4` directly.
+
 Four worker processes, all pointed at the one database. Each takes every fourth file of the sorted
 discovery, so between them they cover the collection exactly once, and striding rather than slicing
 keeps the shares alike in content. Left out, `--workers` takes one process per core, up to a ceiling
@@ -136,15 +137,16 @@ uv run samplelibrary thumbnails
 
 Needed only for the web UI's waveform previews. Skip it until you want to look at the app.
 
-### Notes — optional, expensive, memory-hungry
+### Notes — expensive, memory-hungry
 
 ```sh
 just capped notes
 ```
 
 Produces roughly 29 million `note_event` rows and about 2.8 GB of database, which is 89% of the
-catalog's total size. It is needed only for the free weak-label work described in
-[`05-evaluation.md`](05-evaluation.md).
+catalog's total size. It folds those events into the rate the app plays each sample at, and feeds
+the free weak-label work described in [`05-evaluation.md`](05-evaluation.md). `just rebuild` runs
+it along with extraction, thumbnails and the cloud.
 
 It needed four restarts on the original machine: the harness kills it whenever system free memory
 dips, and a worst-case module materializes about 98,000 note events at once. Resumability — a marker

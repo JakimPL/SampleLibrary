@@ -17,7 +17,7 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `samplemorph` trains, and through its text tower suggests labels for every sample from a vocabulary of prompts (`samplecloud.suggestions`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the keyword table names alike, and whether it groups what the note events say the library plays alike. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
 | `samplemorph` | The decodable-representation pipeline: canonicalizing a sample into a fixed-size sound image on a log-frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a pluggable `Vocoder` turning a magnitude spectrogram back into audible frames -- in production a restorer taught what the grid's band averaging removes from this library's own sounds, followed by phase gradient heap integration under a Gaussian analysis -- and a learned `Descriptor` (`samplemorph.descriptors`) that reads the canonical grid as one vector: distilled from the pretrained listening model, taught by retuned views that a retuning changes nothing, and by the hand labels what the listener calls alike. A conditioned codec (`samplemorph.codecs.conditioned`) decodes the grid from that descriptor beside a small residual under a prior, so a morph moves a sound's identity through the space the harness judges and its particulars through a space where every point decodes. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner -- which is what leaves the representation invertible where the sample cloud's descriptors are not. Training passes (`samplemorph.training`) run under a run tracker and read a grid cache canonicalized once under the library root. Each shell command is one module under `samplemorph.commands`, and the ones that train import the trainer only when they run, so parsing arguments and the commands that train nothing stay clear of it. `samplemorph.service` is the same pipeline over HTTP: the morph inference process (`samplelibrary morph serve`), which loads the fitted models once, renders any point between two stored samples on request, and is what the web API dials for a morph. Depends on `samplecore` only. | `samplecore`, `librosa`, `scikit-learn`, `torch`, `fastapi`, `uvicorn` (the `morph` extra) |
 | `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples, and the morph routes, which relay renders from the inference process over HTTP. Every route is served under `API_PREFIX` (`/api`), which keeps the whole API inside one path segment and leaves every other path to the single-page application's own routes. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn`, `httpx` (the `server` extra) |
-| `samplelibrary` | The `samplelibrary` command line: one parser naming every operation on the library, which hands the rest of a command line to the module owning that command and imports that module as the command runs, so listing the commands stays instant and each command needs its own package's extras alone. A global `--config` sets `SAMPLELIBRARY_CONFIG`, which every process a command starts inherits -- uvicorn's workers and a pipeline's worker processes included. It also holds the commands that belong to no pipeline: `setup` (the config file and the databases), `reset`, and `tracking uri`. It sits over every other package. | every package above |
+| `samplelibrary` | The `samplelibrary` command line: one parser naming every operation on the library, which hands the rest of a command line to the module owning that command and imports that module as the command runs, so listing the commands stays instant and each command needs its own package's extras alone. A global `--config` sets `SAMPLELIBRARY_CONFIG` and drops any exported `SAMPLELIBRARY_DATABASE_URL`, so the file it names supplies the database too, and every process a command starts inherits both -- uvicorn's workers and a pipeline's worker processes included. The dispatcher accepts a command's own arguments only after its name. It also holds the commands that belong to no pipeline: `setup` (the config file and the databases), `reset`, and `tracking uri` / `tracking ui`. It sits over every other package. | every package above |
 
 ## Boundaries the import-linter contracts enforce
 
@@ -120,10 +120,10 @@ and it is the one thing in this library no pass can rebuild. It therefore sits o
 own, in a Postgres schema of its own (`samplecore.storage.curation`), apart from the single
 `MetaData` every other table belongs to. Both places this project empties a database —
 `samplelibrary reset` and the test suite's own teardown — iterate
-`database.metadata.sorted_tables`, so a table registered on the curation metadata is beyond their
+`database.metadata.sorted_tables` (`samplecore.storage.reset` owns the first), so a table registered on the curation metadata is beyond their
 reach by construction rather than by an exemption list somebody has to keep current. For the same
 reason it carries no foreign key into the catalog: one would either delete these rows along with the
-samples or block the purge outright. A test in `tests/samplelibrary/test_reset.py` pins exactly
+samples or block the purge outright. A test in `tests/samplecore/storage/test_reset.py` pins exactly
 that, seeding an annotation and asserting it survives a full reset.
 
 A label is stored in upper case, which is the case it is shown in: `LabelText` normalizes it at the
@@ -188,7 +188,8 @@ Local, machine-specific configuration (the module source directory, the library 
 connection URL) is read from a gitignored `config.toml` via `samplecore.config.load_config`, never
 hardcoded into source; the connection URL can also be supplied via the `SAMPLELIBRARY_DATABASE_URL`
 environment variable (taking precedence over the config file), so credentials need not live in a
-file at all. `config.example.toml` documents the expected shape.
+file at all. A command given `--config` reads the database from that file alone. `config.example.toml`
+documents the expected shape.
 
 A repository that recomputes a whole table's contents from scratch every run -- the cloud
 coordinate, module coordinate, and spectral feature repositories, whenever a fresh embedding pass
@@ -204,8 +205,10 @@ client and server share a filesystem the way a file-path-based `COPY` would.
 ## The three databases
 
 One Postgres server carries three: the real library, `samplelibrary_dev` for the disposable
-sandbox `scripts/build_dev_library.py` builds together with a config naming it, and
-`samplelibrary_test` for the suite. One role, named by `config.toml`'s `database_url`, owns all
+sandbox, and `samplelibrary_test` for the suite. `scripts/build_dev_library.py` builds the sandbox
+together with a config naming `samplelibrary_dev` on the server, role and password of the configured
+library (`provisioning.development_database_url`), and an inference address of its own, so the
+sandbox's API never dials the real library's renderer. One role, named by `config.toml`'s `database_url`, owns all
 three.
 
 `samplelibrary setup database` (`just database`) creates whatever of those is missing and touches
@@ -217,9 +220,10 @@ inside one database, and `provisioning` decides what to ask for. `CREATE ROLE` n
 which `SAMPLELIBRARY_ADMIN_DATABASE_URL` supplies where the library's own credentials cannot;
 without it the command reports the statement to run by hand.
 
-Which database a run reaches is `database_url`, overridden by `SAMPLELIBRARY_DATABASE_URL` --
-which is how the `*-dev` targets reach the sandbox, and how a deployment supplies credentials that
-never live in a file. The suite reads `SAMPLELIBRARY_TEST_DATABASE_URL`, defaulting to
+Which database a run reaches is `database_url`, overridden by `SAMPLELIBRARY_DATABASE_URL`, which
+is how a deployment supplies credentials that never live in a file. `--config` wins over both: the
+`dev` recipes pass the sandbox's config, and the file's database is the one they reach whatever the
+environment holds. The suite reads `SAMPLELIBRARY_TEST_DATABASE_URL`, defaulting to
 `samplelibrary_test` on localhost, and gives each `pytest -n` worker a database of its own, created
 and dropped around the run: that is what the role's `CREATEDB` grant is for, and why
 `samplelibrary_test` itself stays empty.
@@ -266,10 +270,12 @@ no retry anywhere in this project to fall back on.
 Two packages run as long-lived services: `sampleserver`, the API, and `samplemorph.service`, the
 morph inference process. `sampleextract` and `samplecloud` are one-shot offline batch commands,
 run by hand or on a schedule, never by the served app itself. The root `Dockerfile` builds a
-runtime image for `sampleserver` alone, installing only the `server` extra (`fastapi`, `uvicorn`,
-`httpx`) -- `sampleextract`/`samplecloud`'s own heavier dependencies (`librosa`, `umap-learn`,
-`scikit-learn`) never reach that image, mirroring the `sampleserver never imports the offline
-batch pipelines` import-linter contract above.
+runtime image for the served app alone: a Node stage builds the frontend, and the Python stages
+install only the `server` extra (`fastapi`, `uvicorn`, `httpx`) -- `sampleextract`/`samplecloud`'s
+own heavier dependencies (`librosa`, `umap-learn`, `scikit-learn`) never reach that image, mirroring
+the `sampleserver never imports the offline batch pipelines` import-linter contract above. The
+image runs as an unprivileged user and reads its config at `/app/config.toml`
+(`SAMPLELIBRARY_CONFIG`).
 
 The inference process (`samplelibrary morph serve`) installs the `morph` extra, reads the library
 root and the fitted models, and opens no database: a morph names two stored objects and a weight,
@@ -284,11 +290,24 @@ Every route the API serves sits under `/api` (`sampleserver.app.API_PREFIX`), so
 names one thing: the frontend reaches `/api/samples` while a person's browser holds `/samples/{hash}`
 as a client route of its own. That is what lets the Vite dev server forward a single prefix to the
 backend and answer everything else with the application itself, so reloading a sample's own URL
-brings back the dashboard.
+brings back the dashboard. `samplelibrary serve --frontend <dist>` does the same without Vite:
+`sampleserver.frontend.SinglePageApplication` serves the built files and answers every other path
+outside `/api` with `index.html`, and the image serves its own build this way.
+
+`samplelibrary serve` loads the configuration and opens the catalog once before uvicorn starts, so a
+missing config or an unreachable database ends the start with one message and exit status 1, and
+the catalog's schema is prepared once, under the schema lock, before any worker runs. Each worker's
+own start prepares the curation schema under the same lock (`connect_for_curation`), so workers
+starting together take turns.
 
 `docker-compose.yml` adds a `postgres` service alongside it (a named volume for persistence), as a
-worked example of the two running together; a real deployment points `database_url`/`SAMPLELIBRARY_DATABASE_URL` at
-whatever Postgres instance it actually runs against, container or otherwise. Local development runs
+worked example of the two running together. Its `sampleserver` mounts `LIBRARY_ROOT` (default
+`./library`) at `/library` and `CONFIG_PATH` (default `docker/config.toml`, whose paths are the
+container's own) at `/app/config.toml`, both read-only, supplies the database through
+`SAMPLELIBRARY_DATABASE_URL`, and publishes the app on `127.0.0.1:8000`. A real deployment points
+`database_url`/`SAMPLELIBRARY_DATABASE_URL` at whatever Postgres instance it actually runs against,
+container or otherwise. `just docker-run <library> <config>` runs the image alone against a config
+written for the container; a Postgres on the host is reachable from it as `host.docker.internal`. Local development runs
 against a Postgres installed on the machine directly, which the test suite and both library
 databases share. The container runs
 `samplelibrary serve` with several worker processes (`--workers`), where `just serve` starts the one
@@ -296,9 +315,9 @@ reloading process development uses: each worker holds a small pool of read-only 
 connections, checked out per request (`sampleserver.dependencies.get_connection`), which Postgres's
 own concurrent-connection handling supports natively, so multiple people browsing the library
 through one deployed server works correctly with no shared state between workers. The library's data
-directory and a `config.toml` pointing at its in-container path are supplied at `docker run` time (a
-bind mount plus `SAMPLELIBRARY_CONFIG`), never baked into the image, mirroring `config.toml` never
-being committed to the repository.
+directory and a `config.toml` pointing at its in-container path are supplied at `docker run` time as
+bind mounts, never baked into the image, mirroring `config.toml` never being committed to the
+repository.
 
 Three routes answer for the whole catalog at once — the cloud's hundred thousand points, a
 nearest-neighbor search, the library statistics — and each is written for that shape rather than
