@@ -79,5 +79,7 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog=prog, description="Place every cataloged module at a placeholder coordinate.")
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Place every cataloged module at a placeholder cloud coordinate."
+    )
     return parser.parse_args(argv)

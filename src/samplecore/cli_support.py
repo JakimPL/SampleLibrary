@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import argparse
 import io
 import logging
 import sys
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Final
 
@@ -117,29 +116,8 @@ def open_catalog_connection(database_url: str) -> Iterator[Connection]:
 
 
 def report_dry_run(description: str) -> None:
-    """Log what a confirm-gated destructive script would do, and that nothing has happened yet.
+    """Log what a confirm-gated destructive command would do, and that it waits for `--confirm`.
 
-    Shared by every such script's ``main()``, so the "nothing changes without --confirm" contract
-    reads identically regardless of which script reports it.
+    Shared by every such command, so the dry run reads identically whichever command reports it.
     """
     _logger.info("%s %s", description, _CONFIRM_FLAG_HINT)
-
-
-def confirmed(
-    argv: list[str],
-    parse_arguments: Callable[[list[str]], argparse.Namespace],
-    dry_run_message: str,
-) -> bool:
-    """Set up logging and parse a confirm-gated script's arguments, reporting when not confirmed.
-
-    Shared by every destructive maintenance script's ``main()``: a false result means ``--confirm``
-    was not passed, the dry-run description has already been logged, and the caller's own body
-    should simply return without doing anything else. ``parse_arguments`` must produce a namespace
-    carrying a ``confirm: bool`` field, matching the ``--confirm`` flag every such script defines.
-    """
-    configure_logging()
-    arguments = parse_arguments(argv)
-    if arguments.confirm:
-        return True
-    report_dry_run(dry_run_message)
-    return False

@@ -65,7 +65,7 @@ def _extractor_for(config: LibraryConfig, arguments: argparse.Namespace) -> Feat
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=prog, description="Extract sample features and reduce them to 2D cloud coordinates."
+        prog=prog, description="Extract sample features and reduce them to cloud coordinates."
     )
     parser.add_argument(
         "--backend",

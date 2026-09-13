@@ -28,7 +28,9 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog=prog, description="Print the API's OpenAPI schema as JSON.")
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Print the API's OpenAPI schema as JSON, or write it to a file."
+    )
     parser.add_argument(
         "--output",
         type=Path,

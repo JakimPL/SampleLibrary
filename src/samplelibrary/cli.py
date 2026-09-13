@@ -6,11 +6,12 @@ import sys
 from pathlib import Path
 from typing import Final
 
-from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplelibrary.commands import COMMANDS, Command, CommandGroup
 
 PROGRAM_NAME: Final[str] = "samplelibrary"
 COMMAND_METAVAR: Final[str] = "<command>"
+CONFIG_OPTION: Final[str] = "--config"
 
 
 def main() -> None:
@@ -23,20 +24,41 @@ def dispatch(argv: list[str]) -> None:
 
     The command parses those arguments with its own parser, so its help and its errors are its own.
     `--config` reaches the command through the environment, which every process the command starts
-    inherits along with it.
+    inherits along with it. The file it names supplies the database too, so a sandbox config keeps
+    every command on the sandbox whatever `SAMPLELIBRARY_DATABASE_URL` holds.
     """
-    arguments, command_arguments = _build_parser().parse_known_args(argv)
+    parser = _build_parser()
+    arguments, command_arguments = parser.parse_known_args(argv)
+    command: Command = arguments.command
+    _require_arguments_after_command(parser, argv, command_arguments, command_name=command.name)
     if arguments.config is not None:
         os.environ[CONFIG_PATH_ENVIRONMENT_VARIABLE] = str(arguments.config.resolve())
+        os.environ.pop(DATABASE_URL_ENVIRONMENT_VARIABLE, None)
 
-    command: Command = arguments.command
     command.run(command_arguments, prog=arguments.program)
+
+
+def _require_arguments_after_command(
+    parser: argparse.ArgumentParser, argv: list[str], command_arguments: list[str], *, command_name: str
+) -> None:
+    """Accept a command's own arguments only where they follow its name, and `--config` only before it.
+
+    Raises:
+        SystemExit: an unrecognized argument precedes the command name, or `--config` follows it.
+    """
+    first_command_argument = len(argv) - len(command_arguments)
+    if argv[first_command_argument:] != command_arguments or argv[first_command_argument - 1] != command_name:
+        parser.error(f"unrecognized arguments: {' '.join(command_arguments)}; a command's options follow its name")
+    if any(argument.split("=")[0] == CONFIG_OPTION for argument in command_arguments):
+        parser.error(
+            f"{CONFIG_OPTION} goes before the command name: {PROGRAM_NAME} {CONFIG_OPTION} PATH {command_name}"
+        )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog=PROGRAM_NAME, description="Run one operation on the sample library.")
     parser.add_argument(
-        "--config",
+        CONFIG_OPTION,
         type=Path,
         default=None,
         help=f"The configuration file to read; ${CONFIG_PATH_ENVIRONMENT_VARIABLE} or config.toml when left out.",

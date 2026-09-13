@@ -27,7 +27,7 @@ def main(argv: list[str], *, prog: str) -> None:
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=prog, description="Detect bit-depth, amplification, and resampled equivalence classes in the catalog."
+        prog=prog, description="Detect bit-depth, amplification and resampled variants among the cataloged samples."
     )
     parser.add_argument(
         "--limit",

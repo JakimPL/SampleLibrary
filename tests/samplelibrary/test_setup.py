@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from samplecore.config import EXAMPLE_CONFIG_PATH
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, EXAMPLE_CONFIG_PATH
 from samplelibrary import setup
+from samplelibrary.cli import dispatch
 
 PROGRAM = "samplelibrary setup"
 
@@ -14,18 +15,28 @@ _UNREACHABLE_SERVER_URL = "postgresql+psycopg://samplelibrary:samplelibrary@loca
 
 def test_config_writes_a_file_where_none_is_there(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_path = tmp_path / "config.toml"
-    monkeypatch.setattr(setup, "DEFAULT_CONFIG_PATH", config_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
 
     setup.main(["config"], prog=PROGRAM)
 
     assert config_path.read_text(encoding="utf-8") == EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
 
 
+def test_config_writes_the_file_the_command_line_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "elsewhere.toml"))
+    config_path = tmp_path / "sandbox.toml"
+
+    dispatch(["--config", str(config_path), "setup", "config"])
+
+    assert config_path.read_text(encoding="utf-8") == EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
+    assert not (tmp_path / "elsewhere.toml").exists()
+
+
 def test_config_keeps_a_file_already_there(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A person's own paths outlive every later install."""
     config_path = tmp_path / "config.toml"
     config_path.write_text('[library]\nlibrary_root = "/somewhere/of/my/own"\n', encoding="utf-8")
-    monkeypatch.setattr(setup, "DEFAULT_CONFIG_PATH", config_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
 
     setup.main(["config"], prog=PROGRAM)
 

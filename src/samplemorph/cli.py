@@ -71,7 +71,7 @@ def _run_on_catalog(
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=prog, description="Fit a decodable sample codec, render morphs through it, and serve them over HTTP."
+        prog=prog, description="Fit, train and render the decodable representation, and serve morphs over HTTP."
     )
     commands = parser.add_subparsers(dest="command", required=True)
     fit.add_parser(commands)

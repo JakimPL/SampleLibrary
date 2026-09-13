@@ -6,7 +6,7 @@ import sys
 from enum import StrEnum, unique
 
 from samplecore.cli_support import bootstrap_cli, configure_console_output_encoding, configure_logging
-from samplecore.config import DEFAULT_CONFIG_PATH, ConfigurationError, create_config_file
+from samplecore.config import ConfigurationError, create_config_file, resolve_config_path
 from samplecore.storage.cluster.provisioning import ProvisioningError, ProvisioningSummary, provision
 
 _logger = logging.getLogger(__name__)
@@ -31,25 +31,26 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _run_config() -> None:
-    """Put a config file at the repository root, leaving one already there exactly as it is.
+    """Put a config file where commands read one, leaving one already there exactly as it is.
+
+    That place is the one `--config` names, then `SAMPLELIBRARY_CONFIG`, then the repository root.
 
     Raises:
         SystemExit: the example this copies from is absent.
     """
     configure_console_output_encoding()
     configure_logging()
+    config_path = resolve_config_path()
     try:
-        created = create_config_file(DEFAULT_CONFIG_PATH)
+        created = create_config_file(config_path)
     except ConfigurationError as error:
         _logger.error("%s", error)
         sys.exit(1)
 
     if created:
-        _logger.warning(
-            "Wrote %s. Open it and fill in your own paths before running anything else.", DEFAULT_CONFIG_PATH
-        )
+        _logger.warning("Wrote %s. Open it and fill in your own paths before running anything else.", config_path)
     else:
-        _logger.info("Keeping the config file already at %s.", DEFAULT_CONFIG_PATH)
+        _logger.info("Keeping the config file already at %s.", config_path)
 
 
 def _run_database() -> None:
@@ -99,7 +100,7 @@ def _report_obstacle(error: ProvisioningError) -> None:
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=prog, description="Prepare a fresh clone to run: its config file, then its databases."
+        prog=prog, description="Put a config file in place, or prepare the databases it names."
     )
     commands = parser.add_subparsers(dest="command", required=True)
 

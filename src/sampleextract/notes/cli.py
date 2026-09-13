@@ -45,7 +45,7 @@ def main(argv: list[str], *, prog: str) -> None:
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=prog, description="Read each cataloged module's patterns for the notes they play."
+        prog=prog, description="Read the notes each module plays, and the rate each sample is heard at."
     )
     parser.add_argument(
         "--force",

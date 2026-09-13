@@ -184,7 +184,7 @@ def _report_hand_labels(agreement: HandLabelAgreement) -> None:
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=prog, description="Score one experiment's descriptor against the catalog's own targets."
+        prog=prog, description="Score an experiment's descriptor against the catalog's own targets."
     )
     parser.add_argument("--experiment-id", type=int, required=True, help="Which experiment's vectors to score.")
     parser.add_argument(

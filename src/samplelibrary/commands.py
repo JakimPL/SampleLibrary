@@ -118,7 +118,13 @@ def _schema(argv: list[str], *, prog: str) -> None:
 
 
 def _tracking_uri(argv: list[str], *, prog: str) -> None:
-    from samplelibrary.tracking import main
+    from samplelibrary.tracking.uri import main
+
+    main(argv, prog=prog)
+
+
+def _tracking_ui(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.tracking.ui import main
 
     main(argv, prog=prog)
 
@@ -127,20 +133,28 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
     Command(name="setup", summary="Put a config file in place, or prepare the databases it names.", run=_setup),
     Command(name="reset", summary="Empty the configured library's catalog and content store.", run=_reset),
     Command(name="extract", summary="Catalog every module under the configured source directory.", run=_extract),
-    Command(name="equivalence", summary="Detect bit-depth, amplification and resampled variants.", run=_equivalence),
+    Command(
+        name="equivalence",
+        summary="Detect bit-depth, amplification and resampled variants among the cataloged samples.",
+        run=_equivalence,
+    ),
     Command(name="thumbnails", summary="Compute a waveform thumbnail for each cataloged sample.", run=_thumbnails),
     Command(
         name="notes", summary="Read the notes each module plays, and the rate each sample is heard at.", run=_notes
     ),
-    Command(name="annotations", summary="Move hand-made annotations in and out of the catalog.", run=_annotations),
+    Command(
+        name="annotations", summary="Move hand-made sample annotations in and out of the catalog.", run=_annotations
+    ),
     CommandGroup(
         name="cloud",
         summary="Describe samples as experiments, and place them on the cloud.",
         commands=(
-            Command(name="embed", summary="Extract features and reduce them to cloud coordinates.", run=_cloud_embed),
+            Command(
+                name="embed", summary="Extract sample features and reduce them to cloud coordinates.", run=_cloud_embed
+            ),
             Command(
                 name="placeholders",
-                summary="Place every module at a placeholder cloud coordinate.",
+                summary="Place every cataloged module at a placeholder cloud coordinate.",
                 run=_cloud_placeholders,
             ),
             Command(
@@ -155,15 +169,22 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
             ),
         ),
     ),
-    Command(name="morph", summary="Fit, train and render the decodable representation, and serve morphs.", run=_morph),
+    Command(
+        name="morph",
+        summary="Fit, train and render the decodable representation, and serve morphs over HTTP.",
+        run=_morph,
+    ),
     Command(name="serve", summary="Serve the library's API over HTTP.", run=_serve),
-    Command(name="schema", summary="Print the API's OpenAPI schema as JSON.", run=_schema),
+    Command(name="schema", summary="Print the API's OpenAPI schema as JSON, or write it to a file.", run=_schema),
     CommandGroup(
         name="tracking",
         summary="Find the run store every training and evaluation pass records to.",
         commands=(
             Command(
                 name="uri", summary="Print the URI of the run store beside the configured library.", run=_tracking_uri
+            ),
+            Command(
+                name="ui", summary="Browse the configured library's run store in MLflow's interface.", run=_tracking_ui
             ),
         ),
     ),

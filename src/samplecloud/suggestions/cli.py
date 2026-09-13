@@ -75,7 +75,7 @@ def _report(summary: ScoringSummary) -> None:
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=prog, description="Suggest labels for every sample from a listening-model experiment."
+        prog=prog, description="Suggest labels for every sample of a listening-model experiment."
     )
     parser.add_argument(
         "--experiment-id", type=int, required=True, help="The listening-model experiment whose vectors are scored."

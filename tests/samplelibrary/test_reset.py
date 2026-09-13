@@ -5,8 +5,10 @@ import types
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from sqlalchemy import Connection, func, select
 
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplecore.hashing import compute_module_hash
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
@@ -37,6 +39,7 @@ from sampleextract.parsing import parse_module
 from samplelibrary import reset
 
 PROGRAM = "samplelibrary reset"
+CONFIG_PASSWORD = "unshown-password"
 
 _BUILD_DEV_LIBRARY_PATH = Path(__file__).resolve().parents[2] / "scripts" / "build_dev_library.py"
 
@@ -239,10 +242,40 @@ def test_confirm_flag_can_be_set() -> None:
     assert arguments.confirm is True
 
 
-def test_main_without_confirm_changes_nothing(connection: Connection, tmp_path: Path) -> None:
-    _populate_library(connection, tmp_path)
+def test_main_without_confirm_changes_nothing(
+    connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    library_root = _populate_library(connection, tmp_path)
+    _use_config(tmp_path, monkeypatch, library_root=library_root)
     before = _row_counts(connection)
 
     reset.main([], prog=PROGRAM)
 
     assert _row_counts(connection) == before
+
+
+def test_main_without_confirm_names_the_library_and_database_it_would_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    library_root = tmp_path / "catalog"
+    _use_config(tmp_path, monkeypatch, library_root=library_root)
+
+    reset.main([], prog=PROGRAM)
+
+    report = capsys.readouterr().out
+    assert str(library_root) in report
+    assert "reset-target" in report
+    assert CONFIG_PASSWORD not in report
+
+
+def _use_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, library_root: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "[library]\n"
+        f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{library_root.as_posix()}"\n'
+        f'database_url = "postgresql+psycopg://samplelibrary:{CONFIG_PASSWORD}@localhost:5432/reset-target"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+    monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)

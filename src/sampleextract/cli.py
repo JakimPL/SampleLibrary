@@ -57,7 +57,7 @@ def _worker_count_argument(value: str) -> WorkerCount:
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog=prog, description="Extract every module under the configured source directory."
+        prog=prog, description="Catalog every module under the configured source directory."
     )
     parser.add_argument(
         "--workers",

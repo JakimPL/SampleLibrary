@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, load_config
-from samplelibrary.cli import dispatch
-from samplelibrary.commands import COMMANDS, CommandGroup, CommandRunner
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE, load_config
+from samplelibrary.cli import PROGRAM_NAME, dispatch
+from samplelibrary.commands import COMMANDS, Command, CommandGroup, CommandRunner
 
 PACKAGES_A_COMMAND_LOADS = (
     "sampleextract",
@@ -22,6 +22,8 @@ PACKAGES_A_COMMAND_LOADS = (
     "uvicorn",
 )
 GROUPS = tuple(entry for entry in COMMANDS if isinstance(entry, CommandGroup))
+SANDBOX_DATABASE_URL = "postgresql+psycopg://user:pass@localhost:5432/sandbox"
+EXPORTED_DATABASE_URL = "postgresql+psycopg://user:pass@localhost:5432/library"
 
 
 @dataclass(frozen=True)
@@ -85,7 +87,13 @@ ROUTE_CASES = (
     ),
     RouteCase(["serve", "--reload"], "sampleserver.cli.main", ["--reload"], "samplelibrary serve"),
     RouteCase(["schema"], "sampleserver.openapi_export.main", [], "samplelibrary schema"),
-    RouteCase(["tracking", "uri"], "samplelibrary.tracking.main", [], "samplelibrary tracking uri"),
+    RouteCase(["tracking", "uri"], "samplelibrary.tracking.uri.main", [], "samplelibrary tracking uri"),
+    RouteCase(
+        ["tracking", "ui", "--port", "5001"],
+        "samplelibrary.tracking.ui.main",
+        ["--port", "5001"],
+        "samplelibrary tracking ui",
+    ),
 )
 
 
@@ -113,24 +121,97 @@ def test_a_command_line_reaches_the_command_it_names_with_the_rest_of_the_line(
     assert (recorded.argv, recorded.prog) == (case.forwarded, case.program)
 
 
-def test_the_named_configuration_is_the_one_the_command_reads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "elsewhere.toml"))
+def _write_sandbox_config(tmp_path: Path) -> Path:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
         "[library]\n"
         f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
         f'library_root = "{(tmp_path / "library").as_posix()}"\n'
-        'database_url = "postgresql+psycopg://user:pass@host/db"\n',
+        f'database_url = "{SANDBOX_DATABASE_URL}"\n',
         encoding="utf-8",
     )
+    return config_path
+
+
+def test_the_named_configuration_is_the_one_the_command_reads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "elsewhere.toml"))
     library_roots: list[Path] = []
     monkeypatch.setattr(
         "sampleextract.notes.cli.main", lambda argv, *, prog: library_roots.append(load_config().library_root)
     )
 
-    dispatch(["--config", str(config_path), "notes"])
+    dispatch(["--config", str(_write_sandbox_config(tmp_path)), "notes"])
 
     assert library_roots == [tmp_path / "library"]
+
+
+def test_the_named_configuration_supplies_the_database_over_an_exported_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(DATABASE_URL_ENVIRONMENT_VARIABLE, EXPORTED_DATABASE_URL)
+    database_urls: list[str] = []
+    monkeypatch.setattr(
+        "sampleextract.notes.cli.main", lambda argv, *, prog: database_urls.append(load_config().database_url)
+    )
+
+    dispatch(["--config", str(_write_sandbox_config(tmp_path)), "notes"])
+
+    assert database_urls == [SANDBOX_DATABASE_URL]
+
+
+@pytest.mark.parametrize(
+    "command_line",
+    [["--confirm", "reset"], ["--workers", "reset"], ["extract", "--config", "config.toml"], ["extract", "--config=x"]],
+    ids=["an option before the command", "an unknown option before the command", "--config after", "--config= after"],
+)
+def test_an_argument_on_the_wrong_side_of_the_command_name_is_a_usage_error(
+    command_line: list[str], recorded: RecordedCall, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("samplelibrary.reset.main", _recorder(recorded))
+    monkeypatch.setattr("sampleextract.cli.main", _recorder(recorded))
+
+    with pytest.raises(SystemExit) as raised:
+        dispatch(command_line)
+
+    assert raised.value.code == 2
+    assert recorded.argv is None
+
+
+@dataclass(frozen=True)
+class LeafCommand:
+    names: list[str]
+    command: Command
+
+    @property
+    def program(self) -> str:
+        return " ".join([PROGRAM_NAME, *self.names])
+
+
+def _leaf_commands() -> list[LeafCommand]:
+    leaves: list[LeafCommand] = []
+    for entry in COMMANDS:
+        match entry:
+            case Command():
+                leaves.append(LeafCommand([entry.name], entry))
+            case CommandGroup():
+                leaves.extend(LeafCommand([entry.name, command.name], command) for command in entry.commands)
+    return leaves
+
+
+def test_every_command_has_a_route_case() -> None:
+    assert {leaf.program for leaf in _leaf_commands()} == {case.program for case in ROUTE_CASES}
+
+
+@pytest.mark.parametrize("leaf", _leaf_commands(), ids=lambda leaf: leaf.program)
+def test_a_command_describes_itself_as_the_command_list_does(
+    leaf: LeafCommand, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        dispatch([*leaf.names, "--help"])
+
+    help_text = " ".join(capsys.readouterr().out.split())
+    assert raised.value.code == 0
+    assert leaf.command.summary in help_text
 
 
 @pytest.mark.parametrize("group", GROUPS, ids=lambda group: group.name)

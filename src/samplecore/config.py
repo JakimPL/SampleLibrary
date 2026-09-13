@@ -68,7 +68,7 @@ def load_config(path: Path | None = None) -> LibraryConfig:
         ConfigurationError: no config file exists at the resolved path, or the file still carries
             the example's stand-in paths.
     """
-    resolved_path = path or _config_path_from_environment() or DEFAULT_CONFIG_PATH
+    resolved_path = resolve_config_path(path)
     if not resolved_path.is_file():
         raise ConfigurationError(
             f"No config file at {resolved_path}. Run `samplelibrary setup config` to put one there, or copy "
@@ -84,6 +84,11 @@ def load_config(path: Path | None = None) -> LibraryConfig:
     config = LibraryConfig.model_validate(library_data)
     _reject_placeholder_paths(config, resolved_path)
     return config
+
+
+def resolve_config_path(path: Path | None = None) -> Path:
+    """The config file a command reads: ``path`` when given, then ``SAMPLELIBRARY_CONFIG``, then the default."""
+    return path or _config_path_from_environment() or DEFAULT_CONFIG_PATH
 
 
 def create_config_file(path: Path) -> bool:

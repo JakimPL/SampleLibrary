@@ -25,9 +25,7 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Compute and cache a waveform-preview thumbnail for each sample."
-    )
+    parser = argparse.ArgumentParser(prog=prog, description="Compute a waveform thumbnail for each cataloged sample.")
     parser.add_argument(
         "--force",
         action="store_true",
