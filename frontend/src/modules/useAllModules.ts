@@ -4,9 +4,7 @@ import { useFetch } from "../shared/useFetch";
 
 const NO_DEPENDENCIES: readonly unknown[] = [];
 
-// The largest page sampleserver accepts in one request (`MAX_PAGE_LIMIT` in
-// `sampleserver/pagination.py`); fetching the whole catalog means paging at this size rather than
-// making one request per default-sized page.
+// Kept equal to `MAX_PAGE_LIMIT` in `sampleserver/pagination.py`, the largest page the API serves.
 export const BULK_FETCH_PAGE_LIMIT = 500;
 
 async function fetchAllModules(): Promise<readonly Module[]> {

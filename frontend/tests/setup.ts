@@ -14,49 +14,37 @@ afterEach(() => {
     cleanup();
 });
 
-// selectionStore is a module-level singleton read and written by every panel's own tests, so it is
-// reset unconditionally here rather than relying on each test file to remember a unique fixture.
+// Module-level stores and caches outlive a test, so each one returns to its initial state here.
 afterEach(() => {
     useSelectionStore.setState(INITIAL_SELECTION_STATE);
 });
 
-// themeStore is likewise a module-level singleton, and every test that renders WorkspaceShell
-// touches it through ThemeMenu; reset both the store and the DOM attribute it drives directly
-// (not through setPreference) so this cleanup never re-writes the localStorage entry the hook
-// below is about to clear anyway.
+// Set directly, bypassing setPreference, so the reset leaves localStorage to the clear below.
 afterEach(() => {
     useThemeStore.setState({ preference: DEFAULT_THEME_PREFERENCE });
     delete document.documentElement.dataset.theme;
 });
 
-// requestCache is likewise a module-level singleton; without a reset, a cache key reused across
-// test files would silently seed a later test's fetch with an earlier test's cached result.
 afterEach(() => {
     clearRequestCache();
 });
 
-// annotationStore holds what this session has decided, module-level like the stores above, so a
-// decision made by one test would otherwise decide what a later test's badge renders.
 afterEach(() => {
     useAnnotationStore.setState(INITIAL_ANNOTATION_STATE);
 });
 
-// morphStore is a module-level singleton too, written by the cloud panel's Shift-click and read by
-// the Morph panel, so a pair one test joined would otherwise show up in the next test's panel.
 afterEach(() => {
     useMorphStore.setState(INITIAL_MORPH_STATE);
 });
 
-// jsdom implements no pointer capture, which the morph marker takes while it is dragged; a no-op
-// pair is enough for a test to drive a drag through pointer events.
+// jsdom lacks pointer capture, which the morph marker takes while it is dragged.
 for (const name of ["setPointerCapture", "releasePointerCapture"] as const) {
     if (!(name in Element.prototype)) {
         Object.defineProperty(Element.prototype, name, { configurable: true, value: () => undefined });
     }
 }
 
-// jsdom defines no PointerEvent either, and a pointer event fired without one carries no
-// coordinates; a mouse event with a pointer id is what the marker's drag reads.
+// jsdom lacks PointerEvent; a mouse event carrying a pointer id gives the marker's drag its coordinates.
 if (!("PointerEvent" in window)) {
     class PointerEventStub extends MouseEvent {
         readonly pointerId: number;
@@ -70,24 +58,19 @@ if (!("PointerEvent" in window)) {
     vi.stubGlobal("PointerEvent", PointerEventStub);
 }
 
-// jsdom's localStorage persists across tests in the same file; without clearing it, a test that
-// exercises the shell's own layout persistence (closing/reopening a panel) would leak a saved
-// layout into every test that mounts WorkspaceShell afterwards.
+// jsdom keeps localStorage across the tests of a file, which would carry a saved layout into the next shell.
 afterEach(() => {
     localStorage.clear();
 });
 
-// jsdom has no real canvas renderer; components must already treat a null 2D context as normal
-// (see CloudView), so tests exercise that path directly instead of jsdom's own noisy warning.
+// jsdom lacks a canvas renderer; components handle a null 2D context, so tests take that path quietly.
 vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 
-// jsdom has no real media pipeline either; play()/pause() are not implemented and jsdom logs a
-// noisy "not implemented" error for each call, so both are stubbed the same way as getContext.
+// jsdom logs a "not implemented" error for every play() and pause() call.
 vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
 vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
 
-// jsdom does not implement ResizeObserver, which dockview uses to auto-fit its layout to its host
-// element; a no-op stub is enough for the shell to mount under a test's fixed jsdom viewport.
+// jsdom lacks ResizeObserver, which dockview uses to fit its layout to its host element.
 class ResizeObserverStub implements ResizeObserver {
     observe(): void {
         // no real layout to observe under jsdom
@@ -102,9 +85,7 @@ class ResizeObserverStub implements ResizeObserver {
 
 vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 
-// jsdom does not implement matchMedia either, which useThemeSignal calls to notice a live OS
-// light/dark flip; a stub with working add/removeEventListener is enough, since no test here
-// evaluates a real media query against jsdom's viewport.
+// jsdom lacks matchMedia, which useThemeSignal calls to follow the operating system's color scheme.
 vi.stubGlobal("matchMedia", (media: string) => ({
     matches: false,
     media,
@@ -112,10 +93,8 @@ vi.stubGlobal("matchMedia", (media: string) => ({
     removeEventListener: () => undefined,
 }));
 
-// jsdom never computes real layout, so every element's offsetWidth/offsetHeight reads 0. The
-// virtualized list panels measure their scroll container this way on mount, before the
-// ResizeObserver stub above could ever report a real size, so a fixed nonzero measurement is
-// stubbed globally here rather than only where a test happens to touch a virtualized table.
+// jsdom lays nothing out, so offsetWidth and offsetHeight read 0, and the virtualized lists measure
+// their scroll container through them on mount.
 const STUBBED_ELEMENT_EXTENT_PX = 600;
 
 Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
@@ -127,10 +106,8 @@ Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     get: () => STUBBED_ELEMENT_EXTENT_PX,
 });
 
-// jsdom's getBoundingClientRect always reads an all-zero rect. recharts' ResponsiveContainer reads
-// it once synchronously on mount to size its chart, before its ResizeObserver-driven updates could
-// ever take over (the stub above is a no-op), so a real chart panel would otherwise measure zero
-// and render nothing.
+// recharts' ResponsiveContainer sizes its chart from getBoundingClientRect on mount, which jsdom
+// reads as an all-zero rect.
 vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
     x: 0,
     y: 0,

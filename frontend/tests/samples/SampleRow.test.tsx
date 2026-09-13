@@ -71,15 +71,6 @@ function renderRow(overrides: RowOverrides = {}): ReturnType<typeof render> {
 }
 
 describe("SampleRow", () => {
-    // Regression test for a real bug: the row's own click handler sat on the `<tr>`, attached with
-    // `onClick`, while the name it wraps is its own `<Link>` one level in. A bubble-phase handler on
-    // the row runs only after that inner `<Link>`'s own bubble-phase handler already read
-    // `event.defaultPrevented` and navigated -- calling `preventDefault` from the row was already too
-    // late to stop it. Every plain click on a sample's name therefore navigated to its route in
-    // addition to highlighting it, which fired the shell's route-param focus effect as a second,
-    // independent write to the same highlight moments after the row's own -- the two-write race this
-    // codebase's Cloud panel actually crashed on. `onClickCapture` (see `useEntityRowInteractions`'s
-    // docstring) is what this test locks in.
     it("a plain click on the name highlights the sample without navigating to its own route", () => {
         renderRow();
 

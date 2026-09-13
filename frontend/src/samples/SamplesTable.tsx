@@ -17,17 +17,10 @@ import { TableColgroup } from "../shared/TableColgroup";
 import { TABLE_INITIAL_VIEWPORT_HEIGHT_PX, TABLE_OVERSCAN_ROWS, TABLE_ROW_HEIGHT_PX } from "../shared/tableMetrics";
 import { SampleRow } from "./SampleRow";
 
-// Calls onLoadMore once the virtualizer's rendered range comes within this many rows of the end
-// of the currently loaded (and possibly filtered) list, so the next window arrives before the
-// user actually scrolls past the last loaded sample.
 const LOAD_MORE_TRIGGER_DISTANCE = 20;
 
 const columnHelper = createColumnHelper<SampleSummary>();
 
-// Every column but the name declares its own width, so the name takes whatever the others leave
-// over. Each width holds that column's own widest reading -- five stars and a heart, a formatted
-// byte count, a header word -- since these are read whole or not at all, while a name is the one
-// thing a listing can trail off and still say something with.
 const COLUMNS = [
     columnHelper.display({ id: "waveform", header: "Waveform", size: 76 }),
     columnHelper.accessor(

@@ -1,24 +1,18 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-// Overridable so a dev server can point at a second backend instance (e.g. one serving
-// dev-library/config.toml) without disturbing the default that talks to the real one.
 const BACKEND_DEV_URL = process.env.VITE_BACKEND_DEV_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
     plugins: [react()],
     server: {
-        // Only the API's own prefix is forwarded, so `/samples/{hash}` and `/modules/{hash}`
-        // reach the single-page application and survive a reload as the client routes they are.
         proxy: {
             "/api": BACKEND_DEV_URL,
         },
     },
     test: {
         environment: "jsdom",
-        // Node 25 ships a Web Storage API of its own, and its `localStorage` global takes
-        // precedence over jsdom's. Turning it off in the worker processes hands the suite jsdom's
-        // own Storage, which carries the whole API these tests exercise.
+        // Node 25's own `localStorage` global shadows jsdom's Storage, which the tests exercise.
         poolOptions: { forks: { execArgv: ["--no-experimental-webstorage"] } },
         setupFiles: ["tests/setup.ts"],
         include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],

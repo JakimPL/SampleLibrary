@@ -190,10 +190,6 @@ export function CloudPanel(): ReactElement {
         highlightEntity(entity);
     }
 
-    // Clicking a point directly is treated as asking to hear it, the same way a Thumbnail's own
-    // play button would -- a module has no comparable single occurrence to play, so this is a
-    // sample-only interaction and a clicked module point highlights (via handleSelect above)
-    // without doing anything else.
     function handleActivate(entity: EntityRef): void {
         if (entity.kind === "sample") {
             play(samplePreview(entity.hash, rateByHash.get(entity.hash) ?? null));

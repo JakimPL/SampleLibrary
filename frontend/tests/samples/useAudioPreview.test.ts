@@ -85,8 +85,7 @@ describe("the shared preview element", () => {
             set src(source: string) {
                 writes.push("src");
                 this.storedSource = source;
-                // What a real media element does with a new source, and the whole point of the
-                // order under test: the rate goes back to the default before the file plays.
+                // A real media element resets its rate to the default on a new source: the order under test.
                 this.storedPlaybackRate = this.defaultPlaybackRate;
             }
 
@@ -113,7 +112,7 @@ describe("the shared preview element", () => {
         }
 
         const element = new RecordingAudio();
-        // Every `new Audio()` in the module under test hands back this one recording element.
+        /** Hands every `new Audio()` in the module under test this one recording element. */
         function audioConstructorStub(): RecordingAudio {
             return element;
         }

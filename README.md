@@ -27,7 +27,7 @@ just install
 ```
 
 `just install` also creates `config.toml`. Open it and set two paths: where your modules are, and
-where extracted samples should go. Then create the databases:
+where extracted samples should go (see [Configuration](#configuration)). Then create the databases:
 
 ```sh
 just database
@@ -40,6 +40,22 @@ anything that already exists alone.
 No PostgreSQL on the machine? `docker compose up -d postgres` starts one. If port 5432 is taken,
 use `POSTGRES_PORT=5433` and set the same port in `config.toml`.
 
+## Configuration
+
+`config.toml` holds your own machine's settings and stays out of the repository:
+
+- `module_source_directory`: your module collection, read with every folder inside it.
+- `library_root`: where extracted audio, fitted models and recorded runs are kept.
+- `database_url`: the PostgreSQL connection. `just database` creates the role and the databases it
+  names wherever they are missing, and the `SAMPLELIBRARY_DATABASE_URL` environment variable takes
+  precedence over it.
+- `minimum_sample_frames`: the shortest sample extraction keeps, 512 frames by default.
+- `[inference] url`: the address the morph renderer listens on and the API reaches it at,
+  `http://127.0.0.1:8010` by default.
+
+Paths take forward slashes or your system's own separator; a backslash is written twice, as in
+`"C:\\Users\\you\\Modules"`.
+
 ## Usage
 
 ```sh
@@ -50,8 +66,8 @@ just frontend-dev              # start the frontend, then open http://localhost:
 ```
 
 Every operation on the library is a `samplelibrary` command: `uv run samplelibrary --help` lists
-them, and each command's own `--help` lists its options. `just` lists the recipes for everyday work
-around them — serving, rebuilding the library, the development sandbox and the frontend.
+them, and each command's own `--help` lists its options. The [recipes](#recipes) cover the everyday
+work around them — serving, rebuilding the library, the development sandbox and the frontend.
 
 Extraction takes a while over a large collection, so it spreads itself across your machine's
 cores. `uv run samplelibrary extract --workers 2` holds it to two processes if you want the machine
@@ -62,6 +78,27 @@ same way.
 `uv run samplelibrary notes` reads what your modules actually play, which is what lets the app
 sound a sample at the speed the music does — run it after extraction, and again whenever you add
 modules. `cloud embed`, `thumbnails` and the rest of the pipeline sit beside it in the command list.
+
+## Recipes
+
+| Recipe | What it does |
+|---|---|
+| `just install` | Installs the Python and frontend dependencies and the git hooks, and puts `config.toml` in place |
+| `just database` | Creates the role and the databases `config.toml` names, wherever they are missing |
+| `just serve` | Starts the API, restarting it whenever the code changes |
+| `just serve-inference` | Starts the morph renderer the API reaches for morphs |
+| `just frontend-dev` | Starts the frontend, reachable from your local network |
+| `just rebuild` | Extracts your modules, finds near-duplicates and lays out the cloud, one pass after another |
+| `just capped <command>` | Runs a `samplelibrary` command under a 16 GB memory ceiling on Linux; `just MEMORY_CAP=24G capped …` raises it |
+| `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
+| `just reset` | Empties the library's catalog and stored audio once you confirm; labels, ratings and favorites stay |
+| `just check` | Formats, lints and tests the Python code and the frontend |
+| `just format`, `just lint`, `just test`, `just coverage` | Runs one part of the Python checks; `coverage` also reports the lines the tests leave unrun |
+| `just frontend-check`, `just frontend-build`, `just frontend-types` | Checks the frontend, builds it for production, and regenerates its API types from the schema |
+| `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Builds a 30-module sandbox, runs a `samplelibrary` command on it, serves it on port 8001, and deletes it |
+| `just docker-build`, `just docker-run <library> <config>` | Builds the API's image, and runs it over a library directory and the config describing it inside the container |
+
+To browse the sandbox, start the frontend with `VITE_BACKEND_DEV_URL=http://127.0.0.1:8001`.
 
 Work on generating audio from a point between two samples lives in the `samplemorph` package,
 one module per command under `samplemorph.commands`: fitting a linear codec, teaching the restorer

@@ -1,6 +1,4 @@
-// Mirrors `API_PREFIX` in `src/sampleserver/app.py`. The whole API lives under one path
-// segment so a client route like `/samples/{hash}` and the listing endpoint behind it stay
-// distinct paths, which is what lets a dev-server proxy forward one and leave the other alone.
+// Kept equal to `API_PREFIX` in `src/sampleserver/app.py`.
 const API_PREFIX = "/api";
 
 /** Where a path relative to the API's own root is actually served. */

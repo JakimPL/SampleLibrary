@@ -39,9 +39,8 @@ function renderShellAt(initialPath: string): ReturnType<typeof render> {
 }
 
 /**
- * Every panel's own tab title, read from dockview's tab markup specifically -- a plain text query
- * would also match unrelated same-named controls a panel renders inside its own body, such as the
- * Cloud panel's Samples/Modules tab buttons.
+ * Every panel's tab title, read from dockview's tab markup, which leaves out same-named controls
+ * inside a panel's body, such as the Cloud panel's Samples and Modules buttons.
  */
 function panelTabTitles(): string[] {
     return Array.from(document.querySelectorAll(".dv-default-tab-content")).map((element) => element.textContent);
@@ -49,7 +48,7 @@ function panelTabTitles(): string[] {
 
 /**
  * Closes one panel through its tab and waits for the shell to save the arrangement without it,
- * which dockview reports a moment after the close rather than within it.
+ * which dockview reports a moment after the close.
  */
 async function closePanelAndSave(title: string): Promise<void> {
     fireEvent.click(screen.getByRole("button", { name: `Close ${title}` }));

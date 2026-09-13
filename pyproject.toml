@@ -39,8 +39,7 @@ perceptual = ["torch>=2.9", "cdpam>=0.0.4", "resampy>=0.4"]
 [project.scripts]
 samplelibrary = "samplelibrary.cli:main"
 
-# The card is sm_120, which needs a CUDA 12.8 or newer build; an older wheel imports cleanly and
-# then fails at the first kernel launch with a no-kernel-image error.
+# The card is sm_120, which needs a CUDA 12.8 or newer build.
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
@@ -107,8 +106,7 @@ addopts = "--import-mode=importlib"
 
 [tool.coverage.run]
 source = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "samplelibrary"]
-# Extraction spends worker processes of its own, whose lines are measured only where coverage
-# follows a process into multiprocessing's own children.
+# Extraction's worker processes count only when coverage follows multiprocessing's children.
 concurrency = ["multiprocessing", "thread"]
 sigterm = true
 

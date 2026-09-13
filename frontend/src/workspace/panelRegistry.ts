@@ -21,10 +21,10 @@ export interface PanelDefinition {
     readonly id: PanelId;
     readonly title: string;
     readonly component: ComponentType;
-    // Where this panel belongs relative to another already-open one. `buildDefaultLayout` and
-    // `AddPanelMenu` (re-adding a panel closed via its own tab) both place a panel this same way,
-    // so the two can never drift apart into disagreeing about where a panel belongs -- `null` for
-    // `modules-list`, the one panel every layout anchors around instead of positioning relative to.
+    /**
+     * Where the panel opens beside an open one, shared by the default layout and the add-panel menu;
+     * `null` for `modules-list`, which anchors every layout.
+     */
     readonly placement: PanelPlacement | null;
 }
 

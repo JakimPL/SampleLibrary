@@ -3,9 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { listSamples, type SampleSelection, type SampleSummary } from "../api/samples";
 import { describeError } from "../shared/fetchState";
 
-// Each sample summary embeds a thumbnail, so fetching the whole catalog at once (unlike Modules)
-// would mean tens of megabytes up front; this is the page size for one step of the incremental
-// scroll-driven fetch instead.
+// Each summary embeds a thumbnail, so the listing arrives one window at a time as it scrolls.
 export const WINDOW_PAGE_LIMIT = 200;
 
 export interface WindowedSamples {

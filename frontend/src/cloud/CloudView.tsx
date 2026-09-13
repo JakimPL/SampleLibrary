@@ -43,9 +43,10 @@ function readCloudColors(): CloudColors {
     };
 }
 
-// Most of a real library's samples match no category keyword, so drawing them as strongly as the
-// classified ones buries the very structure the colors exist to show. They take a recessive tone of
-// their own instead, reading as the substrate the classified points sit in.
+/**
+ * One color per category slot. Uncategorized samples, most of a real library, take a recessive tone so the
+ * classified structure stands out.
+ */
 function readCategoryPalette(): string[] {
     return CATEGORY_ORDER.map((category) =>
         category === UNCATEGORIZED_CATEGORY
@@ -54,8 +55,10 @@ function readCategoryPalette(): string[] {
     );
 }
 
-// The tags a person chose to paint sit on the same recessive ground the uncategorized points do,
-// so the labeled samples stand out of a catalog that is mostly unlabeled.
+/**
+ * The painted tags' colors after the recessive substrate slot, so labeled samples stand out of a mostly
+ * unlabeled catalog.
+ */
 function readLabelPalette(ranks: readonly number[]): string[] {
     const parameters = readLabelPaletteParameters();
     return [
@@ -112,8 +115,7 @@ function buildDrawSpec(points: readonly CloudEntityPoint[], coloring: PointColor
     };
 }
 
-// Kept in step with the ring animations' own total duration in styles.css (two staggered 1400ms
-// rings, the second delayed by 300ms) so the marker element is dropped only once both have faded.
+// Matches the two ping rings in styles.css: 1400ms each, the second delayed by 300ms.
 const PING_LIFETIME_MS = 1900;
 
 /** A morph pair drawn over the cloud: its two ends by hash, and the weight its marker sits at. */
@@ -316,13 +318,8 @@ export function CloudView({
 }: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
-    // Serializes every `draw` call against the current scatterplot instance -- see `drawSerialized`.
-    // Reset on each (re)creation so a chain left over from a just-destroyed instance is abandoned
-    // rather than carried into the new one.
     const drawChainRef = useRef<Promise<void>>(Promise.resolve());
-    // Tracks whether the current scatterplot's first `draw` has resolved -- `getScreenPosition`
-    // throws until it has, so the hover and ping-repositioning subscriptions check this before
-    // calling it rather than risk that throw crashing an unrelated passive-effect commit.
+    // regl-scatterplot's `getScreenPosition` throws until the first `draw` resolves.
     const pointsDrawnRef = useRef(false);
     const pointsRef = useRef<readonly CloudEntityPoint[]>([]);
     const coloringRef = useRef<PointColoring>(coloring);
@@ -362,10 +359,6 @@ export function CloudView({
     const [linkScreen, setLinkScreen] = useState<ScreenSegment | null>(null);
     const [band, setBand] = useState<ScreenSegment | null>(null);
 
-    // Stable on `rawPoints` alone, not recomputed on every render, since it feeds the draw effect's
-    // dependency array below -- an identity that changed on every render (including ones this view
-    // causes itself, like a ping's own state update) would redraw the whole scatterplot far more
-    // often than `rawPoints` actually changes.
     const points = useMemo(() => normalizePoints(rawPoints), [rawPoints]);
     pointsRef.current = points;
     const indexByHash = useMemo(
@@ -375,9 +368,10 @@ export function CloudView({
     const indexByHashRef = useRef(indexByHash);
     indexByHashRef.current = indexByHash;
 
-    // Reads both ends' screen positions afresh; stable, so the mount effect's subscriptions and the
-    // effects below share one function. The link goes unshown while either end is out of this
-    // view (the other tab, a pair joined before the points arrived) or the first draw is pending.
+    /**
+     * Pins the link to both ends' screen positions, hiding it while an end is outside this view or the first
+     * draw is pending.
+     */
     const repinLink = useCallback((): void => {
         const scatterplot = scatterplotRef.current;
         const currentLink = linkRef.current;
@@ -458,9 +452,7 @@ export function CloudView({
             const index = selectedIndices[0];
             const entity = index === undefined ? undefined : pointsRef.current[index]?.ref;
             if (entity !== undefined) {
-                // Recorded before `onSelect` even runs: `highlighted` catching up to this same
-                // entity is this click's own doing, not a locate request from elsewhere, so the
-                // points/highlighted effect's ping guard (comparing against this same ref) skips it.
+                // Set before `onSelect`, so the ping guard reads the highlight that follows as this click's own.
                 previousHighlightedRef.current = entity;
                 onSelectRef.current(entity);
                 onActivateRef.current(entity);
@@ -594,10 +586,7 @@ export function CloudView({
             scatterplotRef.current = null;
             canvas.remove();
         };
-        // Created once per mount: point and highlight updates flow through the effect below, and a
-        // theme switch restyles the live instance, so neither rebuilds the WebGL context.
-        // highlighted is deliberately left out: this effect only needs its value at creation, and
-        // reading it fresh here would otherwise force a recreation on every select.
+        // Created once per mount, reading `highlighted` at creation; the effects below update the live instance.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -607,12 +596,6 @@ export function CloudView({
             return undefined;
         }
 
-        // Canceled if a newer call to this effect (points or highlighted changing again before
-        // this draw resolves) supersedes this one -- otherwise a slow, stale draw could still land
-        // its ping, or overwrite `previousHighlightedRef` with an already-outdated value, after a
-        // newer run already has. The draw itself still queues behind the mount effect's own initial
-        // draw (or any other run's) through `drawChainRef` regardless of this cancellation, since a
-        // canceled run's `draw` call was already issued and the scatterplot has no way to retract it.
         let canceled = false;
         void applyPoints(scatterplot, drawChainRef, points, coloring, highlighted, () => canceled).then(
             (highlightedIndex) => {
@@ -656,11 +639,6 @@ export function CloudView({
     }, [repinLink]);
 
     useEffect(() => {
-        // Redundantly re-applies the colors the mount effect above just set on the first render.
-        // pointColor/colorBy specifically follow the currently-drawn points' own categorization
-        // (see buildDrawSpec) rather than always falling back to the flat point color, so a live
-        // theme switch while viewing the categorized Samples tab keeps every category's own color
-        // instead of collapsing them all back to one.
         const { pointColorActive, backgroundColor } = readCloudColors();
         const spec = buildDrawSpec(pointsRef.current, coloringRef.current);
         void scatterplotRef.current?.set({

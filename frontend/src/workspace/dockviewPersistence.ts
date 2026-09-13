@@ -27,8 +27,7 @@ function saveWorkspace(api: DockviewApi): void {
         localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(api.toJSON()));
         localStorage.setItem(KNOWN_PANELS_STORAGE_KEY, JSON.stringify(Object.keys(PANEL_REGISTRY)));
     } catch {
-        // localStorage can be unavailable (private browsing, a full quota) -- losing layout
-        // persistence for this session is an acceptable degradation, not a reason to crash the shell.
+        // localStorage throws in private browsing or on a full quota; the layout then lasts for this session.
     }
 }
 
@@ -86,8 +85,7 @@ export function resetLayout(api: DockviewApi): void {
         localStorage.removeItem(LAYOUT_STORAGE_KEY);
         localStorage.removeItem(KNOWN_PANELS_STORAGE_KEY);
     } catch {
-        // localStorage can be unavailable (private browsing, a full quota) -- the in-memory rebuild
-        // below still succeeds even though this run won't remember it past a reload.
+        // localStorage throws in private browsing or on a full quota; the rebuild below still applies.
     }
 
     for (const panel of [...api.panels]) {

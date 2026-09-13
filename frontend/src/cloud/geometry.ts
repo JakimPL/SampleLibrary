@@ -5,11 +5,9 @@ export interface CloudEntityPoint {
     readonly ref: EntityRef;
     readonly x: number;
     readonly y: number;
-    // Present for every sample-cloud point (each sample always resolves to a category, worst case
-    // "uncategorized"), and absent for a module-cloud point -- modules carry no category concept.
+    /** Present on every sample point, "uncategorized" at worst, and absent on a module point. */
     readonly category?: SampleCategory;
-    // The rate to hear a clicked sample point at. Absent for a module point, and for a sample the
-    // catalog knows no rate for.
+    /** The rate a clicked sample point plays at; absent on a module point and on a sample of unknown rate. */
     readonly playbackRateHz?: number;
 }
 
@@ -61,8 +59,7 @@ export function normalizePoints(points: readonly CloudEntityPoint[]): readonly C
         ref: point.ref,
         x: NORMALIZED_MIN + ((point.x - horizontal.minimum) / rangeX) * NORMALIZED_SPAN,
         y: NORMALIZED_MIN + ((point.y - vertical.minimum) / rangeY) * NORMALIZED_SPAN,
-        // Spread conditionally rather than assigning `point.category` outright: with
-        // exactOptionalPropertyTypes on, an optional field must be omitted, not set to `undefined`.
+        // exactOptionalPropertyTypes requires an absent optional field to be omitted.
         ...(point.category !== undefined && { category: point.category }),
         ...(point.playbackRateHz !== undefined && { playbackRateHz: point.playbackRateHz }),
     }));
