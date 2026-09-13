@@ -50,70 +50,70 @@ check: format lint test frontend-check
 # unset, a run takes one per core, up to a ceiling one machine's memory carries comfortably.
 .PHONY: extract
 extract:
-	uv run sampleextract $(if $(WORKERS),--workers $(WORKERS),)
+	uv run samplelibrary extract $(if $(WORKERS),--workers $(WORKERS),)
 
 .PHONY: equivalence
 equivalence:
-	uv run sampleequivalence
+	uv run samplelibrary equivalence
 
 .PHONY: thumbnails
 thumbnails:
-	uv run samplethumbnail
+	uv run samplelibrary thumbnails
 
 # Reads each cataloged module's patterns for the notes they play, then folds those notes into the
 # rate every sample is really heard at -- which is what the app plays a sample back at.
 .PHONY: notes
 notes:
-	uv run samplenotes
+	uv run samplelibrary notes
 
 # Hand-made sample annotations. The export is the copy that outlives the database, and nothing else in
 # this repository can rebuild one -- keep it somewhere safe of your own.
 .PHONY: annotations-export
 annotations-export:
-	uv run sampleannotations export
+	uv run samplelibrary annotations export
 
 .PHONY: annotations-import
 annotations-import:
-	uv run sampleannotations import
+	uv run samplelibrary annotations import
 
 # Reattaches annotations whose sample hash the catalog no longer holds, through the module slot each was
 # chosen from. Run it after anything that changes how samples are hashed.
 .PHONY: annotations-relink
 annotations-relink:
-	uv run sampleannotations relink
+	uv run samplelibrary annotations relink
 
 .PHONY: embed
 embed:
-	uv run samplecloud
+	uv run samplelibrary cloud embed
 
 .PHONY: embed-modules-placeholder
 embed-modules-placeholder:
-	uv run samplecloud-modules-placeholder
+	uv run samplelibrary cloud placeholders
 
 # Scores one experiment's descriptor against the catalog's own targets. EXPERIMENT is the
 # experiment id; OUTPUT, when given, writes the report as JSON. Transposition retrieval reads and
 # describes audio again, so `evaluate-fast` leaves it out for a pass over the stored vectors alone.
 .PHONY: evaluate
 evaluate:
-	uv run samplecloud-evaluate --experiment-id $(EXPERIMENT) $(if $(PROBES),--probes $(PROBES),) $(if $(OUTPUT),--output $(OUTPUT),)
+	uv run samplelibrary cloud evaluate --experiment-id $(EXPERIMENT) $(if $(PROBES),--probes $(PROBES),) $(if $(OUTPUT),--output $(OUTPUT),)
 
 .PHONY: evaluate-fast
 evaluate-fast:
-	uv run samplecloud-evaluate --experiment-id $(EXPERIMENT) --skip-transposition $(if $(OUTPUT),--output $(OUTPUT),)
+	uv run samplelibrary cloud evaluate --experiment-id $(EXPERIMENT) --skip-transposition $(if $(OUTPUT),--output $(OUTPUT),)
 
 # Describes every sample with the pretrained listening model, as an experiment kept for measuring
 # and for teaching the descriptor; it leaves the cloud as it is. About an hour over the catalog.
 # HEARD=1 reads every sample at the rate the library plays it at, the way a listener hears it.
 .PHONY: cloud-teacher
 cloud-teacher:
-	$(CAPPED) uv run samplecloud --backend clap --extract-only $(if $(HEARD),--heard-rate,) $(if $(LABEL),--label "$(LABEL)",)
+	$(CAPPED) uv run samplelibrary cloud embed --backend clap --extract-only $(if $(HEARD),--heard-rate,) $(if $(LABEL),--label "$(LABEL)",)
 
 # Suggests labels for every sample of a listening-model experiment, ranking a vocabulary of
 # prompts against its vectors; the application shows the newest scoring. VOCABULARY names
 # `instruments` (shipped), `hand-labels` (what people wrote) or a file with one label per line.
 .PHONY: cloud-suggest
 cloud-suggest:
-	uv run samplecloud-suggest --experiment-id $(EXPERIMENT) $(if $(VOCABULARY),--vocabulary $(VOCABULARY),) $(if $(TOP),--top $(TOP),) $(if $(DEVICE),--device $(DEVICE),) $(if $(LABEL),--label "$(LABEL)",)
+	uv run samplelibrary cloud suggest --experiment-id $(EXPERIMENT) $(if $(VOCABULARY),--vocabulary $(VOCABULARY),) $(if $(TOP),--top $(TOP),) $(if $(DEVICE),--device $(DEVICE),) $(if $(LABEL),--label "$(LABEL)",)
 
 # Serves the run store beside the library, where every training and evaluation pass is recorded.
 .PHONY: mlflow-ui
@@ -126,14 +126,14 @@ mlflow-ui:
 # here on purpose, since its 40-100 ms synthetic tones say nothing about how a morph sounds.
 .PHONY: morph-fit
 morph-fit:
-	uv run samplemorph fit $(if $(CANONICALIZER),--canonicalizer $(CANONICALIZER),) $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(LATENT),--latent-size $(LATENT),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(SEED),--seed $(SEED),) $(if $(MODEL),--model $(MODEL),)
+	uv run samplelibrary morph fit $(if $(CANONICALIZER),--canonicalizer $(CANONICALIZER),) $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(LATENT),--latent-size $(LATENT),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(SEED),--seed $(SEED),) $(if $(MODEL),--model $(MODEL),)
 
 # Teaches the restorer that puts back what the grid smooths away, on every sample the catalog holds
 # unless SAMPLES draws fewer. The pass derives its examples in worker processes and trains on the
 # GPU; about an hour an epoch over the whole catalog.
 .PHONY: morph-train-restorer
 morph-train-restorer:
-	$(CAPPED) uv run samplemorph train-restorer $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(LEARNING_RATE),--learning-rate $(LEARNING_RATE),) $(if $(PRECISION),--precision $(PRECISION),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(RESUME),--resume,)
+	$(CAPPED) uv run samplelibrary morph train-restorer $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(LEARNING_RATE),--learning-rate $(LEARNING_RATE),) $(if $(PRECISION),--precision $(PRECISION),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(RESUME),--resume,)
 
 # The descriptor, in three passes. `morph-cache-grids` canonicalizes the catalog once, with retuned
 # views, into a memory-mapped cache under the library root (about an hour on twelve workers),
@@ -145,26 +145,26 @@ morph-train-restorer:
 # --experiment-id ID` promotes to the cloud.
 .PHONY: morph-cache-grids
 morph-cache-grids:
-	$(CAPPED) uv run samplemorph cache-grids $(if $(CACHE),--cache $(CACHE),) $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(BANDS),--bands-per-semitone $(BANDS),) $(if $(VIEWS),--views $(VIEWS),) $(if $(WORKERS),--workers $(WORKERS),)
+	$(CAPPED) uv run samplelibrary morph cache-grids $(if $(CACHE),--cache $(CACHE),) $(if $(ANCHOR),--anchor $(ANCHOR),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(BANDS),--bands-per-semitone $(BANDS),) $(if $(VIEWS),--views $(VIEWS),) $(if $(WORKERS),--workers $(WORKERS),)
 
 .PHONY: morph-train-descriptor
 morph-train-descriptor:
-	$(CAPPED) uv run samplemorph train-descriptor --teacher-experiment $(TEACHER) $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
+	$(CAPPED) uv run samplelibrary morph train-descriptor --teacher-experiment $(TEACHER) $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
 
 .PHONY: morph-embed
 morph-embed:
-	$(CAPPED) uv run samplemorph embed $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(LABEL),--label "$(LABEL)",) $(if $(DEVICE),--device $(DEVICE),)
+	$(CAPPED) uv run samplelibrary morph embed $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(LABEL),--label "$(LABEL)",) $(if $(DEVICE),--device $(DEVICE),)
 
 # The codec that decodes from the descriptor. It reads a full-resolution cache, one band per band
 # of the grid (`make morph-cache-grids CACHE=codec SAMPLES=30000 BANDS=24 VIEWS=0` at 288 bands per
 # octave), and `morph-render MODEL=conditioned` renders a listening set through it.
 .PHONY: morph-train-codec
 morph-train-codec:
-	$(CAPPED) uv run samplemorph train-codec $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(CODEC),--codec $(CODEC),) $(if $(RESIDUAL),--residual-size $(RESIDUAL),) $(if $(LAYOUT),--layout $(LAYOUT),) $(if $(WIDTH),--width $(WIDTH),) $(if $(PRIOR),--prior-weight $(PRIOR),) $(if $(CYCLE),--cycle-weight $(CYCLE),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
+	$(CAPPED) uv run samplelibrary morph train-codec $(if $(CACHE),--cache $(CACHE),) $(if $(DESCRIPTOR),--descriptor $(DESCRIPTOR),) $(if $(CODEC),--codec $(CODEC),) $(if $(RESIDUAL),--residual-size $(RESIDUAL),) $(if $(LAYOUT),--layout $(LAYOUT),) $(if $(WIDTH),--width $(WIDTH),) $(if $(PRIOR),--prior-weight $(PRIOR),) $(if $(CYCLE),--cycle-weight $(CYCLE),) $(if $(EPOCHS),--epochs $(EPOCHS),) $(if $(BATCH),--batch $(BATCH),) $(if $(WORKERS),--workers $(WORKERS),) $(if $(DEVICE),--device $(DEVICE),) $(if $(RESUME),--resume,)
 
 .PHONY: morph-render
 morph-render:
-	uv run samplemorph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(DEVICE),--device $(DEVICE),)
+	uv run samplelibrary morph render --first $(FIRST) --second $(SECOND) --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(DEVICE),--device $(DEVICE),)
 
 # Reconstructs probe samples through a stored model (MODEL=identity reads the representation
 # alone, the bar every codec is measured against) and the restored vocoder, writes each beside its
@@ -172,7 +172,7 @@ morph-render:
 # a file with one sample hash per line, read in place of the seeded draw of SAMPLES probes.
 .PHONY: morph-measure
 morph-measure:
-	uv run samplemorph measure --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(HASHES),--hashes $(HASHES),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(SEED),--seed $(SEED),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(DEVICE),--device $(DEVICE),)
+	uv run samplelibrary morph measure --output $(OUTPUT) $(if $(MODEL),--model $(MODEL),) $(if $(HASHES),--hashes $(HASHES),) $(if $(SAMPLES),--samples $(SAMPLES),) $(if $(SEED),--seed $(SEED),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),) $(if $(DEVICE),--device $(DEVICE),)
 
 # Destructive: empties the configured library's catalog and content store. Prints what it would
 # do and changes nothing unless invoked as `make reset-library CONFIRM=1`.
@@ -198,24 +198,24 @@ library-dev:
 
 .PHONY: extract-dev
 extract-dev: library-dev
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run sampleextract $(if $(WORKERS),--workers $(WORKERS),)
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary extract $(if $(WORKERS),--workers $(WORKERS),)
 
 .PHONY: equivalence-dev
 equivalence-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run sampleequivalence
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary equivalence
 
 .PHONY: embed-dev
 embed-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplecloud
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplecloud-modules-placeholder
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary cloud embed
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary cloud placeholders
 
 .PHONY: thumbnails-dev
 thumbnails-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplethumbnail
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary thumbnails
 
 .PHONY: notes-dev
 notes-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplenotes
+	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary notes
 
 .PHONY: reset-dev
 reset-dev:
@@ -234,7 +234,7 @@ serve:
 # restorer on the card, and the processor is the default so the card stays free for training.
 .PHONY: serve-inference
 serve-inference:
-	uv run samplemorph-serve $(if $(DEVICE),--device $(DEVICE),) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),)
+	uv run samplelibrary morph serve $(if $(DEVICE),--device $(DEVICE),) $(if $(MODEL),--model $(MODEL),) $(if $(VOCODER),--vocoder $(VOCODER),) $(if $(RESTORER),--restorer $(RESTORER),)
 
 .PHONY: docker-build
 docker-build:
@@ -253,7 +253,7 @@ docker-run:
 
 .PHONY: openapi
 openapi:
-	uv run sampleserver-schema > frontend/openapi.json
+	uv run samplelibrary schema > frontend/openapi.json
 
 .PHONY: frontend-types
 frontend-types: openapi

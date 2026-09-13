@@ -15,9 +15,9 @@ from samplecore.models.experiment import LEARNED_BACKEND_NAME
 _logger = logging.getLogger(__name__)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str], *, prog: str) -> None:
     """Run one embedding pass over the catalog and report the result."""
-    arguments = _parse_arguments(argv)
+    arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     feature_extractor = _extractor_for(config, arguments)
     reading = Reading.HEARD_RATE if arguments.heard_rate else Reading.NOMINAL
@@ -63,8 +63,10 @@ def _extractor_for(config: LibraryConfig, arguments: argparse.Namespace) -> Feat
     return build_learned_extractor(config.library_root, model_name=arguments.model, device=arguments.device)
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Extract sample features and reduce them to 2D cloud coordinates.")
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Extract sample features and reduce them to 2D cloud coordinates."
+    )
     parser.add_argument(
         "--backend",
         choices=sorted({*BACKEND_REGISTRY, LEARNED_BACKEND_NAME}),

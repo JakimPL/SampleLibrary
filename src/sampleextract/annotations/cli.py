@@ -28,9 +28,9 @@ class AnnotationCommand(StrEnum):
     VOCABULARY = "vocabulary"
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str], *, prog: str) -> None:
     """Move hand annotations between the catalog and a file, reattach ones whose sample moved, or list their wording."""
-    arguments = _parse_arguments(argv)
+    arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         _run(AnnotationCommand(arguments.command), arguments, connection)
@@ -90,8 +90,10 @@ def _describe(annotation: SampleAnnotation) -> str:
     return ", ".join(decisions)
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Move hand-made sample annotations in and out of the catalog.")
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Move hand-made sample annotations in and out of the catalog."
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     export_parser = commands.add_parser(

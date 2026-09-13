@@ -37,18 +37,7 @@ teacher = ["torch>=2.9", "transformers>=4.45"]
 perceptual = ["torch>=2.9", "cdpam>=0.0.4", "resampy>=0.4"]
 
 [project.scripts]
-sampleextract = "sampleextract.cli:main"
-sampleequivalence = "sampleextract.equivalence.cli:main"
-samplethumbnail = "sampleextract.thumbnail_cli:main"
-samplenotes = "sampleextract.notes.cli:main"
-sampleannotations = "sampleextract.annotations.cli:main"
-samplecloud = "samplecloud.cli:main"
-samplecloud-modules-placeholder = "samplecloud.placeholder_modules:main"
-samplecloud-evaluate = "samplecloud.evaluation.cli:main"
-samplecloud-suggest = "samplecloud.suggestions.cli:main"
-samplemorph = "samplemorph.cli:main"
-samplemorph-serve = "samplemorph.service.cli:main"
-sampleserver-schema = "sampleserver.openapi_export:main"
+samplelibrary = "samplelibrary.cli:main"
 
 # The card is sm_120, which needs a CUDA 12.8 or newer build; an older wheel imports cleanly and
 # then fails at the first kernel launch with a no-kernel-image error.
@@ -83,7 +72,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/samplecore", "src/sampleextract", "src/samplecloud", "src/sampleserver", "src/samplemorph"]
+packages = [
+    "src/samplecore",
+    "src/sampleextract",
+    "src/samplecloud",
+    "src/sampleserver",
+    "src/samplemorph",
+    "src/samplelibrary",
+]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/samplecore/py.typed" = "samplecore/py.typed"
@@ -91,6 +87,7 @@ packages = ["src/samplecore", "src/sampleextract", "src/samplecloud", "src/sampl
 "src/samplecloud/py.typed" = "samplecloud/py.typed"
 "src/sampleserver/py.typed" = "sampleserver/py.typed"
 "src/samplemorph/py.typed" = "samplemorph/py.typed"
+"src/samplelibrary/py.typed" = "samplelibrary/py.typed"
 
 [tool.black]
 line-length = 120
@@ -100,7 +97,7 @@ extend-exclude = "trackmod"
 [tool.isort]
 profile = "black"
 line_length = 120
-known_first_party = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph"]
+known_first_party = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "samplelibrary"]
 known_third_party = ["trackmod"]
 skip = ["trackmod"]
 
@@ -109,7 +106,7 @@ testpaths = ["tests"]
 addopts = "--import-mode=importlib"
 
 [tool.coverage.run]
-source = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph"]
+source = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "samplelibrary"]
 # Extraction spends worker processes of its own, whose lines are measured only where coverage
 # follows a process into multiprocessing's own children.
 concurrency = ["multiprocessing", "thread"]
@@ -154,7 +151,13 @@ disable = [
 max-line-length = 120
 
 [tool.importlinter]
-root_packages = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph"]
+root_packages = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "samplelibrary"]
+
+[[tool.importlinter.contracts]]
+name = "the command line sits over every package, and none of them imports it"
+type = "forbidden"
+source_modules = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph"]
+forbidden_modules = ["samplelibrary"]
 
 [[tool.importlinter.contracts]]
 name = "core has no dependents among peer packages"

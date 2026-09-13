@@ -18,9 +18,9 @@ DEFAULT_TEXT_DEVICE: Final[str] = "cpu"
 _logger = logging.getLogger(__name__)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str], *, prog: str) -> None:
     """Suggest labels for every sample of a listening-model experiment, and report how they read."""
-    arguments = _parse_arguments(argv)
+    arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         source = _listening_experiment(connection, arguments.experiment_id)
@@ -73,8 +73,10 @@ def _report(summary: ScoringSummary) -> None:
         )
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Suggest labels for every sample from a listening-model experiment.")
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Suggest labels for every sample from a listening-model experiment."
+    )
     parser.add_argument(
         "--experiment-id", type=int, required=True, help="The listening-model experiment whose vectors are scored."
     )

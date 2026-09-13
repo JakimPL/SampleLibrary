@@ -15,6 +15,7 @@ from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 
+PROGRAM = "samplelibrary cloud embed"
 SAMPLE_HASH = "a" * 64
 
 
@@ -37,7 +38,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "does-not-exist.toml"))
 
     with pytest.raises(SystemExit) as raised:
-        main([])
+        main([], prog=PROGRAM)
 
     assert raised.value.code == 1
     assert "Configuration error" in capsys.readouterr().err
@@ -52,7 +53,7 @@ def test_main_reports_an_empty_catalog(
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main([])
+    main([], prog=PROGRAM)
 
     output = capsys.readouterr().out
     assert "extracted features for 0 new samples" in output
@@ -72,7 +73,7 @@ def test_main_passes_the_limit_argument_through(
     audio_store.write(tmp_path, SamplePCM(sample=sample, pcm=np.zeros((32, 1))))
     connection.commit()
 
-    main(["--limit", "0"])
+    main(["--limit", "0"], prog=PROGRAM)
 
     assert "extracted features for 0 new samples" in capsys.readouterr().out
 
@@ -80,6 +81,6 @@ def test_main_passes_the_limit_argument_through(
 def test_main_rejects_an_unknown_backend(capsys: pytest.CaptureFixture[str]) -> None:
     """Argument parsing rejects an unknown --backend before any config or database is touched."""
     with pytest.raises(SystemExit):
-        main(["--backend", "does-not-exist"])
+        main(["--backend", "does-not-exist"], prog=PROGRAM)
 
     assert "invalid choice" in capsys.readouterr().err
