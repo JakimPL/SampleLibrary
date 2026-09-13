@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE, load_config
 from samplelibrary.cli import PROGRAM_NAME, dispatch
@@ -158,6 +159,43 @@ def test_the_named_configuration_supplies_the_database_over_an_exported_one(
     dispatch(["--config", str(_write_sandbox_config(tmp_path)), "notes"])
 
     assert database_urls == [SANDBOX_DATABASE_URL]
+
+
+def test_a_refused_catalog_ends_the_command_with_what_to_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "[library]\n"
+        f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        'database_url = "postgresql+psycopg://samplelibrary:hidden-password@localhost:1/samplelibrary"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+    monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
+
+    with pytest.raises(SystemExit) as raised:
+        dispatch(["notes"])
+
+    report = capsys.readouterr().err
+    assert raised.value.code == 1
+    assert "samplelibrary setup database" in report
+    assert "hidden-password" not in report
+
+
+def test_a_failed_statement_keeps_its_own_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    failure = OperationalError("SELECT 1", {}, Exception("canceling statement due to lock timeout"))
+
+    def fail(argv: list[str], *, prog: str) -> None:
+        raise failure
+
+    monkeypatch.setattr("sampleextract.notes.cli.main", fail)
+
+    with pytest.raises(OperationalError) as raised:
+        dispatch(["notes"])
+
+    assert raised.value is failure
 
 
 @pytest.mark.parametrize(

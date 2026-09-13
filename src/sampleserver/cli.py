@@ -21,8 +21,8 @@ def main(argv: list[str], *, prog: str) -> None:
 
     uvicorn imports the app by its path in every process it starts, so each worker, and each
     restart under `--reload`, reads the configuration afresh and finds the frontend through the
-    environment. Checking the configuration and the catalog here first ends a broken start with
-    one message and exit status 1, and prepares the catalog's schema once before any worker starts.
+    environment. Checking the configuration and the catalog here first stops a broken start before
+    any worker runs, and prepares the catalog's schema once, under its lock.
     """
     arguments = _parse_arguments(argv, prog=prog)
     if arguments.frontend is not None:

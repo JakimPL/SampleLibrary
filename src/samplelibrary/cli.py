@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
@@ -12,6 +13,8 @@ from samplelibrary.commands import COMMANDS, Command, CommandGroup
 PROGRAM_NAME: Final[str] = "samplelibrary"
 COMMAND_METAVAR: Final[str] = "<command>"
 CONFIG_OPTION: Final[str] = "--config"
+
+_logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -35,7 +38,32 @@ def dispatch(argv: list[str]) -> None:
         os.environ[CONFIG_PATH_ENVIRONMENT_VARIABLE] = str(arguments.config.resolve())
         os.environ.pop(DATABASE_URL_ENVIRONMENT_VARIABLE, None)
 
-    command.run(command_arguments, prog=arguments.program)
+    _run_reporting_a_refused_catalog(command, command_arguments, prog=arguments.program)
+
+
+def _run_reporting_a_refused_catalog(command: Command, argv: list[str], *, prog: str) -> None:
+    """Run the command, ending with one message and what to run when the database refuses to connect.
+
+    A worker process's refusal reaches here too, carried back by the run that started it.
+
+    Raises:
+        SystemExit: the configured database refused the connection.
+    """
+    # pylint: disable=import-outside-toplevel
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        command.run(argv, prog=prog)
+    except OperationalError as error:
+        from samplecore.storage.cluster.provisioning import headline, is_connection_refusal, server_message
+
+        if not is_connection_refusal(error):
+            raise
+        _logger.error(
+            "Could not reach the catalog: %s\nRun `samplelibrary setup database` to create it, or correct database_url.",
+            headline(server_message(error)),
+        )
+        sys.exit(1)
 
 
 def _require_arguments_after_command(

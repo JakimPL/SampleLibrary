@@ -362,6 +362,11 @@ def server_message(error: DBAPIError) -> str:
     return str(error.orig).strip() if error.orig is not None else str(error)
 
 
+def is_connection_refusal(error: DBAPIError) -> bool:
+    """Whether the driver reports a connection it could not open, as opposed to a statement that failed."""
+    return server_message(error).startswith(_DRIVER_PREFIX)
+
+
 def headline(message: str) -> str:
     """What a driver message reports, with the wrapping the driver puts around it taken off."""
     first_line = message.splitlines()[0].strip().removeprefix(_DRIVER_PREFIX)

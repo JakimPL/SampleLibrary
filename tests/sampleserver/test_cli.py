@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from sampleserver import cli
@@ -125,18 +126,14 @@ def test_a_missing_configuration_ends_the_start_before_uvicorn(tmp_path: Path, m
     assert not starts
 
 
-def test_an_unreachable_catalog_ends_the_start_before_uvicorn(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_an_unreachable_catalog_stops_the_start_before_uvicorn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_path = _write_config(tmp_path, database_url=UNREACHABLE_DATABASE_URL)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
     monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
     starts: list[str] = []
     monkeypatch.setattr(cli.uvicorn, "run", lambda application_path, **options: starts.append(application_path))
 
-    with pytest.raises(SystemExit) as raised:
+    with pytest.raises(OperationalError):
         cli.main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
-    assert "samplelibrary setup database" in capsys.readouterr().err
     assert not starts
