@@ -1,0 +1,4 @@
+# Paths inside the container; compose supplies the database through SAMPLELIBRARY_DATABASE_URL.
+[library]
+module_source_directory = "/modules"
+library_root = "/library"

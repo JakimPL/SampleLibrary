@@ -18,14 +18,14 @@ services:
 
   sampleserver:
     build: .
+    image: samplelibrary-server
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     # Compose validates every service, so these defaults let `postgres` start alone.
     volumes:
-      - ${LIBRARY_ROOT:-./library}:/library
-      - ${CONFIG_PATH:-./config.toml}:/app/config.toml
+      - ${LIBRARY_ROOT:-./library}:/library:ro
+      - ${CONFIG_PATH:-./docker/config.toml}:/app/config.toml:ro
     environment:
-      SAMPLELIBRARY_CONFIG: /app/config.toml
       SAMPLELIBRARY_DATABASE_URL: postgresql+psycopg://samplelibrary:samplelibrary@postgres:5432/samplelibrary
     depends_on:
       postgres:

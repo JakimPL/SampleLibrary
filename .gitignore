@@ -13,11 +13,12 @@ wheels/
 *.egg-info
 .venv/
 
-config.toml
+/config.toml
 
 notebooks/__marimo__/
 
 dev-library/
+/library/
 
 *.npz
 
