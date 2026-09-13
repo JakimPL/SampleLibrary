@@ -7,6 +7,7 @@ from typing import Final
 import torch
 from sqlalchemy import Connection
 
+from samplecore.cli_support import non_negative_integer, positive_integer
 from samplecore.config import LibraryConfig
 from samplemorph.codecs.conditioned import DEFAULT_CODEC_NAME
 from samplemorph.codecs.conditioned_model import (
@@ -52,7 +53,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument("--codec", type=str, default=DEFAULT_CODEC_NAME, help="The name to store the codec under.")
     parser.add_argument(
         "--residual-size",
-        type=int,
+        type=positive_integer,
         default=DEFAULT_RESIDUAL_SIZE,
         help="How many numbers the residual holds at each of its positions.",
     )
@@ -63,7 +64,9 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         default=DEFAULT_RESIDUAL_LAYOUT,
         help="Whether the residual is one vector or a map with a residual at every bottleneck cell.",
     )
-    parser.add_argument("--width", type=int, default=DEFAULT_CODEC_WIDTH, help="How many channels the first stage has.")
+    parser.add_argument(
+        "--width", type=positive_integer, default=DEFAULT_CODEC_WIDTH, help="How many channels the first stage has."
+    )
     parser.add_argument(
         "--reconstruction-weight",
         type=float,
@@ -81,7 +84,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     parser.add_argument(
         "--prior-warmup",
-        type=int,
+        type=non_negative_integer,
         default=DEFAULT_PRIOR_WARMUP_STEPS,
         help="Over how many steps the prior's weight climbs to its full value.",
     )

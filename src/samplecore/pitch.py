@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from collections.abc import Iterable
+from typing import Final
 
 from trackmod.core.notes.pitch import Note
 from trackmod.schema.scalars import Rate
@@ -10,6 +11,8 @@ from trackmod.spec.pitch import NOTES_PER_OCTAVE, RATE_NOTE
 
 from samplecore.models.note_event import SampleNoteUsage, SamplePlaybackRate
 from samplecore.naming import choose_dominant_rate
+
+MINIMUM_PLAYBACK_RATE_HZ: Final[int] = 1
 
 
 def sounding_rate_hz(*, reference_rate_hz: Rate, sounded_note: Note) -> float:
@@ -25,14 +28,17 @@ def sounding_rate_hz(*, reference_rate_hz: Rate, sounded_note: Note) -> float:
     return reference_rate_hz * math.pow(2.0, (sounded_note.value - RATE_NOTE) / NOTES_PER_OCTAVE)
 
 
-def effective_playback_rate(*, reference_rate_hz: Rate, sounded_note: Note) -> Rate:
+def effective_playback_rate(*, reference_rate_hz: Rate, sounded_note: Note) -> Rate | None:
     """The whole-hertz rate one note event really reads a sample's frames at.
 
     Tracker rates are whole numbers and a fraction of a hertz sits far below hearing, so rounding
     keeps the rates a sample is played at countable: every note event that sounds the same pitch
-    lands on one value, whichever occurrence rate and key it arrived through.
+    lands on one value, whichever occurrence rate and key it arrived through. `None` when the rate
+    rounds below `MINIMUM_PLAYBACK_RATE_HZ`, as a low key pressed against a header's near-zero rate
+    does: such an event plays no frame at a speed a rate can name.
     """
-    return round(sounding_rate_hz(reference_rate_hz=reference_rate_hz, sounded_note=sounded_note))
+    rate_hz = round(sounding_rate_hz(reference_rate_hz=reference_rate_hz, sounded_note=sounded_note))
+    return rate_hz if rate_hz >= MINIMUM_PLAYBACK_RATE_HZ else None
 
 
 def tally_playback_rates(usages: Iterable[SampleNoteUsage]) -> Counter[Rate]:
@@ -40,12 +46,14 @@ def tally_playback_rates(usages: Iterable[SampleNoteUsage]) -> Counter[Rate]:
 
     An occurrence rate and a pressed key each mean nothing alone, and several pairs meet at the same
     speed -- a waveform transposed down an octave and played an octave higher sounds exactly as the
-    untransposed one does -- so their events belong to one rate and are counted as one.
+    untransposed one does -- so their events belong to one rate and are counted as one. Events whose
+    rate rounds below a hertz are left out of the tally.
     """
     tally: Counter[Rate] = Counter()
     for usage in usages:
         rate_hz = effective_playback_rate(reference_rate_hz=usage.reference_rate_hz, sounded_note=usage.sounded_note)
-        tally[rate_hz] += usage.event_count
+        if rate_hz is not None:
+            tally[rate_hz] += usage.event_count
 
     return tally
 

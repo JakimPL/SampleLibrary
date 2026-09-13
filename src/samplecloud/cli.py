@@ -8,7 +8,7 @@ from samplecloud.backends.learned_backend import DEFAULT_LEARNED_DEVICE, build_l
 from samplecloud.hearing import Reading
 from samplecloud.registries import BACKEND_REGISTRY, DEFAULT_BACKEND_NAME
 from samplecloud.run import EmbeddingOptions, reading_parameters, resolve_experiment, run_embedding
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import LEARNED_BACKEND_NAME
 
@@ -84,13 +84,13 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     )
     parser.add_argument(
         "--experiment-id",
-        type=int,
+        type=positive_integer,
         default=None,
         help="Resume an existing experiment's extraction instead of starting a new one.",
     )
     parser.add_argument(
         "--limit",
-        type=int,
+        type=positive_integer,
         default=None,
         help="Extract features for only the first N unfeatured samples, for a quick run over a small slice.",
     )

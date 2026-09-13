@@ -22,7 +22,7 @@ from samplecloud.evaluation.settings import (
 )
 from samplecloud.evaluation.transposition import TranspositionRetrieval
 from samplecloud.registries import BACKEND_REGISTRY
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import LEARNED_BACKEND_NAME, MODEL_PARAMETER, Experiment
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
@@ -186,10 +186,12 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog=prog, description="Score an experiment's descriptor against the catalog's own targets."
     )
-    parser.add_argument("--experiment-id", type=int, required=True, help="Which experiment's vectors to score.")
+    parser.add_argument(
+        "--experiment-id", type=positive_integer, required=True, help="Which experiment's vectors to score."
+    )
     parser.add_argument(
         "--probes",
-        type=int,
+        type=positive_integer,
         default=DEFAULT_PROBE_COUNT,
         help="How many samples to retune for transposition retrieval.",
     )
@@ -202,7 +204,7 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     )
     parser.add_argument(
         "--label-depth",
-        type=int,
+        type=positive_integer,
         default=DEFAULT_LABEL_DEPTH,
         help="How many levels of each hand label to read; every level when left out.",
     )

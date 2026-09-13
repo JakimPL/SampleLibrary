@@ -4,6 +4,7 @@ import argparse
 import logging
 from typing import TYPE_CHECKING
 
+from samplecore.cli_support import non_negative_integer, positive_integer
 from samplemorph.training.run_settings import (
     DEFAULT_ACCELERATOR,
     DEFAULT_BATCH_SIZE,
@@ -24,13 +25,20 @@ _logger = logging.getLogger(__name__)
 
 def add_run_arguments(parser: argparse.ArgumentParser) -> None:
     """The flags every training command shares, declared once so each reads the same."""
-    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS, help="How many passes over the training samples.")
-    parser.add_argument("--batch", type=int, default=DEFAULT_BATCH_SIZE, help="How many examples make up one step.")
+    parser.add_argument(
+        "--epochs", type=positive_integer, default=DEFAULT_EPOCHS, help="How many passes over the training samples."
+    )
+    parser.add_argument(
+        "--batch", type=positive_integer, default=DEFAULT_BATCH_SIZE, help="How many examples make up one step."
+    )
     parser.add_argument(
         "--learning-rate", type=float, default=DEFAULT_LEARNING_RATE, help="The rate the optimizer starts at."
     )
     parser.add_argument(
-        "--workers", type=int, default=DEFAULT_WORKER_COUNT, help="How many processes prepare training examples."
+        "--workers",
+        type=non_negative_integer,
+        default=DEFAULT_WORKER_COUNT,
+        help="How many processes prepare training examples.",
     )
     parser.add_argument(
         "--precision",

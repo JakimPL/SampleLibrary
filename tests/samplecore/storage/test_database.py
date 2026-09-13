@@ -2,20 +2,24 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import Connection, create_engine, func, inspect, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.curation import CURATION_SCHEMA
 from samplecore.storage.database import (
     SCHEMA_LOCK_KEY,
     checkout_read_only,
+    chunks,
     connect,
     connect_for_curation,
     create_pooled_engine,
     create_schema,
+    module,
 )
 
 EXPECTED_TABLES = frozenset(
@@ -148,3 +152,38 @@ def test_a_pooled_checkout_refuses_a_write_on_every_use(connection: Connection, 
                 checked_out.close()
     finally:
         engine.dispose()
+
+
+def _module_row(filename: str) -> dict[str, object]:
+    return {
+        "hash": "a" * 64,
+        "filename": filename,
+        "tracker": TrackerFormat.XM.value,
+        "title": "",
+        "channel_count": 1,
+        "pattern_count": 1,
+        "instrument_count": 1,
+        "sample_count": 1,
+        "file_size": 1,
+        "ingested_at": datetime.now(UTC),
+    }
+
+
+@pytest.mark.parametrize("filename", ["song.xm", "100% pure.it"], ids=("plain", "a percent sign"))
+def test_a_module_filename_naming_a_file_is_stored(connection: Connection, filename: str) -> None:
+    connection.execute(module.insert().values(_module_row(filename)))
+
+    assert connection.execute(select(module.c.filename)).scalar_one() == filename
+
+
+@pytest.mark.parametrize("filename", ["folder/song.xm", "folder\\song.xm"], ids=("a slash", "a backslash"))
+def test_a_module_filename_carrying_a_directory_is_refused(connection: Connection, filename: str) -> None:
+    with pytest.raises(IntegrityError, match="module_filename_check"):
+        connection.execute(module.insert().values(_module_row(filename)))
+
+
+@pytest.mark.parametrize(
+    ("size", "expected"), [(2, [[1, 2], [3, 4], [5]]), (5, [[1, 2, 3, 4, 5]]), (9, [[1, 2, 3, 4, 5]])]
+)
+def test_chunks_cover_every_item_in_order(size: int, expected: list[list[int]]) -> None:
+    assert [list(chunk) for chunk in chunks([1, 2, 3, 4, 5], size)] == expected

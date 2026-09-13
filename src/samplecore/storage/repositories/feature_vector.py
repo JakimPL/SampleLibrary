@@ -40,7 +40,12 @@ class PostgresSampleFeatureVectorRepository:
         )
 
     def list_for_experiment(self, experiment_id: int) -> tuple[SampleFeatureVector, ...]:
-        statement = select(sample_feature_vector).where(sample_feature_vector.c.experiment_id == experiment_id)
+        """One experiment's vectors in sample-hash order, so every reader of a row position means one sample."""
+        statement = (
+            select(sample_feature_vector)
+            .where(sample_feature_vector.c.experiment_id == experiment_id)
+            .order_by(sample_feature_vector.c.sample_hash)
+        )
         rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_feature_vector(row) for row in rows)
 

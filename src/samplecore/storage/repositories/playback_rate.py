@@ -6,7 +6,7 @@ from typing import Final, Protocol
 from sqlalchemy import Connection, func, select
 from trackmod.schema.scalars import Rate
 
-from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, sample_playback_rate
+from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, chunks, sample_playback_rate
 
 _COLUMN_NAMES: Final[tuple[str, ...]] = ("sample_hash", "rate")
 
@@ -49,8 +49,7 @@ class PostgresSamplePlaybackRateRepository:
         parameter ceiling, the same way every other by-hash lookup does.
         """
         rate_by_hash: dict[str, Rate] = {}
-        for chunk_start in range(0, len(sample_hashes), HASH_CHUNK_SIZE):
-            chunk = sample_hashes[chunk_start : chunk_start + HASH_CHUNK_SIZE]
+        for chunk in chunks(sample_hashes, HASH_CHUNK_SIZE):
             statement = select(sample_playback_rate).where(sample_playback_rate.c.sample_hash.in_(chunk))
             rate_by_hash.update({row.sample_hash: row.rate for row in self._connection.execute(statement)})
 

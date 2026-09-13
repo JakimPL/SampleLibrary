@@ -19,6 +19,7 @@ from samplecore.storage.repositories.label_suggestion import PostgresSampleLabel
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
 DEFAULT_SUGGESTION_COUNT: Final[int] = 3
+MAXIMUM_SUGGESTION_COUNT: Final[int] = 256
 INSERT_CHUNK_SIZE: Final[int] = 5_000
 SOURCE_EXPERIMENT_PARAMETER: Final[str] = "source_experiment_id"
 CHECKPOINT_PARAMETER: Final[str] = "checkpoint"

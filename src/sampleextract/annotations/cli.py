@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sqlalchemy import Connection
 
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection, open_catalog_reader
 from samplecore.labeling.vocabulary import read_vocabulary
 from samplecore.models.annotation import SampleAnnotation
 from sampleextract.annotations.relink import RelinkSummary, relink_annotations
@@ -27,13 +27,24 @@ class AnnotationCommand(StrEnum):
     RELINK = "relink"
     VOCABULARY = "vocabulary"
 
+    @property
+    def reads_only(self) -> bool:
+        """Whether the command reports what the catalog holds, leaving every row as it is."""
+        match self:
+            case AnnotationCommand.EXPORT | AnnotationCommand.VOCABULARY:
+                return True
+            case AnnotationCommand.IMPORT | AnnotationCommand.RELINK:
+                return False
+
 
 def main(argv: list[str], *, prog: str) -> None:
     """Move hand annotations between the catalog and a file, reattach ones whose sample moved, or list their wording."""
     arguments = _parse_arguments(argv, prog=prog)
+    command = AnnotationCommand(arguments.command)
     config = bootstrap_cli()
-    with open_catalog_connection(config.database_url) as connection:
-        _run(AnnotationCommand(arguments.command), arguments, connection)
+    open_catalog = open_catalog_reader if command.reads_only else open_catalog_connection
+    with open_catalog(config.database_url) as connection:
+        _run(command, arguments, connection)
 
 
 def _run(command: AnnotationCommand, arguments: argparse.Namespace, connection: Connection) -> None:

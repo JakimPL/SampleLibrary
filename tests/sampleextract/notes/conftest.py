@@ -11,4 +11,8 @@ from samplecore.config import LibraryConfig
 def config(tmp_path: Path) -> LibraryConfig:
     source = tmp_path / "source"
     source.mkdir()
-    return LibraryConfig(module_source_directory=source, library_root=tmp_path / "library", database_url="unused")
+    return LibraryConfig(
+        module_source_directory=source,
+        library_root=tmp_path / "library",
+        database_url="postgresql+psycopg://unused@localhost/unused",
+    )

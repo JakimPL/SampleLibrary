@@ -33,7 +33,9 @@ def dispatch(argv: list[str]) -> None:
     parser = _build_parser()
     arguments, command_arguments = parser.parse_known_args(argv)
     command: Command = arguments.command
-    _require_arguments_after_command(parser, argv, command_arguments, command_name=command.name)
+    _require_arguments_after_command(
+        parser, argv, command_arguments, command_name=command.name, command_path=arguments.program
+    )
     if arguments.config is not None:
         os.environ[CONFIG_PATH_ENVIRONMENT_VARIABLE] = str(arguments.config.resolve())
         os.environ.pop(DATABASE_URL_ENVIRONMENT_VARIABLE, None)
@@ -68,7 +70,12 @@ def _run_reporting_an_unreachable_catalog(command: Command, argv: list[str], *, 
 
 
 def _require_arguments_after_command(
-    parser: argparse.ArgumentParser, argv: list[str], command_arguments: list[str], *, command_name: str
+    parser: argparse.ArgumentParser,
+    argv: list[str],
+    command_arguments: list[str],
+    *,
+    command_name: str,
+    command_path: str,
 ) -> None:
     """Accept a command's own arguments only where they follow its name, and `--config` only before it.
 
@@ -79,8 +86,9 @@ def _require_arguments_after_command(
     if argv[first_command_argument:] != command_arguments or argv[first_command_argument - 1] != command_name:
         parser.error(f"unrecognized arguments: {' '.join(command_arguments)}; a command's options follow its name")
     if any(argument.split("=")[0] == CONFIG_OPTION for argument in command_arguments):
+        command_words = command_path.removeprefix(PROGRAM_NAME).strip()
         parser.error(
-            f"{CONFIG_OPTION} goes before the command name: {PROGRAM_NAME} {CONFIG_OPTION} PATH {command_name}"
+            f"{CONFIG_OPTION} goes before the command name: {PROGRAM_NAME} {CONFIG_OPTION} PATH {command_words}"
         )
 
 

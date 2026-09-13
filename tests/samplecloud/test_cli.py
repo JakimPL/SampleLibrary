@@ -73,9 +73,9 @@ def test_main_passes_the_limit_argument_through(
     audio_store.write(tmp_path, SamplePCM(sample=sample, pcm=np.zeros((32, 1))))
     connection.commit()
 
-    main(["--limit", "0"], prog=PROGRAM)
+    main(["--limit", "1", "--extract-only"], prog=PROGRAM)
 
-    assert "extracted features for 0 new samples" in capsys.readouterr().out
+    assert "extracted features for 1 new samples" in capsys.readouterr().out
 
 
 def test_main_rejects_an_unknown_backend(capsys: pytest.CaptureFixture[str]) -> None:

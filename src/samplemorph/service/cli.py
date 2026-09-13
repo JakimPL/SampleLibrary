@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 import uvicorn
 
+from samplecore.cli_support import port_number
 from samplecore.config import LibraryConfig
 from samplemorph.route_arguments import (
     add_model_argument,
@@ -24,7 +25,9 @@ FALLBACK_PORT: Final[int] = 8010
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = commands.add_parser(COMMAND_NAME, help="Serve morphs between two samples over HTTP.")
     parser.add_argument("--host", type=str, default=None, help="The address to bind, in place of the configured one.")
-    parser.add_argument("--port", type=int, default=None, help="The port to bind, in place of the configured one.")
+    parser.add_argument(
+        "--port", type=port_number, default=None, help="The port to bind, in place of the configured one."
+    )
     add_model_argument(parser)
     add_vocoder_arguments(parser, device_default=DEFAULT_INFERENCE_DEVICE)
     add_morpher_argument(parser)

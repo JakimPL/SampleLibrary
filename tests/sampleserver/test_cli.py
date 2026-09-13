@@ -47,7 +47,10 @@ def _write_config(tmp_path: Path, *, database_url: str) -> Path:
 @pytest.fixture
 def recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RecordedRun:
     """Captures what the serve command hands uvicorn, in place of binding a socket, over a catalog that answers."""
-    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, database_url="unused")))
+    monkeypatch.setenv(
+        CONFIG_PATH_ENVIRONMENT_VARIABLE,
+        str(_write_config(tmp_path, database_url="postgresql+psycopg://unused@localhost/unused")),
+    )
     monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
     monkeypatch.setattr(cli, "open_catalog_connection", lambda database_url: nullcontext())
     run = RecordedRun()

@@ -7,7 +7,7 @@ from typing import Any, Final, Protocol
 from sqlalchemy import Connection, Row, func, select
 
 from samplecore.models.label_suggestion import SampleFirstPick, SampleLabelSuggestion
-from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, sample_label_suggestion
+from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, chunks, sample_label_suggestion
 
 _COLUMN_NAMES: Final[tuple[str, ...]] = ("experiment_id", "sample_hash", "rank", "label", "score", "computed_at")
 
@@ -78,8 +78,7 @@ class PostgresSampleLabelSuggestionRepository:
         parameter ceiling, the same way every other by-hash lookup does.
         """
         by_hash: dict[str, list[SampleLabelSuggestion]] = defaultdict(list)
-        for chunk_start in range(0, len(sample_hashes), HASH_CHUNK_SIZE):
-            chunk = sample_hashes[chunk_start : chunk_start + HASH_CHUNK_SIZE]
+        for chunk in chunks(sample_hashes, HASH_CHUNK_SIZE):
             statement = (
                 select(sample_label_suggestion)
                 .where(sample_label_suggestion.c.experiment_id == experiment_id)

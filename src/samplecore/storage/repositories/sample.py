@@ -18,7 +18,7 @@ from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.naming import choose_dominant_name
 from samplecore.pitch import choose_playback_rate
 from samplecore.storage.curation import sample_annotation
-from samplecore.storage.database import HASH_CHUNK_SIZE, module_instrument, sample, sample_properties
+from samplecore.storage.database import HASH_CHUNK_SIZE, chunks, module_instrument, sample, sample_properties
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
@@ -88,7 +88,8 @@ class PostgresSampleRepository:
         self._connection.execute(statement)
 
     def list_all(self) -> tuple[Sample, ...]:
-        rows = self._connection.execute(select(sample)).fetchall()
+        """Every cataloged sample in hash order, so a pass over the first N reaches the same N each run."""
+        rows = self._connection.execute(select(sample).order_by(sample.c.hash)).fetchall()
         return tuple(_row_to_sample(row) for row in rows)
 
     def sample_reproducibly(
@@ -214,8 +215,7 @@ class PostgresSampleRepository:
     def _chunked(self, statement: Select[Any], hashes: list[str]) -> list[Row[Any]]:
         """Every row ``statement`` reaches for ``hashes``, asked for in parameter-sized chunks."""
         rows: list[Row[Any]] = []
-        for chunk_start in range(0, len(hashes), HASH_CHUNK_SIZE):
-            chunk = hashes[chunk_start : chunk_start + HASH_CHUNK_SIZE]
+        for chunk in chunks(hashes, HASH_CHUNK_SIZE):
             narrowed = statement.where(sample_properties.c.sample_hash.in_(chunk))
             rows.extend(self._connection.execute(narrowed).fetchall())
 

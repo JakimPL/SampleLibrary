@@ -47,7 +47,11 @@ def _claim(connection: Connection, *, module_hash: str, filename: str, file_size
 def config(tmp_path: Path) -> LibraryConfig:
     source = tmp_path / "source"
     source.mkdir()
-    return LibraryConfig(module_source_directory=source, library_root=tmp_path / "library", database_url="unused")
+    return LibraryConfig(
+        module_source_directory=source,
+        library_root=tmp_path / "library",
+        database_url="postgresql+psycopg://unused@localhost/unused",
+    )
 
 
 def _corpus(config: LibraryConfig) -> tuple[Path, ...]:

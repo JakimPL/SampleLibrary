@@ -6,6 +6,7 @@ from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_support import non_negative_integer, positive_integer
 from samplecore.config import DEFAULT_MINIMUM_SAMPLE_FRAMES, LibraryConfig
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplemorph.commands.draws import add_canonicalizer_argument
@@ -36,16 +37,19 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument("--cache", type=str, default=DEFAULT_GRID_CACHE_NAME, help="The name to store the cache under.")
     add_canonicalizer_argument(parser, help_text="Which frequency axis to canonicalize onto.")
     parser.add_argument(
-        "--samples", type=int, default=None, help="How many samples to draw; every sample when left out."
+        "--samples", type=positive_integer, default=None, help="How many samples to draw; every sample when left out."
     )
     parser.add_argument(
         "--bands-per-semitone",
-        type=int,
+        type=positive_integer,
         default=DESCRIPTOR_BANDS_PER_SEMITONE,
         help="How finely the band axis is kept once pooled.",
     )
     parser.add_argument(
-        "--views", type=int, default=DEFAULT_RETUNED_VIEW_COUNT, help="How many retuned readings each sample gets."
+        "--views",
+        type=non_negative_integer,
+        default=DEFAULT_RETUNED_VIEW_COUNT,
+        help="How many retuned readings each sample gets.",
     )
     parser.add_argument(
         "--range",
@@ -53,7 +57,9 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         default=DEFAULT_VIEW_RANGE_SEMITONES,
         help="How far, in semitones either way, a retuned reading may sit.",
     )
-    parser.add_argument("--workers", type=int, default=DEFAULT_WORKER_COUNT, help="How many processes canonicalize.")
+    parser.add_argument(
+        "--workers", type=non_negative_integer, default=DEFAULT_WORKER_COUNT, help="How many processes canonicalize."
+    )
     parser.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed the draw and the views use.")
 
 

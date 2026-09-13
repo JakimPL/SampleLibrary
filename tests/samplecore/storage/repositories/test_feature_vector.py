@@ -48,6 +48,19 @@ def test_inserted_vectors_round_trip_through_list_for_experiment(connection: Con
     assert PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id) == (vector,)
 
 
+def test_an_experiments_vectors_are_listed_in_sample_hash_order(
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    experiment_id = _create_experiment(connection)
+    repository = PostgresSampleFeatureVectorRepository(connection)
+    by_descending_hash = sorted((stored_sample, stored_sample_b), key=lambda sample: sample.hash, reverse=True)
+    repository.insert_many([_vector(experiment_id, sample.hash) for sample in by_descending_hash])
+
+    listed = repository.list_for_experiment(experiment_id)
+
+    assert [vector.sample_hash for vector in listed] == sorted(sample.hash for sample in by_descending_hash)
+
+
 def test_two_experiments_hold_independent_vectors_for_the_same_sample(
     connection: Connection, stored_sample: Sample
 ) -> None:

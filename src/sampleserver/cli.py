@@ -7,7 +7,7 @@ from typing import Final
 
 import uvicorn
 
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection, port_number, positive_integer
 from sampleserver.frontend import FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE, INDEX_DOCUMENT
 
 APPLICATION_PATH: Final[str] = "sampleserver.main:app"
@@ -46,14 +46,14 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         prog=prog, description="Serve the library's API, and the built frontend when named, over HTTP."
     )
     parser.add_argument("--host", type=str, default=DEFAULT_HOST, help="The address to bind.")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="The port to bind.")
+    parser.add_argument("--port", type=port_number, default=DEFAULT_PORT, help="The port to bind.")
     processes = parser.add_mutually_exclusive_group()
     processes.add_argument(
         "--reload", action="store_true", help="Restart the server whenever a Python source file changes."
     )
     processes.add_argument(
         "--workers",
-        type=int,
+        type=positive_integer,
         default=None,
         help="How many processes serve requests side by side; $WEB_CONCURRENCY, or one, when left out.",
     )

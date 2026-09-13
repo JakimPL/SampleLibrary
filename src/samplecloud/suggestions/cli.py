@@ -7,9 +7,15 @@ from typing import Final
 from sqlalchemy import Connection
 
 from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME, TEACHER_CHECKPOINT, load_teacher
-from samplecloud.suggestions.scoring import DEFAULT_SUGGESTION_COUNT, ScoringRecipe, ScoringSummary, score_suggestions
+from samplecloud.suggestions.scoring import (
+    DEFAULT_SUGGESTION_COUNT,
+    MAXIMUM_SUGGESTION_COUNT,
+    ScoringRecipe,
+    ScoringSummary,
+    score_suggestions,
+)
 from samplecloud.suggestions.vocabulary import INSTRUMENTS_CHOICE, prompt_for, vocabulary_from
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.cli_support import bootstrap_cli, integer_between, open_catalog_connection, positive_integer
 from samplecore.models.experiment import Experiment
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 
@@ -78,7 +84,10 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         prog=prog, description="Suggest labels for every sample of a listening-model experiment."
     )
     parser.add_argument(
-        "--experiment-id", type=int, required=True, help="The listening-model experiment whose vectors are scored."
+        "--experiment-id",
+        type=positive_integer,
+        required=True,
+        help="The listening-model experiment whose vectors are scored.",
     )
     parser.add_argument(
         "--vocabulary",
@@ -87,7 +96,10 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         help="Which labels to rank: instruments, hand-labels, or a file with one label per line.",
     )
     parser.add_argument(
-        "--top", type=int, default=DEFAULT_SUGGESTION_COUNT, help="How many labels each sample keeps, closest first."
+        "--top",
+        type=integer_between(1, MAXIMUM_SUGGESTION_COUNT),
+        default=DEFAULT_SUGGESTION_COUNT,
+        help="How many labels each sample keeps, closest first.",
     )
     parser.add_argument(
         "--device", type=str, default=DEFAULT_TEXT_DEVICE, help="Which device the text tower reads the prompts on."

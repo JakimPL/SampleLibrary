@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import io
 import logging
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Final
 
@@ -16,6 +17,9 @@ from samplecore.storage.database import connect
 _LOG_FORMAT: Final[str] = "%(asctime)s  %(message)s"
 _LOG_DATE_FORMAT: Final[str] = "%H:%M:%S"
 _CONFIRM_FLAG_HINT: Final[str] = "Nothing has been changed. Re-run with --confirm to actually do this."
+
+MINIMUM_PORT: Final[int] = 1
+MAXIMUM_PORT: Final[int] = 65_535
 
 _logger = logging.getLogger(__name__)
 
@@ -102,6 +106,20 @@ def redact_database_url(database_url: str) -> str:
 
 
 @contextmanager
+def open_catalog_reader(database_url: str) -> Iterator[Connection]:
+    """Open the catalog read-only for one console entry point's operation, closing it again afterward.
+
+    For a command that reports what the catalog holds: it attaches to a catalog another process
+    prepared, and Postgres refuses any write it attempts.
+    """
+    connection = connect(database_url, read_only=True)
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+
+@contextmanager
 def open_catalog_connection(database_url: str) -> Iterator[Connection]:
     """Open the catalog for one console entry point's operation, closing it again afterward.
 
@@ -121,3 +139,46 @@ def report_dry_run(description: str) -> None:
     Shared by every such command, so the dry run reads identically whichever command reports it.
     """
     _logger.info("%s %s", description, _CONFIRM_FLAG_HINT)
+
+
+def integer_at_least(minimum: int) -> Callable[[str], int]:
+    """An argparse type reading a whole number no smaller than ``minimum``, reported the way argparse reports its own errors."""
+    return lambda raw_value: _bounded_integer(raw_value, minimum=minimum, maximum=None)
+
+
+def integer_between(minimum: int, maximum: int) -> Callable[[str], int]:
+    """An argparse type reading a whole number from ``minimum`` to ``maximum`` inclusive."""
+    return lambda raw_value: _bounded_integer(raw_value, minimum=minimum, maximum=maximum)
+
+
+def positive_integer(raw_value: str) -> int:
+    """An argparse type reading a count of at least one."""
+    return _bounded_integer(raw_value, minimum=1, maximum=None)
+
+
+def non_negative_integer(raw_value: str) -> int:
+    """An argparse type reading a count that may be zero, such as a number of helper processes."""
+    return _bounded_integer(raw_value, minimum=0, maximum=None)
+
+
+def port_number(raw_value: str) -> int:
+    """An argparse type reading a TCP port."""
+    return _bounded_integer(raw_value, minimum=MINIMUM_PORT, maximum=MAXIMUM_PORT)
+
+
+def _bounded_integer(raw_value: str, *, minimum: int, maximum: int | None) -> int:
+    """Read one option value.
+
+    Raises:
+        argparse.ArgumentTypeError: the value is not a whole number, or lies outside the bounds.
+    """
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"expected a whole number, not {raw_value!r}") from error
+
+    if value < minimum:
+        raise argparse.ArgumentTypeError(f"must be at least {minimum}, not {value}")
+    if maximum is not None and value > maximum:
+        raise argparse.ArgumentTypeError(f"must be at most {maximum}, not {value}")
+    return value

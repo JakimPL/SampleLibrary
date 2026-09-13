@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import argparse
 import io
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
-from samplecore.cli_support import bootstrap_cli, configure_console_output_encoding, load_config_or_exit
+from samplecore.cli_support import (
+    bootstrap_cli,
+    configure_console_output_encoding,
+    integer_at_least,
+    integer_between,
+    load_config_or_exit,
+)
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, LibraryConfig
 
 
@@ -93,3 +101,39 @@ def test_bootstrap_cli_configures_console_encoding_and_returns_the_loaded_config
         database_url="postgresql+psycopg://user:pass@host/db",
     )
     assert b"Modu" in narrow_stdout.buffer.getvalue()
+
+
+@dataclass(frozen=True)
+class RefusedIntegerCase:
+    raw_value: str
+    reason: str
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        RefusedIntegerCase(raw_value="two", reason="whole number"),
+        RefusedIntegerCase(raw_value="0", reason="at least 1"),
+        RefusedIntegerCase(raw_value="11", reason="at most 10"),
+    ],
+    ids=("not a number", "below the floor", "above the ceiling"),
+)
+def test_a_bounded_integer_option_refuses_a_value_outside_its_bounds(case: RefusedIntegerCase) -> None:
+    with pytest.raises(argparse.ArgumentTypeError, match=case.reason):
+        integer_between(1, 10)(case.raw_value)
+
+
+def test_a_bounded_integer_option_reads_a_value_on_its_bounds() -> None:
+    assert [integer_between(1, 10)(raw_value) for raw_value in ("1", "10")] == [1, 10]
+    assert integer_at_least(0)("0") == 0
+
+
+def test_a_bounded_integer_option_is_reported_as_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = argparse.ArgumentParser(prog="bounded")
+    parser.add_argument("--workers", type=integer_at_least(1))
+
+    with pytest.raises(SystemExit) as raised:
+        parser.parse_args(["--workers", "0"])
+
+    assert raised.value.code == 2
+    assert "must be at least 1, not 0" in capsys.readouterr().err

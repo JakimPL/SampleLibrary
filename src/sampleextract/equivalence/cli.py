@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
 from sampleextract.equivalence.detect import detect_equivalences
 
 _logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     )
     parser.add_argument(
         "--limit",
-        type=int,
+        type=positive_integer,
         default=None,
         help="Consider only the first N cataloged samples, for a quick run over a small slice.",
     )

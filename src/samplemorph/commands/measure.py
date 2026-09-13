@@ -13,6 +13,7 @@ import soundfile
 from sqlalchemy import Connection
 
 from samplecore.auditory.sound_type import SoundType, sound_type_reading
+from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.sample import Sample
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
@@ -98,7 +99,10 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     add_vocoder_arguments(parser, device_default=DEFAULT_ACCELERATOR)
     parser.add_argument(
-        "--samples", type=int, default=DEFAULT_MEASURE_SAMPLE_COUNT, help="How many probes the seeded draw reads."
+        "--samples",
+        type=positive_integer,
+        default=DEFAULT_MEASURE_SAMPLE_COUNT,
+        help="How many probes the seeded draw reads.",
     )
     parser.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed of the draw.")
     parser.add_argument(

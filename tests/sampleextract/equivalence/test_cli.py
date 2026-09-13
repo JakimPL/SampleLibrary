@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
@@ -9,11 +10,14 @@ from trackmod.core.samples.depth import BitDepth
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
+from samplecore.models.sample_pcm import SamplePCM
+from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from sampleextract.equivalence.cli import main
 
 PROGRAM = "samplelibrary equivalence"
 SAMPLE_HASH = "a" * 64
+OTHER_SAMPLE_HASH = "b" * 64
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
@@ -60,11 +64,20 @@ def test_main_passes_the_limit_argument_through(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    PostgresSampleRepository(connection).upsert(
-        Sample(hash=SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
-    )
+    repository = PostgresSampleRepository(connection)
+    for sample_hash in (SAMPLE_HASH, OTHER_SAMPLE_HASH):
+        sample = Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
+        repository.upsert(sample)
+        audio_store.write(tmp_path, SamplePCM(sample=sample, pcm=np.zeros((8, 1))))
     connection.commit()
 
-    main(["--limit", "0"], prog=PROGRAM)
+    main(["--limit", "1"], prog=PROGRAM)
 
-    assert "Considered 0 samples" in capsys.readouterr().out
+    assert "Considered 1 samples" in capsys.readouterr().out
+
+
+def test_a_limit_below_one_sample_is_a_usage_error() -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["--limit", "0"], prog=PROGRAM)
+
+    assert raised.value.code == 2

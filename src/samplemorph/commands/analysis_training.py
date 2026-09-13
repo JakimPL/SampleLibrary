@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import Connection
 
+from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
@@ -51,15 +52,21 @@ def add_analysis_training_arguments(parser: argparse.ArgumentParser, flags: Anal
     add_canonicalizer_argument(parser, help_text=flags.axis_help)
     parser.add_argument(
         "--samples",
-        type=int,
+        type=positive_integer,
         default=flags.sample_count,
         help="How many samples to train on; every sample the catalog holds when left out.",
     )
     parser.add_argument(
-        "--channels", type=int, default=flags.channels, help="How much capacity the network spends per layer."
+        "--channels",
+        type=positive_integer,
+        default=flags.channels,
+        help="How much capacity the network spends per layer.",
     )
     parser.add_argument(
-        "--crop", type=int, default=DEFAULT_CROP_FRAMES, help="How many analysis frames one training crop spans."
+        "--crop",
+        type=positive_integer,
+        default=DEFAULT_CROP_FRAMES,
+        help="How many analysis frames one training crop spans.",
     )
     parser.add_argument(flags.model_flag, type=str, default=flags.model_name, help="The name to store the model under.")
     add_run_arguments(parser)

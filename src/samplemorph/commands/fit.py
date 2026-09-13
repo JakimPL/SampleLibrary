@@ -7,6 +7,7 @@ from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
 from samplemorph.measurement.corpus import DEFAULT_PROBE_FRAME_CEILING, DEFAULT_PROBE_FRAME_FLOOR, read_probe_samples
@@ -31,9 +32,11 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser = commands.add_parser(COMMAND_NAME, help="Fit a codec over a draw of the library.")
     add_canonicalizer_argument(parser, help_text="Which frequency axis to canonicalize onto.")
     parser.add_argument(
-        "--latent-size", type=int, default=DEFAULT_LATENT_SIZE, help="How many components the codec keeps."
+        "--latent-size", type=positive_integer, default=DEFAULT_LATENT_SIZE, help="How many components the codec keeps."
     )
-    parser.add_argument("--samples", type=int, default=DEFAULT_FIT_SAMPLE_COUNT, help="How many samples to fit over.")
+    parser.add_argument(
+        "--samples", type=positive_integer, default=DEFAULT_FIT_SAMPLE_COUNT, help="How many samples to fit over."
+    )
     parser.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed the draw and the fit use.")
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL_NAME, help="The name to store the model under.")
 

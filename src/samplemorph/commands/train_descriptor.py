@@ -6,6 +6,7 @@ from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
 from samplemorph.descriptors.grid_descriptor import DEFAULT_WIDTH
@@ -39,14 +40,16 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument("--cache", type=str, default=DEFAULT_GRID_CACHE_NAME, help="Which grid cache to train over.")
     parser.add_argument(
         "--teacher-experiment",
-        type=int,
+        type=positive_integer,
         required=True,
         help="The experiment whose vectors the descriptor is distilled from.",
     )
     parser.add_argument(
         "--descriptor", type=str, default=DEFAULT_DESCRIPTOR_NAME, help="The name to store the descriptor under."
     )
-    parser.add_argument("--width", type=int, default=DEFAULT_WIDTH, help="How many channels the first stage has.")
+    parser.add_argument(
+        "--width", type=positive_integer, default=DEFAULT_WIDTH, help="How many channels the first stage has."
+    )
     parser.add_argument(
         "--distillation-weight",
         type=float,
@@ -70,7 +73,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     parser.add_argument(
         "--labeled-per-batch",
-        type=int,
+        type=positive_integer,
         default=DEFAULT_LABELED_PER_BATCH,
         help="How many taught labeled samples every batch carries.",
     )

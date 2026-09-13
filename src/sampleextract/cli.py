@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 import logging
 
-from samplecore.cli_support import bootstrap_cli
-from samplecore.models.scalars import MINIMUM_WORKER_COUNT, WorkerCount
+from samplecore.cli_support import bootstrap_cli, integer_at_least
+from samplecore.models.scalars import MINIMUM_WORKER_COUNT
 from sampleextract.parallel.supervisor import default_worker_count, extract_corpus
 from sampleextract.run import ExtractionSummary
 
@@ -37,31 +37,13 @@ def _report(summary: ExtractionSummary) -> None:
         _logger.warning("Could not read %s: %s", failure.path, failure.reason)
 
 
-def _worker_count_argument(value: str) -> WorkerCount:
-    """Read the ``--workers`` value, reporting a bad one the way argparse reports its own.
-
-    Raises:
-        argparse.ArgumentTypeError: the value is not a whole number, or names fewer processes than
-            a run can be spent on.
-    """
-    try:
-        workers = int(value)
-    except ValueError as error:
-        raise argparse.ArgumentTypeError(f"a worker count reads as a whole number, not {value!r}") from error
-
-    if workers < MINIMUM_WORKER_COUNT:
-        raise argparse.ArgumentTypeError(f"a run spends at least {MINIMUM_WORKER_COUNT} process, not {workers}")
-
-    return workers
-
-
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog=prog, description="Catalog every module under the configured source directory."
     )
     parser.add_argument(
         "--workers",
-        type=_worker_count_argument,
+        type=integer_at_least(MINIMUM_WORKER_COUNT),
         default=default_worker_count(),
         help=(
             "How many processes to spend on the corpus. Defaults to one per core, up to a ceiling "

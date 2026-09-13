@@ -73,14 +73,16 @@ def test_list_all_on_an_empty_catalog_returns_nothing(connection: Connection) ->
     assert PostgresSampleRepository(connection).list_all() == ()
 
 
-def test_list_all_returns_every_stored_sample(connection: Connection, sample_hash_a: str, sample_hash_b: str) -> None:
+def test_list_all_returns_every_stored_sample_in_hash_order(
+    connection: Connection, sample_hash_a: str, sample_hash_b: str
+) -> None:
     repository = PostgresSampleRepository(connection)
     first = Sample(hash=sample_hash_a, depth=BitDepth.EIGHT, channels=ChannelLayout.MONO, frames=4)
     second = Sample(hash=sample_hash_b, depth=BitDepth.SIXTEEN, channels=ChannelLayout.STEREO, frames=16)
-    repository.upsert(first)
     repository.upsert(second)
+    repository.upsert(first)
 
-    assert set(repository.list_all()) == {first, second}
+    assert repository.list_all() == tuple(sorted((first, second), key=lambda sample: sample.hash))
 
 
 def test_list_page_on_an_empty_catalog_returns_nothing(connection: Connection) -> None:

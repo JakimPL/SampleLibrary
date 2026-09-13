@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import pydantic
@@ -197,3 +199,101 @@ def test_a_config_naming_one_stand_in_path_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigurationError):
         load_config(config_path)
+
+
+def _library_table(tmp_path: Path) -> str:
+    return (
+        "[library]\n"
+        f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        'database_url = "postgresql+psycopg://user:pass@host/db"\n'
+    )
+
+
+@dataclass(frozen=True)
+class RejectedConfigCase:
+    content: str
+    reason: str
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        RejectedConfigCase(content='[library\nlibrary_root = "x"\n', reason="not valid TOML"),
+        RejectedConfigCase(content="library = 3\n", reason="write it as a [library] table"),
+        RejectedConfigCase(content='[renderer]\nurl = "x"\n', reason="renderer"),
+    ],
+    ids=("malformed TOML", "a value where a table belongs", "a table this project does not read"),
+)
+def test_a_config_file_this_project_cannot_read_is_a_configuration_error(
+    tmp_path: Path, case: RejectedConfigCase
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(case.content, encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match=re.escape(case.reason)):
+        load_config(config_path)
+
+
+def test_a_misspelled_setting_is_named_in_a_configuration_error(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(_library_table(tmp_path) + "minimum_sample_frame = 128\n", encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="minimum_sample_frame"):
+        load_config(config_path)
+
+
+def test_a_database_url_that_does_not_parse_is_a_configuration_error(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "[library]\n"
+        f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        'database_url = "not a url"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="database_url"):
+        load_config(config_path)
+
+
+def test_an_empty_database_url_variable_leaves_the_file_in_charge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(_library_table(tmp_path), encoding="utf-8")
+    monkeypatch.setenv(DATABASE_URL_ENVIRONMENT_VARIABLE, "")
+
+    assert load_config(config_path).database_url == "postgresql+psycopg://user:pass@host/db"
+
+
+def test_relative_paths_are_read_from_the_config_files_directory(tmp_path: Path) -> None:
+    config_directory = tmp_path / "sandbox"
+    config_directory.mkdir()
+    config_path = config_directory / "config.toml"
+    config_path.write_text(
+        '[library]\nmodule_source_directory = "modules"\nlibrary_root = "catalog"\n'
+        'database_url = "postgresql+psycopg://user:pass@host/db"\n',
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.module_source_directory == config_directory / "modules"
+    assert config.library_root == config_directory / "catalog"
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://127.0.0.1", "https://127.0.0.1:8010", "http://127.0.0.1:8010/renderer", "http://:8010"],
+    ids=("no port", "encrypted scheme", "a path past the root", "no host"),
+)
+def test_an_inference_address_both_ends_cannot_share_is_refused(url: str) -> None:
+    with pytest.raises(pydantic.ValidationError):
+        InferenceConfig(url=url)
+
+
+def test_the_inference_address_names_its_host_and_port() -> None:
+    inference = InferenceConfig(url="http://render.local:9000/")
+
+    assert (inference.host, inference.port) == ("render.local", 9000)

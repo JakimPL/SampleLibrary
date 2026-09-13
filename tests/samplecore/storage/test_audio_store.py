@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import stat
 import threading
 from pathlib import Path
 from unittest import mock
@@ -14,6 +15,7 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
+from samplecore.storage.atomic import PLAIN_FILE_MODE
 
 WRITER_COUNT = 4
 
@@ -109,17 +111,28 @@ def test_a_sample_appears_at_its_own_path_only_once_it_is_whole(tmp_path: Path) 
     sample_pcm = _sample_pcm(BitDepth.SIXTEEN, ChannelLayout.MONO, pcm)
     destination = audio_store.object_path(tmp_path, sample_pcm.sample.hash)
     moves: list[bool] = []
-    original_replace = os.replace
+    original_replace = Path.replace
 
-    def watch_replace(source: StrPath, target: StrPath) -> None:
+    def watch_replace(source: Path, target: StrPath) -> Path:
         moves.append(destination.exists())
-        original_replace(source, target)
+        return original_replace(source, target)
 
-    with mock.patch.object(audio_store.os, "replace", watch_replace):
+    with mock.patch.object(Path, "replace", watch_replace):
         audio_store.write(tmp_path, sample_pcm)
 
     assert moves == [False]
     assert audio_store.read(tmp_path, sample_pcm.sample).sample.hash == sample_pcm.sample.hash
+
+
+def test_a_stored_object_is_readable_by_other_users(tmp_path: Path) -> None:
+    """A server running as another user, such as the Docker image, reads the objects extraction wrote."""
+    pcm = np.zeros((8, 1), dtype=np.float64)
+    sample_pcm = _sample_pcm(BitDepth.SIXTEEN, ChannelLayout.MONO, pcm)
+
+    stored = audio_store.write(tmp_path, sample_pcm)
+
+    assert stored.stat().st_mode & stat.S_IROTH
+    assert stat.S_IMODE(stored.stat().st_mode) == PLAIN_FILE_MODE
 
 
 def test_two_writers_reaching_the_same_sample_leave_it_readable(tmp_path: Path) -> None:

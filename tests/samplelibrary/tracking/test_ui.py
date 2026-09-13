@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import subprocess
+import signal
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -26,23 +27,55 @@ def _write_config(tmp_path: Path) -> Path:
     return config_path
 
 
+@dataclass
+class FakeInterface:
+    """Stands in for MLflow's process: records how it was started and every signal handed to it."""
+
+    commands: list[list[str]] = field(default_factory=list)
+    signals: list[int] = field(default_factory=list)
+    terminate_while_waiting: bool = False
+
+    def start(self, command: list[str]) -> FakeInterface:
+        self.commands.append(command)
+        return self
+
+    def send_signal(self, signal_number: int) -> None:
+        self.signals.append(signal_number)
+
+    def wait(self) -> int:
+        if self.terminate_while_waiting:
+            signal.raise_signal(signal.SIGTERM)
+        return INTERFACE_EXIT_STATUS
+
+
+@pytest.fixture
+def interface(monkeypatch: pytest.MonkeyPatch) -> FakeInterface:
+    fake = FakeInterface()
+    monkeypatch.setattr(ui.subprocess, "Popen", fake.start)
+    return fake
+
+
 def test_the_interface_serves_the_configured_run_store_on_the_chosen_port(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, interface: FakeInterface
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path)))
-    launched: list[list[str]] = []
-
-    def launch(command: list[str], *, check: bool) -> subprocess.CompletedProcess[bytes]:
-        launched.append(command)
-        return subprocess.CompletedProcess(command, INTERFACE_EXIT_STATUS)
-
-    monkeypatch.setattr(ui.subprocess, "run", launch)
 
     with pytest.raises(SystemExit) as raised:
         ui.main(["--port", str(CHOSEN_PORT)], prog=PROGRAM)
 
     assert raised.value.code == INTERFACE_EXIT_STATUS
-    assert launched == [ui.interface_command(tracking_uri(tmp_path / "library"), port=CHOSEN_PORT)]
+    assert interface.commands == [ui.interface_command(tracking_uri(tmp_path / "library"), port=CHOSEN_PORT)]
+
+
+def test_a_termination_request_is_handed_on_to_the_interface(interface: FakeInterface) -> None:
+    interface.terminate_while_waiting = True
+    handler_before = signal.getsignal(signal.SIGTERM)
+
+    status = ui.run_interface(["mlflow"])
+
+    assert status == INTERFACE_EXIT_STATUS
+    assert interface.signals == [signal.SIGTERM]
+    assert signal.getsignal(signal.SIGTERM) == handler_before
 
 
 def test_the_interface_command_names_the_store_the_host_and_the_port() -> None:
@@ -54,14 +87,12 @@ def test_the_interface_command_names_the_store_the_host_and_the_port() -> None:
 
 
 def test_a_missing_configuration_ends_the_process_before_the_interface_starts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, interface: FakeInterface
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "absent.toml"))
-    launched: list[list[str]] = []
-    monkeypatch.setattr(ui.subprocess, "run", lambda command, *, check: launched.append(command))
 
     with pytest.raises(SystemExit) as raised:
         ui.main([], prog=PROGRAM)
 
     assert raised.value.code == 1
-    assert not launched
+    assert not interface.commands

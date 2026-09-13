@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.curation import sample_annotation
-from samplecore.storage.database import HASH_CHUNK_SIZE
+from samplecore.storage.database import HASH_CHUNK_SIZE, chunks
 
 # Every column but the key, read off the table itself. A write replaces a sample's whole annotation,
 # so this list is that contract rather than a copy of it: a hand-kept tuple missing a column would
@@ -62,8 +62,7 @@ class PostgresSampleAnnotationRepository:
             return {}
 
         annotations: dict[str, SampleAnnotation] = {}
-        for chunk_start in range(0, len(hashes), HASH_CHUNK_SIZE):
-            chunk = hashes[chunk_start : chunk_start + HASH_CHUNK_SIZE]
+        for chunk in chunks(hashes, HASH_CHUNK_SIZE):
             statement = select(sample_annotation).where(sample_annotation.c.sample_hash.in_(chunk))
             annotations.update(
                 {row.sample_hash: _row_to_sample_annotation(row) for row in self._connection.execute(statement)}

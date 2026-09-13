@@ -219,6 +219,17 @@ def test_an_argument_on_the_wrong_side_of_the_command_name_is_a_usage_error(
     assert recorded.argv is None
 
 
+def test_config_after_a_grouped_command_is_shown_before_its_whole_name(
+    recorded: RecordedCall, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr("samplecloud.cli.main", _recorder(recorded))
+
+    with pytest.raises(SystemExit):
+        dispatch(["cloud", "embed", "--config", "sandbox.toml"])
+
+    assert "samplelibrary --config PATH cloud embed" in capsys.readouterr().err
+
+
 @dataclass(frozen=True)
 class LeafCommand:
     names: list[str]
