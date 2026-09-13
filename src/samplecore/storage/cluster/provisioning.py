@@ -18,10 +18,10 @@ from samplecore.storage.cluster.statements import create_database, create_role, 
 from samplecore.storage.database import connect
 
 # The disposable sandbox and the database the test suite bootstraps from keep names of their own,
-# matching the Makefile's `DEV_DATABASE_URL` and the suite's own default server. Naming them here
-# rather than deriving them from the configured library keeps all three in agreement whatever a
+# matching the config the dev library builder writes and the suite's own default server. Naming them
+# here rather than deriving them from the configured library keeps all three in agreement whatever a
 # person calls their own library, and keeps a URL that already names the sandbox from growing a
-# second suffix when `make database` runs inside one of the `*-dev` targets' environment.
+# second suffix when the database setup runs with the sandbox's config.
 DEVELOPMENT_DATABASE: Final[str] = "samplelibrary_dev"
 TEST_DATABASE: Final[str] = "samplelibrary_test"
 

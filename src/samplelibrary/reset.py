@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import shutil
+from functools import partial
 from pathlib import Path
 
 from sqlalchemy import Connection
@@ -42,10 +43,11 @@ def _recreate_empty(directory: Path) -> None:
     directory.mkdir(parents=True)
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
+        prog=prog,
         description="Permanently empty the configured library's catalog and content store, so the "
-        "next extraction pass starts from nothing. Destructive and irreversible."
+        "next extraction pass starts from nothing. Destructive and irreversible.",
     )
     parser.add_argument(
         "--confirm", action="store_true", help="Actually perform the reset. Without this flag, nothing is changed."
@@ -53,10 +55,10 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str], *, prog: str) -> None:
     if not confirmed(
         argv,
-        _parse_arguments,
+        partial(_parse_arguments, prog=prog),
         "This would permanently delete every cataloged module, sample, relation, cloud "
         "coordinate, experiment, and feature vector, and every stored audio object, for the "
         "library named in your config.toml.",
@@ -73,7 +75,3 @@ def main(argv: list[str] | None = None) -> None:
         reset_library(connection, config.library_root)
 
     _logger.info("Done. The catalog and content store are empty; run extraction again to rebuild them.")
-
-
-if __name__ == "__main__":
-    main()

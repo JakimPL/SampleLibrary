@@ -13,7 +13,7 @@ CAPPED ?= systemd-run --user --scope -p MemoryMax=$(MEMORY_CAP) -p MemorySwapMax
 install:
 	uv sync --all-extras --all-groups
 	uv run pre-commit install --hook-type pre-commit --hook-type pre-push
-	uv run python scripts/setup.py config
+	uv run samplelibrary setup config
 	$(MAKE) frontend-install
 
 # Creates the role and the three databases this project expects, wherever they are missing, and
@@ -21,7 +21,7 @@ install:
 # schema's hand-made labels, ratings and favorites included. Safe to re-run at any time.
 .PHONY: database
 database:
-	uv run python scripts/setup.py database
+	uv run samplelibrary setup database
 
 .PHONY: format
 format:
@@ -118,7 +118,7 @@ cloud-suggest:
 # Serves the run store beside the library, where every training and evaluation pass is recorded.
 .PHONY: mlflow-ui
 mlflow-ui:
-	uv run python -c "from samplecore.config import load_config; from samplecore.tracking.store import tracking_uri; print(tracking_uri(load_config().library_root))" | xargs -I {} uv run mlflow ui --backend-store-uri {}
+	uv run mlflow ui --backend-store-uri "$$(uv run samplelibrary tracking uri)"
 
 # The decodable representation. `morph-fit` learns a codec over a draw of the library and writes it
 # under the configured library root; `morph-render` writes a listening set between two sample
@@ -178,7 +178,7 @@ morph-measure:
 # do and changes nothing unless invoked as `make reset-library CONFIRM=1`.
 .PHONY: reset-library
 reset-library:
-	uv run python scripts/reset_library.py $(if $(CONFIRM),--confirm,)
+	uv run samplelibrary reset $(if $(CONFIRM),--confirm,)
 
 
 # The full pipeline in one command, in the order a rebuild needs: extraction before equivalence
@@ -187,35 +187,30 @@ reset-library:
 .PHONY: rebuild-library
 rebuild-library: extract equivalence embed embed-modules-placeholder
 
-# dev-library keeps its own database on the same local Postgres server the real library uses, so a
-# rebuild of this disposable 30-module sandbox leaves the real catalog untouched. `make database`
-# creates that database, along with the role and the two others this project expects.
-DEV_DATABASE_URL := postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev
-
 .PHONY: library-dev
 library-dev:
 	uv run python scripts/build_dev_library.py
 
 .PHONY: extract-dev
 extract-dev: library-dev
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary extract $(if $(WORKERS),--workers $(WORKERS),)
+	uv run samplelibrary --config dev-library/config.toml extract $(if $(WORKERS),--workers $(WORKERS),)
 
 .PHONY: equivalence-dev
 equivalence-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary equivalence
+	uv run samplelibrary --config dev-library/config.toml equivalence
 
 .PHONY: embed-dev
 embed-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary cloud embed
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary cloud placeholders
+	uv run samplelibrary --config dev-library/config.toml cloud embed
+	uv run samplelibrary --config dev-library/config.toml cloud placeholders
 
 .PHONY: thumbnails-dev
 thumbnails-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary thumbnails
+	uv run samplelibrary --config dev-library/config.toml thumbnails
 
 .PHONY: notes-dev
 notes-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run samplelibrary notes
+	uv run samplelibrary --config dev-library/config.toml notes
 
 .PHONY: reset-dev
 reset-dev:
@@ -223,11 +218,11 @@ reset-dev:
 
 .PHONY: serve-dev
 serve-dev:
-	SAMPLELIBRARY_CONFIG=dev-library/config.toml SAMPLELIBRARY_DATABASE_URL=$(DEV_DATABASE_URL) uv run uvicorn sampleserver.main:app --reload --port 8001
+	uv run samplelibrary --config dev-library/config.toml serve --reload --port 8001
 
 .PHONY: serve
 serve:
-	uv run uvicorn sampleserver.main:app --reload
+	uv run samplelibrary serve --reload
 
 # The morph inference process: the pipeline over HTTP at the address `[inference] url` names,
 # which `make serve` dials for morphs. Long-lived and small, so it runs bare; DEVICE=cuda puts the

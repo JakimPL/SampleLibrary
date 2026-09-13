@@ -126,8 +126,8 @@ def report_dry_run(description: str) -> None:
 
 
 def confirmed(
-    argv: list[str] | None,
-    parse_arguments: Callable[[list[str] | None], argparse.Namespace],
+    argv: list[str],
+    parse_arguments: Callable[[list[str]], argparse.Namespace],
     dry_run_message: str,
 ) -> bool:
     """Set up logging and parse a confirm-gated script's arguments, reporting when not confirmed.

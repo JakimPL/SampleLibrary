@@ -33,6 +33,18 @@ class CommandGroup:
     commands: tuple[Command, ...]
 
 
+def _setup(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.setup import main
+
+    main(argv, prog=prog)
+
+
+def _reset(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.reset import main
+
+    main(argv, prog=prog)
+
+
 def _extract(argv: list[str], *, prog: str) -> None:
     from sampleextract.cli import main
 
@@ -93,13 +105,27 @@ def _morph(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _serve(argv: list[str], *, prog: str) -> None:
+    from sampleserver.cli import main
+
+    main(argv, prog=prog)
+
+
 def _schema(argv: list[str], *, prog: str) -> None:
     from sampleserver.openapi_export import main
 
     main(argv, prog=prog)
 
 
+def _tracking_uri(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.tracking import main
+
+    main(argv, prog=prog)
+
+
 COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
+    Command(name="setup", summary="Put a config file in place, or prepare the databases it names.", run=_setup),
+    Command(name="reset", summary="Empty the configured library's catalog and content store.", run=_reset),
     Command(name="extract", summary="Catalog every module under the configured source directory.", run=_extract),
     Command(name="equivalence", summary="Detect bit-depth, amplification and resampled variants.", run=_equivalence),
     Command(name="thumbnails", summary="Compute a waveform thumbnail for each cataloged sample.", run=_thumbnails),
@@ -130,5 +156,15 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
         ),
     ),
     Command(name="morph", summary="Fit, train and render the decodable representation, and serve morphs.", run=_morph),
+    Command(name="serve", summary="Serve the library's API over HTTP.", run=_serve),
     Command(name="schema", summary="Print the API's OpenAPI schema as JSON.", run=_schema),
+    CommandGroup(
+        name="tracking",
+        summary="Find the run store every training and evaluation pass records to.",
+        commands=(
+            Command(
+                name="uri", summary="Print the URI of the run store beside the configured library.", run=_tracking_uri
+            ),
+        ),
+    ),
 )

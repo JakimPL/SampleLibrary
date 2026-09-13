@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import tomllib
 import types
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,6 +52,15 @@ def test_build_dev_library_writes_every_scenario_module_and_a_config(tmp_path: P
 
     assert len(written_paths) == len(build_dev_library._all_modules())
     assert (tmp_path / "config.toml").is_file()
+
+
+def test_build_dev_library_config_names_the_sandbox_database(tmp_path: Path) -> None:
+    build_dev_library.build_dev_library(tmp_path)
+
+    with (tmp_path / "config.toml").open("rb") as config_file:
+        library = tomllib.load(config_file)["library"]
+
+    assert library["database_url"] == build_dev_library.DEVELOPMENT_DATABASE_URL
 
 
 def test_build_dev_library_regenerating_replaces_rather_than_accumulates_modules(tmp_path: Path) -> None:

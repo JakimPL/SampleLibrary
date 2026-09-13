@@ -20,9 +20,9 @@ class SetupCommand(StrEnum):
     DATABASE = "database"
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str], *, prog: str) -> None:
     """Put a config file in place, or prepare the Postgres server the configuration names."""
-    arguments = _parse_arguments(argv)
+    arguments = _parse_arguments(argv, prog=prog)
     match SetupCommand(arguments.command):
         case SetupCommand.CONFIG:
             _run_config()
@@ -97,8 +97,10 @@ def _report_obstacle(error: ProvisioningError) -> None:
     _logger.error("%s", "\n".join((str(error), "", *error.remedy)))
 
 
-def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Prepare a fresh clone to run: its config file, then its databases.")
+def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog=prog, description="Prepare a fresh clone to run: its config file, then its databases."
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     commands.add_parser(
@@ -110,7 +112,3 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         help="Create the role and the three databases this project expects, where they are missing.",
     )
     return parser.parse_args(argv)
-
-
-if __name__ == "__main__":
-    main()

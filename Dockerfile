@@ -29,5 +29,5 @@ ENV PATH="/app/.venv/bin:${PATH}"
 # are supplied at `docker run` time (a bind mount plus SAMPLELIBRARY_CONFIG) -- deployment-specific
 # paths stay out of the image, matching this project's config.toml already never being committed.
 EXPOSE 8000
-ENTRYPOINT ["uvicorn", "sampleserver.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["samplelibrary", "serve", "--host", "0.0.0.0", "--port", "8000"]
 CMD ["--workers", "4"]

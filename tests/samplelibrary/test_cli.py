@@ -11,7 +11,16 @@ from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, load_config
 from samplelibrary.cli import dispatch
 from samplelibrary.commands import COMMANDS, CommandGroup, CommandRunner
 
-PACKAGES_A_COMMAND_LOADS = ("sampleextract", "samplecloud", "samplemorph", "sampleserver", "torch", "umap")
+PACKAGES_A_COMMAND_LOADS = (
+    "sampleextract",
+    "samplecloud",
+    "samplemorph",
+    "sampleserver",
+    "sqlalchemy",
+    "torch",
+    "umap",
+    "uvicorn",
+)
 GROUPS = tuple(entry for entry in COMMANDS if isinstance(entry, CommandGroup))
 
 
@@ -30,6 +39,8 @@ class RecordedCall:
 
 
 ROUTE_CASES = (
+    RouteCase(["setup", "database"], "samplelibrary.setup.main", ["database"], "samplelibrary setup"),
+    RouteCase(["reset", "--confirm"], "samplelibrary.reset.main", ["--confirm"], "samplelibrary reset"),
     RouteCase(["extract", "--workers", "2"], "sampleextract.cli.main", ["--workers", "2"], "samplelibrary extract"),
     RouteCase(
         ["equivalence", "--limit", "5"],
@@ -72,7 +83,9 @@ ROUTE_CASES = (
         ["cache-grids", "--cache", "codec", "--views", "0"],
         "samplelibrary morph",
     ),
+    RouteCase(["serve", "--reload"], "sampleserver.cli.main", ["--reload"], "samplelibrary serve"),
     RouteCase(["schema"], "sampleserver.openapi_export.main", [], "samplelibrary schema"),
+    RouteCase(["tracking", "uri"], "samplelibrary.tracking.main", [], "samplelibrary tracking uri"),
 )
 
 

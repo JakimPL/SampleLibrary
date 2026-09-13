@@ -27,7 +27,7 @@ CURATION_SCHEMA: Final[str] = "curation"
 _ANNOTATION_SOURCE_VALUES: Final[tuple[str, ...]] = tuple(source.value for source in AnnotationSource)
 
 # A MetaData of its own, in a schema of its own, is what keeps hand-made work safe from the passes
-# that rebuild everything else. Both places this project empties a database -- `scripts/reset_library.py`
+# that rebuild everything else. Both places this project empties a database -- `samplelibrary reset`
 # and the test suite's own teardown -- iterate `database.metadata.sorted_tables`, so a table registered
 # here is beyond their reach by construction rather than by an exemption list somebody has to maintain.
 # For the same reason nothing here carries a foreign key into the catalog: one would either delete
