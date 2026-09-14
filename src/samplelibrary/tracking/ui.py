@@ -7,6 +7,7 @@ import sys
 from types import FrameType
 from typing import Final
 
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, port_number
 from samplecore.tracking.store import tracking_uri
 
@@ -64,8 +65,6 @@ def interface_command(store_uri: str, *, port: int) -> list[str]:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Browse the configured library's run store in MLflow's interface."
-    )
+    parser = command_parser(prog=prog, description="Browse the configured library's run store in MLflow's interface.")
     parser.add_argument("--port", type=port_number, default=DEFAULT_PORT, help="The port the interface listens on.")
     return parser.parse_args(argv)

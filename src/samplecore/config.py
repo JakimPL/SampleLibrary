@@ -152,13 +152,15 @@ def create_config_file(path: Path) -> bool:
     without a person's own paths ever being overwritten.
 
     Raises:
-        ConfigurationError: the example this copies from is absent.
+        ConfigurationError: the example this copies from is absent, or the directory ``path`` names is.
     """
     if path.exists():
         return False
 
     if not EXAMPLE_CONFIG_PATH.is_file():
         raise ConfigurationError(f"No example config to copy from at {EXAMPLE_CONFIG_PATH}.")
+    if not path.parent.is_dir():
+        raise ConfigurationError(f"No directory {path.parent} to put a config file in; create it first.")
 
     shutil.copyfile(EXAMPLE_CONFIG_PATH, path)
     return True

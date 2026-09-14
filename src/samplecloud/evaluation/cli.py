@@ -23,6 +23,7 @@ from samplecloud.evaluation.settings import (
 from samplecloud.evaluation.transposition import ProbeDescriber, TranspositionRetrieval
 from samplecloud.experiments import ExperimentRefused, experiment_named, extractor_for, recipe_of
 from samplecloud.hearing import hearing_for
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import Experiment
@@ -172,7 +173,7 @@ def _report_hand_labels(agreement: HandLabelAgreement) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
         prog=prog, description="Score an experiment's descriptor against the catalog's own targets."
     )
     parser.add_argument(

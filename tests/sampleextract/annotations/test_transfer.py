@@ -7,7 +7,7 @@ from sqlalchemy import Connection
 
 from samplecore.models.annotation import SampleAnnotation
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from sampleextract.annotations.transfer import export_annotations, import_annotations
+from sampleextract.annotations.transfer import AnnotationFileRefused, export_annotations, import_annotations
 
 
 def test_a_label_survives_a_round_trip_through_a_file(
@@ -100,7 +100,28 @@ def test_a_file_speaking_for_one_sample_twice_is_refused_whole(
     changed = stored_annotation.model_copy(update={"label": "KICK"})
     path.write_text(f"{stored_annotation.model_dump_json()}\n{changed.model_dump_json()}\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="lines 1, 2"):
+    with pytest.raises(AnnotationFileRefused, match="lines 1, 2"):
         import_annotations(connection, path=path)
 
     assert PostgresSampleAnnotationRepository(connection).get(stored_annotation.sample_hash) == stored_annotation
+
+
+@pytest.mark.parametrize(
+    ("content", "reason"),
+    [(None, "cannot be read"), ("{}\n", "line 1 of"), ("not json\n", "line 1 of")],
+    ids=("a missing file", "a line missing the annotation's fields", "a line that is no JSON"),
+)
+def test_a_file_that_is_no_list_of_annotations_is_refused(
+    connection: Connection, tmp_path: Path, content: str | None, reason: str
+) -> None:
+    path = tmp_path / "labels.jsonl"
+    if content is not None:
+        path.write_text(content, encoding="utf-8")
+
+    with pytest.raises(AnnotationFileRefused, match=reason):
+        import_annotations(connection, path=path)
+
+
+def test_exporting_into_a_directory_that_is_not_there_is_refused(connection: Connection, tmp_path: Path) -> None:
+    with pytest.raises(AnnotationFileRefused, match="cannot be written"):
+        export_annotations(connection, path=tmp_path / "absent" / "labels.jsonl")

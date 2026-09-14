@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 from trackmod.core.notes.pitch import Note
@@ -344,6 +345,8 @@ def test_get_sample_gathers_the_rates_its_note_events_really_sound(client: TestC
     _play_note(connection, module=module, slot=0, sounded_note=OCTAVE_ABOVE_REFERENCE_KEY, row=0)
     _play_note(connection, module=module, slot=1, sounded_note=REFERENCE_KEY, row=1)
 
+    PostgresSamplePlaybackRateRepository(connection).replace_all({sample.hash: 16726})
+
     response = client.get(f"/samples/{sample.hash}")
 
     body = response.json()
@@ -358,6 +361,8 @@ def test_get_sample_lists_the_most_played_rate_first(client: TestClient, connect
     _play_note(connection, module=module, slot=0, sounded_note=REFERENCE_KEY, row=0)
     _play_note(connection, module=module, slot=0, sounded_note=OCTAVE_ABOVE_REFERENCE_KEY, row=1)
     _play_note(connection, module=module, slot=0, sounded_note=OCTAVE_ABOVE_REFERENCE_KEY, row=2)
+
+    PostgresSamplePlaybackRateRepository(connection).replace_all({sample.hash: 16726})
 
     response = client.get(f"/samples/{sample.hash}")
 
@@ -639,3 +644,43 @@ def test_get_similar_samples_404s_when_the_target_has_no_vector(client: TestClie
     response = client.get(f"/samples/{SAMPLE_HASH_A}/similar")
 
     assert response.status_code == 404
+
+
+def test_get_sample_hears_a_sample_at_the_rate_every_other_reader_does(
+    client: TestClient, connection: Connection
+) -> None:
+    """Until the notes pass records a rate, the detail plays the occurrences' rate, as the listing and the cloud do."""
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    module = _insert_module(connection)
+    _add_occurrence(connection, sample=sample, module=module, slot=0, name="lead", rate=8363)
+    _play_note(connection, module=module, slot=0, sounded_note=OCTAVE_ABOVE_REFERENCE_KEY, row=0)
+
+    body = client.get(f"/samples/{sample.hash}").json()
+
+    assert body["playback_rates"] == [{"rate_hz": 16726, "event_count": 1}]
+    assert body["playback_rate_hz"] == 8363
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/samples/not-a-hash", "/samples/not-a-hash/preview", "/samples/not-a-hash/similar", "/modules/NOT-A-HASH"],
+)
+def test_a_path_naming_no_hash_is_refused_before_the_catalog_is_read(client: TestClient, path: str) -> None:
+    assert client.get(path).status_code == 422
+
+
+@pytest.mark.parametrize("listing", ["/samples", "/modules"])
+def test_an_offset_past_what_the_catalog_can_count_is_refused(client: TestClient, listing: str) -> None:
+    assert client.get(listing, params={"offset": 2**63}).status_code == 422
+
+
+@pytest.mark.parametrize(
+    "path",
+    [f"/samples/{SAMPLE_HASH_A}/similar", f"/samples/{SAMPLE_HASH_A}/distance/{SAMPLE_HASH_B}"],
+    ids=("similar", "distance"),
+)
+def test_a_neighbor_search_from_an_uncataloged_sample_says_so(client: TestClient, path: str) -> None:
+    response = client.get(path)
+
+    assert response.status_code == 404
+    assert "no sample cataloged" in response.json()["detail"]

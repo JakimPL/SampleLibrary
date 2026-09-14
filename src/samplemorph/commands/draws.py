@@ -44,14 +44,18 @@ def draw_probe_samples(connection: Connection, *, count: int, random_seed: int) 
     )
 
 
+class SampleNotCataloged(ValueError):
+    """Raised when a command names a sample hash the catalog holds no sample under."""
+
+
 def require_sample(connection: Connection, sample_hash: str) -> Sample:
     """Look one sample up by hash.
 
     Raises:
-        ValueError: the catalog holds no sample under that hash.
+        SampleNotCataloged: the catalog holds no sample under that hash.
     """
     sample = PostgresSampleRepository(connection).get(sample_hash)
     if sample is None:
-        raise ValueError(f"the catalog holds no sample {sample_hash}")
+        raise SampleNotCataloged(f"the catalog holds no sample {sample_hash}")
 
     return sample

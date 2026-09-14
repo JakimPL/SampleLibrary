@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
 from samplecore.storage.database import connect_for_curation, create_pooled_engine
-from sampleserver.frontend import SinglePageApplication
+from sampleserver.frontend import FrontendMount
 from sampleserver.inference_client import build_inference_client
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers import cloud, curation, modules, morph, samples, stats
@@ -85,5 +85,5 @@ def create_app(
     for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.router, morph.router):
         application.include_router(api_router, prefix=API_PREFIX)
     if frontend_directory is not None:
-        application.mount("/", SinglePageApplication(frontend_directory, api_prefix=API_PREFIX), name="frontend")
+        application.router.routes.append(FrontendMount(frontend_directory, api_prefix=API_PREFIX))
     return application

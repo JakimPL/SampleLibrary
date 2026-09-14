@@ -43,7 +43,7 @@ COORDINATE_DECIMALS: Final[int] = 4
 JSON_MEDIA_TYPE: Final[str] = "application/json"
 GZIP_ENCODING: Final[str] = "gzip"
 
-CloudRevision = tuple[tuple[int, datetime | None], int, int]
+CloudRevision = tuple[tuple[int, datetime | None], tuple[int, int], int]
 
 
 class SampleCloudPoint(BaseModel):
@@ -98,7 +98,7 @@ def get_cloud(
     """
     revision: CloudRevision = (
         PostgresCloudCoordinateRepository(connection).revision(),
-        PostgresSamplePlaybackRateRepository(connection).count(),
+        PostgresSamplePlaybackRateRepository(connection).revision(),
         PostgresModuleRepository(connection).count(),
     )
     return _cached_json(request, cache, revision, lambda: CLOUD_POINTS.dump_json(_cloud_points(connection)))

@@ -14,6 +14,7 @@ import soundfile
 from sqlalchemy import Connection
 
 from samplecore.auditory.sound_type import SoundType, sound_type_reading
+from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.sample import Sample
@@ -22,6 +23,7 @@ from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.commands.draws import (
+    SampleNotCataloged,
     add_canonicalizer_argument,
     canonicalizer_from,
     draw_probe_samples,
@@ -86,8 +88,10 @@ class ProbeReading:
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(
-        COMMAND_NAME, help="Reconstruct probe samples through a stored model and read what the reconstruction costs."
+    parser = add_subcommand(
+        commands,
+        COMMAND_NAME,
+        summary="Reconstruct probe samples through a stored model and read what the reconstruction costs.",
     )
     parser.add_argument(
         "--model",
@@ -125,9 +129,14 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     before any model loads, so a draw or a hashes file naming none ends the process at once.
 
     Raises:
-        SystemExit: no probe was named or drawn.
+        SystemExit: no probe was named or drawn, the hashes file cannot be read, or it names a hash
+            the catalog holds no sample under.
     """
-    probes = _probes(connection, arguments)
+    try:
+        probes = _probes(connection, arguments)
+    except (SampleNotCataloged, OSError) as error:
+        _logger.error("Measured nothing: %s.", error)
+        sys.exit(1)
     if not probes:
         _logger.error("No probe to measure: the draw or the hashes file names no sample.")
         sys.exit(1)

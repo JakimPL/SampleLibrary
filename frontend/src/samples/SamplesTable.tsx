@@ -39,6 +39,8 @@ const COLUMNS = [
 
 interface SamplesTableProps {
     readonly samples: readonly SampleSummary[];
+    readonly loadedCount: number;
+    readonly groupCount: number;
     readonly total: number;
     readonly hasMore: boolean;
     readonly isLoadingMore: boolean;
@@ -52,6 +54,8 @@ interface SamplesTableProps {
 
 export function SamplesTable({
     samples,
+    loadedCount,
+    groupCount,
     total,
     hasMore,
     isLoadingMore,
@@ -93,19 +97,36 @@ export function SamplesTable({
     const paddingBottom = lastVirtualRow ? virtualizer.getTotalSize() - lastVirtualRow.end : 0;
     const lastVirtualIndex = lastVirtualRow?.index ?? -1;
 
+    // A filter or a column sort narrows or reorders only the rows already held, so loading more under
+    // one would page through the catalog without ever reaching what the person is looking for; a
+    // button asks for the next window instead. Otherwise the next window is asked for once per row count.
+    const isNarrowed = globalFilter !== "" || sorting.length > 0;
+    const requestedAtRef = useRef<number | null>(null);
     useEffect(() => {
-        if (hasMore && lastVirtualIndex >= rows.length - LOAD_MORE_TRIGGER_DISTANCE) {
+        if (
+            !isNarrowed &&
+            hasMore &&
+            lastVirtualIndex >= rows.length - LOAD_MORE_TRIGGER_DISTANCE &&
+            requestedAtRef.current !== loadedCount
+        ) {
+            requestedAtRef.current = loadedCount;
             onLoadMore();
         }
-    }, [hasMore, lastVirtualIndex, rows.length, onLoadMore]);
+    }, [isNarrowed, hasMore, lastVirtualIndex, rows.length, loadedCount, onLoadMore]);
 
     return (
         <div className="panel-stack">
             <div className="panel-status">
                 <span className="cell-muted mono">
-                    {samples.length} of {total} loaded
+                    {loadedCount} of {total} loaded
+                    {groupByEquivalence ? ` · ${String(groupCount)} groups` : ""}
                     {isLoadingMore && hasMore ? " · loading…" : ""}
                 </span>
+                {isNarrowed && hasMore && (
+                    <button type="button" onClick={onLoadMore} disabled={isLoadingMore}>
+                        Load more
+                    </button>
+                )}
                 {loadMoreError !== null && <span className="error-notice">{loadMoreError}</span>}
             </div>
             <div className="panel-filter">

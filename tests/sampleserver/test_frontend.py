@@ -67,3 +67,14 @@ def test_an_app_built_without_a_frontend_serves_the_api_alone(
     with TestClient(create_app(_database_url, tmp_path, INFERENCE_URL, frontend_directory=None)) as client:
         assert client.get("/").status_code == 404
         assert client.get(f"{API_PREFIX}/stats").status_code == 200
+
+
+def test_the_api_answers_a_wrong_method_and_a_trailing_slash_as_it_does_alone(served: TestClient) -> None:
+    """A frontend at the root takes no path under the API, so the API's own answers stand."""
+    wrong_method = served.post(f"{API_PREFIX}/stats")
+    trailing_slash = served.get(f"{API_PREFIX}/samples/", follow_redirects=False)
+
+    assert wrong_method.status_code == 405
+    assert wrong_method.headers["allow"] == "GET"
+    assert trailing_slash.status_code == 307
+    assert trailing_slash.headers["location"].endswith(f"{API_PREFIX}/samples")

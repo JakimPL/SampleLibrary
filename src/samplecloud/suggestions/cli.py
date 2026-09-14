@@ -17,6 +17,7 @@ from samplecloud.suggestions.scoring import (
     score_suggestions,
 )
 from samplecloud.suggestions.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, prompt_for, vocabulary_from
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, integer_between, open_catalog_connection, positive_integer
 from samplecore.models.experiment import Experiment
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
@@ -86,9 +87,7 @@ def _report(summary: ScoringSummary) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Suggest labels for every sample of a listening-model experiment."
-    )
+    parser = command_parser(prog=prog, description="Suggest labels for every sample of a listening-model experiment.")
     parser.add_argument(
         "--experiment-id",
         type=positive_integer,

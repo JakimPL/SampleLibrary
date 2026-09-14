@@ -208,17 +208,17 @@ def test_rendering_writes_a_listening_set_through_a_fitted_model(
     assert soundfile.info(output / "original_first.wav").samplerate == SAMPLE_RATE_HZ
 
 
-def test_rendering_a_sample_the_catalog_lacks_says_so(
+def test_rendering_a_sample_the_catalog_lacks_says_so_before_any_model_loads(
     connection: Connection,
     _database_url: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
 
-    with pytest.raises(ValueError, match="holds no sample"):
+    with pytest.raises(SystemExit) as raised:
         main(
             [
                 "render",
@@ -227,12 +227,15 @@ def test_rendering_a_sample_the_catalog_lacks_says_so(
                 "--second",
                 "f" * 64,
                 "--model",
-                MODEL_NAME,
+                "absent",
                 "--output",
-                str(tmp_path / "render"),
+                str(tmp_path / "out"),
             ],
             prog=PROGRAM,
         )
+
+    assert raised.value.code == 1
+    assert f"Rendered nothing: the catalog holds no sample {'f' * 64}." in capsys.readouterr().err
 
 
 def test_a_restorer_is_trained_on_the_catalog_and_rendered_through(

@@ -20,6 +20,7 @@ from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRep
 from samplecore.waveform import WaveformPeak
 from sampleserver.dependencies import get_connection
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
+from sampleserver.parameters import MAX_PAGE_OFFSET, NOT_FOUND_RESPONSE, ModuleHashPath
 
 router = APIRouter(prefix="/modules", tags=["modules"])
 
@@ -54,7 +55,7 @@ class ModuleDetail(Module):
 @router.get("")
 def list_modules(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)] = DEFAULT_PAGE_LIMIT,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=MAX_PAGE_OFFSET)] = 0,
     tracker: TrackerFormat | None = None,
     connection: Connection = Depends(get_connection),
 ) -> Page[Module]:
@@ -65,8 +66,8 @@ def list_modules(
     return Page(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.get("/{module_hash}")
-def get_module(module_hash: str, connection: Connection = Depends(get_connection)) -> ModuleDetail:
+@router.get("/{module_hash}", responses=NOT_FOUND_RESPONSE)
+def get_module(module_hash: ModuleHashPath, connection: Connection = Depends(get_connection)) -> ModuleDetail:
     """One module's own fields plus every sample occurrence it declares.
 
     Raises:

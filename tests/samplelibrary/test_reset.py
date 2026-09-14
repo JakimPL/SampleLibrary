@@ -59,6 +59,8 @@ def test_main_without_confirm_names_the_library_and_database_it_would_empty(
     assert str(library_root) in report
     assert TARGET_DATABASE in report
     assert CONFIG_PASSWORD not in report
+    assert "hand annotations, fitted models" in report
+    assert "Pass --confirm to carry it out." in report
 
 
 def test_main_with_confirm_empties_the_configured_library(library_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,3 +71,17 @@ def test_main_with_confirm_empties_the_configured_library(library_root: Path, mo
     reset.main(["--confirm"], prog=PROGRAM)
 
     assert emptied == [library_root]
+
+
+def test_a_finished_reset_names_what_stayed_and_the_passes_that_fill_the_library_again(
+    library_root: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(reset, "open_catalog_connection", lambda database_url: nullcontext())
+    monkeypatch.setattr(reset, "reset_library", lambda connection, root: None)
+
+    reset.main(["--confirm"], prog=PROGRAM)
+
+    report = capsys.readouterr().out
+    assert "hand annotations, fitted models" in report
+    assert "just rebuild" in report
+    assert "samplelibrary equivalence" in report

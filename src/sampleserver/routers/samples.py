@@ -3,9 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi import Path as RoutePath
-from fastapi import Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import Connection
@@ -23,7 +21,6 @@ from samplecore.models.sample_properties import TrackerSampleProperties
 from samplecore.models.scalars import (
     MAXIMUM_RATING,
     MINIMUM_RATING,
-    SAMPLE_HASH_PATTERN,
     Count,
     ModuleHash,
     SampleHash,
@@ -31,8 +28,6 @@ from samplecore.models.scalars import (
 from samplecore.models.tracker import TrackerFormat
 from samplecore.naming import choose_dominant_name
 from samplecore.pitch import (
-    choose_playback_rate,
-    dominant_playback_rate,
     playback_rates_of,
     tally_playback_rates,
 )
@@ -53,6 +48,7 @@ from sampleserver.caching import IMMUTABLE_CACHE_CONTROL
 from sampleserver.dependencies import get_connection, get_library_root, get_spectral_vectors
 from sampleserver.equivalence import equivalence_class_members
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
+from sampleserver.parameters import MAX_PAGE_OFFSET, NOT_FOUND_RESPONSE, WAV_CONTENT, SampleHashPath
 
 router = APIRouter(prefix="/samples", tags=["samples"])
 
@@ -159,7 +155,7 @@ def get_selection(
 @router.get("")
 def list_samples(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)] = DEFAULT_PAGE_LIMIT,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=MAX_PAGE_OFFSET)] = 0,
     group_by_equivalence: bool = False,
     selection: SampleSelection = Depends(get_selection),
     connection: Connection = Depends(get_connection),
@@ -215,12 +211,14 @@ def _collapse_by_equivalence(items: tuple[SampleSummary, ...]) -> tuple[SampleSu
     return tuple(collapsed)
 
 
-@router.get("/{sample_hash}")
-def get_sample(sample_hash: str, connection: Connection = Depends(get_connection)) -> SampleDetail:
+@router.get("/{sample_hash}", responses=NOT_FOUND_RESPONSE)
+def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get_connection)) -> SampleDetail:
     """One sample's own fields plus every module occurrence that references it.
 
     ``equivalence_member_count`` travels with the sample so a caller labeling it knows how many
-    near-duplicates the same choice would reach.
+    near-duplicates the same choice would reach. ``playback_rate_hz`` is the rate every reader
+    of the catalog plays the sample at, and ``playback_rates`` lists every rate its note events
+    strike it at, as they stand in the catalog.
 
     Raises:
         HTTPException: 404 when no sample is cataloged under this hash.
@@ -252,9 +250,7 @@ def get_sample(sample_hash: str, connection: Connection = Depends(get_connection
         hand_label=annotation.label if annotation is not None else None,
         rating=annotation.rating if annotation is not None else None,
         favorite=annotation.favorite if annotation is not None else False,
-        playback_rate_hz=choose_playback_rate(
-            note_event_rate=dominant_playback_rate(tally), occurrence_rates=(item.rate for item in properties)
-        ),
+        playback_rate_hz=resolved_playback_rates(connection, [sample_hash])[sample_hash],
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
         playback_rates=playback_rates_of(tally),
         equivalence_member_count=len(equivalence_class_members(connection, sample_hash)),
@@ -274,9 +270,13 @@ def _suggested_labels(connection: Connection, sample_hash: str) -> tuple[Suggest
     )
 
 
-@router.get("/{sample_hash}/audio", response_class=FileResponse)
+@router.get(
+    "/{sample_hash}/audio",
+    response_class=FileResponse,
+    responses={200: {"content": WAV_CONTENT}, **NOT_FOUND_RESPONSE},
+)
 def get_sample_audio(
-    sample_hash: Annotated[str, RoutePath(pattern=SAMPLE_HASH_PATTERN)],
+    sample_hash: SampleHashPath,
     library_root: Path = Depends(get_library_root),
 ) -> FileResponse:
     """The sample's own canonical audio, as stored in the content-addressable store.
@@ -295,8 +295,8 @@ def get_sample_audio(
     return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
 
 
-@router.get("/{sample_hash}/preview")
-def get_sample_preview(sample_hash: str, connection: Connection = Depends(get_connection)) -> SamplePreview:
+@router.get("/{sample_hash}/preview", responses=NOT_FOUND_RESPONSE)
+def get_sample_preview(sample_hash: SampleHashPath, connection: Connection = Depends(get_connection)) -> SamplePreview:
     """A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
 
     Four narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
@@ -331,9 +331,9 @@ def _previews_by_hash(connection: Connection, sample_hashes: list[str]) -> dict[
     return previews
 
 
-@router.get("/{sample_hash}/relations")
+@router.get("/{sample_hash}/relations", responses=NOT_FOUND_RESPONSE)
 def get_sample_relations(
-    sample_hash: str, connection: Connection = Depends(get_connection)
+    sample_hash: SampleHashPath, connection: Connection = Depends(get_connection)
 ) -> tuple[SampleRelation, ...]:
     """Every equivalence-class link this sample participates in, on either side of the pair.
 
@@ -346,16 +346,18 @@ def get_sample_relations(
     return PostgresSampleRelationRepository(connection).list_for_sample(sample_hash)
 
 
-@router.get("/{sample_hash}/distance/{other_hash}")
+@router.get("/{sample_hash}/distance/{other_hash}", responses=NOT_FOUND_RESPONSE)
 def get_sample_distance(
-    sample_hash: str, other_hash: str, connection: Connection = Depends(get_connection)
+    sample_hash: SampleHashPath, other_hash: SampleHashPath, connection: Connection = Depends(get_connection)
 ) -> SampleDistance:
     """The Euclidean distance between two samples' persisted, standardized spectral feature vectors.
 
     Raises:
-        HTTPException: 404 when either sample has no persisted spectral feature vector yet -- not
-            yet embedded, or embedded before this metric existed.
+        HTTPException: 404 when either sample is not cataloged, or has no persisted spectral feature
+            vector yet -- not yet embedded, or embedded before this metric existed.
     """
+    for named_hash in (sample_hash, other_hash):
+        _require_cataloged(connection, named_hash)
     repository = PostgresSampleSpectralFeatureRepository(connection)
     subject = repository.get(sample_hash)
     reference = repository.get(other_hash)
@@ -367,9 +369,9 @@ def get_sample_distance(
     )
 
 
-@router.get("/{sample_hash}/similar")
+@router.get("/{sample_hash}/similar", responses=NOT_FOUND_RESPONSE)
 def get_similar_samples(
-    sample_hash: str,
+    sample_hash: SampleHashPath,
     limit: Annotated[int, Query(ge=1, le=MAX_SIMILAR_SAMPLES_LIMIT)] = DEFAULT_SIMILAR_SAMPLES_LIMIT,
     connection: Connection = Depends(get_connection),
     vectors: SpectralVectors = Depends(get_spectral_vectors),
@@ -381,8 +383,9 @@ def get_similar_samples(
     glance shows, so a listing reads and plays without opening any of them.
 
     Raises:
-        HTTPException: 404 when this sample has no persisted spectral feature vector yet.
+        HTTPException: 404 when this sample is not cataloged, or has no persisted spectral feature vector yet.
     """
+    _require_cataloged(connection, sample_hash)
     if sample_hash not in vectors.row_by_hash:
         raise HTTPException(status_code=404, detail=f"sample {sample_hash!r} has no spectral feature vector yet")
 
@@ -399,6 +402,16 @@ def get_similar_samples(
         )
         for neighbor_hash, distance in neighbors
     )
+
+
+def _require_cataloged(connection: Connection, sample_hash: str) -> None:
+    """Refuse a hash the catalog holds no sample under, before asking after anything computed from one.
+
+    Raises:
+        HTTPException: 404 when no sample is cataloged under this hash.
+    """
+    if PostgresSampleRepository(connection).get(sample_hash) is None:
+        raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
 
 def _similar_sample(

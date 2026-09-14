@@ -5,6 +5,7 @@ import logging
 import sys
 from typing import Final
 
+from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import port_number
 from samplecore.config import LibraryConfig
 from samplemorph.route_arguments import (
@@ -21,7 +22,7 @@ _logger = logging.getLogger(__name__)
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(COMMAND_NAME, help="Serve morphs between two samples over HTTP.")
+    parser = add_subcommand(commands, COMMAND_NAME, summary="Serve morphs between two samples over HTTP.")
     parser.add_argument("--host", type=str, default=None, help="The address to bind, in place of the configured one.")
     parser.add_argument(
         "--port", type=port_number, default=None, help="The port to bind, in place of the configured one."

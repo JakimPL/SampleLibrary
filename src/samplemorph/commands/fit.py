@@ -8,6 +8,7 @@ from typing import Final
 import numpy as np
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.storage import audio_store
@@ -33,7 +34,7 @@ _logger = logging.getLogger(__name__)
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(COMMAND_NAME, help="Fit a codec over a draw of the library.")
+    parser = add_subcommand(commands, COMMAND_NAME, summary="Fit a codec over a draw of the library.")
     add_canonicalizer_argument(
         parser, help_text="Which frequency axis to canonicalize onto.", names=RENDERABLE_CANONICALIZER_NAMES
     )

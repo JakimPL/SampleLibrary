@@ -150,6 +150,11 @@ def test_the_cloud_follows_a_fresh_embedding_and_a_replaced_rate(client: TestCli
 
     assert by_hash[SAMPLE_HASH]["playback_rate_hz"] == 8363
 
+    PostgresSamplePlaybackRateRepository(connection).replace_all({SAMPLE_HASH: 16726})
+    by_hash = {point["sample_hash"]: point for point in client.get("/cloud").json()}
+
+    assert by_hash[SAMPLE_HASH]["playback_rate_hz"] == 16726
+
 
 def test_the_cloud_goes_out_gzipped_only_when_the_caller_accepts_it(client: TestClient, connection: Connection) -> None:
     _store_samples(connection, SAMPLE_HASH)

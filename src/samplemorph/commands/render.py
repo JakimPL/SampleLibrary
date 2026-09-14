@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import add_subcommand
 from samplecore.config import LibraryConfig
-from samplemorph.commands.draws import require_sample
+from samplemorph.commands.draws import SampleNotCataloged, require_sample
 from samplemorph.pipeline import (
     encode_pair,
     listening_set_manifest,
@@ -31,7 +33,7 @@ _logger = logging.getLogger(__name__)
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(COMMAND_NAME, help="Render a listening set between two samples.")
+    parser = add_subcommand(commands, COMMAND_NAME, summary="Render a listening set between two samples.")
     parser.add_argument("--first", type=str, required=True, help="The sample hash the morph starts from.")
     parser.add_argument("--second", type=str, required=True, help="The sample hash the morph arrives at.")
     parser.add_argument("--output", type=str, required=True, help="The directory to write the audio into.")
@@ -44,10 +46,17 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     """Render a listening set between two samples through a stored model.
 
     The two hashes are checked against the catalog before any model loads, so a mistyped hash is
-    reported as such rather than as whatever the models had to say first.
+    reported as such, in one line, rather than as whatever the models had to say first.
+
+    Raises:
+        SystemExit: either hash names no cataloged sample.
     """
-    first_sample = require_sample(connection, arguments.first)
-    second_sample = require_sample(connection, arguments.second)
+    try:
+        first_sample = require_sample(connection, arguments.first)
+        second_sample = require_sample(connection, arguments.second)
+    except SampleNotCataloged as error:
+        _logger.error("Rendered nothing: %s.", error)
+        sys.exit(1)
     loaded = load_route(config.library_root, route_choice_from(arguments))
     pair = encode_pair(
         read_heard_sample(connection, config.library_root, first_sample),

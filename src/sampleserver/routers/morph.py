@@ -14,6 +14,7 @@ from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.playback_rates import resolved_playback_rates
 from sampleserver.dependencies import ConnectionOpener, get_connection_opener, get_inference_client
 from sampleserver.inference_client import STATUS_TIMEOUT_SECONDS, timed_out_detail, unavailable_detail
+from sampleserver.parameters import WAV_CONTENT, ErrorDetail
 
 router = APIRouter(prefix="/morph", tags=["morph"])
 
@@ -58,7 +59,18 @@ def _heard_rate(rate: Rate | None) -> Rate:
     return NOMINAL_WAV_RATE if rate is None else rate
 
 
-@router.get("/audio", response_class=Response)
+@router.get(
+    "/audio",
+    response_class=Response,
+    responses={
+        200: {"content": WAV_CONTENT},
+        304: {"description": "The caller's validator names the render it already holds."},
+        404: {"model": ErrorDetail},
+        502: {"model": ErrorDetail},
+        503: {"model": ErrorDetail},
+        504: {"model": ErrorDetail},
+    },
+)
 async def get_morph_audio(
     request: Request,
     point: HeardMorphPoint = Depends(get_heard_point),
@@ -127,7 +139,7 @@ def _upstream_detail(upstream: httpx.Response) -> str:
     except ValueError:
         return upstream.reason_phrase
     match body:
-        case {"detail": str(detail)}:
+        case {"detail": str() as detail}:
             return detail
         case _:
             return upstream.reason_phrase

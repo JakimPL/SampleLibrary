@@ -6,6 +6,7 @@ from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import add_subcommand
 from samplecore.config import LibraryConfig
 from samplemorph.model_paths import DEFAULT_DESCRIPTOR_NAME, descriptor_path
 from samplemorph.training.descriptor_cache import DEFAULT_GRID_CACHE_NAME, grid_cache_directory, open_grid_cache
@@ -17,8 +18,8 @@ _logger = logging.getLogger(__name__)
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(
-        COMMAND_NAME, help="Describe every cached sample with a stored descriptor, as a new experiment."
+    parser = add_subcommand(
+        commands, COMMAND_NAME, summary="Describe every cached sample with a stored descriptor, as a new experiment."
     )
     parser.add_argument("--cache", type=str, default=DEFAULT_GRID_CACHE_NAME, help="Which grid cache to describe.")
     parser.add_argument(

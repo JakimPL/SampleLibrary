@@ -6,6 +6,7 @@ from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import non_negative_integer, positive_integer
 from samplecore.config import DEFAULT_MINIMUM_SAMPLE_FRAMES, LibraryConfig
 from samplecore.storage.repositories.sample import PostgresSampleRepository
@@ -32,8 +33,10 @@ _logger = logging.getLogger(__name__)
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(
-        COMMAND_NAME, help="Canonicalize a draw of the library once, with retuned views, for training a descriptor."
+    parser = add_subcommand(
+        commands,
+        COMMAND_NAME,
+        summary="Canonicalize a draw of the library once, with retuned views, for training a descriptor.",
     )
     parser.add_argument("--cache", type=str, default=DEFAULT_GRID_CACHE_NAME, help="The name to store the cache under.")
     add_canonicalizer_argument(

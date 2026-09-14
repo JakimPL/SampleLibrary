@@ -7,13 +7,19 @@ from typing import Final
 
 import uvicorn
 
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection, port_number, positive_integer
-from sampleserver.frontend import FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE, INDEX_DOCUMENT
+from sampleserver.frontend import (
+    FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE,
+    built_frontend,
+    frontend_directory_from_environment,
+)
 
 APPLICATION_PATH: Final[str] = "sampleserver.main:app"
 SOURCE_DIRECTORY: Final[Path] = Path(__file__).resolve().parents[1]
 DEFAULT_HOST: Final[str] = "127.0.0.1"
 DEFAULT_PORT: Final[int] = 8000
+WORKER_COUNT_ENVIRONMENT_VARIABLE: Final[str] = "WEB_CONCURRENCY"
 
 
 def main(argv: list[str], *, prog: str) -> None:
@@ -42,7 +48,7 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
         prog=prog, description="Serve the library's API, and the built frontend when named, over HTTP."
     )
     parser.add_argument("--host", type=str, default=DEFAULT_HOST, help="The address to bind.")
@@ -64,8 +70,26 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         help="The built frontend to serve beside the API, such as frontend/dist after `npm run build`.",
     )
     arguments = parser.parse_args(argv)
-    if arguments.frontend is not None:
-        arguments.frontend = arguments.frontend.resolve()
-        if not (arguments.frontend / INDEX_DOCUMENT).is_file():
-            parser.error(f"--frontend names no built frontend: {arguments.frontend} holds no {INDEX_DOCUMENT}")
+    try:
+        arguments.frontend = (
+            built_frontend(arguments.frontend)
+            if arguments.frontend is not None
+            else frontend_directory_from_environment()
+        )
+    except ValueError as error:
+        parser.error(f"--frontend names no built frontend: {error}")
+    if arguments.workers is None and not _names_a_process_count(os.environ.get(WORKER_COUNT_ENVIRONMENT_VARIABLE)):
+        parser.error(
+            f"${WORKER_COUNT_ENVIRONMENT_VARIABLE} names no process count; set it to a whole number of at least 1"
+        )
     return arguments
+
+
+def _names_a_process_count(raw_value: str | None) -> bool:
+    """Whether the variable uvicorn reads a process count from is unset, or holds a count it can start."""
+    if raw_value is None:
+        return True
+    try:
+        return positive_integer(raw_value) >= 1
+    except argparse.ArgumentTypeError:
+        return False

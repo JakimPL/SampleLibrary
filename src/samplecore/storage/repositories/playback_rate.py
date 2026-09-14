@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Final, Protocol
 
-from sqlalchemy import Connection, func, select
+from sqlalchemy import Connection, String, cast, func, select
 from trackmod.schema.scalars import Rate
 
 from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, chunks, sample_playback_rate
@@ -21,6 +21,8 @@ class SamplePlaybackRateRepository(Protocol):
     def list_all(self) -> dict[str, Rate]: ...
 
     def count(self) -> int: ...
+
+    def revision(self) -> tuple[int, int]: ...
 
 
 class PostgresSamplePlaybackRateRepository:
@@ -64,3 +66,16 @@ class PostgresSamplePlaybackRateRepository:
         # pylint: disable-next=not-callable
         counted = self._connection.execute(select(func.count()).select_from(sample_playback_rate)).scalar_one()
         return int(counted)
+
+    def revision(self) -> tuple[int, int]:
+        """What the rates on file amount to: how many, and a sum of one hash per sample and rate.
+
+        A pass that replaces the rates with as many new ones moves the sum whenever any sample's
+        rate changed, so a reader holding an answer built from them can tell in one query.
+        """
+        digest = func.hashtextextended(
+            sample_playback_rate.c.sample_hash + ":" + cast(sample_playback_rate.c.rate, String), 0
+        )
+        # pylint: disable-next=not-callable
+        row = self._connection.execute(select(func.count(), func.coalesce(func.sum(digest), 0))).one()
+        return int(row[0]), int(row[1])

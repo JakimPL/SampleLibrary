@@ -35,7 +35,7 @@ vi.mock("../../../src/api/morph", async () => {
 
 vi.mock("../../../src/samples/useAudioPreview", async () => {
     const actual = await vi.importActual<typeof AudioPreview>("../../../src/samples/useAudioPreview");
-    return { ...actual, useAudioPreview: () => ({ play, playingKey: null }) };
+    return { ...actual, useAudioPreview: () => ({ play, playingKey: null, failure: null }) };
 });
 
 const SERVICE = {
@@ -178,5 +178,20 @@ describe("MorphPanel", () => {
             expect(screen.getByRole("button", { name: "▶ Play morph" })).toBeEnabled();
         });
         expect(getMorphStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it("plays nothing when a key is let go with the weight where it was", async () => {
+        getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
+        serveSamples();
+        useMorphStore.getState().setPair(FIRST, SECOND);
+        renderPanel();
+        await screen.findByText("kick_808");
+        await waitFor(() => {
+            expect(screen.getByRole("button", { name: "▶ Play morph" })).toBeEnabled();
+        });
+
+        fireEvent.keyUp(screen.getByRole("slider", { name: "Morph weight" }), { key: "Tab" });
+
+        expect(play).not.toHaveBeenCalled();
     });
 });

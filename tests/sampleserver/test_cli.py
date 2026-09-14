@@ -140,3 +140,29 @@ def test_an_unreachable_catalog_stops_the_start_before_uvicorn(tmp_path: Path, m
         cli.main([], prog=PROGRAM)
 
     assert not starts
+
+
+def test_an_environment_frontend_without_a_build_is_a_usage_error(
+    recorded: RecordedRun, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv(FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE, str(tmp_path / "unbuilt"))
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main([], prog=PROGRAM)
+
+    assert raised.value.code == 2
+    assert FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE in capsys.readouterr().err
+    assert not recorded.calls
+
+
+def test_a_process_count_the_environment_cannot_name_is_a_usage_error(
+    recorded: RecordedRun, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv(cli.WORKER_COUNT_ENVIRONMENT_VARIABLE, "abc")
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main([], prog=PROGRAM)
+
+    assert raised.value.code == 2
+    assert "WEB_CONCURRENCY" in capsys.readouterr().err
+    assert not recorded.calls

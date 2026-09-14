@@ -4,6 +4,7 @@ import argparse
 import logging
 import sys
 
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, integer_at_least, open_catalog_connection
 from samplecore.config import LibraryConfig
 from samplecore.models.scalars import MINIMUM_WORKER_COUNT
@@ -78,9 +79,7 @@ def _prune(config: LibraryConfig, outcome: CorpusOutcome) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Catalog every module under the configured source directory."
-    )
+    parser = command_parser(prog=prog, description="Catalog every module under the configured source directory.")
     parser.add_argument(
         "--workers",
         type=integer_at_least(MINIMUM_WORKER_COUNT),

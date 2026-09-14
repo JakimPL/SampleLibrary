@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
 from sampleextract.equivalence.detect import detect_equivalences
 
@@ -30,7 +31,7 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
         prog=prog, description="Detect bit-depth, amplification and resampled variants among the cataloged samples."
     )
     parser.add_argument(

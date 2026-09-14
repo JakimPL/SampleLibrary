@@ -6,6 +6,7 @@ from typing import Final
 
 from starlette.exceptions import HTTPException
 from starlette.responses import Response
+from starlette.routing import Match, Mount
 from starlette.staticfiles import StaticFiles
 from starlette.status import HTTP_404_NOT_FOUND
 from starlette.types import Scope
@@ -40,7 +41,47 @@ class SinglePageApplication(StaticFiles):
         return not under_api and not PurePosixPath(path).suffix
 
 
+class FrontendMount(Mount):
+    """The built frontend mounted at the root, taking every path outside the API's own segment.
+
+    A request under the API prefix that no API route takes is then the API's own to answer: a
+    wrong method gets its 405 with the methods allowed, a trailing slash its redirect, and an
+    unknown path its JSON 404, the same whether or not a frontend is served beside it.
+    """
+
+    def __init__(self, directory: Path, *, api_prefix: str) -> None:
+        super().__init__("/", app=SinglePageApplication(directory, api_prefix=api_prefix), name="frontend")
+        self._api_prefix = api_prefix.rstrip("/")
+
+    def matches(self, scope: Scope) -> tuple[Match, Scope]:
+        path: str = scope.get("path", "")
+        if path == self._api_prefix or path.startswith(f"{self._api_prefix}/"):
+            return Match.NONE, {}
+        return super().matches(scope)
+
+
+def built_frontend(directory: Path) -> Path:
+    """The directory, resolved, once it is known to hold a built frontend.
+
+    Raises:
+        ValueError: the directory holds no index document.
+    """
+    resolved = directory.resolve()
+    if not (resolved / INDEX_DOCUMENT).is_file():
+        raise ValueError(f"{resolved} holds no {INDEX_DOCUMENT}, so it is no built frontend")
+    return resolved
+
+
 def frontend_directory_from_environment() -> Path | None:
-    """The built frontend `samplelibrary serve --frontend` hands every worker, if it named one."""
+    """The built frontend `samplelibrary serve --frontend` hands every worker, if it named one.
+
+    Raises:
+        ValueError: the variable names a directory holding no built frontend.
+    """
     raw_directory = os.environ.get(FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE)
-    return Path(raw_directory) if raw_directory else None
+    if not raw_directory:
+        return None
+    try:
+        return built_frontend(Path(raw_directory))
+    except ValueError as error:
+        raise ValueError(f"{FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE}: {error}") from error

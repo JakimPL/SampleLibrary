@@ -84,7 +84,9 @@ export interface paths {
          * @description One sample's own fields plus every module occurrence that references it.
          *
          *     ``equivalence_member_count`` travels with the sample so a caller labeling it knows how many
-         *     near-duplicates the same choice would reach.
+         *     near-duplicates the same choice would reach. ``playback_rate_hz`` is the rate every reader
+         *     of the catalog plays the sample at, and ``playback_rates`` lists every rate its note events
+         *     strike it at, as they stand in the catalog.
          *
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
@@ -186,8 +188,8 @@ export interface paths {
          * @description The Euclidean distance between two samples' persisted, standardized spectral feature vectors.
          *
          *     Raises:
-         *         HTTPException: 404 when either sample has no persisted spectral feature vector yet -- not
-         *             yet embedded, or embedded before this metric existed.
+         *         HTTPException: 404 when either sample is not cataloged, or has no persisted spectral feature
+         *             vector yet -- not yet embedded, or embedded before this metric existed.
          */
         readonly get: operations["get_sample_distance_api_samples__sample_hash__distance__other_hash__get"];
         readonly put?: never;
@@ -214,7 +216,7 @@ export interface paths {
          *     glance shows, so a listing reads and plays without opening any of them.
          *
          *     Raises:
-         *         HTTPException: 404 when this sample has no persisted spectral feature vector yet.
+         *         HTTPException: 404 when this sample is not cataloged, or has no persisted spectral feature vector yet.
          */
         readonly get: operations["get_similar_samples_api_samples__sample_hash__similar_get"];
         readonly put?: never;
@@ -473,8 +475,10 @@ export interface paths {
          *     browser that holds the render is answered with a 304 by the process that made it.
          *
          *     Raises:
-         *         HTTPException: 503 when no inference process answers; the process's own 404 for a sample
-         *             it has no object for, and 422 for a weight off the grid, are relayed with their detail.
+         *         HTTPException: 503 when no inference process answers, and 504 when it takes longer than a
+         *             render is waited for; the process's own 404 for a sample it has no object for, and 422
+         *             for a point it will not render, are relayed with their detail; any other answer it
+         *             gives reads as 502.
          */
         readonly get: operations["get_morph_audio_api_morph_audio_get"];
         readonly put?: never;
@@ -494,7 +498,7 @@ export interface paths {
         };
         /**
          * Get Morph Status
-         * @description Whether the inference process answers, and what it serves when it does.
+         * @description Whether the inference process answers within a moment, and what it serves when it does.
          */
         readonly get: operations["get_morph_status_api_morph_status_get"];
         readonly put?: never;
@@ -621,6 +625,14 @@ export interface components {
             readonly path: readonly string[];
             /** Score */
             readonly score: number;
+        };
+        /**
+         * ErrorDetail
+         * @description What a refused request is told, in the one shape every route answers a refusal in.
+         */
+        readonly ErrorDetail: {
+            /** Detail */
+            readonly detail: string;
         };
         /** HTTPValidationError */
         readonly HTTPValidationError: {
@@ -1419,6 +1431,15 @@ export interface operations {
                     readonly "application/json": components["schemas"]["ModuleDetail"];
                 };
             };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
             /** @description Validation Error */
             readonly 422: {
                 headers: {
@@ -1486,6 +1507,15 @@ export interface operations {
                     readonly "application/json": components["schemas"]["SampleDetail"];
                 };
             };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
             /** @description Validation Error */
             readonly 422: {
                 headers: {
@@ -1513,7 +1543,18 @@ export interface operations {
                 headers: {
                     readonly [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    readonly "audio/wav": unknown;
+                };
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
             };
             /** @description Validation Error */
             readonly 422: {
@@ -1546,6 +1587,15 @@ export interface operations {
                     readonly "application/json": components["schemas"]["SamplePreview"];
                 };
             };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
             /** @description Validation Error */
             readonly 422: {
                 headers: {
@@ -1575,6 +1625,15 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": readonly components["schemas"]["SampleRelation"][];
+                };
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description Validation Error */
@@ -1609,6 +1668,15 @@ export interface operations {
                     readonly "application/json": components["schemas"]["SampleDistance"];
                 };
             };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
             /** @description Validation Error */
             readonly 422: {
                 headers: {
@@ -1640,6 +1708,15 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": readonly components["schemas"]["SimilarSample"][];
+                };
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description Validation Error */
@@ -1791,6 +1868,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
             /** @description Validation Error */
             readonly 422: {
                 headers: {
@@ -1824,6 +1910,15 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["AnnotationsWritten"];
+                };
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
             /** @description Validation Error */
@@ -1895,7 +1990,25 @@ export interface operations {
                 headers: {
                     readonly [name: string]: unknown;
                 };
+                content: {
+                    readonly "audio/wav": unknown;
+                };
+            };
+            /** @description The caller's validator names the render it already holds. */
+            readonly 304: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
                 content?: never;
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
             };
             /** @description Validation Error */
             readonly 422: {
@@ -1904,6 +2017,33 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Bad Gateway */
+            readonly 502: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Service Unavailable */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Gateway Timeout */
+            readonly 504: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
                 };
             };
         };

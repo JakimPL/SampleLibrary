@@ -3,9 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated, Final, Self
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi import Path as RoutePath
-from fastapi import Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Strict, model_validator
 from sqlalchemy import Connection
 
@@ -20,7 +18,7 @@ from samplecore.models.annotation import (
     LabelText,
 )
 from samplecore.models.base import FROZEN
-from samplecore.models.scalars import SAMPLE_HASH_PATTERN, Rating, SampleHash
+from samplecore.models.scalars import Rating, SampleHash
 from samplecore.storage.annotation_writes import AnnotationWrite, write_annotation_changes
 from samplecore.storage.curation import claim_annotation_writes, read_tag_ranks
 from samplecore.storage.database import start_batch
@@ -30,10 +28,10 @@ from samplecore.storage.repositories.sample_annotation import (
 )
 from sampleserver.dependencies import get_connection, get_curation_connection
 from sampleserver.equivalence import equivalence_class_members
+from sampleserver.parameters import NOT_FOUND_RESPONSE, SampleHashPath
 
 router = APIRouter(prefix="/curation", tags=["curation"])
 
-SampleHashPath = Annotated[str, RoutePath(pattern=SAMPLE_HASH_PATTERN)]
 DECISION_FIELDS: Final[frozenset[str]] = frozenset(decision.value for decision in AnnotationDecision)
 
 
@@ -106,7 +104,7 @@ class AnnotationsWritten(BaseModel):
     skipped: tuple[SampleHash, ...]
 
 
-@router.patch("/annotations/{sample_hash}")
+@router.patch("/annotations/{sample_hash}", responses=NOT_FOUND_RESPONSE)
 def change_annotation(
     sample_hash: SampleHashPath,
     request: AnnotationChangeRequest,
@@ -147,7 +145,7 @@ def change_annotation(
     )
 
 
-@router.delete("/annotations/{sample_hash}", status_code=204)
+@router.delete("/annotations/{sample_hash}", status_code=204, responses=NOT_FOUND_RESPONSE)
 def remove_annotation(
     sample_hash: SampleHashPath, curation_connection: Connection = Depends(get_curation_connection)
 ) -> Response:

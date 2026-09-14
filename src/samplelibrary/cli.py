@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Final
 
+from samplecore.cli_parsing import command_parser
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplelibrary.commands import COMMANDS, Command, CommandGroup
 
@@ -93,7 +94,7 @@ def _require_arguments_after_command(
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog=PROGRAM_NAME, description="Run one operation on the sample library.")
+    parser = command_parser(prog=PROGRAM_NAME, description="Run one operation on the sample library.")
     parser.add_argument(
         CONFIG_OPTION,
         type=Path,

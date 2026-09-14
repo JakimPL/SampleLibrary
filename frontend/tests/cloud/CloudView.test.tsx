@@ -264,6 +264,46 @@ describe("CloudView", () => {
         expect(onClear).toHaveBeenCalled();
     });
 
+    it("keeps the highlight through a click that ends a pan", async () => {
+        const onClear = vi.fn();
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onClear });
+
+        fireEvent.mouseDown(latestCanvas(), { button: 0, clientX: 10, clientY: 10 });
+        fireEvent.click(latestCanvas(), { button: 0, clientX: 60, clientY: 40 });
+
+        expect(onClear).not.toHaveBeenCalled();
+    });
+
+    it("moves the highlight among the drawn points without drawing them again", async () => {
+        const second: EntityRef = { kind: "sample", hash: "c".repeat(64) };
+        const points = [point(SAMPLE_REF, 0, 0), point(second, 1, 1)];
+        const { rerender } = await renderCloudView({ points, highlighted: SAMPLE_REF });
+        const draws = latestInstance().draw.mock.calls.length;
+
+        rerender(
+            <CloudView
+                coloring={CATEGORY_COLORING}
+                points={points}
+                highlighted={second}
+                onSelect={vi.fn()}
+                onFocus={vi.fn()}
+                onClear={vi.fn()}
+                onHover={vi.fn()}
+                onCompare={vi.fn()}
+                onJoin={vi.fn()}
+                onActivate={vi.fn()}
+                link={null}
+                onWeightChange={vi.fn()}
+                onWeightCommit={vi.fn()}
+                anchor={null}
+            />,
+        );
+        await flushDraw();
+
+        expect(latestInstance().select).toHaveBeenLastCalledWith([1], { preventEvent: true });
+        expect(latestInstance().draw.mock.calls.length).toBe(draws);
+    });
+
     it("selects the highlighted point within the scatterplot itself", async () => {
         await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], highlighted: SAMPLE_REF });
 

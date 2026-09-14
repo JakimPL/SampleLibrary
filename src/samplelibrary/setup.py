@@ -5,6 +5,7 @@ import logging
 import sys
 from enum import StrEnum, unique
 
+from samplecore.cli_parsing import add_subcommand, command_parser
 from samplecore.cli_support import bootstrap_cli, configure_console_output_encoding, configure_logging
 from samplecore.config import ConfigurationError, create_config_file, resolve_config_path
 from samplecore.storage.cluster.provisioning import ProvisioningError, ProvisioningSummary, provision
@@ -99,17 +100,17 @@ def _report_obstacle(error: ProvisioningError) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Put a config file in place, or prepare the databases it names."
-    )
+    parser = command_parser(prog=prog, description="Put a config file in place, or prepare the databases it names.")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    commands.add_parser(
+    add_subcommand(
+        commands,
         SetupCommand.CONFIG.value,
-        help="Copy config.example.toml to config.toml, keeping any config file already there.",
+        summary="Copy config.example.toml to config.toml, keeping any config file already there.",
     )
-    commands.add_parser(
+    add_subcommand(
+        commands,
         SetupCommand.DATABASE.value,
-        help="Create the role and the three databases this project expects, where they are missing.",
+        summary="Create the role and the three databases this project expects, where they are missing.",
     )
     return parser.parse_args(argv)

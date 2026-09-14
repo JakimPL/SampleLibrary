@@ -16,7 +16,7 @@ from samplecore.storage.database import connect
 
 _LOG_FORMAT: Final[str] = "%(asctime)s  %(message)s"
 _LOG_DATE_FORMAT: Final[str] = "%H:%M:%S"
-_CONFIRM_FLAG_HINT: Final[str] = "Nothing has been changed. Re-run with --confirm to actually do this."
+_CONFIRM_FLAG_HINT: Final[str] = "Nothing has been changed. Pass --confirm to carry it out."
 
 MINIMUM_PORT: Final[int] = 1
 MAXIMUM_PORT: Final[int] = 65_535

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -110,3 +111,29 @@ def test_vocabulary_lists_the_tags_in_use_as_a_tree(
     assert "    2  HI-HAT" in reported
     assert "        1  CLOSED" in reported
     assert "Carried by one sample each: ELECTRIC, HI-HAT: CLOSED, HI-HAT: OPEN, LO-FI." in reported
+
+
+def test_an_import_from_a_file_that_is_not_there_ends_with_one_message(
+    configured: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["import", "--path", str(tmp_path / "absent.jsonl")], prog=PROGRAM)
+
+    assert raised.value.code == 1
+    reported = capsys.readouterr().err
+    assert "Moved nothing:" in reported
+    assert "Traceback" not in reported
+
+
+def test_the_vocabulary_prints_its_lines_as_data(
+    connection: Connection, stored_annotation: SampleAnnotation, configured: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    PostgresSampleAnnotationRepository(connection).upsert_many(
+        (stored_annotation.model_copy(update={"label": "KICK"}),)
+    )
+    connection.commit()
+
+    main(["vocabulary"], prog=PROGRAM)
+
+    first_line = capsys.readouterr().out.splitlines()[0]
+    assert re.match(r"^\s*1\s+KICK$", first_line)

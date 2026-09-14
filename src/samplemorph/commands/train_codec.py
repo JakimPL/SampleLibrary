@@ -6,6 +6,7 @@ from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import non_negative_integer, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.hashing import file_sha256
@@ -38,8 +39,10 @@ _logger = logging.getLogger(__name__)
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(
-        COMMAND_NAME, help="Teach a codec that decodes a grid from a stored descriptor's vector and a residual."
+    parser = add_subcommand(
+        commands,
+        COMMAND_NAME,
+        summary="Teach a codec that decodes a grid from a stored descriptor's vector and a residual.",
     )
     parser.add_argument(
         "--cache", type=str, default=DEFAULT_CODEC_CACHE_NAME, help="Which full-resolution grid cache to train over."

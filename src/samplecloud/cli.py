@@ -17,6 +17,7 @@ from samplecloud.experiments import (
 )
 from samplecloud.registries import BACKEND_REGISTRY, DEFAULT_BACKEND_NAME
 from samplecloud.run import EmbeddingOptions, EmbeddingSummary, create_experiment, experiment_to_rebuild, run_embedding
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import LEARNED_BACKEND_NAME, Reading
@@ -170,9 +171,7 @@ def _report(summary: EmbeddingSummary) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Extract sample features and reduce them to cloud coordinates."
-    )
+    parser = command_parser(prog=prog, description="Extract sample features and reduce them to cloud coordinates.")
     parser.add_argument(
         "--backend",
         choices=sorted({*BACKEND_REGISTRY, LEARNED_BACKEND_NAME}),

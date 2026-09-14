@@ -5,6 +5,7 @@ from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import add_subcommand
 from samplecore.config import LibraryConfig
 from samplemorph.commands.analysis_training import (
     AnalysisTrainer,
@@ -29,8 +30,10 @@ FLAGS: Final[AnalysisTrainingFlags] = AnalysisTrainingFlags(
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(
-        COMMAND_NAME, help="Teach a restorer the fine structure the grid removes from this pipeline's magnitudes."
+    parser = add_subcommand(
+        commands,
+        COMMAND_NAME,
+        summary="Teach a restorer the fine structure the grid removes from this pipeline's magnitudes.",
     )
     add_analysis_training_arguments(parser, FLAGS)
 

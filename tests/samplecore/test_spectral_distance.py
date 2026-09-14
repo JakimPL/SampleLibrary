@@ -73,3 +73,13 @@ def test_nearest_neighbors_respects_the_limit() -> None:
 def test_nearest_neighbors_raises_for_an_unknown_target() -> None:
     with pytest.raises(KeyError):
         nearest_neighbors(HASH_A, _vectors({HASH_B: (0.0, 0.0)}), limit=10)
+
+
+def test_nearest_neighbors_break_a_tie_at_the_limit_by_ascending_hash() -> None:
+    """A tie straddling the last place still resolves by hash, whichever rows the partition picked."""
+    vectors = SpectralVectors(
+        hashes=("t", "d", "c", "b", "a"),
+        matrix=np.array([[0.0], [1.0], [1.0], [1.0], [2.0]]),
+    )
+
+    assert nearest_neighbors("t", vectors, limit=2) == (("b", 1.0), ("c", 1.0))

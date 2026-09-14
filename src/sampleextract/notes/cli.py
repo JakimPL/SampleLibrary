@@ -4,6 +4,7 @@ import argparse
 import logging
 import sys
 
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from sampleextract.notes.backfill import extract_missing_notes
 from sampleextract.notes.playback_rates import record_playback_rates
@@ -48,7 +49,7 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
         prog=prog, description="Read the notes each module plays, and the rate each sample is heard at."
     )
     parser.add_argument(

@@ -6,6 +6,7 @@ from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from, train_and_report
@@ -32,8 +33,10 @@ _logger = logging.getLogger(__name__)
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(
-        COMMAND_NAME, help="Teach a descriptor from a grid cache, a teacher experiment and the hand labels."
+    parser = add_subcommand(
+        commands,
+        COMMAND_NAME,
+        summary="Teach a descriptor from a grid cache, a teacher experiment and the hand labels.",
     )
     parser.add_argument("--cache", type=str, default=DEFAULT_GRID_CACHE_NAME, help="Which grid cache to train over.")
     parser.add_argument(

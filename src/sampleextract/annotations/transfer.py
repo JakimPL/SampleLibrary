@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from pydantic import ValidationError
 from sqlalchemy import Connection
 
 from samplecore.models.annotation import SampleAnnotation
@@ -13,6 +14,10 @@ from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
 DEFAULT_ANNOTATION_FILE: Final[Path] = Path("annotations.jsonl")
+
+
+class AnnotationFileRefused(ValueError):
+    """Raised when an annotations file cannot be read or written as the list of annotations it stands for."""
 
 
 @dataclass(frozen=True)
@@ -30,11 +35,17 @@ def export_annotations(connection: Connection, *, path: Path) -> TransferSummary
     `import_annotations` restores it into a database that has never held one. This is the copy that
     survives losing the database, which matters here more than anywhere else in the library, a
     person's own decisions being the one thing no pass can rebuild.
+
+    Raises:
+        AnnotationFileRefused: the file cannot be written.
     """
     annotations = PostgresSampleAnnotationRepository(connection).list_all()
-    with path.open("w", encoding="utf-8", newline="\n") as file:
-        for annotation in annotations:
-            file.write(f"{annotation.model_dump_json()}\n")
+    try:
+        with path.open("w", encoding="utf-8", newline="\n") as file:
+            for annotation in annotations:
+                file.write(f"{annotation.model_dump_json()}\n")
+    except OSError as error:
+        raise AnnotationFileRefused(f"{path} cannot be written ({error.strerror})") from error
 
     return TransferSummary(annotations=len(annotations), path=path)
 
@@ -47,8 +58,8 @@ def import_annotations(connection: Connection, *, path: Path) -> TransferSummary
     afterward, whatever it held before. The whole file lands in one transaction, or none of it does.
 
     Raises:
-        ValidationError: a line holds something other than an annotation.
-        ValueError: the file speaks for one sample on more than one line.
+        AnnotationFileRefused: the file cannot be read, a line holds something other than an
+            annotation, or the file speaks for one sample on more than one line.
     """
     annotations = _read_annotation_lines(path)
     with start_batch(connection):
@@ -69,18 +80,21 @@ def _read_annotation_lines(path: Path) -> tuple[SampleAnnotation, ...]:
     them, so the file is split on the newlines the export writes and on nothing else.
 
     Raises:
-        ValidationError: a line holds something other than an annotation.
-        ValueError: the file speaks for one sample on more than one line.
+        AnnotationFileRefused: the file cannot be read, a line holds something other than an
+            annotation, or the file speaks for one sample on more than one line.
     """
     line_numbers_by_hash: dict[str, list[int]] = defaultdict(list)
     annotations: list[SampleAnnotation] = []
-    with path.open(encoding="utf-8", newline="") as file:
-        for line_number, line in enumerate(file, start=1):
-            if line.strip() == "":
-                continue
-            annotation = SampleAnnotation.model_validate_json(line)
-            line_numbers_by_hash[annotation.sample_hash].append(line_number)
-            annotations.append(annotation)
+    try:
+        with path.open(encoding="utf-8", newline="") as file:
+            for line_number, line in enumerate(file, start=1):
+                if line.strip() == "":
+                    continue
+                annotation = _annotation_on(line, line_number=line_number, path=path)
+                line_numbers_by_hash[annotation.sample_hash].append(line_number)
+                annotations.append(annotation)
+    except (OSError, UnicodeDecodeError) as error:
+        raise AnnotationFileRefused(f"{path} cannot be read ({error})") from error
 
     repeated = {sample_hash: lines for sample_hash, lines in line_numbers_by_hash.items() if len(lines) > 1}
     if repeated:
@@ -88,5 +102,21 @@ def _read_annotation_lines(path: Path) -> tuple[SampleAnnotation, ...]:
             f"{sample_hash} on lines {', '.join(str(number) for number in lines)}"
             for sample_hash, lines in sorted(repeated.items())
         )
-        raise ValueError(f"{path} speaks for a sample on more than one line: {described}")
+        raise AnnotationFileRefused(f"{path} speaks for a sample on more than one line: {described}")
     return tuple(annotations)
+
+
+def _annotation_on(line: str, *, line_number: int, path: Path) -> SampleAnnotation:
+    """The annotation one line of the file holds.
+
+    Raises:
+        AnnotationFileRefused: the line holds something other than an annotation.
+    """
+    try:
+        return SampleAnnotation.model_validate_json(line)
+    except ValidationError as error:
+        first = error.errors()[0]
+        location = ".".join(str(part) for part in first["loc"]) or "the line"
+        raise AnnotationFileRefused(
+            f"line {line_number} of {path} holds no annotation: {location}: {first['msg']}"
+        ) from error

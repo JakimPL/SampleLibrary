@@ -6,6 +6,7 @@ from enum import StrEnum, unique
 
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.config import LibraryConfig
 from samplemorph.commands import (
@@ -69,7 +70,7 @@ def _on_catalog(run: CatalogCommand, config: LibraryConfig, arguments: argparse.
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
         prog=prog, description="Fit, train and render the decodable representation, and serve morphs over HTTP."
     )
     commands = parser.add_subparsers(dest="command", required=True)

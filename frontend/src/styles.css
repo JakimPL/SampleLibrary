@@ -1658,3 +1658,11 @@ table.data td .annotation-editor-input {
     border: none;
     background: transparent;
 }
+
+.not-found {
+    display: grid;
+    place-content: center;
+    gap: 0.5rem;
+    min-height: 100vh;
+    text-align: center;
+}
