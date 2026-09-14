@@ -673,10 +673,11 @@ and the same field on the detail and cloud-point models): the guessed category t
 a reader sees both what a person decided and what the keyword table inferred, and `CategoryBadge` is
 the single place that rule is applied. The frontend colors the sample cloud by category
 (`regl-scatterplot`'s own categorical coloring, one fixed hue per `SampleCategory` declared as a CSS
-custom property per theme in `styles.css`) and shows the category as a badge everywhere a sample's
-name appears; the same color and label always travel together, since fourteen categories are too
-many to stay reliably distinguishable by hue alone for every viewer. In the badge a hand label
-wears one style of its own, being free text.
+custom property per theme in `styles.css`, the uncategorized samples drawn first as a finer, fainter
+substrate; [The cloud on screen](#the-cloud-on-screen) describes the drawing) and shows the category
+as a badge everywhere a sample's name appears; the same color and label always travel together,
+since fourteen categories are too many to stay reliably distinguishable by hue alone for every
+viewer. In the badge a hand label wears one style of its own, being free text.
 
 The cloud can also color by the hand labels' own tags, with nothing about any tag known to the
 frontend. `GET /curation/annotations/tags` reads the tag tree out of the labels through
@@ -689,8 +690,8 @@ chroma each theme declares), so a tag keeps its color as the vocabulary grows an
 the next hue; the legend is the picker, painting the most used top-level tags until a person
 chooses their own, listing the painted ones with the rest behind a toggle inside a strip of at
 most three rows, and a sample carrying several painted tags takes the first it was given
-(`labelColoring.ts`). Everything a painted tag does not reach stays on the recessive tone the
-uncategorized points use.
+(`labelColoring.ts`). Every point outside the painted tags joins the uncategorized ones in the
+substrate, on its recessive tone.
 
 A third kind of label travels beside the two: what the listening model hears a sample as, the
 suggestions a `zero_shot` scoring wrote. `GET /cloud/suggestions` carries each sample's first
@@ -704,6 +705,67 @@ near-duplicates the way the editor's own default does, and a tag the label alrea
 taken. The suggestion stays a suggestion until a person accepts it: the hand label wins wherever
 one exists, and the badge that names a sample never shows a suggestion.
 
+## The cloud on screen
+
+`frontend/src/cloud/CloudView.tsx` draws the cloud as a stack of layers inside `.cloud-wrap`, which
+paints the theme's ground. From the bottom:
+
+| Layer | Drawn by | Shows |
+|---|---|---|
+| `canvas.cloud-underlay` | `useUnderlay`, on a 2D canvas | the grid, and the density glow under a theme that declares one |
+| `canvas.cloud-dots` | `regl-scatterplot` | every point as a dot; the pointer target for panning, zooming, hit-testing and selection |
+| `canvas.cloud-nodes` | `useNodeLayer` and `hollowPointRenderer.ts`, on WebGL through `regl` | every point as a hollow square or ring of one size at every zoom |
+| `svg.cloud-markers` | `CloudMarkers` | the hovered and the selected point, each in the theme's point shape |
+| overlays | `CloudView`, `MorphBand`, `MorphLink` | the ping locating a highlighted point, the pairing band and the morph link |
+
+Every layer moves within the frame that draws the points. The scatterplot publishes its `drawing`
+event synchronously inside the animation frame rendering a moved view, and `CloudView` answers it,
+and every resize of the container, in one pass (`syncView`): it derives a `ViewTransform` from the
+camera matrix (`viewTransform.ts`), repaints the underlay and the node layer through it, and commits
+the overlays' positions from `getScreenPosition` through `flushSync`, so the frame paints dots,
+nodes, grid and markers from one view. With `W` and `H` the container's size in CSS pixels and
+`view` the column-major camera matrix, the scatterplot places a data point `(x, y)` at
+
+```
+screenX = W/2 + (H/2) * (view[0] * x + view[4] * y + view[12])
+screenY = H/2 - (H/2) * (view[1] * x + view[5] * y + view[13])
+```
+
+Half the height is one clip unit on both axes, which keeps the data square in a panel of any aspect.
+
+The scatterplot draws each palette slot at a size and opacity of its own, the substrate's slot
+first, finer and fainter, so the named points stand on a ground whose density still shows. The
+active and hover colors arrive as one color per slot, which paints a selected or hovered categorical
+point in the theme's own selection and hover colors. The library compiles the point shape into its
+shaders at creation, so a theme that changes `--cloud-point-shape` recreates the scatterplot with its
+camera carried over.
+
+`--cloud-node-mode` sets when the node layer takes over from the dots, through a short crossfade of
+the two canvases (`.cloud-wrap-nodes`): `always` at every zoom, and `detail` once the view holds at
+most as many points as markers covering 30% of the surface (`detailLevel.ts`). The node shader
+places every frame on the device's pixel grid, so a one-pixel outline stays crisp at any pixel ratio,
+and paints it from the palette the dots use, the substrate at `--cloud-node-substrate-opacity`.
+
+The grid's lines stand a power of two apart in data units, the smallest step keeping them at least
+`--cloud-grid-spacing` pixels apart (`gridSpacing.ts`), so a zoom halves or doubles the grid in
+place; every line is a row, every fourth a beat and every sixteenth a measure, each rank in its own
+color, drawn on both axes or as vertical lines with a zero line across `y = 0`. The glow, under a
+theme with a positive `--cloud-glow-opacity`, is one image built whenever the points or their colors
+change (`densityGlow.ts`): the named points counted into a 256 by 256 field over the normalized data
+domain, blurred by three box passes, each cell in the average color of its points and as opaque as
+the logarithm of its count. The underlay stretches that image over the screen box its domain covers.
+
+Every visual value above is a CSS custom property in `styles.css` (`--cloud-point-*`,
+`--cloud-substrate-*`, `--cloud-marker-*`, `--cloud-node-*`, `--cloud-grid-*`, `--cloud-glow-opacity`,
+`--cloud-link-*`, `--cloud-band-dash`, `--cloud-ping-*`, `--cloud-hover-color`), so the themes differ
+in tokens alone: `cloudRenderSettings.ts` reads the ones the canvases use into one
+`CloudRenderSettings` whenever the theme changes, and the SVG overlays take theirs through CSS. The
+dark and light themes draw round dots over their substrate, rings in detail, cased markers and a
+solid accent link. The OpenMPT theme draws its envelope editor: a black ground, a vertical grid,
+every point a hollow square in its category's color at every zoom, the selected point yellow and the
+morph pair joined by a blue line. A system dark preference applies the dark block beneath a chosen
+OpenMPT theme as well, so the OpenMPT block declares every token the dark block declares.
+
 ## Morphs in the application
 
 A morph is a pair of samples and a weight between them, held in `frontend/src/morph/morphStore.ts`
@@ -715,8 +777,9 @@ another joins the two, and a right-click on a point joins it to the highlighted 
 While the button is held, a band runs from the point the drag started at, or from that sample when
 the press landed on empty space, to the cursor, snapping to the point under it
 (`frontend/src/cloud/MorphBand.tsx`), so the pair a release would join is visible before it lands;
-the join then draws a dashed line between the two with a marker that is the weight
-(`frontend/src/cloud/MorphLink.tsx`), pinned through pan and zoom the way the ping is. The Morph
+the join then draws a line between the two ends' markers with a knob on it that is the weight
+(`frontend/src/cloud/MorphLink.tsx`), moving with the points through pan and zoom like every overlay
+on the cloud. The Morph
 panel mirrors the same weight as a slider, names both ends with the
 link every listing row carries (a click highlights the end, a double-click opens it in the Sample
 Detail), and plays the render on release through the one preview element every sample plays
