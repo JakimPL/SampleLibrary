@@ -14,6 +14,8 @@ wheels/
 .venv/
 
 /config.toml
+# Compose reads the port a local PostgreSQL publishes on from here.
+.env
 
 notebooks/__marimo__/
 

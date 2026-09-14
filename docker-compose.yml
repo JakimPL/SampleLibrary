@@ -21,12 +21,26 @@ services:
     image: samplelibrary-server
     ports:
       - "127.0.0.1:8000:8000"
-    # Compose validates every service, so these defaults let `postgres` start alone.
+    # Compose validates every service, so these defaults let `postgres` start alone. A path that is
+    # not there fails the start rather than leaving an empty directory mounted in its place.
     volumes:
-      - ${LIBRARY_ROOT:-./library}:/library:ro
-      - ${CONFIG_PATH:-./docker/config.toml}:/app/config.toml:ro
+      - type: bind
+        source: ${LIBRARY_ROOT:-./library}
+        target: /library
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CONFIG_PATH:-./docker/config.toml}
+        target: /app/config.toml
+        read_only: true
+        bind:
+          create_host_path: false
     environment:
       SAMPLELIBRARY_DATABASE_URL: postgresql+psycopg://samplelibrary:samplelibrary@postgres:5432/samplelibrary
+    # Lets `[inference] url = "http://host.docker.internal:8010"` reach a renderer on the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

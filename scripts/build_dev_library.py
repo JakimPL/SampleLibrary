@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 from pathlib import Path
 from typing import Callable, Final, NamedTuple
@@ -358,14 +359,19 @@ def _write_config(
     config_path = output_directory / "config.toml"
     config_path.write_text(
         "[library]\n"
-        f'module_source_directory = "{modules_directory.resolve().as_posix()}"\n'
-        f'library_root = "{catalog_directory.resolve().as_posix()}"\n'
-        f'database_url = "{database_url}"\n'
+        f"module_source_directory = {_toml_string(modules_directory.resolve().as_posix())}\n"
+        f"library_root = {_toml_string(catalog_directory.resolve().as_posix())}\n"
+        f"database_url = {_toml_string(database_url)}\n"
         "\n"
         "[inference]\n"
-        f'url = "{SANDBOX_INFERENCE_URL}"\n',
+        f"url = {_toml_string(SANDBOX_INFERENCE_URL)}\n",
         encoding="utf-8",
     )
+
+
+def _toml_string(value: str) -> str:
+    """A value written as a TOML basic string, whose escapes JSON's own string escapes are a subset of."""
+    return json.dumps(value)
 
 
 def build_dev_library(

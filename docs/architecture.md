@@ -14,7 +14,7 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 |---|---|---|
 | `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the reading of a hand label as tag paths and the agreement between two of them (`samplecore.labeling`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the pitch rule that turns an occurrence rate and a pressed key into the one rate a sample is really played at, the anchoring rule that keeps a hand label attached to its sample, the waveform hygiene every analysis shares (folding to mono, the subsonic high-pass), the auditory front end (`samplecore.auditory`: an ERB-spaced gammatone bank, subband envelopes and the two-lobe modulation spectrum a listener hears flutter and roughness on, designed once as data so a numpy reading and a torch loss apply the same kernels), and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `scipy`, `pydantic`, `soundfile` |
 | `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each) and folding those notes into the rate each sample is heard at, the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
-| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `samplemorph` trains, and through its text tower suggests labels for every sample from a vocabulary of prompts (`samplecloud.suggestions`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the keyword table names alike, and whether it groups what the note events say the library plays alike. Depends on `samplecore` only, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
+| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `samplemorph` trains, and through its text tower suggests labels for every sample from a vocabulary of prompts (`samplecloud.suggestions`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the keyword table names alike, and whether it groups what the note events say the library plays alike. Depends on `samplecore`, and on `samplemorph` inside its `learned` backend's factory, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `samplemorph` (the `learned` backend), `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn`, `mlflow` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
 | `samplemorph` | The decodable-representation pipeline: canonicalizing a sample into a fixed-size sound image on a log-frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a pluggable `Vocoder` turning a magnitude spectrogram back into audible frames -- in production a restorer taught what the grid's band averaging removes from this library's own sounds, followed by phase gradient heap integration under a Gaussian analysis -- and a learned `Descriptor` (`samplemorph.descriptors`) that reads the canonical grid as one vector: distilled from the pretrained listening model, taught by retuned views that a retuning changes nothing, and by the hand labels what the listener calls alike. A conditioned codec (`samplemorph.codecs.conditioned`) decodes the grid from that descriptor beside a small residual under a prior, so a morph moves a sound's identity through the space the harness judges and its particulars through a space where every point decodes. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner -- which is what leaves the representation invertible where the sample cloud's descriptors are not. Training passes (`samplemorph.training`) run under a run tracker and read a grid cache canonicalized once under the library root. Each shell command is one module under `samplemorph.commands`, and the ones that train import the trainer only when they run, so parsing arguments and the commands that train nothing stay clear of it. `samplemorph.service` is the same pipeline over HTTP: the morph inference process (`samplelibrary morph serve`), which loads the fitted models once, renders any point between two stored samples on request, and is what the web API dials for a morph. Depends on `samplecore` only. | `samplecore`, `librosa`, `scikit-learn`, `torch`, `fastapi`, `uvicorn` (the `morph` extra) |
 | `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples, and the morph routes, which relay renders from the inference process over HTTP. Every route is served under `API_PREFIX` (`/api`), which keeps the whole API inside one path segment and leaves every other path to the single-page application's own routes. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn`, `httpx` (the `server` extra) |
 | `samplelibrary` | The `samplelibrary` command line: one parser naming every operation on the library, which hands the rest of a command line to the module owning that command and imports that module as the command runs, so listing the commands stays instant and each command needs its own package's extras alone. A global `--config` sets `SAMPLELIBRARY_CONFIG` and drops any exported `SAMPLELIBRARY_DATABASE_URL`, so the file it names supplies the database too, and every process a command starts inherits both -- uvicorn's workers and a pipeline's worker processes included. The dispatcher accepts a command's own arguments only after its name. It also holds the commands that belong to no pipeline: `setup` (the config file and the databases), `reset`, and `tracking uri` / `tracking ui`. It sits over every other package. | every package above |
@@ -24,7 +24,8 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 - `samplecore` has no dependents among its peers: nothing it does can accidentally couple to the
   extraction pipeline, the embedding pipeline, or the web server.
 - `sampleserver` never imports `sampleextract`, `samplecloud` or `samplemorph`: the read API cannot trigger a
-  batch job, and cannot inherit either pipeline's heavier dependencies.
+  batch job, and cannot inherit either pipeline's heavier dependencies. The pipelines never import
+  `sampleserver` either: they write the catalog the server reads, and meet it there alone.
 - `sampleextract` is declared independent of both `samplecloud` and `samplemorph`: extraction
   never waits on embedding, and a change to either pipeline's dependencies never touches it.
 - `samplemorph` never imports `samplecloud`, while `samplecloud` may import `samplemorph`: the
@@ -51,7 +52,8 @@ Postgres is the single authoritative store for all catalog metadata (`Module`, `
 `s3m_sample_properties` tables (MOD carries no properties beyond the shared base, so it has no
 table of its own), `SampleRelation`, `Experiment`, `sample_feature_vector`,
 `sample_cloud_coordinates`, `module_cloud_coordinates`, `sample_spectral_feature`,
-`sample_thumbnail`, `module_instrument`, `note_event`, and `module_note_extraction`). Equivalence classes are not a stored table: `samplecore.equivalence_classes`
+`sample_thumbnail`, `module_instrument`, `note_event`, `module_note_extraction`, `sample_playback_rate`,
+`sample_label_suggestion`, and `cloud_promotion`). Equivalence classes are not a stored table: `samplecore.equivalence_classes`
 derives them on request from `SampleRelation` rows, since the relation graph stays small even at
 real-catalog scale. The filesystem content-addressable store —
 `{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file per unique `Sample` — is the single
@@ -65,7 +67,16 @@ table: two experiments extracting concurrently write disjoint rows, keyed by
 `(experiment_id, sample_hash)`, so neither can clobber the other's vectors. `sample_cloud_coordinates`,
 `module_cloud_coordinates`, and `sample_spectral_feature` stay singular and global -- they represent
 whichever experiment has been deliberately *promoted* (`samplecloud.reduce.reduce_and_persist_coordinates`,
-given an explicit `experiment_id`), not per-experiment scratch space.
+given an explicit `experiment_id`), not per-experiment scratch space. `cloud_promotion` holds one row
+naming that experiment, written in the same transaction as the coordinates, which is how a later
+pass knows which experiment the cloud shows: `samplelibrary cloud embed --resume-promoted`, the
+step `just rebuild` runs, resumes it rather than opening a new one.
+
+Stored objects are written through `samplecore.storage.atomic.write_atomically`: staged beside the
+destination, flushed, and moved into place whole, ending with the permissions a plain file gets
+under the writing process's umask, so a library one user extracts is readable by a container
+running as another. A library written before objects were made readable wants
+`chmod -R a+rX objects` under its root once.
 
 `note_event` holds one row per key a module's patterns press, keyed by its grid position
 `(module_id, pattern_index, row_index, channel_index)`. Beside the key a cell states, each row
@@ -126,10 +137,11 @@ reason it carries no foreign key into the catalog: one would either delete these
 samples or block the purge outright. A test in `tests/samplecore/storage/test_reset.py` pins exactly
 that, seeding an annotation and asserting it survives a full reset.
 
-A label is stored in upper case, which is the case it is shown in: `LabelText` normalizes it at the
-model boundary, so every path that records one — the curation route, a JSONL import, a relink —
-agrees, and the vocabulary offered back gathers one entry per wording rather than one per way of
-typing it.
+A label is stored in one canonical spelling, `HI-HAT: CLOSED, LO-FI` — upper case, one space after
+each colon and comma, each tag path once, in the order written — which is the spelling it is shown in:
+`LabelText` applies `samplecore.labeling.labels.canonical_label` at the model boundary, so every path
+that records one — the curation route, a JSONL import, a relink — agrees, and the vocabulary offered
+back gathers one entry per wording rather than one per way of typing it.
 
 What a label says is read by `samplecore.labeling`, and every consumer reads it the same way. A
 label is a set of tags separated by commas, and each tag is a path whose colons step from a broad
@@ -146,11 +158,21 @@ category and as a specification under another, and tags carried by one sample. I
 nothing; settling the wording stays with the person, in the interface.
 
 One row holds all three decisions, and exists because at least one of them was made — a CHECK
-constraint says so, and `SampleAnnotation`'s own validator says so alongside it. Writes are
-whole-state: `PUT /curation/annotations/{hash}` carries the complete state a sample should hold from
-then on, so a decision left out is a decision undone, and a state recording nothing removes the row.
-That makes one endpoint enough for setting, changing and clearing, and it is why
-`replace_many` derives its column list from the table rather than keeping one by hand.
+constraint says so, and `SampleAnnotation`'s own validator says so alongside it. Writes carry only
+what changed: `PATCH /curation/annotations/{hash}` names a scope and any of `label`, `rating` and
+`favorite`, a field left out stays as it is and `null` clears it, so two gestures on one sample — a
+label typed while a star is clicked — both land. The route merges the change into each reached
+sample's row under a transaction-scoped advisory lock (`samplecore.storage.annotation_writes`), leaves
+a member the change does not alter untouched, and removes a row left recording nothing; the answer
+lists each sample written with what it holds now, and the members it skipped for want of an anchor.
+`DELETE /curation/annotations/{hash}` removes one annotation outright, including one for a sample
+the catalog no longer holds. In the app, `annotationWriteQueue` sends one sample's changes in order,
+and `annotationStore` shows a change at once and reverts it when the write fails.
+
+`curation.tag_rank` gives every tag path a rank that never moves once given: seeded once from the
+labels in the order they were first used, and extended inside the write that first uses a new tag.
+The cloud paints a tag by its rank, so a rating written on an old label leaves every color where it
+was.
 
 Because a sample's hash follows from how this project hashes audio, an annotation keyed on the hash
 alone would be lost the moment that changes. Every annotation therefore also records the module slot
@@ -182,7 +204,9 @@ the single path all of them write through, so every row, badge and panel showing
 one write at once.
 
 `samplelibrary annotations export` writes every annotation to JSONL as the copy that outlives the
-database, and `import` merges a file back without clearing anything.
+database, and `import` merges a file back without clearing anything, in one transaction under the
+same lock; a file naming one sample on two lines is refused whole, naming the lines. `relink` leaves
+an annotation alone when the sample now in its slot carries a decision of its own, and names it.
 
 Local, machine-specific configuration (the module source directory, the library root, the catalog's
 connection URL) is read from a gitignored `config.toml` via `samplecore.config.load_config`, never
@@ -224,10 +248,10 @@ without it the command reports the statement to run by hand.
 Which database a run reaches is `database_url`, overridden by `SAMPLELIBRARY_DATABASE_URL`, which
 is how a deployment supplies credentials that never live in a file. `--config` wins over both: the
 `dev` recipes pass the sandbox's config, and the file's database is the one they reach whatever the
-environment holds. The suite reads `SAMPLELIBRARY_TEST_DATABASE_URL`, defaulting to
-`samplelibrary_test` on localhost, and gives each `pytest -n` worker a database of its own, created
-and dropped around the run: that is what the role's `CREATEDB` grant is for, and why
-`samplelibrary_test` itself stays empty.
+environment holds. The suite reads `SAMPLELIBRARY_TEST_DATABASE_URL`, then the server the
+configuration names under the `samplelibrary_test` database, then `samplelibrary_test` on localhost,
+and gives each `pytest -n` worker a database of its own, created and dropped around the run: that is
+what the role's `CREATEDB` grant is for, and why `samplelibrary_test` itself stays empty.
 
 ## Running extraction in parallel
 
@@ -266,6 +290,33 @@ what the other wants next, which Postgres resolves by aborting one with `Deadloc
 failure arriving as `OperationalError`, outside the `IntegrityError` a collision is read from, with
 no retry anywhere in this project to fall back on.
 
+## Removing what the collection no longer holds
+
+Extraction adds and never removes, so a module deleted from the collection stays cataloged until
+`samplelibrary extract --prune` removes it. The pass decides what is gone from what the run itself
+read (`sampleextract.prune`): every module file it opened, those it failed to parse included, stays.
+It refuses whenever that reading could be incomplete — a worker failed, a file or a folder could not
+be read, or the collection yielded no file while modules are cataloged, as an unmounted drive does —
+and while another extraction or notes pass holds the extraction lock in shared mode.
+`samplecore.storage.prune` then deletes, in one transaction, every row naming a gone module and every
+sample no remaining module holds, with each table reaching either, and afterwards unlinks those
+samples' objects and sweeps any object the catalog does not name. Hand annotations stay;
+`annotations relink` reattaches the ones whose slot now holds another sample.
+
+## Detecting near-duplicates
+
+`samplelibrary equivalence` finds pairs of samples that are one sound stored twice: at another bit
+depth, at another level, or read at another rate. It streams the catalog once, trimming each
+waveform's trailing silence and reducing it to two short fingerprints (`sampleextract.equivalence.fingerprint`):
+one over bands relative to the waveform's own length, which a change of depth or level leaves alone,
+and one over cycle-count octave bands, which a resampling leaves alone. A blockwise dot product
+finds each fingerprint's close neighbors (`candidates.py`), the shape fingerprint proposing gain
+pairs of nearly equal trimmed length and the rate fingerprint proposing resampled pairs further
+apart, and only those pairs are read again and scored on the waveforms themselves (`scoring.py`),
+through a cache that keeps the most recently read waveforms. Each block of pairs is scored and written in its own
+transaction, so an interrupted run keeps the blocks it finished and a rerun writes the same rows.
+Silent samples take no part.
+
 ## Deployment
 
 Two packages run as long-lived services: `sampleserver`, the API, and `samplemorph.service`, the
@@ -275,20 +326,27 @@ runtime image for the served app alone: a Node stage builds the frontend, and th
 install only the `server` extra (`fastapi`, `uvicorn`, `httpx`) -- `sampleextract`/`samplecloud`'s
 own heavier dependencies (`librosa`, `umap-learn`, `scikit-learn`) never reach that image, mirroring
 the `sampleserver never imports the offline batch pipelines` import-linter contract above. The
-image runs as an unprivileged user (uid 1000), so a mounted library has to be readable by it. Its
-environment names the config at `/app/config.toml` (`SAMPLELIBRARY_CONFIG`), the built frontend
-(`SAMPLELIBRARY_FRONTEND_DIRECTORY`) and four workers (`WEB_CONCURRENCY`), and its command is
-`serve --host 0.0.0.0 --port 8000`, so a replacement command keeps the frontend and the workers; the
-health check probes port 8000.
+image runs as an unprivileged user (uid 1000), so a mounted library has to be readable by it, which
+objects written by this version are. Its environment names the config at `/app/config.toml`
+(`SAMPLELIBRARY_CONFIG`), the built frontend (`SAMPLELIBRARY_FRONTEND_DIRECTORY`) and four workers
+(`WEB_CONCURRENCY`), and its command is `serve --host 0.0.0.0 --port 8000`, so a replacement command
+keeps the frontend and the workers; the health check reads `/api/stats`, so a healthy container is one
+whose catalog answers. The config mounted into it names `module_source_directory` and `library_root`
+as paths inside the container, and `database_url` unless the environment supplies it.
 
 The inference process (`samplelibrary morph serve`) installs the `morph` extra, reads the library
 root and the fitted models, and opens no database: a morph names two stored objects and a weight,
 and the API, which knows the catalog, reads each sample's playback rate for the frontend the way it
 does everywhere else. Both processes read one setting, `[inference] url` in `config.toml`: the
 process binds it, the API dials it, and a morph request reaching the API while no process answers
-comes back as 503 with that address in its detail. Renders are deterministic given the model
-files, so each carries a validator built from the model's fingerprint and the point, and a browser
-holding one is answered with a 304 by the process that made it.
+comes back as 503 with that address in its detail, a render outlasting the client's wait as 504, and
+any other failure of the process as 502. Renders are deterministic given the files a route loads, so
+each carries a validator built from a fingerprint over those files' digests, the vocoder, the morpher
+and `RENDER_REVISION`, together with the point, under `Cache-Control: private, no-cache`: a browser
+revalidates every play, and one holding the render is answered with a 304 by the process that made
+it. A point whose ends are heard more than sixteen times apart in rate, or that would render past
+`MAXIMUM_RENDER_FRAMES`, is refused with 422 before any rendering, and the render and latent caches
+are bounded by the bytes they hold.
 
 Every route the API serves sits under `/api` (`sampleserver.app.API_PREFIX`), so one path always
 names one thing: the frontend reaches `/api/samples` while a person's browser holds `/samples/{hash}`
@@ -296,7 +354,10 @@ as a client route of its own. That is what lets the Vite dev server forward a si
 backend and answer everything else with the application itself, so reloading a sample's own URL
 brings back the dashboard. `samplelibrary serve --frontend <dist>` does the same without Vite:
 `sampleserver.frontend.SinglePageApplication` serves the built files and answers every other path
-outside `/api` with `index.html`, and the image serves its own build this way.
+outside `/api` with `index.html`, and the image serves its own build this way. It is mounted through
+`FrontendMount`, which takes no path under `/api`, so the API answers a wrong method with 405 and
+its allowed methods, a trailing slash with its redirect, and an unknown path with its JSON 404,
+whether or not a frontend is served beside it.
 
 `samplelibrary serve` loads the configuration and opens the catalog once before uvicorn starts, so a
 missing or incomplete config, or a database that cannot be reached within ten seconds, ends the start
@@ -309,16 +370,21 @@ starting together take turns.
 worked example of the two running together. Its `sampleserver` mounts `LIBRARY_ROOT` (default
 `./library`) at `/library` and `CONFIG_PATH` (default `docker/config.toml`, whose paths are the
 container's own) at `/app/config.toml`, both read-only, supplies the database through
-`SAMPLELIBRARY_DATABASE_URL`, and publishes the app on `127.0.0.1:8000`. A real deployment points
+`SAMPLELIBRARY_DATABASE_URL`, and publishes the app on `127.0.0.1:8000`. A path either names that is
+not there fails the start rather than mounting an empty directory. Its `extra_hosts` entry lets the
+container reach a renderer running on the host at `http://host.docker.internal:8010`, the commented
+`[inference]` table in `docker/config.toml`. A real deployment points
 `database_url`/`SAMPLELIBRARY_DATABASE_URL` at whatever Postgres instance it actually runs against,
 container or otherwise. `just docker-run <library> <config>` runs the image alone against a config
 written for the container, which names its `database_url` and, for morphs, an `[inference] url` the
 container reaches. On Linux the recipe shares the host's network and binds `127.0.0.1:8000`, so
 `localhost` in that config means the host itself; on macOS and Windows it publishes
-`127.0.0.1:8000`, and Docker Desktop names the host `host.docker.internal`. Local development runs
+`127.0.0.1:8000`, and Docker Desktop names the host `host.docker.internal`. The recipe reads both
+paths from the directory it was run in, and mounts them so that a path that is not there fails the
+run. Local development runs
 against a Postgres installed on the machine directly, which the test suite and both library
 databases share. The container runs
-`samplelibrary serve` with several worker processes (`--workers`), where `just serve` starts the one
+`samplelibrary serve` with several worker processes (`WEB_CONCURRENCY`), where `just serve` starts the one
 reloading process development uses: each worker holds a small pool of read-only Postgres
 connections, checked out per request (`sampleserver.dependencies.get_connection`), which Postgres's
 own concurrent-connection handling supports natively, so multiple people browsing the library
@@ -400,7 +466,18 @@ compare its result, and only promote it (`reduce_and_persist_coordinates` agains
 id) once satisfied -- the previously promoted experiment's `sample_cloud_coordinates` stay exactly
 as they were until that deliberate step. `samplelibrary cloud embed --backend <name> --extract-only`
 runs the extraction alone, for an experiment made to be measured or to teach another descriptor;
-running the same experiment again by its id, without the flag, promotes it.
+`cloud embed --experiment-id N` resumes experiment N and promotes it.
+
+An experiment records its recipe in its parameters (`samplecloud.experiments.EmbeddingRecipe`): the
+backend, the `reading`, and for a learned descriptor the model's name. A resumed experiment follows
+the recipe its own row records, so `--experiment-id` refuses a `--backend`, `--model` or
+`--heard-rate` naming another, and a label, which names a new experiment. Before new vectors join an
+experiment that already holds some, its first eight samples by hash are described again and must
+point where their stored vectors do (`require_reproducible`), so a descriptor retrained under the
+same name is refused rather than mixed in. `--resume-promoted` resumes the experiment `cloud_promotion`
+names, opening and recording the default `librosa` experiment on a library with no cloud yet; a
+promoting run that adds no vector to the experiment already shown keeps its layout as it is. A layout
+needs at least four vectors, the fewest UMAP lays out.
 
 The `clap` backend reads a pretrained audio-text model (`samplecloud.backends.teacher_backend`,
 behind the `teacher` extra), which knows sound from what people wrote about recordings and, on the
@@ -424,7 +501,8 @@ whose parameters name the source experiment, the checkpoint, the prompt template
 in order (`sample_label_suggestion`, `samplecore.storage.repositories.label_suggestion`). The
 command reports how the first picks spread over the vocabulary and how they agree with the hand
 labels, exactly and by category. Suggestions are rebuildable, so they live in the main schema beside
-the feature vectors; the newest scoring is the one the application shows.
+the feature vectors; the newest scoring is the one the application shows, and a scoring writes its
+experiment and every suggestion in one transaction, so a reader never meets one half written.
 
 ### Judging a descriptor
 

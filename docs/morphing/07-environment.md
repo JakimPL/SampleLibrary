@@ -196,11 +196,21 @@ For frontend work against a small disposable corpus rather than the real one, th
 build and serve a 30-module sandbox on port 8001 (`just dev-build`, `just dev extract`,
 `just serve-dev`, and `just dev-reset` to wipe it).
 
-**One standing caution about that sandbox:** its samples are 40–100 ms synthetic tones built to
-exercise equivalence detection. They are fine for testing that a pipeline runs and useless for
+**One standing caution about that sandbox:** its samples are synthetic tones — two-second filler
+beside the much shorter pairs built to exercise equivalence detection. They are fine for testing that a pipeline runs and useless for
 anything that has to *sound* like music. An earlier morph demo was built against them and the result
 was rightly called useless. Every listening test in [`04-roadmap.md`](04-roadmap.md) uses real
 samples from the real library.
+
+## Training runs
+
+A training run keeps its metrics and its resume point under `runs/<family>/<name>` in the library
+root, the family being `codec`, `descriptor` or `restorer`, so a codec and a descriptor of one name
+keep apart. The resume point is rewritten after every epoch with the best score exported so far, and
+`--resume` continues from the latest finished epoch; a codec run resumed beside another descriptor
+file is refused. A codec trains on a grid cache at the axis's full resolution, which on today's 288
+bands per octave is `morph cache-grids --bands-per-semitone 24 --views 0`; `train-codec` names the
+value when a cache is pooled. A descriptor's cache holds at least one retuned view.
 
 ## While a batch job runs
 

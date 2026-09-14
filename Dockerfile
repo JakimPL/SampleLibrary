@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:25-bookworm-slim AS frontend
+FROM node:26-bookworm-slim AS frontend
 
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
@@ -8,7 +8,7 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build
 
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.13-slim-bookworm AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.9.7 /uv /uvx /bin/
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
@@ -23,7 +23,7 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --extra server --no-dev --no-editable --frozen
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.13-slim-bookworm AS runtime
 
 RUN useradd --create-home samplelibrary
 WORKDIR /app
@@ -36,6 +36,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 USER samplelibrary
 
 EXPOSE 8000
-HEALTHCHECK CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/openapi.json', timeout=5)"]
+# The statistics route counts rows, so a healthy container is one whose catalog answers too.
+HEALTHCHECK CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/stats', timeout=5)"]
 ENTRYPOINT ["samplelibrary"]
 CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]

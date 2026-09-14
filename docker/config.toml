@@ -2,3 +2,9 @@
 [library]
 module_source_directory = "/modules"
 library_root = "/library"
+
+# A morph renderer runs on the host. Under compose the container reaches the host through the
+# address Docker gives it, and under `just docker-run` on Linux the container shares the host's
+# network, where the default http://127.0.0.1:8010 already names it.
+# [inference]
+# url = "http://host.docker.internal:8010"

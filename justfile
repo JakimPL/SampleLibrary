@@ -79,6 +79,11 @@ _reset-confirmed:
 [group("dev")]
 dev-build:
     uv run python scripts/build_dev_library.py
+    uv run samplelibrary --config {{ DEV_CONFIG }} extract
+    uv run samplelibrary --config {{ DEV_CONFIG }} notes
+    uv run samplelibrary --config {{ DEV_CONFIG }} thumbnails
+    uv run samplelibrary --config {{ DEV_CONFIG }} cloud embed --resume-promoted
+    uv run samplelibrary --config {{ DEV_CONFIG }} cloud placeholders
 
 [group("dev")]
 [unix]
@@ -99,16 +104,16 @@ serve-dev:
     uv run samplelibrary --config {{ DEV_CONFIG }} serve --reload --port {{ DEV_PORT }}
 
 [group("dev")]
-dev-reset: dev-build && _delete-dev-library
-    uv run samplelibrary --config {{ DEV_CONFIG }} reset --confirm
-
 [unix]
-_delete-dev-library:
+dev-reset:
+    if [ -f {{ DEV_CONFIG }} ]; then uv run samplelibrary --config {{ DEV_CONFIG }} reset --confirm; fi
     rm -rf dev-library
 
+[group("dev")]
 [windows]
-_delete-dev-library:
-    Remove-Item -Recurse -Force dev-library
+dev-reset:
+    if (Test-Path {{ DEV_CONFIG }}) { uv run samplelibrary --config {{ DEV_CONFIG }} reset --confirm }
+    if (Test-Path dev-library) { Remove-Item -Recurse -Force dev-library }
 
 [group("frontend")]
 [working-directory("frontend")]
@@ -143,13 +148,18 @@ frontend-types:
 docker-build:
     docker build -t samplelibrary-server .
 
+LIBRARY_MOUNT := "type=bind,target=/library,readonly,source="
+CONFIG_MOUNT := "type=bind,target=/app/config.toml,readonly,source="
+
+# Both paths are read from where the recipe was run, and a mount of a path that is not there fails
+# rather than leaving an empty directory in its place.
 [group("docker")]
 [linux]
 docker-run library_root config_path:
-    docker run --rm --network host -v "{{ absolute_path(library_root) }}:/library:ro" -v "{{ absolute_path(config_path) }}:/app/config.toml:ro" samplelibrary-server serve --host 127.0.0.1 --port 8000
+    docker run --rm --network host --mount "{{ LIBRARY_MOUNT }}{{ absolute_path(join(invocation_directory(), library_root)) }}" --mount "{{ CONFIG_MOUNT }}{{ absolute_path(join(invocation_directory(), config_path)) }}" samplelibrary-server serve --host 127.0.0.1 --port 8000
 
 [group("docker")]
 [macos]
 [windows]
 docker-run library_root config_path:
-    docker run --rm -p 127.0.0.1:8000:8000 -v "{{ absolute_path(library_root) }}:/library:ro" -v "{{ absolute_path(config_path) }}:/app/config.toml:ro" samplelibrary-server
+    docker run --rm -p 127.0.0.1:8000:8000 --mount "{{ LIBRARY_MOUNT }}{{ absolute_path(join(invocation_directory(), library_root)) }}" --mount "{{ CONFIG_MOUNT }}{{ absolute_path(join(invocation_directory(), config_path)) }}" samplelibrary-server

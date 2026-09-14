@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 server = ["fastapi>=0.120", "uvicorn>=0.35", "httpx>=0.28"]
-cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9"]
+cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9", "mlflow>=3.6"]
 morph = [
     "librosa>=0.11",
     "scikit-learn>=1.9",
@@ -31,6 +31,7 @@ morph = [
     "pghipy>=0.1",
     "fastapi>=0.120",
     "uvicorn>=0.35",
+    "mlflow>=3.6",
 ]
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]
@@ -47,7 +48,8 @@ explicit = true
 
 [tool.uv.sources]
 trackmod = { path = "trackmod", editable = true }
-torch = { index = "pytorch-cu128" }
+# macOS takes torch from PyPI, since the CUDA index publishes no macOS wheels.
+torch = [{ index = "pytorch-cu128", marker = "sys_platform != 'darwin'" }]
 
 [dependency-groups]
 dev = [
@@ -168,6 +170,12 @@ name = "server never imports the offline batch pipelines"
 type = "forbidden"
 source_modules = ["sampleserver"]
 forbidden_modules = ["sampleextract", "samplecloud", "samplemorph"]
+
+[[tool.importlinter.contracts]]
+name = "the offline pipelines never import the server, which reads what they write"
+type = "forbidden"
+source_modules = ["sampleextract", "samplecloud", "samplemorph"]
+forbidden_modules = ["sampleserver"]
 
 [[tool.importlinter.contracts]]
 name = "extraction stays independent of the embedding pipelines"
