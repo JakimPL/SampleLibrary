@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from collections.abc import Collection
 
 from sqlalchemy import Connection
 
 from samplecore.models.sample import Sample
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.geometry import DEFAULT_ANCHOR, Anchor
 from samplemorph.measurement.corpus import DEFAULT_PROBE_FRAME_CEILING, DEFAULT_PROBE_FRAME_FLOOR
 from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
+
+_logger = logging.getLogger(__name__)
 
 
 def add_canonicalizer_argument(parser: argparse.ArgumentParser, *, help_text: str, names: Collection[str]) -> None:
@@ -42,6 +46,18 @@ def draw_probe_samples(connection: Connection, *, count: int, random_seed: int) 
         frame_floor=DEFAULT_PROBE_FRAME_FLOOR,
         frame_ceiling=DEFAULT_PROBE_FRAME_CEILING,
     )
+
+
+def readable_samples(samples: tuple[Sample, ...], audio: SampleAudio) -> tuple[Sample, ...]:
+    """The samples whose audio can be read now, in the order given, naming how many were left out.
+
+    A sample found in a sample directory is read from its file, which can be gone; a fit, a cache or
+    a training run sized to its samples holds only the ones it can read.
+    """
+    readable = tuple(sample for sample in samples if audio.is_available(sample.hash))
+    if len(readable) < len(samples):
+        _logger.warning("%d sample(s) have no file to read now and are left out.", len(samples) - len(readable))
+    return readable
 
 
 class SampleNotCataloged(ValueError):

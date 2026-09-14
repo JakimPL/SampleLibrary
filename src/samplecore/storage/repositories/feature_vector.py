@@ -16,7 +16,9 @@ class SampleFeatureVectorRepository(Protocol):
 
     def sample_hashes_for_experiment(self, experiment_id: int) -> frozenset[str]: ...
 
-    def first_vectors(self, experiment_id: int, *, count: int) -> tuple[SampleFeatureVector, ...]: ...
+    def vectors_in_hash_order(
+        self, experiment_id: int, *, count: int, offset: int
+    ) -> tuple[SampleFeatureVector, ...]: ...
 
     def list_for_experiment(self, experiment_id: int) -> tuple[SampleFeatureVector, ...]: ...
 
@@ -50,13 +52,14 @@ class PostgresSampleFeatureVectorRepository:
         )
         return frozenset(str(row.sample_hash) for row in self._connection.execute(statement))
 
-    def first_vectors(self, experiment_id: int, *, count: int) -> tuple[SampleFeatureVector, ...]:
-        """The vectors of an experiment's first ``count`` samples in hash order, the same few every call."""
+    def vectors_in_hash_order(self, experiment_id: int, *, count: int, offset: int) -> tuple[SampleFeatureVector, ...]:
+        """Up to ``count`` of an experiment's vectors in sample-hash order, past the first ``offset``, the same ones every call."""
         statement = (
             select(sample_feature_vector)
             .where(sample_feature_vector.c.experiment_id == experiment_id)
             .order_by(sample_feature_vector.c.sample_hash)
             .limit(count)
+            .offset(offset)
         )
         return tuple(_row_to_feature_vector(row) for row in self._connection.execute(statement))
 

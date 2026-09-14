@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Final
 
 import numpy as np
@@ -14,10 +13,10 @@ from tqdm import tqdm
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
-from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository, SampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 from samplecore.waveform import trim_trailing_silence
 from sampleextract.equivalence.candidates import NEIGHBOR_BLOCK_ROWS, CandidateBlock, Fingerprints, candidate_blocks
 from sampleextract.equivalence.fingerprint import FINGERPRINT_SIZE, compute_rate_fingerprint, compute_shape_fingerprint
@@ -42,11 +41,15 @@ class EquivalenceSummary:
     """What one equivalence-detection pass did, across every sample it considered.
 
     ``silent_samples`` counts the samples holding nothing above the silence threshold, which have no
-    content for a relation to be about.
+    content for a relation to be about. ``unavailable_samples`` counts the samples whose audio lives
+    only in sample files none of which holds it now, and ``unavailable_pairs`` the candidate pairs
+    left unscored because such a file went missing while the pass ran; a later pass takes them up.
     """
 
     samples_considered: int
     silent_samples: int
+    unavailable_samples: int
+    unavailable_pairs: int
     gain_candidates: int
     resampled_candidates: int
     bit_depth_relations: int
@@ -65,18 +68,23 @@ class _WaveformCache:
     bounded amount of audio.
     """
 
-    library_root: Path
+    audio: SampleAudio
     byte_budget: int
     _waveforms: OrderedDict[str, NDArray[np.float64]] = field(default_factory=OrderedDict)
     _held_bytes: int = 0
 
     def get(self, sample: Sample) -> NDArray[np.float64]:
+        """A sample's trimmed waveform, read once while it stays among the most recent.
+
+        Raises:
+            SampleUnavailableError: the sample lives only in sample files, and none of them holds it now.
+        """
         cached = self._waveforms.get(sample.hash)
         if cached is not None:
             self._waveforms.move_to_end(sample.hash)
             return cached
 
-        pcm = audio_store.read(self.library_root, sample).pcm
+        pcm = self.audio.read(sample).pcm
         waveform = trim_trailing_silence(pcm, threshold=TRAILING_SILENCE_THRESHOLD)
         self._hold(sample.hash, waveform)
         return waveform
@@ -102,6 +110,8 @@ class _Fingerprinted:
 @dataclass
 class _Tally:
     silent_samples: int = 0
+    unavailable_samples: int = 0
+    unavailable_pairs: int = 0
     gain_candidates: int = 0
     resampled_candidates: int = 0
     bit_depth_relations: int = 0
@@ -110,7 +120,7 @@ class _Tally:
 
 
 def detect_equivalences(
-    connection: Connection, library_root: Path, *, sample_limit: int | None = None
+    connection: Connection, audio: SampleAudio, *, sample_limit: int | None = None
 ) -> EquivalenceSummary:
     """Find and persist every equivalence-class link the current catalog's samples support.
 
@@ -136,7 +146,7 @@ def detect_equivalences(
     if sample_limit is not None:
         samples = samples[:sample_limit]
     relation_repository = PostgresSampleRelationRepository(connection)
-    waveforms = _WaveformCache(library_root, byte_budget=WAVEFORM_CACHE_BYTES)
+    waveforms = _WaveformCache(audio, byte_budget=WAVEFORM_CACHE_BYTES)
     tally = _Tally()
 
     for fingerprints in _fingerprints_by_layout(samples, waveforms, tally=tally):
@@ -149,6 +159,8 @@ def detect_equivalences(
     return EquivalenceSummary(
         samples_considered=len(samples),
         silent_samples=tally.silent_samples,
+        unavailable_samples=tally.unavailable_samples,
+        unavailable_pairs=tally.unavailable_pairs,
         gain_candidates=tally.gain_candidates,
         resampled_candidates=tally.resampled_candidates,
         bit_depth_relations=tally.bit_depth_relations,
@@ -160,10 +172,14 @@ def detect_equivalences(
 def _fingerprints_by_layout(
     samples: tuple[Sample, ...], waveforms: _WaveformCache, *, tally: _Tally
 ) -> tuple[Fingerprints, ...]:
-    """Every sample holding sound, fingerprinted and grouped by channel layout, which relations never cross."""
+    """Every sample holding sound that can be read now, fingerprinted and grouped by channel layout, which relations never cross."""
     kept: dict[ChannelLayout, list[_Fingerprinted]] = {layout: [] for layout in ChannelLayout}
     for sample in tqdm(samples, desc="Fingerprinting samples"):
-        waveform = waveforms.get(sample)
+        try:
+            waveform = waveforms.get(sample)
+        except SampleUnavailableError:
+            tally.unavailable_samples += 1
+            continue
         if waveform.shape[0] == 0:
             tally.silent_samples += 1
             continue
@@ -194,15 +210,30 @@ def _record_block(
     tally.gain_candidates += len(block.gain_pairs)
     tally.resampled_candidates += len(block.resampled_pairs)
     for pair in block.gain_pairs:
-        _record_gain_variant(relation_repository, pair, waveforms, tally=tally)
+        pair_waveforms = _pair_waveforms(pair, waveforms, tally=tally)
+        if pair_waveforms is not None:
+            _record_gain_variant(relation_repository, pair, pair_waveforms, tally=tally)
     for pair in block.resampled_pairs:
-        _record_resampled_variant(relation_repository, pair, waveforms, tally=tally)
+        pair_waveforms = _pair_waveforms(pair, waveforms, tally=tally)
+        if pair_waveforms is not None:
+            _record_resampled_variant(relation_repository, pair, pair_waveforms, tally=tally)
+
+
+def _pair_waveforms(
+    pair: tuple[Sample, Sample], waveforms: _WaveformCache, *, tally: _Tally
+) -> tuple[NDArray[np.float64], NDArray[np.float64]] | None:
+    """Both waveforms of a candidate pair, or ``None`` counted as unavailable when a file went missing since fingerprinting."""
+    try:
+        return waveforms.get(pair[0]), waveforms.get(pair[1])
+    except SampleUnavailableError:
+        tally.unavailable_pairs += 1
+        return None
 
 
 def _record_gain_variant(
     relation_repository: SampleRelationRepository,
     pair: tuple[Sample, Sample],
-    waveforms: _WaveformCache,
+    pair_waveforms: tuple[NDArray[np.float64], NDArray[np.float64]],
     *,
     tally: _Tally,
 ) -> None:
@@ -215,9 +246,7 @@ def _record_gain_variant(
     tail, are both classified as amplification variants -- the former carrying its own depth-changed
     evidence, mirroring how a resampled variant already records its own.
     """
-    score = score_gain_variant(
-        waveforms.get(pair[0]), waveforms.get(pair[1]), depth_a=pair[0].depth, depth_b=pair[1].depth
-    )
+    score = score_gain_variant(*pair_waveforms, depth_a=pair[0].depth, depth_b=pair[1].depth)
     if score is None or score.confidence < GAIN_VARIANT_MINIMUM_CONFIDENCE:
         return
 
@@ -241,11 +270,11 @@ def _record_gain_variant(
 def _record_resampled_variant(
     relation_repository: SampleRelationRepository,
     pair: tuple[Sample, Sample],
-    waveforms: _WaveformCache,
+    pair_waveforms: tuple[NDArray[np.float64], NDArray[np.float64]],
     *,
     tally: _Tally,
 ) -> None:
-    score = score_resampled_variant(waveforms.get(pair[0]), waveforms.get(pair[1]))
+    score = score_resampled_variant(*pair_waveforms)
     if score is None or score.confidence < RESAMPLED_MINIMUM_CONFIDENCE:
         return
 

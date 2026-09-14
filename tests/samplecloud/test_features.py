@@ -16,6 +16,7 @@ from samplecloud.hearing import Hearing, hearing_for
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import Experiment, Reading
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import SampleFile
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
@@ -23,6 +24,7 @@ from samplecore.storage.repositories.experiment import PostgresExperimentReposit
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio
 
 NOMINAL = Hearing(reading=Reading.NOMINAL, playback_rate_by_hash={})
 SAMPLE_FRAMES = 32
@@ -69,7 +71,7 @@ def _extract(
         hearing=hearing,
     )
     pending = pending_samples(connection, experiment_id, sample_limit=sample_limit)
-    return extract_features(connection, library_root, feature_pass, pending)
+    return extract_features(connection, SampleAudio.from_catalog(connection, library_root), feature_pass, pending)
 
 
 def test_extract_features_writes_a_vector_for_every_cataloged_sample(connection: Connection, tmp_path: Path) -> None:
@@ -79,7 +81,7 @@ def test_extract_features_writes_a_vector_for_every_cataloged_sample(connection:
 
     summary = _extract(connection, tmp_path, experiment_id)
 
-    assert summary == FeatureExtractionSummary(cataloged=2, already_extracted=0, newly_extracted=2)
+    assert summary == FeatureExtractionSummary(cataloged=2, already_extracted=0, newly_extracted=2, unavailable=0)
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
     assert {vector.sample_hash for vector in vectors} == {first.hash, second.hash}
 
@@ -92,7 +94,7 @@ def test_a_second_run_skips_already_extracted_samples(connection: Connection, tm
 
     summary = _extract(connection, tmp_path, experiment_id)
 
-    assert summary == FeatureExtractionSummary(cataloged=2, already_extracted=1, newly_extracted=1)
+    assert summary == FeatureExtractionSummary(cataloged=2, already_extracted=1, newly_extracted=1, unavailable=0)
 
 
 def test_a_different_experiment_extracts_independently(connection: Connection, tmp_path: Path) -> None:
@@ -103,7 +105,7 @@ def test_a_different_experiment_extracts_independently(connection: Connection, t
     second_experiment_id = _create_experiment(connection)
     summary = _extract(connection, tmp_path, second_experiment_id)
 
-    assert summary == FeatureExtractionSummary(cataloged=1, already_extracted=0, newly_extracted=1)
+    assert summary == FeatureExtractionSummary(cataloged=1, already_extracted=0, newly_extracted=1, unavailable=0)
 
 
 def test_sample_limit_bounds_how_many_new_samples_are_extracted(connection: Connection, tmp_path: Path) -> None:
@@ -158,7 +160,7 @@ def test_an_empty_catalog_extracts_nothing(connection: Connection, tmp_path: Pat
 
     summary = _extract(connection, tmp_path, experiment_id)
 
-    assert summary == FeatureExtractionSummary(cataloged=0, already_extracted=0, newly_extracted=0)
+    assert summary == FeatureExtractionSummary(cataloged=0, already_extracted=0, newly_extracted=0, unavailable=0)
 
 
 class _InterruptingFeatureExtractor:
@@ -187,3 +189,16 @@ def test_an_interruption_loses_at_most_one_checkpoint_of_work(
 
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
     assert len(vectors) == 2
+
+
+def test_a_sample_whose_file_is_gone_is_counted_and_stays_pending(
+    connection: Connection, tmp_path: Path, vanished_sample_file: SampleFile
+) -> None:
+    _store_sample(connection, tmp_path, hash_seed=1)
+    experiment_id = _create_experiment(connection)
+
+    summary = _extract(connection, tmp_path, experiment_id)
+
+    assert (summary.newly_extracted, summary.unavailable) == (1, 1)
+    still_pending = pending_samples(connection, experiment_id, sample_limit=None).samples
+    assert [pending.hash for pending in still_pending] == [vanished_sample_file.sample_hash]

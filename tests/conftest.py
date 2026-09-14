@@ -2,19 +2,28 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Final
 
+import numpy as np
 import pytest
+import soundfile
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import make_url
 
 from samplecore.config import ConfigurationError, load_config
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
+from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage.curation import curation_metadata
 from samplecore.storage.database import connect, metadata
+from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 
 SERVER_URL_VARIABLE: Final[str] = "SAMPLELIBRARY_TEST_DATABASE_URL"
 TEST_DATABASE_NAME: Final[str] = "samplelibrary_test"
 DEFAULT_SERVER_URL: Final[str] = f"postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/{TEST_DATABASE_NAME}"
+VANISHED_SAMPLE_FRAMES: Final[int] = 2048
+VANISHED_SAMPLE_RATE: Final[int] = 44100
 
 
 @pytest.fixture(scope="session")
@@ -84,3 +93,28 @@ def connection(_database_url: str) -> Iterator[Connection]:
             open_connection.execute(table.delete())
         open_connection.commit()
         open_connection.close()
+
+
+@pytest.fixture
+def vanished_sample_file(connection: Connection, tmp_path: Path) -> SampleFile:
+    """A sample a scan found in a file of a sample directory, whose file has since been deleted.
+
+    The catalog still holds the sample, its thumbnail and its file row, so every pass reaches it and
+    none can read it: the case of a folder of samples on a drive that is no longer plugged in.
+    """
+    directory = tmp_path / "vanished pack"
+    path = directory / "Kicks" / "Gone 01.wav"
+    path.parent.mkdir(parents=True)
+    soundfile.write(path, np.linspace(-0.5, 0.5, VANISHED_SAMPLE_FRAMES), VANISHED_SAMPLE_RATE, subtype="PCM_16")
+    decoded = decode_sample_file(path)
+    sample_file = SampleFile(
+        sample_hash=decoded.sample_pcm.sample.hash,
+        location=SampleFileLocation(directory=directory, relative_path="Kicks/Gone 01.wav"),
+        rate=decoded.rate,
+        fingerprint=FileFingerprint.of(path.stat()),
+    )
+    PostgresSampleRepository(connection).upsert(decoded.sample_pcm.sample)
+    PostgresSampleFileRepository(connection).upsert(sample_file)
+    connection.commit()
+    path.unlink()
+    return sample_file

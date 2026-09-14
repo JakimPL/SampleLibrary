@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Generic, Protocol, TypeVar
 
 import numpy as np
@@ -9,7 +8,7 @@ from numpy.typing import NDArray
 from torch.utils.data import Dataset
 
 from samplecore.models.sample import Sample
-from samplecore.storage import audio_store
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.geometry import Geometry
 from samplemorph.training.epoch_draws import CropRequest
@@ -54,19 +53,20 @@ class DerivedExampleSet(Dataset[Item], Generic[Example, Item]):
 
     Each request names a sample and the seed its crop is drawn from, which the loader's sampler
     chooses per epoch, so a long run sees many crops of each sample and two runs of one seed see
-    the same ones. A silent sample yields the next sample along instead, so every request answers.
+    the same ones. A silent sample, and one whose sample files went missing during the run, yields
+    the next sample along instead, so every request answers.
     """
 
     def __init__(
         self,
         samples: tuple[Sample, ...],
         *,
-        library_root: Path,
+        audio: SampleAudio,
         canonicalizer: Canonicalizer,
         family: ExampleFamily[Example, Item],
     ) -> None:
         self._samples = samples
-        self._library_root = library_root
+        self._audio = audio
         self._canonicalizer = canonicalizer
         self._family = family
 
@@ -78,12 +78,16 @@ class DerivedExampleSet(Dataset[Item], Generic[Example, Item]):
         generator = np.random.default_rng(crop_seed)
         for offset in range(len(self._samples)):
             position = (index + offset) % len(self._samples)
+            try:
+                sample_pcm = self._audio.read(self._samples[position])
+            except SampleUnavailableError:
+                continue
             example = self._family.derive(
-                audio_store.read(self._library_root, self._samples[position]).pcm,
-                canonicalizer=self._canonicalizer,
-                geometry=self._canonicalizer.geometry,
+                sample_pcm.pcm, canonicalizer=self._canonicalizer, geometry=self._canonicalizer.geometry
             )
             if example is not None:
                 return self._family.crop(example, crop_frames=self._family.crop_frames, generator=generator)
 
-        raise ValueError("every sample in this training set is silent, so there is nothing to learn from it")
+        raise ValueError(
+            "every sample in this training set is silent or unreadable, so there is nothing to learn from it"
+        )

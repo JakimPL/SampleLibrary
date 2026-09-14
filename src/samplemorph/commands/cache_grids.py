@@ -10,7 +10,8 @@ from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import non_negative_integer, positive_integer
 from samplecore.config import DEFAULT_MINIMUM_SAMPLE_FRAMES, LibraryConfig
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplemorph.commands.draws import add_canonicalizer_argument
+from samplecore.storage.sample_audio import SampleAudio
+from samplemorph.commands.draws import add_canonicalizer_argument, readable_samples
 from samplemorph.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE
 from samplemorph.registries import CANONICALIZER_REGISTRY
 from samplemorph.training.descriptor_cache import (
@@ -72,12 +73,19 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
     """Build one named grid cache over a draw of the catalog and report where it went."""
     repository = PostgresSampleRepository(connection)
-    samples = (
-        repository.list_all()
-        if arguments.samples is None
-        else repository.sample_reproducibly(
-            count=arguments.samples, random_seed=arguments.seed, frame_floor=FRAME_FLOOR, frame_ceiling=FRAME_CEILING
-        )
+    audio = SampleAudio.from_catalog(connection, config.library_root)
+    samples = readable_samples(
+        (
+            repository.list_all()
+            if arguments.samples is None
+            else repository.sample_reproducibly(
+                count=arguments.samples,
+                random_seed=arguments.seed,
+                frame_floor=FRAME_FLOOR,
+                frame_ceiling=FRAME_CEILING,
+            )
+        ),
+        audio,
     )
     recipe = GridCacheRecipe(
         canonicalizer_name=arguments.canonicalizer,
@@ -91,9 +99,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     _logger.info(
         "Canonicalizing %d samples with %d retuned views each into %s...", len(samples), arguments.views, directory
     )
-    cache = build_grid_cache(
-        directory, samples=samples, library_root=config.library_root, recipe=recipe, worker_count=arguments.workers
-    )
+    cache = build_grid_cache(directory, samples=samples, audio=audio, recipe=recipe, worker_count=arguments.workers)
     _logger.info(
         "Cached %d samples as %d x %d grids, %.1f GB on disk.",
         cache.sample_count,

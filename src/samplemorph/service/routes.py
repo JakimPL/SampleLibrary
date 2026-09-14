@@ -6,6 +6,7 @@ from typing import Annotated, Final
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from samplecore.models.morph import HeardMorphPoint, MorphServiceStatus
+from samplecore.storage.sample_audio import SampleUnavailableError
 from samplemorph.service.dependencies import get_renderer
 from samplemorph.service.renderer import MorphRenderer, RenderBoundsError
 from samplemorph.service.settings import CACHE_CONTROL, WAV_MEDIA_TYPE
@@ -29,8 +30,9 @@ def get_morph_audio(
     a bare 304 and no synthesis, and a caller holding a render of another route is sent the new one.
 
     Raises:
-        HTTPException: 404 when the store holds no object for one of the two samples; 422 when the
-            point would render past the process's limits.
+        HTTPException: 404 when the store holds no object for an end, or an end's file is gone, holds
+            another sample or lies outside every sample directory served; 422 when the point would
+            render past the process's limits.
     """
     etag = renderer.etag(point)
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
@@ -40,7 +42,7 @@ def get_morph_audio(
     try:
         renderer.check_bounds(point)
         rendered = renderer.render(point)
-    except FileNotFoundError as error:
+    except (FileNotFoundError, SampleUnavailableError) as error:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from error
     except RenderBoundsError as error:
         raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(error)) from error

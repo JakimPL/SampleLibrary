@@ -26,6 +26,7 @@ from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, ending_in_one_line, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import Experiment
+from samplecore.storage.sample_audio import SampleAudio
 from samplecore.tracking.session import open_run
 
 _logger = logging.getLogger(__name__)
@@ -49,7 +50,6 @@ def main(argv: list[str], *, prog: str) -> None:
             report = evaluate_experiment(
                 connection,
                 experiment_id=experiment.id,
-                library_root=config.library_root,
                 describer=describer,
                 settings=EvaluationSettings(
                     random_seed=arguments.seed, probe_count=arguments.probes, label_depth=arguments.label_depth
@@ -81,6 +81,7 @@ def _describer(
     return ProbeDescriber(
         feature_extractor=extractor_for(recipe, library_root=config.library_root, device=arguments.device),
         hearing=hearing_for(connection, recipe.reading),
+        audio=SampleAudio.from_catalog(connection, config.library_root),
     )
 
 
@@ -105,8 +106,10 @@ def _report(report: EvaluationReport) -> None:
 
 def _report_transposition(retrieval: TranspositionRetrieval) -> None:
     _logger.info(
-        "Transposition retrieval over %d probes against %d samples: rank-1 %.1f%%, median rank %.0f.",
+        "Transposition retrieval over %d probes (%d with no file to read now) against %d samples: "
+        "rank-1 %.1f%%, median rank %.0f.",
         retrieval.probe_sample_count,
+        retrieval.unavailable_probe_count,
         retrieval.catalog_sample_count,
         100.0 * retrieval.rank_one_share,
         retrieval.median_rank,

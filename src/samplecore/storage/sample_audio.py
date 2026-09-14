@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy import Connection
 
 from samplecore.models.sample import Sample
-from samplecore.models.sample_file import FileFingerprint, SampleFile
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.sample_files.decoding import UNREADABLE_SAMPLE_FILE_ERRORS, decode_sample_file, sample_file_frame_count
 from samplecore.storage import audio_store
@@ -89,6 +89,23 @@ class SampleAudio:
                 continue
         raise _unavailable(sample_hash, self._files_of(sample_hash))
 
+    def location_to_read(self, sample_hash: str) -> SampleFileLocation | None:
+        """Where a process holding no catalog reads a sample from: the first of its files still as scanned.
+
+        ``None`` for a sample the store holds an object of, which such a process reads by its hash,
+        and for a sample no file is given here for.
+
+        Raises:
+            SampleUnavailableError: the sample lives only in sample files, and every one of them is gone or changed.
+        """
+        sample_files = self.files_by_hash.get(sample_hash, ())
+        if audio_store.object_path(self.library_root, sample_hash).is_file() or not sample_files:
+            return None
+        for sample_file in sample_files:
+            if is_unchanged(sample_file):
+                return sample_file.location
+        raise _unavailable(sample_hash, sample_files)
+
     def is_available(self, sample_hash: str) -> bool:
         """Whether the sample has a stored object, or a file whose fingerprint still matches."""
         return audio_store.object_path(self.library_root, sample_hash).is_file() or any(
@@ -123,14 +140,43 @@ def is_unchanged(sample_file: SampleFile) -> bool:
     return FileFingerprint.of(status) == sample_file.fingerprint
 
 
-def _decoded_if_unchanged(sample_file: SampleFile) -> SamplePCM | None:
-    if not is_unchanged(sample_file):
-        return None
+def read_sample_file(location: SampleFileLocation, sample_hash: str) -> SamplePCM:
+    """A sample's waveform read from a file said to hold it, for a process holding no catalog.
+
+    The file is taken only when it decodes to the hash asked for, which is what lets a location
+    handed over by a catalog reader stand in for a fingerprint.
+
+    Raises:
+        SampleUnavailableError: the file is gone, unreadable, or holds another sample now.
+    """
+    sample_pcm = _decoded_as(location, sample_hash)
+    if sample_pcm is None:
+        raise SampleUnavailableError(f"{location.path} is gone, unreadable, or holds another sample than {sample_hash}")
+    return sample_pcm
+
+
+def read_sample_file_frame_count(location: SampleFileLocation) -> int:
+    """How many frames a sample file holds, from its header alone, for a process holding no catalog.
+
+    Raises:
+        SampleUnavailableError: the file is gone or unreadable.
+    """
     try:
-        decoded = decode_sample_file(sample_file.location.path)
+        return sample_file_frame_count(location.path)
+    except UNREADABLE_SAMPLE_FILE_ERRORS as error:
+        raise SampleUnavailableError(f"{location.path} is gone or unreadable: {error}") from error
+
+
+def _decoded_if_unchanged(sample_file: SampleFile) -> SamplePCM | None:
+    return _decoded_as(sample_file.location, sample_file.sample_hash) if is_unchanged(sample_file) else None
+
+
+def _decoded_as(location: SampleFileLocation, sample_hash: str) -> SamplePCM | None:
+    try:
+        decoded = decode_sample_file(location.path)
     except UNREADABLE_SAMPLE_FILE_ERRORS:
         return None
-    return decoded.sample_pcm if decoded.sample_pcm.sample.hash == sample_file.sample_hash else None
+    return decoded.sample_pcm if decoded.sample_pcm.sample.hash == sample_hash else None
 
 
 def _unavailable(sample_hash: str, sample_files: tuple[SampleFile, ...]) -> SampleUnavailableError:

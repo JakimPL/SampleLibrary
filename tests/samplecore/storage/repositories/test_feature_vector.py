@@ -61,7 +61,7 @@ def test_an_experiments_vectors_are_listed_in_sample_hash_order(
     assert [vector.sample_hash for vector in listed] == sorted(sample.hash for sample in by_descending_hash)
 
 
-def test_an_experiments_sample_hashes_and_first_vectors_are_read_on_their_own(
+def test_an_experiments_sample_hashes_and_vectors_in_hash_order_are_read_on_their_own(
     connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
     experiment_id = _create_experiment(connection)
@@ -72,7 +72,12 @@ def test_an_experiments_sample_hashes_and_first_vectors_are_read_on_their_own(
     first_hash = min(stored_sample.hash, stored_sample_b.hash)
 
     assert repository.sample_hashes_for_experiment(experiment_id) == {stored_sample.hash, stored_sample_b.hash}
-    assert [vector.sample_hash for vector in repository.first_vectors(experiment_id, count=1)] == [first_hash]
+    assert [vector.sample_hash for vector in repository.vectors_in_hash_order(experiment_id, count=1, offset=0)] == [
+        first_hash
+    ]
+    assert [vector.sample_hash for vector in repository.vectors_in_hash_order(experiment_id, count=5, offset=1)] == [
+        max(stored_sample.hash, stored_sample_b.hash)
+    ]
 
 
 def test_two_experiments_hold_independent_vectors_for_the_same_sample(

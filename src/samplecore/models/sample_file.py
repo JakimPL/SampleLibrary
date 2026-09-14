@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 from typing import Final
 
@@ -10,7 +11,6 @@ from trackmod.schema.scalars import Rate
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import Count, SampleHash
 
-WINDOWS_SEPARATOR: Final[str] = "\\"
 _TRAVERSING_PARTS: Final[frozenset[str]] = frozenset({".", ".."})
 
 
@@ -43,10 +43,23 @@ class SampleFileLocation(BaseModel):
             or posix_path.is_absolute()
             or posix_path.as_posix() != relative_path
             or _TRAVERSING_PARTS & set(posix_path.parts)
-            or WINDOWS_SEPARATOR in relative_path
         ):
             raise ValueError(f"{relative_path!r} must be a forward-slash path below its directory")
         return relative_path
+
+    @classmethod
+    def inside(cls, path: Path, directories: Iterable[Path]) -> SampleFileLocation | None:
+        """The location of a file inside whichever of ``directories`` holds it.
+
+        ``None`` when the path lies below none of them, or climbs back out of one through ``..``,
+        which is how a process reading files a request names keeps to the directories it serves.
+        """
+        if _TRAVERSING_PARTS & set(path.parts):
+            return None
+        for directory in directories:
+            if path != directory and path.is_relative_to(directory):
+                return cls(directory=directory, relative_path=path.relative_to(directory).as_posix())
+        return None
 
     @property
     def path(self) -> Path:

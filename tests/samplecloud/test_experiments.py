@@ -23,11 +23,13 @@ from samplecloud.hearing import Hearing
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import Experiment, Reading, SampleFeatureVector
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import SampleFile
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio
 
 NOMINAL = Hearing(reading=Reading.NOMINAL, playback_rate_by_hash={})
 
@@ -135,7 +137,11 @@ def test_the_extractor_that_made_an_experiment_reproduces_it(connection: Connect
     experiment_id = _seed_experiment(connection, tmp_path)
 
     require_reproducible(
-        connection, tmp_path, experiment_id=experiment_id, extractor=_ShapeExtractor(swapped=False), hearing=NOMINAL
+        connection,
+        SampleAudio.from_catalog(connection, tmp_path),
+        experiment_id=experiment_id,
+        extractor=_ShapeExtractor(swapped=False),
+        hearing=NOMINAL,
     )
 
 
@@ -144,5 +150,51 @@ def test_an_extractor_describing_the_samples_otherwise_is_refused(connection: Co
 
     with pytest.raises(ExtractorChanged, match="start a new experiment"):
         require_reproducible(
-            connection, tmp_path, experiment_id=experiment_id, extractor=_ShapeExtractor(swapped=True), hearing=NOMINAL
+            connection,
+            SampleAudio.from_catalog(connection, tmp_path),
+            experiment_id=experiment_id,
+            extractor=_ShapeExtractor(swapped=True),
+            hearing=NOMINAL,
+        )
+
+
+def _add_vector(connection: Connection, experiment_id: int, sample_hash: str) -> None:
+    PostgresSampleFeatureVectorRepository(connection).insert_many(
+        [
+            SampleFeatureVector(
+                experiment_id=experiment_id, sample_hash=sample_hash, vector=(0.0, 1.0), computed_at=datetime.now(UTC)
+            )
+        ]
+    )
+    connection.commit()
+
+
+def test_a_sample_whose_file_is_gone_is_passed_over_by_the_check(
+    connection: Connection, tmp_path: Path, vanished_sample_file: SampleFile
+) -> None:
+    experiment_id = _seed_experiment(connection, tmp_path)
+    _add_vector(connection, experiment_id, vanished_sample_file.sample_hash)
+
+    require_reproducible(
+        connection,
+        SampleAudio.from_catalog(connection, tmp_path),
+        experiment_id=experiment_id,
+        extractor=_ShapeExtractor(swapped=False),
+        hearing=NOMINAL,
+    )
+
+
+def test_an_experiment_none_of_whose_samples_can_be_read_is_refused(
+    connection: Connection, tmp_path: Path, vanished_sample_file: SampleFile
+) -> None:
+    experiment_id = PostgresExperimentRepository(connection).create(backend_name="stub", label=None, params={})
+    _add_vector(connection, experiment_id, vanished_sample_file.sample_hash)
+
+    with pytest.raises(ExperimentRefused, match="can be read now"):
+        require_reproducible(
+            connection,
+            SampleAudio.from_catalog(connection, tmp_path),
+            experiment_id=experiment_id,
+            extractor=_ShapeExtractor(swapped=False),
+            hearing=NOMINAL,
         )

@@ -3,14 +3,18 @@ from __future__ import annotations
 import hashlib
 import math
 import threading
+from pathlib import Path
 from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
 
 from samplecore.models.morph import MORPH_WEIGHT_STEPS, HeardMorphPoint, MorphServiceStatus
+from samplecore.models.sample_file import SampleFileLocation
+from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
+from samplecore.storage.sample_audio import SampleUnavailableError, read_sample_file, read_sample_file_frame_count
 from samplemorph.codecs.conditioned import ConditionedCodec
 from samplemorph.images import SampleLatent
 from samplemorph.pipeline import LoadedRoute, common_rate, encode_heard, encode_waveform, load_route, render_morph
@@ -73,7 +77,8 @@ class MorphRenderer:
         Raises:
             RenderBoundsError: the two rates lie further apart than the limits allow, or an end would
                 render longer than the frame bound.
-            FileNotFoundError: the store holds no object for one of the two samples.
+            FileNotFoundError: the store holds no object for an end read from the store.
+            SampleUnavailableError: an end's file is gone, unreadable, or outside every sample directory served.
         """
         limits = self._settings.limits
         first_rate, second_rate = float(point.first_rate_hz), float(point.second_rate_hz)
@@ -84,10 +89,9 @@ class MorphRenderer:
                 f"the two ends are heard {ratio:.1f} times apart in rate, and a morph spans at most "
                 f"{limits.maximum_rate_ratio:g}"
             )
-        for sample_hash, heard_rate in ((point.first, first_rate), (point.second, second_rate)):
-            frames = math.ceil(
-                audio_store.stored_frame_count(self._settings.library_root, sample_hash) * rate_hz / heard_rate
-            )
+        ends = ((point.first, point.first_file, first_rate), (point.second, point.second_file, second_rate))
+        for sample_hash, sample_file, heard_rate in ends:
+            frames = math.ceil(self._frame_count(sample_hash, sample_file) * rate_hz / heard_rate)
             if frames > limits.maximum_frames:
                 raise RenderBoundsError(
                     f"sample {sample_hash} would render {frames} frames in this pair, past the {limits.maximum_frames} "
@@ -101,7 +105,9 @@ class MorphRenderer:
         waiting once the render lock frees.
 
         Raises:
-            FileNotFoundError: the store holds no object for one of the two samples.
+            FileNotFoundError: the store holds no object for an end read from the store.
+            SampleUnavailableError: an end's file is gone, unreadable, holds another sample, or lies
+                outside every sample directory served.
         """
         cached = self._cached_render(point)
         if cached is not None:
@@ -114,8 +120,10 @@ class MorphRenderer:
 
             rate_hz = common_rate(float(point.first_rate_hz), float(point.second_rate_hz))
             waveform = render_morph(
-                self._latent(point.first, rate_hz=float(point.first_rate_hz), target_rate_hz=rate_hz),
-                self._latent(point.second, rate_hz=float(point.second_rate_hz), target_rate_hz=rate_hz),
+                self._latent(point.first, point.first_file, rate_hz=float(point.first_rate_hz), target_rate_hz=rate_hz),
+                self._latent(
+                    point.second, point.second_file, rate_hz=float(point.second_rate_hz), target_rate_hz=rate_hz
+                ),
                 weight=point.weight,
                 route=self._loaded.route,
             )
@@ -184,14 +192,16 @@ class MorphRenderer:
         with self._cache_lock:
             return self._renders.get(point)
 
-    def _latent(self, sample_hash: str, *, rate_hz: float, target_rate_hz: float) -> SampleLatent:
+    def _latent(
+        self, sample_hash: str, sample_file: Path | None, *, rate_hz: float, target_rate_hz: float
+    ) -> SampleLatent:
         key: LatentKey = (sample_hash, rate_hz, target_rate_hz)
         with self._cache_lock:
             cached = self._latents.get(key)
         if cached is not None:
             return cached
 
-        pcm = audio_store.read_object(self._settings.library_root, sample_hash).pcm
+        pcm = self._read(sample_hash, sample_file).pcm
         route = self._loaded.route
         encoded = encode_heard(
             pcm, rate_hz=rate_hz, target_rate_hz=target_rate_hz, canonicalizer=route.canonicalizer, codec=route.codec
@@ -199,6 +209,29 @@ class MorphRenderer:
         with self._cache_lock:
             self._latents.put(key, encoded.latent)
         return encoded.latent
+
+    def _read(self, sample_hash: str, sample_file: Path | None) -> SamplePCM:
+        """An end's waveform: its stored object by hash, or the file the request names for it."""
+        if sample_file is None:
+            return audio_store.read_object(self._settings.library_root, sample_hash)
+        return read_sample_file(self._served_location(sample_file), sample_hash)
+
+    def _frame_count(self, sample_hash: str, sample_file: Path | None) -> int:
+        """How many frames an end holds, from the stored object's header or the named file's."""
+        if sample_file is None:
+            return audio_store.stored_frame_count(self._settings.library_root, sample_hash)
+        return read_sample_file_frame_count(self._served_location(sample_file))
+
+    def _served_location(self, sample_file: Path) -> SampleFileLocation:
+        """The named file as a location inside one of the sample directories this process serves.
+
+        Raises:
+            SampleUnavailableError: the file lies inside none of them.
+        """
+        location = SampleFileLocation.inside(sample_file, self._settings.sample_directories)
+        if location is None:
+            raise SampleUnavailableError(f"{sample_file} lies in no sample directory this process reads")
+        return location
 
 
 def load_renderer(settings: ServiceSettings) -> MorphRenderer:

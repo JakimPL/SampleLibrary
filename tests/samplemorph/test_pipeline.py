@@ -25,6 +25,7 @@ from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
@@ -116,8 +117,8 @@ def _stored_pair(
     first_sample = _store_sample(connection, library_root, index=1, frequency=220.0, rate_hz=FIRST_RATE_HZ)
     second_sample = _store_sample(connection, library_root, index=2, frequency=660.0, rate_hz=SECOND_RATE_HZ)
     return encode_pair(
-        read_heard_sample(connection, library_root, first_sample),
-        read_heard_sample(connection, library_root, second_sample),
+        read_heard_sample(connection, SampleAudio.from_catalog(connection, library_root), first_sample),
+        read_heard_sample(connection, SampleAudio.from_catalog(connection, library_root), second_sample),
         canonicalizer=canonicalizer,
         codec=codec,
     )
@@ -226,7 +227,7 @@ def test_encoding_a_sample_with_no_cataloged_occurrence_says_so(connection: Conn
     with pytest.raises(ValueError, match="playback rate is unknown"):
         encode_sample(
             connection,
-            library_root,
+            SampleAudio.from_catalog(connection, library_root),
             sample,
             canonicalizer=canonicalizer,
             codec=IdentityCodec(canonicalizer.geometry),
@@ -244,7 +245,11 @@ def test_the_note_events_rate_wins_over_the_occurrences_when_the_catalog_holds_o
     canonicalizer = CANONICALIZER_REGISTRY[DEFAULT_CANONICALIZER_NAME]()
 
     encoded = encode_sample(
-        connection, library_root, sample, canonicalizer=canonicalizer, codec=IdentityCodec(canonicalizer.geometry)
+        connection,
+        SampleAudio.from_catalog(connection, library_root),
+        sample,
+        canonicalizer=canonicalizer,
+        codec=IdentityCodec(canonicalizer.geometry),
     )
 
     assert encoded.rate_hz == NOTE_EVENT_RATE_HZ

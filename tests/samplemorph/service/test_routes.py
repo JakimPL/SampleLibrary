@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -154,3 +155,38 @@ def test_a_quiet_point_keeps_its_level(client: TestClient, library: StoredLibrar
     frames, _ = soundfile.read(io.BytesIO(client.get(AUDIO_PATH, params=_params(library, 0.5)).content))
 
     assert float(np.abs(frames).max()) <= FULL_SCALE_CEILING + 1.0 / 32768
+
+
+def test_an_end_found_in_a_sample_directory_renders_from_its_file(client: TestClient, library: StoredLibrary) -> None:
+    params = {**_params(library, 0.5), "second": library.file_hash, "second_file": str(library.file_path)}
+
+    response = client.get(AUDIO_PATH, params=params)
+
+    assert response.status_code == 200
+    assert soundfile.read(io.BytesIO(response.content))[1] == SECOND_RATE_HZ
+
+
+def test_a_file_outside_every_served_sample_directory_is_refused(
+    client: TestClient, library: StoredLibrary, tmp_path: Path
+) -> None:
+    elsewhere = tmp_path / "elsewhere.wav"
+    elsewhere.write_bytes(library.file_path.read_bytes())
+    climbing = library.sample_directory / ".." / elsewhere.name
+
+    for named in (elsewhere, climbing):
+        params = {**_params(library, 0.5), "second": library.file_hash, "second_file": str(named)}
+        response = client.get(AUDIO_PATH, params=params)
+
+        assert response.status_code == 404
+        assert "no sample directory" in response.json()["detail"]
+
+
+def test_a_file_holding_another_sample_than_the_one_named_is_refused(
+    client: TestClient, library: StoredLibrary
+) -> None:
+    params = {**_params(library, 0.5), "second": library.hashes[2], "second_file": str(library.file_path)}
+
+    response = client.get(AUDIO_PATH, params=params)
+
+    assert response.status_code == 404
+    assert "holds another sample" in response.json()["detail"]

@@ -44,7 +44,6 @@ def test_every_metric_a_report_holds_reaches_the_run(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -71,7 +70,6 @@ def test_a_retuning_is_named_by_its_direction_and_size(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -84,7 +82,7 @@ def test_a_retuning_is_named_by_its_direction_and_size(
     stubbed = replace(
         report,
         transposition=TranspositionRetrieval(
-            offsets=offsets, probe_sample_count=4, catalog_sample_count=32, random_seed=0
+            offsets=offsets, probe_sample_count=4, unavailable_probe_count=0, catalog_sample_count=32, random_seed=0
         ),
     )
     run = RecordingRun()

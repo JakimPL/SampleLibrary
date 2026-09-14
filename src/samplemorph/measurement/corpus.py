@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Final
 
 import numpy as np
 
 from samplecore.auditory.sound_type import SoundType, sound_type_reading
 from samplecore.models.sample import Sample
-from samplecore.storage import audio_store
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
+from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
 
 DEFAULT_PROBE_FRAME_FLOOR: Final[int] = 4_000
@@ -30,14 +29,14 @@ class ProbeSample:
     sound_type: SoundType
 
 
-def read_probe_samples(library_root: Path, samples: tuple[Sample, ...]) -> tuple[ProbeSample, ...]:
-    """Read each sample's stored audio, prepared exactly as every frequency axis analyzes it.
+def read_probe_samples(audio: SampleAudio, samples: tuple[Sample, ...]) -> tuple[ProbeSample, ...]:
+    """Read each sample's audio, prepared exactly as every frequency axis analyzes it.
 
     A probe's mono is the reference every reconstruction of it is measured against, so it takes
     the same way in as the analysis and the two compare the same content. Its sound type is read
     from those frames at the rate the analysis reads them.
     """
-    return tuple(_probe(sample, prepare_mono(audio_store.read(library_root, sample).pcm)) for sample in samples)
+    return tuple(_probe(sample, prepare_mono(audio.read(sample).pcm)) for sample in samples)
 
 
 def _probe(sample: Sample, mono: PreparedMono) -> ProbeSample:

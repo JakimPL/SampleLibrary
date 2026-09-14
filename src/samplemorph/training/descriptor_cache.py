@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
-from samplecore.storage import audio_store
+from samplecore.storage.sample_audio import SampleAudio
 from samplecore.waveform import resample_by_semitones
 from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
 from samplemorph.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
@@ -159,7 +159,7 @@ def build_grid_cache(
     directory: Path,
     *,
     samples: tuple[Sample, ...],
-    library_root: Path,
+    audio: SampleAudio,
     recipe: GridCacheRecipe,
     worker_count: int,
 ) -> GridCache:
@@ -171,7 +171,9 @@ def build_grid_cache(
 
     The cache is built beside `directory` and moved into place once its description is written,
     so a build stopped partway leaves the previous cache under that name as it was, and a trainer
-    already reading the previous cache keeps the files it mapped.
+    already reading the previous cache keeps the files it mapped. The rows are sized to `samples`, so
+    a caller passes the samples whose audio can be read now; a sample file going missing while the
+    build runs stops the build the same way.
 
     Raises:
         ValueError: the draw is empty.
@@ -212,7 +214,7 @@ def build_grid_cache(
         )
         for sample in samples
     ]
-    worker = _Worker(library_root=library_root, geometry=geometry, band_count=band_count)
+    worker = _Worker(audio=audio, geometry=geometry, band_count=band_count)
     for position, (job_grids, job_durations) in enumerate(_derived(jobs, worker=worker, worker_count=worker_count)):
         grids[position] = job_grids
         durations[position] = job_durations
@@ -304,13 +306,13 @@ class _Worker:
     differ in their grids alone.
     """
 
-    library_root: Path
+    audio: SampleAudio
     geometry: Geometry
     band_count: int
 
     def __call__(self, job: _Job) -> tuple[NDArray[np.float16], NDArray[np.float32]]:
         canonicalizer = canonicalizer_for_geometry(self.geometry)
-        mono = prepare_mono(audio_store.read(self.library_root, job.sample).pcm)
+        mono = prepare_mono(self.audio.read(job.sample).pcm)
         stored = canonicalizer.canonicalize(mono)
         views = [
             canonicalizer.canonicalize(PreparedMono(resample_by_semitones(mono, semitones=offset)))

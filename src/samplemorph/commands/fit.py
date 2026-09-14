@@ -11,9 +11,14 @@ from sqlalchemy import Connection
 from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
-from samplecore.storage import audio_store
+from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers.common import prepare_mono
-from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
+from samplemorph.commands.draws import (
+    add_canonicalizer_argument,
+    canonicalizer_from,
+    draw_probe_samples,
+    readable_samples,
+)
 from samplemorph.measurement.corpus import DEFAULT_PROBE_FRAME_CEILING, DEFAULT_PROBE_FRAME_FLOOR
 from samplemorph.model_store import (
     DEFAULT_MODEL_NAME,
@@ -59,7 +64,10 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
             codec's components, after naming the `--latent-size` that fits.
     """
     canonicalizer = canonicalizer_from(arguments)
-    samples = draw_probe_samples(connection, count=arguments.samples, random_seed=arguments.seed)
+    audio = SampleAudio.from_catalog(connection, config.library_root)
+    samples = readable_samples(
+        draw_probe_samples(connection, count=arguments.samples, random_seed=arguments.seed), audio
+    )
     if not samples:
         _logger.error(
             "No sample lies between %d and %d frames, so there is nothing to fit a codec over.",
@@ -88,10 +96,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         len(samples) * bands * columns * np.dtype(np.float32).itemsize / 1e9,
     )
     grids = stack_grids(
-        (
-            canonicalizer.canonicalize(prepare_mono(audio_store.read(config.library_root, sample).pcm))
-            for sample in samples
-        ),
+        (canonicalizer.canonicalize(prepare_mono(audio.read(sample).pcm)) for sample in samples),
         count=len(samples),
         geometry=geometry,
     )

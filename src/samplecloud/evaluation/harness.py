@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from pathlib import Path
 
 from sqlalchemy import Connection
 
@@ -22,7 +21,6 @@ def evaluate_experiment(
     connection: Connection,
     *,
     experiment_id: int,
-    library_root: Path,
     describer: ProbeDescriber | None,
     settings: EvaluationSettings,
 ) -> EvaluationReport:
@@ -59,9 +57,7 @@ def evaluate_experiment(
         sample_count=corpus.sample_count,
         random_seed=settings.random_seed,
         evaluated_at=datetime.now(UTC),
-        transposition=_transposition(
-            connection, corpus, library_root=library_root, describer=describer, settings=settings
-        ),
+        transposition=_transposition(connection, corpus, describer=describer, settings=settings),
         categories=categories,
         notes=notes,
         hand_labels=hand_labels,
@@ -85,7 +81,6 @@ def _transposition(
     connection: Connection,
     corpus: EvaluationCorpus,
     *,
-    library_root: Path,
     describer: ProbeDescriber | None,
     settings: EvaluationSettings,
 ) -> TranspositionRetrieval | None:
@@ -94,9 +89,7 @@ def _transposition(
         return None
 
     _logger.info("Retuning %d probes across the offset grid...", settings.probe_count)
-    retrieval = transposition_retrieval(
-        connection, corpus, library_root=library_root, describer=describer, settings=settings
-    )
+    retrieval = transposition_retrieval(connection, corpus, describer=describer, settings=settings)
     if retrieval is None:
         _logger.info("No probe sample is left in the catalog, so transposition retrieval is left out.")
     return retrieval

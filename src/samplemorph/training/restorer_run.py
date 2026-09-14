@@ -43,7 +43,7 @@ def run_restorer_training(
         | geometry_parameters(corpus.canonicalizer.geometry)
     )
     module = RestorerTrainingModule(RestorerShape(channels=settings.channels), learning_rate=settings.run.learning_rate)
-    path = restorer_path(corpus.library_root, name=placement.model_name)
+    path = restorer_path(placement.library_root, name=placement.model_name)
     export = BestEpochExport(
         path=path,
         monitored=RESTORER_MONITORED_METRIC,

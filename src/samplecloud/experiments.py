@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Final
 
 import numpy as np
+from numpy.typing import NDArray
 from sqlalchemy import Connection
 
 from samplecloud.backends import FeatureExtractor
@@ -18,13 +19,15 @@ from samplecore.models.experiment import (
     ZERO_SHOT_BACKEND_NAME,
     Experiment,
     Reading,
+    SampleFeatureVector,
 )
-from samplecore.storage import audio_store
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 
 REPRODUCTION_PROBE_COUNT: Final[int] = 8
+REPRODUCTION_PAGE_ROWS: Final[int] = 256
 REPRODUCTION_MINIMUM_SIMILARITY: Final[float] = 0.999
 
 
@@ -99,31 +102,58 @@ def extractor_for(recipe: EmbeddingRecipe, *, library_root: Path, device: str) -
 
 
 def require_reproducible(
-    connection: Connection, library_root: Path, *, experiment_id: int, extractor: FeatureExtractor, hearing: Hearing
+    connection: Connection, audio: SampleAudio, *, experiment_id: int, extractor: FeatureExtractor, hearing: Hearing
 ) -> None:
     """Describe a few of an experiment's samples again, and insist the vectors match the ones it holds.
 
     A learned descriptor is found by name, so retraining it under that name, or a backend changing
     with a library upgrade, would add vectors of another kind to an experiment resumed later. The
-    probe is the experiment's first samples in hash order, so every resume checks the same ones.
+    probe is the experiment's first samples in hash order whose audio can be read now, so every resume
+    checks the same ones for as long as their files stay where they are.
 
     Raises:
         ExtractorChanged: a probe sample's new vector points elsewhere than its stored one.
+        ExperimentRefused: none of the experiment's samples can be read now to check against.
     """
-    stored = PostgresSampleFeatureVectorRepository(connection).first_vectors(
-        experiment_id, count=REPRODUCTION_PROBE_COUNT
-    )
-    samples = PostgresSampleRepository(connection).get_many([vector.sample_hash for vector in stored])
-    for vector in stored:
-        heard = hearing.hear(vector.sample_hash, audio_store.read(library_root, samples[vector.sample_hash]).pcm)
-        described = np.asarray(extractor.extract(heard), dtype=np.float64)
-        similarity = _cosine(described, np.asarray(vector.vector, dtype=np.float64))
-        if similarity < REPRODUCTION_MINIMUM_SIMILARITY:
-            raise ExtractorChanged(
-                f"experiment {experiment_id}'s extractor now describes sample {vector.sample_hash} at a cosine of "
-                f"{similarity:.4f} from the vector it holds, so new vectors would not belong beside the old ones; "
-                "start a new experiment instead"
-            )
+    vector_repository = PostgresSampleFeatureVectorRepository(connection)
+    compared = 0
+    offset = 0
+    while compared < REPRODUCTION_PROBE_COUNT:
+        page = vector_repository.vectors_in_hash_order(experiment_id, count=REPRODUCTION_PAGE_ROWS, offset=offset)
+        if not page:
+            break
+        offset += len(page)
+        samples = PostgresSampleRepository(connection).get_many([vector.sample_hash for vector in page])
+        for vector in page:
+            try:
+                sample_pcm = audio.read(samples[vector.sample_hash])
+            except SampleUnavailableError:
+                continue
+            _require_matching(extractor.extract(hearing.hear(vector.sample_hash, sample_pcm.pcm)), vector)
+            compared += 1
+            if compared == REPRODUCTION_PROBE_COUNT:
+                return
+
+    if compared == 0 and offset > 0:
+        raise ExperimentRefused(
+            f"none of experiment {experiment_id}'s samples can be read now, so its extractor cannot be checked "
+            "against the vectors it holds; bring its sample files back first"
+        )
+
+
+def _require_matching(described: NDArray[np.float64], vector: SampleFeatureVector) -> None:
+    """Insist a sample described again points where its stored vector does.
+
+    Raises:
+        ExtractorChanged: the new vector points elsewhere than the stored one.
+    """
+    similarity = _cosine(np.asarray(described, dtype=np.float64), np.asarray(vector.vector, dtype=np.float64))
+    if similarity < REPRODUCTION_MINIMUM_SIMILARITY:
+        raise ExtractorChanged(
+            f"experiment {vector.experiment_id}'s extractor now describes sample {vector.sample_hash} at a cosine of "
+            f"{similarity:.4f} from the vector it holds, so new vectors would not belong beside the old ones; "
+            "start a new experiment instead"
+        )
 
 
 def _cosine(first: np.ndarray, second: np.ndarray) -> float:

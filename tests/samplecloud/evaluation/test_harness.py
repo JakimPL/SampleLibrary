@@ -47,7 +47,6 @@ def test_a_pass_without_an_extractor_scores_the_stored_vectors_alone(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -68,7 +67,6 @@ def test_a_pass_scores_the_hand_labels_once_enough_samples_carry_one(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -97,9 +95,7 @@ def test_a_corpus_too_small_to_fold_leaves_those_metrics_out(connection: Connect
         )
     connection.commit()
 
-    report = evaluate_experiment(
-        connection, experiment_id=experiment_id, library_root=tmp_path, describer=None, settings=SETTINGS
-    )
+    report = evaluate_experiment(connection, experiment_id=experiment_id, describer=None, settings=SETTINGS)
 
     assert (report.categories, report.notes, report.hand_labels) == (None, None, None)
     assert json.loads(report_json(report))["categories"] is None
@@ -111,7 +107,6 @@ def test_a_score_no_metric_could_read_is_written_as_null(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -123,7 +118,7 @@ def test_a_score_no_metric_could_read_is_written_as_null(
 
 def test_an_unknown_experiment_says_so(connection: Connection, tmp_path: Path) -> None:
     with pytest.raises(ExperimentRefused, match="holds no experiment"):
-        evaluate_experiment(connection, experiment_id=9999, library_root=tmp_path, describer=None, settings=SETTINGS)
+        evaluate_experiment(connection, experiment_id=9999, describer=None, settings=SETTINGS)
 
 
 def test_a_report_renders_as_json_a_tracker_can_read(
@@ -132,7 +127,6 @@ def test_a_report_renders_as_json_a_tracker_can_read(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -260,7 +254,6 @@ def test_the_command_reports_retrieval_offset_by_offset(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -273,6 +266,7 @@ def test_the_command_reports_retrieval_offset_by_offset(
                 ),
             ),
             probe_sample_count=4,
+            unavailable_probe_count=0,
             catalog_sample_count=32,
             random_seed=0,
         ),

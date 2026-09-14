@@ -14,6 +14,7 @@ def _():
     from samplecore.models.relation import RelationType
     from samplecore.storage import audio_store
     from samplecore.storage.database import connect
+    from samplecore.storage.sample_audio import SampleAudio
     from sampleextract.equivalence.calibration import (
         gain_variant_calibration_trials,
         most_marginal_relations,
@@ -28,6 +29,7 @@ def _():
         GAIN_VARIANT_MINIMUM_CONFIDENCE,
         RESAMPLED_MINIMUM_CONFIDENCE,
         RelationType,
+        SampleAudio,
         audio_store,
         connect,
         dataclasses,
@@ -214,6 +216,7 @@ def _(RelationType, catalog_connection, mo):
 @app.cell
 def _(
     RelationType,
+    SampleAudio,
     audio_store,
     catalog_connection,
     library_config,
@@ -222,14 +225,14 @@ def _(
     relation_limit_picker,
     relation_type_picker,
 ):
-    def _relation_row(relation: object) -> dict[str, object]:
-        subject_path = audio_store.object_path(library_config.library_root, relation.subject_hash)  # type: ignore[attr-defined]
-        reference_path = audio_store.object_path(library_config.library_root, relation.reference_hash)  # type: ignore[attr-defined]
+    def _relation_row(relation: object, sample_audio: SampleAudio) -> dict[str, object]:
+        subject = sample_audio.read_by_hash(relation.subject_hash)  # type: ignore[attr-defined]
+        reference = sample_audio.read_by_hash(relation.reference_hash)  # type: ignore[attr-defined]
         return {
             "confidence": relation.confidence,  # type: ignore[attr-defined]
             "evidence": relation.evidence,  # type: ignore[attr-defined]
-            "subject": mo.audio(str(subject_path)),
-            "reference": mo.audio(str(reference_path)),
+            "subject": mo.audio(audio_store.encode_wav(subject)),
+            "reference": mo.audio(audio_store.encode_wav(reference)),
         }
 
     if catalog_connection is not None:
@@ -238,7 +241,8 @@ def _(
             relation_type=RelationType(relation_type_picker.value),
             limit=int(relation_limit_picker.value),
         )
-        mo.ui.table([_relation_row(relation) for relation in marginal_relations])
+        relation_audio = SampleAudio.from_catalog(catalog_connection, library_config.library_root)
+        mo.ui.table([_relation_row(relation, relation_audio) for relation in marginal_relations])
     else:
         mo.md("Fill in `config.toml` to inspect the real catalog's relations here.")
     return

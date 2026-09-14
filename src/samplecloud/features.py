@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Final
 
 from sqlalchemy import Connection
@@ -13,9 +12,9 @@ from samplecloud.backends import FeatureExtractor
 from samplecloud.hearing import Hearing
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.models.sample import Sample
-from samplecore.storage import audio_store
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 
 EXTRACTION_CHECKPOINT_INTERVAL: Final[int] = 500
 
@@ -24,11 +23,16 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class FeatureExtractionSummary:
-    """What one feature-extraction run did, across every sample it considered."""
+    """What one feature-extraction run did, across every sample it considered.
+
+    ``unavailable`` counts the pending samples whose audio lives only in sample files none of which
+    holds it now; they stay pending, so a later run describes them once a file is back.
+    """
 
     cataloged: int
     already_extracted: int
     newly_extracted: int
+    unavailable: int
 
 
 @dataclass(frozen=True)
@@ -77,7 +81,7 @@ def pending_samples(connection: Connection, experiment_id: int, *, sample_limit:
 
 
 def extract_features(
-    connection: Connection, library_root: Path, feature_pass: FeaturePass, pending: PendingSamples
+    connection: Connection, audio: SampleAudio, feature_pass: FeaturePass, pending: PendingSamples
 ) -> FeatureExtractionSummary:
     """Extract a feature vector for every pending sample of the pass's experiment.
 
@@ -96,8 +100,14 @@ def extract_features(
 
     pending_vectors: list[SampleFeatureVector] = []
     newly_extracted_count = 0
+    unavailable_count = 0
     for sample in tqdm(pending.samples, desc="Extracting features"):
-        heard = feature_pass.hearing.hear(sample.hash, audio_store.read(library_root, sample).pcm)
+        try:
+            sample_pcm = audio.read(sample)
+        except SampleUnavailableError:
+            unavailable_count += 1
+            continue
+        heard = feature_pass.hearing.hear(sample.hash, sample_pcm.pcm)
         raw_vector = feature_pass.feature_extractor.extract(heard)
         pending_vectors.append(
             SampleFeatureVector(
@@ -117,5 +127,8 @@ def extract_features(
     connection.commit()
     _logger.info("Feature extraction complete.")
     return FeatureExtractionSummary(
-        cataloged=pending.cataloged, already_extracted=pending.already_extracted, newly_extracted=newly_extracted_count
+        cataloged=pending.cataloged,
+        already_extracted=pending.already_extracted,
+        newly_extracted=newly_extracted_count,
+        unavailable=unavailable_count,
     )

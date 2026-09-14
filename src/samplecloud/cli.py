@@ -169,10 +169,12 @@ def _refuse_conflicts(arguments: argparse.Namespace, recipe: EmbeddingRecipe) ->
 
 def _report(summary: EmbeddingSummary) -> None:
     _logger.info(
-        "Experiment %d: extracted features for %d new samples (%d already known, %d cataloged).",
+        "Experiment %d: extracted features for %d new samples (%d already known, %d with no file to read now, "
+        "%d cataloged).",
         summary.experiment_id,
         summary.extraction.newly_extracted,
         summary.extraction.already_extracted,
+        summary.extraction.unavailable,
         summary.extraction.cataloged,
     )
     if summary.reduction is not None:

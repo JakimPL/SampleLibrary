@@ -1,28 +1,32 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from sqlalchemy import Connection
 from tqdm import tqdm
 
-from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, SampleThumbnailRepository
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 from samplecore.waveform import compute_thumbnail
 
 
 @dataclass(frozen=True)
 class ThumbnailBackfillSummary:
-    """What one thumbnail backfill pass did, across every sample it considered."""
+    """What one thumbnail backfill pass did, across every sample it considered.
+
+    ``unavailable`` counts the samples whose audio lives only in sample files none of which holds it
+    now, which a later pass thumbnails once a file is back.
+    """
 
     cataloged: int
     already_thumbnailed: int
     computed: int
+    unavailable: int
 
 
-def compute_missing_thumbnails(connection: Connection, library_root: Path, *, force: bool) -> ThumbnailBackfillSummary:
+def compute_missing_thumbnails(connection: Connection, audio: SampleAudio, *, force: bool) -> ThumbnailBackfillSummary:
     """Compute and cache a waveform-preview thumbnail for every sample that does not have one yet.
 
     Idempotent by default: rerunning after a previous pass only computes thumbnails for samples
@@ -36,13 +40,21 @@ def compute_missing_thumbnails(connection: Connection, library_root: Path, *, fo
 
     already_thumbnailed = 0
     computed = 0
+    unavailable = 0
     with start_batch(connection):
         for sample in tqdm(samples, desc="Computing thumbnails"):
             if not force and thumbnail_repository.get(sample.hash) is not None:
                 already_thumbnailed += 1
                 continue
 
-            thumbnail_repository.upsert(compute_thumbnail(sample.hash, audio_store.read(library_root, sample).pcm))
+            try:
+                sample_pcm = audio.read(sample)
+            except SampleUnavailableError:
+                unavailable += 1
+                continue
+            thumbnail_repository.upsert(compute_thumbnail(sample.hash, sample_pcm.pcm))
             computed += 1
 
-    return ThumbnailBackfillSummary(cataloged=len(samples), already_thumbnailed=already_thumbnailed, computed=computed)
+    return ThumbnailBackfillSummary(
+        cataloged=len(samples), already_thumbnailed=already_thumbnailed, computed=computed, unavailable=unavailable
+    )

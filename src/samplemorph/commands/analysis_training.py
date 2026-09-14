@@ -11,7 +11,13 @@ from sqlalchemy import Connection
 from samplecore.cli_support import positive_integer, positive_multiple_of
 from samplecore.config import LibraryConfig
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
+from samplecore.storage.sample_audio import SampleAudio
+from samplemorph.commands.draws import (
+    add_canonicalizer_argument,
+    canonicalizer_from,
+    draw_probe_samples,
+    readable_samples,
+)
 from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from, train_and_report
 from samplemorph.registries import RENDERABLE_CANONICALIZER_NAMES
 from samplemorph.training.settings import DEFAULT_CROP_FRAMES, AnalysisTrainingSettings
@@ -87,14 +93,18 @@ def train_on_analysis_corpus(
     from samplemorph.training.analysis_data import AnalysisCorpus
     from samplemorph.training.runs import RunPlacement, check_resume_point
 
-    samples = (
-        PostgresSampleRepository(connection).list_all()
-        if arguments.samples is None
-        else draw_probe_samples(connection, count=arguments.samples, random_seed=arguments.seed)
+    audio = SampleAudio.from_catalog(connection, config.library_root)
+    samples = readable_samples(
+        (
+            PostgresSampleRepository(connection).list_all()
+            if arguments.samples is None
+            else draw_probe_samples(connection, count=arguments.samples, random_seed=arguments.seed)
+        ),
+        audio,
     )
     corpus = AnalysisCorpus(
         samples=samples,
-        library_root=config.library_root,
+        audio=audio,
         canonicalizer=canonicalizer_from(arguments),
         canonicalizer_name=arguments.canonicalizer,
     )

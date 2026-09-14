@@ -10,6 +10,7 @@ from sqlalchemy import Connection
 
 from samplecore.cli_parsing import add_subcommand
 from samplecore.config import LibraryConfig
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 from samplemorph.commands.draws import SampleNotCataloged, require_sample
 from samplemorph.pipeline import (
     encode_pair,
@@ -45,22 +46,23 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
     """Render a listening set between two samples through a stored model.
 
-    The two hashes are checked against the catalog before any model loads, so a mistyped hash is
-    reported as such, in one line, rather than as whatever the models had to say first.
+    Both samples are read before any model loads, so a mistyped hash, or a sample whose files are
+    gone, is reported as such, in one line, rather than as whatever the models had to say first.
 
     Raises:
-        SystemExit: either hash names no cataloged sample.
+        SystemExit: either hash names no cataloged sample, or a sample none of whose files holds it now.
     """
+    audio = SampleAudio.from_catalog(connection, config.library_root)
     try:
-        first_sample = require_sample(connection, arguments.first)
-        second_sample = require_sample(connection, arguments.second)
-    except SampleNotCataloged as error:
+        first = read_heard_sample(connection, audio, require_sample(connection, arguments.first))
+        second = read_heard_sample(connection, audio, require_sample(connection, arguments.second))
+    except (SampleNotCataloged, SampleUnavailableError) as error:
         _logger.error("Rendered nothing: %s.", error)
         sys.exit(1)
     loaded = load_route(config.library_root, route_choice_from(arguments))
     pair = encode_pair(
-        read_heard_sample(connection, config.library_root, first_sample),
-        read_heard_sample(connection, config.library_root, second_sample),
+        first,
+        second,
         canonicalizer=loaded.route.canonicalizer,
         codec=loaded.route.codec,
     )

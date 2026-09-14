@@ -47,7 +47,11 @@ def run(config: LibraryConfig, arguments: argparse.Namespace) -> None:
     from samplemorph.service.renderer import load_renderer
 
     host, port = _bind_address(config, arguments)
-    settings = ServiceSettings(library_root=config.library_root, choice=route_choice_from(arguments))
+    settings = ServiceSettings(
+        library_root=config.library_root,
+        sample_directories=config.sample_directories,
+        choice=route_choice_from(arguments),
+    )
     try:
         renderer = load_renderer(settings)
     except (FileNotFoundError, ValueError, ModelFileChanged) as error:

@@ -28,6 +28,7 @@ from samplecore.storage.repositories.label_suggestion import PostgresSampleLabel
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
+from samplecore.storage.sample_audio import SampleAudio
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
 from sampleextract.files.discovery import discover_sample_files
@@ -90,7 +91,7 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
     library_root = tmp_path / "catalog"
     _ingest_all(connection, library_root, tmp_path / "modules")
     connection.commit()
-    detect_equivalences(connection, library_root)
+    detect_equivalences(connection, SampleAudio.from_catalog(connection, library_root))
     connection.commit()
     record_playback_rates(connection)
 

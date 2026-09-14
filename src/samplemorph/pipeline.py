@@ -15,8 +15,8 @@ from sqlalchemy import Connection
 from samplecore.hashing import file_sha256
 from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
-from samplecore.storage import audio_store
 from samplecore.storage.playback_rates import resolved_playback_rates
+from samplecore.storage.sample_audio import SampleAudio
 from samplecore.waveform import heard_at_rate
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
@@ -239,26 +239,27 @@ def common_rate(first_rate_hz: float, second_rate_hz: float) -> float:
     return max(first_rate_hz, second_rate_hz)
 
 
-def read_heard_sample(connection: Connection, library_root: Path, sample: Sample) -> HeardSample:
+def read_heard_sample(connection: Connection, audio: SampleAudio, sample: Sample) -> HeardSample:
     """Read one cataloged sample with the rate the application plays it at.
 
-    The stored file states a nominal rate rather than a measured one, so the rate is read from the
-    catalog by the one rule every reader applies: what the note events say first, the occurrences'
-    dominant rate after.
+    The audio a reader gets states a nominal rate rather than a measured one, so the rate is read
+    from the catalog by the one rule every reader applies: what the note events say first, the
+    dominant rate the occurrences and sample files declare after.
 
     Raises:
-        ValueError: the catalog holds no occurrence of this sample, so no playback rate is known.
+        ValueError: the catalog holds no occurrence or file of this sample, so no playback rate is known.
+        SampleUnavailableError: the sample lives only in sample files, and none of them holds it now.
     """
     rate = resolved_playback_rates(connection, [sample.hash])[sample.hash]
     if rate is None:
         raise ValueError(f"sample {sample.hash} has no cataloged occurrence, so its playback rate is unknown")
 
-    return HeardSample(sample=sample, pcm=audio_store.read(library_root, sample).pcm, rate_hz=float(rate))
+    return HeardSample(sample=sample, pcm=audio.read(sample).pcm, rate_hz=float(rate))
 
 
 def encode_sample(
     connection: Connection,
-    library_root: Path,
+    audio: SampleAudio,
     sample: Sample,
     *,
     canonicalizer: Canonicalizer,
@@ -269,9 +270,10 @@ def encode_sample(
     The playback rate travels alongside so a rendered file can state the rate its content is heard at.
 
     Raises:
-        ValueError: the catalog holds no occurrence of this sample, so no playback rate is known.
+        ValueError: the catalog holds no occurrence or file of this sample, so no playback rate is known.
+        SampleUnavailableError: the sample lives only in sample files, and none of them holds it now.
     """
-    heard = read_heard_sample(connection, library_root, sample)
+    heard = read_heard_sample(connection, audio, sample)
     encoded = encode_waveform(heard.pcm, canonicalizer=canonicalizer, codec=codec)
     return EncodedSample(sample=sample, latent=encoded.latent, mono=encoded.mono, rate_hz=heard.rate_hz)
 

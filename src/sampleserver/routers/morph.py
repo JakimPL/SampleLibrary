@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from http import HTTPStatus
+from pathlib import Path
 from typing import Annotated, Final
 
 import httpx
@@ -12,7 +13,14 @@ from samplecore.models.base import FROZEN
 from samplecore.models.morph import HeardMorphPoint, MorphPoint, MorphServiceStatus
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.playback_rates import resolved_playback_rates
-from sampleserver.dependencies import ConnectionOpener, get_connection_opener, get_inference_client
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
+from sampleserver.dependencies import (
+    ConnectionOpener,
+    get_connection_opener,
+    get_inference_client,
+    get_library_root,
+)
 from sampleserver.inference_client import STATUS_TIMEOUT_SECONDS, timed_out_detail, unavailable_detail
 from sampleserver.parameters import WAV_CONTENT, WAV_MEDIA_TYPE, ErrorDetail
 
@@ -35,22 +43,38 @@ class MorphAvailability(BaseModel):
 
 
 def get_heard_point(
-    point: Annotated[MorphPoint, Query()], open_connection: ConnectionOpener = Depends(get_connection_opener)
+    point: Annotated[MorphPoint, Query()],
+    open_connection: ConnectionOpener = Depends(get_connection_opener),
+    library_root: Path = Depends(get_library_root),
 ) -> HeardMorphPoint:
-    """The point with the rate each end is heard at, by the one rule every reader of the catalog applies.
+    """The point with the rate each end is heard at, and the file an end found in a sample directory is read from.
 
-    A sample the catalog holds no rate for is heard as stored, at the nominal rate its file
-    states, which is the reading every player of such a sample gives it. The connection is held
-    only while the rates are read, so none waits in the pool's stead while the render is awaited.
+    The rate follows the one rule every reader of the catalog applies, and a sample the catalog
+    holds no rate for is heard as stored, at the nominal rate its file states, which is the reading
+    every player of such a sample gives it. The file is the first of the sample's files still as it
+    was scanned, which the inference process reads in place. The connection is held only while the
+    catalog is read, so none waits in the pool's stead while the render is awaited.
+
+    Raises:
+        HTTPException: 404 when an end lives only in sample files and every one of them is gone or changed.
     """
     with open_connection() as connection:
         rates = resolved_playback_rates(connection, [point.first, point.second])
+        sample_files = PostgresSampleFileRepository(connection).list_for_samples([point.first, point.second])
+    audio = SampleAudio.of_files(library_root, sample_files)
+    try:
+        first_location = audio.location_to_read(point.first)
+        second_location = audio.location_to_read(point.second)
+    except SampleUnavailableError as error:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from error
     return HeardMorphPoint(
         first=point.first,
         second=point.second,
         weight=point.weight,
         first_rate_hz=_heard_rate(rates[point.first]),
         second_rate_hz=_heard_rate(rates[point.second]),
+        first_file=first_location.path if first_location is not None else None,
+        second_file=second_location.path if second_location is not None else None,
     )
 
 
@@ -90,7 +114,9 @@ async def get_morph_audio(
     """
     headers = {CONDITIONAL_HEADER: request.headers[CONDITIONAL_HEADER]} if CONDITIONAL_HEADER in request.headers else {}
     try:
-        upstream = await client.get(AUDIO_PATH, params=point.model_dump(), headers=headers)
+        upstream = await client.get(
+            AUDIO_PATH, params=point.model_dump(mode="json", exclude_none=True), headers=headers
+        )
     except httpx.TimeoutException as error:
         raise HTTPException(
             status_code=HTTPStatus.GATEWAY_TIMEOUT, detail=timed_out_detail(str(client.base_url))

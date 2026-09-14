@@ -36,8 +36,14 @@ class RenderLimits:
 
 @dataclass(frozen=True)
 class ServiceSettings:
-    """What one inference process serves: the library it reads objects from, the route it renders through, and its limits."""
+    """What one inference process serves: the library it reads objects from, the sample directories it
+    reads files from, the route it renders through, and its limits.
+
+    A request names the file a sample found in a sample directory is read from, and the process reads
+    only files inside the directories named here, which are the ones its configuration lists.
+    """
 
     library_root: Path
+    sample_directories: tuple[Path, ...]
     choice: RouteChoice
     limits: RenderLimits = field(default_factory=RenderLimits)

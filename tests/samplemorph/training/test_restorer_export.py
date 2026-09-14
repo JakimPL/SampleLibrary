@@ -7,6 +7,7 @@ import torch
 from lightning.pytorch import Trainer
 from torch.utils.data import DataLoader
 
+from samplecore.storage.sample_audio import SampleAudio
 from samplecore.tracking.silent import SilentRun
 from samplemorph.geometry import AnalysisWindow, log_frequency_geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY, canonicalizer_for_geometry
@@ -26,7 +27,7 @@ TRAINED_SAMPLE_COUNT = 4
 def _corpus(library_root: Path) -> AnalysisCorpus:
     return AnalysisCorpus(
         samples=(),
-        library_root=library_root,
+        audio=SampleAudio.of_files(library_root, ()),
         canonicalizer=CANONICALIZER_REGISTRY[CANONICALIZER_NAME](),
         canonicalizer_name=CANONICALIZER_NAME,
     )
@@ -56,7 +57,7 @@ def test_a_corpus_on_another_analysis_is_refused_by_name(
 ) -> None:
     hann = canonicalizer_for_geometry(log_frequency_geometry(analysis_window=AnalysisWindow.HANN))
     corpus = AnalysisCorpus(
-        samples=(), library_root=tmp_path, canonicalizer=hann, canonicalizer_name=CANONICALIZER_NAME
+        samples=(), audio=SampleAudio.of_files(tmp_path, ()), canonicalizer=hann, canonicalizer_name=CANONICALIZER_NAME
     )
 
     with pytest.raises(ValueError, match="hann taper"):

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import soundfile
 import torch
 from fastapi.testclient import TestClient
 from numpy.typing import NDArray
@@ -15,6 +16,7 @@ from samplecore.hashing import compute_sample_hash
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
+from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage import audio_store
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.geometry import Geometry, log_frequency_geometry
@@ -46,17 +48,23 @@ from samplemorph.vocoders.restorer_shape import RestorerShape
 from tests.samplemorph.conftest import harmonic_tone
 
 TONES = ((220.0, 4096), (330.0, 8192), (440.0, 6144))
+FILE_TONE = (275.0, 5120)
+FILE_RATE_HZ = 44100
 LATENT_SIZE = 2
 SMALL_RESTORER = RestorerShape(channels=8, kernel_size=3, dilations=(1, 2))
 
 
 @dataclass(frozen=True)
 class StoredLibrary:
-    """A library root holding three stored tones, a fitted linear codec, and an untrained restorer."""
+    """A library root holding three stored tones, a fitted linear codec, and an untrained restorer,
+    beside a sample directory holding a fourth tone as a file read in place."""
 
     root: Path
     hashes: tuple[str, ...]
     frame_counts: tuple[int, ...]
+    sample_directory: Path
+    file_path: Path
+    file_hash: str
 
 
 def _store_tone(root: Path, *, frequency: float, frame_count: int) -> str:
@@ -65,6 +73,12 @@ def _store_tone(root: Path, *, frequency: float, frame_count: int) -> str:
     sample = Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=frame_count)
     audio_store.write(root, SamplePCM(sample=sample, pcm=pcm))
     return sample_hash
+
+
+def _write_tone_file(path: Path, *, frequency: float, frame_count: int) -> str:
+    path.parent.mkdir(parents=True)
+    soundfile.write(path, harmonic_tone(frame_count, frequency=frequency), FILE_RATE_HZ, subtype="PCM_16")
+    return decode_sample_file(path).sample_pcm.sample.hash
 
 
 def _fit_codec(root: Path) -> None:
@@ -112,12 +126,22 @@ def library(tmp_path_factory: pytest.TempPathFactory) -> StoredLibrary:
     hashes = tuple(_store_tone(root, frequency=frequency, frame_count=frame_count) for frequency, frame_count in TONES)
     _fit_codec(root)
     _store_restorer(root)
-    return StoredLibrary(root=root, hashes=hashes, frame_counts=tuple(frame_count for _, frame_count in TONES))
+    sample_directory = tmp_path_factory.mktemp("packs")
+    file_path = sample_directory / "Tones" / "Tone 01.wav"
+    return StoredLibrary(
+        root=root,
+        hashes=hashes,
+        frame_counts=tuple(frame_count for _, frame_count in TONES),
+        sample_directory=sample_directory,
+        file_path=file_path,
+        file_hash=_write_tone_file(file_path, frequency=FILE_TONE[0], frame_count=FILE_TONE[1]),
+    )
 
 
 def _settings(library: StoredLibrary, vocoder_name: str) -> ServiceSettings:
     return ServiceSettings(
         library_root=library.root,
+        sample_directories=(library.sample_directory,),
         choice=RouteChoice(
             model_name=DEFAULT_MODEL_NAME,
             vocoder_name=vocoder_name,

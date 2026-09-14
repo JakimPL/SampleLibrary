@@ -19,6 +19,7 @@ from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.sample import Sample
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
+from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
@@ -27,6 +28,7 @@ from samplemorph.commands.draws import (
     add_canonicalizer_argument,
     canonicalizer_from,
     draw_probe_samples,
+    readable_samples,
     require_sample,
 )
 from samplemorph.commands.vocoders import vocoder_from
@@ -148,7 +150,8 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         vocoder=vocoder_from(arguments, library_root=config.library_root),
         output_directory=Path(arguments.output),
     )
-    readings = tuple(_measure(connection, config.library_root, sample, route=route) for sample in probes)
+    audio = SampleAudio.from_catalog(connection, config.library_root)
+    readings = tuple(_measure(connection, audio, sample, route=route) for sample in readable_samples(probes, audio))
     _write_table(route.output_directory / READINGS_FILE_NAME, readings)
     _report(readings)
     _logger.info("Wrote %d probes through %s into %s.", len(readings), route.model, route.output_directory)
@@ -172,8 +175,8 @@ def _probes(connection: Connection, arguments: argparse.Namespace) -> tuple[Samp
     return tuple(require_sample(connection, sample_hash) for sample_hash in named)
 
 
-def _measure(connection: Connection, library_root: Path, sample: Sample, *, route: MeasuredRoute) -> ProbeReading:
-    encoded = encode_sample(connection, library_root, sample, canonicalizer=route.canonicalizer, codec=route.codec)
+def _measure(connection: Connection, audio: SampleAudio, sample: Sample, *, route: MeasuredRoute) -> ProbeReading:
+    encoded = encode_sample(connection, audio, sample, canonicalizer=route.canonicalizer, codec=route.codec)
     reconstruction = route.vocoder.synthesize(route.canonicalizer.restore(route.codec.decode(encoded.latent)))
     frames = min(encoded.mono.shape[0], reconstruction.shape[0])
     rate_hz = int(round(encoded.rate_hz))

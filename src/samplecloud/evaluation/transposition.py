@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Final
 
 import numpy as np
@@ -13,8 +12,8 @@ from samplecloud.backends import FeatureExtractor
 from samplecloud.evaluation.corpus import EvaluationCorpus
 from samplecloud.evaluation.settings import EvaluationSettings
 from samplecloud.hearing import Hearing
-from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 from samplecore.waveform import resample_by_semitones
 
 QUERY_CHUNK_SIZE: Final[int] = 64
@@ -43,11 +42,13 @@ class TranspositionRetrieval:
     The offsets form a fixed mirrored grid rather than a random draw, so two runs compare directly
     and each offset's own difficulty stays visible. `median_rank` sits beside the shares because a
     descriptor placing the original second every time and one placing it forty-thousandth every time
-    both score zero at rank one, and they are not the same descriptor.
+    both score zero at rank one, and they are not the same descriptor. `unavailable_probe_count`
+    counts the drawn probes whose sample files are gone, which the trials leave out.
     """
 
     offsets: tuple[OffsetRetrieval, ...]
     probe_sample_count: int
+    unavailable_probe_count: int
     catalog_sample_count: int
     random_seed: int
 
@@ -64,25 +65,26 @@ class TranspositionRetrieval:
 
 @dataclass(frozen=True)
 class ProbeDescriber:
-    """What describes a retuned probe again: the experiment's own extractor, hearing samples its own way."""
+    """What describes a retuned probe again: the experiment's own extractor, hearing samples its own way from the audio they are read from."""
 
     feature_extractor: FeatureExtractor
     hearing: Hearing
+    audio: SampleAudio
 
 
 def transposition_retrieval(
     connection: Connection,
     corpus: EvaluationCorpus,
     *,
-    library_root: Path,
     describer: ProbeDescriber,
     settings: EvaluationSettings,
 ) -> TranspositionRetrieval | None:
     """Retune each probe sample by every offset and ask where its own original ranks.
 
     Each probe is heard the way the experiment heard its samples before it is retuned, so an
-    unretuned probe is described exactly as its stored vector was. Returns None when the corpus
-    offers no probe the catalog still holds.
+    unretuned probe is described exactly as its stored vector was. A probe whose sample files are gone
+    is counted and left out. Returns None when the corpus offers no probe the catalog still holds and
+    can read.
     """
     offsets = settings.semitone_offsets
     positions = _probe_positions(corpus, settings=settings)
@@ -91,12 +93,18 @@ def transposition_retrieval(
     queries: list[NDArray[np.float64]] = []
     targets: list[int] = []
     query_offsets: list[float] = []
+    unavailable_probe_count = 0
     for position in tqdm(positions, desc="Retuning probes"):
         sample = samples.get(corpus.sample_hashes[position])
         if sample is None:
             continue
+        try:
+            sample_pcm = describer.audio.read(sample)
+        except SampleUnavailableError:
+            unavailable_probe_count += 1
+            continue
 
-        waveform = describer.hearing.hear(sample.hash, audio_store.read(library_root, sample).pcm)
+        waveform = describer.hearing.hear(sample.hash, sample_pcm.pcm)
         for offset in offsets:
             retuned = resample_by_semitones(waveform, semitones=offset)
             queries.append(np.asarray(describer.feature_extractor.extract(retuned), dtype=np.float64))
@@ -111,6 +119,7 @@ def transposition_retrieval(
     return TranspositionRetrieval(
         offsets=tuple(_summarize(offset, ranks_by_offset[offset]) for offset in offsets),
         probe_sample_count=len(positions),
+        unavailable_probe_count=unavailable_probe_count,
         catalog_sample_count=corpus.sample_count,
         random_seed=settings.random_seed,
     )

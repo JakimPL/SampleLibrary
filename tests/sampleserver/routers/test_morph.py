@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import httpx
 import pytest
@@ -12,9 +13,11 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from sampleserver.dependencies import get_connection_opener, get_inference_client
 from tests.sampleserver.conftest import INFERENCE_URL
 
@@ -105,6 +108,46 @@ def test_the_rates_the_catalog_holds_for_both_ends_travel_to_the_process(
 
     params = dict(upstream.requests[0].url.params)
     assert (params["first_rate_hz"], params["second_rate_hz"]) == (str(FIRST_RATE_HZ), str(SECOND_RATE_HZ))
+
+
+def test_the_file_an_end_found_only_in_a_sample_directory_is_read_from_travels_to_the_process(
+    client: TestClient, connection: Connection, tmp_path: Path
+) -> None:
+    upstream = _serve(client, _rendered)
+    PostgresSampleRepository(connection).upsert(
+        Sample(hash=FIRST, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
+    )
+    kick = tmp_path / "packs" / "Kick 01.wav"
+    kick.parent.mkdir()
+    kick.write_bytes(b"a file standing in for a kick")
+    PostgresSampleFileRepository(connection).upsert(
+        SampleFile(
+            sample_hash=FIRST,
+            location=SampleFileLocation(directory=kick.parent, relative_path=kick.name),
+            rate=44100,
+            fingerprint=FileFingerprint.of(kick.stat()),
+        )
+    )
+
+    client.get("/morph/audio", params={"first": FIRST, "second": SECOND, "weight": 0.5})
+
+    params = dict(upstream.requests[0].url.params)
+    assert (params["first_file"], params["first_rate_hz"]) == (str(kick), "44100")
+    assert "second_file" not in params
+
+
+def test_an_end_whose_sample_files_are_all_gone_is_not_found_before_the_process_is_dialed(
+    client: TestClient, vanished_sample_file: SampleFile
+) -> None:
+    upstream = _serve(client, _rendered)
+
+    response = client.get(
+        "/morph/audio", params={"first": vanished_sample_file.sample_hash, "second": SECOND, "weight": 0.5}
+    )
+
+    assert response.status_code == 404
+    assert "Gone 01.wav" in response.json()["detail"]
+    assert upstream.requests == []
 
 
 def test_a_caller_s_validator_is_forwarded_and_the_process_s_304_comes_back(client: TestClient) -> None:

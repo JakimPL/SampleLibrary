@@ -11,6 +11,7 @@ from sqlalchemy import Connection
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE, DEFAULT_INFERENCE_URL
 from samplecore.hashing import compute_module_hash
+from samplecore.storage.sample_audio import SampleAudio
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
 from sampleextract.files.discovery import discover_sample_files
@@ -110,7 +111,7 @@ def test_the_generated_corpus_yields_exactly_the_intended_relations(
     build_dev_library.build_dev_library(tmp_path, database_url=SANDBOX_DATABASE_URL)
     _ingest_all(connection, tmp_path / "catalog", tmp_path / "modules")
 
-    summary = detect_equivalences(connection, tmp_path / "catalog")
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path / "catalog"))
 
     counts = {
         "bit_depth_variant": summary.bit_depth_relations,

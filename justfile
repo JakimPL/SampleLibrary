@@ -57,6 +57,7 @@ tracking-ui:
 [group("library")]
 rebuild:
     {{ CAPPED_SAMPLELIBRARY }} extract
+    {{ CAPPED_SAMPLELIBRARY }} files
     {{ CAPPED_SAMPLELIBRARY }} notes
     {{ CAPPED_SAMPLELIBRARY }} thumbnails
     {{ CAPPED_SAMPLELIBRARY }} cloud embed --resume-promoted
@@ -80,6 +81,7 @@ _reset-confirmed:
 dev-build:
     uv run python scripts/build_dev_library.py
     uv run samplelibrary --config {{ DEV_CONFIG }} extract
+    uv run samplelibrary --config {{ DEV_CONFIG }} files
     uv run samplelibrary --config {{ DEV_CONFIG }} notes
     uv run samplelibrary --config {{ DEV_CONFIG }} thumbnails
     uv run samplelibrary --config {{ DEV_CONFIG }} cloud embed --resume-promoted

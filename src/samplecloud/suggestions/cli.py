@@ -67,7 +67,7 @@ def _listening_experiment(connection: Connection, experiment_id: int) -> Experim
             f"experiment {experiment_id} was extracted by the {experiment.backend_name} backend; "
             f"suggestions read the {TEACHER_BACKEND_NAME} backend's vectors"
         )
-    if not PostgresSampleFeatureVectorRepository(connection).first_vectors(experiment_id, count=1):
+    if not PostgresSampleFeatureVectorRepository(connection).vectors_in_hash_order(experiment_id, count=1, offset=0):
         raise ExperimentRefused(f"experiment {experiment_id} holds no vectors to score")
     return experiment
 

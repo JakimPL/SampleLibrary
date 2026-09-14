@@ -9,6 +9,7 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
+from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.geometry import Anchor
 from samplemorph.training import descriptor_cache
 from samplemorph.training.descriptor_cache import (
@@ -58,14 +59,18 @@ def test_a_rebuild_stopped_partway_leaves_the_previous_cache_readable(
 ) -> None:
     directory = tmp_path / "cache" / "grids" / "descriptor"
     samples = _samples(tmp_path, 3)
-    build_grid_cache(directory, samples=samples[:2], library_root=tmp_path, recipe=_recipe(), worker_count=0)
+    build_grid_cache(
+        directory, samples=samples[:2], audio=SampleAudio.of_files(tmp_path, ()), recipe=_recipe(), worker_count=0
+    )
 
     def fail(self: object, job: object) -> None:
         raise _BrokenWorker("stopped partway")
 
     monkeypatch.setattr(descriptor_cache._Worker, "__call__", fail)
     with pytest.raises(_BrokenWorker):
-        build_grid_cache(directory, samples=samples, library_root=tmp_path, recipe=_recipe(), worker_count=0)
+        build_grid_cache(
+            directory, samples=samples, audio=SampleAudio.of_files(tmp_path, ()), recipe=_recipe(), worker_count=0
+        )
 
     assert open_grid_cache(directory).hashes == tuple(sample.hash for sample in samples[:2])
 
@@ -73,9 +78,13 @@ def test_a_rebuild_stopped_partway_leaves_the_previous_cache_readable(
 def test_a_finished_rebuild_takes_the_name_and_leaves_nothing_beside_it(tmp_path: Path) -> None:
     directory = tmp_path / "cache" / "grids" / "descriptor"
     samples = _samples(tmp_path, 3)
-    build_grid_cache(directory, samples=samples[:2], library_root=tmp_path, recipe=_recipe(), worker_count=0)
+    build_grid_cache(
+        directory, samples=samples[:2], audio=SampleAudio.of_files(tmp_path, ()), recipe=_recipe(), worker_count=0
+    )
 
-    rebuilt = build_grid_cache(directory, samples=samples, library_root=tmp_path, recipe=_recipe(), worker_count=0)
+    rebuilt = build_grid_cache(
+        directory, samples=samples, audio=SampleAudio.of_files(tmp_path, ()), recipe=_recipe(), worker_count=0
+    )
 
     assert rebuilt.sample_count == 3
     assert sorted(path.name for path in directory.parent.iterdir()) == ["descriptor"]

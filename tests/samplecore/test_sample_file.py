@@ -20,8 +20,8 @@ def test_a_location_names_the_file_its_stem_and_its_folders_nearest_first() -> N
 
 @pytest.mark.parametrize(
     "relative_path",
-    ["", "/kick.wav", "../kick.wav", "drums/../kick.wav", "drums//kick.wav", "./kick.wav", "drums\\kick.wav"],
-    ids=("empty", "absolute", "above the directory", "climbing back", "a doubled slash", "a dot", "a backslash"),
+    ["", "/kick.wav", "../kick.wav", "drums/../kick.wav", "drums//kick.wav", "./kick.wav"],
+    ids=("empty", "absolute", "above the directory", "climbing back", "a doubled slash", "a dot"),
 )
 def test_a_location_outside_or_loosely_below_its_directory_is_refused(relative_path: str) -> None:
     with pytest.raises(pydantic.ValidationError, match="below its directory"):

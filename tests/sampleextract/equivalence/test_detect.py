@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+import soundfile
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
 from sqlalchemy import Connection
@@ -15,12 +16,16 @@ import sampleextract.equivalence.detect as detect_module
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.relation import RelationType
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_pcm import SamplePCM
+from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from sampleextract.equivalence.candidates import CandidateBlock
+from samplecore.storage.sample_audio import SampleAudio
+from sampleextract.equivalence.candidates import CandidateBlock, Fingerprints
 from sampleextract.equivalence.detect import EquivalenceSummary, detect_equivalences
+from sampleextract.files.ingest import ingest_sample_file
 
 SAMPLE_RATE = 44100
 
@@ -95,7 +100,7 @@ def _seed_catalog(connection: Connection, library_root: Path) -> tuple[Sample, S
 def test_detect_equivalences_records_exactly_the_genuine_pairs(connection: Connection, tmp_path: Path) -> None:
     original_16, quantized_8, original_44k, resampled_22k, louder_original = _seed_catalog(connection, tmp_path)
 
-    summary = detect_equivalences(connection, tmp_path)
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
 
     relations = PostgresSampleRelationRepository(connection).list_all()
     assert summary.samples_considered == 8
@@ -122,9 +127,9 @@ def test_detect_equivalences_records_exactly_the_genuine_pairs(connection: Conne
 
 def test_a_second_run_leaves_the_same_relations_in_place(connection: Connection, tmp_path: Path) -> None:
     _seed_catalog(connection, tmp_path)
-    detect_equivalences(connection, tmp_path)
+    detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
 
-    detect_equivalences(connection, tmp_path)
+    detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
 
     assert len(PostgresSampleRelationRepository(connection).list_all()) == 3
 
@@ -132,7 +137,7 @@ def test_a_second_run_leaves_the_same_relations_in_place(connection: Connection,
 def test_sample_limit_restricts_the_considered_sample_count(connection: Connection, tmp_path: Path) -> None:
     _seed_catalog(connection, tmp_path)
 
-    summary = detect_equivalences(connection, tmp_path, sample_limit=2)
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path), sample_limit=2)
 
     assert summary.samples_considered == 2
 
@@ -140,11 +145,13 @@ def test_sample_limit_restricts_the_considered_sample_count(connection: Connecti
 def test_sample_limit_of_zero_finds_nothing(connection: Connection, tmp_path: Path) -> None:
     _seed_catalog(connection, tmp_path)
 
-    summary = detect_equivalences(connection, tmp_path, sample_limit=0)
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path), sample_limit=0)
 
     assert summary == EquivalenceSummary(
         samples_considered=0,
         silent_samples=0,
+        unavailable_samples=0,
+        unavailable_pairs=0,
         gain_candidates=0,
         resampled_candidates=0,
         bit_depth_relations=0,
@@ -155,7 +162,7 @@ def test_sample_limit_of_zero_finds_nothing(connection: Connection, tmp_path: Pa
 
 def test_a_negative_sample_limit_is_refused(connection: Connection, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="at least 0"):
-        detect_equivalences(connection, tmp_path, sample_limit=-1)
+        detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path), sample_limit=-1)
 
 
 def test_a_failure_in_a_later_block_keeps_the_relations_earlier_blocks_found(
@@ -177,7 +184,7 @@ def test_a_failure_in_a_later_block_keeps_the_relations_earlier_blocks_found(
     monkeypatch.setattr(detect_module, "_record_block", fail_after_the_first_block_with_relations)
 
     with pytest.raises(OSError):
-        detect_equivalences(connection, tmp_path)
+        detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
 
     kept = PostgresSampleRelationRepository(connection).list_all()
     assert 0 < len(kept) < 3
@@ -188,7 +195,7 @@ def test_silent_samples_are_counted_and_left_out_of_every_comparison(connection:
     _store_sample(connection, tmp_path, hash_seed=21, depth=BitDepth.SIXTEEN, pcm=np.zeros((1024, 1)))
     _store_sample(connection, tmp_path, hash_seed=22, depth=BitDepth.EIGHT, pcm=np.zeros((2048, 1)))
 
-    summary = detect_equivalences(connection, tmp_path)
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
 
     assert summary.silent_samples == 2
     assert PostgresSampleRelationRepository(connection).list_all() == ()
@@ -199,14 +206,14 @@ def test_a_trimmed_tail_pair_is_recorded_once_as_the_gain_variant_it_is(connecti
     _store_sample(connection, tmp_path, hash_seed=31, depth=BitDepth.SIXTEEN, pcm=content)
     _store_sample(connection, tmp_path, hash_seed=32, depth=BitDepth.SIXTEEN, pcm=np.pad(content, ((0, 20), (0, 0))))
 
-    summary = detect_equivalences(connection, tmp_path)
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
 
     assert (summary.amplification_relations, summary.resampled_relations) == (1, 0)
 
 
 def test_the_waveform_cache_lets_the_oldest_waveforms_go_once_its_budget_is_spent(tmp_path: Path) -> None:
     samples = [_store_sample_file(tmp_path, hash_seed=seed, pcm=_tonal_waveform(1000)) for seed in range(41, 44)]
-    cache = detect_module._WaveformCache(tmp_path, byte_budget=2 * 1000 * 8)
+    cache = detect_module._WaveformCache(SampleAudio.of_files(tmp_path, ()), byte_budget=2 * 1000 * 8)
 
     for sample in samples:
         cache.get(sample)
@@ -227,7 +234,7 @@ def test_detect_equivalences_finds_a_pair_differing_only_by_a_trimmed_silent_tai
     without_tail = _store_sample(connection, tmp_path, hash_seed=11, depth=BitDepth.SIXTEEN, pcm=content)
     with_tail = _store_sample(connection, tmp_path, hash_seed=12, depth=BitDepth.SIXTEEN, pcm=with_silent_tail)
 
-    summary = detect_equivalences(connection, tmp_path)
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
 
     assert summary.amplification_relations == 1
     assert summary.bit_depth_relations == 0
@@ -240,3 +247,45 @@ def test_detect_equivalences_finds_a_pair_differing_only_by_a_trimmed_silent_tai
     assert relation.relation_type == RelationType.AMPLIFICATION_VARIANT
     assert relation.evidence["depth_changed"] == 0.0
     assert relation.evidence["gain"] == pytest.approx(1.0)
+
+
+def test_a_sample_whose_file_is_gone_is_counted_and_the_rest_are_still_compared(
+    connection: Connection, tmp_path: Path, vanished_sample_file: SampleFile
+) -> None:
+    _seed_catalog(connection, tmp_path)
+
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+
+    assert summary.unavailable_samples == 1
+    assert summary.bit_depth_relations + summary.amplification_relations + summary.resampled_relations > 0
+
+
+def test_a_pair_whose_file_goes_missing_while_the_pass_runs_is_left_for_a_later_pass(
+    connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "pack"
+    directory.mkdir()
+    loud, quiet = directory / "tone.wav", directory / "tone quiet.wav"
+    soundfile.write(loud, _tonal_waveform(4096), SAMPLE_RATE, subtype="PCM_16")
+    soundfile.write(quiet, 0.5 * _tonal_waveform(4096), SAMPLE_RATE, subtype="PCM_16")
+    for path in (loud, quiet):
+        ingest_sample_file(
+            connection,
+            location=SampleFileLocation(directory=directory, relative_path=path.name),
+            decoded=decode_sample_file(path),
+            fingerprint=FileFingerprint.of(path.stat()),
+        )
+    fingerprint_layouts = detect_module._fingerprints_by_layout
+
+    def unplug_once_fingerprinted(*arguments: Any, **keywords: Any) -> tuple[Fingerprints, ...]:
+        fingerprints = fingerprint_layouts(*arguments, **keywords)
+        arguments[1]._waveforms.clear()
+        quiet.unlink()
+        return fingerprints
+
+    monkeypatch.setattr(detect_module, "_fingerprints_by_layout", unplug_once_fingerprinted)
+
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+
+    assert (summary.unavailable_samples, summary.unavailable_pairs) == (0, 1)
+    assert PostgresSampleRelationRepository(connection).list_all() == ()

@@ -9,9 +9,12 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import SampleFile
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio
+from samplemorph.commands.draws import readable_samples
 from samplemorph.registries import CANONICALIZER_REGISTRY
 from samplemorph.training.analysis_data import AnalysisCorpus, AnalysisDataModule
 from samplemorph.training.derived_examples import DerivedExampleSet, ExampleFamily
@@ -100,7 +103,7 @@ def test_a_training_set_yields_one_pair_per_sample(connection: Connection, tmp_p
 
     training_set = DerivedExampleSet(
         tuple(samples),
-        library_root=tmp_path,
+        audio=SampleAudio.of_files(tmp_path, ()),
         canonicalizer=CANONICALIZER_REGISTRY["log_frequency"](),
         family=ExampleFamily(derive=restorer_example, crop=crop_item, crop_frames=CROP_FRAMES),
     )
@@ -155,7 +158,7 @@ def _sample(index: int) -> Sample:
 def test_a_corpus_too_small_to_train_on_is_refused(sample_count: int, batch_size: int, reason: str) -> None:
     corpus = AnalysisCorpus(
         samples=tuple(_sample(index) for index in range(sample_count)),
-        library_root=Path("unused"),
+        audio=SampleAudio.of_files(Path("unused"), ()),
         canonicalizer=CANONICALIZER_REGISTRY["log_frequency"](),
         canonicalizer_name="log_frequency",
     )
@@ -166,3 +169,25 @@ def test_a_corpus_too_small_to_train_on_is_refused(sample_count: int, batch_size
             family=ExampleFamily(derive=restorer_example, crop=crop_item, crop_frames=CROP_FRAMES),
             run=RunSettings(batch_size=batch_size, worker_count=0, random_seed=0),
         )
+
+
+def test_a_sample_whose_file_is_gone_yields_the_next_sample_along(
+    connection: Connection, tmp_path: Path, vanished_sample_file: SampleFile
+) -> None:
+    stored = Sample(hash=format(1, "064x"), depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=FRAME_COUNT)
+    PostgresSampleRepository(connection).upsert(stored)
+    audio_store.write(tmp_path, SamplePCM(sample=stored, pcm=harmonic_tone(FRAME_COUNT, frequency=220.0)))
+    vanished = PostgresSampleRepository(connection).get(vanished_sample_file.sample_hash)
+    assert vanished is not None
+    audio = SampleAudio.from_catalog(connection, tmp_path)
+    training_set = DerivedExampleSet(
+        (vanished, stored),
+        audio=audio,
+        canonicalizer=CANONICALIZER_REGISTRY["log_frequency"](),
+        family=ExampleFamily(derive=restorer_example, crop=crop_item, crop_frames=CROP_FRAMES),
+    )
+
+    least_squares, _ = training_set[(0, 0)]
+
+    assert least_squares.shape[1] == CROP_FRAMES
+    assert readable_samples((vanished, stored), audio) == (stored,)

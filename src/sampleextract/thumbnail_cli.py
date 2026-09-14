@@ -5,6 +5,7 @@ import logging
 
 from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.storage.sample_audio import SampleAudio
 from sampleextract.thumbnail import compute_missing_thumbnails
 
 _logger = logging.getLogger(__name__)
@@ -15,13 +16,15 @@ def main(argv: list[str], *, prog: str) -> None:
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
-        summary = compute_missing_thumbnails(connection, config.library_root, force=arguments.force)
+        audio = SampleAudio.from_catalog(connection, config.library_root)
+        summary = compute_missing_thumbnails(connection, audio, force=arguments.force)
 
     _logger.info(
-        "%d samples cataloged: %d thumbnail(s) computed, %d already cached.",
+        "%d samples cataloged: %d thumbnail(s) computed, %d already cached, %d with no file to read now.",
         summary.cataloged,
         summary.computed,
         summary.already_thumbnailed,
+        summary.unavailable,
     )
 
 

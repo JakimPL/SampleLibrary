@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Final, Generic, TypeVar
 
 import numpy as np
@@ -9,6 +8,7 @@ from lightning.pytorch import LightningDataModule
 from torch.utils.data import DataLoader
 
 from samplecore.models.sample import Sample
+from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.training.derived_examples import DerivedExampleSet, ExampleFamily
 from samplemorph.training.epoch_draws import EpochCropSampler, FixedCropSampler
@@ -31,7 +31,7 @@ class AnalysisCorpus:
     """
 
     samples: tuple[Sample, ...]
-    library_root: Path
+    audio: SampleAudio
     canonicalizer: Canonicalizer
     canonicalizer_name: str
 
@@ -88,7 +88,7 @@ class AnalysisDataModule(LightningDataModule, Generic[Example, Item]):
     def _examples(self, samples: tuple[Sample, ...]) -> DerivedExampleSet[Example, Item]:
         return DerivedExampleSet(
             samples,
-            library_root=self._corpus.library_root,
+            audio=self._corpus.audio,
             canonicalizer=self._corpus.canonicalizer,
             family=self._family,
         )

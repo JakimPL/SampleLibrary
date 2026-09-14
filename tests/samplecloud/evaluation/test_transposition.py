@@ -17,6 +17,7 @@ from samplecloud.hearing import Hearing, hearing_for
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import Experiment, Reading, SampleFeatureVector
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import SampleFile
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
@@ -25,6 +26,7 @@ from samplecore.storage.repositories.experiment import PostgresExperimentReposit
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio
 
 SHORTEST_FRAME_COUNT = 2000
 FRAME_STEP = 400
@@ -115,8 +117,9 @@ def _retrieve(
     retrieval = transposition_retrieval(
         connection,
         corpus,
-        library_root=library_root,
-        describer=ProbeDescriber(feature_extractor=extractor, hearing=hearing),
+        describer=ProbeDescriber(
+            feature_extractor=extractor, hearing=hearing, audio=SampleAudio.from_catalog(connection, library_root)
+        ),
         settings=settings,
     )
     assert retrieval is not None
@@ -201,9 +204,34 @@ def test_a_corpus_whose_probes_left_the_catalog_retrieves_nothing(connection: Co
     retrieval = transposition_retrieval(
         connection,
         corpus,
-        library_root=tmp_path,
-        describer=ProbeDescriber(feature_extractor=extractor, hearing=NOMINAL),
+        describer=ProbeDescriber(
+            feature_extractor=extractor, hearing=NOMINAL, audio=SampleAudio.from_catalog(connection, tmp_path)
+        ),
         settings=SETTINGS,
     )
 
     assert retrieval is None
+
+
+def test_a_probe_whose_file_is_gone_is_counted_and_left_out(
+    connection: Connection, tmp_path: Path, vanished_sample_file: SampleFile
+) -> None:
+    extractor = LoudnessShapeExtractor()
+    experiment_id = _seed(connection, tmp_path, extractor)
+    PostgresSampleFeatureVectorRepository(connection).insert_many(
+        [
+            SampleFeatureVector(
+                experiment_id=experiment_id,
+                sample_hash=vanished_sample_file.sample_hash,
+                vector=tuple(float(value) for value in range(8)),
+                computed_at=datetime.now(UTC),
+            )
+        ]
+    )
+    connection.commit()
+    every_sample = EvaluationSettings(random_seed=0, probe_count=SAMPLE_COUNT + 1, semitone_offsets=(-7.0, 7.0))
+
+    retrieval = _retrieve(connection, tmp_path, experiment_id, extractor, settings=every_sample)
+
+    assert (retrieval.probe_sample_count, retrieval.unavailable_probe_count) == (SAMPLE_COUNT + 1, 1)
+    assert retrieval.offsets[0].trial_count == SAMPLE_COUNT

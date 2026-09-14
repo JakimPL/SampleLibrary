@@ -11,6 +11,8 @@ def _():
     from samplecore.config import ConfigurationError, load_config
     from samplecore.storage.database import connect
     from samplecore.storage.repositories.sample import PostgresSampleRepository
+    from samplecore.storage.sample_audio import SampleAudio
+    from samplemorph.commands.draws import readable_samples
     from samplemorph.measurement.corpus import (
         DEFAULT_PROBE_FRAME_CEILING,
         DEFAULT_PROBE_FRAME_FLOOR,
@@ -36,11 +38,13 @@ def _():
         DEFAULT_PROBE_FRAME_FLOOR,
         PostgresSampleRepository,
         ReconstructionRung,
+        SampleAudio,
         connect,
         equivariance_trials,
         load_config,
         mo,
         read_probe_samples,
+        readable_samples,
         reconstruction_trials,
         summarize_equivariance,
         summarize_reconstruction,
@@ -105,11 +109,13 @@ def _(
     DEFAULT_PROBE_FRAME_CEILING,
     DEFAULT_PROBE_FRAME_FLOOR,
     PostgresSampleRepository,
+    SampleAudio,
     catalog_connection,
     library_config,
     probe_count,
     random_seed,
     read_probe_samples,
+    readable_samples,
 ):
     if catalog_connection is None:
         probes = ()
@@ -121,7 +127,8 @@ def _(
                 frame_floor=DEFAULT_PROBE_FRAME_FLOOR,
                 frame_ceiling=DEFAULT_PROBE_FRAME_CEILING,
             )
-        probes = read_probe_samples(library_config.library_root, drawn_samples)
+            sample_audio = SampleAudio.from_catalog(session, library_config.library_root)
+        probes = read_probe_samples(sample_audio, readable_samples(drawn_samples, sample_audio))
     return (probes,)
 
 
