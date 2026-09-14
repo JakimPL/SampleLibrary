@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type CloudLink, CloudView } from "../../src/cloud/CloudView";
 import type { CloudEntityPoint } from "../../src/cloud/geometry";
 import type { PointColoring } from "../../src/cloud/labelColoring";
+import { categoryIndex } from "../../src/samples/category";
 import { useThemeStore } from "../../src/theme/themeStore";
 import type { EntityRef } from "../../src/workspace/selectionStore";
 
@@ -16,6 +17,8 @@ const { instances, createScatterplotMock } = vi.hoisted(() => {
         readonly destroy = vi.fn();
         readonly set = vi.fn().mockResolvedValue(undefined);
         readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
+        cameraView = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+        readonly get = vi.fn((property: string) => (property === "cameraView" ? this.cameraView : undefined));
         private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 
         constructor(options: unknown) {
@@ -716,5 +719,115 @@ describe("CloudView right-button pairing", () => {
         fireEvent.mouseMove(latestCanvas(), { clientX: 70, clientY: 80 });
 
         expect(bandLine(container)).not.toBeInTheDocument();
+    });
+});
+
+describe("CloudView point appearance", () => {
+    const THEME_PROPERTIES = [
+        "--cloud-point-opacity",
+        "--cloud-substrate-opacity",
+        "--cloud-point-shape",
+        "--cloud-point-selected",
+        "--cloud-hover-color",
+    ];
+
+    afterEach(() => {
+        for (const property of THEME_PROPERTIES) {
+            document.documentElement.style.removeProperty(property);
+        }
+    });
+
+    function lastPropertiesWith(instance: (typeof instances)[number], key: string): Record<string, unknown> {
+        const matching = instance.set.mock.calls
+            .map((call) => call[0] as Record<string, unknown>)
+            .filter((properties) => key in properties);
+        const properties = matching[matching.length - 1];
+        if (properties === undefined) {
+            throw new Error(`no set call carried ${key}`);
+        }
+        return properties;
+    }
+
+    function sample(hashCharacter: string, category: CloudEntityPoint["category"]): CloudEntityPoint {
+        return point({ kind: "sample", hash: hashCharacter.repeat(64) }, 0, 0, category);
+    }
+
+    it("paints a categorical point's selected and hovered states in the theme's own colors, one per slot", async () => {
+        document.documentElement.style.setProperty("--cloud-point-selected", "#ffff00");
+        document.documentElement.style.setProperty("--cloud-hover-color", "#ffffff");
+        await renderCloudView({ points: [sample("1", "kick"), sample("2", "snare")] });
+
+        const properties = lastPropertiesWith(latestInstance(), "pointColorActive");
+        const palette = properties.pointColor as string[];
+        expect(properties.pointColorActive).toEqual(palette.map(() => "#ffff00"));
+        expect(properties.pointColorHover).toEqual(palette.map(() => "#ffffff"));
+    });
+
+    it("gives the substrate's slot its own opacity and every other slot the named points' one", async () => {
+        document.documentElement.style.setProperty("--cloud-point-opacity", "0.8");
+        document.documentElement.style.setProperty("--cloud-substrate-opacity", "0.3");
+        await renderCloudView({ points: [sample("1", "kick"), sample("2", "uncategorized")] });
+
+        const properties = lastPropertiesWith(latestInstance(), "opacity");
+        const opacities = properties.opacity as number[];
+        const substrateSlot = categoryIndex("uncategorized");
+        expect(properties.opacityBy).toBe("category");
+        expect(opacities[substrateSlot]).toBe(0.3);
+        expect(opacities.filter((_, slot) => slot !== substrateSlot)).toEqual(
+            Array.from({ length: opacities.length - 1 }, () => 0.8),
+        );
+    });
+
+    it("draws the substrate's points beneath the named ones once the points are drawn", async () => {
+        await renderCloudView({
+            points: [
+                sample("1", "kick"),
+                sample("2", "uncategorized"),
+                sample("3", "snare"),
+                sample("4", "uncategorized"),
+            ],
+        });
+
+        expect(latestInstance().set).toHaveBeenCalledWith({ pointOrder: [1, 3, 0, 2] });
+    });
+
+    it("draws a batch of one flat color in its own order", async () => {
+        await renderCloudView({ points: [point(MODULE_REF, 0, 0)] });
+
+        expect(latestInstance().set).toHaveBeenCalledWith({ pointOrder: null });
+    });
+
+    it("recreates the scatterplot when a theme changes the point shape, keeping its camera, points and highlight", async () => {
+        const points = [sample("1", "kick"), sample("2", "snare")];
+        const highlighted = points[1]?.ref ?? null;
+        await renderCloudView({ points, highlighted });
+        const first = latestInstance();
+        first.cameraView = new Float32Array([2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0.5, -0.25, 0, 1]);
+
+        document.documentElement.style.setProperty("--cloud-point-shape", "square");
+        act(() => {
+            useThemeStore.getState().setPreference("openmpt");
+        });
+        await flushDraw();
+
+        const second = latestInstance();
+        const options = second.options as { renderPointsAsSquares?: boolean; cameraView?: Float32Array };
+        expect(second).not.toBe(first);
+        expect(first.destroy).toHaveBeenCalled();
+        expect(options.renderPointsAsSquares).toBe(true);
+        expect(options.cameraView).toEqual(first.cameraView);
+        expect(second.draw.mock.calls[0]?.[0]).toHaveLength(points.length);
+        expect(second.select).toHaveBeenCalledWith([1], { preventEvent: true });
+    });
+
+    it("keeps one scatterplot through a theme change that keeps the point shape", async () => {
+        await renderCloudView({ points: [sample("1", "kick")] });
+
+        act(() => {
+            useThemeStore.getState().setPreference("dark");
+        });
+        await flushDraw();
+
+        expect(instances).toHaveLength(1);
     });
 });

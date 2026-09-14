@@ -31,6 +31,18 @@
     --cloud-point-selected: var(--accent);
     --cloud-ping-color: var(--accent);
     --cloud-link-color: var(--accent);
+    --cloud-hover-color: var(--text-primary);
+
+    /* Read by cloud/cloudRenderSettings.ts: sizes in CSS pixels, opacities in [0, 1]. The substrate is
+       every point that names nothing, drawn fainter and beneath the rest. */
+    --cloud-point-shape: circle;
+    --cloud-point-size: 2.5;
+    --cloud-substrate-size: 1.8;
+    --cloud-point-opacity: 0.9;
+    --cloud-substrate-opacity: 0.6;
+    --cloud-point-size-selected: 2;
+    --cloud-point-outline-width: 0;
+    --cloud-point-scale-mode: asinh;
 
     /* One hue per SampleCategory in samples/category.ts. Fourteen hues blur together for some
        viewers, so every place a color appears also names its category. */
@@ -104,6 +116,10 @@
         --category-loop: #8f82f0;
         --category-uncategorized: #a3a196;
         --cloud-point-uncategorized: #6e6d64;
+        --cloud-hover-color: #fff;
+        --cloud-point-opacity: 0.85;
+        --cloud-substrate-size: 1.6;
+        --cloud-substrate-opacity: 0.28;
         --label-lightness: 0.74;
         --label-chroma: 0.15;
     }
@@ -149,6 +165,10 @@
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
     --cloud-point-uncategorized: #6e6d64;
+    --cloud-hover-color: #fff;
+    --cloud-point-opacity: 0.85;
+    --cloud-substrate-size: 1.6;
+    --cloud-substrate-opacity: 0.28;
     --label-lightness: 0.74;
     --label-chroma: 0.15;
 }
@@ -182,9 +202,19 @@
     --wave-progress: var(--wave-fill);
     --cloud-bg: #000;
     --cloud-point: #fff;
-    --cloud-point-selected: var(--wave-fill);
+
+    /* OpenMPT's envelope editor: crisp square nodes, the dragged one yellow, joined by a pure blue line. */
+    --cloud-point-selected: #ff0;
     --cloud-ping-color: #ff0;
-    --cloud-link-color: #ff0;
+    --cloud-link-color: #00f;
+    --cloud-hover-color: #fff;
+    --cloud-point-shape: square;
+    --cloud-point-size: 2;
+    --cloud-substrate-size: 2;
+    --cloud-point-opacity: 1;
+    --cloud-substrate-opacity: 1;
+    --cloud-point-size-selected: 1;
+    --cloud-point-scale-mode: constant;
 
     /* The dark theme's category steps, since this theme's cloud canvas is near-black too. */
     --category-kick: #3987e5;
@@ -920,16 +950,16 @@ table.data td .annotation-editor-input {
     overflow: hidden;
 }
 
+/* regl-scatterplot clears its canvas to transparent; this background is what shows through every layer. */
 .cloud-wrap {
     position: absolute;
     inset: 0;
+    background: var(--cloud-bg);
 }
 
-/* regl-scatterplot clears its canvas to transparent; this background is what shows through. */
 .cloud-canvas {
     position: absolute;
     inset: 0;
-    background: var(--cloud-bg);
 }
 
 .cloud-canvas canvas {

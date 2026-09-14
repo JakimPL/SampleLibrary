@@ -30,6 +30,9 @@ const {
         readonly destroy = vi.fn();
         readonly set = vi.fn().mockResolvedValue(undefined);
         readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
+        readonly get = vi.fn((property: string) =>
+            property === "cameraView" ? new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]) : undefined,
+        );
         private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 
         subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
