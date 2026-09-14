@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from samplecore.exit_status import ExitStatus
 from samplelibrary.pipeline.artifacts import write_step_record
 from samplelibrary.pipeline.context import RunSession
+from samplelibrary.pipeline.decisions import decide
 from samplelibrary.pipeline.events import (
     AttemptEnded,
     AttemptStarted,
@@ -172,7 +173,7 @@ def _leave_unreached(steps: tuple[Step, ...], verdicts: dict[str, StepVerdict], 
 
 def _take(session: RunSession, step: Step, sinks: Sinks, *, follow: bool) -> _Taken:
     """Decide one step and carry out whatever it says is left, reporting how it went."""
-    plan = step.evaluate(session.context)
+    plan = decide(session.context, step)
     sinks.emit(InputsEvaluated(step=step.name, inputs=dict(plan.inputs), digest=plan.digest))
     match plan.action:
         case StepAction.SKIP:

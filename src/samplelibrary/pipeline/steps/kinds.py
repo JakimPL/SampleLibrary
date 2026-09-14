@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Final, Protocol
 
 from samplecore.models.experiment import ExperimentKey
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
@@ -17,6 +17,10 @@ from samplelibrary.pipeline.artifacts import (
 )
 from samplelibrary.pipeline.context import PipelineContext
 from samplelibrary.pipeline.results import StepAction, StepPlan
+
+NO_EXPERIMENT: Final[str] = "no experiment"
+SAMPLES_TO_DESCRIBE: Final[str] = "samples to describe"
+NOT_SHOWN: Final[str] = "not shown"
 
 Inputs = Mapping[str, str]
 InputReader = Callable[[PipelineContext], Inputs]
@@ -49,6 +53,10 @@ class Step(Protocol):
 
 class MissingOutput(Exception):
     """Raised when a step's command ended a success without leaving the output the step stands for."""
+
+
+class StepRefused(Exception):
+    """Raised while a step reads its inputs, when what it would read cannot be read as the step needs it."""
 
 
 @dataclass(frozen=True)
@@ -108,17 +116,21 @@ class GrowingExperimentStep:
     requires: tuple[str, ...]
     key: Callable[[PipelineContext], ExperimentKey]
     command: CommandBuilder
-    pending: Callable[[PipelineContext], int]
-    inputs: InputReader = field(default=lambda context: {})
+    pending: Callable[[PipelineContext, int], int]
+    inputs: InputReader
 
     def evaluate(self, context: PipelineContext) -> StepPlan:
         inputs = self.inputs(context)
         filed = PostgresExperimentRepository(context.connection).get_by_key(self.key(context))
-        pending = self.pending(context)
-        if filed is not None and pending == 0:
+        if filed is None:
+            return StepPlan(
+                inputs=inputs, action=StepAction.RUN, argv=self.command(context), reasons=frozenset({NO_EXPERIMENT})
+            )
+        if self.pending(context, filed.id) == 0:
             return StepPlan(inputs=inputs, action=StepAction.SKIP)
-        reasons = frozenset({"samples to describe"}) if filed is not None else frozenset({"no experiment"})
-        return StepPlan(inputs=inputs, action=StepAction.RUN, argv=self.command(context), reasons=reasons)
+        return StepPlan(
+            inputs=inputs, action=StepAction.RUN, argv=self.command(context), reasons=frozenset({SAMPLES_TO_DESCRIBE})
+        )
 
     def seal(self, context: PipelineContext, plan: StepPlan) -> Inputs:  # pylint: disable=unused-argument
         key = self.key(context)
@@ -140,26 +152,26 @@ class DerivedExperimentStep:
     requires: tuple[str, ...]
     inputs: InputReader
     key: KeyNamer
-    command: ArtifactCommandBuilder
+    command: Callable[[PipelineContext, ExperimentKey], tuple[str, ...]]
+    shown: Callable[[PipelineContext, int], bool] | None = None
 
     def evaluate(self, context: PipelineContext) -> StepPlan:
         inputs = self.inputs(context)
         plan = StepPlan(inputs=inputs, action=StepAction.SKIP)
-        filed = PostgresExperimentRepository(context.connection).get_by_key(self.key(context, plan.digest))
-        if filed is not None:
+        key = self.key(context, plan.digest)
+        filed = PostgresExperimentRepository(context.connection).get_by_key(key)
+        if filed is not None and (self.shown is None or self.shown(context, filed.id)):
             return plan
-        return StepPlan(
-            inputs=inputs,
-            action=StepAction.RUN,
-            argv=self.command(context, Path(), False),
-            reasons=frozenset({"no experiment"}),
-        )
+        reasons = frozenset({NOT_SHOWN}) if filed is not None else frozenset()
+        return StepPlan(inputs=inputs, action=StepAction.RUN, argv=self.command(context, key), reasons=reasons)
 
     def seal(self, context: PipelineContext, plan: StepPlan) -> Inputs:
         key = self.key(context, plan.digest)
         filed = PostgresExperimentRepository(context.connection).get_by_key(key)
         if filed is None:
             raise MissingOutput(f"{self.name} left no experiment filed under {key}")
+        if self.shown is not None and not self.shown(context, filed.id):
+            raise MissingOutput(f"{self.name} filed experiment {filed.id} under {key} and left it unshown")
         return {"experiment": str(filed.id), "key": key}
 
 

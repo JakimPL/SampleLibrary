@@ -14,7 +14,7 @@ from samplecore.models.experiment import SampleFeatureVector
 from samplecore.models.sample import Sample
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError, readable_sample_hashes
 
 EXTRACTION_CHECKPOINT_INTERVAL: Final[int] = 500
 
@@ -88,6 +88,21 @@ def pending_samples(
         already_extracted=len(held) - len(moved),
         samples=missing if sample_limit is None else missing[:sample_limit],
         moved=moved,
+    )
+
+
+def readable_pending_count(connection: Connection, experiment_id: int, *, hearing: Hearing) -> int:
+    """How many samples whose audio can be read now an experiment still has to describe, read without any audio.
+
+    The pending rule is `pending_samples`' own, over the samples a pass can reach: a sample whose
+    only file is gone stays out of the count until the file is back, so an experiment describing
+    everything readable counts nothing left.
+    """
+    held = PostgresSampleFeatureVectorRepository(connection).heard_rates_for_experiment(experiment_id)
+    return sum(
+        1
+        for sample_hash in readable_sample_hashes(connection)
+        if sample_hash not in held or held[sample_hash] != hearing.rate_for(sample_hash)
     )
 
 

@@ -3,13 +3,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from samplelibrary.pipeline.artifacts import read_step_record
 from samplelibrary.pipeline.context import PipelineContext
+from samplelibrary.pipeline.decisions import decide
 from samplelibrary.pipeline.execution import read_attempts
 from samplelibrary.pipeline.graph import StepGraph
 from samplelibrary.pipeline.layout import ATTEMPTS_FILE_NAME, PipelineLayout
-from samplelibrary.pipeline.results import StepAction, changed_components
-from samplelibrary.pipeline.steps.kinds import Step
+from samplelibrary.pipeline.results import StepAction
+from samplelibrary.pipeline.steps.kinds import PassStep, Step
 
 _logger = logging.getLogger(__name__)
 
@@ -43,14 +43,15 @@ def read_status(context: PipelineContext, graph: StepGraph, targets: tuple[str, 
     """What each step of the named targets would do now, read without running anything.
 
     A step whose inputs an earlier step would change reads as waiting on it, since what it would do
-    is settled by what that step leaves behind.
+    is settled by what that step leaves behind. A pass reads as leaving the catalog as it stands, which
+    it does over a collection that stands still.
     """
     statuses: list[StepStatus] = []
     unsettled: set[str] = set()
     for step in graph.order(targets):
         waits_on = frozenset(set(step.requires) & unsettled)
         status = _status_of(context, step, waits_on)
-        if status.action is not StepAction.SKIP:
+        if status.action is not StepAction.SKIP and not isinstance(step, PassStep):
             unsettled.add(step.name)
         statuses.append(status)
     return tuple(statuses)
@@ -75,9 +76,7 @@ def report_last_attempts(layout: PipelineLayout) -> None:
 def _status_of(context: PipelineContext, step: Step, waits_on: frozenset[str]) -> StepStatus:
     if waits_on:
         return StepStatus(step=step.name, action=StepAction.RUN, reasons=frozenset(), waits_on=waits_on)
-    plan = step.evaluate(context)
-    recorded = read_step_record(context.layout.step_record(step.name))
-    reasons = plan.reasons or (
-        changed_components(plan.inputs, recorded.inputs) if recorded is not None else frozenset()
+    plan = decide(context, step)
+    return StepStatus(
+        step=step.name, action=plan.action, reasons=plan.reasons, waits_on=frozenset(), reason=plan.reason
     )
-    return StepStatus(step=step.name, action=plan.action, reasons=reasons, waits_on=frozenset(), reason=plan.reason)

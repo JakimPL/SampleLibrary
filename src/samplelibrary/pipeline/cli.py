@@ -21,7 +21,7 @@ from samplelibrary.pipeline.programs import ProgramResolver, SampleLibraryProgra
 from samplelibrary.pipeline.scheduler import RunRequest, run_pipeline
 from samplelibrary.pipeline.settings import PipelineSettings, read_pipeline_settings
 from samplelibrary.pipeline.status import read_status, report_last_attempts, report_status
-from samplelibrary.pipeline.steps.library import library_graph
+from samplelibrary.pipeline.steps.library import library_graph, settings_model
 
 RUN_COMMAND: Final[str] = "run"
 STATUS_COMMAND: Final[str] = "status"
@@ -54,7 +54,7 @@ def run_pipeline_command(
         _logger.error("Configuration error: %s", error)
         raise SystemExit(ExitStatus.REFUSED) from error
     graph = library_graph()
-    _require_known_steps(settings, graph)
+    _require_readable_step_tables(settings, graph)
     targets = tuple(arguments.targets)
     with ending_in_one_line("Ran nothing", REFUSALS):
         graph.order(targets)
@@ -78,11 +78,11 @@ def run_pipeline_command(
         _run(session, graph, arguments, extra_sinks)
 
 
-def _require_known_steps(settings: PipelineSettings, graph: StepGraph) -> None:
-    """Refuse a pipeline table naming a step this pipeline does not hold, which is most often a misspelling.
+def _require_readable_step_tables(settings: PipelineSettings, graph: StepGraph) -> None:
+    """Refuse a step table naming a step this pipeline does not hold, or holding a setting its step does not read.
 
     Raises:
-        SystemExit: a table of the pipeline table names no step of this pipeline.
+        SystemExit: a table names no step of this pipeline, or a setting or value its step does not read.
     """
     known = {step.name for step in graph.steps}
     unknown = sorted(set(settings.steps) - known)
@@ -93,6 +93,12 @@ def _require_known_steps(settings: PipelineSettings, graph: StepGraph) -> None:
             ", ".join(sorted(known)),
         )
         raise SystemExit(ExitStatus.REFUSED)
+    for step in sorted(settings.steps):
+        try:
+            settings.settings_for(step, settings_model(step))
+        except ConfigurationError as error:
+            _logger.error("Configuration error: %s", error)
+            raise SystemExit(ExitStatus.REFUSED) from error
 
 
 def _report(context: PipelineContext, graph: StepGraph, targets: tuple[str, ...]) -> None:

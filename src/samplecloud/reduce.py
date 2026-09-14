@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from typing import Final
 
 import numpy as np
-import umap
 from sqlalchemy import Connection
 
 from samplecloud.standardization import standardize
@@ -72,6 +71,10 @@ def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -
     standardized = standardize(feature_matrix)
     n_neighbors = max(MINIMUM_N_NEIGHBORS, min(DEFAULT_N_NEIGHBORS, len(sample_hashes) - 1))
     _logger.info("Fitting UMAP over %d feature vectors...", len(sample_hashes))
+    # UMAP compiles its kernels as it is imported, which a pass extracting features and laying out
+    # nothing spares itself by importing it here.
+    import umap  # pylint: disable=import-outside-toplevel
+
     coordinates = umap.UMAP(
         n_neighbors=n_neighbors, metric=DISTANCE_METRIC, random_state=RANDOM_SEED, verbose=True
     ).fit_transform(standardized)

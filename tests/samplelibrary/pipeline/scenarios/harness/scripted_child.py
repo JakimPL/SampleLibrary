@@ -31,6 +31,7 @@ from tests.samplelibrary.pipeline.scenarios.harness.plans import (
     StepFault,
     gate_path,
 )
+from tests.samplelibrary.pipeline.scenarios.harness.stand_ins import run_stand_in
 
 SCRIPTED_CHILD_MODULE: Final[str] = "tests.samplelibrary.pipeline.scenarios.harness.scripted_child"
 GATE_POLL_SECONDS: Final[float] = 0.02
@@ -59,6 +60,9 @@ def main() -> None:
     if fault.gate is GateMoment.BEFORE_OUTPUT:
         _wait_at_the_gate(step, GateMoment.BEFORE_OUTPUT)
     status = _carry_out(fault)
+    if fault.effect is ScriptedEffect.COMPLETE:
+        midway = (lambda: _wait_at_the_gate(step, GateMoment.MIDWAY)) if fault.gate is GateMoment.MIDWAY else None
+        run_stand_in(command, midway=midway)
     if fault.gate is GateMoment.AFTER_OUTPUT:
         _wait_at_the_gate(step, GateMoment.AFTER_OUTPUT)
     if lock is not None:

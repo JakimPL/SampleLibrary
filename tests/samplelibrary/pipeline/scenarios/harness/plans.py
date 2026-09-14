@@ -30,9 +30,13 @@ class ScriptedEffect(StrEnum):
 
 @unique
 class GateMoment(StrEnum):
-    """Where a scripted step stops and waits for the scenario: before it writes its output, or after."""
+    """Where a scripted step stops and waits for the scenario: before its output, partway through it, or after.
+
+    Partway means once the first checkpoint of a stood-in command is committed.
+    """
 
     BEFORE_OUTPUT = "before output"
+    MIDWAY = "midway"
     AFTER_OUTPUT = "after output"
 
 

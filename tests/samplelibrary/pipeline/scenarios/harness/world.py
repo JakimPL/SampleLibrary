@@ -8,14 +8,22 @@ from pathlib import Path
 from typing import Final
 
 import soundfile
-from sqlalchemy import Connection, text
+from sqlalchemy import Column, Connection, select, text
 
 from samplecore.config import load_config
 from samplecore.digests import digest_of_rows
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.pass_completion import PassKind
 from samplecore.models.sample_properties import SampleOccurrence
-from samplecore.storage.database import claim_named_lock, connect, named_lock_key
+from samplecore.storage.database import (
+    claim_named_lock,
+    connect,
+    experiment,
+    named_lock_key,
+    suggestion_promotion,
+)
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.pass_completion import PostgresPassCompletionRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
@@ -39,7 +47,16 @@ MODULE_COUNT: Final[int] = 6
 PACK_FILE_COUNT: Final[int] = 2
 ADDED_PACK_FRAMES: Final[int] = SAMPLE_RATE // 4
 DEFAULT_PIPELINE_TABLE: Final[str] = 'memory_cap = "none"\nworkers = 1\n'
-PARTS: Final[tuple[str, ...]] = ("modules", "samples", "relations", "files", "labels", "passes")
+PARTS: Final[tuple[str, ...]] = (
+    "modules",
+    "samples",
+    "relations",
+    "files",
+    "labels",
+    "passes",
+    "experiments",
+    "suggestions",
+)
 
 
 @dataclass(frozen=True)
@@ -309,9 +326,40 @@ class World:
                     if (completion := completions.get(kind)) is not None
                 )
             ),
+            "experiments": self._experiments_digest(),
+            "suggestions": self._shown_digest(suggestion_promotion.c.experiment_id),
         }
         self.connection.rollback()
         return digests
+
+    def _experiments_digest(self) -> str:
+        """Every experiment by its key and backend, with the samples it describes, its id aside."""
+        vectors = PostgresSampleFeatureVectorRepository(self.connection)
+        rows = self.connection.execute(
+            select(experiment.c.id, experiment.c.key, experiment.c.backend_name).order_by(experiment.c.key)
+        ).all()
+        return digest_of_rows((row.key, row.backend_name, vectors.membership_digest(row.id)) for row in rows)
+
+    def _shown_digest(self, promoted: Column[int]) -> str:
+        """Which experiment a promotion table names as shown, by its key."""
+        rows = self.connection.execute(
+            select(experiment.c.key).join_from(promoted.table, experiment, experiment.c.id == promoted)
+        ).all()
+        return digest_of_rows(sorted((row.key,) for row in rows))
+
+    def experiment_by_key(self, key: str) -> tuple[int, int] | None:
+        """The id of the experiment under a key and how many vectors it holds, or nothing where none is filed."""
+        filed = PostgresExperimentRepository(self.connection).get_by_key(key)
+        held = (
+            None
+            if filed is None
+            else (
+                filed.id,
+                len(PostgresSampleFeatureVectorRepository(self.connection).heard_rates_for_experiment(filed.id)),
+            )
+        )
+        self.connection.rollback()
+        return held
 
     def close(self) -> None:
         for held in list(self.holders):

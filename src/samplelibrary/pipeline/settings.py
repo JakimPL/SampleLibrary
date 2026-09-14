@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path
@@ -8,18 +9,31 @@ from typing import Any, Final
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from samplecore.config import PIPELINE_TABLE, ConfigurationError, resolve_config_path
+from samplecore.digests import digest_of_rows
 from samplelibrary.limits.ceiling import MalformedCeiling, MemoryCeiling
 
 DEFAULT_MEMORY_CAP: Final[str] = "none"
+OPERATIONAL_STEP_SETTINGS: Final[set[str]] = {"memory_cap"}
 DEFAULT_DEVICE: Final[str] = "cuda"
 
 
 class StepSettings(BaseModel):
-    """What every step takes from the configuration, whatever else it takes beside it."""
+    """What one step's own table says: the ceiling the step runs under, and the parameters its outputs are named from.
+
+    A step taking parameters reads them through a model of its own built on this one, each field
+    defaulting to its command's own default, so a table writing a default out names the same outputs
+    as one leaving it out.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     memory_cap: str | None = None
+
+    @property
+    def parameters_digest(self) -> str:
+        """One digest over the parameters as read, which a step's outputs are named from and the ceiling stays out of."""
+        values = self.model_dump(mode="json", exclude=OPERATIONAL_STEP_SETTINGS)
+        return digest_of_rows((name, json.dumps(values[name], sort_keys=True)) for name in sorted(values))
 
 
 class PipelineSettings(BaseModel):
@@ -59,6 +73,20 @@ class PipelineSettings(BaseModel):
     def table_for(self, step: str) -> Mapping[str, Any]:
         """What the configuration says about one step, which that step validates as its own settings."""
         return self.steps.get(step, {})
+
+    def settings_for[Settings: StepSettings](self, step: str, model: type[Settings]) -> Settings:
+        """One step's table read as the settings that step takes.
+
+        Raises:
+            ConfigurationError: the table names a setting the step does not take, or a value written
+                some other way than the step reads it.
+        """
+        try:
+            return model.model_validate(self.table_for(step))
+        except ValidationError as error:
+            first = error.errors()[0]
+            location = ".".join(str(part) for part in first["loc"])
+            raise ConfigurationError(f"[{PIPELINE_TABLE}.{step}] {location}: {first['msg']}") from error
 
 
 def read_pipeline_settings(path: Path | None = None) -> PipelineSettings:
