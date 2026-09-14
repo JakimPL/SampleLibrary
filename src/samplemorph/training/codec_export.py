@@ -23,6 +23,7 @@ def describe_codec(
         geometry=corpus.cache.description.geometry,
         shape=module.model.shape,
         descriptor=corpus.descriptor_name,
+        descriptor_sha256=corpus.descriptor_sha256,
         epochs=record.epochs,
         trained_sample_count=trained_sample_count,
         random_seed=random_seed,

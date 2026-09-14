@@ -14,11 +14,23 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 from samplecore.labeling.labels import SampleLabel
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from samplemorph.training.descriptor_cache import GRIDS_FILE_NAME, STORED_VIEW, GridCache, GridSource
+from samplemorph.descriptors.grid_descriptor import DESCRIPTOR_SIZE
+from samplemorph.training.descriptor_cache import (
+    MINIMUM_RETUNED_VIEW_COUNT,
+    STORED_VIEW,
+    GridCache,
+    GridSource,
+    MappedGrids,
+)
 from samplemorph.training.descriptor_settings import DescriptorTrainingSettings
-from samplemorph.training.loaders import build_loader
+from samplemorph.training.epoch_draws import VIEW_STREAM, EpochPermutation, ViewRequest, epoch_generator
+from samplemorph.training.loaders import build_batched_loader, build_loader, require_full_batch
+from samplemorph.training.refusals import TrainingDataShortfall, TrainingRefused
 
 NO_LABEL: Final[int] = -1
+# Validation reads the first retuned view of every sample, the same one every epoch.
+VALIDATION_VIEW: Final[int] = 0
+GALLERY_SHARE_DIVISOR: Final[int] = 2
 
 # (position in the corpus, stored grid, retuned grid, stored duration, retuned duration)
 DescriptorBatchItem = tuple[int, NDArray[np.float32], NDArray[np.float32], np.float32, np.float32]
@@ -73,17 +85,23 @@ def load_descriptor_corpus(
     The settings say what share of the labels is held out and under which seed.
 
     Raises:
-        ValueError: a cached sample has no teacher vector, so the experiment does not cover the draw.
+        TrainingRefused: a cached sample has no teacher vector, so the experiment does not cover the
+            draw, or the teacher's vectors are not the size a descriptor answers in.
     """
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(teacher_experiment_id)
     by_hash = {vector.sample_hash: vector.vector for vector in vectors}
     missing = [sample_hash for sample_hash in cache.hashes if sample_hash not in by_hash]
     if missing:
-        raise ValueError(
+        raise TrainingRefused(
             f"experiment {teacher_experiment_id} holds no vector for {len(missing)} of the "
             f"{cache.sample_count} cached samples"
         )
     teacher = np.asarray([by_hash[sample_hash] for sample_hash in cache.hashes], dtype=np.float32)
+    if teacher.shape[1] != DESCRIPTOR_SIZE:
+        raise TrainingRefused(
+            f"experiment {teacher_experiment_id} holds vectors of {teacher.shape[1]} numbers, and a descriptor is "
+            f"distilled from a listening model's vectors of {DESCRIPTOR_SIZE}"
+        )
 
     annotations = PostgresSampleAnnotationRepository(connection).annotations_by_hash(list(cache.hashes))
     labels: list[SampleLabel] = []
@@ -108,106 +126,142 @@ def load_descriptor_corpus(
     )
 
 
-class GridCacheSet(Dataset[DescriptorBatchItem]):
-    """The cached grids of chosen samples, each read beside one of its retuned views.
+class RetunedViewSet(Dataset[DescriptorBatchItem]):
+    """Any cached sample's stored grid beside the retuned view a request names.
 
-    The mapped file is opened on first use in whichever process reads it.
+    The batch sampler draws which view pairs with each stored grid, every epoch afresh, so the
+    views a cache holds are all read over a run. The mapped file is opened on first use in
+    whichever process reads it.
     """
 
-    def __init__(
-        self, source: GridSource, *, positions: NDArray[np.intp], random_seed: int, fixed_view: int | None
-    ) -> None:
-        self._directory = source.directory
-        self._positions = positions
+    def __init__(self, source: GridSource) -> None:
+        self._grids = MappedGrids(source)
         self._durations = source.durations
-        self._view_count = source.view_count
-        self._random_seed = random_seed
-        self._fixed_view = fixed_view
-        self._grids: NDArray[np.float16] | None = None
+
+    def __len__(self) -> int:
+        return len(self._durations)
+
+    def __getitem__(self, request: ViewRequest) -> DescriptorBatchItem:
+        position, view = request
+        return _paired(self._grids.array(), self._durations, position=position, view=view)
+
+
+class FixedViewSet(Dataset[DescriptorBatchItem]):
+    """Chosen samples' stored grids, each beside the same retuned view every epoch, so epochs compare."""
+
+    def __init__(self, source: GridSource, *, positions: NDArray[np.intp], view: int) -> None:
+        self._grids = MappedGrids(source)
+        self._durations = source.durations
+        self._positions = positions
+        self._view = view
 
     def __len__(self) -> int:
         return len(self._positions)
 
     def __getitem__(self, index: int) -> DescriptorBatchItem:
-        position = int(self._positions[index])
-        view = self._fixed_view if self._fixed_view is not None else self._drawn_view(index)
-        grids = self._mapped_grids()
-        return (
-            position,
-            grids[position, STORED_VIEW].astype(np.float32),
-            grids[position, 1 + view].astype(np.float32),
-            self._durations[position, STORED_VIEW],
-            self._durations[position, 1 + view],
-        )
-
-    def _drawn_view(self, index: int) -> int:
-        generator = np.random.default_rng(self._random_seed + index)
-        return int(generator.integers(0, self._view_count))
-
-    def _mapped_grids(self) -> NDArray[np.float16]:
-        if self._grids is None:
-            self._grids = np.load(self._directory / GRIDS_FILE_NAME, mmap_mode="r")
-        return self._grids
+        return _paired(self._grids.array(), self._durations, position=int(self._positions[index]), view=self._view)
 
 
-class LabeledBatchSampler(Sampler[list[int]]):
-    """Batches drawn from the whole pool, each carrying a fixed number of labeled samples.
+def _paired(
+    grids: NDArray[np.float16], durations: NDArray[np.float32], *, position: int, view: int
+) -> DescriptorBatchItem:
+    return (
+        position,
+        grids[position, STORED_VIEW].astype(np.float32),
+        grids[position, 1 + view].astype(np.float32),
+        durations[position, STORED_VIEW],
+        durations[position, 1 + view],
+    )
+
+
+@dataclass(frozen=True)
+class BatchComposition:
+    """What one training batch is made of: how many samples, how many of them taught labels, and how many views each offers."""
+
+    batch_size: int
+    labeled_per_batch: int
+    view_count: int
+
+
+class LabeledBatchSampler(Sampler[list[ViewRequest]]):
+    """Batches drawn from the whole pool, each carrying a fixed number of labeled samples and a view for every sample.
 
     The label term scores pairs, so a batch that met a labeled sample by chance would rarely hold
     two. Every batch instead holds `labeled_per_batch` of the taught labeled samples beside its
-    share of the pool, and each epoch walks the pool in a fresh order.
+    share of the pool. Each epoch walks the pool in a fresh order and draws fresh labeled samples
+    and views, all from the seed and the epoch the trainer hands to `sampler`.
     """
 
     def __init__(
-        self,
-        *,
-        pool: NDArray[np.intp],
-        labeled: NDArray[np.intp],
-        batch_size: int,
-        labeled_per_batch: int,
-        random_seed: int,
+        self, *, pool: NDArray[np.intp], labeled: NDArray[np.intp], composition: BatchComposition, random_seed: int
     ) -> None:
         super().__init__()
-        self._pool = pool
+        self.sampler = EpochPermutation(pool, random_seed=random_seed)
         self._labeled = labeled
-        self._labeled_per_batch = min(labeled_per_batch, len(labeled))
-        self._pool_per_batch = batch_size - self._labeled_per_batch
-        self._generator = np.random.default_rng(random_seed)
+        self._labeled_per_batch = min(composition.labeled_per_batch, len(labeled))
+        self._pool_per_batch = composition.batch_size - self._labeled_per_batch
+        self._view_count = composition.view_count
+        self._random_seed = random_seed
 
     def __len__(self) -> int:
-        return len(self._pool) // self._pool_per_batch
+        return len(self.sampler) // self._pool_per_batch
 
-    def __iter__(self) -> Iterator[list[int]]:
-        order = self._generator.permutation(self._pool)
+    def __iter__(self) -> Iterator[list[ViewRequest]]:
+        generator = epoch_generator(self._random_seed, stream=VIEW_STREAM, epoch=self.sampler.epoch)
+        order = list(self.sampler)
         for start in range(0, len(self) * self._pool_per_batch, self._pool_per_batch):
-            batch = order[start : start + self._pool_per_batch].tolist()
+            positions = order[start : start + self._pool_per_batch]
             if self._labeled_per_batch:
-                batch += self._generator.choice(self._labeled, self._labeled_per_batch, replace=False).tolist()
-            yield batch
+                positions += generator.choice(self._labeled, self._labeled_per_batch, replace=False).tolist()
+            views = generator.integers(0, self._view_count, len(positions)).tolist()
+            yield list(zip(positions, views, strict=True))
 
 
 class DescriptorDataModule(LightningDataModule):
     """Hands the trainer the cached grids: a mixed batch to learn from, and a fixed set to be judged on.
 
-    Training draws every cached sample but the held-out labeled ones, each batch carrying its share
-    of taught labels. Validation reads the held-out labeled samples beside a gallery drawn once, at
-    a fixed view, so the retuning check ranks each view against the same crowd every epoch.
+    Training draws every cached sample but the validation ones, each batch carrying its share of
+    taught labels. Validation reads the held-out labeled samples beside a gallery drawn once from
+    the unlabeled samples, at a fixed view, so the retuning check ranks each view against the same
+    crowd every epoch. The gallery takes at most half the unlabeled samples, which leaves a small
+    library the other half to train on.
+
+    Raises:
+        TrainingDataShortfall: the cache holds no retuned views, nothing is left to validate on, or
+            the unlabeled training samples fill no batch.
     """
 
     def __init__(self, corpus: DescriptorCorpus, *, settings: DescriptorTrainingSettings) -> None:
         super().__init__()
+        if corpus.cache.view_count < MINIMUM_RETUNED_VIEW_COUNT:
+            raise TrainingDataShortfall(
+                f"the cache under {corpus.cache.directory} holds no retuned views, which teach a descriptor that "
+                "a retuning changes nothing; build it with --views 1 or more"
+            )
         self._corpus = corpus
         self._batch_size = settings.run.batch_size
-        self._labeled_per_batch = settings.labeled_per_batch
         self._worker_count = settings.run.worker_count
         self._random_seed = settings.run.random_seed
         held_out = corpus.held_out_labeled_positions
         everyone = np.arange(corpus.sample_count)
         candidates = np.setdiff1d(everyone, np.concatenate([held_out, corpus.labeled_positions]))
         generator = np.random.default_rng(settings.run.random_seed)
-        gallery = generator.choice(candidates, size=min(settings.validation_gallery, len(candidates)), replace=False)
+        gallery_size = min(settings.validation_gallery, len(candidates) // GALLERY_SHARE_DIVISOR)
+        gallery = generator.choice(candidates, size=gallery_size, replace=False)
         self._validation_positions = np.sort(np.concatenate([held_out, gallery]))
-        self._training_positions = np.setdiff1d(everyone, held_out)
+        if self._validation_positions.size == 0:
+            raise TrainingDataShortfall(
+                "every cached sample is a taught label, which leaves nothing to validate on; cache more samples "
+                "or raise --label-holdout"
+            )
+        self._training_positions = np.setdiff1d(everyone, self._validation_positions)
+        self._labeled_per_batch = min(settings.labeled_per_batch, len(corpus.taught_labeled_positions))
+        self._pool = np.setdiff1d(self._training_positions, corpus.taught_labeled_positions)
+        require_full_batch(
+            len(self._pool) + self._labeled_per_batch,
+            batch_size=self._batch_size,
+            flags="--batch and --labeled-per-batch",
+        )
 
     @property
     def training_sample_count(self) -> int:
@@ -218,32 +272,26 @@ class DescriptorDataModule(LightningDataModule):
         return len(self._validation_positions)
 
     def train_dataloader(self) -> DataLoader[DescriptorBatchItem]:
-        """Batches named by corpus position, so the sampler decides who is trained on and the set reads anyone."""
-        dataset = self._dataset(np.arange(self._corpus.sample_count), fixed_view=None)
+        """Batches of (position, view) requests, so the sampler decides who is trained on and which view each reads."""
         sampler = LabeledBatchSampler(
-            pool=np.setdiff1d(self._training_positions, self._corpus.taught_labeled_positions),
+            pool=self._pool,
             labeled=self._corpus.taught_labeled_positions,
-            batch_size=self._batch_size,
-            labeled_per_batch=self._labeled_per_batch,
+            composition=BatchComposition(
+                batch_size=self._batch_size,
+                labeled_per_batch=self._labeled_per_batch,
+                view_count=self._corpus.cache.view_count,
+            ),
             random_seed=self._random_seed,
         )
-        return self._loader(dataset, batch_sampler=sampler)
-
-    def val_dataloader(self) -> DataLoader[DescriptorBatchItem]:
-        return self._loader(self._dataset(self._validation_positions, fixed_view=STORED_VIEW), batch_sampler=None)
-
-    def _dataset(self, positions: NDArray[np.intp], *, fixed_view: int | None) -> GridCacheSet:
-        return GridCacheSet(
-            GridSource.of(self._corpus.cache), positions=positions, random_seed=self._random_seed, fixed_view=fixed_view
+        return build_batched_loader(
+            RetunedViewSet(GridSource.of(self._corpus.cache)), worker_count=self._worker_count, batch_sampler=sampler
         )
 
-    def _loader(
-        self, dataset: GridCacheSet, *, batch_sampler: LabeledBatchSampler | None
-    ) -> DataLoader[DescriptorBatchItem]:
+    def val_dataloader(self) -> DataLoader[DescriptorBatchItem]:
         return build_loader(
-            dataset,
+            FixedViewSet(GridSource.of(self._corpus.cache), positions=self._validation_positions, view=VALIDATION_VIEW),
             batch_size=self._batch_size,
             worker_count=self._worker_count,
-            shuffle=False,
-            batch_sampler=batch_sampler,
+            sampler=None,
+            drop_last=False,
         )

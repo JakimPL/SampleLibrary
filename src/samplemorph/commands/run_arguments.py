@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from samplecore.cli_support import non_negative_integer, positive_integer
+from samplemorph.training.refusals import TrainingRefused
 from samplemorph.training.run_settings import (
     DEFAULT_ACCELERATOR,
     DEFAULT_BATCH_SIZE,
@@ -68,8 +71,34 @@ def run_settings_from(arguments: argparse.Namespace) -> RunSettings:
     )
 
 
+def train_and_report(train: Callable[[], TrainingOutcome]) -> None:
+    """Run one training and say how it ended, ending the process with one message when it cannot go ahead.
+
+    A run that finishes with no epoch validated wrote no model, which ends the process as a failure.
+    """
+    try:
+        outcome = train()
+    except TrainingRefused as error:
+        _logger.error("Trained nothing: %s.", error)
+        sys.exit(1)
+
+    report_outcome(outcome)
+
+
 def report_outcome(outcome: TrainingOutcome) -> None:
-    """Say how a run ended and where its best epoch was written."""
+    """Say how a run ended and where its best epoch was written, ending the process when none was.
+
+    Raises:
+        SystemExit: no epoch finished validation, so nothing was written.
+    """
+    if not outcome.exported:
+        _logger.error(
+            "Trained for %d epochs, and no epoch finished validation with a score; nothing was written to %s.",
+            outcome.epochs_completed,
+            outcome.model_path,
+        )
+        sys.exit(1)
+
     _logger.info(
         "Trained for %d epochs. The best epoch scored %.4f and is what %s holds.",
         outcome.epochs_completed,

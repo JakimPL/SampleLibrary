@@ -4,9 +4,11 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 from fastapi.testclient import TestClient
+from numpy.typing import NDArray
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.hashing import compute_sample_hash
@@ -14,7 +16,9 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
-from samplemorph.geometry import log_frequency_geometry
+from samplemorph.canonicalizers.common import prepare_mono
+from samplemorph.geometry import Geometry, log_frequency_geometry
+from samplemorph.images import SoundImage
 from samplemorph.model_store import (
     DEFAULT_MODEL_NAME,
     PRINCIPAL_COMPONENT_CODEC_NAME,
@@ -33,7 +37,7 @@ from samplemorph.registries import (
 )
 from samplemorph.service.app import create_app
 from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
-from samplemorph.training.principal_components import PrincipalComponentTrainer
+from samplemorph.training.principal_components import PrincipalComponentTrainer, stack_grids
 from samplemorph.vocoders.restored import DEFAULT_RESTORER_NAME, RestorerDescription, restorer_path, save_restorer
 from samplemorph.vocoders.restorer_model import Restorer, RestorerShape
 from tests.samplemorph.conftest import harmonic_tone
@@ -64,9 +68,12 @@ def _fit_codec(root: Path) -> None:
     geometry = log_frequency_geometry()
     canonicalizer = CANONICALIZER_REGISTRY[DEFAULT_CANONICALIZER_NAME]()
     images = [
-        canonicalizer.canonicalize(harmonic_tone(frame_count, frequency=frequency)) for frequency, frame_count in TONES
+        canonicalizer.canonicalize(prepare_mono(harmonic_tone(frame_count, frequency=frequency)))
+        for frequency, frame_count in TONES
     ]
-    codec = PrincipalComponentTrainer(geometry, latent_size=LATENT_SIZE, random_seed=0).fit(images)
+    codec = PrincipalComponentTrainer(geometry, latent_size=LATENT_SIZE, random_seed=0).fit(
+        _stacked(images, geometry=geometry)
+    )
     description = MorphModelDescription(
         codec=PRINCIPAL_COMPONENT_CODEC_NAME,
         canonicalizer=DEFAULT_CANONICALIZER_NAME,
@@ -132,3 +139,7 @@ def restored_settings(library: StoredLibrary) -> ServiceSettings:
 def client(settings: ServiceSettings) -> Iterator[TestClient]:
     with TestClient(create_app(settings)) as test_client:
         yield test_client
+
+
+def _stacked(images: list[SoundImage], *, geometry: Geometry) -> NDArray[np.float32]:
+    return stack_grids(images, count=len(images), geometry=geometry)

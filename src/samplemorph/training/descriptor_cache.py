@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import shutil
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +17,7 @@ from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
 from samplecore.storage import audio_store
 from samplecore.waveform import resample_by_semitones
-from samplemorph.canonicalizers.common import prepare_mono
+from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
 from samplemorph.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
 from samplemorph.geometry import Anchor, Geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY, canonicalizer_for_geometry
@@ -28,6 +29,7 @@ DEFAULT_GRID_CACHE_NAME: Final[str] = "descriptor"
 # The first reading of every sample is the stored waveform's own; the retuned views follow it.
 STORED_VIEW: Final[int] = 0
 DEFAULT_RETUNED_VIEW_COUNT: Final[int] = 2
+MINIMUM_RETUNED_VIEW_COUNT: Final[int] = 1
 # The corpus retunes a sample by an octave at the median and seventeen semitones at the ninetieth
 # percentile, so views drawn this far teach the invariance the catalog itself asks for.
 DEFAULT_VIEW_RANGE_SEMITONES: Final[float] = 17.0
@@ -36,6 +38,8 @@ DURATIONS_FILE_NAME: Final[str] = "durations.npy"
 HASHES_FILE_NAME: Final[str] = "hashes.txt"
 DESCRIPTION_FILE_NAME: Final[str] = "description.json"
 JOB_CHUNK_SIZE: Final[int] = 8
+STAGING_SUFFIX: Final[str] = ".partial"
+RETIRED_SUFFIX: Final[str] = ".retired"
 
 
 class GridCacheDescription(BaseModel):
@@ -61,7 +65,8 @@ class GridCache:
     `grids` is `(samples, 1 + views, bands, columns)`: the stored waveform's grid first, then the
     same sound read at each of its retunings. `durations` holds each sample's canonical duration
     beside every one of its grids. The retuned views are what teach a descriptor that a retuning
-    changes nothing, and they are drawn once so every epoch and every run reads the same views.
+    changes nothing; they are stored once, and a trainer draws which of them pairs with the stored
+    grid every epoch.
     """
 
     directory: Path
@@ -84,16 +89,47 @@ class GridSource:
     """What a reading set needs to know about a cache without holding its mapped grids.
 
     A worker started fresh maps the file itself from the directory, so handing it this rather than
-    the cache keeps the grids out of what is sent to every process.
+    the cache keeps the grids out of what is sent to every process. The shape the trainer opened
+    travels too, so a worker that maps a cache rebuilt in the meantime notices.
     """
 
     directory: Path
     durations: NDArray[np.float32]
     view_count: int
+    grid_shape: tuple[int, ...]
 
     @classmethod
     def of(cls, cache: GridCache) -> GridSource:
-        return cls(directory=cache.directory, durations=cache.durations, view_count=cache.view_count)
+        return cls(
+            directory=cache.directory,
+            durations=cache.durations,
+            view_count=cache.view_count,
+            grid_shape=tuple(cache.grids.shape),
+        )
+
+
+class MappedGrids:
+    """A cache's grids, mapped on first use in whichever process reads them."""
+
+    def __init__(self, source: GridSource) -> None:
+        self._source = source
+        self._grids: NDArray[np.float16] | None = None
+
+    def array(self) -> NDArray[np.float16]:
+        """The mapped grids.
+
+        Raises:
+            ValueError: the file under the cache's directory is no longer the cache the run opened.
+        """
+        if self._grids is None:
+            grids: NDArray[np.float16] = np.load(self._source.directory / GRIDS_FILE_NAME, mmap_mode="r")
+            if tuple(grids.shape) != self._source.grid_shape:
+                raise ValueError(
+                    f"the grid cache under {self._source.directory} was rebuilt while this run read it; "
+                    "start the run again"
+                )
+            self._grids = grids
+        return self._grids
 
 
 @dataclass(frozen=True)
@@ -133,6 +169,10 @@ def build_grid_cache(
     trainer measured as the one that shares the machine's cores rather than fighting over them.
     Rows are written as they arrive, so memory stays flat however large the draw.
 
+    The cache is built beside `directory` and moved into place once its description is written,
+    so a build stopped partway leaves the previous cache under that name as it was, and a trainer
+    already reading the previous cache keeps the files it mapped.
+
     Raises:
         ValueError: the draw is empty.
     """
@@ -152,9 +192,11 @@ def build_grid_cache(
         view_range_semitones=recipe.view_range_semitones,
         random_seed=recipe.random_seed,
     )
-    directory.mkdir(parents=True, exist_ok=True)
+    staging = _sibling(directory, suffix=STAGING_SUFFIX)
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
     grids = np.lib.format.open_memmap(
-        directory / GRIDS_FILE_NAME,
+        staging / GRIDS_FILE_NAME,
         mode="w+",
         dtype=np.float16,
         shape=(len(samples), 1 + recipe.view_count, band_count, geometry.time_columns),
@@ -175,10 +217,26 @@ def build_grid_cache(
         grids[position] = job_grids
         durations[position] = job_durations
     grids.flush()
-    np.save(directory / DURATIONS_FILE_NAME, durations)
-    (directory / HASHES_FILE_NAME).write_text("\n".join(sample.hash for sample in samples), encoding="utf-8")
-    (directory / DESCRIPTION_FILE_NAME).write_text(description.model_dump_json(indent=2), encoding="utf-8")
+    del grids
+    np.save(staging / DURATIONS_FILE_NAME, durations)
+    (staging / HASHES_FILE_NAME).write_text("\n".join(sample.hash for sample in samples), encoding="utf-8")
+    (staging / DESCRIPTION_FILE_NAME).write_text(description.model_dump_json(indent=2), encoding="utf-8")
+    _swap_into_place(staging, directory)
     return open_grid_cache(directory)
+
+
+def _sibling(directory: Path, *, suffix: str) -> Path:
+    return directory.with_name(f".{directory.name}{suffix}")
+
+
+def _swap_into_place(staging: Path, directory: Path) -> None:
+    """Move a finished cache under its name, retiring whichever cache held the name before."""
+    retired = _sibling(directory, suffix=RETIRED_SUFFIX)
+    shutil.rmtree(retired, ignore_errors=True)
+    if directory.exists():
+        directory.replace(retired)
+    staging.replace(directory)
+    shutil.rmtree(retired, ignore_errors=True)
 
 
 def open_grid_cache(directory: Path) -> GridCache:
@@ -186,6 +244,8 @@ def open_grid_cache(directory: Path) -> GridCache:
 
     Raises:
         FileNotFoundError: no cache was built under that directory.
+        ValueError: the grids, the durations and the hashes disagree on how many samples and views
+            the cache holds.
     """
     description_path = directory / DESCRIPTION_FILE_NAME
     if not description_path.exists():
@@ -193,13 +253,24 @@ def open_grid_cache(directory: Path) -> GridCache:
 
     description = GridCacheDescription.model_validate_json(description_path.read_text(encoding="utf-8"))
     hashes = tuple(directory.joinpath(HASHES_FILE_NAME).read_text(encoding="utf-8").split("\n"))
-    return GridCache(
-        directory=directory,
-        description=description,
-        hashes=hashes,
-        grids=np.load(directory / GRIDS_FILE_NAME, mmap_mode="r"),
-        durations=np.load(directory / DURATIONS_FILE_NAME),
+    grids: NDArray[np.float16] = np.load(directory / GRIDS_FILE_NAME, mmap_mode="r")
+    durations: NDArray[np.float32] = np.load(directory / DURATIONS_FILE_NAME)
+    expected_grids = (
+        description.sample_count,
+        1 + description.view_count,
+        description.band_count,
+        description.time_columns,
     )
+    if (
+        tuple(grids.shape) != expected_grids
+        or tuple(durations.shape) != expected_grids[:2]
+        or len(hashes) != description.sample_count
+    ):
+        raise ValueError(
+            f"the grid cache under {directory} is incomplete: its grids, durations and hashes disagree with its "
+            "description; build it again with cache-grids"
+        )
+    return GridCache(directory=directory, description=description, hashes=hashes, grids=grids, durations=durations)
 
 
 def _derived(
@@ -241,7 +312,10 @@ class _Worker:
         canonicalizer = canonicalizer_for_geometry(self.geometry)
         mono = prepare_mono(audio_store.read(self.library_root, job.sample).pcm)
         stored = canonicalizer.canonicalize(mono)
-        views = [canonicalizer.canonicalize(resample_by_semitones(mono, semitones=offset)) for offset in job.offsets]
+        views = [
+            canonicalizer.canonicalize(PreparedMono(resample_by_semitones(mono, semitones=offset)))
+            for offset in job.offsets
+        ]
         grids = [pool_bands(image.grid, band_count=self.band_count).astype(np.float16) for image in (stored, *views)]
         duration = canonical_duration(stored.conditioners)
         return np.stack(grids), np.full(1 + len(views), duration, dtype=np.float32)

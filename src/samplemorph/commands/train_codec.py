@@ -9,6 +9,7 @@ from sqlalchemy import Connection
 
 from samplecore.cli_support import non_negative_integer, positive_integer
 from samplecore.config import LibraryConfig
+from samplecore.hashing import file_sha256
 from samplemorph.codecs.conditioned import DEFAULT_CODEC_NAME
 from samplemorph.codecs.conditioned_model import (
     DEFAULT_CODEC_WIDTH,
@@ -16,7 +17,7 @@ from samplemorph.codecs.conditioned_model import (
     DEFAULT_RESIDUAL_SIZE,
     ResidualLayout,
 )
-from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
+from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from, train_and_report
 from samplemorph.descriptors.learned import DEFAULT_DESCRIPTOR_NAME, descriptor_path, load_descriptor
 from samplemorph.training.codec_losses import (
     DEFAULT_CYCLE_WEIGHT,
@@ -102,16 +103,12 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     from samplecore.tracking.session import open_run
     from samplemorph.training.codec_data import CodecCorpus
     from samplemorph.training.codec_run import run_codec_training
-    from samplemorph.training.runs import RunPlacement
+    from samplemorph.training.runs import RunFamily, RunPlacement, TrainingOutcome, check_resume_point
 
     del connection
     cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))
-    descriptor = load_descriptor(
-        descriptor_path(config.library_root, name=arguments.descriptor), device=torch.device(arguments.device)
-    )
-    corpus = CodecCorpus(
-        cache=cache, library_root=config.library_root, descriptor=descriptor, descriptor_name=arguments.descriptor
-    )
+    stored_descriptor = descriptor_path(config.library_root, name=arguments.descriptor)
+    descriptor = load_descriptor(stored_descriptor, device=torch.device(arguments.device))
     settings = CodecTrainingSettings(
         run=run_settings_from(arguments),
         weights=CodecLossWeights(
@@ -122,19 +119,33 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         width=arguments.width,
         prior_warmup_steps=arguments.prior_warmup,
     )
-    _logger.info("Training over %d cached grids with the %s descriptor.", corpus.sample_count, arguments.descriptor)
-    with open_run(
-        config.library_root,
-        recorded=not arguments.no_tracking,
-        experiment_name=CODEC_EXPERIMENT_NAME,
-        run_name=arguments.codec,
-    ) as tracker:
-        outcome = run_codec_training(
-            corpus,
-            settings=settings,
-            placement=RunPlacement(
-                library_root=config.library_root, model_name=arguments.codec, tracker=tracker, resume=arguments.resume
-            ),
-        )
 
-    report_outcome(outcome)
+    def train() -> TrainingOutcome:
+        check_resume_point(config.library_root, family=RunFamily.CODEC, name=arguments.codec, resume=arguments.resume)
+        corpus = CodecCorpus(
+            cache=cache,
+            library_root=config.library_root,
+            descriptor=descriptor,
+            descriptor_name=arguments.descriptor,
+            descriptor_sha256=file_sha256(stored_descriptor),
+        )
+        _logger.info("Training over %d cached grids with the %s descriptor.", corpus.sample_count, arguments.descriptor)
+        with open_run(
+            config.library_root,
+            recorded=not arguments.no_tracking,
+            experiment_name=CODEC_EXPERIMENT_NAME,
+            run_name=arguments.codec,
+        ) as tracker:
+            return run_codec_training(
+                corpus,
+                settings=settings,
+                placement=RunPlacement(
+                    library_root=config.library_root,
+                    family=RunFamily.CODEC,
+                    model_name=arguments.codec,
+                    tracker=tracker,
+                    resume=arguments.resume,
+                ),
+            )
+
+    train_and_report(train)

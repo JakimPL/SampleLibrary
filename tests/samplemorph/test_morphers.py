@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.geometry import Anchor, Geometry, log_frequency_geometry, mel_geometry
 from samplemorph.images import Conditioners, SampleLatent, SoundImage
@@ -105,8 +106,8 @@ def test_a_lossless_morph_travels_from_one_endpoint_to_the_other() -> None:
     """
     canonicalizer = CANONICALIZER_REGISTRY["mel"]()
     codec = IdentityCodec(canonicalizer.geometry)
-    first = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
-    second = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=660.0)))
+    first = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))))
+    second = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=660.0))))
 
     plausibility = morph_plausibility(
         MorphEndpoint(sample_hash=FIRST_HASH, latent=first),
@@ -149,8 +150,8 @@ def test_a_lossless_linear_morph_is_exactly_the_crossfade_of_its_endpoints() -> 
     """The identity codec under a linear morpher is the crossfade this reading exists to catch."""
     canonicalizer = CANONICALIZER_REGISTRY["mel"]()
     codec = IdentityCodec(canonicalizer.geometry)
-    first = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
-    second = codec.encode(canonicalizer.canonicalize(noise_burst(TEST_FRAME_COUNT, seed=1)))
+    first = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))))
+    second = codec.encode(canonicalizer.canonicalize(prepare_mono(noise_burst(TEST_FRAME_COUNT, seed=1))))
 
     plausibility = morph_plausibility(
         MorphEndpoint(sample_hash=FIRST_HASH, latent=first),
@@ -166,8 +167,8 @@ def test_a_lossless_linear_morph_is_exactly_the_crossfade_of_its_endpoints() -> 
 def test_a_codec_that_states_a_sound_of_its_own_reads_above_the_crossfade() -> None:
     canonicalizer = CANONICALIZER_REGISTRY["mel"]()
     codec = SnappingCodec(canonicalizer.geometry)
-    first = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
-    second = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=660.0)))
+    first = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))))
+    second = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=660.0))))
 
     plausibility = morph_plausibility(
         MorphEndpoint(sample_hash=FIRST_HASH, latent=first),
@@ -199,9 +200,11 @@ def _pitch_path(anchor: Anchor) -> float:
     canonicalizer = CANONICALIZER_REGISTRY["log_frequency"](anchor=anchor)
     codec = IdentityCodec(canonicalizer.geometry)
     first = codec.encode(
-        canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0, weights=SECOND_HARMONIC_LOUDEST))
+        canonicalizer.canonicalize(
+            prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0, weights=SECOND_HARMONIC_LOUDEST))
+        )
     )
-    second = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0)))
+    second = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0))))
     return morph_plausibility(
         MorphEndpoint(sample_hash=FIRST_HASH, latent=first),
         MorphEndpoint(sample_hash=SECOND_HASH, latent=second),
@@ -223,7 +226,7 @@ def test_a_morph_anchored_on_the_loudest_band_swings_off_the_line_when_the_ancho
 def test_the_heard_pitch_reads_the_note_an_image_was_made_from() -> None:
     canonicalizer = CANONICALIZER_REGISTRY["log_frequency"]()
 
-    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=880.0))
+    image = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=880.0)))
 
     assert heard_pitch_semitones(image) == pytest.approx(12.0, abs=PITCH_TOLERANCE_SEMITONES)
 
@@ -231,7 +234,7 @@ def test_the_heard_pitch_reads_the_note_an_image_was_made_from() -> None:
 def test_measuring_a_morph_path_asks_for_at_least_two_weights() -> None:
     canonicalizer = CANONICALIZER_REGISTRY["mel"]()
     codec = IdentityCodec(canonicalizer.geometry)
-    latent = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
+    latent = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))))
 
     with pytest.raises(ValueError, match="at least two weights"):
         morph_plausibility(
@@ -247,8 +250,8 @@ def test_a_straight_line_through_a_grid_of_decibels_thins_out_what_two_sounds_do
     """The midpoint of a tone and a noise burst on a lossless grid keeps a fraction of either's energy."""
     canonicalizer = CANONICALIZER_REGISTRY["mel"]()
     codec = IdentityCodec(canonicalizer.geometry)
-    first = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
-    second = codec.encode(canonicalizer.canonicalize(noise_burst(TEST_FRAME_COUNT, seed=1)))
+    first = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))))
+    second = codec.encode(canonicalizer.canonicalize(prepare_mono(noise_burst(TEST_FRAME_COUNT, seed=1))))
 
     plausibility = morph_plausibility(
         MorphEndpoint(sample_hash=FIRST_HASH, latent=first),

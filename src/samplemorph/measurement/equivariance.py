@@ -7,6 +7,7 @@ import numpy as np
 
 from samplecore.waveform import resample_by_semitones
 from samplemorph.canonicalizers import Canonicalizer
+from samplemorph.canonicalizers.common import PreparedMono
 from samplemorph.measurement.comparison import grid_distance
 from samplemorph.measurement.corpus import ProbeSample, unrelated_pairs
 
@@ -78,7 +79,9 @@ def equivariance_trials(
     for probe in probes:
         reference = canonicalizer.canonicalize(probe.mono)
         for semitone_offset in semitone_offsets:
-            retuned = canonicalizer.canonicalize(resample_by_semitones(probe.mono, semitones=semitone_offset))
+            retuned = canonicalizer.canonicalize(
+                PreparedMono(resample_by_semitones(probe.mono, semitones=semitone_offset))
+            )
             reported = retuned.conditioners.translation_semitones - reference.conditioners.translation_semitones
             trials.append(
                 EquivarianceTrial(

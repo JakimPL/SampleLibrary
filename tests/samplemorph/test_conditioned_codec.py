@@ -6,6 +6,8 @@ import numpy as np
 import pytest
 import torch
 
+from samplecore.hashing import file_sha256
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.canonicalizers.log_frequency import build_log_frequency_canonicalizer
 from samplemorph.codecs.conditioned import (
     ConditionedCodec,
@@ -76,6 +78,7 @@ def _store_codec(library_root: Path, layout: ResidualLayout = ResidualLayout.VEC
         geometry=log_frequency_geometry(),
         shape=shape,
         descriptor=DESCRIPTOR_NAME,
+        descriptor_sha256=file_sha256(descriptor_path(library_root, name=DESCRIPTOR_NAME)),
         epochs=1,
         trained_sample_count=8,
         random_seed=0,
@@ -144,7 +147,7 @@ def test_a_stored_codec_encodes_and_decodes_an_image_beside_its_descriptor(tmp_p
     _store_descriptor(tmp_path)
     path = _store_codec(tmp_path)
     canonicalizer = build_log_frequency_canonicalizer()
-    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))
+    image = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
 
     codec = load_conditioned_codec(path, library_root=tmp_path, device=torch.device("cpu"))
     latent = codec.encode(image)
@@ -162,7 +165,7 @@ def test_a_map_codec_carries_its_residual_flattened_in_the_latent(tmp_path: Path
     _store_descriptor(tmp_path)
     path = _store_codec(tmp_path, ResidualLayout.MAP)
     canonicalizer = build_log_frequency_canonicalizer()
-    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))
+    image = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
 
     codec = load_conditioned_codec(path, library_root=tmp_path, device=torch.device("cpu"))
     latent = codec.encode(image)
@@ -179,8 +182,8 @@ def test_a_morph_between_two_latents_decodes_to_a_grid(tmp_path: Path, layout: R
     _store_descriptor(tmp_path)
     codec = load_conditioned_codec(_store_codec(tmp_path, layout), library_root=tmp_path, device=torch.device("cpu"))
     canonicalizer = build_log_frequency_canonicalizer()
-    first = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
-    second = codec.encode(canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=330.0)))
+    first = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))))
+    second = codec.encode(canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=330.0))))
 
     halfway = codec.decode(LinearMorpher().morph(first, second, weights=MorphWeights.uniform(0.5)))
 
@@ -191,3 +194,19 @@ def test_a_morph_between_two_latents_decodes_to_a_grid(tmp_path: Path, layout: R
 def test_a_missing_codec_says_so(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="no conditioned codec"):
         load_conditioned_codec(codec_path(tmp_path, name="absent"), library_root=tmp_path, device=torch.device("cpu"))
+
+
+def test_a_codec_whose_descriptor_changed_since_it_was_trained_is_refused(tmp_path: Path) -> None:
+    """A codec decodes from what its own descriptor says, so another file under that name is another codec's input."""
+    _store_descriptor(tmp_path)
+    path = _store_codec(tmp_path)
+    torch.manual_seed(7)
+    retrained = torch.load(descriptor_path(tmp_path, name=DESCRIPTOR_NAME), weights_only=True)
+    save_descriptor(
+        descriptor_path(tmp_path, name=DESCRIPTOR_NAME),
+        GridDescriptor(_descriptor_shape()),
+        DescriptorDescription.model_validate_json(str(retrained["description"])),
+    )
+
+    with pytest.raises(ValueError, match="another tiny-descriptor descriptor"):
+        load_conditioned_codec(path, library_root=tmp_path, device=torch.device("cpu"))

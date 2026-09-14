@@ -25,6 +25,7 @@ def run_descriptor_training(
     What the run was asked to do reaches the record before the first epoch, together with which
     cache and which teacher it read, so a pass that ends badly is still identifiable.
     """
+    data = DescriptorDataModule(corpus, settings=settings)
     begin_cached_run(
         placement,
         settings=settings.run,
@@ -32,7 +33,6 @@ def run_descriptor_training(
         | {"teacher_experiment_id": str(corpus.teacher_experiment_id), "labeled_sample_count": str(len(corpus.labels))},
         cache=corpus.cache,
     )
-    data = DescriptorDataModule(corpus, settings=settings)
     module = DescriptorTrainingModule(
         DescriptorShape(
             band_count=corpus.cache.description.band_count,

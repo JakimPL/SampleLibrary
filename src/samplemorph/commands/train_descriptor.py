@@ -8,7 +8,7 @@ from sqlalchemy import Connection
 
 from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
-from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
+from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from, train_and_report
 from samplemorph.descriptors.grid_descriptor import DEFAULT_WIDTH
 from samplemorph.descriptors.learned import DEFAULT_DESCRIPTOR_NAME
 from samplemorph.training.descriptor_cache import DEFAULT_GRID_CACHE_NAME, grid_cache_directory, open_grid_cache
@@ -93,48 +93,54 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     from samplecore.tracking.session import open_run
     from samplemorph.training.descriptor_data import load_descriptor_corpus
     from samplemorph.training.descriptor_run import run_descriptor_training
-    from samplemorph.training.runs import RunPlacement
+    from samplemorph.training.runs import RunFamily, RunPlacement, TrainingOutcome, check_resume_point
 
     cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))
-    settings = DescriptorTrainingSettings(
-        run=run_settings_from(arguments),
-        weights=DescriptorLossWeights(
-            distillation=arguments.distillation_weight,
-            retuning=arguments.retuning_weight,
-            labels=arguments.label_weight,
-        ),
-        width=arguments.width,
-        label_holdout_share=arguments.label_holdout,
-        labeled_per_batch=arguments.labeled_per_batch,
-    )
-    corpus = load_descriptor_corpus(
-        connection,
-        cache=cache,
-        library_root=config.library_root,
-        teacher_experiment_id=arguments.teacher_experiment,
-        settings=settings,
-    )
-    _logger.info(
-        "Training over %d cached samples, %d labeled by hand of which %d are held out.",
-        corpus.sample_count,
-        len(corpus.labels),
-        len(corpus.held_out_labeled_positions),
-    )
-    with open_run(
-        config.library_root,
-        recorded=not arguments.no_tracking,
-        experiment_name=DESCRIPTOR_EXPERIMENT_NAME,
-        run_name=arguments.descriptor,
-    ) as tracker:
-        outcome = run_descriptor_training(
-            corpus,
-            settings=settings,
-            placement=RunPlacement(
-                library_root=config.library_root,
-                model_name=arguments.descriptor,
-                tracker=tracker,
-                resume=arguments.resume,
-            ),
-        )
 
-    report_outcome(outcome)
+    def train() -> TrainingOutcome:
+        check_resume_point(
+            config.library_root, family=RunFamily.DESCRIPTOR, name=arguments.descriptor, resume=arguments.resume
+        )
+        settings = DescriptorTrainingSettings(
+            run=run_settings_from(arguments),
+            weights=DescriptorLossWeights(
+                distillation=arguments.distillation_weight,
+                retuning=arguments.retuning_weight,
+                labels=arguments.label_weight,
+            ),
+            width=arguments.width,
+            label_holdout_share=arguments.label_holdout,
+            labeled_per_batch=arguments.labeled_per_batch,
+        )
+        corpus = load_descriptor_corpus(
+            connection,
+            cache=cache,
+            library_root=config.library_root,
+            teacher_experiment_id=arguments.teacher_experiment,
+            settings=settings,
+        )
+        _logger.info(
+            "Training over %d cached samples, %d labeled by hand of which %d are held out.",
+            corpus.sample_count,
+            len(corpus.labels),
+            len(corpus.held_out_labeled_positions),
+        )
+        with open_run(
+            config.library_root,
+            recorded=not arguments.no_tracking,
+            experiment_name=DESCRIPTOR_EXPERIMENT_NAME,
+            run_name=arguments.descriptor,
+        ) as tracker:
+            return run_descriptor_training(
+                corpus,
+                settings=settings,
+                placement=RunPlacement(
+                    library_root=config.library_root,
+                    family=RunFamily.DESCRIPTOR,
+                    model_name=arguments.descriptor,
+                    tracker=tracker,
+                    resume=arguments.resume,
+                ),
+            )
+
+    train_and_report(train)

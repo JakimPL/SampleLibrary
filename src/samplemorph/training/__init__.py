@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Final, Protocol
 
+import numpy as np
+from numpy.typing import NDArray
+
 from samplemorph.codecs import SampleCodec
-from samplemorph.images import SoundImage
 
 
 class CodecTrainer(Protocol):
-    """Fits a codec to a body of sound images, producing one ready to encode and decode.
+    """Fits a codec to a body of sound images laid out one grid per row, producing one ready to encode and decode.
 
     Training is kept in its own package so that decoding reaches for none of the machinery fitting
     needs: the served side of this project depends on a `SampleCodec` and never on a trainer, and
     the import contracts hold that apart.
     """
 
-    def fit(self, images: Sequence[SoundImage]) -> SampleCodec: ...
+    def fit(self, grids: NDArray[np.float32]) -> SampleCodec: ...
 
 
 # Every worker process a trainer or a cache builder starts is a fresh interpreter, which is what

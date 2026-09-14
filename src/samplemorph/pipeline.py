@@ -14,7 +14,7 @@ from samplecore.storage import audio_store
 from samplecore.storage.playback_rates import resolved_playback_rates
 from samplecore.waveform import heard_at_rate
 from samplemorph.canonicalizers import Canonicalizer
-from samplemorph.canonicalizers.common import prepare_mono
+from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
 from samplemorph.codecs import SampleCodec
 from samplemorph.images import SampleLatent
 from samplemorph.model_store import MorphModel, MorphModelDescription, load_named_model
@@ -33,7 +33,7 @@ SECOND_ENDPOINT_WEIGHT: Final[float] = 1.0
 class EncodedWaveform:
     """A waveform carried into the latent space, beside the mono it was read from."""
 
-    mono: NDArray[np.float64]
+    mono: PreparedMono
     latent: SampleLatent
 
 

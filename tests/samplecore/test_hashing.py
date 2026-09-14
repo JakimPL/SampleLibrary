@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+from pathlib import Path
+
 import numpy as np
 from trackmod.core.samples.depth import BitDepth
 
-from samplecore.hashing import compute_module_hash, compute_sample_hash
+from samplecore.hashing import compute_module_hash, compute_sample_hash, file_sha256
 from samplecore.models.channels import ChannelLayout
 
 MONO = ChannelLayout.MONO
@@ -72,3 +75,10 @@ def test_a_changed_module_byte_changes_the_hash() -> None:
     changed = b"a fabricated module fila"
 
     assert compute_module_hash(original) != compute_module_hash(changed)
+
+
+def test_a_file_digest_is_the_sha256_of_its_bytes(tmp_path: Path) -> None:
+    path = tmp_path / "model.pt"
+    path.write_bytes(b"weights" * 10_000)
+
+    assert file_sha256(path) == hashlib.sha256(b"weights" * 10_000).hexdigest()

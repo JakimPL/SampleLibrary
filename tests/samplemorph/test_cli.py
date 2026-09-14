@@ -141,7 +141,7 @@ def test_fitting_writes_a_model_under_the_library_root(
     _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
+    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
 
     assert model_path(tmp_path, name=MODEL_NAME).exists()
     assert "Fitted" in capsys.readouterr().out
@@ -215,7 +215,7 @@ def test_rendering_a_sample_the_catalog_lacks_says_so(
 ) -> None:
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
+    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
 
     with pytest.raises(ValueError, match="holds no sample"):
         main(
@@ -344,20 +344,14 @@ def test_probes_are_measured_through_the_representation_and_through_a_fitted_mod
     assert model_folder.name.endswith(hashes[0][:12])
 
 
-def test_training_a_restorer_on_an_axis_the_vocoder_never_reads_says_so(
-    connection: Connection,
-    _database_url: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+def test_training_a_restorer_on_an_axis_the_vocoder_never_reads_is_refused_by_the_flags(
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _seed_catalog(connection, tmp_path)
-    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    with pytest.raises(SystemExit) as raised:
+        main(["train-restorer", "--canonicalizer", "mel", "--workers", "0", "--device", "cpu"], prog=PROGRAM)
 
-    with pytest.raises(ValueError, match="is a mel one"):
-        main(
-            ["train-restorer", "--canonicalizer", "mel", "--workers", "0", "--device", "cpu", "--no-tracking"],
-            prog=PROGRAM,
-        )
+    assert raised.value.code == 2
+    assert "invalid choice: 'mel'" in capsys.readouterr().err
 
 
 def test_rendering_through_a_restorer_that_was_never_trained_says_so(
@@ -368,7 +362,7 @@ def test_rendering_through_a_restorer_that_was_never_trained_says_so(
 ) -> None:
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    main(["fit", "--canonicalizer", "mel", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
+    main(["fit", "--latent-size", str(LATENT_SIZE), "--model", MODEL_NAME], prog=PROGRAM)
 
     with pytest.raises(FileNotFoundError, match="no restorer is stored"):
         main(
@@ -537,3 +531,87 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
     assert codec_path(tmp_path, name=CODEC_NAME).exists()
     assert (output / "morph_050.wav").exists()
     assert json.loads((output / "manifest.json").read_text())["model"]["codec"] == "conditioned"
+
+
+def test_measuring_with_no_probe_ends_before_any_model_loads(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    empty = tmp_path / "hashes.txt"
+    empty.write_text("\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main(["measure", "--model", "absent", "--hashes", str(empty), "--output", str(tmp_path / "out")], prog=PROGRAM)
+
+    assert raised.value.code == 1
+    assert "No probe to measure" in capsys.readouterr().err
+
+
+def test_fitting_over_a_library_with_no_eligible_sample_says_so(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    with pytest.raises(SystemExit) as raised:
+        main(["fit", "--model", MODEL_NAME], prog=PROGRAM)
+
+    assert raised.value.code == 1
+    reported = capsys.readouterr().err
+    assert "No sample lies between" in reported
+    assert "--latent-size" not in reported
+
+
+def test_continuing_a_training_run_that_never_ran_ends_with_one_message(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    with pytest.raises(SystemExit) as raised:
+        main(["train-restorer", "--resume", "--workers", "0", "--device", "cpu", "--no-tracking"], prog=PROGRAM)
+
+    assert raised.value.code == 1
+    assert "Trained nothing: --resume continues from" in capsys.readouterr().err
+
+
+def test_a_teacher_whose_vectors_a_descriptor_cannot_answer_in_is_refused(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    hashes = _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    teacher_id = PostgresExperimentRepository(connection).create(backend_name="librosa", label=None, params={})
+    PostgresSampleFeatureVectorRepository(connection).insert_many(
+        [
+            SampleFeatureVector(
+                experiment_id=teacher_id, sample_hash=sample_hash, vector=(0.1, 0.2, 0.3), computed_at=datetime.now(UTC)
+            )
+            for sample_hash in hashes
+        ]
+    )
+    connection.commit()
+    main(["cache-grids", "--cache", "small-teacher", "--views", "1", "--workers", "0"], prog=PROGRAM)
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            ["train-descriptor", "--cache", "small-teacher", "--teacher-experiment", str(teacher_id), "--no-tracking"],
+            prog=PROGRAM,
+        )
+
+    assert raised.value.code == 1
+    assert "vectors of 3 numbers" in capsys.readouterr().err

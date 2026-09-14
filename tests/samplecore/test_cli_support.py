@@ -13,6 +13,7 @@ from samplecore.cli_support import (
     integer_at_least,
     integer_between,
     load_config_or_exit,
+    positive_multiple_of,
 )
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, LibraryConfig
 
@@ -137,3 +138,20 @@ def test_a_bounded_integer_option_is_reported_as_a_usage_error(capsys: pytest.Ca
 
     assert raised.value.code == 2
     assert "must be at least 1, not 0" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        RefusedIntegerCase(raw_value="12", reason="multiple of 8"),
+        RefusedIntegerCase(raw_value="0", reason="at least 8"),
+    ],
+    ids=("between steps", "no step at all"),
+)
+def test_a_stepped_option_refuses_a_value_off_its_steps(case: RefusedIntegerCase) -> None:
+    with pytest.raises(argparse.ArgumentTypeError, match=case.reason):
+        positive_multiple_of(8)(case.raw_value)
+
+
+def test_a_stepped_option_reads_a_value_on_its_steps() -> None:
+    assert positive_multiple_of(8)("48") == 48

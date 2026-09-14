@@ -4,7 +4,7 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 
-from samplemorph.canonicalizers.common import prepare_mono, restore_spectrogram, to_sound_image
+from samplemorph.canonicalizers.common import PreparedMono, restore_spectrogram, to_sound_image
 from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, MelGeometry, mel_geometry
 from samplemorph.images import AnalysisSpectrogram, SoundImage
 
@@ -27,8 +27,7 @@ class MelCanonicalizer:
     def geometry(self) -> MelGeometry:
         return self._geometry
 
-    def canonicalize(self, waveform: NDArray[np.float64]) -> SoundImage:
-        mono = prepare_mono(waveform)
+    def canonicalize(self, mono: PreparedMono) -> SoundImage:
         bands = librosa.feature.melspectrogram(
             y=mono,
             sr=self._geometry.analysis_rate_hz,

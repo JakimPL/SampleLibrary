@@ -31,17 +31,16 @@ def run_restorer_training(
         ValueError: the corpus is canonicalized on an axis the restored vocoder does not read.
     """
     gaussian_log_frequency(corpus.canonicalizer.geometry)
+    data: AnalysisDataModule[RestorerExample, RestorerBatchItem] = AnalysisDataModule(
+        corpus,
+        family=ExampleFamily(derive=restorer_example, crop=crop_item, crop_frames=settings.crop_frames),
+        run=settings.run,
+    )
     seed_everything(settings.run.random_seed, workers=True)
     placement.tracker.log_parameters(
         settings.as_parameters()
         | {"canonicalizer": corpus.canonicalizer_name}
         | geometry_parameters(corpus.canonicalizer.geometry)
-    )
-
-    data: AnalysisDataModule[RestorerExample, RestorerBatchItem] = AnalysisDataModule(
-        corpus,
-        family=ExampleFamily(derive=restorer_example, crop=crop_item, crop_frames=settings.crop_frames),
-        run=settings.run,
     )
     module = RestorerTrainingModule(RestorerShape(channels=settings.channels), learning_rate=settings.run.learning_rate)
     path = restorer_path(corpus.library_root, name=placement.model_name)

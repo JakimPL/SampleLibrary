@@ -5,13 +5,12 @@ from pathlib import Path
 from typing import Final
 
 import numpy as np
-from numpy.typing import NDArray
 
 from samplecore.auditory.sound_type import SoundType, sound_type_reading
 from samplecore.models.sample import Sample
 from samplecore.storage import audio_store
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
-from samplemorph.canonicalizers.common import prepare_mono
+from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
 
 DEFAULT_PROBE_FRAME_FLOOR: Final[int] = 4_000
 DEFAULT_PROBE_FRAME_CEILING: Final[int] = 200_000
@@ -27,7 +26,7 @@ class ProbeSample:
     """
 
     sample: Sample
-    mono: NDArray[np.float64]
+    mono: PreparedMono
     sound_type: SoundType
 
 
@@ -41,7 +40,7 @@ def read_probe_samples(library_root: Path, samples: tuple[Sample, ...]) -> tuple
     return tuple(_probe(sample, prepare_mono(audio_store.read(library_root, sample).pcm)) for sample in samples)
 
 
-def _probe(sample: Sample, mono: NDArray[np.float64]) -> ProbeSample:
+def _probe(sample: Sample, mono: PreparedMono) -> ProbeSample:
     return ProbeSample(
         sample=sample, mono=mono, sound_type=sound_type_reading(mono, sample_rate_hz=NOMINAL_WAV_RATE).sound_type
     )

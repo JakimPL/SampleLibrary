@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 from typing import Final
 
 import numpy as np
@@ -47,3 +48,9 @@ def compute_equivalence_class_hash(member_hashes: tuple[str, ...]) -> str:
     header = f"{EQUIVALENCE_CLASS_HASH_DOMAIN}\0".encode("ascii")
     payload = "\0".join(sorted(member_hashes)).encode("ascii")
     return hashlib.sha256(header + payload).hexdigest()
+
+
+def file_sha256(path: Path) -> str:
+    """The sha256 of a file's bytes, read in chunks so a model file of any size hashes in flat memory."""
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()

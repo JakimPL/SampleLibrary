@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Generic, Protocol, TypeVar
 
 import numpy as np
-import torch
 from numpy.typing import NDArray
 from torch.utils.data import Dataset
 
@@ -13,6 +12,7 @@ from samplecore.models.sample import Sample
 from samplecore.storage import audio_store
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.geometry import Geometry
+from samplemorph.training.epoch_draws import CropRequest
 
 Example = TypeVar("Example")
 Example_co = TypeVar("Example_co", covariant=True)
@@ -52,10 +52,9 @@ class DerivedExampleSet(Dataset[Item], Generic[Example, Item]):
     own worker processes instead. That also keeps the training set exactly current with the
     canonicalizer: a change to the grid changes what this yields, with nothing stale to invalidate.
 
-    Which span of a sample gets taken follows the loader's own seed for the epoch, so a long run
-    sees many crops of each sample rather than the same one over and over. Setting torch's seed
-    before a run fixes the whole sequence, which keeps two runs of one configuration alike. A
-    silent sample yields the next sample along instead, so every index answers.
+    Each request names a sample and the seed its crop is drawn from, which the loader's sampler
+    chooses per epoch, so a long run sees many crops of each sample and two runs of one seed see
+    the same ones. A silent sample yields the next sample along instead, so every request answers.
     """
 
     def __init__(
@@ -64,20 +63,19 @@ class DerivedExampleSet(Dataset[Item], Generic[Example, Item]):
         *,
         library_root: Path,
         canonicalizer: Canonicalizer,
-        random_seed: int,
         family: ExampleFamily[Example, Item],
     ) -> None:
         self._samples = samples
         self._library_root = library_root
         self._canonicalizer = canonicalizer
-        self._random_seed = random_seed
         self._family = family
 
     def __len__(self) -> int:
         return len(self._samples)
 
-    def __getitem__(self, index: int) -> Item:
-        generator = np.random.default_rng(self._random_seed + index + torch.initial_seed())
+    def __getitem__(self, request: CropRequest) -> Item:
+        index, crop_seed = request
+        generator = np.random.default_rng(crop_seed)
         for offset in range(len(self._samples)):
             position = (index + offset) % len(self._samples)
             example = self._family.derive(

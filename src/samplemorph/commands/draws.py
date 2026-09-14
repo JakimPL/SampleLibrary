@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Collection
 
 from sqlalchemy import Connection
 
@@ -12,11 +13,13 @@ from samplemorph.measurement.corpus import DEFAULT_PROBE_FRAME_CEILING, DEFAULT_
 from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
 
 
-def add_canonicalizer_argument(parser: argparse.ArgumentParser, *, help_text: str) -> None:
-    """The axis flags every command that canonicalizes shares, declared once so each reads the same."""
-    parser.add_argument(
-        "--canonicalizer", choices=sorted(CANONICALIZER_REGISTRY), default=DEFAULT_CANONICALIZER_NAME, help=help_text
-    )
+def add_canonicalizer_argument(parser: argparse.ArgumentParser, *, help_text: str, names: Collection[str]) -> None:
+    """The axis flags every command that canonicalizes shares, declared once so each reads the same.
+
+    `names` are the registered axes the command accepts: every one for a command that analyzes,
+    the renderable ones for a command that fits what is later heard.
+    """
+    parser.add_argument("--canonicalizer", choices=sorted(names), default=DEFAULT_CANONICALIZER_NAME, help=help_text)
     parser.add_argument(
         "--anchor",
         type=Anchor,

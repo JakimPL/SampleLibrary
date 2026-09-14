@@ -4,9 +4,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.codecs.identity import IdentityCodec
-from samplemorph.geometry import constant_q_geometry, mel_geometry
+from samplemorph.geometry import Geometry, constant_q_geometry, mel_geometry
+from samplemorph.images import SoundImage
 from samplemorph.model_store import (
     IDENTITY_CODEC_NAME,
     MODELS_DIRECTORY_NAME,
@@ -19,7 +22,7 @@ from samplemorph.model_store import (
     save_model,
 )
 from samplemorph.registries import CANONICALIZER_REGISTRY
-from samplemorph.training.principal_components import PrincipalComponentTrainer
+from samplemorph.training.principal_components import PrincipalComponentTrainer, stack_grids
 from tests.samplemorph.conftest import harmonic_tone
 
 LATENT_SIZE = 4
@@ -31,7 +34,7 @@ MODEL_NAME = "under-test"
 def _images() -> list:
     canonicalizer = CANONICALIZER_REGISTRY["mel"]()
     return [
-        canonicalizer.canonicalize(harmonic_tone(FIT_FRAME_COUNT, frequency=110.0 * (1.0 + index / 3.0)))
+        canonicalizer.canonicalize(prepare_mono(harmonic_tone(FIT_FRAME_COUNT, frequency=110.0 * (1.0 + index / 3.0))))
         for index in range(IMAGE_COUNT)
     ]
 
@@ -58,7 +61,9 @@ def test_a_model_path_sits_under_the_library_root(tmp_path: Path) -> None:
 
 def test_a_projection_survives_a_write_and_a_read(tmp_path: Path) -> None:
     images = _images()
-    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(images)
+    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(
+        _stacked(images, geometry=mel_geometry())
+    )
     path = model_path(tmp_path, name=MODEL_NAME)
 
     save_model(
@@ -113,3 +118,7 @@ def test_a_missing_model_names_the_commands_that_write_one(tmp_path: Path) -> No
 
     assert str(model_path(tmp_path, name=MODEL_NAME)) in str(raised.value)
     assert "samplelibrary morph train-codec" in str(raised.value)
+
+
+def _stacked(images: list[SoundImage], *, geometry: Geometry) -> NDArray[np.float32]:
+    return stack_grids(images, count=len(images), geometry=geometry)

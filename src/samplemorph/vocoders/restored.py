@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
+from samplecore.storage.atomic import write_atomically
 from samplemorph.canonicalizers.linear_axis import onto_linear_axis
 from samplemorph.geometry import LogFrequencyGeometry
 from samplemorph.images import AnalysisSpectrogram
@@ -100,9 +101,9 @@ def restorer_path(library_root: Path, *, name: str = DEFAULT_RESTORER_NAME) -> P
 
 
 def save_restorer(path: Path, model: Restorer, description: RestorerDescription) -> None:
-    """Write the weights beside the description that says how to rebuild the network around them."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"description": description.model_dump_json(), "state": model.state_dict()}, path)
+    """Write the weights beside the description that says how to rebuild the network around them, in place whole."""
+    stored = {"description": description.model_dump_json(), "state": model.state_dict()}
+    write_atomically(path, lambda stream: torch.save(stored, stream))
 
 
 def load_restorer(path: Path, *, device: torch.device) -> RestoredPghiVocoder:

@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-import numpy as np
-from numpy.typing import NDArray
-
+from samplemorph.canonicalizers.common import PreparedMono
 from samplemorph.geometry import Geometry
 from samplemorph.images import AnalysisSpectrogram, SoundImage
 
@@ -18,7 +16,8 @@ class Canonicalizer(Protocol):
     along it; the translation is measured, moved out of the grid, and carried as a conditioner, so
     the grid describes timbre and the conditioners describe the reading it was heard at.
 
-    `restore` returns a magnitude spectrogram rather than audio, which leaves phase estimation to a
+    `canonicalize` reads frames already prepared by `prepare_mono`, which is where the pipeline takes
+    audio in. `restore` returns a magnitude spectrogram rather than audio, which leaves phase estimation to a
     `Vocoder` and keeps the two questions -- what the representation loses, and what the phase
     estimate loses -- answerable one at a time.
     """
@@ -26,6 +25,6 @@ class Canonicalizer(Protocol):
     @property
     def geometry(self) -> Geometry: ...
 
-    def canonicalize(self, waveform: NDArray[np.float64]) -> SoundImage: ...
+    def canonicalize(self, mono: PreparedMono) -> SoundImage: ...
 
     def restore(self, image: SoundImage) -> AnalysisSpectrogram: ...

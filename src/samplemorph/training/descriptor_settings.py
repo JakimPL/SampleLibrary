@@ -5,6 +5,7 @@ from typing import Final
 
 from samplemorph.descriptors.grid_descriptor import DEFAULT_WIDTH
 from samplemorph.training.descriptor_losses import DescriptorLossWeights
+from samplemorph.training.refusals import TrainingRefused
 from samplemorph.training.run_settings import RunSettings
 
 DEFAULT_DESCRIPTOR_EPOCHS: Final[int] = 40
@@ -46,7 +47,7 @@ class DescriptorTrainingSettings:
                 f"the held-out share of labels lies strictly between 0 and 1, got {self.label_holdout_share}"
             )
         if self.labeled_per_batch >= self.run.batch_size:
-            raise ValueError(
+            raise TrainingRefused(
                 f"a batch of {self.run.batch_size} cannot carry {self.labeled_per_batch} labeled samples and any others"
             )
 

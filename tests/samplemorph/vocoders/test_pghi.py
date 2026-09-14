@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.canonicalizers.log_frequency import LogFrequencyCanonicalizer
 from samplemorph.canonicalizers.mel import build_mel_canonicalizer
 from samplemorph.geometry import AnalysisWindow, analysis_taper, log_frequency_geometry
@@ -48,7 +49,7 @@ def test_the_hann_taper_is_the_periodic_one_the_analysis_overlaps_cleanly() -> N
 def test_the_integrated_phase_makes_a_tone_audible_close_to_its_level() -> None:
     canonicalizer = _gaussian_canonicalizer()
     tone = harmonic_tone(4 * TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0]
-    spectrogram = canonicalizer.restore(canonicalizer.canonicalize(tone))
+    spectrogram = canonicalizer.restore(canonicalizer.canonicalize(prepare_mono(tone)))
 
     reconstruction = PghiVocoder().synthesize(spectrogram)
 
@@ -60,7 +61,7 @@ def test_the_integrated_phase_makes_a_tone_audible_close_to_its_level() -> None:
 def test_the_integrated_phase_holds_a_tone_steady() -> None:
     canonicalizer = _gaussian_canonicalizer()
     tone = harmonic_tone(4 * TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0]
-    spectrogram = canonicalizer.restore(canonicalizer.canonicalize(tone))
+    spectrogram = canonicalizer.restore(canonicalizer.canonicalize(prepare_mono(tone)))
 
     integrated = modulation_spectrum_distance(PghiVocoder().synthesize(spectrogram), tone)
 
@@ -70,7 +71,7 @@ def test_the_integrated_phase_holds_a_tone_steady() -> None:
 def test_a_hann_analysis_is_refused_by_name() -> None:
     canonicalizer = LogFrequencyCanonicalizer(log_frequency_geometry(analysis_window=AnalysisWindow.HANN))
     spectrogram = canonicalizer.restore(
-        canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0])
+        canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0]))
     )
 
     with pytest.raises(ValueError, match="hann taper"):
@@ -80,7 +81,7 @@ def test_a_hann_analysis_is_refused_by_name() -> None:
 def test_another_axis_is_refused_by_name() -> None:
     canonicalizer = build_mel_canonicalizer()
     spectrogram = canonicalizer.restore(
-        canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0])
+        canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0]))
     )
 
     with pytest.raises(ValueError, match="is a mel one"):

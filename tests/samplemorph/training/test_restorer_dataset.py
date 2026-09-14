@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
@@ -12,7 +13,10 @@ from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplemorph.registries import CANONICALIZER_REGISTRY
+from samplemorph.training.analysis_data import AnalysisCorpus, AnalysisDataModule
 from samplemorph.training.derived_examples import DerivedExampleSet, ExampleFamily
+from samplemorph.training.epoch_draws import EpochCropSampler, FixedCropSampler
+from samplemorph.training.refusals import TrainingDataShortfall
 from samplemorph.training.restorer_dataset import (
     SILENCE_DECIBELS,
     RestorerExample,
@@ -20,6 +24,7 @@ from samplemorph.training.restorer_dataset import (
     crop_to,
     restorer_example,
 )
+from samplemorph.training.run_settings import RunSettings
 from tests.samplemorph.conftest import harmonic_tone
 
 FRAME_COUNT = 32768
@@ -97,11 +102,67 @@ def test_a_training_set_yields_one_pair_per_sample(connection: Connection, tmp_p
         tuple(samples),
         library_root=tmp_path,
         canonicalizer=CANONICALIZER_REGISTRY["log_frequency"](),
-        random_seed=0,
         family=ExampleFamily(derive=restorer_example, crop=crop_item, crop_frames=CROP_FRAMES),
     )
 
-    least_squares, clean = training_set[0]
+    least_squares, clean = training_set[(0, 0)]
     assert len(training_set) == 3
     assert least_squares.shape == clean.shape
     assert least_squares.shape[1] == CROP_FRAMES
+
+
+def _requests(sampler: EpochCropSampler, epoch: int) -> list[tuple[int, int]]:
+    sampler.set_epoch(epoch)
+    return list(sampler)
+
+
+def test_training_crops_are_drawn_afresh_every_epoch_and_replay_under_one_seed() -> None:
+    """A crop fixed per sample would show a long run the same span of every sample, epoch after epoch."""
+    first = _requests(EpochCropSampler(12, random_seed=0), 0)
+
+    assert sorted(index for index, _ in first) == list(range(12))
+    assert _requests(EpochCropSampler(12, random_seed=0), 1) != first
+    assert _requests(EpochCropSampler(12, random_seed=0), 0) == first
+
+
+def test_validation_crops_stay_where_they_were_every_epoch() -> None:
+    sampler = FixedCropSampler(12, random_seed=0)
+
+    assert list(sampler) == list(sampler) == list(FixedCropSampler(12, random_seed=0))
+    assert [index for index, _ in sampler] == list(range(12))
+
+
+def test_a_crop_seed_decides_the_span_a_request_reads() -> None:
+    example = _example()
+
+    first = crop_to(example, crop_frames=CROP_FRAMES, generator=np.random.default_rng(11))
+    again = crop_to(example, crop_frames=CROP_FRAMES, generator=np.random.default_rng(11))
+
+    np.testing.assert_array_equal(first.least_squares, again.least_squares)
+
+
+def _sample(index: int) -> Sample:
+    return Sample(
+        hash=format(index + 1, "064x"), depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=FRAME_COUNT
+    )
+
+
+@pytest.mark.parametrize(
+    ("sample_count", "batch_size", "reason"),
+    [(1, 1, "nothing to train on"), (20, 32, "fill no batch of 32; set --batch")],
+    ids=("too few to hold any back", "too few for one batch"),
+)
+def test_a_corpus_too_small_to_train_on_is_refused(sample_count: int, batch_size: int, reason: str) -> None:
+    corpus = AnalysisCorpus(
+        samples=tuple(_sample(index) for index in range(sample_count)),
+        library_root=Path("unused"),
+        canonicalizer=CANONICALIZER_REGISTRY["log_frequency"](),
+        canonicalizer_name="log_frequency",
+    )
+
+    with pytest.raises(TrainingDataShortfall, match=reason):
+        AnalysisDataModule(
+            corpus,
+            family=ExampleFamily(derive=restorer_example, crop=crop_item, crop_frames=CROP_FRAMES),
+            run=RunSettings(batch_size=batch_size, worker_count=0, random_seed=0),
+        )

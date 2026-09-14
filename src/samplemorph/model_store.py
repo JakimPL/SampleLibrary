@@ -8,6 +8,7 @@ import numpy as np
 from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
+from samplecore.storage.atomic import write_atomically
 from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.codecs.principal_components import PrincipalComponentCodec
@@ -94,17 +95,15 @@ def load_named_model(library_root: Path, *, name: str, device: str) -> MorphMode
 
 
 def save_model(path: Path, model: MorphModel) -> None:
-    """Write a fitted codec's arrays and its description into one file.
+    """Write a fitted codec's arrays and its description into one file, put in place whole.
 
     Raises:
         ValueError: the codec is of a kind this store has no writer for.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
     stored = dict(_codec_arrays(model.codec))
     stored[DESCRIPTION_KEY] = np.array(model.description.model_dump_json())
-    with path.open("wb") as handle:
-        # savez names every array through **kwds, which its own stub types as the bool `allow_pickle`.
-        np.savez(handle, **stored)  # type: ignore[arg-type]
+    # savez names every array through **kwds, which its own stub types as the bool `allow_pickle`.
+    write_atomically(path, lambda stream: np.savez(stream, **stored))  # type: ignore[arg-type]
 
 
 def load_model(path: Path) -> MorphModel:

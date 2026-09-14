@@ -7,7 +7,13 @@ import numpy as np
 import pytest
 
 from samplemorph.canonicalizers import Canonicalizer
-from samplemorph.canonicalizers.common import analysis_transform, bands_onto_linear_axis
+from samplemorph.canonicalizers.common import (
+    analysis_transform,
+    bands_onto_linear_axis,
+    prepare_mono,
+    to_sound_image,
+)
+from samplemorph.canonicalizers.log_frequency import band_weights
 from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_burst
@@ -34,7 +40,7 @@ CANONICALIZER_CASES = tuple(CanonicalizerCase(name=name) for name in sorted(CANO
 def test_canonicalize_returns_the_geometry_grid_shape(case: CanonicalizerCase) -> None:
     canonicalizer = case.build()
 
-    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0))
+    image = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0)))
 
     assert image.grid.shape == canonicalizer.geometry.grid_shape
 
@@ -43,8 +49,8 @@ def test_canonicalize_returns_the_geometry_grid_shape(case: CanonicalizerCase) -
 def test_canonicalize_returns_one_shape_whatever_the_input_length(case: CanonicalizerCase) -> None:
     canonicalizer = case.build()
 
-    short = canonicalizer.canonicalize(harmonic_tone(2048, frequency=440.0))
-    long = canonicalizer.canonicalize(harmonic_tone(16 * 2048, frequency=440.0))
+    short = canonicalizer.canonicalize(prepare_mono(harmonic_tone(2048, frequency=440.0)))
+    long = canonicalizer.canonicalize(prepare_mono(harmonic_tone(16 * 2048, frequency=440.0)))
 
     assert short.grid.shape == long.grid.shape
 
@@ -65,7 +71,7 @@ def test_a_hit_shorter_than_one_transform_is_analyzed_without_a_warning() -> Non
 def test_canonicalize_keeps_the_grid_finite_and_within_the_unit_range(case: CanonicalizerCase) -> None:
     canonicalizer = case.build()
 
-    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))
+    image = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
 
     assert np.all(np.isfinite(image.grid))
     assert image.grid.min() >= 0.0
@@ -77,7 +83,7 @@ def test_canonicalize_handles_a_percussive_noise_burst(case: CanonicalizerCase) 
     """A burst with no fundamental takes the same path a pitched tone does, uniformly."""
     canonicalizer = case.build()
 
-    image = canonicalizer.canonicalize(noise_burst(2048, seed=0))
+    image = canonicalizer.canonicalize(prepare_mono(noise_burst(2048, seed=0)))
 
     assert np.all(np.isfinite(image.grid))
 
@@ -88,8 +94,8 @@ def test_a_gain_change_leaves_the_grid_alone_and_moves_only_the_recorded_gain(ca
     canonicalizer = case.build()
     tone = harmonic_tone(TEST_FRAME_COUNT, frequency=330.0)
 
-    loud = canonicalizer.canonicalize(tone)
-    quiet = canonicalizer.canonicalize(tone * GAIN_FACTOR)
+    loud = canonicalizer.canonicalize(prepare_mono(tone))
+    quiet = canonicalizer.canonicalize(prepare_mono(tone * GAIN_FACTOR))
 
     assert np.allclose(loud.grid, quiet.grid)
     assert quiet.conditioners.log_gain == pytest.approx(loud.conditioners.log_gain + GAIN_FACTOR_IN_OCTAVES, abs=1e-6)
@@ -99,8 +105,8 @@ def test_a_gain_change_leaves_the_grid_alone_and_moves_only_the_recorded_gain(ca
 def test_the_recorded_duration_follows_the_frame_count(case: CanonicalizerCase) -> None:
     canonicalizer = case.build()
 
-    shorter = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0))
-    longer = canonicalizer.canonicalize(harmonic_tone(2 * TEST_FRAME_COUNT, frequency=440.0))
+    shorter = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0)))
+    longer = canonicalizer.canonicalize(prepare_mono(harmonic_tone(2 * TEST_FRAME_COUNT, frequency=440.0)))
 
     assert longer.conditioners.log_duration == pytest.approx(shorter.conditioners.log_duration + 1.0)
 
@@ -108,7 +114,7 @@ def test_the_recorded_duration_follows_the_frame_count(case: CanonicalizerCase) 
 @pytest.mark.parametrize("case", CANONICALIZER_CASES, ids=lambda case: case.name)
 def test_restore_returns_a_spectrogram_sounding_for_the_recorded_duration(case: CanonicalizerCase) -> None:
     canonicalizer = case.build()
-    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0))
+    image = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0)))
 
     spectrogram = canonicalizer.restore(image)
 
@@ -120,7 +126,7 @@ def test_restore_returns_a_spectrogram_sounding_for_the_recorded_duration(case: 
 def test_restoring_an_unmodified_image_recovers_the_peak_magnitude(case: CanonicalizerCase) -> None:
     """The gain the grid was normalized by comes back, so a reconstruction sits at its own level."""
     canonicalizer = case.build()
-    image = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0))
+    image = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0)))
 
     spectrogram = canonicalizer.restore(image)
 
@@ -132,9 +138,9 @@ def test_a_transposed_tone_lands_closer_than_unrelated_content(case: Canonicaliz
     """Aligning the picture is what makes one instrument at two pitches read as one instrument."""
     canonicalizer = CANONICALIZER_REGISTRY[case.name](anchor=Anchor.FUNDAMENTAL)
 
-    low = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0))
-    high = canonicalizer.canonicalize(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0))
-    unrelated = canonicalizer.canonicalize(noise_burst(TEST_FRAME_COUNT, seed=1))
+    low = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=220.0)))
+    high = canonicalizer.canonicalize(prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=440.0)))
+    unrelated = canonicalizer.canonicalize(prepare_mono(noise_burst(TEST_FRAME_COUNT, seed=1)))
 
     transposed_distance = float(np.sqrt(np.mean((low.grid - high.grid) ** 2)))
     unrelated_distance = float(np.sqrt(np.mean((low.grid - unrelated.grid) ** 2)))
@@ -161,3 +167,22 @@ def test_the_linear_axis_reads_silence_beyond_the_bands_the_analysis_covers() ->
     )
     assert outside.sum() > 0
     assert np.array_equal(linear[outside], np.zeros((int(outside.sum()), 4)))
+
+
+def test_the_log_frequency_axis_reads_prepared_frames_as_they_are() -> None:
+    """The subsonic band leaves once, where audio comes in, so canonicalizing filters nothing further."""
+    geometry = log_frequency_geometry()
+    mono = prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=55.0))
+    bands = band_weights(geometry) @ np.abs(analysis_transform(mono, geometry=geometry))
+
+    image = CANONICALIZER_REGISTRY["log_frequency"]().canonicalize(mono)
+
+    np.testing.assert_allclose(image.grid, to_sound_image(bands, geometry=geometry, frame_count=mono.shape[0]).grid)
+
+
+def test_the_band_weights_are_built_once_per_geometry_and_shared_read_only() -> None:
+    geometry = log_frequency_geometry()
+
+    assert band_weights(geometry) is band_weights(geometry)
+    with pytest.raises(ValueError, match="read-only"):
+        band_weights(geometry)[0, 0] = 1.0

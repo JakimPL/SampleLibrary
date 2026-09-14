@@ -13,7 +13,7 @@ from samplemorph.commands.analysis_training import (
     train_on_analysis_corpus,
 )
 from samplemorph.vocoders.restored import DEFAULT_RESTORER_NAME
-from samplemorph.vocoders.restorer_model import DEFAULT_CHANNELS
+from samplemorph.vocoders.restorer_model import DEFAULT_CHANNELS, GROUP_COUNT
 
 COMMAND_NAME: Final[str] = "train-restorer"
 RESTORER_EXPERIMENT_NAME: Final[str] = "restorer"
@@ -22,6 +22,7 @@ FLAGS: Final[AnalysisTrainingFlags] = AnalysisTrainingFlags(
     axis_help="Which frequency axis the magnitudes are read back from.",
     sample_count=None,
     channels=DEFAULT_CHANNELS,
+    channel_step=GROUP_COUNT,
     model_flag="--restorer",
     model_name=DEFAULT_RESTORER_NAME,
 )
@@ -40,9 +41,11 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     # clear of it.
     # pylint: disable=import-outside-toplevel
     from samplemorph.training.restorer_run import run_restorer_training
+    from samplemorph.training.runs import RunFamily
 
     trainer = AnalysisTrainer(
         experiment_name=RESTORER_EXPERIMENT_NAME,
+        family=RunFamily.RESTORER,
         model_name=arguments.restorer,
         train=lambda corpus, settings, placement: run_restorer_training(corpus, settings=settings, placement=placement),
     )

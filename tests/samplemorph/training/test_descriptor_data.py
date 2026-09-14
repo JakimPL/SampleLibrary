@@ -8,43 +8,44 @@ import pytest
 from samplemorph.training.descriptor_cache import GridSource, open_grid_cache
 from samplemorph.training.descriptor_data import (
     NO_LABEL,
-    STORED_VIEW,
+    BatchComposition,
     DescriptorCorpus,
     DescriptorDataModule,
-    GridCacheSet,
+    FixedViewSet,
     LabeledBatchSampler,
+    RetunedViewSet,
 )
 from samplemorph.training.descriptor_settings import DescriptorTrainingSettings
+from samplemorph.training.refusals import TrainingDataShortfall
 from samplemorph.training.run_settings import RunSettings
-from tests.samplemorph.training.conftest import BAND_COUNT, CACHED_SAMPLE_COUNT, TIME_COLUMNS
+from tests.samplemorph.training.conftest import (
+    BAND_COUNT,
+    CACHED_SAMPLE_COUNT,
+    TIME_COLUMNS,
+    VIEW_COUNT,
+    synthetic_corpus,
+)
 
 SETTINGS = DescriptorTrainingSettings(
     run=RunSettings(batch_size=8, worker_count=0, random_seed=0), labeled_per_batch=2, validation_gallery=4
 )
 
 
-def test_a_cached_item_carries_a_stored_grid_beside_one_retuned_view(descriptor_corpus: DescriptorCorpus) -> None:
-    dataset = GridCacheSet(
-        GridSource.of(descriptor_corpus.cache),
-        positions=np.arange(descriptor_corpus.sample_count),
-        random_seed=0,
-        fixed_view=None,
-    )
+def test_a_requested_item_carries_a_stored_grid_beside_the_view_it_names(descriptor_corpus: DescriptorCorpus) -> None:
+    dataset = RetunedViewSet(GridSource.of(descriptor_corpus.cache))
 
-    position, stored, retuned, stored_duration, retuned_duration = dataset[5]
+    position, stored, retuned, stored_duration, retuned_duration = dataset[(5, 1)]
 
     assert position == 5
     assert stored.shape == retuned.shape == (BAND_COUNT, TIME_COLUMNS)
     assert stored.dtype == retuned.dtype == np.float32
+    np.testing.assert_array_equal(retuned, descriptor_corpus.cache.grids[5, 2].astype(np.float32))
     assert stored_duration == retuned_duration
 
 
 def test_a_fixed_view_reads_the_same_retuning_every_time(descriptor_corpus: DescriptorCorpus) -> None:
-    dataset = GridCacheSet(
-        GridSource.of(descriptor_corpus.cache),
-        positions=np.arange(descriptor_corpus.sample_count),
-        random_seed=0,
-        fixed_view=STORED_VIEW,
+    dataset = FixedViewSet(
+        GridSource.of(descriptor_corpus.cache), positions=np.arange(descriptor_corpus.sample_count), view=0
     )
 
     first = dataset[3][2]
@@ -54,32 +55,80 @@ def test_a_fixed_view_reads_the_same_retuning_every_time(descriptor_corpus: Desc
     np.testing.assert_array_equal(first, descriptor_corpus.cache.grids[3, 1].astype(np.float32))
 
 
-def test_every_batch_carries_its_share_of_taught_labels() -> None:
-    pool = np.arange(20)
-    labeled = np.arange(20, 26)
-    sampler = LabeledBatchSampler(pool=pool, labeled=labeled, batch_size=8, labeled_per_batch=3, random_seed=0)
+def _sampler(*, view_count: int = VIEW_COUNT, random_seed: int = 0) -> LabeledBatchSampler:
+    return LabeledBatchSampler(
+        pool=np.arange(20),
+        labeled=np.arange(20, 26),
+        composition=BatchComposition(batch_size=8, labeled_per_batch=3, view_count=view_count),
+        random_seed=random_seed,
+    )
 
-    batches = list(sampler)
+
+def _epoch(sampler: LabeledBatchSampler, epoch: int) -> list[list[tuple[int, int]]]:
+    sampler.sampler.set_epoch(epoch)
+    return list(sampler)
+
+
+def test_every_batch_carries_its_share_of_taught_labels() -> None:
+    sampler = _sampler()
+
+    batches = _epoch(sampler, 0)
 
     assert len(sampler) == len(batches) == 4
     for batch in batches:
-        assert len(batch) == 8
-        assert sum(index in set(labeled.tolist()) for index in batch) == 3
-        assert len(set(batch)) == 8
+        positions = [position for position, _ in batch]
+        assert len(positions) == 8
+        assert sum(position >= 20 for position in positions) == 3
+        assert len(set(positions)) == 8
 
 
-def test_the_held_out_labels_stay_out_of_training_and_inside_validation(descriptor_corpus: DescriptorCorpus) -> None:
+def test_each_epoch_draws_its_own_order_views_and_labels_and_replays_them_under_one_seed() -> None:
+    """A retuned view drawn once per sample would leave every other stored view unread for the whole run."""
+    first_epoch = _epoch(_sampler(), 0)
+
+    assert _epoch(_sampler(), 1) != first_epoch
+    assert _epoch(_sampler(), 0) == first_epoch
+    assert {view for batch in first_epoch for _, view in batch} == set(range(VIEW_COUNT))
+
+
+def test_the_trainer_reaches_the_epoch_through_the_loader(descriptor_corpus: DescriptorCorpus) -> None:
+    loader = DescriptorDataModule(descriptor_corpus, settings=SETTINGS).train_dataloader()
+
+    assert isinstance(loader.batch_sampler, LabeledBatchSampler)
+    loader.batch_sampler.sampler.set_epoch(3)
+    assert loader.batch_sampler.sampler.epoch == 3
+
+
+def test_the_validation_samples_stay_out_of_training(descriptor_corpus: DescriptorCorpus) -> None:
     data = DescriptorDataModule(descriptor_corpus, settings=SETTINGS)
+    loader = data.train_dataloader()
+    assert isinstance(loader.batch_sampler, LabeledBatchSampler)
 
-    training_positions = {index for batch in data.train_dataloader().batch_sampler for index in batch}
+    training_positions = {position for batch in loader.batch_sampler for position, _ in batch}
     validation_positions = {int(item[0]) for batch in data.val_dataloader() for item in zip(*batch)}
 
     held_out = set(descriptor_corpus.held_out_labeled_positions.tolist())
     assert held_out
-    assert held_out.isdisjoint(training_positions)
     assert held_out <= validation_positions
-    assert data.validation_sample_count == len(held_out) + 4
-    assert data.training_sample_count == CACHED_SAMPLE_COUNT - len(held_out)
+    assert training_positions.isdisjoint(validation_positions)
+    assert data.validation_sample_count == len(held_out) + SETTINGS.validation_gallery
+    assert data.training_sample_count == CACHED_SAMPLE_COUNT - data.validation_sample_count
+
+
+def test_a_cache_without_retuned_views_is_refused_for_a_descriptor(tmp_path: Path) -> None:
+    corpus = synthetic_corpus(tmp_path / "cache" / "grids" / "flat", view_count=0)
+
+    with pytest.raises(TrainingDataShortfall, match="--views 1"):
+        DescriptorDataModule(corpus, settings=SETTINGS)
+
+
+def test_a_library_too_small_for_one_batch_names_the_flags_that_shrink_it(descriptor_corpus: DescriptorCorpus) -> None:
+    settings = DescriptorTrainingSettings(
+        run=RunSettings(batch_size=64, worker_count=0, random_seed=0), labeled_per_batch=2, validation_gallery=4
+    )
+
+    with pytest.raises(TrainingDataShortfall, match="--batch and --labeled-per-batch"):
+        DescriptorDataModule(descriptor_corpus, settings=settings)
 
 
 def test_a_corpus_names_its_taught_and_held_out_labels_apart(descriptor_corpus: DescriptorCorpus) -> None:

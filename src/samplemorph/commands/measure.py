@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
+import sys
 from collections import defaultdict
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
@@ -31,7 +32,7 @@ from samplemorph.measurement.loudness import match_loudness
 from samplemorph.measurement.readings import ReconstructionReadings, read_reconstruction
 from samplemorph.model_store import DEFAULT_MODEL_NAME, load_named_model
 from samplemorph.pipeline import encode_sample
-from samplemorph.registries import canonicalizer_for_geometry
+from samplemorph.registries import RENDERABLE_CANONICALIZER_NAMES, canonicalizer_for_geometry
 from samplemorph.route_arguments import add_vocoder_arguments
 from samplemorph.training.run_settings import DEFAULT_ACCELERATOR, DEFAULT_RANDOM_SEED
 from samplemorph.vocoders import Vocoder
@@ -95,7 +96,9 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help=f"Which stored model to reconstruct through, or {IDENTITY_MODEL_NAME} for the representation alone.",
     )
     add_canonicalizer_argument(
-        parser, help_text=f"The axis the {IDENTITY_MODEL_NAME} model reads; a stored model brings its own."
+        parser,
+        help_text=f"The axis the {IDENTITY_MODEL_NAME} model reads; a stored model brings its own.",
+        names=RENDERABLE_CANONICALIZER_NAMES,
     )
     add_vocoder_arguments(parser, device_default=DEFAULT_ACCELERATOR)
     parser.add_argument(
@@ -118,8 +121,16 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
 
     Each probe comes back as `<sound type>_<hash prefix>/original.wav` and `reconstruction.wav`,
     matched in loudness under one headroom, at the rate the sample is heard at; `readings.csv`
-    holds one row per probe, and the log the medians per sound type.
+    holds one row per probe, and the log the medians per sound type. The probes are resolved
+    before any model loads, so a draw or a hashes file naming none ends the process at once.
+
+    Raises:
+        SystemExit: no probe was named or drawn.
     """
+    probes = _probes(connection, arguments)
+    if not probes:
+        _logger.error("No probe to measure: the draw or the hashes file names no sample.")
+        sys.exit(1)
     canonicalizer, codec = _codec_for(config, arguments)
     route = MeasuredRoute(
         model=arguments.model,
@@ -128,9 +139,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         vocoder=vocoder_from(arguments, library_root=config.library_root),
         output_directory=Path(arguments.output),
     )
-    readings = tuple(
-        _measure(connection, config.library_root, sample, route=route) for sample in _probes(connection, arguments)
-    )
+    readings = tuple(_measure(connection, config.library_root, sample, route=route) for sample in probes)
     _write_table(route.output_directory / READINGS_FILE_NAME, readings)
     _report(readings)
     _logger.info("Wrote %d probes through %s into %s.", len(readings), route.model, route.output_directory)

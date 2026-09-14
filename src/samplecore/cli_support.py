@@ -151,6 +151,18 @@ def integer_between(minimum: int, maximum: int) -> Callable[[str], int]:
     return lambda raw_value: _bounded_integer(raw_value, minimum=minimum, maximum=maximum)
 
 
+def positive_multiple_of(step: int) -> Callable[[str], int]:
+    """An argparse type reading a whole number of at least ``step`` that ``step`` divides."""
+
+    def read(raw_value: str) -> int:
+        value = _bounded_integer(raw_value, minimum=step, maximum=None)
+        if value % step:
+            raise argparse.ArgumentTypeError(f"must be a multiple of {step}, not {value}")
+        return value
+
+    return read
+
+
 def positive_integer(raw_value: str) -> int:
     """An argparse type reading a count of at least one."""
     return _bounded_integer(raw_value, minimum=1, maximum=None)

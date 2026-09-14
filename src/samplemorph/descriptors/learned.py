@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
+from samplecore.storage.atomic import write_atomically
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
@@ -84,9 +85,9 @@ def descriptor_path(library_root: Path, *, name: str) -> Path:
 
 
 def save_descriptor(path: Path, model: GridDescriptor, description: DescriptorDescription) -> None:
-    """Write the weights beside the description that says how to rebuild the network around them."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"description": description.model_dump_json(), "state": model.state_dict()}, path)
+    """Write the weights beside the description that says how to rebuild the network around them, in place whole."""
+    stored = {"description": description.model_dump_json(), "state": model.state_dict()}
+    write_atomically(path, lambda stream: torch.save(stored, stream))
 
 
 def load_descriptor(path: Path, *, device: torch.device) -> LearnedDescriptor:

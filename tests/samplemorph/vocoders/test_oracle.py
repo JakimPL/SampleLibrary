@@ -5,11 +5,14 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from samplemorph.registries import CANONICALIZER_REGISTRY, SYNTHESIS_CANONICALIZER_NAMES
+from samplemorph.canonicalizers.common import prepare_mono
+from samplemorph.registries import CANONICALIZER_REGISTRY
 from samplemorph.vocoders.oracle import OraclePhaseVocoder
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone
 
 TONE_FREQUENCY_HZ = 440.0
+# The axes whose bands state amplitude per Fourier bin, which a round trip handed its own phase reproduces.
+SYNTHESIS_AXES = ("log_frequency", "mel")
 
 
 @dataclass(frozen=True)
@@ -19,7 +22,7 @@ class SynthesisCase:
     name: str
 
 
-SYNTHESIS_CASES = tuple(SynthesisCase(name=name) for name in sorted(SYNTHESIS_CANONICALIZER_NAMES))
+SYNTHESIS_CASES = tuple(SynthesisCase(name=name) for name in SYNTHESIS_AXES)
 
 
 @pytest.mark.parametrize("case", SYNTHESIS_CASES, ids=lambda case: case.name)
@@ -32,7 +35,7 @@ def test_a_synthesis_axis_lands_nearer_the_reference_than_unrelated_content_does
     """
     canonicalizer = CANONICALIZER_REGISTRY[case.name]()
     tone = harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)
-    spectrogram = canonicalizer.restore(canonicalizer.canonicalize(tone))
+    spectrogram = canonicalizer.restore(canonicalizer.canonicalize(prepare_mono(tone)))
     reference = tone[:, 0]
     unrelated = harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ * 3.0)[:, 0]
 
@@ -51,7 +54,7 @@ def test_the_constant_q_axis_is_kept_out_of_synthesis() -> None:
     """
     canonicalizer = CANONICALIZER_REGISTRY["constant_q"]()
     tone = harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)
-    spectrogram = canonicalizer.restore(canonicalizer.canonicalize(tone))
+    spectrogram = canonicalizer.restore(canonicalizer.canonicalize(prepare_mono(tone)))
     reference = tone[:, 0]
     unrelated = harmonic_tone(TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ * 3.0)[:, 0]
 

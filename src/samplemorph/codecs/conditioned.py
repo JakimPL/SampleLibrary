@@ -10,7 +10,9 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 from torch import Tensor
 
+from samplecore.hashing import file_sha256
 from samplecore.models.base import FROZEN
+from samplecore.storage.atomic import write_atomically
 from samplemorph.codecs.conditioned_model import ConditionedCodecModel, ConditionedCodecShape
 from samplemorph.descriptors.learned import LearnedDescriptor, descriptor_path, load_descriptor
 from samplemorph.geometry import Geometry
@@ -31,6 +33,7 @@ class ConditionedCodecDescription(BaseModel):
     geometry: Geometry
     shape: ConditionedCodecShape
     descriptor: str
+    descriptor_sha256: str
     epochs: int
     trained_sample_count: int
     random_seed: int
@@ -86,16 +89,20 @@ def codec_path(library_root: Path, *, name: str) -> Path:
 
 
 def save_conditioned_codec(path: Path, model: ConditionedCodecModel, description: ConditionedCodecDescription) -> None:
-    """Write the weights beside the description that says how to rebuild the network around them."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"description": description.model_dump_json(), "state": model.state_dict()}, path)
+    """Write the weights beside the description that says how to rebuild the network around them, in place whole."""
+    stored = {"description": description.model_dump_json(), "state": model.state_dict()}
+    write_atomically(path, lambda stream: torch.save(stored, stream))
 
 
 def load_conditioned_codec(path: Path, *, library_root: Path, device: torch.device) -> ConditionedCodec:
     """Rebuild a fitted conditioned codec beside the descriptor it was trained to decode from.
 
+    The descriptor is found by name and must still be the very file the codec was taught beside,
+    since a codec decodes from what that descriptor says and nothing else.
+
     Raises:
         FileNotFoundError: no codec is stored at that path, or its descriptor is gone.
+        ValueError: the descriptor stored under that name has changed since the codec was trained.
     """
     if not path.exists():
         raise FileNotFoundError(f"no conditioned codec is stored at {path}")
@@ -105,7 +112,13 @@ def load_conditioned_codec(path: Path, *, library_root: Path, device: torch.devi
     model = ConditionedCodecModel(description.shape).to(device)
     model.load_state_dict(stored["state"])
     model.eval()
-    descriptor = load_descriptor(descriptor_path(library_root, name=description.descriptor), device=device)
+    stored_descriptor = descriptor_path(library_root, name=description.descriptor)
+    if stored_descriptor.is_file() and file_sha256(stored_descriptor) != description.descriptor_sha256:
+        raise ValueError(
+            f"the codec at {path} was trained beside another {description.descriptor} descriptor than the one "
+            f"stored at {stored_descriptor} now; train the codec again beside it"
+        )
+    descriptor = load_descriptor(stored_descriptor, device=device)
     return ConditionedCodec(
         model=model, description=description, descriptor=descriptor, geometry=description.geometry, device=device
     )
