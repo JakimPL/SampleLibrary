@@ -49,9 +49,15 @@ export function WaveformPlayer({ sampleHash, rateHz, rateOptions, onRateChange }
                 <button type="button" className="play-btn" onClick={handleTogglePlay} disabled={!player.isReady}>
                     {player.isPlaying ? "⏸" : "▶"}
                 </button>
-                <span className="time">
-                    {formatDuration(player.currentTimeSeconds)} / {formatDuration(player.durationSeconds)}
-                </span>
+                {player.hasFailed ? (
+                    <span className="cell-muted">
+                        Audio unavailable: the file this sample is read from may be gone or changed since its scan.
+                    </span>
+                ) : (
+                    <span className="time">
+                        {formatDuration(player.currentTimeSeconds)} / {formatDuration(player.durationSeconds)}
+                    </span>
+                )}
                 {rateOptions.length > 1 && (
                     <label>
                         Rate

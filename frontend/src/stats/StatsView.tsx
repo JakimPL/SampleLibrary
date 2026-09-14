@@ -26,6 +26,10 @@ export function StatsView({ stats }: StatsViewProps): ReactElement {
                 <div className="label">Sample properties</div>
             </div>
             <div className="stat-tile">
+                <div className="big mono">{stats.sample_file_count}</div>
+                <div className="label">Sample files</div>
+            </div>
+            <div className="stat-tile is-wide">
                 <div className="big mono">{formatBytes(stats.total_stored_bytes)}</div>
                 <div className="label">Stored audio</div>
             </div>

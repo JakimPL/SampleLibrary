@@ -79,6 +79,7 @@ describe("CloudHoverTooltip", () => {
             file_size: 4096,
             ingested_at: "2026-01-01T00:00:00Z",
             occurrences: [],
+            files: [],
         });
 
         render(<CloudHoverTooltip entity={{ kind: "module", hash: MODULE_HASH }} x={10} y={20} />);
@@ -104,6 +105,7 @@ describe("CloudHoverTooltip", () => {
             file_size: 4096,
             ingested_at: "2026-01-01T00:00:00Z",
             occurrences: [],
+            files: [],
         });
 
         render(<CloudHoverTooltip entity={{ kind: "module", hash: MODULE_HASH }} x={10} y={20} />);

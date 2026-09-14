@@ -56,6 +56,7 @@ const SAMPLE_DETAIL = {
             module: { hash: "module-1", title: "A Song", filename: "song.xm", tracker: "xm" },
         },
     ],
+    files: [],
 };
 
 describe("SampleDetailPanel", () => {
@@ -80,6 +81,31 @@ describe("SampleDetailPanel", () => {
         expect(screen.getByRole("button", { name: "Occurrences (1)" })).toHaveAttribute("aria-pressed", "true");
         expect(screen.getByRole("button", { name: "Similar (0)" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Co-occurs" })).toBeInTheDocument();
+    });
+
+    it("lists the sample files a sample was found in beside its module slots, marking a file gone since its scan", async () => {
+        getSample.mockResolvedValue({
+            ...SAMPLE_DETAIL,
+            occurrences: [],
+            files: [
+                { location: { directory: "/packs", relative_path: "Kicks/Kick 01.wav" }, rate: 44100, available: true },
+                {
+                    location: { directory: "/packs", relative_path: "Kicks/Kick 02.wav" },
+                    rate: 44100,
+                    available: false,
+                },
+            ],
+        });
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+        useSelectionStore.getState().focusSample("abc");
+
+        renderPanel();
+
+        expect(await screen.findByRole("button", { name: "Occurrences (2)" })).toHaveAttribute("aria-pressed", "true");
+        expect(screen.getByText("Kicks/Kick 01.wav")).toBeInTheDocument();
+        expect(screen.getAllByText("unavailable")).toHaveLength(1);
+        expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
     });
 
     it("renders the sample's spectral neighbors on their own tab, with what a glance shows", async () => {

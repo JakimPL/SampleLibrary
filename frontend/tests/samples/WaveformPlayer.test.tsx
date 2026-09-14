@@ -68,6 +68,17 @@ function renderPlayer(overrides: PlayerOverrides = {}): RenderResult {
 }
 
 describe("WaveformPlayer", () => {
+    it("says the audio is unavailable when wavesurfer cannot load it", () => {
+        renderPlayer();
+
+        act(() => {
+            latestInstance().emit("error", new Error("404"));
+        });
+
+        expect(screen.getByText(/Audio unavailable/)).toBeInTheDocument();
+        expect(screen.getByRole("button")).toBeDisabled();
+    });
+
     it("disables the play button until wavesurfer reports ready", () => {
         renderPlayer();
 

@@ -81,7 +81,7 @@ export interface paths {
         };
         /**
          * Get Sample
-         * @description One sample's own fields plus every module occurrence that references it.
+         * @description One sample's own fields plus every module occurrence and sample file holding it.
          *
          *     ``equivalence_member_count`` travels with the sample so a caller labeling it knows how many
          *     near-duplicates the same choice would reach. ``playback_rate_hz`` is the rate every reader
@@ -109,14 +109,17 @@ export interface paths {
         };
         /**
          * Get Sample Audio
-         * @description The sample's own canonical audio, as stored in the content-addressable store.
+         * @description The sample's own canonical audio: its stored object, or the WAV the store would hold for it.
          *
-         *     The object is content-addressed, so it is served with a cache lifetime of a year and read
-         *     straight off the store by its hash, with no catalog round trip on the way to a sound: the
-         *     hash's own shape is checked on the path, which is what keeps a request inside the store.
+         *     A stored object is read straight off the store by its hash, with no catalog round trip on the
+         *     way to a sound: the hash's own shape is checked on the path, which is what keeps a request inside
+         *     the store. A sample found in a sample file is read from the file the catalog names and encoded
+         *     the way the store encodes an object, so both kinds play at the same nominal header rate. Either
+         *     way the bytes are those of the hash, so they are served with a cache lifetime of a year.
          *
          *     Raises:
-         *         HTTPException: 404 when the store holds no object under this hash.
+         *         HTTPException: 404 when the store holds no object under this hash and no cataloged file
+         *             holds the sample now.
          */
         readonly get: operations["get_sample_audio_api_samples__sample_hash__audio_get"];
         readonly put?: never;
@@ -259,8 +262,8 @@ export interface paths {
          * @description Every sample's position in the library's 2D embedding space, as of the latest embedding run.
          *
          *     The answer is built once per revision of what it reads and served from memory after that: the
-         *     coordinates' count and last write, the playback rates on file and the modules cataloged are
-         *     what a pipeline moves, and three scalar queries say whether any has. A caller that accepts
+         *     coordinates' count and last write, the playback rates on file, the modules cataloged and the
+         *     sample files scanned are what a pipeline moves, and four scalar queries say whether any has. A caller that accepts
          *     gzip receives the body compressed once at the best level rather than per request.
          */
         readonly get: operations["get_cloud_api_cloud_get"];
@@ -675,6 +678,9 @@ export interface components {
         /**
          * LibraryStats
          * @description A snapshot of the catalog's overall size and composition.
+         *
+         *     ``sample_properties_count`` counts the module occurrences of samples and ``sample_file_count``
+         *     the files samples were found in, the two ways a sample reaches the catalog.
          */
         readonly LibraryStats: {
             /** Module Count */
@@ -683,6 +689,8 @@ export interface components {
             readonly sample_count: number;
             /** Sample Properties Count */
             readonly sample_properties_count: number;
+            /** Sample File Count */
+            readonly sample_file_count: number;
             /** Modules By Tracker */
             readonly modules_by_tracker: readonly components["schemas"]["TrackerModuleCount"][];
             /** Relations By Type */
@@ -990,9 +998,8 @@ export interface components {
          * SampleCloudPoint
          * @description One sample's place in the embedding, with what a viewer needs to color and hear the point.
          *
-         *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
-         *     sample's own occurrence names together with the names of the instruments reaching it -- rather
-         *     than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
+         *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from every
+         *     name the sample goes by -- rather than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
          *     clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
          *     the catalog knows no rate for.
          *
@@ -1014,7 +1021,7 @@ export interface components {
         };
         /**
          * SampleDetail
-         * @description A sample together with every module occurrence that references it, and the rates it is heard at.
+         * @description A sample together with every module occurrence and sample file holding it, and the rates it is heard at.
          *
          *     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
          *     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
@@ -1043,6 +1050,8 @@ export interface components {
             readonly playback_rate_hz: number | null;
             /** Occurrences */
             readonly occurrences: readonly components["schemas"]["SampleOccurrenceDetail"][];
+            /** Files */
+            readonly files: readonly components["schemas"]["SampleFileDetail"][];
             /** Duration Seconds */
             readonly duration_seconds: number;
             /** Playback Rates */
@@ -1063,6 +1072,37 @@ export interface components {
             readonly other_hash: string;
             /** Distance */
             readonly distance: number;
+        };
+        /**
+         * SampleFileDetail
+         * @description One file a sample was found in, read in place from a sample directory.
+         *
+         *     ``available`` says whether the file is there now with the size and write time it was scanned
+         *     at, which is what playing the sample from it needs.
+         */
+        readonly SampleFileDetail: {
+            readonly location: components["schemas"]["SampleFileLocation"];
+            /** Rate */
+            readonly rate: number;
+            /** Available */
+            readonly available: boolean;
+        };
+        /**
+         * SampleFileLocation
+         * @description Where a sample file sits: one of the configured sample directories, and its path inside it.
+         *
+         *     The path inside the directory is written with forward slashes on every system and names a file
+         *     below the directory, which keeps a location read from a request or a catalog row within the
+         *     directory it names.
+         */
+        readonly SampleFileLocation: {
+            /**
+             * Directory
+             * Format: path
+             */
+            readonly directory: string;
+            /** Relative Path */
+            readonly relative_path: string;
         };
         /**
          * SampleOccurrence

@@ -81,6 +81,7 @@ function buildSampleDetail(overrides: SampleDetailOverrides): unknown {
         playback_rates: overrides.playbackRates ?? [],
         suggested_labels: [],
         occurrences: [],
+        files: [],
     };
 }
 

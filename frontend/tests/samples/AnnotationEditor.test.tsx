@@ -29,6 +29,7 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         channels: 1,
         frames: 4096,
         occurrences: [],
+        files: [],
         size_bytes: 8192,
         display_name: "smp01",
         category: "uncategorized",

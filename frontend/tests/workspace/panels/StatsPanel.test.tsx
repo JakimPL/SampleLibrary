@@ -25,6 +25,7 @@ describe("StatsPanel", () => {
             module_count: 2,
             sample_count: 5,
             sample_properties_count: 5,
+            sample_file_count: 3,
             total_stored_bytes: 1024,
             modules_by_tracker: [{ tracker: "xm", module_count: 2 }],
             relations_by_type: [{ relation_type: "resampled_variant", relation_count: 1 }],

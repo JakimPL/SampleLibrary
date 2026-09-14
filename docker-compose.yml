@@ -36,6 +36,12 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      # Samples found in sample directories are read in place, and the catalog names each directory
+      # by the path it was scanned under, so each one is mounted at that same path, read-only:
+      # - type: bind
+      #   source: /home/you/Samples/Packs
+      #   target: /home/you/Samples/Packs
+      #   read_only: true
     environment:
       SAMPLELIBRARY_DATABASE_URL: postgresql+psycopg://samplelibrary:samplelibrary@postgres:5432/samplelibrary
     # Lets `[inference] url = "http://host.docker.internal:8010"` reach a renderer on the host.

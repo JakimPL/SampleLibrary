@@ -540,6 +540,11 @@ tr.is-focused {
     color: var(--critical);
 }
 
+.badge-unavailable {
+    background: color-mix(in srgb, var(--warn) var(--badge-tint-strength), var(--surface-1));
+    color: var(--warn);
+}
+
 .badge-equivalence {
     background: color-mix(in srgb, var(--accent) var(--badge-tint-strength), var(--surface-1));
     color: var(--accent);
@@ -1308,6 +1313,10 @@ table.data td .annotation-editor-input {
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px 12px;
+}
+
+.stat-tile.is-wide {
+    grid-column: span 2;
 }
 
 .stat-tile .big {

@@ -1,9 +1,9 @@
 # SampleLibrary
 
-A personal library and web app for the samples inside tracker modules (XM, IT, MOD, S3M). It
-collects every sample from your module collection, drops exact duplicates, groups near-duplicates
-together, and lets you browse, label and rate them — including a visual "cloud" of the whole
-library.
+A personal library and web app for the samples inside tracker modules (XM, IT, MOD, S3M), and for
+folders of plain audio files beside them. It collects every sample from your module collection and
+your sample folders, drops exact duplicates, groups near-duplicates together, and lets you browse,
+label and rate them — including a visual "cloud" of the whole library.
 
 ## Requirements
 
@@ -27,7 +27,8 @@ just install
 ```
 
 `just install` also creates `config.toml`. Open it and set two paths: where your modules are, and
-where extracted samples should go (see [Configuration](#configuration)).
+where extracted samples should go. Folders of sample packs are optional and can be added at any time
+(see [Configuration](#configuration)).
 
 No PostgreSQL on the machine? `docker compose up -d postgres` starts one on port 5432. If that port is
 taken, put another in a file named `.env` beside `docker-compose.yml`, such as `POSTGRES_PORT=5433`:
@@ -58,6 +59,12 @@ under its `[library]` table:
   takes precedence over it, except for a command given `--config`, which reads everything from the
   file it names.
 - `minimum_sample_frames`: the shortest sample extraction keeps, 512 frames by default.
+- `sample_directories`: folders of WAV, AIFF and FLAC files to add to the library, such as
+  `["/home/you/Samples/Packs"]`. Their files are read where they are, so they keep taking up disk
+  space in their own folders alone. Each folder must stand apart from the others.
+- `sample_exclusions`: patterns for files and folders inside those folders to leave out, such as
+  `["*loop*"]`. Each pattern is matched against a path relative to its folder, ignoring case, and
+  `*` also matches across folders.
 
 The `[inference]` table holds one key, `url`: the address the morph renderer listens on and the API
 reaches it at, `http://127.0.0.1:8010` by default. It names a port of its own.
@@ -73,14 +80,24 @@ just serve           # start the API
 just frontend-dev    # start the frontend in a second terminal, then open http://localhost:5173
 ```
 
-`just rebuild` runs the passes the app reads, one after another: extraction, the notes your modules
-play (which set the speed a sample sounds at), waveform thumbnails, and the cloud's layout. Run it
+`just rebuild` runs the passes the app reads, one after another: extraction, the scan of your sample
+folders, the notes your modules play (which set the speed a sample sounds at), waveform thumbnails,
+and the cloud's layout. Run it
 again whenever you add modules: extraction, notes and thumbnails pick up the new ones, and the cloud
 describes the new samples the way it described the rest and lays itself out again; with nothing new,
 the cloud stays as it is. Extraction takes a while over a large collection, so it spreads itself
 across your machine's cores. `uv run samplelibrary extract --prune` also removes the modules whose
 files are gone from your collection, with the samples only they held; it refuses when a file or a
 folder could not be read, so a disconnected drive empties nothing.
+
+Sample folders are scanned by `uv run samplelibrary files`. A second scan reads only the files that
+changed since the last one. Because the files stay where
+they are, a sample whose file has gone missing — a deleted file, an unplugged drive — stays in the
+library: the app marks it unavailable, and every pass skips it and picks it up again once the file
+is back. `uv run samplelibrary files --prune` removes the files that are gone, the ones your
+exclusions now leave out, and every file of a folder you took out of `sample_directories`. Like
+extraction, it refuses when a configured folder is missing or empty, so an unplugged drive empties
+nothing.
 
 Every operation on the library is a `samplelibrary` command: `uv run samplelibrary --help` lists
 them, and each command's own `--help` lists its options — `uv run samplelibrary extract --workers 2`
@@ -125,7 +142,7 @@ together with the API at `http://127.0.0.1:8000`. The Docker image does the same
 |---|---|
 | `just install` | Installs the Python and frontend dependencies and the git hooks, and puts `config.toml` in place |
 | `just database` | Creates the role and the library, sandbox and test databases on the configured server, wherever they are missing |
-| `just rebuild` | Extracts your modules, reads their notes, draws thumbnails and lays out the cloud, capped on Linux |
+| `just rebuild` | Extracts your modules, scans your sample folders, reads the modules' notes, draws thumbnails and lays out the cloud, capped on Linux |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
 | `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
@@ -168,6 +185,12 @@ apart from everything the pipelines generate, and `just reset` leaves them alone
 `uv run samplelibrary annotations export` writes them to `annotations.jsonl` — keep a copy of your
 own — and `annotations import` reads one back. `annotations relink` reattaches them if a sample's
 hash ever changes.
+
+A library labeled before sample folders existed needs its labels table brought up to date once.
+Export your labels first, then run `uv run python scripts/migrate_annotation_anchors.py`; it changes
+the table's shape and keeps every label, rating and favorite. For the sandbox, run it with
+`SAMPLELIBRARY_CONFIG=dev-library/config.toml` in front. Then export again: the import reads files
+in the new shape.
 
 The listening model can suggest labels for every sample.
 `uv run samplelibrary cloud embed --backend clap --extract-only --heard-rate` describes the catalog
