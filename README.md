@@ -131,6 +131,13 @@ To point the frontend at an API on another port, set `VITE_BACKEND_DEV_URL` befo
 app from another device, run `npm run dev -- --host` inside `frontend`; anyone on your network can
 then change your labels, since the app asks nobody to sign in.
 
+The sandbox library holds a few dozen samples, too few to show how the cloud behaves at the size of a
+real library. `VITE_CLOUD_DENSIFY=100000 VITE_BACKEND_DEV_URL=http://127.0.0.1:8001 just frontend-dev`
+grows the sandbox's cloud to a hundred thousand points while the frontend runs under Vite; every added
+point borrows a real sample's identity, so hovering, playing and morphing keep working. A library with
+no embedding yet is laid out from its own samples, a cluster per category, so the view fills either way.
+`VITE_CLOUD_DENSIFY_MODULES` does the same for the Modules tab.
+
 `just frontend-build` builds the frontend for production, and
 `uv run samplelibrary serve --frontend frontend/dist`, run in place of `just serve`, serves it
 together with the API at `http://127.0.0.1:8000`. The Docker image does the same;

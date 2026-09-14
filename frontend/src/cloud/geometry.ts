@@ -16,7 +16,7 @@ const NORMALIZED_MAX = 1;
 const NORMALIZED_SPAN = NORMALIZED_MAX - NORMALIZED_MIN;
 const FALLBACK_RANGE = 1;
 
-interface Bounds {
+export interface Bounds {
     readonly minimum: number;
     readonly maximum: number;
 }
@@ -27,7 +27,7 @@ interface Bounds {
  * its own argument, and a hundred thousand of them is past what a call frame takes -- which a
  * browser reports as an exceeded call stack, taking the whole page down with it.
  */
-function boundsOf(points: readonly CloudEntityPoint[], coordinateOf: (point: CloudEntityPoint) => number): Bounds {
+export function boundsOf<Point>(points: readonly Point[], coordinateOf: (point: Point) => number): Bounds {
     let minimum = Number.POSITIVE_INFINITY;
     let maximum = Number.NEGATIVE_INFINITY;
     for (const point of points) {

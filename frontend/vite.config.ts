@@ -1,10 +1,19 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import { densifyCloudPlugin } from "./dev/densifyCloudPlugin";
+
 const BACKEND_DEV_URL = process.env.VITE_BACKEND_DEV_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
-    plugins: [react()],
+    plugins: [
+        react(),
+        densifyCloudPlugin({
+            backendUrl: BACKEND_DEV_URL,
+            sampleTargetText: process.env.VITE_CLOUD_DENSIFY,
+            moduleTargetText: process.env.VITE_CLOUD_DENSIFY_MODULES,
+        }),
+    ],
     server: {
         proxy: {
             "/api": BACKEND_DEV_URL,

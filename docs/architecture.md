@@ -440,6 +440,14 @@ outside `/api` with `index.html`, and the image serves its own build this way. I
 its allowed methods, a trailing slash with its redirect, and an unknown path with its JSON 404,
 whether or not a frontend is served beside it.
 
+The dev server also grows the cloud on request: with `VITE_CLOUD_DENSIFY` set, a plugin in
+`frontend/dev/` answers `/api/cloud` (and `/api/cloud/modules` under `VITE_CLOUD_DENSIFY_MODULES`)
+with the backend's own points followed by seeded clones of them, laid out in Gaussian clusters and
+each carrying its parent's hash and category, so the sandbox's few dozen samples show the density of
+a library of a hundred thousand and every interaction still reaches the catalog. A catalog whose
+embedding has yet to run is laid out from its own listing first, one cluster per category, which
+keeps every point on a real hash. The plugin runs under `vite` serve alone.
+
 `samplelibrary serve` loads the configuration and opens the catalog once before uvicorn starts, so a
 missing or incomplete config ends the start with one message and exit status 3, a database that
 cannot be reached within ten seconds with one message and exit status 1, and
