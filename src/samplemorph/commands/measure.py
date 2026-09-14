@@ -151,7 +151,7 @@ def _codec_for(config: LibraryConfig, arguments: argparse.Namespace) -> tuple[Ca
         canonicalizer = canonicalizer_from(arguments)
         return canonicalizer, IdentityCodec(canonicalizer.geometry)
 
-    model = load_named_model(config.library_root, name=arguments.model, device=arguments.device)
+    model = load_named_model(config.library_root, name=arguments.model, device=arguments.device).model
     return canonicalizer_for_geometry(model.description.geometry), model.codec
 
 

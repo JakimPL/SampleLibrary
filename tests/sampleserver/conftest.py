@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 
 from sampleserver.app import API_PREFIX, create_app
-from sampleserver.dependencies import get_connection, get_curation_connection
+from sampleserver.dependencies import get_connection, get_connection_opener, get_curation_connection
 
 INFERENCE_URL = "http://inference.test"
 
@@ -36,6 +37,7 @@ def client(connection: Connection, _database_url: str, tmp_path: Path) -> Iterat
         yield connection
 
     application.dependency_overrides[get_connection] = override_get_connection
+    application.dependency_overrides[get_connection_opener] = lambda: lambda: nullcontext(connection)
     application.dependency_overrides[get_curation_connection] = override_get_connection
     with TestClient(application, base_url=f"http://testserver{API_PREFIX}") as test_client:
         yield test_client

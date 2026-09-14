@@ -5,13 +5,13 @@ import torch
 
 from samplemorph.training.descriptor_losses import (
     CONTRAST_TEMPERATURE,
-    DescriptorLossWeights,
     DescriptorTargets,
     descriptor_loss,
     distillation_error,
     label_contrast,
     retuning_contrast,
 )
+from samplemorph.training.descriptor_settings import DescriptorLossWeights
 
 
 def _unit(rows: int, size: int, seed: int) -> torch.Tensor:

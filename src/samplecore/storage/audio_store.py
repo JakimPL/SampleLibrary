@@ -83,6 +83,20 @@ def read(library_root: Path, sample: Sample) -> SamplePCM:
     return SamplePCM(sample=sample, pcm=dequantize(quantized, sample.depth))
 
 
+def stored_frame_count(library_root: Path, sample_hash: str) -> int:
+    """How many frames a stored object holds, read from its WAV header alone.
+
+    Raises:
+        FileNotFoundError: no object is stored under that hash.
+    """
+    path = object_path(library_root, sample_hash)
+    if not path.is_file():
+        raise FileNotFoundError(f"no object is stored for sample {sample_hash}")
+
+    with wave.open(str(path), "rb") as wav_file:
+        return wav_file.getnframes()
+
+
 def read_object(library_root: Path, sample_hash: str) -> SamplePCM:
     """Read a stored object by its hash alone, its frame layout taken from the WAV header.
 

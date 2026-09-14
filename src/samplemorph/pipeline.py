@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
+from pydantic import BaseModel
 from sqlalchemy import Connection
 
+from samplecore.hashing import file_sha256
+from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
 from samplecore.storage import audio_store
 from samplecore.storage.playback_rates import resolved_playback_rates
@@ -17,10 +22,11 @@ from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
 from samplemorph.codecs import SampleCodec
 from samplemorph.images import SampleLatent
-from samplemorph.model_store import MorphModel, MorphModelDescription, load_named_model
+from samplemorph.model_paths import restorer_path
+from samplemorph.model_store import MorphModel, load_named_model
 from samplemorph.morphers import Morpher, MorphWeights
-from samplemorph.registries import MORPHER_REGISTRY, canonicalizer_for_geometry
-from samplemorph.rendering import RenderedFile, RenderKind, write_rendering
+from samplemorph.registries import MORPHER_REGISTRY, RESTORED_VOCODER_NAME, canonicalizer_for_geometry
+from samplemorph.rendering import RENDER_REVISION, RenderedFile, RenderKind, write_rendering
 from samplemorph.vocoders import Vocoder
 from samplemorph.vocoders.selection import vocoder_named
 
@@ -109,25 +115,93 @@ class MorphRenderSummary:
         return sum(1 for file in self.files if file.kind is RenderKind.MORPH)
 
 
-def load_route(library_root: Path, choice: RouteChoice) -> tuple[MorphModel, MorphRoute]:
+class ModelFileChanged(RuntimeError):
+    """Raised when a model file changes on disk while a route is being loaded from it."""
+
+
+class StoredFile(BaseModel):
+    """One file a route was loaded from, named by its path and the digest of its bytes."""
+
+    model_config = FROZEN
+
+    path: Path
+    sha256: str
+
+
+@dataclass(frozen=True)
+class LoadedRoute:
+    """A route loaded from the library, beside the choice that named it and every file it was read from."""
+
+    model: MorphModel
+    route: MorphRoute
+    choice: RouteChoice
+    files: tuple[StoredFile, ...]
+
+    @property
+    def fingerprint(self) -> str:
+        """One digest naming what this route renders: the rendering code's revision, the vocoder, the morpher and the bytes of every file.
+
+        Two routes over the same files render the same audio, and a retrained file under the same
+        name renders another, so the digest follows the bytes rather than the names.
+        """
+        named = "|".join(
+            (
+                str(RENDER_REVISION),
+                self.choice.vocoder_name,
+                self.choice.morpher_name,
+                *(file.sha256 for file in self.files),
+            )
+        )
+        return hashlib.sha256(named.encode()).hexdigest()
+
+
+def load_route(library_root: Path, choice: RouteChoice) -> LoadedRoute:
     """Load the stored model a choice names and assemble the route that renders through it.
 
     The canonicalizer is the one the model's own geometry names, so a route always reads the axis
-    its codec was fitted on.
+    its codec was fitted on. Every file read is hashed once loaded, and a file written since the
+    load began is refused, so the digests name the very bytes in memory.
 
     Raises:
         FileNotFoundError: the model, or the restorer the vocoder reads, is stored under no such name.
+        ModelFileChanged: a file was written while the route was loaded from it.
     """
-    model = load_named_model(library_root, name=choice.model_name, device=choice.device)
+    started_ns = time.time_ns()
+    loaded = load_named_model(library_root, name=choice.model_name, device=choice.device)
     route = MorphRoute(
-        canonicalizer=canonicalizer_for_geometry(model.description.geometry),
-        codec=model.codec,
+        canonicalizer=canonicalizer_for_geometry(loaded.model.description.geometry),
+        codec=loaded.model.codec,
         vocoder=vocoder_named(
             choice.vocoder_name, library_root=library_root, restorer_name=choice.restorer_name, device=choice.device
         ),
         morpher=MORPHER_REGISTRY[choice.morpher_name](),
     )
-    return model, route
+    restorer = (
+        (restorer_path(library_root, name=choice.restorer_name),)
+        if choice.vocoder_name == RESTORED_VOCODER_NAME
+        else ()
+    )
+    return LoadedRoute(
+        model=loaded.model,
+        route=route,
+        choice=choice,
+        files=tuple(_stored_file(path, loaded_since_ns=started_ns) for path in (*loaded.files, *restorer)),
+    )
+
+
+def _stored_file(path: Path, *, loaded_since_ns: int) -> StoredFile:
+    """The file named by the digest of its bytes, as they were when the route was loaded from it.
+
+    Raises:
+        ModelFileChanged: the file was written after the load began, or while it was hashed.
+    """
+    before = path.stat()
+    digest = file_sha256(path)
+    after = path.stat()
+    unchanged = (before.st_ino, before.st_size, before.st_mtime_ns) == (after.st_ino, after.st_size, after.st_mtime_ns)
+    if before.st_mtime_ns > loaded_since_ns or not unchanged:
+        raise ModelFileChanged(f"{path} was written while the route was loaded from it; load the route again")
+    return StoredFile(path=path, sha256=digest)
 
 
 def encode_waveform(pcm: NDArray[np.float64], *, canonicalizer: Canonicalizer, codec: SampleCodec) -> EncodedWaveform:
@@ -307,15 +381,24 @@ def decode_to_audio(latent: SampleLatent, *, route: MorphRoute) -> NDArray[np.fl
     return route.vocoder.synthesize(route.canonicalizer.restore(route.codec.decode(latent)))
 
 
-def listening_set_manifest(description: MorphModelDescription, summary: MorphRenderSummary) -> str:
+def listening_set_manifest(loaded: LoadedRoute, summary: MorphRenderSummary) -> str:
     """What a listening set is, as indented JSON written beside the audio.
 
     A set is judged by ear days after it was written, so the manifest names the two samples it runs
-    between and the rate each file states, which is what it takes to render the same comparison
-    again or to look either sample up in the catalog.
+    between and the rate each file states, the whole route it took -- the model, the vocoder and
+    the restorer it read, the morpher, the device -- and the digest of every file the route was
+    loaded from, which is what it takes to render the same comparison again or to tell two sets
+    of one name apart.
     """
     manifest = {
-        "model": json.loads(description.model_dump_json()),
+        "model": json.loads(loaded.model.description.model_dump_json()),
+        "vocoder": loaded.choice.vocoder_name,
+        "restorer": loaded.choice.restorer_name if loaded.choice.vocoder_name == RESTORED_VOCODER_NAME else None,
+        "morpher": loaded.choice.morpher_name,
+        "device": loaded.choice.device,
+        "render_revision": RENDER_REVISION,
+        "fingerprint": loaded.fingerprint,
+        "loaded_files": [{"path": str(file.path), "sha256": file.sha256} for file in loaded.files],
         "first_hash": summary.first_hash,
         "second_hash": summary.second_hash,
         "files": [

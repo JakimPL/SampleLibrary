@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
 
 import numpy as np
 import torch
@@ -13,15 +12,12 @@ from torch import Tensor
 from samplecore.hashing import file_sha256
 from samplecore.models.base import FROZEN
 from samplecore.storage.atomic import write_atomically
-from samplemorph.codecs.conditioned_model import ConditionedCodecModel, ConditionedCodecShape
-from samplemorph.descriptors.learned import LearnedDescriptor, descriptor_path, load_descriptor
+from samplemorph.codecs.conditioned_model import ConditionedCodecModel
+from samplemorph.codecs.conditioned_shape import ConditionedCodecShape
+from samplemorph.descriptors.learned import LearnedDescriptor, load_descriptor
 from samplemorph.geometry import Geometry
 from samplemorph.images import SampleLatent, SoundImage
-
-CONDITIONED_CODEC_NAME: Final[str] = "conditioned"
-CODECS_DIRECTORY_NAME: Final[str] = "codecs"
-CODEC_SUFFIX: Final[str] = ".pt"
-DEFAULT_CODEC_NAME: Final[str] = "conditioned"
+from samplemorph.model_paths import descriptor_path
 
 
 class ConditionedCodecDescription(BaseModel):
@@ -81,11 +77,6 @@ class ConditionedCodec:
     def split(self, values: Tensor) -> tuple[Tensor, Tensor]:
         """A latent's two halves: the descriptor it was encoded beside, and the residual flattened."""
         return values[:, : self.model.shape.descriptor_size], values[:, self.model.shape.descriptor_size :]
-
-
-def codec_path(library_root: Path, *, name: str) -> Path:
-    """Where a fitted conditioned codec is written, under the library root beside the other models."""
-    return library_root / "models" / CODECS_DIRECTORY_NAME / f"{name}{CODEC_SUFFIX}"
 
 
 def save_conditioned_codec(path: Path, model: ConditionedCodecModel, description: ConditionedCodecDescription) -> None:

@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from samplecore.labeling.labels import SampleLabel
 from samplecore.labeling.ranking import agreement_matrix
-from samplemorph.descriptors.grid_descriptor import DescriptorShape
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.training.descriptor_cache import (
     DESCRIPTION_FILE_NAME,
@@ -22,11 +22,11 @@ from samplemorph.training.descriptor_cache import (
     open_grid_cache,
 )
 from samplemorph.training.descriptor_data import NO_LABEL, DescriptorCorpus
-from samplemorph.training.descriptor_losses import DescriptorLossWeights
 from samplemorph.training.descriptor_module import DescriptorTrainingModule, TeachingMaterial
+from samplemorph.training.descriptor_settings import DescriptorLossWeights
 from samplemorph.training.restorer_dataset import RestorerBatchItem
 from samplemorph.training.restorer_module import RestorerTrainingModule
-from samplemorph.vocoders.restorer_model import RestorerShape
+from samplemorph.vocoders.restorer_shape import RestorerShape
 
 CROP_COUNT = 4
 LEARNING_RATE = 1e-3

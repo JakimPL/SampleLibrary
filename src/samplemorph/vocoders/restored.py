@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
 
 import numpy as np
 import torch
@@ -16,10 +15,8 @@ from samplemorph.geometry import LogFrequencyGeometry
 from samplemorph.images import AnalysisSpectrogram
 from samplemorph.vocoders.levels import peak_level
 from samplemorph.vocoders.pghi import gaussian_log_frequency, integrate_and_synthesize
-from samplemorph.vocoders.restorer_model import Restorer, RestorerShape, compress, expand
-
-RESTORER_SUFFIX: Final[str] = ".pt"
-DEFAULT_RESTORER_NAME: Final[str] = "restorer"
+from samplemorph.vocoders.restorer_model import Restorer, compress, expand
+from samplemorph.vocoders.restorer_shape import RestorerShape
 
 
 class RestorerDescription(BaseModel):
@@ -93,11 +90,6 @@ def same_analysis(first: LogFrequencyGeometry, second: LogFrequencyGeometry) -> 
     whole number of bands, so a restorer taught on either anchor reads the other's magnitude.
     """
     return first.model_copy(update={"anchor": second.anchor}) == second
-
-
-def restorer_path(library_root: Path, *, name: str = DEFAULT_RESTORER_NAME) -> Path:
-    """Where a fitted restorer is written, under the configured library root rather than the repo."""
-    return library_root / "models" / f"{name}{RESTORER_SUFFIX}"
 
 
 def save_restorer(path: Path, model: Restorer, description: RestorerDescription) -> None:

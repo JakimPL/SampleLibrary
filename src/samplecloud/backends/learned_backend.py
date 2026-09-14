@@ -18,6 +18,7 @@ def build_learned_extractor(library_root: Path, *, model_name: str, device: str)
     # pylint: disable=import-outside-toplevel
     import torch
 
-    from samplemorph.descriptors.learned import descriptor_path, load_descriptor
+    from samplemorph.descriptors.learned import load_descriptor
+    from samplemorph.model_paths import descriptor_path
 
     return load_descriptor(descriptor_path(library_root, name=model_name), device=torch.device(device))

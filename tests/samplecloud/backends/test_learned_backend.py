@@ -6,10 +6,12 @@ import numpy as np
 import torch
 
 from samplecloud.backends.learned_backend import build_learned_extractor
-from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
-from samplemorph.descriptors.learned import DescriptorDescription, descriptor_path, save_descriptor
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
+from samplemorph.descriptors.grid_descriptor import GridDescriptor
+from samplemorph.descriptors.learned import DescriptorDescription, save_descriptor
 from samplemorph.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE, pooled_band_count
 from samplemorph.geometry import log_frequency_geometry
+from samplemorph.model_paths import descriptor_path
 
 EMBEDDING_SIZE = 8
 

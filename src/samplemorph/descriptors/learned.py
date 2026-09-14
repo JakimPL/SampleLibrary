@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
 
 import numpy as np
 import torch
@@ -13,15 +12,12 @@ from samplecore.models.base import FROZEN
 from samplecore.storage.atomic import write_atomically
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.canonicalizers.common import prepare_mono
-from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
+from samplemorph.descriptors.grid_descriptor import GridDescriptor
 from samplemorph.descriptors.pooling import canonical_duration, pool_bands
 from samplemorph.geometry import Geometry
 from samplemorph.images import SoundImage
 from samplemorph.registries import canonicalizer_for_geometry
-
-DESCRIPTORS_DIRECTORY_NAME: Final[str] = "descriptors"
-DESCRIPTOR_SUFFIX: Final[str] = ".pt"
-DEFAULT_DESCRIPTOR_NAME: Final[str] = "descriptor"
 
 
 class DescriptorDescription(BaseModel):
@@ -77,11 +73,6 @@ class LearnedDescriptor:
     def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]:
         """The cloud's extractor protocol: describe a stored waveform."""
         return self.describe(self.canonicalizer.canonicalize(prepare_mono(waveform)))
-
-
-def descriptor_path(library_root: Path, *, name: str) -> Path:
-    """Where a fitted descriptor is written, under the library root beside the other models."""
-    return library_root / "models" / DESCRIPTORS_DIRECTORY_NAME / f"{name}{DESCRIPTOR_SUFFIX}"
 
 
 def save_descriptor(path: Path, model: GridDescriptor, description: DescriptorDescription) -> None:

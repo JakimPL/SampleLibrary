@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, Dataset, Sampler
 from samplecore.labeling.labels import SampleLabel
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from samplemorph.descriptors.grid_descriptor import DESCRIPTOR_SIZE
+from samplemorph.descriptors.descriptor_shape import DESCRIPTOR_SIZE
 from samplemorph.training.descriptor_cache import (
     MINIMUM_RETUNED_VIEW_COUNT,
     STORED_VIEW,

@@ -25,7 +25,7 @@ from samplemorph.training.runs import (
     resume_path,
     run_directory,
 )
-from samplemorph.vocoders.restorer_model import RestorerShape
+from samplemorph.vocoders.restorer_shape import RestorerShape
 from tests.samplemorph.training.conftest import RESTORER_CHANNELS
 
 

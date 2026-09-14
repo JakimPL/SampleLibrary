@@ -9,21 +9,19 @@ from sqlalchemy import Connection
 from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from, train_and_report
-from samplemorph.descriptors.grid_descriptor import DEFAULT_WIDTH
-from samplemorph.descriptors.learned import DEFAULT_DESCRIPTOR_NAME
+from samplemorph.descriptors.descriptor_shape import DEFAULT_WIDTH
+from samplemorph.model_paths import DEFAULT_DESCRIPTOR_NAME
 from samplemorph.training.descriptor_cache import DEFAULT_GRID_CACHE_NAME, grid_cache_directory, open_grid_cache
-from samplemorph.training.descriptor_losses import (
-    DEFAULT_DISTILLATION_WEIGHT,
-    DEFAULT_LABEL_WEIGHT,
-    DEFAULT_RETUNING_WEIGHT,
-    DescriptorLossWeights,
-)
 from samplemorph.training.descriptor_settings import (
     DEFAULT_DESCRIPTOR_BATCH_SIZE,
     DEFAULT_DESCRIPTOR_EPOCHS,
     DEFAULT_DESCRIPTOR_LEARNING_RATE,
+    DEFAULT_DISTILLATION_WEIGHT,
     DEFAULT_LABEL_HOLDOUT_SHARE,
+    DEFAULT_LABEL_WEIGHT,
     DEFAULT_LABELED_PER_BATCH,
+    DEFAULT_RETUNING_WEIGHT,
+    DescriptorLossWeights,
     DescriptorTrainingSettings,
 )
 

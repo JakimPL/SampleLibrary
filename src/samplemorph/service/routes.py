@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from http import HTTPStatus
-from typing import Annotated
+from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from samplecore.models.morph import HeardMorphPoint, MorphServiceStatus
 from samplemorph.service.dependencies import get_renderer
-from samplemorph.service.renderer import MorphRenderer
+from samplemorph.service.renderer import MorphRenderer, RenderBoundsError
 from samplemorph.service.settings import CACHE_CONTROL, WAV_MEDIA_TYPE
+
+ANY_ENTITY_TAG: Final[str] = "*"
+WEAK_TAG_PREFIX: Final[str] = "W/"
 
 router = APIRouter(prefix="/morph", tags=["morph"])
 
@@ -21,21 +24,26 @@ def get_morph_audio(
 ) -> Response:
     """The audio at one point between two samples, as a WAV stating the rate the pair is heard at.
 
-    The response names its render with a validator built from the loaded model and the point, so
-    a caller that already holds it is answered with a bare 304 and no synthesis.
+    The response names its render with a validator built from the loaded route and the point, and
+    asks every cache to check it before reuse, so a caller that holds the render is answered with
+    a bare 304 and no synthesis, and a caller holding a render of another route is sent the new one.
 
     Raises:
-        HTTPException: 404 when the store holds no object for one of the two samples.
+        HTTPException: 404 when the store holds no object for one of the two samples; 422 when the
+            point would render past the process's limits.
     """
     etag = renderer.etag(point)
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
-    if request.headers.get("if-none-match") == etag:
+    if _matches(request.headers.get("if-none-match"), etag):
         return Response(status_code=HTTPStatus.NOT_MODIFIED, headers=headers)
 
     try:
+        renderer.check_bounds(point)
         rendered = renderer.render(point)
     except FileNotFoundError as error:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from error
+    except RenderBoundsError as error:
+        raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(error)) from error
 
     return Response(content=rendered, media_type=WAV_MEDIA_TYPE, headers=headers)
 
@@ -44,3 +52,11 @@ def get_morph_audio(
 def get_morph_status(renderer: MorphRenderer = Depends(get_renderer)) -> MorphServiceStatus:
     """What this process serves: the model, the route, the device, and the fingerprint renders are named by."""
     return renderer.status()
+
+
+def _matches(condition: str | None, etag: str) -> bool:
+    """Whether an `If-None-Match` list names this validator, weakly or strongly, or names every one."""
+    if condition is None:
+        return False
+    tags = (candidate.strip() for candidate in condition.split(","))
+    return any(tag == ANY_ENTITY_TAG or tag.removeprefix(WEAK_TAG_PREFIX) == etag for tag in tags)

@@ -14,8 +14,9 @@ from samplecore.models.sample import Sample
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
 from samplemorph.descriptors.embedding import describe_cache, embed_cache
-from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
+from samplemorph.descriptors.grid_descriptor import GridDescriptor
 from samplemorph.descriptors.learned import DescriptorDescription, LearnedDescriptor
 from samplemorph.registries import canonicalizer_for_geometry
 from samplemorph.training.descriptor_cache import GridCache

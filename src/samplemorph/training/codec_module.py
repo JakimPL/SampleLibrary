@@ -8,9 +8,11 @@ from lightning.pytorch import LightningModule
 from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig
 from torch import Tensor, nn
 
-from samplemorph.codecs.conditioned_model import ConditionedCodecModel, ConditionedCodecShape
+from samplemorph.codecs.conditioned_model import ConditionedCodecModel
+from samplemorph.codecs.conditioned_shape import ConditionedCodecShape
 from samplemorph.descriptors.grid_descriptor import GridDescriptor
-from samplemorph.training.codec_losses import CodecLossParts, CodecLossWeights, CodecPrediction, codec_loss
+from samplemorph.training.codec_losses import CodecLossParts, CodecPrediction, codec_loss
+from samplemorph.training.codec_settings import CodecLossWeights
 from samplemorph.training.metrics import (
     CODEC_TRAINING_CYCLE,
     CODEC_TRAINING_LOSS,

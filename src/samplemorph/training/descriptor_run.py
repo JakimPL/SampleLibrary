@@ -3,8 +3,8 @@ from __future__ import annotations
 import torch
 
 from samplecore.labeling.ranking import agreement_matrix
-from samplemorph.descriptors.grid_descriptor import DescriptorShape
-from samplemorph.descriptors.learned import descriptor_path
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
+from samplemorph.model_paths import descriptor_path
 from samplemorph.training.descriptor_data import DescriptorCorpus, DescriptorDataModule
 from samplemorph.training.descriptor_export import DescriptorWriter
 from samplemorph.training.descriptor_module import DescriptorTrainingModule, TeachingMaterial

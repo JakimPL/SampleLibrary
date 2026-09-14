@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import csv
 import json
+import os
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,13 +30,11 @@ from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplemorph.cli import main
-from samplemorph.codecs.conditioned import codec_path
-from samplemorph.descriptors.grid_descriptor import DESCRIPTOR_SIZE
-from samplemorph.descriptors.learned import descriptor_path
+from samplemorph.descriptors.descriptor_shape import DESCRIPTOR_SIZE
 from samplemorph.geometry import Anchor, log_frequency_geometry
+from samplemorph.model_paths import codec_path, descriptor_path, restorer_path
 from samplemorph.model_store import model_path
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
-from samplemorph.vocoders.restored import restorer_path
 from tests.samplemorph.conftest import harmonic_tone
 
 PROGRAM = "samplelibrary morph"
@@ -615,3 +616,14 @@ def test_a_teacher_whose_vectors_a_descriptor_cannot_answer_in_is_refused(
 
     assert raised.value.code == 1
     assert "vectors of 3 numbers" in capsys.readouterr().err
+
+
+def test_parsing_a_morph_command_loads_no_network_library() -> None:
+    """Every morph command's flags, its help included, are read with torch and lightning left unloaded."""
+    probe = "import sys, samplemorph.cli; sys.exit(any(name in sys.modules for name in ('torch', 'lightning')))"
+
+    finished = subprocess.run(
+        [sys.executable, "-c", probe], env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}, check=False
+    )
+
+    assert finished.returncode == 0

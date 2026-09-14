@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, closing
 from pathlib import Path
 
 import httpx
@@ -38,6 +39,19 @@ def get_connection(request: Request) -> Iterator[Connection]:
         yield connection
     finally:
         connection.close()
+
+
+ConnectionOpener = Callable[[], AbstractContextManager[Connection]]
+
+
+def get_connection_opener(request: Request) -> ConnectionOpener:
+    """Opens a read-only connection for just the span a route reads the catalog in, closed when that span ends.
+
+    A route that awaits another process after reading holds no pooled connection while it waits,
+    which a dependency holding one for the whole request would.
+    """
+    engine = request.app.state.engine
+    return lambda: closing(checkout_read_only(engine))
 
 
 def get_curation_connection(request: Request) -> Iterator[Connection]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 
+from samplemorph.model_paths import DEFAULT_RESTORER_NAME
 from samplemorph.model_store import DEFAULT_MODEL_NAME
 from samplemorph.pipeline import RouteChoice
 from samplemorph.registries import (
@@ -11,7 +12,6 @@ from samplemorph.registries import (
     RESTORED_VOCODER_NAME,
     VOCODER_REGISTRY,
 )
-from samplemorph.vocoders.restored import DEFAULT_RESTORER_NAME
 
 
 def add_model_argument(parser: argparse.ArgumentParser) -> None:

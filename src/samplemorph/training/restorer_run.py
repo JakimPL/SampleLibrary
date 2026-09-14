@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from lightning.pytorch import seed_everything
 
+from samplemorph.model_paths import restorer_path
 from samplemorph.training.analysis_data import AnalysisCorpus, AnalysisDataModule
 from samplemorph.training.derived_examples import ExampleFamily
 from samplemorph.training.export import BestEpochExport
@@ -12,8 +13,7 @@ from samplemorph.training.restorer_module import RestorerTrainingModule
 from samplemorph.training.runs import RunPlacement, TrainingOutcome, fit_and_export, geometry_parameters
 from samplemorph.training.settings import AnalysisTrainingSettings
 from samplemorph.vocoders.pghi import gaussian_log_frequency
-from samplemorph.vocoders.restored import restorer_path
-from samplemorph.vocoders.restorer_model import RestorerShape
+from samplemorph.vocoders.restorer_shape import RestorerShape
 
 
 def run_restorer_training(

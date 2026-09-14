@@ -19,6 +19,7 @@ from samplecore.storage import audio_store
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.geometry import Geometry, log_frequency_geometry
 from samplemorph.images import SoundImage
+from samplemorph.model_paths import DEFAULT_RESTORER_NAME, restorer_path
 from samplemorph.model_store import (
     DEFAULT_MODEL_NAME,
     PRINCIPAL_COMPONENT_CODEC_NAME,
@@ -36,10 +37,12 @@ from samplemorph.registries import (
     RESTORED_VOCODER_NAME,
 )
 from samplemorph.service.app import create_app
+from samplemorph.service.renderer import load_renderer
 from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
 from samplemorph.training.principal_components import PrincipalComponentTrainer, stack_grids
-from samplemorph.vocoders.restored import DEFAULT_RESTORER_NAME, RestorerDescription, restorer_path, save_restorer
-from samplemorph.vocoders.restorer_model import Restorer, RestorerShape
+from samplemorph.vocoders.restored import RestorerDescription, save_restorer
+from samplemorph.vocoders.restorer_model import Restorer
+from samplemorph.vocoders.restorer_shape import RestorerShape
 from tests.samplemorph.conftest import harmonic_tone
 
 TONES = ((220.0, 4096), (330.0, 8192), (440.0, 6144))
@@ -137,7 +140,7 @@ def restored_settings(library: StoredLibrary) -> ServiceSettings:
 
 @pytest.fixture
 def client(settings: ServiceSettings) -> Iterator[TestClient]:
-    with TestClient(create_app(settings)) as test_client:
+    with TestClient(create_app(load_renderer(settings))) as test_client:
         yield test_client
 
 

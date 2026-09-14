@@ -7,27 +7,11 @@ import torch
 from torch import Tensor
 from torch.nn import functional
 
-DEFAULT_RECONSTRUCTION_WEIGHT: Final[float] = 1.0
-DEFAULT_PRIOR_WEIGHT: Final[float] = 0.01
-DEFAULT_CYCLE_WEIGHT: Final[float] = 0.1
+from samplemorph.training.codec_settings import CodecLossWeights
+
 # The grid is read at its own resolution and at two coarser ones, so a decoder is scored on the
 # shape of a spectrum as well as on its lines.
 COARSER_READINGS: Final[tuple[tuple[int, int], ...]] = ((4, 2), (16, 4))
-
-
-@dataclass(frozen=True)
-class CodecLossWeights:
-    """How much each of the three terms says in the total.
-
-    Reconstruction is what the codec is for. The prior on the residual is what makes a point between
-    two residuals decode to something, and its weight is the trade between fidelity and a latent
-    that interpolates. The cycle term asks the decoded grid to describe as the descriptor it was
-    decoded from, which is what makes the decoder use its conditioning.
-    """
-
-    reconstruction: float = DEFAULT_RECONSTRUCTION_WEIGHT
-    prior: float = DEFAULT_PRIOR_WEIGHT
-    cycle: float = DEFAULT_CYCLE_WEIGHT
 
 
 @dataclass(frozen=True)

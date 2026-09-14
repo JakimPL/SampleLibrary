@@ -48,17 +48,17 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     """
     first_sample = require_sample(connection, arguments.first)
     second_sample = require_sample(connection, arguments.second)
-    model, route = load_route(config.library_root, route_choice_from(arguments))
+    loaded = load_route(config.library_root, route_choice_from(arguments))
     pair = encode_pair(
         read_heard_sample(connection, config.library_root, first_sample),
         read_heard_sample(connection, config.library_root, second_sample),
-        canonicalizer=route.canonicalizer,
-        codec=route.codec,
+        canonicalizer=loaded.route.canonicalizer,
+        codec=loaded.route.codec,
     )
 
     output_directory = Path(arguments.output)
-    summary = render_listening_set(pair, route=route, output_directory=output_directory)
-    (output_directory / MANIFEST_NAME).write_text(listening_set_manifest(model.description, summary))
+    summary = render_listening_set(pair, route=loaded.route, output_directory=output_directory)
+    (output_directory / MANIFEST_NAME).write_text(listening_set_manifest(loaded, summary))
 
     _logger.info(
         "Wrote %d files for %s against %s, %d of them morphs, into %s.",

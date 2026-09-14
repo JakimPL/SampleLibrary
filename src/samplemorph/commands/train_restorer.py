@@ -12,8 +12,8 @@ from samplemorph.commands.analysis_training import (
     add_analysis_training_arguments,
     train_on_analysis_corpus,
 )
-from samplemorph.vocoders.restored import DEFAULT_RESTORER_NAME
-from samplemorph.vocoders.restorer_model import DEFAULT_CHANNELS, GROUP_COUNT
+from samplemorph.model_paths import DEFAULT_RESTORER_NAME
+from samplemorph.vocoders.restorer_shape import DEFAULT_CHANNELS, GROUP_COUNT
 
 COMMAND_NAME: Final[str] = "train-restorer"
 RESTORER_EXPERIMENT_NAME: Final[str] = "restorer"

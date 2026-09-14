@@ -4,32 +4,28 @@ import argparse
 import logging
 from typing import Final
 
-import torch
 from sqlalchemy import Connection
 
 from samplecore.cli_support import non_negative_integer, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.hashing import file_sha256
-from samplemorph.codecs.conditioned import DEFAULT_CODEC_NAME
-from samplemorph.codecs.conditioned_model import (
+from samplemorph.codecs.conditioned_shape import (
     DEFAULT_CODEC_WIDTH,
     DEFAULT_RESIDUAL_LAYOUT,
     DEFAULT_RESIDUAL_SIZE,
     ResidualLayout,
 )
 from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from, train_and_report
-from samplemorph.descriptors.learned import DEFAULT_DESCRIPTOR_NAME, descriptor_path, load_descriptor
-from samplemorph.training.codec_losses import (
-    DEFAULT_CYCLE_WEIGHT,
-    DEFAULT_PRIOR_WEIGHT,
-    DEFAULT_RECONSTRUCTION_WEIGHT,
-    CodecLossWeights,
-)
+from samplemorph.model_paths import DEFAULT_CODEC_NAME, DEFAULT_DESCRIPTOR_NAME, descriptor_path
 from samplemorph.training.codec_settings import (
     DEFAULT_CODEC_BATCH_SIZE,
     DEFAULT_CODEC_EPOCHS,
     DEFAULT_CODEC_LEARNING_RATE,
+    DEFAULT_CYCLE_WEIGHT,
     DEFAULT_PRIOR_WARMUP_STEPS,
+    DEFAULT_PRIOR_WEIGHT,
+    DEFAULT_RECONSTRUCTION_WEIGHT,
+    CodecLossWeights,
     CodecTrainingSettings,
 )
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
@@ -100,7 +96,10 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     # The trainer and the run store are imported here, so parsing arguments and the commands that
     # train nothing stay clear of them.
     # pylint: disable=import-outside-toplevel
+    import torch
+
     from samplecore.tracking.session import open_run
+    from samplemorph.descriptors.learned import load_descriptor
     from samplemorph.training.codec_data import CodecCorpus
     from samplemorph.training.codec_run import run_codec_training
     from samplemorph.training.runs import RunFamily, RunPlacement, TrainingOutcome, check_resume_point

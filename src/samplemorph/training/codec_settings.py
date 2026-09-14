@@ -3,13 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Final
 
-from samplemorph.codecs.conditioned_model import (
+from samplemorph.codecs.conditioned_shape import (
     DEFAULT_CODEC_WIDTH,
     DEFAULT_RESIDUAL_LAYOUT,
     DEFAULT_RESIDUAL_SIZE,
     ResidualLayout,
 )
-from samplemorph.training.codec_losses import CodecLossWeights
 from samplemorph.training.run_settings import RunSettings
 
 DEFAULT_CODEC_EPOCHS: Final[int] = 20
@@ -17,6 +16,24 @@ DEFAULT_CODEC_BATCH_SIZE: Final[int] = 32
 DEFAULT_CODEC_LEARNING_RATE: Final[float] = 3e-4
 DEFAULT_PRIOR_WARMUP_STEPS: Final[int] = 2_000
 DEFAULT_CODEC_VALIDATION_SHARE: Final[float] = 0.05
+DEFAULT_RECONSTRUCTION_WEIGHT: Final[float] = 1.0
+DEFAULT_PRIOR_WEIGHT: Final[float] = 0.01
+DEFAULT_CYCLE_WEIGHT: Final[float] = 0.1
+
+
+@dataclass(frozen=True)
+class CodecLossWeights:
+    """How much each of the three terms says in the total.
+
+    Reconstruction is what the codec is for. The prior on the residual is what makes a point between
+    two residuals decode to something, and its weight is the trade between fidelity and a latent
+    that interpolates. The cycle term asks the decoded grid to describe as the descriptor it was
+    decoded from, which is what makes the decoder use its conditioning.
+    """
+
+    reconstruction: float = DEFAULT_RECONSTRUCTION_WEIGHT
+    prior: float = DEFAULT_PRIOR_WEIGHT
+    cycle: float = DEFAULT_CYCLE_WEIGHT
 
 
 def default_run_settings() -> RunSettings:

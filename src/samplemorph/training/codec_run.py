@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from samplemorph.codecs.conditioned import codec_path
-from samplemorph.codecs.conditioned_model import ConditionedCodecShape
+from samplemorph.codecs.conditioned_shape import ConditionedCodecShape
+from samplemorph.model_paths import codec_path
 from samplemorph.training.codec_data import CodecCorpus, CodecDataModule
 from samplemorph.training.codec_export import CodecWriter
 from samplemorph.training.codec_module import CodecTrainingModule, ConditioningDescriptor

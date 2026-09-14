@@ -9,22 +9,18 @@ from lightning.pytorch import Trainer
 
 from samplecore.hashing import file_sha256
 from samplemorph.codecs.conditioned import load_conditioned_codec
-from samplemorph.codecs.conditioned_model import ConditionedCodecShape, ResidualLayout
-from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
-from samplemorph.descriptors.learned import DescriptorDescription, LearnedDescriptor, descriptor_path, save_descriptor
+from samplemorph.codecs.conditioned_shape import ConditionedCodecShape, ResidualLayout
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
+from samplemorph.descriptors.grid_descriptor import GridDescriptor
+from samplemorph.descriptors.learned import DescriptorDescription, LearnedDescriptor, save_descriptor
 from samplemorph.geometry import log_frequency_geometry
+from samplemorph.model_paths import descriptor_path
 from samplemorph.registries import canonicalizer_for_geometry
 from samplemorph.training.codec_data import CodecCorpus, CodecDataModule
 from samplemorph.training.codec_export import CodecWriter
-from samplemorph.training.codec_losses import (
-    CodecLossWeights,
-    CodecPrediction,
-    codec_loss,
-    prior_divergence,
-    reconstruction_error,
-)
+from samplemorph.training.codec_losses import CodecPrediction, codec_loss, prior_divergence, reconstruction_error
 from samplemorph.training.codec_module import DESCRIPTOR_DIGEST_KEY, CodecTrainingModule, ConditioningDescriptor
-from samplemorph.training.codec_settings import CodecTrainingSettings
+from samplemorph.training.codec_settings import CodecLossWeights, CodecTrainingSettings
 from samplemorph.training.descriptor_cache import (
     DESCRIPTION_FILE_NAME,
     DURATIONS_FILE_NAME,

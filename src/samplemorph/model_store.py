@@ -13,6 +13,7 @@ from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.codecs.principal_components import PrincipalComponentCodec
 from samplemorph.geometry import Geometry
+from samplemorph.model_paths import CONDITIONED_CODEC_NAME, codec_path, descriptor_path
 
 MODELS_DIRECTORY_NAME: Final[str] = "models"
 MODEL_SUFFIX: Final[str] = ".npz"
@@ -58,20 +59,30 @@ def model_path(library_root: Path, *, name: str) -> Path:
     return library_root / MODELS_DIRECTORY_NAME / f"{name}{MODEL_SUFFIX}"
 
 
-def load_named_model(library_root: Path, *, name: str, device: str) -> MorphModel:
+@dataclass(frozen=True)
+class LoadedModel:
+    """A stored model as loaded, beside every file it was read from."""
+
+    model: MorphModel
+    files: tuple[Path, ...]
+
+
+def load_named_model(library_root: Path, *, name: str, device: str) -> LoadedModel:
     """A fitted model by name, from whichever store holds it: arrays for a linear codec, weights for a learned one.
+
+    A learned codec is read beside its descriptor, so both files are named among those it came from.
 
     Raises:
         FileNotFoundError: no model of that name is stored in either.
     """
     array_path = model_path(library_root, name=name)
     if array_path.exists():
-        return load_model(array_path)
+        return LoadedModel(model=load_model(array_path), files=(array_path,))
 
     # pylint: disable=import-outside-toplevel
     import torch
 
-    from samplemorph.codecs.conditioned import CONDITIONED_CODEC_NAME, codec_path, load_conditioned_codec
+    from samplemorph.codecs.conditioned import load_conditioned_codec
 
     stored_codec_path = codec_path(library_root, name=name)
     if not stored_codec_path.exists():
@@ -91,7 +102,10 @@ def load_named_model(library_root: Path, *, name: str, device: str) -> MorphMode
         random_seed=codec.description.random_seed,
         explained_variance=None,
     )
-    return MorphModel(description=description, codec=codec)
+    return LoadedModel(
+        model=MorphModel(description=description, codec=codec),
+        files=(stored_codec_path, descriptor_path(library_root, name=codec.description.descriptor)),
+    )
 
 
 def save_model(path: Path, model: MorphModel) -> None:

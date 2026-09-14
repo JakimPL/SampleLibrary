@@ -12,15 +12,17 @@ from samplemorph.canonicalizers.log_frequency import build_log_frequency_canonic
 from samplemorph.codecs.conditioned import (
     ConditionedCodec,
     ConditionedCodecDescription,
-    codec_path,
     load_conditioned_codec,
     save_conditioned_codec,
 )
-from samplemorph.codecs.conditioned_model import ConditionedCodecModel, ConditionedCodecShape, ResidualLayout
-from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
-from samplemorph.descriptors.learned import DescriptorDescription, descriptor_path, save_descriptor
+from samplemorph.codecs.conditioned_model import ConditionedCodecModel
+from samplemorph.codecs.conditioned_shape import ConditionedCodecShape, ResidualLayout
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
+from samplemorph.descriptors.grid_descriptor import GridDescriptor
+from samplemorph.descriptors.learned import DescriptorDescription, save_descriptor
 from samplemorph.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE, pooled_band_count
 from samplemorph.geometry import log_frequency_geometry
+from samplemorph.model_paths import codec_path, descriptor_path
 from samplemorph.morphers import MorphWeights
 from samplemorph.morphers.linear import LinearMorpher
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone
