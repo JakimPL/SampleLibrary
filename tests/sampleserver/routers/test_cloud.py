@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
@@ -14,6 +15,7 @@ from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND
 from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.repositories.cloud import (
@@ -30,6 +32,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import (
     PostgresSamplePropertiesRepository,
 )
@@ -154,6 +157,26 @@ def test_the_cloud_follows_a_fresh_embedding_and_a_replaced_rate(client: TestCli
     by_hash = {point["sample_hash"]: point for point in client.get("/cloud").json()}
 
     assert by_hash[SAMPLE_HASH]["playback_rate_hz"] == 16726
+
+
+def test_the_cloud_follows_a_scanned_sample_file(client: TestClient, connection: Connection) -> None:
+    _store_samples(connection, SAMPLE_HASH)
+    PostgresCloudCoordinateRepository(connection).upsert(
+        SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
+    )
+    assert client.get("/cloud").json()[0]["category"] == "uncategorized"
+
+    PostgresSampleFileRepository(connection).upsert(
+        SampleFile(
+            sample_hash=SAMPLE_HASH,
+            location=SampleFileLocation(directory=Path("/samples"), relative_path="Snares/001.wav"),
+            rate=44100,
+            fingerprint=FileFingerprint(size_bytes=64, modified_ns=0),
+        )
+    )
+    point = client.get("/cloud").json()[0]
+
+    assert (point["category"], point["playback_rate_hz"]) == ("snare", 44100)
 
 
 def test_the_cloud_goes_out_gzipped_only_when_the_caller_accepts_it(client: TestClient, connection: Connection) -> None:

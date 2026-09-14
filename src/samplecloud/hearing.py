@@ -44,13 +44,13 @@ def hearing_for(connection: Connection, reading: Reading) -> Hearing:
     """The hearing a pass asked for, its playback rates read once for the whole catalog.
 
     The rate of a sample is the one the library plays it at, the way the application sounds it:
-    the rate its note events settle on where a pattern plays it, its occurrences' dominant rate
-    otherwise.
+    the rate its note events settle on where a pattern plays it, and otherwise the dominant rate its
+    module occurrences and sample files declare.
     """
     if reading is Reading.NOMINAL:
         return Hearing(reading=reading, playback_rate_by_hash={})
 
-    _, occurrence_rates = PostgresSampleRepository(connection).names_and_rates_for_every_sample()
+    occurrence_rates = PostgresSampleRepository(connection).rates_for_every_sample()
     recorded = PostgresSamplePlaybackRateRepository(connection).list_all()
     playback_rate_by_hash: dict[str, Rate] = {}
     for sample_hash in occurrence_rates.keys() | recorded.keys():

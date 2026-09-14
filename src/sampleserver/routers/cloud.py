@@ -10,12 +10,13 @@ from pydantic import BaseModel, TypeAdapter
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
-from samplecore.categorization import classify_sample_category
+from samplecore.categorization import classify_sample_names
 from samplecore.labeling.labels import LabelPath, written_paths
 from samplecore.models.base import FROZEN
 from samplecore.models.category import SampleCategory
 from samplecore.models.experiment import VOCABULARY_PARAMETER
 from samplecore.models.scalars import ModuleHash, SampleHash
+from samplecore.naming import NO_SAMPLE_NAMES
 from samplecore.pitch import choose_playback_rate
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
@@ -31,6 +32,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from sampleserver.dependencies import get_cloud_cache, get_connection, get_suggestions_cache
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers.curation import TagSummary
@@ -43,15 +45,14 @@ COORDINATE_DECIMALS: Final[int] = 4
 JSON_MEDIA_TYPE: Final[str] = "application/json"
 GZIP_ENCODING: Final[str] = "gzip"
 
-CloudRevision = tuple[tuple[int, datetime | None], tuple[int, int], int]
+CloudRevision = tuple[tuple[int, datetime | None], tuple[int, int], int, tuple[int, int]]
 
 
 class SampleCloudPoint(BaseModel):
     """One sample's place in the embedding, with what a viewer needs to color and hear the point.
 
-    ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
-    sample's own occurrence names together with the names of the instruments reaching it -- rather
-    than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
+    ``category`` is computed the same way `SampleSummary.category` is -- at read time, from every
+    name the sample goes by -- rather than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
     clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
     the catalog knows no rate for.
 
@@ -92,14 +93,15 @@ def get_cloud(
     """Every sample's position in the library's 2D embedding space, as of the latest embedding run.
 
     The answer is built once per revision of what it reads and served from memory after that: the
-    coordinates' count and last write, the playback rates on file and the modules cataloged are
-    what a pipeline moves, and three scalar queries say whether any has. A caller that accepts
+    coordinates' count and last write, the playback rates on file, the modules cataloged and the
+    sample files scanned are what a pipeline moves, and four scalar queries say whether any has. A caller that accepts
     gzip receives the body compressed once at the best level rather than per request.
     """
     revision: CloudRevision = (
         PostgresCloudCoordinateRepository(connection).revision(),
         PostgresSamplePlaybackRateRepository(connection).revision(),
         PostgresModuleRepository(connection).count(),
+        PostgresSampleFileRepository(connection).revision(),
     )
     return _cached_json(request, cache, revision, lambda: CLOUD_POINTS.dump_json(_cloud_points(connection)))
 
@@ -109,16 +111,13 @@ def _cloud_points(connection: Connection) -> tuple[SampleCloudPoint, ...]:
     coordinates = PostgresCloudCoordinateRepository(connection).list_all()
     repository = PostgresSampleRepository(connection)
     names_by_hash, rates_by_hash = repository.names_and_rates_for_every_sample()
-    instrument_names_by_hash = repository.instrument_names_for_every_sample()
     playback_rate_by_hash = PostgresSamplePlaybackRateRepository(connection).list_all()
     return tuple(
         SampleCloudPoint(
             sample_hash=coordinate.sample_hash,
             x=round(coordinate.x, COORDINATE_DECIMALS),
             y=round(coordinate.y, COORDINATE_DECIMALS),
-            category=classify_sample_category(
-                names_by_hash.get(coordinate.sample_hash, ()) + instrument_names_by_hash.get(coordinate.sample_hash, ())
-            ),
+            category=classify_sample_names(names_by_hash.get(coordinate.sample_hash, NO_SAMPLE_NAMES)),
             playback_rate_hz=choose_playback_rate(
                 note_event_rate=playback_rate_by_hash.get(coordinate.sample_hash),
                 occurrence_rates=rates_by_hash.get(coordinate.sample_hash, ()),

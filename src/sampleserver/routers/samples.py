@@ -3,13 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
-from samplecore.categorization import classify_sample_category
+from samplecore.categorization import classify_sample_names
 from samplecore.equivalence_classes import classes_by_member_hash, compute_equivalence_classes
 from samplecore.models.base import FROZEN
 from samplecore.models.category import SampleCategory
@@ -17,6 +17,7 @@ from samplecore.models.module import Module
 from samplecore.models.note_event import SamplePlaybackRate
 from samplecore.models.relation import SampleRelation
 from samplecore.models.sample import DescribedSample, SampleSelection, SampleSort, SampleSummary
+from samplecore.models.sample_file import SampleFileLocation
 from samplecore.models.sample_properties import TrackerSampleProperties
 from samplecore.models.scalars import (
     MAXIMUM_RATING,
@@ -26,7 +27,7 @@ from samplecore.models.scalars import (
     SampleHash,
 )
 from samplecore.models.tracker import TrackerFormat
-from samplecore.naming import choose_dominant_name
+from samplecore.naming import NO_SAMPLE_NAMES
 from samplecore.pitch import (
     playback_rates_of,
     tally_playback_rates,
@@ -40,15 +41,23 @@ from samplecore.storage.repositories.note_event import PostgresNoteEventReposito
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError, is_unchanged
 from samplecore.waveform import WaveformPeak
 from sampleserver.caching import IMMUTABLE_CACHE_CONTROL
-from sampleserver.dependencies import get_connection, get_library_root, get_spectral_vectors
+from sampleserver.dependencies import (
+    ConnectionOpener,
+    get_connection,
+    get_connection_opener,
+    get_library_root,
+    get_spectral_vectors,
+)
 from sampleserver.equivalence import equivalence_class_members
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
-from sampleserver.parameters import MAX_PAGE_OFFSET, NOT_FOUND_RESPONSE, WAV_CONTENT, SampleHashPath
+from sampleserver.parameters import MAX_PAGE_OFFSET, NOT_FOUND_RESPONSE, WAV_CONTENT, WAV_MEDIA_TYPE, SampleHashPath
 
 router = APIRouter(prefix="/samples", tags=["samples"])
 
@@ -74,6 +83,20 @@ class SampleOccurrenceDetail(BaseModel):
 
     properties: TrackerSampleProperties
     module: SampleOccurrenceModule
+
+
+class SampleFileDetail(BaseModel):
+    """One file a sample was found in, read in place from a sample directory.
+
+    ``available`` says whether the file is there now with the size and write time it was scanned
+    at, which is what playing the sample from it needs.
+    """
+
+    model_config = FROZEN
+
+    location: SampleFileLocation
+    rate: Rate
+    available: bool
 
 
 class SampleDistance(BaseModel):
@@ -123,7 +146,7 @@ class SuggestedLabel(BaseModel):
 
 
 class SampleDetail(DescribedSample):
-    """A sample together with every module occurrence that references it, and the rates it is heard at.
+    """A sample together with every module occurrence and sample file holding it, and the rates it is heard at.
 
     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
@@ -132,6 +155,7 @@ class SampleDetail(DescribedSample):
     """
 
     occurrences: tuple[SampleOccurrenceDetail, ...]
+    files: tuple[SampleFileDetail, ...]
     duration_seconds: float
     playback_rates: tuple[SamplePlaybackRate, ...]
     equivalence_member_count: Count
@@ -213,7 +237,7 @@ def _collapse_by_equivalence(items: tuple[SampleSummary, ...]) -> tuple[SampleSu
 
 @router.get("/{sample_hash}", responses=NOT_FOUND_RESPONSE)
 def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get_connection)) -> SampleDetail:
-    """One sample's own fields plus every module occurrence that references it.
+    """One sample's own fields plus every module occurrence and sample file holding it.
 
     ``equivalence_member_count`` travels with the sample so a caller labeling it knows how many
     near-duplicates the same choice would reach. ``playback_rate_hz`` is the rate every reader
@@ -235,18 +259,21 @@ def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get
         for item in properties
     )
     tally = tally_playback_rates(PostgresNoteEventRepository(connection).note_usage_for_sample(sample_hash))
+    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash([sample_hash])
+    names = names_by_hash.get(sample_hash, NO_SAMPLE_NAMES)
     return SampleDetail(
         hash=sample.hash,
         depth=sample.depth,
         channels=sample.channels,
         frames=sample.frames,
         occurrences=occurrences,
-        size_bytes=sample.stored_bytes,
-        display_name=choose_dominant_name(item.name for item in properties),
-        category=classify_sample_category(
-            tuple(item.name for item in properties)
-            + PostgresSampleRepository(connection).instrument_names_by_hash([sample.hash]).get(sample.hash, ())
+        files=tuple(
+            SampleFileDetail(location=found.location, rate=found.rate, available=is_unchanged(found))
+            for found in PostgresSampleFileRepository(connection).list_for_samples([sample_hash])
         ),
+        size_bytes=sample.stored_bytes,
+        display_name=names.display_name,
+        category=classify_sample_names(names),
         hand_label=annotation.label if annotation is not None else None,
         rating=annotation.rating if annotation is not None else None,
         favorite=annotation.favorite if annotation is not None else False,
@@ -278,21 +305,38 @@ def _suggested_labels(connection: Connection, sample_hash: str) -> tuple[Suggest
 def get_sample_audio(
     sample_hash: SampleHashPath,
     library_root: Path = Depends(get_library_root),
-) -> FileResponse:
-    """The sample's own canonical audio, as stored in the content-addressable store.
+    open_connection: ConnectionOpener = Depends(get_connection_opener),
+) -> Response:
+    """The sample's own canonical audio: its stored object, or the WAV the store would hold for it.
 
-    The object is content-addressed, so it is served with a cache lifetime of a year and read
-    straight off the store by its hash, with no catalog round trip on the way to a sound: the
-    hash's own shape is checked on the path, which is what keeps a request inside the store.
+    A stored object is read straight off the store by its hash, with no catalog round trip on the
+    way to a sound: the hash's own shape is checked on the path, which is what keeps a request inside
+    the store. A sample found in a sample file is read from the file the catalog names and encoded
+    the way the store encodes an object, so both kinds play at the same nominal header rate. Either
+    way the bytes are those of the hash, so they are served with a cache lifetime of a year.
 
     Raises:
-        HTTPException: 404 when the store holds no object under this hash.
+        HTTPException: 404 when the store holds no object under this hash and no cataloged file
+            holds the sample now.
     """
     path = audio_store.object_path(library_root, sample_hash)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail=f"no sample stored with hash {sample_hash!r}")
+    if path.is_file():
+        return FileResponse(path, media_type=WAV_MEDIA_TYPE, headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
 
-    return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
+    with open_connection() as connection:
+        sample_files = PostgresSampleFileRepository(connection).list_for_samples([sample_hash])
+    try:
+        sample_pcm = SampleAudio.of_files(library_root, sample_files).read_by_hash(sample_hash)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=f"no sample stored with hash {sample_hash!r}") from error
+    except SampleUnavailableError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+    return Response(
+        audio_store.encode_wav(sample_pcm),
+        media_type=WAV_MEDIA_TYPE,
+        headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL},
+    )
 
 
 @router.get("/{sample_hash}/preview", responses=NOT_FOUND_RESPONSE)
@@ -313,18 +357,16 @@ def get_sample_preview(sample_hash: SampleHashPath, connection: Connection = Dep
 
 def _previews_by_hash(connection: Connection, sample_hashes: list[str]) -> dict[str, SamplePreview]:
     """A glance at each given sample, from four lookups over the whole list at once."""
-    repository = PostgresSampleRepository(connection)
-    names_by_hash, _ = repository.names_and_rates_by_hash(sample_hashes)
-    instrument_names_by_hash = repository.instrument_names_by_hash(sample_hashes)
+    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash(sample_hashes)
     annotations_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(sample_hashes)
     thumbnails_by_hash = PostgresSampleThumbnailRepository(connection).get_many(sample_hashes)
     previews: dict[str, SamplePreview] = {}
     for sample_hash in sample_hashes:
-        names = names_by_hash.get(sample_hash, ())
+        names = names_by_hash.get(sample_hash, NO_SAMPLE_NAMES)
         annotation = annotations_by_hash.get(sample_hash)
         previews[sample_hash] = SamplePreview(
-            display_name=choose_dominant_name(names),
-            category=classify_sample_category(names + instrument_names_by_hash.get(sample_hash, ())),
+            display_name=names.display_name,
+            category=classify_sample_names(names),
             hand_label=annotation.label if annotation is not None else None,
             thumbnail=peaks_from_thumbnail(thumbnails_by_hash.get(sample_hash)),
         )

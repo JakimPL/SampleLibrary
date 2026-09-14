@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from typing import Final
 
 from samplecore.models.category import SampleCategory
+from samplecore.naming import SampleNames
 
 _SEPARATOR_PATTERN: Final = re.compile(r"[ _-]")
 
@@ -57,4 +58,23 @@ def classify_sample_category(names: Iterable[str]) -> SampleCategory:
         if any(keyword in matching_key for matching_key in matching_keys for keyword in keywords):
             return category
 
+    return SampleCategory.UNCATEGORIZED
+
+
+def classify_sample_names(names: SampleNames) -> SampleCategory:
+    """Guess a sample's instrument category from its own and its instruments' names, then from its folders.
+
+    A name given to the sound itself outranks the folder it was filed in: a pack's "Kicks" folder
+    holding a file called "Snare 01" holds a snare. Folders speak only for a sample its names leave
+    uncategorized, one folder at a time and nearest the file first, so the folder a file sits in
+    outranks the pack's folder above it, and a keyword inside a long pack title reaches the sample
+    last.
+    """
+    category = classify_sample_category(names.own_names + names.instrument_names)
+    if category is not SampleCategory.UNCATEGORIZED:
+        return category
+    for folder_name in names.folder_names:
+        category = classify_sample_category((folder_name,))
+        if category is not SampleCategory.UNCATEGORIZED:
+            return category
     return SampleCategory.UNCATEGORIZED

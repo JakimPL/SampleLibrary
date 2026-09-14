@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import soundfile
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 from trackmod.core.notes.pitch import Note
@@ -16,17 +17,20 @@ from samplecore.models.module import Module
 from samplecore.models.note_event import NoteEvent
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
+from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
@@ -684,3 +688,75 @@ def test_a_neighbor_search_from_an_uncataloged_sample_says_so(client: TestClient
 
     assert response.status_code == 404
     assert "no sample cataloged" in response.json()["detail"]
+
+
+@pytest.fixture
+def cataloged_kick_file(connection: Connection, tmp_path: Path) -> SampleFile:
+    """A sample found in a file of a sample directory beside the library, cataloged the way a scan leaves it."""
+    directory = tmp_path / "packs"
+    path = directory / "Kicks" / "Deep 01.wav"
+    path.parent.mkdir(parents=True)
+    soundfile.write(path, np.linspace(-0.5, 0.5, 64), 48000, subtype="PCM_16")
+    decoded = decode_sample_file(path)
+    sample_file = SampleFile(
+        sample_hash=decoded.sample_pcm.sample.hash,
+        location=SampleFileLocation(directory=directory, relative_path="Kicks/Deep 01.wav"),
+        rate=decoded.rate,
+        fingerprint=FileFingerprint.of(path.stat()),
+    )
+    PostgresSampleRepository(connection).upsert(decoded.sample_pcm.sample)
+    PostgresSampleFileRepository(connection).upsert(sample_file)
+    return sample_file
+
+
+def test_a_sample_found_in_a_file_is_detailed_with_its_file_name_folder_category_and_rate(
+    client: TestClient, cataloged_kick_file: SampleFile
+) -> None:
+    response = client.get(f"/samples/{cataloged_kick_file.sample_hash}")
+
+    assert response.status_code == 200
+    detail = response.json()
+    assert (detail["display_name"], detail["category"], detail["playback_rate_hz"]) == ("deep 01", "kick", 48000)
+    assert detail["occurrences"] == []
+    assert detail["files"] == [
+        {
+            "location": {
+                "directory": cataloged_kick_file.location.directory.as_posix(),
+                "relative_path": "Kicks/Deep 01.wav",
+            },
+            "rate": 48000,
+            "available": True,
+        }
+    ]
+
+
+def test_a_sample_whose_file_is_gone_is_detailed_as_unavailable(
+    client: TestClient, cataloged_kick_file: SampleFile
+) -> None:
+    cataloged_kick_file.location.path.unlink()
+
+    response = client.get(f"/samples/{cataloged_kick_file.sample_hash}")
+
+    assert response.json()["files"][0]["available"] is False
+
+
+def test_a_sample_found_in_a_file_is_served_as_the_wav_the_store_would_hold(
+    client: TestClient, cataloged_kick_file: SampleFile
+) -> None:
+    response = client.get(f"/samples/{cataloged_kick_file.sample_hash}/audio")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/wav"
+    assert "immutable" in response.headers["cache-control"]
+    assert response.content == audio_store.encode_wav(decode_sample_file(cataloged_kick_file.location.path).sample_pcm)
+
+
+def test_the_audio_of_a_sample_whose_file_is_gone_is_not_found_naming_the_file(
+    client: TestClient, cataloged_kick_file: SampleFile
+) -> None:
+    cataloged_kick_file.location.path.unlink()
+
+    response = client.get(f"/samples/{cataloged_kick_file.sample_hash}/audio")
+
+    assert response.status_code == 404
+    assert "Deep 01.wav" in response.json()["detail"]

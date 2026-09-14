@@ -38,18 +38,19 @@ class Sample(BaseModel):
 class DescribedSample(Sample):
     """A sample as a reader meets it: what to call it, what it is taken to be, and how it sounds.
 
-    ``display_name`` resolves the sample's, possibly conflicting, occurrence names via
-    `samplecore.naming.choose_dominant_name`, and ``category`` resolves the same way via
-    `samplecore.categorization.classify_sample_category`, against those names together with the
-    names of the instruments reaching it. ``hand_label`` is the category a person chose; where it is
-    filled in it is what the sample is, and ``category`` beside it stays the keyword table's own
-    guess. ``rating`` and ``favorite`` carry what that person thought of the sample, which is what
-    makes a collection of their own. ``size_bytes`` re-exposes ``Sample.stored_bytes`` under its own
-    name: a Pydantic field cannot share a name with an inherited plain property without the property
-    silently winning on attribute access. ``playback_rate_hz`` is the rate the library really sounds
-    this sample at, resolved via `samplecore.pitch.choose_playback_rate` from the note events that
-    play it and, where no pattern reaches it, from its occurrences' own rates; it is ``None`` for a
-    sample the catalog holds neither for.
+    ``display_name`` resolves the names the waveform is stored under -- each module occurrence's name
+    and each sample file's name -- via `samplecore.naming.choose_dominant_name`, and ``category``
+    resolves via `samplecore.categorization.classify_sample_names`, against those names together
+    with the names of the instruments reaching the sample and the folders its files sit in.
+    ``hand_label`` is the category a person chose; where it is filled in it is what the sample is,
+    and ``category`` beside it stays the keyword table's own guess. ``rating`` and ``favorite``
+    carry what that person thought of the sample, which is what makes a collection of their own.
+    ``size_bytes`` re-exposes ``Sample.stored_bytes`` under its own name: a Pydantic field cannot
+    share a name with an inherited plain property without the property silently winning on
+    attribute access. ``playback_rate_hz`` is the rate the library really sounds this sample at,
+    resolved via `samplecore.pitch.choose_playback_rate` from the note events that play it and,
+    where no pattern reaches it, from the rates its occurrences and files declare; it is ``None``
+    for a sample the catalog holds neither for.
     """
 
     display_name: str

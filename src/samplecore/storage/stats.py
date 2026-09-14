@@ -9,7 +9,7 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.relation import RelationType
 from samplecore.models.stats import LibraryStats, RelationTypeCount, TrackerModuleCount
 from samplecore.models.tracker import TrackerFormat
-from samplecore.storage.database import module, sample, sample_properties, sample_relation
+from samplecore.storage.database import module, sample, sample_file, sample_properties, sample_relation
 
 
 def compute_library_stats(connection: Connection) -> LibraryStats:
@@ -27,6 +27,8 @@ def compute_library_stats(connection: Connection) -> LibraryStats:
     module_count = connection.execute(select(func.count()).select_from(module)).scalar_one()
     # pylint: disable-next=not-callable
     sample_properties_count = connection.execute(select(func.count()).select_from(sample_properties)).scalar_one()
+    # pylint: disable-next=not-callable
+    sample_file_count = connection.execute(select(func.count()).select_from(sample_file)).scalar_one()
     shapes = connection.execute(
         select(
             sample.c.depth,
@@ -58,6 +60,7 @@ def compute_library_stats(connection: Connection) -> LibraryStats:
         module_count=module_count,
         sample_count=sum(shape.sample_count for shape in shapes),
         sample_properties_count=sample_properties_count,
+        sample_file_count=sample_file_count,
         modules_by_tracker=modules_by_tracker,
         relations_by_type=relations_by_type,
         total_stored_bytes=sum(_stored_bytes_of(shape) for shape in shapes),

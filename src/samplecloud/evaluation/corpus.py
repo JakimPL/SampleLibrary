@@ -7,10 +7,11 @@ from numpy.typing import NDArray
 from sqlalchemy import Connection
 
 from samplecloud.standardization import Standardization, fit_standardization
-from samplecore.categorization import classify_sample_category
+from samplecore.categorization import classify_sample_names
 from samplecore.labeling.labels import SampleLabel
 from samplecore.models.category import SampleCategory
 from samplecore.models.note_event import SampleNoteStatistics
+from samplecore.naming import NO_SAMPLE_NAMES
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
@@ -101,14 +102,10 @@ def load_corpus(connection: Connection, *, experiment_id: int) -> EvaluationCorp
 
 
 def _categories_for(connection: Connection, sample_hashes: tuple[str, ...]) -> tuple[SampleCategory, ...]:
-    """Classify every sample from every name it goes by, occurrence names and instrument names alike."""
-    repository = PostgresSampleRepository(connection)
-    hashes = list(sample_hashes)
-    occurrence_names, _ = repository.names_and_rates_by_hash(hashes)
-    instrument_names = repository.instrument_names_by_hash(hashes)
+    """Classify every sample from every name it goes by: its own, its instruments' and its folders'."""
+    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash(list(sample_hashes))
     return tuple(
-        classify_sample_category(occurrence_names.get(sample_hash, ()) + instrument_names.get(sample_hash, ()))
-        for sample_hash in sample_hashes
+        classify_sample_names(names_by_hash.get(sample_hash, NO_SAMPLE_NAMES)) for sample_hash in sample_hashes
     )
 
 

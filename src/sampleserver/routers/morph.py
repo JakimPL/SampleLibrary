@@ -14,7 +14,7 @@ from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.playback_rates import resolved_playback_rates
 from sampleserver.dependencies import ConnectionOpener, get_connection_opener, get_inference_client
 from sampleserver.inference_client import STATUS_TIMEOUT_SECONDS, timed_out_detail, unavailable_detail
-from sampleserver.parameters import WAV_CONTENT, ErrorDetail
+from sampleserver.parameters import WAV_CONTENT, WAV_MEDIA_TYPE, ErrorDetail
 
 router = APIRouter(prefix="/morph", tags=["morph"])
 
@@ -22,7 +22,6 @@ AUDIO_PATH: Final[str] = "/morph/audio"
 STATUS_PATH: Final[str] = "/morph/status"
 RELAYED_HEADERS: Final[frozenset[str]] = frozenset({"etag", "cache-control"})
 CONDITIONAL_HEADER: Final[str] = "if-none-match"
-WAV_MEDIA_TYPE: Final[str] = "audio/wav"
 RELAYED_REFUSALS: Final[frozenset[int]] = frozenset({HTTPStatus.NOT_FOUND, HTTPStatus.UNPROCESSABLE_ENTITY})
 
 

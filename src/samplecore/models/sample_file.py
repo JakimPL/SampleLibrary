@@ -56,12 +56,12 @@ class SampleFileLocation(BaseModel):
     @property
     def stem(self) -> str:
         """The file's name without its suffix, which is what a person named the sound."""
-        return PurePosixPath(self.relative_path).stem
+        return stem_of(self.relative_path)
 
     @property
     def folder_names(self) -> tuple[str, ...]:
         """The folders between the directory and the file, nearest the file first."""
-        return tuple(reversed(PurePosixPath(self.relative_path).parts[:-1]))
+        return folder_names_of(self.relative_path)
 
     @property
     def sort_key(self) -> tuple[str, str]:
@@ -101,3 +101,13 @@ class SampleFile(BaseModel):
     location: SampleFileLocation
     rate: Rate
     fingerprint: FileFingerprint
+
+
+def stem_of(relative_path: str) -> str:
+    """A sample file's name without its suffix, from its path inside its directory."""
+    return PurePosixPath(relative_path).stem
+
+
+def folder_names_of(relative_path: str) -> tuple[str, ...]:
+    """The folders a sample file sits in inside its directory, nearest the file first."""
+    return tuple(reversed(PurePosixPath(relative_path).parts[:-1]))

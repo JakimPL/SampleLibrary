@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
-from sqlalchemy import Connection, Row, func, select
+from sqlalchemy import Connection, Row, String, cast, func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
@@ -23,6 +23,8 @@ class SampleFileRepository(Protocol):
     def list_all(self) -> tuple[SampleFile, ...]: ...
 
     def count(self) -> int: ...
+
+    def revision(self) -> tuple[int, int]: ...
 
 
 class PostgresSampleFileRepository:
@@ -79,6 +81,26 @@ class PostgresSampleFileRepository:
         # pylint: disable-next=not-callable
         counted = self._connection.execute(select(func.count()).select_from(sample_file)).scalar_one()
         return int(counted)
+
+    def revision(self) -> tuple[int, int]:
+        """What the cataloged files amount to: how many, and a sum of one hash per file, sample and rate.
+
+        A scan that moves any file to another sample, renames it or changes its rate moves the sum,
+        so a reader holding an answer built from the files can tell in one query.
+        """
+        digest = func.hashtextextended(
+            sample_file.c.directory
+            + ":"
+            + sample_file.c.relative_path
+            + ":"
+            + sample_file.c.sample_hash
+            + ":"
+            + cast(sample_file.c.rate, String),
+            0,
+        )
+        # pylint: disable-next=not-callable
+        row = self._connection.execute(select(func.count(), func.coalesce(func.sum(digest), 0))).one()
+        return int(row[0]), int(row[1])
 
 
 def _in_location_order(rows: Sequence[Row[Any]]) -> tuple[SampleFile, ...]:

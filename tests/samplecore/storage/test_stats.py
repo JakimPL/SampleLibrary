@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from sqlalchemy import Connection
 from trackmod.core.samples.loop import Loop, LoopMode
@@ -9,10 +10,12 @@ from trackmod.trackers.xm.tuning import Tuning
 from samplecore.models.module import Module
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.stats import compute_library_stats
 
@@ -48,6 +51,15 @@ def test_compute_library_stats_against_a_small_seeded_catalog(
         )
     )
 
+    PostgresSampleFileRepository(connection).upsert(
+        SampleFile(
+            sample_hash=stored_sample_b.hash,
+            location=SampleFileLocation(directory=Path("/samples"), relative_path="Kicks/Deep 01.wav"),
+            rate=44100,
+            fingerprint=FileFingerprint(size_bytes=64, modified_ns=0),
+        )
+    )
+
     relation_repository = PostgresSampleRelationRepository(connection)
     relation_repository.upsert(
         SampleRelation(
@@ -67,6 +79,7 @@ def test_compute_library_stats_against_a_small_seeded_catalog(
     assert stats.module_count == 2
     assert stats.sample_count == 2
     assert stats.sample_properties_count == 1
+    assert stats.sample_file_count == 1
     assert {(item.tracker, item.module_count) for item in stats.modules_by_tracker} == {
         (TrackerFormat.IT, 1),
         (TrackerFormat.XM, 1),
@@ -83,6 +96,7 @@ def test_compute_library_stats_on_an_empty_catalog(connection: Connection) -> No
     assert stats.module_count == 0
     assert stats.sample_count == 0
     assert stats.sample_properties_count == 0
+    assert stats.sample_file_count == 0
     assert stats.modules_by_tracker == ()
     assert stats.relations_by_type == ()
     assert stats.total_stored_bytes == 0

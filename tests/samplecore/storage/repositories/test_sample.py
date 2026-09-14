@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from sqlalchemy import Connection
@@ -15,13 +16,16 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
 from samplecore.models.module_instrument import ModuleInstrument
 from samplecore.models.sample import Sample, SampleSelection, SampleSort
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.thumbnail import SampleThumbnail
+from samplecore.naming import SampleNames
 from samplecore.storage.repositories import sample as sample_repository
 from samplecore.storage.repositories.module_instrument import PostgresModuleInstrumentRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 
@@ -254,7 +258,10 @@ def test_names_and_rates_by_hash_covers_hashes_spanning_several_chunks(
         [stored_sample.hash, stored_sample_b.hash]
     )
 
-    assert names_by_hash == {stored_sample.hash: ("kick",), stored_sample_b.hash: ("snare",)}
+    assert names_by_hash == {
+        stored_sample.hash: SampleNames(own_names=("kick",), instrument_names=(), folder_names=()),
+        stored_sample_b.hash: SampleNames(own_names=("snare",), instrument_names=(), folder_names=()),
+    }
     assert rates_by_hash == {stored_sample.hash: (8363,), stored_sample_b.hash: (16000,)}
 
 
@@ -280,19 +287,61 @@ def _add_instrument(connection: Connection, *, module: Module, instrument_index:
     )
 
 
-def test_instrument_names_by_hash_reports_the_voice_each_occurrence_is_reached_through(
+def test_names_include_the_voice_each_occurrence_is_reached_through(
     connection: Connection, stored_sample: Sample, stored_module: Module
 ) -> None:
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="smp03")
     _add_instrument(connection, module=stored_module, instrument_index=0, name="warm pad")
 
-    names = PostgresSampleRepository(connection).instrument_names_by_hash([stored_sample.hash])
+    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash([stored_sample.hash])
 
-    assert names == {stored_sample.hash: ("warm pad",)}
+    assert names_by_hash[stored_sample.hash].instrument_names == ("warm pad",)
 
 
-def test_instrument_names_by_hash_with_no_hashes_returns_nothing(connection: Connection) -> None:
-    assert PostgresSampleRepository(connection).instrument_names_by_hash([]) == {}
+def _add_sample_file(connection: Connection, *, sample: Sample, relative_path: str, rate: int) -> None:
+    PostgresSampleFileRepository(connection).upsert(
+        SampleFile(
+            sample_hash=sample.hash,
+            location=SampleFileLocation(directory=Path("/samples"), relative_path=relative_path),
+            rate=rate,
+            fingerprint=FileFingerprint(size_bytes=64, modified_ns=0),
+        )
+    )
+    connection.commit()
+
+
+def test_a_sample_file_names_a_sample_by_its_stem_and_its_folders_nearest_first(
+    connection: Connection, stored_sample: Sample, stored_module: Module
+) -> None:
+    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="smp03", rate=8363)
+    _add_sample_file(connection, sample=stored_sample, relative_path="Club Pack/Kicks/Deep 01.wav", rate=44100)
+    _add_sample_file(connection, sample=stored_sample, relative_path="House/Deep 01 copy.flac", rate=48000)
+
+    repository = PostgresSampleRepository(connection)
+    names_by_hash, rates_by_hash = repository.names_and_rates_by_hash([stored_sample.hash])
+
+    assert names_by_hash[stored_sample.hash] == SampleNames(
+        own_names=("smp03", "Deep 01", "Deep 01 copy"),
+        instrument_names=(),
+        folder_names=("Kicks", "House", "Club Pack"),
+    )
+    assert rates_by_hash[stored_sample.hash] == (8363, 44100, 48000)
+    assert repository.rates_by_hash([stored_sample.hash]) == rates_by_hash
+    assert repository.names_and_rates_for_every_sample() == (names_by_hash, rates_by_hash)
+
+
+def test_a_sample_found_only_in_a_file_is_listed_with_its_name_folder_category_and_rate(
+    connection: Connection, stored_sample: Sample
+) -> None:
+    _add_sample_file(connection, sample=stored_sample, relative_path="Kicks/VEH1 001.wav", rate=44100)
+
+    page = PostgresSampleRepository(connection).list_page(limit=50, offset=0, class_by_hash={}, selection=EVERYTHING)
+
+    assert (page[0].display_name, page[0].category, page[0].playback_rate_hz) == (
+        "veh1 001",
+        SampleCategory.KICK,
+        44100,
+    )
 
 
 def test_a_sample_is_categorized_by_the_name_of_the_voice_that_plays_it(
