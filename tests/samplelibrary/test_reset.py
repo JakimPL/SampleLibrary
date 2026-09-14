@@ -83,5 +83,4 @@ def test_a_finished_reset_names_what_stayed_and_the_passes_that_fill_the_library
 
     report = capsys.readouterr().out
     assert "hand annotations, fitted models" in report
-    assert "just rebuild" in report
-    assert "samplelibrary equivalence" in report
+    assert "samplelibrary pipeline run" in report

@@ -83,6 +83,7 @@ class HostPlan(BaseModel):
     ledger: Path
     gates: Path
     events: Path
+    stands_in: bool
     kill_at: KillPoint | None = None
 
 

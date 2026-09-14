@@ -9,14 +9,19 @@ from sqlalchemy import Connection
 
 from samplecore.config import DEFAULT_INFERENCE_URL
 from samplecore.hashing import compute_module_hash
+from samplecore.models.annotation import SampleAnnotation, SampleFileAnchor
+from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage.sample_audio import SampleAudio
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
 from sampleextract.files.discovery import discover_sample_files
 from sampleextract.ingest import ingest_module
 from sampleextract.parsing import parse_module
+from samplelibrary.pipeline.settings import read_pipeline_settings
+from samplelibrary.pipeline.steps.library import settings_model
 from samplelibrary.sandbox.build import build_sandbox
 from samplelibrary.sandbox.modules import sandbox_modules
+from samplelibrary.sandbox.one_shots import CATEGORIES, ONE_SHOT_COUNT, ONE_SHOTS_DIRECTORY_NAME
 
 SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
 LIBRARY_ON_ANOTHER_PORT = "postgresql+psycopg://someone:secret@localhost:5433/my_library"
@@ -97,8 +102,29 @@ def test_the_sandbox_config_names_a_sample_pack_whose_loop_its_exclusions_leave_
         exclusions=tuple(library["sample_exclusions"]),
     )
 
-    assert [location.relative_path for location in discovery.locations] == [
+    listed = [location.relative_path for location in discovery.locations]
+    assert [path for path in listed if not path.startswith(ONE_SHOTS_DIRECTORY_NAME)] == [
         "Drums/Kick 01.wav",
         "Drums/Snare 01.wav",
         "Tonal/Pad C.flac",
     ]
+    assert len(listed) == 3 + ONE_SHOT_COUNT
+
+
+def test_the_sandbox_labels_name_one_shots_its_pack_holds_and_its_pipeline_table_reads(tmp_path: Path) -> None:
+    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    settings = read_pipeline_settings(tmp_path / "config.toml")
+    assert settings.labels is not None
+
+    annotations = [
+        SampleAnnotation.model_validate_json(line) for line in settings.labels.read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert len(annotations) == len(CATEGORIES)
+    for annotation in annotations:
+        assert isinstance(annotation.anchor, SampleFileAnchor)
+        location = annotation.anchor.location
+        decoded = decode_sample_file(location.directory / location.relative_path)
+        assert decoded.sample_pcm.sample.hash == annotation.sample_hash
+    for step in settings.steps:
+        settings.settings_for(step, settings_model(step))

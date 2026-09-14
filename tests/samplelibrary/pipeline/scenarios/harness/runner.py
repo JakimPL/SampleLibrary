@@ -37,7 +37,7 @@ from tests.samplelibrary.pipeline.scenarios.harness.world import World
 
 HOST_MODULE: Final[str] = "tests.samplelibrary.pipeline.scenarios.harness.host"
 REPOSITORY_ROOT: Final[Path] = Path(__file__).resolve().parents[5]
-RUN_DEADLINE_SECONDS: Final[float] = 600.0
+RUN_DEADLINE_SECONDS: Final[float] = 7200.0
 GATE_DEADLINE_SECONDS: Final[float] = 300.0
 POLL_SECONDS: Final[float] = 0.02
 KILLED_STATUS: Final[int] = -signal.SIGKILL
@@ -155,6 +155,7 @@ class ScenarioRunner:
     """
 
     world: World
+    stands_in: bool = True
     graph: StepGraph = field(default_factory=library_graph)
     acts: int = field(default=0, init=False)
     hosts: list[Host] = field(default_factory=list, init=False)
@@ -180,6 +181,7 @@ class ScenarioRunner:
             ledger=act / "ledger.jsonl",
             gates=act / "gates",
             events=act / "events.jsonl",
+            stands_in=self.stands_in,
             kill_at=request.kill_at,
         )
         plan_path = act / "plan.json"

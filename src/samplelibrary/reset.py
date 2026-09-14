@@ -19,10 +19,7 @@ EMPTIED: Final[str] = (
     "experiment, feature vector and label suggestion, and every stored audio object"
 )
 KEPT: Final[str] = "hand annotations, fitted models, grid caches, training runs and the MLflow record"
-REFILLING_PASSES: Final[str] = (
-    "`just rebuild` for the catalog, notes, thumbnails and cloud, then `samplelibrary equivalence` and "
-    "`samplelibrary cloud suggest`, and `samplelibrary annotations relink` for the annotations"
-)
+REFILLING_PASSES: Final[str] = "`samplelibrary pipeline run`, which builds every step again and relinks the annotations"
 
 _logger = logging.getLogger(__name__)
 

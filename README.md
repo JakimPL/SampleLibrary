@@ -69,6 +69,15 @@ under its `[library]` table:
 The `[inference]` table holds one key, `url`: the address the morph renderer listens on and the API
 reaches it at, `http://127.0.0.1:8010` by default. It names a port of its own.
 
+The optional `[pipeline]` table holds the settings `just rebuild` builds the library with:
+
+- `memory_cap`: the memory ceiling every step runs under, such as `"16G"`; `"none"` by default.
+- `device` and `workers`: the device training runs on (`"cuda"` by default) and how many processes a
+  pass spreads over.
+- `labels`: a file of hand labels, as `annotations export` writes it, read into a fresh library.
+- A table per step, such as `[pipeline.descriptor]`, sets that step's parameters (`epochs = 40`) and
+  its own `memory_cap`. `config.example.toml` shows the shape.
+
 Paths take forward slashes or your system's own separator; a backslash is written twice, as in
 `"C:\\Users\\you\\Modules"`.
 
@@ -80,13 +89,21 @@ just serve           # start the API
 just frontend-dev    # start the frontend in a second terminal, then open http://localhost:5173
 ```
 
-`just rebuild` runs the passes the app reads, one after another: extraction, the scan of your sample
-folders, the notes your modules play (which set the speed a sample sounds at), waveform thumbnails,
-and the cloud's layout. Run it
-again whenever you add modules: extraction, notes and thumbnails pick up the new ones, and the cloud
-describes the new samples the way it described the rest and lays itself out again; with nothing new,
-the cloud stays as it is. Extraction takes a while over a large collection, so it spreads itself
-across your machine's cores. `uv run samplelibrary extract --prune` also removes the modules whose
+`just rebuild` builds the whole library in one command: it reads your modules and sample folders
+into the catalog, finds near-duplicates, draws thumbnails, hears every sample with the listening
+model and suggests labels, teaches the descriptor, lays out the cloud, and fits the models the
+morph renderer uses. Run it again whenever you add modules or samples: every step checks what it
+was built from, and only the steps whose inputs changed run again, so a library that stands still
+is done in moments. `just rebuild catalog`, `just rebuild cloud` and `just rebuild morph` build one
+part and whatever it needs. `just status` says what each step would do now and why.
+
+A run that fails or is interrupted with Ctrl+C stops at that step, and the next `just rebuild` picks
+up there: extraction keeps the modules it finished, and training continues from its last epoch. Each
+run keeps its log files and a record of every step under `pipeline/runs` in your library root.
+`uv run samplelibrary pipeline run --from-scratch` empties the catalog and everything the pipeline
+built, keeping your labels, and builds it all again; `--redo descriptor` teaches the descriptor again
+on its own. Extraction takes a while over a large collection, so it spreads itself across your
+machine's cores. `uv run samplelibrary extract --prune` also removes the modules whose
 files are gone from your collection, with the samples only they held; it refuses when a file or a
 folder could not be read, so a disconnected drive empties nothing.
 
@@ -103,18 +120,18 @@ Every operation on the library is a `samplelibrary` command: `uv run samplelibra
 them, and each command's own `--help` lists its options — `uv run samplelibrary extract --workers 2`
 holds extraction to two processes, for example. Any command takes `--memory-cap 16G`, which holds it
 and every process it starts to that much memory, so a pass that outgrows the machine is stopped and
-the machine stays up: Linux holds it in a systemd user scope, Windows in a job object. `just rebuild`
-and `just capped <command>` pass a 16 GB ceiling for you. A system offering neither way to hold a
-process runs the command only with `--memory-cap none`.
+the machine stays up: Linux holds it in a systemd user scope, Windows in a job object.
+`just capped <command>` passes a 16 GB ceiling for you, and `just rebuild` holds every step to the
+`memory_cap` of the `[pipeline]` table. A system offering neither way to hold a process runs the
+command only with a ceiling of `none`.
 
 Near-duplicate detection is a command of its own, `uv run samplelibrary equivalence`. It reads every
 sample once into a short fingerprint, then compares only the samples whose fingerprints are alike,
 in under three gigabytes of memory; over 127,588 samples it took two and a quarter hours on one
 core, and an interrupted run keeps what it finished.
 
-`just reset` empties the catalog and the stored audio. To fill the library again, run `just rebuild`,
-then `uv run samplelibrary equivalence`, and `uv run samplelibrary cloud suggest` for label
-suggestions; your labels, models and training runs are kept throughout.
+`just reset` empties the catalog and the stored audio, and `just rebuild` fills the library again;
+your labels, models and training runs are kept throughout.
 
 Everything listens on this machine alone:
 
@@ -143,7 +160,8 @@ together with the API at `http://127.0.0.1:8000`. The Docker image does the same
 |---|---|
 | `just install` | Installs the Python and frontend dependencies and the git hooks, and puts `config.toml` in place |
 | `just database` | Creates the role and the library, sandbox and test databases on the configured server, wherever they are missing |
-| `just rebuild` | Extracts your modules, scans your sample folders, reads the modules' notes, draws thumbnails and lays out the cloud, under a memory ceiling |
+| `just rebuild [targets]` | Builds the library, or the `catalog`, `cloud` or `morph` part of it, running only the steps whose inputs changed |
+| `just status [targets]` | Says what each step of the library would do now, and why |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
 | `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
@@ -151,9 +169,10 @@ together with the API at `http://127.0.0.1:8000`. The Docker image does the same
 | `just reset` | Names the library and database it would empty, then empties the catalog and stored audio once you confirm; labels, ratings, favorites, models and runs stay |
 | `just check` | Formats, lints and tests the Python code and the frontend |
 | `just format`, `just lint`, `just test`, `just coverage` | Runs one part of the Python checks; `coverage` also reports the lines the tests leave unrun |
+| `just test-pipeline` | Builds a tiny library with every real program, the listening model and training included, on the processor |
 | `just frontend-install`, `just frontend-dev` | Installs the frontend's dependencies; starts its development server |
 | `just frontend-check`, `just frontend-build`, `just frontend-types` | Checks the frontend, builds it for production, and regenerates its API types from the schema |
-| `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Builds a 30-module sandbox in `dev-library` and fills its catalog, runs a `samplelibrary` command on it, serves it on port 8001, and empties its database and deletes its files |
+| `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Writes a sandbox of 30 modules, 300 one-shots and ten labels in `dev-library` and builds it, runs a `samplelibrary` command on it, serves it on port 8001, and empties its database and deletes its files |
 | `just docker-build`, `just docker-run <library> <config>` | Builds the app's image, and runs it over a library directory and a config written for the container, both read from where you run the recipe |
 
 The sandbox shares the PostgreSQL server `config.toml` names, under its own `samplelibrary_dev`
@@ -186,12 +205,6 @@ apart from everything the pipelines generate, and `just reset` leaves them alone
 `uv run samplelibrary annotations export` writes them to `annotations.jsonl` — keep a copy of your
 own — and `annotations import` reads one back. `annotations relink` reattaches them if a sample's
 hash ever changes.
-
-A library labeled before sample folders existed needs its labels table brought up to date once.
-Export your labels first, then run `uv run python scripts/migrate_annotation_anchors.py`; it changes
-the table's shape and keeps every label, rating and favorite. For the sandbox, run it with
-`SAMPLELIBRARY_CONFIG=dev-library/config.toml` in front. Then export again: the import reads files
-in the new shape.
 
 The listening model can suggest labels for every sample.
 `uv run samplelibrary cloud embed --backend clap --extract-only --heard-rate` describes the catalog

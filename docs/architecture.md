@@ -72,8 +72,9 @@ table: two experiments extracting concurrently write disjoint rows, keyed by
 whichever experiment has been deliberately *promoted* (`samplecloud.reduce.reduce_and_persist_coordinates`,
 given an explicit `experiment_id`), not per-experiment scratch space. `cloud_promotion` holds one row
 naming that experiment, written in the same transaction as the coordinates, which is how a later
-pass knows which experiment the cloud shows: `samplelibrary cloud embed --resume-promoted`, the
-step `just rebuild` runs, resumes it rather than opening a new one.
+pass knows which experiment the cloud shows: `samplelibrary cloud embed --resume-promoted` resumes
+it rather than opening a new one, and the pipeline's `cloud` step is satisfied once it names the
+learned experiment.
 
 Stored objects are written through `samplecore.storage.atomic.write_atomically`: staged beside the
 destination, flushed, and moved into place whole, ending with the permissions a plain file gets
@@ -184,9 +185,7 @@ instrument index, sample slot, and the occurrence's name — or, for a sample fo
 directories, the sample file it was chosen from. `SampleAnnotation.anchor` is the union of the two,
 told apart by `kind` in the JSONL a transfer writes, and the table keeps both anchors' columns with a
 CHECK holding each row to exactly one of them. `samplelibrary annotations relink` reads each anchor
-back to recover whatever sample sits there now. A library whose annotation table predates sample
-files is brought to this shape once by `scripts/migrate_annotation_anchors.py`, which keeps every
-row. The annotation is stored per sample even when it was
+back to recover whatever sample sits there now. The annotation is stored per sample even when it was
 applied to a whole equivalence class at once, since a class is identified by a content hash over its
 members and gains a different identity the moment its membership changes; `source` records which
 gesture applied it, so a decision made about one sample stays distinguishable from one inherited
@@ -392,6 +391,72 @@ scanned size and write time), taken before and after its pass, unless the two di
 limited to a slice. A pass that goes ahead drops its record first, so an interrupted pass leaves none,
 and `--force` goes ahead whatever the record says. The records live in the catalog, so a reset forgets
 them along with the rows they describe.
+
+## Building the library in one command
+
+`samplelibrary pipeline run [TARGET…]` (`samplelibrary.pipeline`) builds the library through its
+steps, one at a time and each in a process of its own: the catalog passes (`labels`, `modules`,
+`sample-files`, `notes`, `thumbnails`, `equivalence`, `relink`), the listening model's two readings
+and its suggestions (`teacher`, `hearing-teacher`, `suggestions`), the descriptor from its grid cache
+to the cloud (`grid-cache`, `descriptor`, `embedding`, `completion`, `evaluation`,
+`module-evaluation`, `cloud`, `module-placeholders`), and the renderer's models (`morph-codec`,
+`restorer`, `morph-models`). The targets `catalog`, `cloud`, `morph` and `all` name groups of them,
+and a run takes every step its targets need, in the order `steps/library.py` declares them.
+
+**A step decides from what exists.** Progress lives with the outputs themselves. Just before it
+would run, a step reads its inputs as named components -- the readable samples, the label texts, an upstream
+artifact's content, its parameters -- and is satisfied when an output exists for exactly those
+inputs (`steps/kinds.py`):
+
+| Kind | Satisfied when |
+|---|---|
+| `PassStep` | always runs, its command skipping the work it already finished (`pass_completion`) |
+| `GuardedPassStep` | the labels file's digest is recorded in `curation.annotation_import`; it refuses over labels of the library's own |
+| `GrowingExperimentStep` | its key names an experiment and no readable sample is left for it to describe |
+| `DerivedExperimentStep` | an experiment is filed under the key its inputs' digest names, and shown where it must be |
+| `FileArtifactStep` | the artifact named by its inputs' digest stands complete with a sidecar recording those inputs |
+| `PointerStep` | the library's record (the cloud's promotion, the published models) names this run's output |
+
+A file artifact's sidecar (`<artifact>.pipeline.json`) holds the inputs, the content digest and the
+file's fingerprint; an artifact complete by its own marker whose sidecar is missing is sealed
+without a rerun. A training artifact is complete once `finished.json` stands beside its model, and a
+run of the same inputs that stopped short continues with `--resume`. The descriptor is also sealed
+under its content (`descriptor-<sha16>.pt`), which the learned experiment names, so an experiment
+always loads the weights it was described by. Downstream inputs read upstream content, so a rerun
+producing the same bytes leaves everything after it satisfied. Parameters digest over the validated
+values of a step's settings model (`settings.py`), so a default written out, `40.0` for `40` and
+reordered keys name the same outputs, and the digest reads the parameters alone, apart from the
+ceiling, the device and the worker count.
+`pipeline status` evaluates the same decisions without running anything, naming the components that
+moved since a step's last record under `pipeline/steps`.
+
+**Runs stop and resume.** The first step that fails, refuses, is interrupted or outgrows its ceiling
+ends the run, every later step is recorded as unreached, and the command exits with that step's
+status (1, 3, 130 or 4); a relaunch takes up there. A run holds a session advisory lock per library,
+and every step's process holds a lock named for its step (`SAMPLELIBRARY_STEP_LOCK`), so a second run,
+or a relaunch while an orphaned step still runs, is refused. A step runs in a session of its own
+under its memory scope; the run passes Ctrl+C on to it once, terminates it on the second and kills
+it on the third. Each run keeps `pipeline/runs/<time>-<id>/`: `events.jsonl`, `attempts.jsonl`, a
+log per step and the configuration snapshot every step reads, so an edit made while a run goes on
+reaches the next run. Every durable effect is made before the event reporting it, and the scheduler
+holds no `finally` or exit that writes (`test_forward_only.py`), which is what makes a killed run
+equal to one stopped at the same moment.
+
+`--from-scratch` records its intent, resets the catalog, removes every output the steps own, and
+removes the intent; a relaunch finding the intent finishes the removal first. `--redo STEP` drops a
+file step's artifact, sidecar and training run, keeping its sealed copy.
+
+**Scenarios prove it.** `tests/samplelibrary/pipeline/scenarios` runs the pipeline through its own
+composition root (`run_pipeline_command`) in a process of its own over a small world of modules and
+sample files. A scenario states, act by act, the verdict of every step, how the run ended, and which
+parts of the catalog and the artifacts moved; every act is also held to the evidence the run left
+(attempts, logs, the scripted steps' ledger), to what `status` said right before it, to a settled
+status after it, and to no lock outliving it. Catalog passes run their real commands; the steps
+reading the listening model or training a network run their real command lines against stand-ins
+that write the real outputs (`harness/stand_ins.py`). Faults script a step's exit, a gate stops it
+before, partway through or after its output for the scenario to interrupt or kill it, and a sink
+kills the run's own process at a chosen event. `just test-pipeline` runs the same stories with every
+real program on the processor.
 
 ## Deployment
 

@@ -104,7 +104,8 @@ skip = ["trackmod"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib -m 'not pipeline_real'"
+markers = ["pipeline_real: runs the pipeline's real programs, listening model and training included; `just test-pipeline` runs them"]
 
 [tool.coverage.run]
 source = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "samplelibrary"]

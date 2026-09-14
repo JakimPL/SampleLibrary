@@ -71,7 +71,10 @@ def main() -> None:
     if plan.kill_at is not None:
         sinks.append(SelfKill(plan.kill_at))
     run_pipeline_command(
-        list(plan.argv), prog=HOST_PROGRAM, resolver=HybridPrograms(faults=plan.faults), extra_sinks=sinks
+        list(plan.argv),
+        prog=HOST_PROGRAM,
+        resolver=HybridPrograms(faults=plan.faults, stands_in=plan.stands_in),
+        extra_sinks=sinks,
     )
 
 

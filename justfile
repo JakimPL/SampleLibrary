@@ -36,6 +36,10 @@ test:
     uv run pytest -n auto
 
 [group("quality")]
+test-pipeline:
+    uv run pytest -m pipeline_real tests/samplelibrary/pipeline/scenarios/real
+
+[group("quality")]
 coverage:
     uv run pytest --cov --cov-report=term-missing
 
@@ -55,13 +59,12 @@ tracking-ui:
     uv run samplelibrary tracking ui
 
 [group("library")]
-rebuild:
-    {{ CAPPED_SAMPLELIBRARY }} extract
-    {{ CAPPED_SAMPLELIBRARY }} files
-    {{ CAPPED_SAMPLELIBRARY }} notes
-    {{ CAPPED_SAMPLELIBRARY }} thumbnails
-    {{ CAPPED_SAMPLELIBRARY }} cloud embed --resume-promoted
-    {{ CAPPED_SAMPLELIBRARY }} cloud placeholders
+rebuild *targets:
+    uv run samplelibrary pipeline run {{ targets }}
+
+[group("library")]
+status *targets:
+    uv run samplelibrary pipeline status {{ targets }}
 
 [group("library")]
 [unix]
@@ -86,14 +89,9 @@ _reset-confirmed:
     uv run samplelibrary reset --confirm
 
 [group("dev")]
-dev-build:
+dev-build *targets:
     uv run python scripts/build_dev_library.py
-    uv run samplelibrary --config {{ DEV_CONFIG }} extract
-    uv run samplelibrary --config {{ DEV_CONFIG }} files
-    uv run samplelibrary --config {{ DEV_CONFIG }} notes
-    uv run samplelibrary --config {{ DEV_CONFIG }} thumbnails
-    uv run samplelibrary --config {{ DEV_CONFIG }} cloud embed --resume-promoted
-    uv run samplelibrary --config {{ DEV_CONFIG }} cloud placeholders
+    uv run samplelibrary --config {{ DEV_CONFIG }} pipeline run {{ targets }}
 
 [group("dev")]
 [unix]
