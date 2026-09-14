@@ -17,6 +17,7 @@ import { MorphLink } from "./MorphLink";
 import { type NodeGeometry, nodeGeometryOf, nodePaletteOf } from "./nodeGeometry";
 import { drawOrder, paletteColors, type PointSlots, slotPoints, slotValues } from "./pointPalette";
 import { useNodeLayer } from "./useNodeLayer";
+import { useUnderlay } from "./useUnderlay";
 import { type ViewTransform, viewTransformOf, visibleBounds } from "./viewTransform";
 
 type Scatterplot = ReturnType<typeof createScatterplot>;
@@ -368,7 +369,9 @@ function selectHighlighted(
  * whatever the zoom -- a square under square points, a ring under round ones -- and takes over from
  * the dots through a short crossfade: at every zoom under a theme whose nodes always show, and under
  * one that shows them in detail once the view holds few enough points for the markers to stay
- * legible. It follows the view within the same frame the overlays do.
+ * legible. It follows the view within the same frame the overlays do, and so does the underlay: a
+ * canvas beneath the dots that paints the theme's grid, its lines ranked as rows, beats and measures
+ * and locked to the camera, so the grid pans and zooms with the points on it.
  */
 export function CloudView({
     points: rawPoints,
@@ -480,6 +483,8 @@ export function CloudView({
         [pointShape, settings],
     );
     const nodeLayer = useNodeLayer(nodeCanvasRef, nodeGeometry, nodePalette, nodeFrameStyle);
+    const underlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const underlay = useUnderlay(underlayCanvasRef, settings.grid);
 
     /**
      * Pins the link to both ends' screen positions, hiding it while an end is outside this view or the first
@@ -582,6 +587,7 @@ export function CloudView({
                 heightPx: bounds.height,
                 devicePixelRatio: window.devicePixelRatio,
             });
+            underlay.draw(transform);
             const shown = nodesShownAt(transform, nodeGeometryRef.current, settingsRef.current.node);
             if (shown) {
                 nodeLayer.draw(transform);
@@ -599,7 +605,7 @@ export function CloudView({
                 commit();
             }
         },
-        [nodeLayer, repinLink, repinBand, repinPing, repinMarkers],
+        [underlay, nodeLayer, repinLink, repinBand, repinPing, repinMarkers],
     );
 
     useEffect(() => {
@@ -912,6 +918,7 @@ export function CloudView({
 
     return (
         <div className={classNames("cloud-wrap", nodesShown && "cloud-wrap-nodes")}>
+            <canvas className="cloud-underlay" ref={underlayCanvasRef} aria-hidden />
             <div className="cloud-canvas" ref={containerRef} />
             <canvas className="cloud-nodes" ref={nodeCanvasRef} aria-hidden />
             <CloudMarkers positions={markers} appearance={markerAppearance} />

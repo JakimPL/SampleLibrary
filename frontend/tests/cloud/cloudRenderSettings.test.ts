@@ -22,6 +22,13 @@ const PROPERTIES = [
     "--cloud-node-line-width",
     "--cloud-node-fill-opacity",
     "--cloud-node-substrate-opacity",
+    "--cloud-grid-axes",
+    "--cloud-grid-spacing",
+    "--cloud-grid-line-width",
+    "--cloud-grid-row",
+    "--cloud-grid-beat",
+    "--cloud-grid-measure",
+    "--cloud-grid-center",
 ];
 
 function declare(values: Readonly<Record<string, string>>): void {
@@ -97,6 +104,28 @@ describe("readCloudRenderSettings", () => {
 
         expect(marker).toEqual({ sizePx: 9, lineWidthPx: 2, casingWidthPx: 0 });
         expect(node).toEqual({ mode: "always", sizePx: 5, lineWidthPx: 1, fillOpacity: 0.4, substrateOpacity: 0.5 });
+    });
+
+    it("reads the grid a theme declares", () => {
+        declare({
+            "--cloud-grid-axes": "vertical",
+            "--cloud-grid-spacing": "36",
+            "--cloud-grid-line-width": "1",
+            "--cloud-grid-row": "#333",
+            "--cloud-grid-beat": "#555",
+            "--cloud-grid-measure": "#808080",
+            "--cloud-grid-center": "#8a8a8a",
+        });
+
+        expect(readCloudRenderSettings().grid).toEqual({
+            axes: "vertical",
+            spacingPx: 36,
+            lineWidthPx: 1,
+            rowColor: "#333",
+            beatColor: "#555",
+            measureColor: "#808080",
+            centerColor: "#8a8a8a",
+        });
     });
 
     it("holds node opacities to the unit interval", () => {

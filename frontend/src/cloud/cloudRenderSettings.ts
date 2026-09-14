@@ -17,6 +17,10 @@ export type PointScaleMode = (typeof POINT_SCALE_MODES)[number];
 export const NODE_MODES = ["always", "detail"] as const;
 export type NodeMode = (typeof NODE_MODES)[number];
 
+/** Which lines the grid draws: across both axes, or the vertical ones alone the way a tracker's time grid does. */
+export const GRID_AXES = ["both", "vertical"] as const;
+export type GridAxes = (typeof GRID_AXES)[number];
+
 /** How the theme draws the cloud's points themselves. */
 export interface PointStyle {
     readonly shape: PointShape;
@@ -68,12 +72,26 @@ export interface NodeStyle {
     readonly substrateOpacity: number;
 }
 
+/** How the theme draws the grid beneath the points, its lines ranked as rows, beats and measures. */
+export interface GridStyle {
+    readonly axes: GridAxes;
+    /** The least distance between neighboring lines, which the grid keeps under two of these. */
+    readonly spacingPx: number;
+    readonly lineWidthPx: number;
+    readonly rowColor: string;
+    readonly beatColor: string;
+    readonly measureColor: string;
+    /** The horizontal line through the data's zero, "transparent" leaving it out. */
+    readonly centerColor: string;
+}
+
 /** Everything the current theme says about how the cloud is drawn, read once per theme change. */
 export interface CloudRenderSettings {
     readonly point: PointStyle;
     readonly colors: CloudColors;
     readonly marker: MarkerStyle;
     readonly node: NodeStyle;
+    readonly grid: GridStyle;
 }
 
 interface Token<Value> {
@@ -103,6 +121,14 @@ const NODE_SIZE: Token<number> = { property: "--cloud-node-size", fallback: 7 };
 const NODE_LINE_WIDTH: Token<number> = { property: "--cloud-node-line-width", fallback: 1 };
 const NODE_FILL_OPACITY: Token<number> = { property: "--cloud-node-fill-opacity", fallback: 0.2 };
 const NODE_SUBSTRATE_OPACITY: Token<number> = { property: "--cloud-node-substrate-opacity", fallback: 0.8 };
+const GRID_AXES_TOKEN: Token<GridAxes> = { property: "--cloud-grid-axes", fallback: "both" };
+const GRID_SPACING: Token<number> = { property: "--cloud-grid-spacing", fallback: 44 };
+const GRID_LINE_WIDTH: Token<number> = { property: "--cloud-grid-line-width", fallback: 1 };
+const GRID_ROW_COLOR: Token<string> = { property: "--cloud-grid-row", fallback: "rgb(27 31 38 / 3.5%)" };
+const GRID_BEAT_COLOR: Token<string> = { property: "--cloud-grid-beat", fallback: "rgb(27 31 38 / 6%)" };
+const GRID_MEASURE_COLOR: Token<string> = { property: "--cloud-grid-measure", fallback: "rgb(27 31 38 / 10%)" };
+const GRID_CENTER_COLOR: Token<string> = { property: "--cloud-grid-center", fallback: "transparent" };
+const MINIMUM_GRID_SPACING_PX = 4;
 
 const UNCATEGORIZED_CATEGORY = "uncategorized";
 const MINIMUM_OPACITY = 0.01;
@@ -181,8 +207,26 @@ function readNodeStyle(): NodeStyle {
     };
 }
 
+function readGridStyle(): GridStyle {
+    return {
+        axes: readThemeKeyword(GRID_AXES_TOKEN.property, GRID_AXES, GRID_AXES_TOKEN.fallback),
+        spacingPx: Math.max(MINIMUM_GRID_SPACING_PX, readNumber(GRID_SPACING)),
+        lineWidthPx: Math.max(0, readNumber(GRID_LINE_WIDTH)),
+        rowColor: readColor(GRID_ROW_COLOR),
+        beatColor: readColor(GRID_BEAT_COLOR),
+        measureColor: readColor(GRID_MEASURE_COLOR),
+        centerColor: readColor(GRID_CENTER_COLOR),
+    };
+}
+
 export function readCloudRenderSettings(): CloudRenderSettings {
-    return { point: readPointStyle(), colors: readCloudColors(), marker: readMarkerStyle(), node: readNodeStyle() };
+    return {
+        point: readPointStyle(),
+        colors: readCloudColors(),
+        marker: readMarkerStyle(),
+        node: readNodeStyle(),
+        grid: readGridStyle(),
+    };
 }
 
 /**

@@ -65,7 +65,7 @@ function latestInstance(): (typeof instances)[number] {
 }
 
 function latestCanvas(): HTMLCanvasElement {
-    const canvas = document.querySelector("canvas");
+    const canvas = document.querySelector<HTMLCanvasElement>("canvas.cloud-dots");
     if (canvas === null) {
         throw new Error("canvas not found");
     }
