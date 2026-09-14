@@ -6,6 +6,7 @@ import sys
 
 from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.exit_status import ExitStatus
 from sampleextract.notes.backfill import extract_missing_notes
 from sampleextract.notes.playback_rates import record_playback_rates
 
@@ -17,6 +18,11 @@ def main(argv: list[str], *, prog: str) -> None:
 
     The pass ends by folding every note event on file into the rate each sample is really heard at,
     which is what a listener hears when they play one, so the two always describe the same catalog.
+    A module whose patterns cannot be read describes the collection, so it goes out as a warning and
+    the pass still ends a success.
+
+    Raises:
+        SystemExit: the source directory is missing.
     """
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
@@ -25,7 +31,7 @@ def main(argv: list[str], *, prog: str) -> None:
             summary = extract_missing_notes(config, connection, force=arguments.force)
         except (FileNotFoundError, NotADirectoryError) as error:
             _logger.error("%s; set module_source_directory to your module collection.", error)
-            sys.exit(1)
+            sys.exit(ExitStatus.REFUSED)
         _logger.info("Folding note events into a playback rate per sample.")
         samples_rated = record_playback_rates(connection)
 
@@ -43,9 +49,6 @@ def main(argv: list[str], *, prog: str) -> None:
     )
     for failure in summary.failures:
         _logger.warning("Could not %s %s: %s", failure.stage.value, failure.path, failure.reason)
-
-    if summary.failures:
-        sys.exit(1)
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:

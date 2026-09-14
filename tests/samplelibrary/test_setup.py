@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, EXAMPLE_CONFIG_PATH
+from samplecore.exit_status import ExitStatus
 from samplelibrary import setup
 from samplelibrary.cli import dispatch
 
@@ -76,7 +77,7 @@ def test_database_insists_on_a_config_whose_paths_are_filled_in(
     with pytest.raises(SystemExit) as exit_info:
         setup.main(["database"], prog=PROGRAM)
 
-    assert exit_info.value.code == 1
+    assert exit_info.value.code == ExitStatus.REFUSED
     assert "stand-in path" in capsys.readouterr().err
 
 
@@ -88,5 +89,5 @@ def test_config_into_a_directory_that_is_not_there_ends_with_one_message(
     with pytest.raises(SystemExit) as raised:
         setup.main(["config"], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "No directory" in capsys.readouterr().err

@@ -10,6 +10,7 @@ from sqlalchemy import Connection
 
 from samplecore.cli_parsing import add_subcommand, command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection, open_catalog_reader
+from samplecore.exit_status import ExitStatus
 from samplecore.labeling.vocabulary import read_vocabulary
 from samplecore.models.annotation import AnnotationAnchor, ModuleSlotAnchor, SampleAnnotation, SampleFileAnchor
 from sampleextract.annotations.relink import RelinkSummary, relink_annotations
@@ -54,7 +55,7 @@ def main(argv: list[str], *, prog: str) -> None:
             _run(command, arguments, connection)
         except AnnotationFileRefused as error:
             _logger.error("Moved nothing: %s.", error)
-            sys.exit(1)
+            sys.exit(ExitStatus.REFUSED)
 
 
 def _run(command: AnnotationCommand, arguments: argparse.Namespace, connection: Connection) -> None:
@@ -93,9 +94,6 @@ def _report_relink(summary: RelinkSummary) -> None:
             annotation.sample_hash,
             _describe_anchor(annotation.anchor),
         )
-
-    if summary.needs_a_person:
-        sys.exit(1)
 
 
 def _describe_anchor(anchor: AnnotationAnchor) -> str:

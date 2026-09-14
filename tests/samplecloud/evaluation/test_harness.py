@@ -17,6 +17,7 @@ from samplecloud.evaluation.settings import EvaluationSettings
 from samplecloud.evaluation.transposition import OffsetRetrieval, TranspositionRetrieval
 from samplecloud.experiments import ExperimentRefused
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.models.sample import Sample
@@ -195,7 +196,7 @@ def test_the_command_reports_an_experiment_extracted_by_an_unknown_backend(
     with pytest.raises(SystemExit) as raised:
         main(["--experiment-id", str(separable_catalog.experiment_id)], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "stub backend, unknown here" in capsys.readouterr().err
     assert not (tmp_path / TRACKING_DATABASE_NAME).exists()
 

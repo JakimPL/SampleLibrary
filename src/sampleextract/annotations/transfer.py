@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy import Connection
 
 from samplecore.models.annotation import SampleAnnotation
+from samplecore.storage.atomic import write_bytes_atomically
 from samplecore.storage.curation import claim_annotation_writes, register_tag_ranks
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
@@ -31,7 +32,8 @@ class TransferSummary:
 def export_annotations(connection: Connection, *, path: Path) -> TransferSummary:
     """Write every hand annotation to a JSONL file, one annotation per line.
 
-    Each line carries a whole annotation, anchor included, so the file stands on its own:
+    The file lands whole or leaves an earlier export at that path as it was. Each line carries a
+    whole annotation, anchor included, so the file stands on its own:
     `import_annotations` restores it into a database that has never held one. This is the copy that
     survives losing the database, which matters here more than anywhere else in the library, a
     person's own decisions being the one thing no pass can rebuild.
@@ -40,10 +42,9 @@ def export_annotations(connection: Connection, *, path: Path) -> TransferSummary
         AnnotationFileRefused: the file cannot be written.
     """
     annotations = PostgresSampleAnnotationRepository(connection).list_all()
+    lines = "".join(f"{annotation.model_dump_json()}\n" for annotation in annotations).encode("utf-8")
     try:
-        with path.open("w", encoding="utf-8", newline="\n") as file:
-            for annotation in annotations:
-                file.write(f"{annotation.model_dump_json()}\n")
+        write_bytes_atomically(path, lines)
     except OSError as error:
         raise AnnotationFileRefused(f"{path} cannot be written ({error.strerror})") from error
 

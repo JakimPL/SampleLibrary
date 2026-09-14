@@ -11,7 +11,7 @@ from sqlalchemy import Connection
 
 from samplecloud.suggestions.vocabulary import PROMPT_TEMPLATE
 from samplecore.labeling.labels import SampleLabel, written_paths
-from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
+from samplecore.models.experiment import CHECKPOINT_REVISION_PARAMETER, VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
 from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
@@ -35,6 +35,7 @@ class ScoringRecipe:
 
     source_experiment_id: int
     checkpoint: str
+    checkpoint_revision: str
     vocabulary: tuple[str, ...]
     suggestion_count: int
     label: str | None
@@ -52,6 +53,7 @@ class ScoringRecipe:
         return {
             SOURCE_EXPERIMENT_PARAMETER: self.source_experiment_id,
             CHECKPOINT_PARAMETER: self.checkpoint,
+            CHECKPOINT_REVISION_PARAMETER: self.checkpoint_revision,
             TEMPLATE_PARAMETER: PROMPT_TEMPLATE,
             VOCABULARY_PARAMETER: list(self.vocabulary),
             SUGGESTION_COUNT_PARAMETER: self.suggestion_count,

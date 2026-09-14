@@ -13,8 +13,10 @@ from lightning.fabric.plugins import TorchCheckpointIO
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
+from pydantic import BaseModel
 
-from samplecore.storage.atomic import write_atomically
+from samplecore.models.base import FROZEN
+from samplecore.storage.atomic import write_atomically, write_bytes_atomically
 from samplecore.tracking import TrackedRun
 from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
 from samplemorph.training.descriptor_cache import GridCache
@@ -27,6 +29,7 @@ from samplemorph.training.tracked_logger import TrackedRunLogger
 RUNS_DIRECTORY_NAME: Final[str] = "runs"
 RESUME_CHECKPOINT_NAME: Final[str] = "resume"
 CHECKPOINT_SUFFIX: Final[str] = ".ckpt"
+FINISHED_RECORD_NAME: Final[str] = "finished.json"
 
 _logger = logging.getLogger(__name__)
 
@@ -53,6 +56,33 @@ class TrainingOutcome:
     def exported(self) -> bool:
         """Whether an epoch finished validation with a score, which is what writes the model."""
         return math.isfinite(self.best_validation_loss)
+
+
+class RunFinished(BaseModel):
+    """What a run that reached its last epoch records beside its files: how far it went and the best score it kept.
+
+    It is written once the trainer finishes every epoch it was asked for, and removed when a run of
+    the same name starts again, so a model file standing beside it is the complete outcome of that
+    run rather than an epoch a stopped run happened to export.
+    """
+
+    model_config = FROZEN
+
+    epochs_completed: int
+    best_validation_loss: float
+
+
+def finished_record_path(library_root: Path, *, family: RunFamily, name: str) -> Path:
+    """Where a run that reached its last epoch records that it did."""
+    return run_directory(library_root, family=family, name=name) / FINISHED_RECORD_NAME
+
+
+def read_run_finished(library_root: Path, *, family: RunFamily, name: str) -> RunFinished | None:
+    """The record of a run that reached its last epoch, or ``None`` for a run that has not, or never ran."""
+    path = finished_record_path(library_root, family=family, name=name)
+    if not path.is_file():
+        return None
+    return RunFinished.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def run_directory(library_root: Path, *, family: RunFamily, name: str) -> Path:
@@ -142,7 +172,8 @@ def fit_and_export(
     optimizer, the schedule, the epoch reached and the best score exported so far, so a run cut
     short continues from the epoch it stopped at. The export carries the network alone, which is
     what a reader of the model loads. Progress reaches the log as lines throughout, and the
-    progress bar draws on a terminal.
+    progress bar draws on a terminal. A run that finishes every epoch with a model exported writes
+    a `RunFinished` record beside them.
     """
     trainer = Trainer(
         max_epochs=settings.epochs,
@@ -155,7 +186,12 @@ def fit_and_export(
         plugins=[SameDirectoryCheckpointIO()],
         enable_progress_bar=sys.stdout.isatty(),
     )
+    finished_path = finished_record_path(placement.library_root, family=placement.family, name=placement.model_name)
+    finished_path.unlink(missing_ok=True)
     trainer.fit(module, datamodule=data, ckpt_path=str(placement.resume_path) if placement.resume else None)
+    if trainer.state.finished and math.isfinite(export.best_loss):
+        record = RunFinished(epochs_completed=trainer.current_epoch, best_validation_loss=export.best_loss)
+        write_bytes_atomically(finished_path, record.model_dump_json().encode("utf-8"))
     return TrainingOutcome(
         best_validation_loss=export.best_loss,
         epochs_completed=trainer.current_epoch,

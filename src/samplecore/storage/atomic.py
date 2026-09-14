@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -28,7 +29,8 @@ def write_atomically(path: Path, write: Callable[[IO[bytes]], None]) -> None:
     the writer raises. Staging in the destination's own directory keeps the move on one filesystem,
     which is what makes it a single step. The file ends with the permissions a plain ``open`` gives
     under this process's umask, so a library one user writes reads for another user the way any of
-    their files does.
+    their files does. The directory is flushed after the move, so the new name survives a machine
+    that stops right after this returns.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=path.parent, suffix=PARTIAL_SUFFIX, delete_on_close=False) as partial:
@@ -39,3 +41,38 @@ def write_atomically(path: Path, write: Callable[[IO[bytes]], None]) -> None:
         staged = Path(partial.name)
         staged.chmod(PLAIN_FILE_MODE)
         staged.replace(path)
+    synchronize_directory(path.parent)
+
+
+def write_bytes_atomically(path: Path, content: bytes) -> None:
+    """Put ``content`` in place at ``path`` whole, the way `write_atomically` puts any file."""
+
+    def write(file: IO[bytes]) -> None:
+        file.write(content)
+
+    write_atomically(path, write)
+
+
+def synchronize_file(path: Path) -> None:
+    """Flush a file another writer produced to disk, so its content survives a crash along with its name.
+
+    For files built in place by a library of their own, such as a memory map, before they move into
+    a name that readers trust.
+    """
+    with path.open("r+b") as file:
+        os.fsync(file.fileno())
+
+
+def synchronize_directory(directory: Path) -> None:
+    """Flush a directory's entries to disk, so a file created, renamed or removed in it stays that way after a crash.
+
+    Windows commits a rename through its file system's own journal and opens no handle on a
+    directory for this, so the flush applies to POSIX systems.
+    """
+    if sys.platform == "win32":
+        return
+    descriptor = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)

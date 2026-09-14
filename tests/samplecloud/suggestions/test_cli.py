@@ -9,6 +9,7 @@ from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME
 from samplecloud.suggestions import cli
 from samplecloud.suggestions.cli import main
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from tests.samplecloud.backends.test_teacher_backend import RecordingTeacher
@@ -80,7 +81,7 @@ def test_a_scoring_that_cannot_start_ends_with_one_message(
     with pytest.raises(SystemExit) as raised:
         main(["--experiment-id", str(source), *extra], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert reason in capsys.readouterr().err
 
 

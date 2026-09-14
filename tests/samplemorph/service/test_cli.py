@@ -8,6 +8,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, InferenceConfig
+from samplecore.exit_status import ExitStatus
 from samplemorph.cli import MorphCommand, main
 from samplemorph.service import renderer as renderer_module
 from samplemorph.service.renderer import load_renderer
@@ -87,7 +88,7 @@ def test_serving_a_model_the_library_lacks_ends_with_one_message_before_binding(
     with pytest.raises(SystemExit) as raised:
         main([MorphCommand.SERVE, "--vocoder", "pghi"], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     reported = capsys.readouterr().err
     assert "Serving nothing: no model named" in reported
     assert "Traceback" not in reported
@@ -100,4 +101,4 @@ def test_a_missing_configuration_ends_the_process(tmp_path: Path, monkeypatch: p
     with pytest.raises(SystemExit) as raised:
         main([MorphCommand.SERVE], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED

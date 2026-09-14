@@ -17,6 +17,7 @@ from samplecore.auditory.sound_type import SoundType, sound_type_reading
 from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
+from samplecore.exit_status import ExitStatus
 from samplecore.models.sample import Sample
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.sample_audio import SampleAudio
@@ -138,10 +139,10 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         probes = _probes(connection, arguments)
     except (SampleNotCataloged, OSError) as error:
         _logger.error("Measured nothing: %s.", error)
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
     if not probes:
         _logger.error("No probe to measure: the draw or the hashes file names no sample.")
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
     canonicalizer, codec = _codec_for(config, arguments)
     route = MeasuredRoute(
         model=arguments.model,

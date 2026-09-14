@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from samplecore.cli_support import non_negative_integer, positive_integer
+from samplecore.exit_status import ExitStatus
 from samplemorph.training.refusals import TrainingRefused
 from samplemorph.training.run_settings import (
     DEFAULT_ACCELERATOR,
@@ -80,7 +81,7 @@ def train_and_report(train: Callable[[], TrainingOutcome]) -> None:
         outcome = train()
     except TrainingRefused as error:
         _logger.error("Trained nothing: %s.", error)
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
 
     report_outcome(outcome)
 
@@ -97,7 +98,7 @@ def report_outcome(outcome: TrainingOutcome) -> None:
             outcome.epochs_completed,
             outcome.model_path,
         )
-        sys.exit(1)
+        sys.exit(ExitStatus.FAILED)
 
     _logger.info(
         "Trained for %d epochs. The best epoch scored %.4f and is what %s holds.",

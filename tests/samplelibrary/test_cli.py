@@ -303,3 +303,11 @@ def test_listing_commands_loads_none_of_the_packages_they_run(command_line: list
     completed = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
 
     assert completed.stdout.splitlines()[-1] == "[]"
+
+
+def test_the_package_runs_as_a_module_the_way_the_console_script_does() -> None:
+    completed = subprocess.run(
+        [sys.executable, "-m", "samplelibrary", "--help"], capture_output=True, text=True, check=True
+    )
+
+    assert "commands" in completed.stdout

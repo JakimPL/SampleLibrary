@@ -3,16 +3,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from sqlalchemy import Connection, func, select
 
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.module import Module
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.tracker import TrackerFormat
-from samplecore.storage.database import metadata
+from samplecore.storage.database import connect, metadata
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from samplecore.storage.reset import reset_library
+from samplecore.storage.reset import RETIRED_SUFFIX, ResetRefused, reset_library
 
 
 def _row_counts(connection: Connection) -> dict[str, int]:
@@ -115,3 +116,35 @@ def test_reset_library_leaves_the_schema_usable_afterward(connection: Connection
     connection.commit()
 
     assert connection.execute(select(func.count()).select_from(metadata.tables["module"])).scalar_one() == 1
+
+
+def test_a_reset_a_reader_holds_off_is_refused_and_leaves_every_row(
+    connection: Connection, populated_library: Path, _database_url: str
+) -> None:
+    before = _row_counts(connection)
+    reader = connect(_database_url, read_only=True)
+    reader.execute(select(func.count()).select_from(metadata.tables["sample"])).scalar_one()
+
+    with pytest.raises(ResetRefused, match="held the catalog"):
+        reset_library(connection, populated_library, lock_timeout_milliseconds=200)
+    reader.close()
+
+    assert _row_counts(connection) == before
+    assert any((populated_library / "objects").rglob("*.wav"))
+
+
+def test_a_reset_removes_what_a_stopped_reset_left_aside(connection: Connection, populated_library: Path) -> None:
+    left_aside = populated_library / f"objects{RETIRED_SUFFIX}"
+    left_aside.mkdir()
+    (left_aside / "stale.wav").write_bytes(b"stale")
+
+    reset_library(connection, populated_library)
+
+    assert not left_aside.exists()
+    assert list((populated_library / "objects").iterdir()) == []
+
+
+def test_a_reset_catalog_numbers_its_modules_from_one_again(connection: Connection, populated_library: Path) -> None:
+    reset_library(connection, populated_library)
+
+    assert PostgresModuleRepository(connection).next_id() == 1

@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from sampleextract.files.cli import main
 from tests.sampleextract.files.conftest import MINIMUM_SAMPLE_FRAMES, SamplePack
@@ -73,7 +74,7 @@ def test_a_prune_refused_for_a_missing_directory_ends_the_command_with_one_messa
     with pytest.raises(SystemExit) as raised:
         main(["--workers", "1", "--prune"], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     output = capsys.readouterr()
     assert f"The sample directory {unplugged} is not there" in output.err
     assert "Pruned nothing" in output.err

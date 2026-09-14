@@ -8,6 +8,7 @@ from typing import Final
 from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import port_number
 from samplecore.config import LibraryConfig
+from samplecore.exit_status import ExitStatus
 from samplemorph.route_arguments import (
     add_model_argument,
     add_morpher_argument,
@@ -56,7 +57,7 @@ def run(config: LibraryConfig, arguments: argparse.Namespace) -> None:
         renderer = load_renderer(settings)
     except (FileNotFoundError, ValueError, ModelFileChanged) as error:
         _logger.error("Serving nothing: %s.", error)
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
 
     uvicorn.run(create_app(renderer), host=host, port=port)
 

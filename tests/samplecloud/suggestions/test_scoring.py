@@ -70,7 +70,12 @@ def test_each_sample_keeps_its_closest_labels_first_under_a_new_experiment(conne
     summary = score_suggestions(
         connection,
         recipe=ScoringRecipe(
-            source_experiment_id=source, checkpoint="stub", vocabulary=VOCABULARY, suggestion_count=2, label=None
+            source_experiment_id=source,
+            checkpoint="stub",
+            checkpoint_revision="stub-revision",
+            vocabulary=VOCABULARY,
+            suggestion_count=2,
+            label=None,
         ),
         prompts=prompts(),
     )
@@ -96,7 +101,12 @@ def test_the_summary_counts_the_first_picks_and_their_agreement_with_the_hand_la
     summary = score_suggestions(
         connection,
         recipe=ScoringRecipe(
-            source_experiment_id=source, checkpoint="stub", vocabulary=VOCABULARY, suggestion_count=1, label=None
+            source_experiment_id=source,
+            checkpoint="stub",
+            checkpoint_revision="stub-revision",
+            vocabulary=VOCABULARY,
+            suggestion_count=1,
+            label=None,
         ),
         prompts=prompts(),
     )
@@ -113,7 +123,12 @@ def test_an_experiment_without_vectors_says_so(connection: Connection) -> None:
         score_suggestions(
             connection,
             recipe=ScoringRecipe(
-                source_experiment_id=empty, checkpoint="stub", vocabulary=VOCABULARY, suggestion_count=1, label=None
+                source_experiment_id=empty,
+                checkpoint="stub",
+                checkpoint_revision="stub-revision",
+                vocabulary=VOCABULARY,
+                suggestion_count=1,
+                label=None,
             ),
             prompts=prompts(),
         )
@@ -151,7 +166,12 @@ def test_a_scoring_interrupted_while_writing_leaves_no_experiment_behind(
         score_suggestions(
             connection,
             recipe=ScoringRecipe(
-                source_experiment_id=source, checkpoint="stub", vocabulary=VOCABULARY, suggestion_count=1, label=None
+                source_experiment_id=source,
+                checkpoint="stub",
+                checkpoint_revision="stub-revision",
+                vocabulary=VOCABULARY,
+                suggestion_count=1,
+                label=None,
             ),
             prompts=prompts(),
         )
@@ -170,6 +190,7 @@ def test_a_recipe_outside_its_bounds_is_refused(suggestion_count: int, vocabular
         ScoringRecipe(
             source_experiment_id=1,
             checkpoint="stub",
+            checkpoint_revision="stub-revision",
             vocabulary=vocabulary,
             suggestion_count=suggestion_count,
             label=None,

@@ -5,8 +5,14 @@ import logging
 from typing import Final
 
 from samplecore.cli_parsing import command_parser
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection, redact_database_url, report_dry_run
-from samplecore.storage.reset import reset_library
+from samplecore.cli_support import (
+    bootstrap_cli,
+    ending_in_one_line,
+    open_catalog_connection,
+    redact_database_url,
+    report_dry_run,
+)
+from samplecore.storage.reset import ResetRefused, reset_library
 
 EMPTIED: Final[str] = (
     "every cataloged module, sample, note event, relation, playback rate, cloud coordinate and promotion, "
@@ -43,7 +49,10 @@ def main(argv: list[str], *, prog: str) -> None:
         return
 
     _logger.info("Resetting %s...", target)
-    with open_catalog_connection(config.database_url) as connection:
+    with (
+        open_catalog_connection(config.database_url) as connection,
+        ending_in_one_line("Reset nothing", (ResetRefused,)),
+    ):
         reset_library(connection, config.library_root)
 
     _logger.info("Done. The catalog and content store are empty; %s stay.", KEPT)

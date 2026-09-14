@@ -7,6 +7,7 @@ import sys
 from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.config import LibraryConfig
+from samplecore.exit_status import ExitStatus
 from sampleextract.corpus import CorpusOutcome, extract_corpus
 from sampleextract.parallel.cli import add_workers_argument, raise_worker_errors
 from sampleextract.prune import PruneRefused, prune_gone_modules
@@ -28,7 +29,7 @@ def main(argv: list[str], *, prog: str) -> None:
         outcome = extract_corpus(config, workers=arguments.workers)
     except (FileNotFoundError, NotADirectoryError) as error:
         _logger.error("%s; set module_source_directory to your module collection.", error)
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
 
     _report(outcome.summary)
     raise_worker_errors(outcome.worker_errors)
@@ -60,7 +61,7 @@ def _prune(config: LibraryConfig, outcome: CorpusOutcome) -> None:
             summary = prune_gone_modules(config, connection, outcome)
         except PruneRefused as error:
             _logger.error("Pruned nothing: %s.", error)
-            sys.exit(1)
+            sys.exit(ExitStatus.REFUSED)
 
     _logger.info(
         "Pruned %d module(s) whose file is gone, %d sample(s) nothing else holds, and %d stored object(s).",

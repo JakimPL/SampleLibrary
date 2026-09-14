@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections.abc
+import hashlib
 from collections.abc import Iterable, Iterator
 from typing import Final, TypeVar, cast
 
@@ -539,6 +540,20 @@ def share_extraction_lock(connection: Connection) -> None:
     adding a sample and a prune removing samples no module holds never run at once.
     """
     connection.execute(select(func.pg_advisory_lock_shared(EXTRACTION_LOCK_KEY)))
+
+
+def named_lock_key(name: str) -> int:
+    """The advisory lock key a name stands for: the first eight bytes of its SHA-256 as a signed 64-bit integer.
+
+    Postgres keys an advisory lock by a bigint, so every process naming one lock agrees on its key,
+    and two different names meet on one key no more often than two 64-bit digests do.
+    """
+    return int.from_bytes(hashlib.sha256(name.encode("utf-8")).digest()[:8], "big", signed=True)
+
+
+def claim_named_lock(connection: Connection, name: str) -> bool:
+    """Take the advisory lock a name stands for, for as long as the connection stays open, reporting whether it was free."""
+    return bool(connection.execute(select(func.pg_try_advisory_lock(named_lock_key(name)))).scalar_one())
 
 
 def claim_extraction_lock(connection: Connection) -> bool:

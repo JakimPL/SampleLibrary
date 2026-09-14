@@ -12,6 +12,7 @@ from samplecloud.experiments import EmbeddingRecipe
 from samplecloud.registries import DEFAULT_BACKEND_NAME
 from samplecloud.run import create_experiment
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import Reading
 from samplecore.models.sample import Sample
@@ -46,7 +47,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     with pytest.raises(SystemExit) as raised:
         main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Configuration error" in capsys.readouterr().err
 
 
@@ -93,7 +94,7 @@ def test_main_rejects_an_unknown_backend(capsys: pytest.CaptureFixture[str]) -> 
 
 
 def _refusal(raised: pytest.ExceptionInfo[SystemExit], capsys: pytest.CaptureFixture[str]) -> str:
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     captured = capsys.readouterr()
     return captured.out + captured.err
 

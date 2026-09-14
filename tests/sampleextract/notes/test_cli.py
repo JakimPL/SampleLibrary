@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -54,3 +56,25 @@ def test_main_passes_over_a_file_the_catalog_never_ingested(
     main([], prog=PROGRAM)
 
     assert "Discovered 1 files: 0 module(s) read" in capsys.readouterr().out
+
+
+@pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0, reason="file modes bar reading only for other users")
+def test_a_file_the_pass_cannot_read_is_a_warning_and_the_pass_still_succeeds(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    xm_module_bytes: bytes,
+) -> None:
+    """An unreadable file describes the collection, so the notes of everything else still land."""
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    unreadable = tmp_path / "modules" / "locked.xm"
+    unreadable.write_bytes(xm_module_bytes)
+    unreadable.chmod(0)
+
+    main([], prog=PROGRAM)
+
+    captured = capsys.readouterr()
+    assert "1 failed" in captured.out
+    assert "Could not read" in captured.err

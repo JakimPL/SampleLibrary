@@ -26,6 +26,7 @@ from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, ending_in_one_line, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import Experiment
+from samplecore.storage.atomic import write_bytes_atomically
 from samplecore.storage.sample_audio import SampleAudio
 from samplecore.tracking.session import open_run
 
@@ -34,7 +35,7 @@ _logger = logging.getLogger(__name__)
 
 def main(argv: list[str], *, prog: str) -> None:
     """Score one experiment's descriptor, record the pass, and report what it measured."""
-    arguments = _parse_arguments(argv, prog=prog)
+    arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         with ending_in_one_line("Scored nothing", (ExperimentRefused,)):
@@ -59,8 +60,7 @@ def main(argv: list[str], *, prog: str) -> None:
 
     if arguments.output is not None:
         output = Path(arguments.output)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(report_json(report), encoding="utf-8")
+        write_bytes_atomically(output, report_json(report).encode("utf-8"))
         _logger.info("Wrote the report to %s.", output)
 
     _report(report)
@@ -171,7 +171,7 @@ def _report_hand_labels(agreement: HandLabelAgreement) -> None:
         _logger.info("  %-28s AP %.3f over %4d samples.", score.path, score.average_precision, score.support)
 
 
-def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = command_parser(
         prog=prog, description="Score an experiment's descriptor against the catalog's own targets."
     )

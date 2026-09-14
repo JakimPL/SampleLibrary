@@ -146,6 +146,30 @@ def test_a_file_that_is_no_list_of_annotations_is_refused(
         import_annotations(connection, path=path)
 
 
-def test_exporting_into_a_directory_that_is_not_there_is_refused(connection: Connection, tmp_path: Path) -> None:
+def test_exporting_beneath_a_file_is_refused(connection: Connection, tmp_path: Path) -> None:
+    blocking_file = tmp_path / "labels"
+    blocking_file.write_text("", encoding="utf-8")
+
     with pytest.raises(AnnotationFileRefused, match="cannot be written"):
-        export_annotations(connection, path=tmp_path / "absent" / "labels.jsonl")
+        export_annotations(connection, path=blocking_file / "labels.jsonl")
+
+
+def test_exporting_into_a_directory_that_is_not_there_creates_it(connection: Connection, tmp_path: Path) -> None:
+    path = tmp_path / "absent" / "labels.jsonl"
+
+    summary = export_annotations(connection, path=path)
+
+    assert summary.annotations == 0
+    assert path.read_text(encoding="utf-8") == ""
+
+
+def test_an_export_replacing_an_earlier_one_leaves_no_partial_file_beside_it(
+    connection: Connection, tmp_path: Path
+) -> None:
+    path = tmp_path / "labels.jsonl"
+    path.write_text("an earlier export\n", encoding="utf-8")
+
+    export_annotations(connection, path=path)
+
+    assert path.read_text(encoding="utf-8") == ""
+    assert [entry.name for entry in tmp_path.iterdir()] == ["labels.jsonl"]

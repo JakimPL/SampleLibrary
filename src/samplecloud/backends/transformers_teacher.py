@@ -31,15 +31,15 @@ class TransformersTeacher:
     under, and a sound's cosine against a sentence says how well the sentence describes it.
     """
 
-    def __init__(self, *, checkpoint: str, rate_hz: int, device: str) -> None:
+    def __init__(self, *, checkpoint: str, revision: str, rate_hz: int, device: str) -> None:
         self._rate_hz = rate_hz
         self._device = device
-        model = ClapModel.from_pretrained(checkpoint)
+        model = ClapModel.from_pretrained(checkpoint, revision=revision)
         # The library types the wrapped `to` as taking the model where it takes the device, so the
         # call is accepted as the library documents it.
         self._model = model.to(self._device).eval()  # type: ignore[arg-type]
-        self._tokenizer = AutoTokenizer.from_pretrained(checkpoint)
-        extractor = ClapFeatureExtractor.from_pretrained(checkpoint)
+        self._tokenizer = AutoTokenizer.from_pretrained(checkpoint, revision=revision)
+        extractor = ClapFeatureExtractor.from_pretrained(checkpoint, revision=revision)
         self._window_frames = WINDOW_SECONDS * rate_hz
         self._fft_length = int(extractor.fft_window_size)
         self._hop_length = int(extractor.hop_length)

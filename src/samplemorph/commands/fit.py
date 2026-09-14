@@ -11,6 +11,7 @@ from sqlalchemy import Connection
 from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
+from samplecore.exit_status import ExitStatus
 from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.commands.draws import (
@@ -74,7 +75,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
             DEFAULT_PROBE_FRAME_FLOOR,
             DEFAULT_PROBE_FRAME_CEILING,
         )
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
     if len(samples) < arguments.latent_size:
         _logger.error(
             "%d samples lie between %d and %d frames, fewer than the %d components the codec keeps. "
@@ -85,7 +86,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
             arguments.latent_size,
             len(samples),
         )
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
 
     geometry = canonicalizer.geometry
     bands, columns = geometry.grid_shape

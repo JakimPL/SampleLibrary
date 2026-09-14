@@ -15,11 +15,13 @@ from samplecore.storage.database import (
     SCHEMA_LOCK_KEY,
     checkout_read_only,
     chunks,
+    claim_named_lock,
     connect,
     connect_for_curation,
     create_pooled_engine,
     create_schema,
     module,
+    named_lock_key,
 )
 
 EXPECTED_TABLES = frozenset(
@@ -208,3 +210,24 @@ def test_a_writable_checkout_between_read_only_ones_writes_and_leaves_the_next_r
             checked_out.close()
     finally:
         engine.dispose()
+
+
+def test_one_lock_name_stands_for_one_key_in_the_signed_64_bit_range() -> None:
+    names = ("samplelibrary-a-teacher", "samplelibrary-a-descriptor", "samplelibrary-b-teacher")
+    keys = [named_lock_key(name) for name in names]
+
+    assert keys == [named_lock_key(name) for name in names]
+    assert len(set(keys)) == len(names)
+    assert all(-(2**63) <= key < 2**63 for key in keys)
+
+
+def test_a_named_lock_is_free_again_once_the_connection_holding_it_closes(
+    connection: Connection, _database_url: str
+) -> None:
+    holder = connect(_database_url, read_only=True)
+    assert claim_named_lock(holder, "samplelibrary-held-step")
+
+    assert not claim_named_lock(connection, "samplelibrary-held-step")
+    holder.close()
+    assert claim_named_lock(connection, "samplelibrary-held-step")
+    connection.execute(select(func.pg_advisory_unlock(named_lock_key("samplelibrary-held-step"))))

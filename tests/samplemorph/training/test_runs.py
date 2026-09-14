@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 import torch
-from lightning.pytorch import Trainer
+from lightning.pytorch import LightningDataModule, Trainer
 from torch.utils.data import DataLoader
 
 from samplecore.tracking.silent import SilentRun
@@ -16,11 +16,17 @@ from samplemorph.training.metrics import RESTORER_MONITORED_METRIC
 from samplemorph.training.refusals import ResumeRefused
 from samplemorph.training.restorer_dataset import RestorerBatchItem
 from samplemorph.training.restorer_module import RestorerTrainingModule
+from samplemorph.training.run_settings import RunSettings
 from samplemorph.training.runs import (
     RunFamily,
+    RunFinished,
+    RunPlacement,
     SameDirectoryCheckpointIO,
     check_resume_point,
+    finished_record_path,
+    fit_and_export,
     geometry_parameters,
+    read_run_finished,
     resume_checkpoint,
     resume_path,
     run_directory,
@@ -149,3 +155,70 @@ def test_a_resumed_run_continues_from_the_epoch_it_stopped_at_with_its_best_scor
     assert resumed.current_epoch == 3
     assert second.best_loss <= first.best_loss
     assert all(loss < first.best_loss for loss in second_writes)
+
+
+class PairData(LightningDataModule):
+    """The same crops for training and validation, in the shape `fit_and_export` takes a run's data."""
+
+    def __init__(self, loader: DataLoader[RestorerBatchItem]) -> None:
+        super().__init__()
+        self._loader = loader
+
+    def train_dataloader(self) -> DataLoader[RestorerBatchItem]:
+        return self._loader
+
+    def val_dataloader(self) -> DataLoader[RestorerBatchItem]:
+        return self._loader
+
+
+class StoppingRestorer(RestorerTrainingModule):
+    """A restorer whose second epoch breaks off, the way a run a machine stops never reaches its end."""
+
+    def training_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_index: int) -> torch.Tensor:
+        if self.current_epoch >= 1:
+            raise RuntimeError("the run stopped")
+        return super().training_step(batch, batch_index)
+
+
+def _placement(library_root: Path) -> RunPlacement:
+    return RunPlacement(
+        library_root=library_root, family=RunFamily.RESTORER, model_name="finishing", tracker=SilentRun(), resume=False
+    )
+
+
+def test_a_run_reaching_its_last_epoch_records_that_it_finished(
+    tmp_path: Path, pair_loader: DataLoader[RestorerBatchItem]
+) -> None:
+    placement = _placement(tmp_path)
+    module = RestorerTrainingModule(RestorerShape(channels=RESTORER_CHANNELS, dilations=(1, 2)), learning_rate=1e-3)
+
+    outcome = fit_and_export(
+        module,
+        PairData(pair_loader),
+        export=_export(tmp_path / "model.pt", []),
+        settings=RunSettings(epochs=2, batch_size=2, worker_count=0, accelerator="cpu"),
+        placement=placement,
+    )
+
+    finished = read_run_finished(tmp_path, family=RunFamily.RESTORER, name="finishing")
+    assert finished == RunFinished(epochs_completed=2, best_validation_loss=outcome.best_validation_loss)
+
+
+def test_a_run_that_stops_before_its_last_epoch_leaves_no_record_of_an_earlier_finish(
+    tmp_path: Path, pair_loader: DataLoader[RestorerBatchItem]
+) -> None:
+    stale = finished_record_path(tmp_path, family=RunFamily.RESTORER, name="finishing")
+    stale.parent.mkdir(parents=True)
+    stale.write_text(RunFinished(epochs_completed=9, best_validation_loss=0.5).model_dump_json(), encoding="utf-8")
+    module = StoppingRestorer(RestorerShape(channels=RESTORER_CHANNELS, dilations=(1, 2)), learning_rate=1e-3)
+
+    with pytest.raises(RuntimeError, match="the run stopped"):
+        fit_and_export(
+            module,
+            PairData(pair_loader),
+            export=_export(tmp_path / "model.pt", []),
+            settings=RunSettings(epochs=3, batch_size=2, worker_count=0, accelerator="cpu"),
+            placement=_placement(tmp_path),
+        )
+
+    assert read_run_finished(tmp_path, family=RunFamily.RESTORER, name="finishing") is None

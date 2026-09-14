@@ -7,6 +7,7 @@ import sys
 from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.config import LibraryConfig
+from samplecore.exit_status import ExitStatus
 from sampleextract.files.prune import prune_gone_sample_files
 from sampleextract.files.scan import SampleFileScanOutcome, scan_sample_directories
 from sampleextract.parallel.cli import add_workers_argument, raise_worker_errors
@@ -63,7 +64,7 @@ def _prune(config: LibraryConfig, outcome: SampleFileScanOutcome) -> None:
             summary = prune_gone_sample_files(config, connection, outcome)
         except PruneRefused as error:
             _logger.error("Pruned nothing: %s.", error)
-            sys.exit(1)
+            sys.exit(ExitStatus.REFUSED)
 
     _logger.info(
         "Pruned %d sample file(s) no longer in the collection, %d sample(s) nothing else holds, "

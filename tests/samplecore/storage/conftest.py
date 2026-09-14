@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
-import types
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -36,22 +34,9 @@ from sampleextract.files.ingest import ingest_sample_file
 from sampleextract.ingest import ingest_module
 from sampleextract.notes.playback_rates import record_playback_rates
 from sampleextract.parsing import parse_module
+from samplelibrary.sandbox.build import SAMPLE_PACK_DIRECTORY_NAME, build_sandbox
 
 SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
-
-_BUILD_DEV_LIBRARY_PATH = Path(__file__).resolve().parents[3] / "scripts" / "build_dev_library.py"
-
-
-def _load_script(path: Path, name: str) -> types.ModuleType:
-    """Imports a script by file path -- it lives outside every installed package, by design."""
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-build_dev_library = _load_script(_BUILD_DEV_LIBRARY_PATH, "build_dev_library")
 
 
 def _ingest_all(connection: Connection, library_root: Path, modules_directory: Path) -> None:
@@ -87,7 +72,7 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
     object -- every table the schema declares, not only the ones a plain extraction pass happens to
     touch. Returns the filesystem library root the content store was written under.
     """
-    build_dev_library.build_dev_library(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
     library_root = tmp_path / "catalog"
     _ingest_all(connection, library_root, tmp_path / "modules")
     connection.commit()
@@ -126,7 +111,7 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
         ]
     )
     PostgresCloudPromotionRepository(connection).record(CloudPromotion(experiment_id=experiment_id, promoted_at=now))
-    _catalog_the_sample_pack(connection, tmp_path / build_dev_library.SAMPLE_PACK_DIRECTORY_NAME)
+    _catalog_the_sample_pack(connection, tmp_path / SAMPLE_PACK_DIRECTORY_NAME)
     PostgresSampleLabelSuggestionRepository(connection).insert_many(
         [
             SampleLabelSuggestion(

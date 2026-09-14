@@ -12,7 +12,9 @@ from sqlalchemy import Connection
 from sqlalchemy.engine import make_url
 
 from samplecore.config import ConfigurationError, LibraryConfig, load_config
+from samplecore.exit_status import ExitStatus
 from samplecore.storage.database import connect
+from samplecore.storage.sample_audio import SampleAudio
 
 _LOG_FORMAT: Final[str] = "%(asctime)s  %(message)s"
 _LOG_DATE_FORMAT: Final[str] = "%H:%M:%S"
@@ -79,7 +81,7 @@ def load_config_or_exit() -> LibraryConfig:
         return load_config()
     except ConfigurationError as error:
         _logger.error("Configuration error: %s", error)
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
 
 
 def bootstrap_cli() -> LibraryConfig:
@@ -134,6 +136,17 @@ def open_catalog_connection(database_url: str) -> Iterator[Connection]:
 
 
 @contextmanager
+def open_catalog_audio(config: LibraryConfig) -> Iterator[tuple[Connection, SampleAudio]]:
+    """Open the catalog for one pass over its samples' audio, together with the reader of that audio.
+
+    The reader learns every sample file the catalog lists as the pass opens, so a pass reads each
+    sample from the store or from the files cataloged when it started.
+    """
+    with open_catalog_connection(config.database_url) as connection:
+        yield connection, SampleAudio.from_catalog(connection, config.library_root)
+
+
+@contextmanager
 def ending_in_one_line(outcome: str, refusals: tuple[type[ValueError], ...]) -> Iterator[None]:
     """End the process with one message when the work inside is refused, saying what was left undone.
 
@@ -148,7 +161,7 @@ def ending_in_one_line(outcome: str, refusals: tuple[type[ValueError], ...]) -> 
         yield
     except refusals as error:
         _logger.error("%s: %s.", outcome, error)
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
 
 
 def report_dry_run(description: str) -> None:

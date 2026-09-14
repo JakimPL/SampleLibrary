@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
+from samplecloud.backends.teacher_backend import TEACHER_REVISION
 from samplecloud.experiments import (
     EmbeddingRecipe,
     ExperimentRefused,
@@ -55,7 +56,7 @@ class RecipeCase:
         ),
         RecipeCase(
             backend_name="clap",
-            params={"reading": "heard_rate"},
+            params={"reading": "heard_rate", "checkpoint_revision": TEACHER_REVISION},
             recipe=EmbeddingRecipe(backend_name="clap", reading=Reading.HEARD_RATE, model_name=None),
         ),
         RecipeCase(
@@ -88,8 +89,22 @@ class RefusedRecipeCase:
         RefusedRecipeCase(backend_name="learned", params={"reading": "nominal"}, reason="does not name"),
         RefusedRecipeCase(backend_name="librosa", params={}, reason="records no reading"),
         RefusedRecipeCase(backend_name="librosa", params={"reading": "sideways"}, reason="records no reading"),
+        RefusedRecipeCase(
+            backend_name="clap",
+            params={"reading": "nominal", "checkpoint_revision": "0" * 40},
+            reason="listening-model commit 0{40}",
+        ),
+        RefusedRecipeCase(backend_name="clap", params={"reading": "nominal"}, reason="commit unrecorded"),
     ],
-    ids=("a scoring", "an unknown backend", "a learned one naming no model", "no reading", "an unknown reading"),
+    ids=(
+        "a scoring",
+        "an unknown backend",
+        "a learned one naming no model",
+        "no reading",
+        "an unknown reading",
+        "another listening-model commit",
+        "no listening-model commit",
+    ),
 )
 def test_an_experiment_recording_no_followable_recipe_is_refused(case: RefusedRecipeCase) -> None:
     with pytest.raises(ExperimentRefused, match=case.reason):

@@ -4,8 +4,7 @@ import argparse
 import logging
 
 from samplecore.cli_parsing import command_parser
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
-from samplecore.storage.sample_audio import SampleAudio
+from samplecore.cli_support import bootstrap_cli, open_catalog_audio
 from sampleextract.thumbnail import compute_missing_thumbnails
 
 _logger = logging.getLogger(__name__)
@@ -15,8 +14,7 @@ def main(argv: list[str], *, prog: str) -> None:
     """Run one thumbnail backfill pass over the catalog and report the result."""
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
-    with open_catalog_connection(config.database_url) as connection:
-        audio = SampleAudio.from_catalog(connection, config.library_root)
+    with open_catalog_audio(config) as (connection, audio):
         summary = compute_missing_thumbnails(connection, audio, force=arguments.force)
 
     _logger.info(

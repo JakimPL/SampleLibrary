@@ -41,7 +41,7 @@ class MorphCommand(StrEnum):
 
 def main(argv: list[str], *, prog: str) -> None:
     """Run one morph command and report the result, with the catalog open for every command that reads it."""
-    arguments = _parse_arguments(argv, prog=prog)
+    arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     match MorphCommand(arguments.command):
         case MorphCommand.SERVE:
@@ -69,7 +69,7 @@ def _on_catalog(run: CatalogCommand, config: LibraryConfig, arguments: argparse.
         run(connection, config, arguments)
 
 
-def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = command_parser(
         prog=prog, description="Fit, train and render the decodable representation, and serve morphs over HTTP."
     )

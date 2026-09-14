@@ -6,7 +6,12 @@ from typing import Final
 
 from sqlalchemy import Connection
 
-from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME, TEACHER_CHECKPOINT, load_teacher
+from samplecloud.backends.teacher_backend import (
+    TEACHER_BACKEND_NAME,
+    TEACHER_CHECKPOINT,
+    TEACHER_REVISION,
+    load_teacher,
+)
 from samplecloud.experiments import ExperimentRefused, experiment_named
 from samplecloud.suggestions.scoring import (
     DEFAULT_SUGGESTION_COUNT,
@@ -34,7 +39,7 @@ _logger = logging.getLogger(__name__)
 
 def main(argv: list[str], *, prog: str) -> None:
     """Suggest labels for every sample of a listening-model experiment, and report how they read."""
-    arguments = _parse_arguments(argv, prog=prog)
+    arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         with ending_in_one_line("Suggested nothing", (ExperimentRefused, VocabularyRefused)):
@@ -46,6 +51,7 @@ def main(argv: list[str], *, prog: str) -> None:
             recipe=ScoringRecipe(
                 source_experiment_id=source.id,
                 checkpoint=TEACHER_CHECKPOINT,
+                checkpoint_revision=TEACHER_REVISION,
                 vocabulary=vocabulary,
                 suggestion_count=arguments.top,
                 label=arguments.label,
@@ -88,7 +94,7 @@ def _report(summary: ScoringSummary) -> None:
         )
 
 
-def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = command_parser(prog=prog, description="Suggest labels for every sample of a listening-model experiment.")
     parser.add_argument(
         "--experiment-id",

@@ -8,6 +8,7 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
@@ -42,7 +43,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     with pytest.raises(SystemExit) as raised:
         main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Configuration error" in capsys.readouterr().err
 
 

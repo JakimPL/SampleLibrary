@@ -16,6 +16,7 @@ from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import LEARNED_BACKEND_NAME, SampleFeatureVector
 from samplecore.models.module import Module
@@ -116,7 +117,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     with pytest.raises(SystemExit) as raised:
         main(["fit"], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Configuration error" in capsys.readouterr().err
 
 
@@ -161,7 +162,7 @@ def test_a_library_smaller_than_the_codec_names_the_latent_size_that_fits(
     with pytest.raises(SystemExit) as raised:
         main(["fit", "--latent-size", str(sample_count + 1), "--model", MODEL_NAME], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert f"--latent-size {sample_count} or less" in capsys.readouterr().err
     assert not model_path(tmp_path, name=MODEL_NAME).exists()
 
@@ -234,7 +235,7 @@ def test_rendering_a_sample_the_catalog_lacks_says_so_before_any_model_loads(
             prog=PROGRAM,
         )
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert f"Rendered nothing: the catalog holds no sample {'f' * 64}." in capsys.readouterr().err
 
 
@@ -551,7 +552,7 @@ def test_measuring_with_no_probe_ends_before_any_model_loads(
     with pytest.raises(SystemExit) as raised:
         main(["measure", "--model", "absent", "--hashes", str(empty), "--output", str(tmp_path / "out")], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "No probe to measure" in capsys.readouterr().err
 
 
@@ -567,7 +568,7 @@ def test_fitting_over_a_library_with_no_eligible_sample_says_so(
     with pytest.raises(SystemExit) as raised:
         main(["fit", "--model", MODEL_NAME], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     reported = capsys.readouterr().err
     assert "No sample lies between" in reported
     assert "--latent-size" not in reported
@@ -586,7 +587,7 @@ def test_continuing_a_training_run_that_never_ran_ends_with_one_message(
     with pytest.raises(SystemExit) as raised:
         main(["train-restorer", "--resume", "--workers", "0", "--device", "cpu", "--no-tracking"], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Trained nothing: --resume continues from" in capsys.readouterr().err
 
 
@@ -617,7 +618,7 @@ def test_a_teacher_whose_vectors_a_descriptor_cannot_answer_in_is_refused(
             prog=PROGRAM,
         )
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "vectors of 3 numbers" in capsys.readouterr().err
 
 

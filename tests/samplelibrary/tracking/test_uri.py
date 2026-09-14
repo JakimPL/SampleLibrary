@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.tracking.store import tracking_uri
 from samplelibrary.tracking import uri
 
@@ -36,4 +37,4 @@ def test_a_missing_configuration_ends_the_process(tmp_path: Path, monkeypatch: p
     with pytest.raises(SystemExit) as raised:
         uri.main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED

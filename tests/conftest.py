@@ -75,8 +75,7 @@ def _database_url(_server_url: str, worker_id: str) -> Iterator[str]:
 def connection(_database_url: str) -> Iterator[Connection]:
     """A catalog connection to this worker's database, with an empty schema on every test.
 
-    Emptying every table at teardown, in the same reverse-dependency order ``reset_library`` uses,
-    gives each test the same "starts from nothing" guarantee -- rolling back first discards any
+    Emptying every table at teardown, children before the tables they reference, gives each test the same "starts from nothing" guarantee -- rolling back first discards any
     transaction a failing test left open, so the cleanup deletes themselves always run against a
     clean transaction state.
 

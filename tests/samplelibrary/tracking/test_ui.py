@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.tracking.store import tracking_uri
 from samplelibrary.tracking import ui
 
@@ -100,5 +101,5 @@ def test_a_missing_configuration_ends_the_process_before_the_interface_starts(
     with pytest.raises(SystemExit) as raised:
         ui.main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert not interface.commands

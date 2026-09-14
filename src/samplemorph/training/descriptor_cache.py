@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
+from samplecore.storage.atomic import synchronize_directory, synchronize_file
 from samplecore.storage.sample_audio import SampleAudio
 from samplecore.waveform import resample_by_semitones
 from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
@@ -169,9 +170,10 @@ def build_grid_cache(
     trainer measured as the one that shares the machine's cores rather than fighting over them.
     Rows are written as they arrive, so memory stays flat however large the draw.
 
-    The cache is built beside `directory` and moved into place once its description is written,
-    so a build stopped partway leaves the previous cache under that name as it was, and a trainer
-    already reading the previous cache keeps the files it mapped. The rows are sized to `samples`, so
+    The cache is built beside `directory`, flushed to disk, and moved into place once its
+    description is written, so a build stopped partway leaves the previous cache under that name as
+    it was, a machine stopping right after the move keeps the new one whole, and a trainer already
+    reading the previous cache keeps the files it mapped. The rows are sized to `samples`, so
     a caller passes the samples whose audio can be read now; a sample file going missing while the
     build runs stops the build the same way.
 
@@ -223,6 +225,9 @@ def build_grid_cache(
     np.save(staging / DURATIONS_FILE_NAME, durations)
     (staging / HASHES_FILE_NAME).write_text("\n".join(sample.hash for sample in samples), encoding="utf-8")
     (staging / DESCRIPTION_FILE_NAME).write_text(description.model_dump_json(indent=2), encoding="utf-8")
+    for name in (GRIDS_FILE_NAME, DURATIONS_FILE_NAME, HASHES_FILE_NAME, DESCRIPTION_FILE_NAME):
+        synchronize_file(staging / name)
+    synchronize_directory(staging)
     _swap_into_place(staging, directory)
     return open_grid_cache(directory)
 
@@ -238,6 +243,7 @@ def _swap_into_place(staging: Path, directory: Path) -> None:
     if directory.exists():
         directory.replace(retired)
     staging.replace(directory)
+    synchronize_directory(directory.parent)
     shutil.rmtree(retired, ignore_errors=True)
 
 

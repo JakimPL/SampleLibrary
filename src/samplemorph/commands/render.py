@@ -10,6 +10,7 @@ from sqlalchemy import Connection
 
 from samplecore.cli_parsing import add_subcommand
 from samplecore.config import LibraryConfig
+from samplecore.exit_status import ExitStatus
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 from samplemorph.commands.draws import SampleNotCataloged, require_sample
 from samplemorph.pipeline import (
@@ -58,7 +59,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         second = read_heard_sample(connection, audio, require_sample(connection, arguments.second))
     except (SampleNotCataloged, SampleUnavailableError) as error:
         _logger.error("Rendered nothing: %s.", error)
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
     loaded = load_route(config.library_root, route_choice_from(arguments))
     pair = encode_pair(
         first,

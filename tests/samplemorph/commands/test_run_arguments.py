@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from samplecore.exit_status import ExitStatus
 from samplemorph.commands.run_arguments import report_outcome, train_and_report
 from samplemorph.training.refusals import TrainingDataShortfall
 from samplemorph.training.runs import TrainingOutcome
@@ -24,7 +25,7 @@ def test_a_run_with_no_validated_epoch_ends_as_a_failure(tmp_path: Path, caplog:
     with pytest.raises(SystemExit) as raised, caplog.at_level(logging.INFO):
         report_outcome(_outcome(tmp_path, best_validation_loss=math.inf))
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.FAILED
     assert "nothing was written" in caplog.text
 
 
@@ -42,5 +43,5 @@ def test_a_run_that_cannot_go_ahead_ends_with_one_message(caplog: pytest.LogCapt
     with pytest.raises(SystemExit) as raised, caplog.at_level(logging.INFO):
         train_and_report(refused)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Trained nothing: 3 training samples fill no batch of 8." in caplog.text

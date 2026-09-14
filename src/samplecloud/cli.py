@@ -28,7 +28,7 @@ _logger = logging.getLogger(__name__)
 
 def main(argv: list[str], *, prog: str) -> None:
     """Run one embedding pass over the catalog and report the result."""
-    arguments = _parse_arguments(argv, prog=prog)
+    arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with (
         open_catalog_connection(config.database_url) as connection,
@@ -181,7 +181,7 @@ def _report(summary: EmbeddingSummary) -> None:
         _logger.info("Reduced %d samples to 2D coordinates.", summary.reduction.samples_reduced)
 
 
-def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = command_parser(prog=prog, description="Extract sample features and reduce them to cloud coordinates.")
     parser.add_argument(
         "--backend",

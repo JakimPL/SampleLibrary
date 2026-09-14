@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from sampleextract.cli import main
 
@@ -34,7 +35,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     with pytest.raises(SystemExit) as raised:
         main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Configuration error" in capsys.readouterr().err
 
 
@@ -87,7 +88,7 @@ def test_a_missing_source_directory_ends_the_command_with_one_message(
     with pytest.raises(SystemExit) as raised:
         main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "does not exist" in capsys.readouterr().err
 
 
@@ -167,6 +168,6 @@ def test_pruning_is_refused_when_the_source_directory_holds_no_module_at_all(
     with pytest.raises(SystemExit) as raised:
         main(["--prune"], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Pruned nothing" in capsys.readouterr().err
     assert len(PostgresModuleRepository(connection).list_all()) == 1

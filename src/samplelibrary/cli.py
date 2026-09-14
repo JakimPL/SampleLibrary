@@ -5,11 +5,16 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from samplecore.cli_parsing import command_parser
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplelibrary.commands import COMMANDS, Command, CommandGroup
+from samplelibrary.environment import STEP_LOCK_ENVIRONMENT_VARIABLE
+
+if TYPE_CHECKING:
+    from sqlalchemy import Connection
 
 PROGRAM_NAME: Final[str] = "samplelibrary"
 COMMAND_METAVAR: Final[str] = "<command>"
@@ -56,7 +61,10 @@ def _run_reporting_an_unreachable_catalog(command: Command, argv: list[str], *, 
     from sqlalchemy.exc import OperationalError
 
     try:
+        step_lock = _hold_step_lock_when_named()
         command.run(argv, prog=prog)
+        if step_lock is not None:
+            step_lock.close()
     except OperationalError as error:
         from samplecore.storage.cluster.provisioning import headline, is_connection_failure, server_message
 
@@ -67,7 +75,20 @@ def _run_reporting_an_unreachable_catalog(command: Command, argv: list[str], *, 
             "`samplelibrary setup database` creates a missing database.",
             headline(server_message(error)),
         )
-        sys.exit(1)
+        sys.exit(ExitStatus.FAILED)
+
+
+def _hold_step_lock_when_named() -> Connection | None:
+    """The connection holding the lock a pipeline names for this process, imported only when one is named.
+
+    A command run by hand names no lock, so it keeps loading nothing beyond its own package.
+    """
+    if not os.environ.get(STEP_LOCK_ENVIRONMENT_VARIABLE):
+        return None
+    # pylint: disable-next=import-outside-toplevel
+    from samplelibrary.step_lock import hold_step_lock
+
+    return hold_step_lock()
 
 
 def _require_arguments_after_command(

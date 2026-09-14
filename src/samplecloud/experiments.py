@@ -10,9 +10,11 @@ from sqlalchemy import Connection
 
 from samplecloud.backends import FeatureExtractor
 from samplecloud.backends.learned_backend import build_learned_extractor
+from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME, TEACHER_REVISION
 from samplecloud.hearing import Hearing
 from samplecloud.registries import BACKEND_REGISTRY
 from samplecore.models.experiment import (
+    CHECKPOINT_REVISION_PARAMETER,
     LEARNED_BACKEND_NAME,
     MODEL_PARAMETER,
     READING_PARAMETER,
@@ -48,10 +50,19 @@ class EmbeddingRecipe:
     model_name: str | None
 
     @property
+    def checkpoint_revision(self) -> str | None:
+        """The commit of the pretrained checkpoint a listening-model recipe hears through, as this build pins it."""
+        return TEACHER_REVISION if self.backend_name == TEACHER_BACKEND_NAME else None
+
+    @property
     def parameters(self) -> dict[str, str]:
         """The recipe in the form an experiment row records it."""
         recorded = {READING_PARAMETER: self.reading.value}
-        return recorded | ({MODEL_PARAMETER: self.model_name} if self.model_name is not None else {})
+        if self.model_name is not None:
+            recorded[MODEL_PARAMETER] = self.model_name
+        if self.checkpoint_revision is not None:
+            recorded[CHECKPOINT_REVISION_PARAMETER] = self.checkpoint_revision
+        return recorded
 
 
 def experiment_named(connection: Connection, experiment_id: int) -> Experiment:
@@ -71,7 +82,8 @@ def recipe_of(experiment: Experiment) -> EmbeddingRecipe:
 
     Raises:
         ExperimentRefused: the experiment holds label suggestions rather than vectors, names a backend this
-            build lacks, is a learned experiment naming no model, or records no reading.
+            build lacks, is a learned experiment naming no model, records no reading, or was heard
+            through another commit of the listening model than the one this build pins.
     """
     if experiment.backend_name == ZERO_SHOT_BACKEND_NAME:
         raise ExperimentRefused(f"experiment {experiment.id} is a scoring of label suggestions, which holds no vectors")
@@ -86,6 +98,12 @@ def recipe_of(experiment: Experiment) -> EmbeddingRecipe:
     reading = experiment.params.get(READING_PARAMETER)
     if reading not in tuple(Reading):
         raise ExperimentRefused(f"experiment {experiment.id} records no reading its samples were heard under")
+    revision = experiment.params.get(CHECKPOINT_REVISION_PARAMETER)
+    if experiment.backend_name == TEACHER_BACKEND_NAME and revision != TEACHER_REVISION:
+        raise ExperimentRefused(
+            f"experiment {experiment.id} was heard through listening-model commit {revision or 'unrecorded'}, "
+            f"and this build reads commit {TEACHER_REVISION}"
+        )
 
     return EmbeddingRecipe(
         backend_name=experiment.backend_name,

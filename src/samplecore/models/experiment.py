@@ -18,6 +18,7 @@ ZERO_SHOT_BACKEND_NAME: Final[str] = "zero_shot"
 MODEL_PARAMETER: Final[str] = "model"
 VOCABULARY_PARAMETER: Final[str] = "vocabulary"
 READING_PARAMETER: Final[str] = "reading"
+CHECKPOINT_REVISION_PARAMETER: Final[str] = "checkpoint_revision"
 
 
 @unique
