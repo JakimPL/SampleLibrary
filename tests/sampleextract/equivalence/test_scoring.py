@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 from numpy.typing import NDArray
@@ -7,6 +9,7 @@ from scipy.signal import resample_poly
 from trackmod.binary.pcm.quantize import dequantize, quantize
 from trackmod.core.samples.depth import BitDepth
 
+from sampleextract.equivalence import scoring
 from sampleextract.equivalence.scoring import (
     GAIN_VARIANT_MINIMUM_CONFIDENCE,
     MAX_TRIM_MISMATCH_FRAMES,
@@ -146,9 +149,14 @@ def test_score_resampled_variant_clamps_confidence_to_one_despite_floating_point
     """A near-perfect match's raw Pearson correlation can round to fractionally above 1.0 -- this
     must never reach a RelationScore, since SampleRelation.confidence rejects anything past 1.0.
     """
-    monkeypatch.setattr(
-        "sampleextract.equivalence.scoring._pearson_correlation", lambda first, second: 1.0000000000000002
-    )
+    aligned = scoring._best_aligned_correlation
+
+    def overshooting(resampled: NDArray[np.float64], reference: NDArray[np.float64], *, max_lag: int) -> object:
+        alignment = aligned(resampled, reference, max_lag=max_lag)
+        assert alignment is not None
+        return replace(alignment, correlation=1.0000000000000002)
+
+    monkeypatch.setattr(scoring, "_best_aligned_correlation", overshooting)
     original = _tonal_waveform(4410)
     resampled = resample_poly(original, up=22050, down=44100, axis=0)
 
@@ -241,3 +249,18 @@ def test_score_resampled_variant_returns_none_for_a_waveform_too_short_to_compar
     """A trimmed-away sample reaches the scorer as an empty waveform, which names no rate ratio."""
     assert score_resampled_variant(np.zeros((0, 1)), _tonal_waveform(2000)) is None
     assert score_resampled_variant(_tonal_waveform(10), _tonal_waveform(2000)) is None
+
+
+def test_the_lag_search_finds_the_offset_a_trimmed_lead_in_left_on_every_channel() -> None:
+    """Every lag's correlation comes from running sums, which must agree with reading each lag's windows directly."""
+    generator = np.random.default_rng(5)
+    reference = generator.normal(size=(3000, 2))
+    shifted = reference[17:]
+    padded = np.pad(shifted, ((0, 17), (0, 0)))
+
+    alignment = scoring._best_aligned_correlation(padded, reference, max_lag=64)
+
+    assert alignment is not None
+    assert alignment.lag_frames == 17
+    direct = np.corrcoef(alignment.windowed_resampled.reshape(-1), alignment.windowed_reference.reshape(-1))[0, 1]
+    assert alignment.correlation == pytest.approx(direct, abs=1e-9)
