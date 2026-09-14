@@ -13,6 +13,10 @@ export type PointShape = (typeof POINT_SHAPES)[number];
 export const POINT_SCALE_MODES = ["asinh", "linear", "constant"] as const;
 export type PointScaleMode = (typeof POINT_SCALE_MODES)[number];
 
+/** When the node layer draws every point as a hollow marker: at every zoom, or once a view holds few enough points. */
+export const NODE_MODES = ["always", "detail"] as const;
+export type NodeMode = (typeof NODE_MODES)[number];
+
 /** How the theme draws the cloud's points themselves. */
 export interface PointStyle {
     readonly shape: PointShape;
@@ -53,11 +57,23 @@ export interface MarkerStyle {
     readonly casingWidthPx: number;
 }
 
+/** How the theme draws the node layer: every point as a hollow marker of one size at any zoom. */
+export interface NodeStyle {
+    readonly mode: NodeMode;
+    readonly sizePx: number;
+    readonly lineWidthPx: number;
+    /** How opaque a marker's inside is, zero leaving it hollow. */
+    readonly fillOpacity: number;
+    /** How opaque the substrate's markers are, the named points' being fully opaque. */
+    readonly substrateOpacity: number;
+}
+
 /** Everything the current theme says about how the cloud is drawn, read once per theme change. */
 export interface CloudRenderSettings {
     readonly point: PointStyle;
     readonly colors: CloudColors;
     readonly marker: MarkerStyle;
+    readonly node: NodeStyle;
 }
 
 interface Token<Value> {
@@ -82,6 +98,11 @@ const UNCATEGORIZED_COLOR: Token<string> = { property: "--cloud-point-uncategori
 const MARKER_SIZE: Token<number> = { property: "--cloud-marker-size", fallback: 13 };
 const MARKER_LINE_WIDTH: Token<number> = { property: "--cloud-marker-line-width", fallback: 1.5 };
 const MARKER_CASING_WIDTH: Token<number> = { property: "--cloud-marker-casing-width", fallback: 1.5 };
+const NODE_MODE: Token<NodeMode> = { property: "--cloud-node-mode", fallback: "detail" };
+const NODE_SIZE: Token<number> = { property: "--cloud-node-size", fallback: 7 };
+const NODE_LINE_WIDTH: Token<number> = { property: "--cloud-node-line-width", fallback: 1 };
+const NODE_FILL_OPACITY: Token<number> = { property: "--cloud-node-fill-opacity", fallback: 0.2 };
+const NODE_SUBSTRATE_OPACITY: Token<number> = { property: "--cloud-node-substrate-opacity", fallback: 0.8 };
 
 const UNCATEGORIZED_CATEGORY = "uncategorized";
 const MINIMUM_OPACITY = 0.01;
@@ -146,8 +167,22 @@ function readMarkerStyle(): MarkerStyle {
     };
 }
 
+function readUnitInterval(token: Token<number>): number {
+    return Math.min(1, Math.max(0, readNumber(token)));
+}
+
+function readNodeStyle(): NodeStyle {
+    return {
+        mode: readThemeKeyword(NODE_MODE.property, NODE_MODES, NODE_MODE.fallback),
+        sizePx: Math.max(1, readNumber(NODE_SIZE)),
+        lineWidthPx: Math.max(0, readNumber(NODE_LINE_WIDTH)),
+        fillOpacity: readUnitInterval(NODE_FILL_OPACITY),
+        substrateOpacity: readUnitInterval(NODE_SUBSTRATE_OPACITY),
+    };
+}
+
 export function readCloudRenderSettings(): CloudRenderSettings {
-    return { point: readPointStyle(), colors: readCloudColors(), marker: readMarkerStyle() };
+    return { point: readPointStyle(), colors: readCloudColors(), marker: readMarkerStyle(), node: readNodeStyle() };
 }
 
 /**

@@ -53,6 +53,11 @@
     --cloud-marker-size: 13;
     --cloud-marker-line-width: 1.5;
     --cloud-marker-casing-width: 1.5;
+    --cloud-node-mode: detail;
+    --cloud-node-size: 7;
+    --cloud-node-line-width: 1;
+    --cloud-node-fill-opacity: 0.2;
+    --cloud-node-substrate-opacity: 0.8;
 
     /* One hue per SampleCategory in samples/category.ts. Fourteen hues blur together for some
        viewers, so every place a color appears also names its category. */
@@ -235,6 +240,11 @@
     --cloud-marker-size: 7;
     --cloud-marker-line-width: 1;
     --cloud-marker-casing-width: 0;
+    --cloud-node-mode: always;
+    --cloud-node-size: 7;
+    --cloud-node-line-width: 1;
+    --cloud-node-fill-opacity: 0;
+    --cloud-node-substrate-opacity: 1;
 
     /* The dark theme's category steps, since this theme's cloud canvas is near-black too. */
     --category-kick: #3987e5;
@@ -982,10 +992,38 @@ table.data td .annotation-editor-input {
     inset: 0;
 }
 
-.cloud-canvas canvas {
+.cloud-dots {
     display: block;
     width: 100%;
     height: 100%;
+    transition: opacity 160ms ease-out;
+}
+
+/* The node layer takes over from the dots it redraws as markers; the dots' canvas keeps the pointer. */
+.cloud-nodes {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease-out;
+}
+
+.cloud-wrap-nodes .cloud-nodes {
+    opacity: 1;
+}
+
+.cloud-wrap-nodes .cloud-dots {
+    opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cloud-nodes,
+    .cloud-dots {
+        transition: none;
+    }
 }
 
 .cloud-caption {

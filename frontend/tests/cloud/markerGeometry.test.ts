@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { crispSquare, devicePixels, ringFrame, snapToDevicePixel } from "../../src/cloud/markerGeometry";
+import {
+    crispSquare,
+    devicePixels,
+    lineBetweenMarkers,
+    type MarkerAppearance,
+    markerReach,
+    ringFrame,
+    snapToDevicePixel,
+} from "../../src/cloud/markerGeometry";
 
 function isWhole(value: number): boolean {
     return Math.abs(value - Math.round(value)) < 1e-9;
@@ -59,5 +67,54 @@ describe("crispSquare", () => {
 describe("ringFrame", () => {
     it("runs the stroke just inside the ring's outer size", () => {
         expect(ringFrame(13, 1.5)).toEqual({ radius: 5.75, strokeWidth: 1.5 });
+    });
+});
+
+describe("markerReach", () => {
+    const RING: MarkerAppearance = {
+        shape: "circle",
+        sizePx: 12,
+        lineWidthPx: 1,
+        casingWidthPx: 0,
+        devicePixelRatio: 1,
+    };
+    const SQUARE: MarkerAppearance = { ...RING, shape: "square" };
+
+    it("reaches a ring's radius in every direction", () => {
+        expect(markerReach(RING, 1, 0)).toBe(6);
+        expect(markerReach(RING, 3, 4)).toBe(6);
+    });
+
+    it("reaches a square's side straight across and its corner along the diagonal", () => {
+        expect(markerReach(SQUARE, 0, -5)).toBe(6);
+        expect(markerReach(SQUARE, 1, 1)).toBeCloseTo(6 * Math.SQRT2);
+    });
+});
+
+describe("lineBetweenMarkers", () => {
+    const RING: MarkerAppearance = {
+        shape: "circle",
+        sizePx: 10,
+        lineWidthPx: 1,
+        casingWidthPx: 0,
+        devicePixelRatio: 1,
+    };
+
+    it("stops short of the marker at each marked end", () => {
+        expect(lineBetweenMarkers([0, 0], [100, 0], RING, true)).toEqual([
+            [5, 0],
+            [95, 0],
+        ]);
+    });
+
+    it("runs to an unmarked end", () => {
+        expect(lineBetweenMarkers([0, 0], [100, 0], RING, false)).toEqual([
+            [5, 0],
+            [100, 0],
+        ]);
+    });
+
+    it("draws nothing between markers that touch", () => {
+        expect(lineBetweenMarkers([0, 0], [8, 0], RING, true)).toBeNull();
     });
 });

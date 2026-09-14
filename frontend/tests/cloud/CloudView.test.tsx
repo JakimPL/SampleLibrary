@@ -954,3 +954,55 @@ describe("CloudView markers", () => {
         expect(container.querySelector(".cloud-marker-selected rect.cloud-marker-stroke")).toBeInTheDocument();
     });
 });
+
+describe("CloudView node layer", () => {
+    const GRID_SIDE = 150;
+
+    afterEach(() => {
+        document.documentElement.style.removeProperty("--cloud-node-mode");
+    });
+
+    /** Enough points spread over the whole data space that no marker would stay legible with all of them in view. */
+    function crowdedPoints(): readonly CloudEntityPoint[] {
+        return Array.from({ length: GRID_SIDE * GRID_SIDE }, (_, index) =>
+            point(
+                { kind: "sample", hash: index.toString(16).padStart(64, "0") },
+                index % GRID_SIDE,
+                Math.floor(index / GRID_SIDE),
+                "kick",
+            ),
+        );
+    }
+
+    function nodesShown(container: HTMLElement): boolean {
+        return container.querySelector(".cloud-wrap")?.classList.contains("cloud-wrap-nodes") ?? false;
+    }
+
+    it("draws the points as markers while the view holds few of them", async () => {
+        const { container } = await renderCloudView({ points: [point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)] });
+
+        expect(container.querySelector("canvas.cloud-nodes")).toBeInTheDocument();
+        expect(nodesShown(container)).toBe(true);
+    });
+
+    it("keeps the dots while the view holds too many points, and turns to markers once a frame zooms in", async () => {
+        const { container } = await renderCloudView({ points: crowdedPoints() });
+
+        expect(nodesShown(container)).toBe(false);
+
+        act(() => {
+            latestInstance().emit("drawing", {
+                view: new Float32Array([40, 0, 0, 0, 0, 40, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]),
+            });
+        });
+
+        expect(nodesShown(container)).toBe(true);
+    });
+
+    it("draws markers at every zoom under a theme that always does", async () => {
+        document.documentElement.style.setProperty("--cloud-node-mode", "always");
+        const { container } = await renderCloudView({ points: crowdedPoints() });
+
+        expect(nodesShown(container)).toBe(true);
+    });
+});

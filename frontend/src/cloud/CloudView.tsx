@@ -3,15 +3,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import createScatterplot from "regl-scatterplot";
 
+import { classNames } from "../shared/classNames";
 import type { EntityRef } from "../workspace/selectionStore";
 import { CloudMarkers, type MarkerPositions, NO_MARKERS, sameMarkers } from "./CloudMarkers";
-import { type CloudRenderSettings, useCloudRenderSettings } from "./cloudRenderSettings";
+import { type CloudRenderSettings, type NodeStyle, useCloudRenderSettings } from "./cloudRenderSettings";
+import { countVisibleUpTo, detailNodeLimit } from "./detailLevel";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
+import type { NodeFrameStyle } from "./hollowPointRenderer";
 import type { PointColoring } from "./labelColoring";
 import type { MarkerAppearance } from "./markerGeometry";
 import { MorphBand } from "./MorphBand";
 import { MorphLink } from "./MorphLink";
+import { type NodeGeometry, nodeGeometryOf, nodePaletteOf } from "./nodeGeometry";
 import { drawOrder, paletteColors, type PointSlots, slotPoints, slotValues } from "./pointPalette";
+import { useNodeLayer } from "./useNodeLayer";
+import { type ViewTransform, viewTransformOf, visibleBounds } from "./viewTransform";
 
 type Scatterplot = ReturnType<typeof createScatterplot>;
 type ScatterplotProperties = Parameters<Scatterplot["set"]>[0];
@@ -21,6 +27,8 @@ type ScreenPosition = readonly [number, number];
 const CATEGORICAL_ENCODING = "category";
 const CATEGORICAL_DATA = "categorical";
 const SQUARE_SHAPE = "square";
+const ALWAYS_NODE_MODE = "always";
+const DOTS_CANVAS_CLASS = "cloud-dots";
 const CAMERA_VIEW_PROPERTY = "cameraView";
 const LEFT_BUTTON = 0;
 const RIGHT_BUTTON = 2;
@@ -187,6 +195,18 @@ function sameView(first: Float32Array | null, second: Float32Array | null): bool
     );
 }
 
+/**
+ * Whether the node layer shows under `transform`: always in the "always" mode, and in the detail
+ * mode while the view holds few enough points for their markers to stay legible.
+ */
+function nodesShownAt(transform: ViewTransform, geometry: NodeGeometry, node: NodeStyle): boolean {
+    if (node.mode === ALWAYS_NODE_MODE) {
+        return true;
+    }
+    const limit = detailNodeLimit(transform, node.sizePx);
+    return countVisibleUpTo(geometry.positions, visibleBounds(transform, node.sizePx), limit) <= limit;
+}
+
 /** The first index each hash takes among `points`, the same point `selectHighlighted` finds for it. */
 function firstIndexByHash(points: readonly CloudEntityPoint[]): ReadonlyMap<string, number> {
     const indices = new Map<string, number>();
@@ -343,6 +363,12 @@ function selectHighlighted(
  * what paints a selected or hovered point in the theme's own selection and hover colors. The
  * library compiles a point's shape into its shaders at creation, so a theme that changes the shape
  * recreates the scatterplot, carrying the camera over so the view stays where it was.
+ *
+ * A second canvas over the dots, the node layer, draws every point as a hollow marker of one size
+ * whatever the zoom -- a square under square points, a ring under round ones -- and takes over from
+ * the dots through a short crossfade: at every zoom under a theme whose nodes always show, and under
+ * one that shows them in detail once the view holds few enough points for the markers to stay
+ * legible. It follows the view within the same frame the overlays do.
  */
 export function CloudView({
     points: rawPoints,
@@ -408,8 +434,12 @@ export function CloudView({
     const [linkScreen, setLinkScreen] = useState<ScreenSegment | null>(null);
     const [band, setBand] = useState<BandSegment | null>(null);
     const [markers, setMarkers] = useState<MarkerPositions>(NO_MARKERS);
+    const [nodesShown, setNodesShown] = useState(false);
+    const nodeCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
     const settings = useCloudRenderSettings();
+    const settingsRef = useRef(settings);
+    settingsRef.current = settings;
     const pointShape = settings.point.shape;
     const devicePixelRatio = window.devicePixelRatio;
     const markerAppearance = useMemo(
@@ -427,6 +457,29 @@ export function CloudView({
     const indexByHash = useMemo(() => firstIndexByHash(points), [points]);
     const indexByHashRef = useRef(indexByHash);
     indexByHashRef.current = indexByHash;
+
+    const nodeGeometry = useMemo(() => nodeGeometryOf(points, slotting), [points, slotting]);
+    const nodeGeometryRef = useRef(nodeGeometry);
+    nodeGeometryRef.current = nodeGeometry;
+    const nodePalette = useMemo(
+        () =>
+            nodePaletteOf(
+                slotting === null ? [settings.colors.point] : paletteColors(coloring, settings.colors),
+                slotting?.substrateSlot ?? null,
+                settings.node.substrateOpacity,
+            ),
+        [slotting, coloring, settings],
+    );
+    const nodeFrameStyle = useMemo(
+        (): NodeFrameStyle => ({
+            shape: pointShape,
+            sizePx: settings.node.sizePx,
+            lineWidthPx: settings.node.lineWidthPx,
+            fillOpacity: settings.node.fillOpacity,
+        }),
+        [pointShape, settings],
+    );
+    const nodeLayer = useNodeLayer(nodeCanvasRef, nodeGeometry, nodePalette, nodeFrameStyle);
 
     /**
      * Pins the link to both ends' screen positions, hiding it while an end is outside this view or the first
@@ -509,18 +562,45 @@ export function CloudView({
     }, []);
 
     /**
-     * Pins every overlay to the points it marks, committed before the frame paints: called from the
-     * scatterplot's own drawing of a moved view and from a resize, so a ring, the link and the ping
-     * move in the very frame the points do.
+     * Brings every layer over the points up to the scatterplot's current view: the node layer draws
+     * where the view puts the points, or steps aside when a detail-mode view holds too many, and
+     * each overlay pins to the point it marks. `view` is the camera a frame just drew, or null to
+     * read the live one. From the scatterplot's own drawing of a moved view and from a resize, the
+     * sync is `immediate`: committed before the frame paints, so the layers move in the very frame
+     * the points do.
      */
-    const repinOverlays = useCallback((): void => {
-        flushSync(() => {
-            repinLink();
-            repinBand();
-            repinPing();
-            repinMarkers();
-        });
-    }, [repinLink, repinBand, repinPing, repinMarkers]);
+    const syncView = useCallback(
+        (view: Float32Array | null, immediate: boolean): void => {
+            const scatterplot = scatterplotRef.current;
+            const container = containerRef.current;
+            if (scatterplot === null || container === null || !pointsDrawnRef.current) {
+                return;
+            }
+            const bounds = container.getBoundingClientRect();
+            const transform = viewTransformOf(view ?? scatterplot.get(CAMERA_VIEW_PROPERTY), {
+                widthPx: bounds.width,
+                heightPx: bounds.height,
+                devicePixelRatio: window.devicePixelRatio,
+            });
+            const shown = nodesShownAt(transform, nodeGeometryRef.current, settingsRef.current.node);
+            if (shown) {
+                nodeLayer.draw(transform);
+            }
+            const commit = (): void => {
+                setNodesShown(shown);
+                repinLink();
+                repinBand();
+                repinPing();
+                repinMarkers();
+            };
+            if (immediate) {
+                flushSync(commit);
+            } else {
+                commit();
+            }
+        },
+        [nodeLayer, repinLink, repinBand, repinPing, repinMarkers],
+    );
 
     useEffect(() => {
         const container = containerRef.current;
@@ -529,6 +609,7 @@ export function CloudView({
         }
 
         const canvas = document.createElement("canvas");
+        canvas.className = DOTS_CANVAS_CLASS;
         container.append(canvas);
 
         const cameraView = cameraViewRef.current;
@@ -561,8 +642,7 @@ export function CloudView({
             if (!isCanceled()) {
                 pointsDrawnRef.current = true;
                 selectedIndexRef.current = highlightedIndex;
-                repinLink();
-                repinMarkers();
+                syncView(null, false);
             }
         });
 
@@ -604,7 +684,7 @@ export function CloudView({
                 return;
             }
             lastViewRef.current = Float32Array.from(view);
-            repinOverlays();
+            syncView(view, true);
         });
 
         function cursorOf(event: MouseEvent): ScreenPosition {
@@ -761,14 +841,13 @@ export function CloudView({
 
             pointsDrawnRef.current = true;
             selectedIndexRef.current = highlightedIndex;
-            repinLink();
-            repinMarkers();
+            syncView(null, false);
             pingNewHighlight(scatterplot, highlightedIndex);
         });
         return (): void => {
             canceled = true;
         };
-    }, [points, slotting, repinLink, repinMarkers, pingNewHighlight]);
+    }, [points, slotting, syncView, pingNewHighlight]);
 
     // A highlight moving from one point to another selects it among the points already drawn, so the
     // cloud's hundred thousand points are drawn again only when they themselves change.
@@ -803,18 +882,20 @@ export function CloudView({
             return undefined;
         }
         const observer = new ResizeObserver(() => {
-            repinOverlays();
+            syncView(null, true);
         });
         observer.observe(container);
         return (): void => {
             observer.disconnect();
         };
-    }, [repinOverlays]);
+    }, [syncView]);
 
-    // A new theme reaches the live scatterplot through `set`; a new coloring reaches it with its own draw.
+    // A new theme reaches the live scatterplot through `set`, and may change whether the nodes show;
+    // a new coloring reaches the scatterplot with its own draw.
     useEffect(() => {
         void scatterplotRef.current?.set(appearanceRef.current);
-    }, [settings]);
+        syncView(null, false);
+    }, [settings, syncView]);
 
     useEffect(() => {
         if (ping === null) {
@@ -830,8 +911,9 @@ export function CloudView({
     }, [ping]);
 
     return (
-        <div className="cloud-wrap">
+        <div className={classNames("cloud-wrap", nodesShown && "cloud-wrap-nodes")}>
             <div className="cloud-canvas" ref={containerRef} />
+            <canvas className="cloud-nodes" ref={nodeCanvasRef} aria-hidden />
             <CloudMarkers positions={markers} appearance={markerAppearance} />
             {ping !== null && (
                 <span key={ping.key} className="cloud-ping" style={{ left: ping.position[0], top: ping.position[1] }}>

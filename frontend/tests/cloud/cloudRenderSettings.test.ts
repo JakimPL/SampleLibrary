@@ -14,6 +14,14 @@ const PROPERTIES = [
     "--cloud-point-scale-mode",
     "--cloud-point-uncategorized",
     "--category-kick",
+    "--cloud-marker-size",
+    "--cloud-marker-line-width",
+    "--cloud-marker-casing-width",
+    "--cloud-node-mode",
+    "--cloud-node-size",
+    "--cloud-node-line-width",
+    "--cloud-node-fill-opacity",
+    "--cloud-node-substrate-opacity",
 ];
 
 function declare(values: Readonly<Record<string, string>>): void {
@@ -71,5 +79,32 @@ describe("readCloudRenderSettings", () => {
         expect(colors.categories[categoryIndex("kick")]).toBe("#abcdef");
         expect(colors.categories[categoryIndex("uncategorized")]).toBe("#123456");
         expect(colors.uncategorized).toBe("#123456");
+    });
+
+    it("reads the marker and node styles a theme declares", () => {
+        declare({
+            "--cloud-marker-size": "9",
+            "--cloud-marker-line-width": "2",
+            "--cloud-marker-casing-width": "0",
+            "--cloud-node-mode": "always",
+            "--cloud-node-size": "5",
+            "--cloud-node-line-width": "1",
+            "--cloud-node-fill-opacity": "0.4",
+            "--cloud-node-substrate-opacity": "0.5",
+        });
+
+        const { marker, node } = readCloudRenderSettings();
+
+        expect(marker).toEqual({ sizePx: 9, lineWidthPx: 2, casingWidthPx: 0 });
+        expect(node).toEqual({ mode: "always", sizePx: 5, lineWidthPx: 1, fillOpacity: 0.4, substrateOpacity: 0.5 });
+    });
+
+    it("holds node opacities to the unit interval", () => {
+        declare({ "--cloud-node-fill-opacity": "-1", "--cloud-node-substrate-opacity": "3" });
+
+        const { node } = readCloudRenderSettings();
+
+        expect(node.fillOpacity).toBe(0);
+        expect(node.substrateOpacity).toBe(1);
     });
 });
