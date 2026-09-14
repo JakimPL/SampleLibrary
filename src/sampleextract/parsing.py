@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
+from enum import StrEnum, unique
 from pathlib import Path
 from typing import Final
 
@@ -13,18 +14,28 @@ from trackmod.trackers.xm.module import XMModule
 
 from samplecore.models.tracker import TrackerFormat
 
-RECOVERABLE_PARSE_ERRORS: Final[tuple[type[Exception], ...]] = (ValueError, OSError, struct.error, IndexError)
+RECOVERABLE_MODULE_ERRORS: Final[tuple[type[Exception], ...]] = (ValueError, struct.error, IndexError)
 # ValueError: TrackMod's own documented parse failures (a bad tag, a malformed structure) and every
-#   pydantic ValidationError, which subclasses it. OSError: the file could not be read. struct.error and
-#   IndexError: raw struct/array bounds failures a sufficiently corrupt file can still trigger beneath
-#   TrackMod's own ValueError guards. Anything outside this set is treated as a bug, and crashes loudly.
+#   pydantic ValidationError, which subclasses it. struct.error and IndexError: raw struct/array bounds
+#   failures a sufficiently corrupt file can still trigger beneath TrackMod's own ValueError guards.
+#   Each describes one module's content; anything outside this set is treated as a bug, and crashes loudly.
+
+
+@unique
+class FailureStage(StrEnum):
+    """Where one module's way into the catalog stopped: its file, its format, or what it holds."""
+
+    READ = "read"
+    PARSE = "parse"
+    CATALOG = "catalog"
 
 
 @dataclass(frozen=True)
 class ExtractionFailure:
-    """One module a pass could not read, and why."""
+    """One module a pass could not take in, the stage it stopped at, and why."""
 
     path: Path
+    stage: FailureStage
     reason: str
 
 

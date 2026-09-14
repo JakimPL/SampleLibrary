@@ -22,11 +22,11 @@ GAIN_UNITY_TOLERANCE: Final[float] = 0.05
 TRAILING_SILENCE_THRESHOLD: Final[float] = 1.0 / BitDepth.EIGHT.scale
 
 # How far two independently trailing-trimmed waveforms' lengths may still disagree and be treated as
-# the same content -- tight, since candidate generation's own MAX_TRAILING_TRIM_FRAMES already
-# absorbed the real silent-tail difference; this only absorbs noise in exactly where each waveform's
-# own trim boundary landed.
+# the same content: the waveforms are compared after trimming, so this only absorbs noise in exactly
+# where each waveform's own trim boundary landed.
 MAX_TRIM_MISMATCH_FRAMES: Final[int] = 32
 
+MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON: Final[int] = 64
 MAX_RESAMPLE_DENOMINATOR: Final[int] = 200
 MAX_TRIM_LAG_FRAMES: Final[int] = 64
 MAX_COMPARISON_FRAMES: Final[int] = 20_000
@@ -108,12 +108,15 @@ def score_resampled_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray
     computed on mean-centered, self-normalized signals), so this already recognizes a pair related by
     resampling and amplitude at once without any gain compensation of its own; the best-fitting gain
     is still recovered and reported in ``evidence``, purely as corroborating detail. Returns None
-    when every offset in the search window leaves one of the compared windows silent (zero
+    when the shorter waveform holds fewer than ``MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON`` frames, too
+    few for a rate ratio to mean anything, and when every offset in the search window leaves one of the compared windows silent (zero
     variance), since Pearson correlation is undefined there rather than meaningfully zero. Clamped to
     at most 1.0, since floating-point rounding on a near-perfect match can otherwise put the raw
     correlation a fraction above its mathematical ceiling.
     """
     short, long_ = (waveform_a, waveform_b) if waveform_a.shape[0] <= waveform_b.shape[0] else (waveform_b, waveform_a)
+    if short.shape[0] < MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON:
+        return None
     ratio = Fraction(long_.shape[0], short.shape[0]).limit_denominator(MAX_RESAMPLE_DENOMINATOR)
     resampled = _match_length(resample_poly(short, up=ratio.numerator, down=ratio.denominator, axis=0), long_.shape[0])
 

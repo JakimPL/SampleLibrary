@@ -4,7 +4,12 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
 
-from sampleextract.equivalence.fingerprint import FREQUENCY_BANDS, TIME_BINS, compute_fingerprint
+from sampleextract.equivalence.fingerprint import (
+    FREQUENCY_BANDS,
+    TIME_BINS,
+    compute_rate_fingerprint,
+    compute_shape_fingerprint,
+)
 
 SAMPLE_RATE = 44100
 
@@ -19,45 +24,58 @@ def _tonal_waveform(frames: int) -> NDArray[np.float64]:
     return waveform.reshape(-1, 1)
 
 
-def test_compute_fingerprint_returns_a_unit_norm_vector_of_the_declared_shape() -> None:
-    fingerprint = compute_fingerprint(_tonal_waveform(4410))
+def test_compute_shape_fingerprint_returns_a_unit_norm_vector_of_the_declared_shape() -> None:
+    fingerprint = compute_shape_fingerprint(_tonal_waveform(4410))
 
     assert fingerprint.shape == (TIME_BINS * FREQUENCY_BANDS,)
     assert np.isclose(np.linalg.norm(fingerprint), 1.0)
 
 
-def test_compute_fingerprint_returns_a_zero_vector_for_silence() -> None:
+def test_compute_shape_fingerprint_returns_a_zero_vector_for_silence() -> None:
     silence = np.zeros((4410, 1))
 
-    fingerprint = compute_fingerprint(silence)
+    fingerprint = compute_shape_fingerprint(silence)
 
     assert np.array_equal(fingerprint, np.zeros(TIME_BINS * FREQUENCY_BANDS))
 
 
-def test_compute_fingerprint_stays_similar_across_resampling_and_a_trimmed_lead_in() -> None:
+def test_the_shape_fingerprint_stays_similar_across_a_gain_and_a_trimmed_lead_in() -> None:
     original = _tonal_waveform(44100)
-    resampled = resample_poly(original, up=22050, down=44100, axis=0)
-    trimmed = resampled[64:]
 
-    reference = compute_fingerprint(original)
-    untrimmed_similarity = np.dot(reference, compute_fingerprint(resampled))
-    trimmed_similarity = np.dot(reference, compute_fingerprint(trimmed))
+    reference = compute_shape_fingerprint(original)
 
-    assert untrimmed_similarity > 0.99
-    assert trimmed_similarity > 0.99
+    assert np.dot(reference, compute_shape_fingerprint(original * 0.3)) > 0.999
+    assert np.dot(reference, compute_shape_fingerprint(original[64:])) > 0.99
 
 
-def test_compute_fingerprint_handles_a_waveform_too_short_for_every_time_bin_to_carry_a_spectrum() -> None:
-    """A waveform with far fewer frames than TIME_BINS leaves some bins with too few samples for
-    a meaningful spectrum -- those bins contribute zero energy rather than raising.
-    """
-    fingerprint = compute_fingerprint(_tonal_waveform(20))
+def test_the_rate_fingerprint_stays_similar_across_a_resample() -> None:
+    """A resample keeps every cycle a sound holds, which is what the rate fingerprint counts."""
+    original = np.random.default_rng(7).standard_normal((20000, 1)) * np.exp(-np.arange(20000) / 4000)[:, np.newaxis]
+    halved = resample_poly(original, up=1, down=2, axis=0)
+
+    similarity = np.dot(compute_rate_fingerprint(original), compute_rate_fingerprint(halved))
+
+    assert similarity > 0.97
+    assert np.dot(compute_shape_fingerprint(original), compute_shape_fingerprint(halved)) < similarity
+
+
+def test_a_short_waveform_is_read_padded_so_two_copies_of_it_lie_together() -> None:
+    """A chip loop of a few dozen frames carries a fingerprint of its own, the same for a quieter copy."""
+    short = _tonal_waveform(20)
+
+    fingerprint = compute_shape_fingerprint(short)
 
     assert fingerprint.shape == (TIME_BINS * FREQUENCY_BANDS,)
+    assert np.isclose(np.linalg.norm(fingerprint), 1.0)
+    assert np.dot(fingerprint, compute_shape_fingerprint(short * 0.25)) > 0.999
 
 
-def test_compute_fingerprint_separates_unrelated_content() -> None:
-    tonal = compute_fingerprint(_tonal_waveform(22050))
-    noise = compute_fingerprint(np.random.default_rng(3).uniform(-1.0, 1.0, (22050, 1)))
+def test_compute_shape_fingerprint_separates_unrelated_content() -> None:
+    tonal = compute_shape_fingerprint(_tonal_waveform(22050))
+    noise = compute_shape_fingerprint(np.random.default_rng(3).uniform(-1.0, 1.0, (22050, 1)))
 
     assert np.dot(tonal, noise) < 0.9
+
+
+def test_the_rate_fingerprint_of_silence_is_the_zero_vector() -> None:
+    assert np.array_equal(compute_rate_fingerprint(np.zeros((4410, 1))), np.zeros(TIME_BINS * FREQUENCY_BANDS))

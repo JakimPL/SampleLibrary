@@ -17,8 +17,12 @@ def main(argv: list[str], *, prog: str) -> None:
         summary = detect_equivalences(connection, config.library_root, sample_limit=arguments.limit)
 
     _logger.info(
-        "Considered %d samples: %d bit-depth variants, %d amplification variants, %d resampled variants.",
+        "Considered %d samples (%d silent), scored %d gain and %d resampled candidates: "
+        "%d bit-depth variants, %d amplification variants, %d resampled variants.",
         summary.samples_considered,
+        summary.silent_samples,
+        summary.gain_candidates,
+        summary.resampled_candidates,
         summary.bit_depth_relations,
         summary.amplification_relations,
         summary.resampled_relations,

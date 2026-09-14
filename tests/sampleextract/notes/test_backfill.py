@@ -32,7 +32,7 @@ def cataloged_corpus(
     """
     (config.module_source_directory / "song.xm").write_bytes(xm_module_bytes)
     (config.module_source_directory / "song.it").write_bytes(it_module_bytes)
-    run_extraction(config, connection, discover_modules(config.module_source_directory), progress=progress)
+    run_extraction(config, connection, discover_modules(config.module_source_directory).paths, progress=progress)
     for module in PostgresModuleRepository(connection).list_all():
         clear_module_notes(connection, module_id=module.id)
 
@@ -134,7 +134,9 @@ def test_ingest_records_a_new_module_s_notes_without_a_backfill_pass(
 ) -> None:
     (config.module_source_directory / "song.xm").write_bytes(xm_module_bytes)
 
-    summary = run_extraction(config, connection, discover_modules(config.module_source_directory), progress=progress)
+    summary = run_extraction(
+        config, connection, discover_modules(config.module_source_directory).paths, progress=progress
+    )
 
     events = PostgresNoteEventRepository(connection).list_for_module(summary.ingested[0].id)
     assert [event.sounded_note for event in events] == [played_note]

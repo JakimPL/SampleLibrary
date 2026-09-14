@@ -4,6 +4,7 @@ import logging
 import multiprocessing
 import os
 from concurrent.futures import Future, ProcessPoolExecutor, wait
+from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, Queue
 from typing import Final
@@ -11,7 +12,7 @@ from typing import Final
 from samplecore.cli_support import open_catalog_connection
 from samplecore.config import LibraryConfig
 from samplecore.models.scalars import MINIMUM_WORKER_COUNT, WorkerCount
-from sampleextract.discovery import discover_modules
+from sampleextract.discovery import Discovery, discover_modules
 from sampleextract.parallel.division import divide
 from sampleextract.parallel.worker import extract_share
 from sampleextract.progress import ProgressSink, extraction_bar
@@ -24,6 +25,16 @@ _DRAW_INTERVAL_SECONDS: Final[float] = 0.1
 _logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class CorpusOutcome:
+    """What a pass over the whole corpus did: the listing it covered, what the shares that finished
+    reported, and the error each share that stopped raised."""
+
+    discovery: Discovery
+    summary: ExtractionSummary
+    worker_errors: tuple[BaseException, ...]
+
+
 def default_worker_count() -> WorkerCount:
     """How many processes a run spends when it is left to choose for itself.
 
@@ -34,21 +45,29 @@ def default_worker_count() -> WorkerCount:
     return min(os.cpu_count() or MINIMUM_WORKER_COUNT, MAXIMUM_AUTOMATIC_WORKERS)
 
 
-def extract_corpus(config: LibraryConfig, *, workers: WorkerCount) -> ExtractionSummary:
+def extract_corpus(config: LibraryConfig, *, workers: WorkerCount) -> CorpusOutcome:
     """Cover the configured source directory once, spending ``workers`` processes on it.
 
     The corpus is walked here, in one place, and the shares handed out from it, so every worker
     covers a share of the same list and the catalog sees each module reached by one of them.
+
+    Raises:
+        FileNotFoundError: the source directory does not exist.
+        NotADirectoryError: the source directory names a file.
     """
-    paths = discover_modules(config.module_source_directory)
+    discovery = discover_modules(config.module_source_directory)
+    paths = discovery.paths
     shares = tuple(share for share in divide(paths, workers=workers) if share)
     if len(shares) <= 1:
         with extraction_bar(len(paths)) as progress:
-            return _extract_here(config, paths, progress=progress)
+            return CorpusOutcome(
+                discovery=discovery, summary=_extract_here(config, paths, progress=progress), worker_errors=()
+            )
 
     _logger.info("Spending %d worker processes on %d modules.", len(shares), len(paths))
     with extraction_bar(len(paths)) as progress:
-        return _extract_across_processes(config, shares, progress=progress)
+        summary, worker_errors = _extract_across_processes(config, shares, progress=progress)
+    return CorpusOutcome(discovery=discovery, summary=summary, worker_errors=worker_errors)
 
 
 def _extract_here(config: LibraryConfig, paths: tuple[Path, ...], *, progress: ProgressSink) -> ExtractionSummary:
@@ -59,7 +78,7 @@ def _extract_here(config: LibraryConfig, paths: tuple[Path, ...], *, progress: P
 
 def _extract_across_processes(
     config: LibraryConfig, shares: tuple[tuple[Path, ...], ...], *, progress: ProgressSink
-) -> ExtractionSummary:
+) -> tuple[ExtractionSummary, tuple[BaseException, ...]]:
     """Spend one process per share, drawing what they all report onto this process's own bar.
 
     Processes rather than threads, since parsing is where the time goes and it is ordinary Python.
@@ -67,15 +86,18 @@ def _extract_across_processes(
     catalog connection while the children start, and naming spawn keeps that true wherever the run
     happens, at the cost of about a second of startup against a pass measured in hours.
 
-    A worker that dies leaves its failure on the future it was given, which surfaces here as the
-    run's own: work this size is worth stopping for rather than finishing quietly short.
+    A share that stops leaves its error on the future it was given. The other shares carry on to
+    their end, since every module they land is kept by a rerun anyway, and what they report is
+    combined beside the errors of the shares that stopped, so a caller reports both.
     """
     context = multiprocessing.get_context(_START_METHOD)
     with context.Manager() as manager, ProcessPoolExecutor(max_workers=len(shares), mp_context=context) as pool:
         counts: Queue[int] = manager.Queue()
         futures = [pool.submit(extract_share, config, share, counts) for share in shares]
         _draw_until_finished(futures, counts=counts, progress=progress)
-        return ExtractionSummary.combine(future.result() for future in futures)
+        errors = tuple(error for error in (future.exception() for future in futures) if error is not None)
+        finished = ExtractionSummary.combine(future.result() for future in futures if future.exception() is None)
+        return finished, errors
 
 
 def _draw_until_finished(

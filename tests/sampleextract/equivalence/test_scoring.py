@@ -11,6 +11,7 @@ from sampleextract.equivalence.scoring import (
     GAIN_VARIANT_MINIMUM_CONFIDENCE,
     MAX_TRIM_MISMATCH_FRAMES,
     MAXIMUM_GAIN,
+    MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON,
     RESAMPLED_MINIMUM_CONFIDENCE,
     score_gain_variant,
     score_resampled_variant,
@@ -215,8 +216,8 @@ def test_score_resampled_variant_handles_frame_counts_shorter_than_the_lag_searc
     with waveforms shorter than the lag search window must not let the search wrap around the
     array's end at its most extreme offsets.
     """
-    long_waveform = _tonal_waveform(40)
-    short_waveform = _tonal_waveform(20)
+    long_waveform = _tonal_waveform(100)
+    short_waveform = _tonal_waveform(MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON)
 
     score = score_resampled_variant(long_waveform, short_waveform)
 
@@ -234,3 +235,9 @@ def test_score_resampled_variant_caps_the_comparison_length_for_long_waveforms()
 
     assert score is not None
     assert score.confidence > RESAMPLED_MINIMUM_CONFIDENCE
+
+
+def test_score_resampled_variant_returns_none_for_a_waveform_too_short_to_compare() -> None:
+    """A trimmed-away sample reaches the scorer as an empty waveform, which names no rate ratio."""
+    assert score_resampled_variant(np.zeros((0, 1)), _tonal_waveform(2000)) is None
+    assert score_resampled_variant(_tonal_waveform(10), _tonal_waveform(2000)) is None

@@ -56,7 +56,7 @@ def config(tmp_path: Path) -> LibraryConfig:
 
 def _corpus(config: LibraryConfig) -> tuple[Path, ...]:
     """Every module under the configured source directory, the share a lone pass covers."""
-    return discover_modules(config.module_source_directory)
+    return discover_modules(config.module_source_directory).paths
 
 
 def _write_corpus(config: LibraryConfig, *, xm_module_bytes: bytes, it_module_bytes: bytes) -> None:

@@ -1,84 +1,92 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from math import sqrt
+from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.spatial import cKDTree
 
-from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
+from sampleextract.equivalence.scoring import MAX_TRIM_MISMATCH_FRAMES, MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON
 
-MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON: Final[int] = 64
 MAX_RESAMPLE_RATIO: Final[float] = 8.0
-MINIMUM_FINGERPRINT_COSINE_SIMILARITY: Final[float] = 0.95
-
-# A generous but bounded tolerance on a trimmed silent tail's length, at a candidate-generation
-# level cheap enough to run on stored frame counts alone -- 4410 frames covers up to half a second
-# of trailing silence at a typical tracker sample rate. The scorer re-checks the actually-trimmed
-# waveforms' lengths against a much tighter bound once it has read them.
-MAX_TRAILING_TRIM_FRAMES: Final[int] = 4410
+MINIMUM_RESAMPLED_FINGERPRINT_SIMILARITY: Final[float] = 0.95
+# A quiet sample requantized to 8 bits carries noise its 16-bit original lacks, which moves its shape
+# fingerprint while the scorer still accepts the pair; the real catalog's accepted pairs reach 0.84.
+MINIMUM_GAIN_FINGERPRINT_SIMILARITY: Final[float] = 0.8
+NEIGHBOR_BLOCK_ROWS: Final[int] = 256
 
 
-def gain_variant_candidate_pairs(samples: Sequence[Sample]) -> tuple[tuple[Sample, Sample], ...]:
-    """Every pair of cataloged samples that could be the same content at a different gain, depth, or both.
+@dataclass(frozen=True)
+class Fingerprints:
+    """The fingerprints of samples sharing one channel layout, row by row.
 
-    Two samples can only be related this way when they share the same channel layout and a frame
-    count within MAX_TRAILING_TRIM_FRAMES of each other -- neither an amplitude change nor a depth
-    conversion resamples, so only a trimmed silent tail can explain a difference in stored length.
-    Sorting each channel-layout group by frame count and sweeping it lets the search stop as soon as
-    a later sample's frame count leaves the tolerance, rather than comparing every pair outright.
+    ``shapes`` holds each sample's shape fingerprint and ``rates`` its rate fingerprint (see
+    fingerprint.py); ``trimmed_frames`` holds each sample's length once its trailing silence is
+    trimmed, the length the scorers compare.
     """
-    candidate_pairs: list[tuple[Sample, Sample]] = []
-    for channels in (ChannelLayout.MONO, ChannelLayout.STEREO):
-        group = sorted((sample for sample in samples if sample.channels is channels), key=lambda sample: sample.frames)
-        for first_index, first in enumerate(group):
-            for second in group[first_index + 1 :]:
-                if second.frames - first.frames > MAX_TRAILING_TRIM_FRAMES:
-                    break
-                candidate_pairs.append((first, second))
 
-    return tuple(candidate_pairs)
+    samples: tuple[Sample, ...]
+    shapes: NDArray[np.float32]
+    rates: NDArray[np.float32]
+    trimmed_frames: NDArray[np.int64]
 
 
-def resampled_candidate_pairs(
-    samples: Sequence[Sample], fingerprints: Mapping[str, NDArray[np.float64]]
+@dataclass(frozen=True)
+class CandidateBlock:
+    """The candidate pairs whose first sample falls in one block of rows."""
+
+    gain_pairs: tuple[tuple[Sample, Sample], ...]
+    resampled_pairs: tuple[tuple[Sample, Sample], ...]
+
+
+def candidate_blocks(fingerprints: Fingerprints, *, block_rows: int) -> Iterator[CandidateBlock]:
+    """Every pair of samples a scorer should see, found through their fingerprints a block of rows at a time.
+
+    Two samples related by gain or depth alone share a length and a shape, so their shape
+    fingerprints lie close together; two related by a resample hold the same cycles over lengths in
+    proportion, so their rate fingerprints do. The cosine similarity of each block of rows against
+    every later row finds those neighbors exactly, while holding one block's similarities in memory,
+    so a catalog of a hundred thousand samples is searched in bounded memory and scored block by block.
+
+    A pair whose trimmed lengths agree within ``MAX_TRIM_MISMATCH_FRAMES`` and whose shapes pass
+    ``MINIMUM_GAIN_FINGERPRINT_SIMILARITY`` is a gain candidate. A pair whose lengths differ by more,
+    within ``MAX_RESAMPLE_RATIO`` and past the resample comparison's frame floor, and whose rate
+    fingerprints pass ``MINIMUM_RESAMPLED_FINGERPRINT_SIMILARITY`` is a resampled candidate.
+    """
+    row_count = fingerprints.shapes.shape[0]
+    frames = fingerprints.trimmed_frames.astype(np.int32)
+    for block_start in range(0, row_count, block_rows):
+        block_stop = min(block_start + block_rows, row_count)
+        # (block rows, rows from the block's start onward)
+        shape_similarities = fingerprints.shapes[block_start:block_stop] @ fingerprints.shapes[block_start:].T
+        rate_similarities = fingerprints.rates[block_start:block_stop] @ fingerprints.rates[block_start:].T
+        firsts = np.arange(block_start, block_stop)[:, np.newaxis]
+        seconds = np.arange(block_start, row_count)[np.newaxis, :]
+        shorter = np.minimum(frames[firsts], frames[seconds])
+        longer = np.maximum(frames[firsts], frames[seconds])
+        after = seconds > firsts
+        lengths_agree = (longer - shorter) <= MAX_TRIM_MISMATCH_FRAMES
+        gain = after & lengths_agree & (shape_similarities >= MINIMUM_GAIN_FINGERPRINT_SIMILARITY)
+        resampled = (
+            after
+            & ~lengths_agree
+            & (shorter >= MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON)
+            & (longer <= shorter * MAX_RESAMPLE_RATIO)
+            & (rate_similarities >= MINIMUM_RESAMPLED_FINGERPRINT_SIMILARITY)
+        )
+        yield CandidateBlock(
+            gain_pairs=_pairs(fingerprints.samples, gain, block_start=block_start),
+            resampled_pairs=_pairs(fingerprints.samples, resampled, block_start=block_start),
+        )
+
+
+def _pairs(
+    samples: tuple[Sample, ...], chosen: NDArray[np.bool_], *, block_start: int
 ) -> tuple[tuple[Sample, Sample], ...]:
-    """Every pair of cataloged samples plausibly the same content at two different sample rates.
-
-    A brute-force scan over every pair of samples is not viable at real library scale -- even
-    after the ratio and minimum-length bounds below, a catalog of a few thousand samples still
-    leaves millions of candidates, each expensive to score fully. Candidates are instead found via
-    a spatial nearest-neighbor search over each sample's coarse fingerprint (fingerprint.py):
-    genuinely unrelated content only very rarely lands within MINIMUM_FINGERPRINT_COSINE_SIMILARITY
-    of another sample's fingerprint, so this narrows the search to a tractable set without
-    meaningfully changing which pairs the full scorer in scoring.py ultimately sees. The ratio and
-    minimum-frames bounds are then re-applied exactly on the search's own results, since
-    fingerprint similarity alone says nothing about whether two samples' durations are actually
-    compatible with a rate conversion.
-    """
-    candidate_pairs: list[tuple[Sample, Sample]] = []
-    for channels in (ChannelLayout.MONO, ChannelLayout.STEREO):
-        group = [sample for sample in samples if sample.channels is channels]
-        if len(group) < 2:
-            continue
-
-        fingerprint_matrix = np.stack([fingerprints[sample.hash] for sample in group])
-        tree = cKDTree(fingerprint_matrix)
-        radius = sqrt(2.0 * (1.0 - MINIMUM_FINGERPRINT_COSINE_SIMILARITY))
-        for first_index, second_index in tree.query_pairs(r=radius):
-            first, second = group[first_index], group[second_index]
-            if _is_plausible_resample_pair(first, second):
-                candidate_pairs.append((first, second))
-
-    return tuple(candidate_pairs)
-
-
-def _is_plausible_resample_pair(first: Sample, second: Sample) -> bool:
-    if first.frames == second.frames:
-        return False
-
-    lower, upper = min(first.frames, second.frames), max(first.frames, second.frames)
-    return lower >= MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON and upper / lower <= MAX_RESAMPLE_RATIO
+    block_positions, later_positions = np.nonzero(chosen)
+    return tuple(
+        (samples[block_start + first], samples[block_start + second])
+        for first, second in zip(block_positions.tolist(), later_positions.tolist())
+    )

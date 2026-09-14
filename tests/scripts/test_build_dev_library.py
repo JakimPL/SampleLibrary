@@ -98,7 +98,7 @@ def test_build_dev_library_regenerating_replaces_rather_than_accumulates_modules
 
 @pytest.mark.parametrize(
     ("relation_type", "expected_count"),
-    [("bit_depth_variant", 1), ("amplification_variant", 3), ("resampled_variant", 2)],
+    [("bit_depth_variant", 1), ("amplification_variant", 3), ("resampled_variant", 1)],
 )
 def test_the_generated_corpus_yields_exactly_the_intended_relations(
     connection: Connection, tmp_path: Path, relation_type: str, expected_count: int

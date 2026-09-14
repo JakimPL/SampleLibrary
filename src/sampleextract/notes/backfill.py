@@ -8,12 +8,12 @@ from tqdm import tqdm
 
 from samplecore.config import LibraryConfig
 from samplecore.hashing import compute_module_hash
-from samplecore.storage.database import start_batch
+from samplecore.storage.database import share_extraction_lock, start_batch
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_extraction import PostgresModuleNoteExtractionRepository
 from sampleextract.discovery import FORMAT_LOADERS, discover_modules
 from sampleextract.notes.persistence import clear_module_notes, persist_module_notes
-from sampleextract.parsing import RECOVERABLE_PARSE_ERRORS, ExtractionFailure, parse_module
+from sampleextract.parsing import RECOVERABLE_MODULE_ERRORS, ExtractionFailure, FailureStage, parse_module
 
 
 @dataclass(frozen=True)
@@ -37,18 +37,29 @@ def extract_missing_notes(config: LibraryConfig, connection: Connection, *, forc
     reads is remembered as it goes and a later file naming it is counted as the duplicate it is.
     Each module lands in a transaction of its own, which is what lets an interrupted pass resume
     having lost at most the module it was reading. ``force`` reads every module again, clearing what
-    an earlier pass left behind first.
+    an earlier pass left behind first. A file that cannot be read is recorded as a failure, and the
+    pass holds the extraction lock in shared mode while it runs, as extraction does.
+
+    Raises:
+        FileNotFoundError: the source directory does not exist.
+        NotADirectoryError: the source directory names a file.
     """
+    share_extraction_lock(connection)
     module_repository = PostgresModuleRepository(connection)
     extracted_before = PostgresModuleNoteExtractionRepository(connection).extracted_module_ids()
-    paths = discover_modules(config.module_source_directory)
+    paths = discover_modules(config.module_source_directory).paths
     failures: list[ExtractionFailure] = []
     read_module_ids: set[int] = set()
     note_events = 0
     duplicate_files = 0
     already_extracted = 0
     for path in tqdm(paths, desc="Reading module notes"):
-        data = path.read_bytes()
+        try:
+            data = path.read_bytes()
+        except OSError as error:
+            failures.append(ExtractionFailure(path=path, stage=FailureStage.READ, reason=str(error)))
+            continue
+
         module = module_repository.get(compute_module_hash(data))
         if module is None:
             continue  # a file the catalog does not hold, which this pass has nothing to attach to
@@ -63,8 +74,8 @@ def extract_missing_notes(config: LibraryConfig, connection: Connection, *, forc
 
         try:
             song = parse_module(data, tracker=FORMAT_LOADERS[path.suffix.lower()])
-        except RECOVERABLE_PARSE_ERRORS as error:
-            failures.append(ExtractionFailure(path=path, reason=str(error)))
+        except RECOVERABLE_MODULE_ERRORS as error:
+            failures.append(ExtractionFailure(path=path, stage=FailureStage.PARSE, reason=str(error)))
             continue
 
         with start_batch(connection):

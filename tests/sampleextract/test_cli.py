@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.storage.repositories.module import PostgresModuleRepository
 from sampleextract.cli import main
 
 PROGRAM = "samplelibrary extract"
@@ -71,8 +72,23 @@ def test_main_warns_about_an_unreadable_file_and_still_finishes(
     main([], prog=PROGRAM)
 
     output = capsys.readouterr()
+    assert "Could not parse" in output.err
     assert "corrupt.xm" in output.err
-    assert "1 unreadable" in output.out
+    assert "1 failed" in output.out
+
+
+def test_a_missing_source_directory_ends_the_command_with_one_message(
+    _database_url: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config_path = _write_config(tmp_path, _database_url)
+    (tmp_path / "modules").rmdir()
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+
+    with pytest.raises(SystemExit) as raised:
+        main([], prog=PROGRAM)
+
+    assert raised.value.code == 1
+    assert "does not exist" in capsys.readouterr().err
 
 
 def test_main_ingests_every_module_the_source_directory_holds(
@@ -108,3 +124,49 @@ def test_main_refuses_a_worker_count_that_is_not_a_whole_number() -> None:
         main(["--workers", "many"], prog=PROGRAM)
 
     assert exit_info.value.code == 2
+
+
+def test_pruning_after_a_pass_removes_a_module_whose_file_is_gone(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+) -> None:
+    config_path = _write_config(tmp_path, _database_url)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+    source = tmp_path / "modules"
+    (source / "first.xm").write_bytes(xm_module_bytes)
+    (source / "second.it").write_bytes(it_module_bytes)
+    main([], prog=PROGRAM)
+    (source / "second.it").unlink()
+
+    main(["--prune"], prog=PROGRAM)
+
+    assert "Pruned 1 module(s)" in capsys.readouterr().out
+    assert [stored.filename for stored in PostgresModuleRepository(connection).list_all()] == ["first.xm"]
+
+
+def test_pruning_is_refused_when_the_source_directory_holds_no_module_at_all(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    xm_module_bytes: bytes,
+) -> None:
+    """An unmounted drive leaves an empty folder behind, which must not read as a collection deleted."""
+    config_path = _write_config(tmp_path, _database_url)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+    (tmp_path / "modules" / "first.xm").write_bytes(xm_module_bytes)
+    main([], prog=PROGRAM)
+    (tmp_path / "modules" / "first.xm").unlink()
+
+    with pytest.raises(SystemExit) as raised:
+        main(["--prune"], prog=PROGRAM)
+
+    assert raised.value.code == 1
+    assert "Pruned nothing" in capsys.readouterr().err
+    assert len(PostgresModuleRepository(connection).list_all()) == 1

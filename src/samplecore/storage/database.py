@@ -68,8 +68,9 @@ HASH_CHUNK_SIZE: Final[int] = 20_000
 # LIKE reads a backslash as its escape character, so the pattern spells a literal one twice.
 MODULE_FILENAME_BACKSLASH_PATTERN: Final[str] = "%\\\\%"
 
-# An arbitrary number, needing only to be one no other advisory lock in this database picks.
+# Arbitrary numbers, each needing only to be one no other advisory lock in this database picks.
 SCHEMA_LOCK_KEY: Final[int] = 6_853_197_402_115_308_001
+EXTRACTION_LOCK_KEY: Final[int] = 2_940_318_775_601_922_553
 CONNECT_TIMEOUT_SECONDS: Final[int] = 10
 
 Item = TypeVar("Item")
@@ -498,6 +499,21 @@ def chunks(items: collections.abc.Sequence[Item], size: int) -> Iterator[collect
     """Consecutive runs of at most ``size`` items, so one statement per run stays inside ``POSTGRES_PARAMETER_LIMIT``."""
     for start in range(0, len(items), size):
         yield items[start : start + size]
+
+
+def share_extraction_lock(connection: Connection) -> None:
+    """Hold the extraction lock alongside every other pass adding to the catalog, for as long as the connection is open.
+
+    Extraction and note reading add rows and stored objects side by side, and each holds the lock in
+    shared mode for its whole run. Pruning takes it alone (``claim_extraction_lock``), so a pass
+    adding a sample and a prune removing samples no module holds never run at once.
+    """
+    connection.execute(select(func.pg_advisory_lock_shared(EXTRACTION_LOCK_KEY)))
+
+
+def claim_extraction_lock(connection: Connection) -> bool:
+    """Take the extraction lock alone for as long as the connection is open, reporting whether it was free."""
+    return bool(connection.execute(select(func.pg_try_advisory_lock(EXTRACTION_LOCK_KEY))).scalar_one())
 
 
 def start_batch(connection: Connection) -> RootTransaction:
