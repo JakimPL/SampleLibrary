@@ -947,6 +947,27 @@ describe("CloudView markers", () => {
         expect(marker(container, "selected")).toHaveAttribute("cx", "10");
     });
 
+    it("ends the hover along with a scatterplot that a theme's point shape replaces", async () => {
+        const onHover = vi.fn();
+        act(() => {
+            useThemeStore.getState().setPreference("dark");
+        });
+        const { container } = await renderCloudView({ points: TWO_POINTS, onHover });
+        act(() => {
+            latestInstance().emit("pointOver", 1);
+        });
+
+        document.documentElement.style.setProperty("--cloud-point-shape", "square");
+        act(() => {
+            useThemeStore.getState().setPreference("openmpt");
+        });
+        await flushDraw();
+
+        expect(instances).toHaveLength(2);
+        expect(onHover).toHaveBeenLastCalledWith(null, null);
+        expect(marker(container, "hover")).not.toBeInTheDocument();
+    });
+
     it("draws square marks under a theme with square points", async () => {
         document.documentElement.style.setProperty("--cloud-point-shape", "square");
         const { container } = await renderCloudView({ points: TWO_POINTS, highlighted: SAMPLE_REF });

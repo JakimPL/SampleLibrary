@@ -806,6 +806,11 @@ export function CloudView({
             scatterplot.unsubscribe(pointOutSubscription);
             scatterplot.unsubscribe(deselectSubscription);
             scatterplot.unsubscribe(drawingSubscription);
+            // A destroyed instance publishes no `pointOut`, so the hover it tracked ends here.
+            if (hoveredIndexRef.current !== null) {
+                hoveredIndexRef.current = null;
+                onHoverRef.current(null, null);
+            }
             cameraViewRef.current = Float32Array.from(scatterplot.get(CAMERA_VIEW_PROPERTY));
             scatterplot.destroy();
             scatterplotRef.current = null;
