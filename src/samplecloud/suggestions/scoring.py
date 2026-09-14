@@ -11,12 +11,21 @@ from sqlalchemy import Connection
 
 from samplecloud.suggestions.vocabulary import PROMPT_TEMPLATE
 from samplecore.labeling.labels import SampleLabel, written_paths
-from samplecore.models.experiment import CHECKPOINT_REVISION_PARAMETER, VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
-from samplecore.models.label_suggestion import SampleLabelSuggestion
+from samplecore.models.experiment import (
+    CHECKPOINT_REVISION_PARAMETER,
+    VOCABULARY_PARAMETER,
+    ZERO_SHOT_BACKEND_NAME,
+    Experiment,
+    ExperimentKey,
+)
+from samplecore.models.label_suggestion import SampleLabelSuggestion, SuggestionPromotion
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
+from samplecore.storage.repositories.label_suggestion import (
+    PostgresSampleLabelSuggestionRepository,
+    PostgresSuggestionPromotionRepository,
+)
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
 DEFAULT_SUGGESTION_COUNT: Final[int] = 3
@@ -29,9 +38,13 @@ TEMPLATE_PARAMETER: Final[str] = "template"
 SUGGESTION_COUNT_PARAMETER: Final[str] = "top"
 
 
+class ScoringConflict(ValueError):
+    """Raised when a key names a scoring made from other vectors, words or counts than a request asks for."""
+
+
 @dataclass(frozen=True)
 class ScoringRecipe:
-    """What one scoring is made of: whose vectors, which words, how many kept, and under which name."""
+    """What one scoring is made of: whose vectors, which words, how many kept, under which label, and the key it is filed under."""
 
     source_experiment_id: int
     checkpoint: str
@@ -39,6 +52,7 @@ class ScoringRecipe:
     vocabulary: tuple[str, ...]
     suggestion_count: int
     label: str | None
+    key: ExperimentKey | None
 
     def __post_init__(self) -> None:
         if not MINIMUM_SUGGESTION_COUNT <= self.suggestion_count <= MAXIMUM_SUGGESTION_COUNT:
@@ -88,8 +102,8 @@ def score_suggestions(connection: Connection, *, recipe: ScoringRecipe, prompts:
 
     Both the stored audio vectors and the prompt vectors are unit length, so one matrix product
     reads every cosine at once; the top `suggestion_count` labels of each sample are written
-    under a new experiment. The experiment and every suggestion land in one transaction, so a
-    reader sees a scoring whole or sees none of it.
+    under a new experiment. The experiment, every suggestion and the record that the application
+    shows this scoring land in one transaction, so a reader sees a scoring whole or sees none of it.
 
     Raises:
         ValueError: the source experiment holds no vectors to score.
@@ -106,7 +120,10 @@ def score_suggestions(connection: Connection, *, recipe: ScoringRecipe, prompts:
     computed_at = datetime.now(UTC)
     with start_batch(connection):
         experiment_id = PostgresExperimentRepository(connection).insert_new(
-            backend_name=ZERO_SHOT_BACKEND_NAME, label=recipe.label, params=recipe.parameters()
+            backend_name=ZERO_SHOT_BACKEND_NAME, label=recipe.label, params=recipe.parameters(), key=recipe.key
+        )
+        PostgresSuggestionPromotionRepository(connection).record(
+            SuggestionPromotion(experiment_id=experiment_id, promoted_at=computed_at)
         )
         repository = PostgresSampleLabelSuggestionRepository(connection)
         for chunk_start in range(0, len(vectors), INSERT_CHUNK_SAMPLES):
@@ -132,6 +149,32 @@ def score_suggestions(connection: Connection, *, recipe: ScoringRecipe, prompts:
         first_picks=dict(Counter(first_pick_by_hash.values())),
         agreement=hand_label_agreement(connection, first_pick_by_hash),
     )
+
+
+def filed_scoring(connection: Connection, recipe: ScoringRecipe) -> Experiment | None:
+    """The scoring filed under the recipe's key, when an earlier run wrote one, or nothing.
+
+    Raises:
+        ScoringConflict: the key names an experiment made some other way than this recipe would make it.
+    """
+    if recipe.key is None:
+        return None
+    filed = PostgresExperimentRepository(connection).get_by_key(recipe.key)
+    if filed is None:
+        return None
+    if filed.backend_name != ZERO_SHOT_BACKEND_NAME or filed.params != recipe.parameters():
+        raise ScoringConflict(
+            f"experiment {filed.id}, filed under {recipe.key}, was made by another recipe than this request names"
+        )
+    return filed
+
+
+def show_scoring(connection: Connection, experiment_id: int) -> None:
+    """Make a scoring written earlier the one the application shows."""
+    with start_batch(connection):
+        PostgresSuggestionPromotionRepository(connection).record(
+            SuggestionPromotion(experiment_id=experiment_id, promoted_at=datetime.now(UTC))
+        )
 
 
 def hand_label_agreement(connection: Connection, first_pick_by_hash: dict[str, str]) -> HandLabelAgreement:

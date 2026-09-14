@@ -9,7 +9,7 @@ from sqlalchemy import Connection, select
 from samplecore.hashing import compute_module_hash
 from samplecore.models.cloud import CloudPromotion, ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
-from samplecore.models.label_suggestion import SampleLabelSuggestion
+from samplecore.models.label_suggestion import SampleLabelSuggestion, SuggestionPromotion
 from samplecore.models.sample_file import FileFingerprint
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
@@ -22,7 +22,10 @@ from samplecore.storage.repositories.cloud import (
 )
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
+from samplecore.storage.repositories.label_suggestion import (
+    PostgresSampleLabelSuggestionRepository,
+    PostgresSuggestionPromotionRepository,
+)
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
@@ -123,6 +126,9 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
                 computed_at=now,
             )
         ]
+    )
+    PostgresSuggestionPromotionRepository(connection).record(
+        SuggestionPromotion(experiment_id=experiment_id, promoted_at=now)
     )
     connection.commit()
 

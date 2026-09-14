@@ -5,9 +5,17 @@ from collections.abc import Sequence
 from typing import Any, Final, Protocol
 
 from sqlalchemy import Connection, Row, func, select
+from sqlalchemy.dialects.postgresql import insert as upsert
 
-from samplecore.models.label_suggestion import SampleFirstPick, SampleLabelSuggestion
-from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, chunks, sample_label_suggestion
+from samplecore.models.label_suggestion import SampleFirstPick, SampleLabelSuggestion, SuggestionPromotion
+from samplecore.storage.database import (
+    HASH_CHUNK_SIZE,
+    PROMOTION_SLOT,
+    bulk_insert,
+    chunks,
+    sample_label_suggestion,
+    suggestion_promotion,
+)
 
 _COLUMN_NAMES: Final[tuple[str, ...]] = ("experiment_id", "sample_hash", "rank", "label", "score", "computed_at")
 
@@ -27,15 +35,14 @@ class SampleLabelSuggestionRepository(Protocol):
 
     def first_pick_counts(self, experiment_id: int) -> dict[str, int]: ...
 
-    def latest_experiment_id(self) -> int | None: ...
+    def shown_experiment_id(self) -> int | None: ...
 
 
 class PostgresSampleLabelSuggestionRepository:
     """A SampleLabelSuggestionRepository backed by the catalog's ``sample_label_suggestion`` table.
 
     A scoring writes every sample's suggestions once under its own experiment, so ``insert_many``
-    needs no conflict resolution, and the experiment with the highest id that holds any is the
-    newest scoring, which is the one a viewer is shown.
+    needs no conflict resolution.
     """
 
     def __init__(self, connection: Connection) -> None:
@@ -117,10 +124,35 @@ class PostgresSampleLabelSuggestionRepository:
         )
         return {str(row.label): int(row.sample_count) for row in self._connection.execute(statement)}
 
-    def latest_experiment_id(self) -> int | None:
-        """The newest scoring's experiment id, or nothing when no scoring has been written."""
-        latest = self._connection.execute(select(func.max(sample_label_suggestion.c.experiment_id))).scalar_one()
-        return int(latest) if latest is not None else None
+    def shown_experiment_id(self) -> int | None:
+        """The scoring the application shows, or nothing when no scoring has been shown."""
+        promotion = PostgresSuggestionPromotionRepository(self._connection).current()
+        return promotion.experiment_id if promotion is not None else None
+
+
+class PostgresSuggestionPromotionRepository:
+    """The one-row record of which scoring the application shows."""
+
+    def __init__(self, connection: Connection) -> None:
+        self._connection = connection
+
+    def record(self, promotion: SuggestionPromotion) -> None:
+        """Make ``promotion`` the scoring on show, replacing whichever one was."""
+        statement = upsert(suggestion_promotion).values(
+            slot=PROMOTION_SLOT, experiment_id=promotion.experiment_id, promoted_at=promotion.promoted_at
+        )
+        statement = statement.on_conflict_do_update(
+            index_elements=[suggestion_promotion.c.slot],
+            set_={"experiment_id": statement.excluded.experiment_id, "promoted_at": statement.excluded.promoted_at},
+        )
+        self._connection.execute(statement)
+
+    def current(self) -> SuggestionPromotion | None:
+        """The scoring on show, or nothing when no scoring has been shown."""
+        row = self._connection.execute(select(suggestion_promotion)).fetchone()
+        if row is None:
+            return None
+        return SuggestionPromotion(experiment_id=row.experiment_id, promoted_at=row.promoted_at)
 
 
 def _row_to_suggestion(row: Row[Any]) -> SampleLabelSuggestion:

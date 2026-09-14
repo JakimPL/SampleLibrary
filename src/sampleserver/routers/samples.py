@@ -150,7 +150,7 @@ class SampleDetail(DescribedSample):
 
     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
-    ``suggested_labels`` are what the newest scoring of the listening model hears the sample as,
+    ``suggested_labels`` are what the scoring on show of the listening model hears the sample as,
     closest first, for a person to accept into the hand label or pass over.
     """
 
@@ -286,14 +286,14 @@ def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get
 
 
 def _suggested_labels(connection: Connection, sample_hash: str) -> tuple[SuggestedLabel, ...]:
-    """The newest scoring's suggestions for one sample, closest first; none for a sample it did not reach."""
+    """The shown scoring's suggestions for one sample, closest first; none for a sample it did not reach."""
     repository = PostgresSampleLabelSuggestionRepository(connection)
-    latest = repository.latest_experiment_id()
-    if latest is None:
+    shown = repository.shown_experiment_id()
+    if shown is None:
         return ()
     return tuple(
         SuggestedLabel(label=suggestion.label, score=suggestion.score)
-        for suggestion in repository.get_many(latest, [sample_hash]).get(sample_hash, ())
+        for suggestion in repository.get_many(shown, [sample_hash]).get(sample_hash, ())
     )
 
 

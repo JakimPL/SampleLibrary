@@ -8,6 +8,7 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
+from samplecloud.suggestions.scoring import show_scoring
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
@@ -271,7 +272,7 @@ VOCABULARY = ("SNARE", "BASS DRUM", "HI-HAT: CLOSED")
 def seed_scoring(connection: Connection, picks: dict[str, tuple[tuple[str, float], ...]]) -> int:
     """A scoring over the catalog: each sample's suggested labels with scores, closest first, under one experiment."""
     experiment_id = PostgresExperimentRepository(connection).create(
-        backend_name=ZERO_SHOT_BACKEND_NAME, label=None, params={VOCABULARY_PARAMETER: list(VOCABULARY)}
+        backend_name=ZERO_SHOT_BACKEND_NAME, label=None, params={VOCABULARY_PARAMETER: list(VOCABULARY)}, key=None
     )
     PostgresSampleLabelSuggestionRepository(connection).insert_many(
         [
@@ -287,6 +288,7 @@ def seed_scoring(connection: Connection, picks: dict[str, tuple[tuple[str, float
             for rank, (label, score) in enumerate(suggestions)
         ]
     )
+    show_scoring(connection, experiment_id)
     return experiment_id
 
 
@@ -307,16 +309,18 @@ def test_get_cloud_suggestions_carries_each_sample_s_closest_pick(client: TestCl
     assert response.json() == [{"sample_hash": SAMPLE_HASH, "path": ["HI-HAT", "CLOSED"], "score": 0.7}]
 
 
-def test_get_cloud_suggestions_reads_the_newest_scoring_alone(client: TestClient, connection: Connection) -> None:
-    """A scoring written after the first answer reaches the next one: the newest scoring is the revision."""
+def test_get_cloud_suggestions_reads_the_scoring_on_show_alone(client: TestClient, connection: Connection) -> None:
+    """Showing a scoring reaches the next answer, an earlier one shown again included: the shown scoring is the revision."""
     _store_samples(connection, SAMPLE_HASH)
-    seed_scoring(connection, {SAMPLE_HASH: (("SNARE", 0.5),)})
+    earlier = seed_scoring(connection, {SAMPLE_HASH: (("SNARE", 0.5),)})
     assert [entry["path"] for entry in client.get("/cloud/suggestions").json()] == [["SNARE"]]
 
     seed_scoring(connection, {SAMPLE_HASH: (("BASS DRUM", 0.6),)})
+    assert [entry["path"] for entry in client.get("/cloud/suggestions").json()] == [["BASS DRUM"]]
+    show_scoring(connection, earlier)
     body = client.get("/cloud/suggestions").json()
 
-    assert [entry["path"] for entry in body] == [["BASS DRUM"]]
+    assert [entry["path"] for entry in body] == [["SNARE"]]
 
 
 def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_first_picks(

@@ -126,7 +126,9 @@ class _ShapeExtractor:
 
 
 def _seed_experiment(connection: Connection, library_root: Path) -> int:
-    experiment_id = PostgresExperimentRepository(connection).create(backend_name="stub", label=None, params={})
+    experiment_id = PostgresExperimentRepository(connection).create(
+        backend_name="stub", label=None, params={}, key=None
+    )
     samples = PostgresSampleRepository(connection)
     vectors: list[SampleFeatureVector] = []
     for seed in range(3):
@@ -202,7 +204,9 @@ def test_a_sample_whose_file_is_gone_is_passed_over_by_the_check(
 def test_an_experiment_none_of_whose_samples_can_be_read_is_refused(
     connection: Connection, tmp_path: Path, vanished_sample_file: SampleFile
 ) -> None:
-    experiment_id = PostgresExperimentRepository(connection).create(backend_name="stub", label=None, params={})
+    experiment_id = PostgresExperimentRepository(connection).create(
+        backend_name="stub", label=None, params={}, key=None
+    )
     _add_vector(connection, experiment_id, vanished_sample_file.sample_hash)
 
     with pytest.raises(ExperimentRefused, match="can be read now"):

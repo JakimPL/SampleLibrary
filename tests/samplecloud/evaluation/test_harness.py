@@ -78,7 +78,9 @@ def test_a_pass_scores_the_hand_labels_once_enough_samples_carry_one(
 
 def test_a_corpus_too_small_to_fold_leaves_those_metrics_out(connection: Connection, tmp_path: Path) -> None:
     """A library with a handful of uncategorized samples no pattern plays still gets a report."""
-    experiment_id = PostgresExperimentRepository(connection).create(backend_name="stub", label=None, params={})
+    experiment_id = PostgresExperimentRepository(connection).create(
+        backend_name="stub", label=None, params={}, key=None
+    )
     for index in range(3):
         sample_hash = format(index + 1, "064x")
         PostgresSampleRepository(connection).upsert(

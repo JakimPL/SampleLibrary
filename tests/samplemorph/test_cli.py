@@ -417,7 +417,9 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
     """The three passes end to end at the smallest size that still exercises them, on the processor."""
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    teacher_id = PostgresExperimentRepository(connection).create(backend_name="stub", label="teacher", params={})
+    teacher_id = PostgresExperimentRepository(connection).create(
+        backend_name="stub", label="teacher", params={}, key=None
+    )
     generator = np.random.default_rng(0)
     PostgresSampleFeatureVectorRepository(connection).insert_many(
         [
@@ -471,6 +473,12 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
     assert experiment is not None
     assert experiment.backend_name == LEARNED_BACKEND_NAME
     assert len(PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment.id)) == CATALOG_SIZE
+    keyed = ["embed", "--cache", "under-test", "--descriptor", DESCRIPTOR_NAME, "--device", "cpu", "--key", "learned"]
+    main(keyed, prog=PROGRAM)
+    filed = PostgresExperimentRepository(connection).get_by_key("learned")
+    main(keyed, prog=PROGRAM)
+    assert filed is not None
+    assert PostgresExperimentRepository(connection).get(filed.id + 1) is None
 
     main(
         [
@@ -600,7 +608,9 @@ def test_a_teacher_whose_vectors_a_descriptor_cannot_answer_in_is_refused(
 ) -> None:
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    teacher_id = PostgresExperimentRepository(connection).create(backend_name="librosa", label=None, params={})
+    teacher_id = PostgresExperimentRepository(connection).create(
+        backend_name="librosa", label=None, params={}, key=None
+    )
     PostgresSampleFeatureVectorRepository(connection).insert_many(
         [
             SampleFeatureVector(

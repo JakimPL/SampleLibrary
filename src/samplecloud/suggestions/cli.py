@@ -16,15 +16,19 @@ from samplecloud.experiments import ExperimentRefused, experiment_named
 from samplecloud.suggestions.scoring import (
     DEFAULT_SUGGESTION_COUNT,
     MAXIMUM_SUGGESTION_COUNT,
+    ScoringConflict,
     ScoringRecipe,
     ScoringSummary,
+    filed_scoring,
     score_suggestions,
+    show_scoring,
 )
 from samplecloud.suggestions.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, prompt_for, vocabulary_from
 from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import (
     bootstrap_cli,
     ending_in_one_line,
+    experiment_key,
     integer_between,
     open_catalog_connection,
     positive_integer,
@@ -38,26 +42,34 @@ _logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str], *, prog: str) -> None:
-    """Suggest labels for every sample of a listening-model experiment, and report how they read."""
+    """Suggest labels for every sample of a listening-model experiment, and report how they read.
+
+    A key files the scoring under a name of its own, so a run naming a key an earlier run filed shows
+    that scoring again and scores nothing.
+    """
     arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
-        with ending_in_one_line("Suggested nothing", (ExperimentRefused, VocabularyRefused)):
+        with ending_in_one_line("Suggested nothing", (ExperimentRefused, VocabularyRefused, ScoringConflict)):
             source = _listening_experiment(connection, arguments.experiment_id)
-            vocabulary = vocabulary_from(arguments.vocabulary, connection)
-        prompts = load_teacher(device=arguments.device).embed_text([prompt_for(label) for label in vocabulary])
-        summary = score_suggestions(
-            connection,
-            recipe=ScoringRecipe(
+            recipe = ScoringRecipe(
                 source_experiment_id=source.id,
                 checkpoint=TEACHER_CHECKPOINT,
                 checkpoint_revision=TEACHER_REVISION,
-                vocabulary=vocabulary,
+                vocabulary=vocabulary_from(arguments.vocabulary, connection),
                 suggestion_count=arguments.top,
                 label=arguments.label,
-            ),
-            prompts=prompts,
-        )
+                key=arguments.key,
+            )
+            filed = filed_scoring(connection, recipe)
+        if filed is not None:
+            show_scoring(connection, filed.id)
+            _logger.info(
+                "Experiment %d already holds the scoring filed under %s, now the one shown.", filed.id, filed.key
+            )
+            return
+        prompts = load_teacher(device=arguments.device).embed_text([prompt_for(label) for label in recipe.vocabulary])
+        summary = score_suggestions(connection, recipe=recipe, prompts=prompts)
     _report(summary)
 
 
@@ -118,4 +130,10 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         "--device", type=str, default=DEFAULT_TEXT_DEVICE, help="Which device the text tower reads the prompts on."
     )
     parser.add_argument("--label", type=str, default=None, help="A human-readable note for the scoring's experiment.")
+    parser.add_argument(
+        "--key",
+        type=experiment_key,
+        default=None,
+        help="File the scoring under this key, or show the scoring an earlier run filed under it.",
+    )
     return parser.parse_args(argv)

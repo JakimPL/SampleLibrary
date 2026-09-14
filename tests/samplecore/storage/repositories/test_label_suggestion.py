@@ -7,10 +7,13 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecore.models.experiment import ZERO_SHOT_BACKEND_NAME, Experiment
-from samplecore.models.label_suggestion import SampleLabelSuggestion
+from samplecore.models.label_suggestion import SampleLabelSuggestion, SuggestionPromotion
 from samplecore.models.sample import Sample
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
+from samplecore.storage.repositories.label_suggestion import (
+    PostgresSampleLabelSuggestionRepository,
+    PostgresSuggestionPromotionRepository,
+)
 
 
 def _create_experiment(connection: Connection) -> int:
@@ -38,7 +41,7 @@ def _suggestion(experiment_id: int, sample_hash: str, *, rank: int, label: str, 
 def test_an_empty_table_holds_no_scoring(connection: Connection) -> None:
     repository = PostgresSampleLabelSuggestionRepository(connection)
 
-    assert repository.latest_experiment_id() is None
+    assert repository.shown_experiment_id() is None
     assert repository.list_for_experiment(_create_experiment(connection)) == ()
 
 
@@ -58,16 +61,20 @@ def test_a_samples_suggestions_come_back_in_rank_order(connection: Connection, s
     assert repository.get_many(experiment_id, [stored_sample.hash, "f" * 64]) == {stored_sample.hash: (first, second)}
 
 
-def test_the_latest_scoring_is_the_experiment_with_the_highest_id(
+def test_the_shown_scoring_is_the_one_promoted_last_whatever_its_id(
     connection: Connection, stored_sample: Sample
 ) -> None:
     earlier = _create_experiment(connection)
     later = _create_experiment(connection)
     repository = PostgresSampleLabelSuggestionRepository(connection)
+    promotions = PostgresSuggestionPromotionRepository(connection)
     repository.insert_many([_suggestion(later, stored_sample.hash, rank=0, label="PIANO", score=0.5)])
     repository.insert_many([_suggestion(earlier, stored_sample.hash, rank=0, label="STRINGS", score=0.6)])
 
-    assert repository.latest_experiment_id() == later
+    promotions.record(SuggestionPromotion(experiment_id=later, promoted_at=datetime.now(UTC)))
+    assert repository.shown_experiment_id() == later
+    promotions.record(SuggestionPromotion(experiment_id=earlier, promoted_at=datetime.now(UTC)))
+    assert repository.shown_experiment_id() == earlier
     assert [suggestion.label for suggestion in repository.list_for_experiment(earlier)] == ["STRINGS"]
 
 

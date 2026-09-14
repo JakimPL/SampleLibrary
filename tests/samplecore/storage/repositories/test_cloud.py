@@ -141,7 +141,7 @@ def test_module_replace_all_with_an_empty_sequence_clears_the_table(
 
 
 def _experiment(connection: Connection) -> int:
-    return PostgresExperimentRepository(connection).create(backend_name="librosa", label=None, params={})
+    return PostgresExperimentRepository(connection).create(backend_name="librosa", label=None, params={}, key=None)
 
 
 def test_no_experiment_is_on_show_before_one_is_recorded(connection: Connection) -> None:

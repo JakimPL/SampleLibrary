@@ -179,15 +179,15 @@ def get_cloud_suggestions(
     connection: Connection = Depends(get_connection),
     cache: RevisionedJsonCache = Depends(get_suggestions_cache),
 ) -> Response:
-    """Every sample's first suggested tag from the newest scoring, for coloring the cloud by what a model hears.
+    """Every sample's first suggested tag from the scoring on show, for coloring the cloud by what a model hears.
 
-    These travel apart from the points the way the hand labels do: a scoring changes only when a
-    pass writes a new one, so the newest scoring's id is the whole revision, and a viewer joins
-    them to the points by hash. An empty answer says no scoring has been written.
+    These travel apart from the points the way the hand labels do: a scoring's suggestions never
+    change once written, so the id of the scoring on show is the whole revision, and a viewer joins
+    them to the points by hash. An empty answer says no scoring is shown.
     """
     repository = PostgresSampleLabelSuggestionRepository(connection)
-    latest = repository.latest_experiment_id()
-    return _cached_json(request, cache, latest, lambda: CLOUD_SUGGESTIONS.dump_json(_first_picks(repository, latest)))
+    shown = repository.shown_experiment_id()
+    return _cached_json(request, cache, shown, lambda: CLOUD_SUGGESTIONS.dump_json(_first_picks(repository, shown)))
 
 
 def _first_picks(
@@ -216,7 +216,7 @@ def _cached_json(
 
 @router.get("/suggestion-tags")
 def get_cloud_suggestion_tags(connection: Connection = Depends(get_connection)) -> tuple[TagSummary, ...]:
-    """Every tag the newest scoring suggests first for some sample, with how many and a lasting rank.
+    """Every tag the scoring on show suggests first for some sample, with how many and a lasting rank.
 
     A specification counts toward its category the way a written label's does, so the legend can
     paint by category while the suggestions name what is under it. The rank is the tag's place in
@@ -225,15 +225,15 @@ def get_cloud_suggestion_tags(connection: Connection = Depends(get_connection)) 
     the vocabulary leaves unnamed ranks after the vocabulary, by name.
     """
     repository = PostgresSampleLabelSuggestionRepository(connection)
-    latest = repository.latest_experiment_id()
-    if latest is None:
+    shown = repository.shown_experiment_id()
+    if shown is None:
         return ()
 
     first_picks: Counter[LabelPath] = Counter()
-    for label, sample_count in repository.first_pick_counts(latest).items():
+    for label, sample_count in repository.first_pick_counts(shown).items():
         for prefix in _prefixes(_path_of(label)):
             first_picks[prefix] += sample_count
-    ranks = _vocabulary_ranks(connection, latest, first_picks)
+    ranks = _vocabulary_ranks(connection, shown, first_picks)
     return tuple(
         TagSummary(path=path, sample_count=count, rank=ranks[path])
         for path, count in sorted(first_picks.items(), key=lambda item: ranks[item[0]])

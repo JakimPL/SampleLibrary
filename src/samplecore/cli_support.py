@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import io
 import logging
+import re
 import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -13,6 +14,7 @@ from sqlalchemy.engine import make_url
 
 from samplecore.config import ConfigurationError, LibraryConfig, load_config
 from samplecore.exit_status import ExitStatus
+from samplecore.models.experiment import EXPERIMENT_KEY_PATTERN
 from samplecore.storage.database import connect
 from samplecore.storage.sample_audio import SampleAudio
 
@@ -197,6 +199,20 @@ def positive_multiple_of(step: int) -> Callable[[str], int]:
 def positive_integer(raw_value: str) -> int:
     """An argparse type reading a count of at least one."""
     return _bounded_integer(raw_value, minimum=1, maximum=None)
+
+
+def experiment_key(raw_value: str) -> str:
+    """An argparse type reading the key an experiment is filed under.
+
+    Raises:
+        argparse.ArgumentTypeError: the value holds a character a key leaves out, or runs too long.
+    """
+    if re.fullmatch(EXPERIMENT_KEY_PATTERN, raw_value) is None:
+        raise argparse.ArgumentTypeError(
+            "a key is lower case letters, digits, '.', '_' and '-', starts with a letter or a digit, "
+            f"and runs at most 128 characters, not {raw_value!r}"
+        )
+    return raw_value
 
 
 def non_negative_integer(raw_value: str) -> int:

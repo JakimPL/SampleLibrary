@@ -13,9 +13,11 @@ from samplecore.models.experiment import (
     LEARNED_BACKEND_NAME,
     MODEL_PARAMETER,
     READING_PARAMETER,
+    ExperimentKey,
     Reading,
     SampleFeatureVector,
 )
+from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplemorph.descriptors.learned import LearnedDescriptor
@@ -57,38 +59,50 @@ def describe_cache(descriptor: LearnedDescriptor, cache: GridCache) -> NDArray[n
     return np.concatenate(vectors).astype(np.float64)
 
 
+@dataclass(frozen=True)
+class EmbeddingFiling:
+    """How the experiment an embedding opens is recorded: the stored model it names, a note, and the key it is filed under."""
+
+    model_name: str
+    label: str | None
+    key: ExperimentKey | None
+
+
 def embed_cache(
-    connection: Connection,
-    *,
-    descriptor: LearnedDescriptor,
-    cache: GridCache,
-    model_name: str,
-    label: str | None,
+    connection: Connection, *, descriptor: LearnedDescriptor, cache: GridCache, filing: EmbeddingFiling
 ) -> EmbeddingSummary:
     """Open an experiment for this descriptor and write every cached sample's vector into it.
 
     The experiment records the model's name and the nominal reading its grids were cached under,
     which is how the cloud's evaluation rebuilds the extractor when it needs to describe retuned
-    audio, and how resuming the experiment reads new samples the way these were read.
+    audio, and how resuming the experiment reads new samples the way these were read. The
+    experiment and every vector land in one transaction, so an experiment a key names holds the
+    whole cache, and a pass stopped partway leaves the catalog as it was.
     """
     vectors = describe_cache(descriptor, cache)
-    experiment_id = PostgresExperimentRepository(connection).create(
-        backend_name=LEARNED_BACKEND_NAME,
-        label=label,
-        params={MODEL_PARAMETER: model_name, READING_PARAMETER: Reading.NOMINAL.value},
-    )
-    repository = PostgresSampleFeatureVectorRepository(connection)
     now = datetime.now(UTC)
-    rows = [
-        SampleFeatureVector(
-            experiment_id=experiment_id,
-            sample_hash=sample_hash,
-            vector=tuple(float(value) for value in vector),
-            computed_at=now,
+    with start_batch(connection):
+        experiment_id = PostgresExperimentRepository(connection).insert_new(
+            backend_name=LEARNED_BACKEND_NAME,
+            label=filing.label,
+            params={MODEL_PARAMETER: filing.model_name, READING_PARAMETER: Reading.NOMINAL.value},
+            key=filing.key,
         )
-        for sample_hash, vector in zip(cache.hashes, vectors, strict=True)
-    ]
-    for start in range(0, len(rows), INSERT_CHUNK_SIZE):
-        repository.insert_many(rows[start : start + INSERT_CHUNK_SIZE])
-        connection.commit()
-    return EmbeddingSummary(experiment_id=experiment_id, sample_count=len(rows))
+        repository = PostgresSampleFeatureVectorRepository(connection)
+        for start in range(0, len(cache.hashes), INSERT_CHUNK_SIZE):
+            repository.insert_many(
+                [
+                    SampleFeatureVector(
+                        experiment_id=experiment_id,
+                        sample_hash=sample_hash,
+                        vector=tuple(float(value) for value in vector),
+                        computed_at=now,
+                    )
+                    for sample_hash, vector in zip(
+                        cache.hashes[start : start + INSERT_CHUNK_SIZE],
+                        vectors[start : start + INSERT_CHUNK_SIZE],
+                        strict=True,
+                    )
+                ]
+            )
+    return EmbeddingSummary(experiment_id=experiment_id, sample_count=len(cache.hashes))

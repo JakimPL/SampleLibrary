@@ -315,6 +315,8 @@ experiment = Table(
     Column("params", String, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("label", String, nullable=True),
+    Column("key", String, nullable=True),
+    UniqueConstraint("key", name="experiment_key_key"),
 )
 
 cloud_promotion = Table(
@@ -348,6 +350,17 @@ sample_label_suggestion = Table(
     PrimaryKeyConstraint("experiment_id", "sample_hash", "rank"),
     CheckConstraint(non_negative("rank"), name="sample_label_suggestion_rank_check"),
     CheckConstraint(column("label") != "", name="sample_label_suggestion_label_check"),
+)
+
+# The scoring the application shows, one row like the cloud's own promotion, written in the
+# transaction that writes a scoring or by a later request to show an earlier one again.
+suggestion_promotion = Table(
+    "suggestion_promotion",
+    metadata,
+    Column("slot", Integer, primary_key=True),
+    Column("experiment_id", Integer, ForeignKey("experiment.id"), nullable=False),
+    Column("promoted_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(column("slot") == PROMOTION_SLOT, name="suggestion_promotion_slot_check"),
 )
 
 module_instrument = Table(

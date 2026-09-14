@@ -535,7 +535,12 @@ runs the extraction alone, for an experiment made to be measured or to teach ano
 `cloud embed --experiment-id N` resumes experiment N and promotes it.
 
 An experiment records its recipe in its parameters (`samplecloud.experiments.EmbeddingRecipe`): the
-backend, the `reading`, and for a learned descriptor the model's name. A resumed experiment follows
+backend, the `reading`, for a learned descriptor the model's name, and for the listening model the
+commit of its checkpoint this build pins (`TEACHER_REVISION`), so an experiment heard through
+another commit is refused rather than extended. An experiment may carry a key, unique across the
+catalog (`experiment.key`): `cloud embed --key K` starts an experiment under K following the recipe
+flags, and every later run naming K resumes it, and `morph embed --key K` writes its experiment and
+every vector in one transaction, so an experiment a key names holds its whole cache. A resumed experiment follows
 the recipe its own row records, so `--experiment-id` refuses a `--backend`, `--model` or
 `--heard-rate` naming another, and a label, which names a new experiment. Before new vectors join an
 experiment that already holds some, its first eight samples by hash are described again and must
@@ -567,8 +572,11 @@ whose parameters name the source experiment, the checkpoint, the prompt template
 in order (`sample_label_suggestion`, `samplecore.storage.repositories.label_suggestion`). The
 command reports how the first picks spread over the vocabulary and how they agree with the hand
 labels, exactly and by category. Suggestions are rebuildable, so they live in the main schema beside
-the feature vectors; the newest scoring is the one the application shows, and a scoring writes its
-experiment and every suggestion in one transaction, so a reader never meets one half written.
+the feature vectors. `suggestion_promotion` names the scoring the application shows, and a scoring
+writes its experiment, every suggestion and that record in one transaction, so a reader never meets
+one half written. `--key` files a scoring under a name of its own: a later run naming the same key
+and the same recipe shows that scoring again without loading the model, and one naming another
+recipe is refused.
 
 ### Judging a descriptor
 

@@ -309,7 +309,7 @@ def test_get_sample_returns_detail_with_occurrences_and_module_context(
     }
 
 
-def test_get_sample_carries_the_newest_scoring_s_suggestions_closest_first(
+def test_get_sample_carries_the_shown_scoring_s_suggestions_closest_first(
     client: TestClient, connection: Connection
 ) -> None:
     sample = _insert_sample(connection, SAMPLE_HASH_A)

@@ -17,7 +17,7 @@ class SampleLabelSuggestion(BaseModel):
     grammar so a person accepts it into their own label as it is. `rank` orders one sample's
     suggestions from the closest match, and `score` is the cosine the model read between the sound
     and the prompt. Every suggestion belongs to the experiment that scored it, so two vocabularies
-    scored over one catalog stay apart and the newest one is the one a viewer sees.
+    scored over one catalog stay apart and the one `SuggestionPromotion` names is the one a viewer sees.
     """
 
     model_config = FROZEN
@@ -28,6 +28,19 @@ class SampleLabelSuggestion(BaseModel):
     label: LabelText
     score: float
     computed_at: datetime
+
+
+class SuggestionPromotion(BaseModel):
+    """Which scoring the application shows, and since when.
+
+    A scoring shows itself in the transaction that writes it, and showing an earlier one again moves
+    this record alone, so the scoring on show is a decision rather than whichever id came last.
+    """
+
+    model_config = FROZEN
+
+    experiment_id: Index
+    promoted_at: datetime
 
 
 class SampleFirstPick(BaseModel):

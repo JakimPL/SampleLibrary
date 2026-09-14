@@ -15,7 +15,7 @@ from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
 from samplecloud.registries import DEFAULT_BACKEND_NAME
 from samplecore.config import LibraryConfig
 from samplecore.models.cloud import CloudPromotion
-from samplecore.models.experiment import Reading
+from samplecore.models.experiment import ExperimentKey, Reading
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository, PostgresCloudPromotionRepository
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
@@ -48,10 +48,12 @@ class EmbeddingSummary:
     reduction: CloudSummary | None
 
 
-def create_experiment(connection: Connection, recipe: EmbeddingRecipe, *, label: str | None) -> int:
-    """Open a new experiment recording ``recipe``, committed at once so a later resume can find it."""
+def create_experiment(
+    connection: Connection, recipe: EmbeddingRecipe, *, label: str | None, key: ExperimentKey | None
+) -> int:
+    """Open a new experiment recording ``recipe``, committed at once so a later resume can find it by its id or key."""
     return PostgresExperimentRepository(connection).create(
-        backend_name=recipe.backend_name, label=label, params=recipe.parameters
+        backend_name=recipe.backend_name, label=label, params=recipe.parameters, key=key
     )
 
 
@@ -76,7 +78,7 @@ def experiment_to_rebuild(connection: Connection) -> int:
 
     with start_batch(connection):
         experiment_id = PostgresExperimentRepository(connection).insert_new(
-            backend_name=REBUILT_RECIPE.backend_name, label=None, params=REBUILT_RECIPE.parameters
+            backend_name=REBUILT_RECIPE.backend_name, label=None, params=REBUILT_RECIPE.parameters, key=None
         )
         PostgresCloudPromotionRepository(connection).record(
             CloudPromotion(experiment_id=experiment_id, promoted_at=datetime.now(UTC))

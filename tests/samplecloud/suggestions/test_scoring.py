@@ -45,7 +45,7 @@ def seed_listening_experiment(connection: Connection) -> int:
             )
         )
     experiment_id = PostgresExperimentRepository(connection).create(
-        backend_name=TEACHER_BACKEND_NAME, label="stub listening", params={}
+        backend_name=TEACHER_BACKEND_NAME, label="stub listening", params={}, key=None
     )
     PostgresSampleFeatureVectorRepository(connection).insert_many(
         [vector.model_copy(update={"experiment_id": experiment_id}) for vector in vectors]
@@ -76,6 +76,7 @@ def test_each_sample_keeps_its_closest_labels_first_under_a_new_experiment(conne
             vocabulary=VOCABULARY,
             suggestion_count=2,
             label=None,
+            key=None,
         ),
         prompts=prompts(),
     )
@@ -86,7 +87,7 @@ def test_each_sample_keeps_its_closest_labels_first_under_a_new_experiment(conne
     assert [suggestion.label for suggestion in suggestions[HAT_HASH]][0] == "HI-HAT: CLOSED"
     assert all(len(held) == 2 for held in suggestions.values())
     assert suggestions[KICK_HASH][0].score == pytest.approx(1.0)
-    assert repository.latest_experiment_id() == summary.experiment_id
+    assert repository.shown_experiment_id() == summary.experiment_id
     experiment = PostgresExperimentRepository(connection).get(summary.experiment_id)
     assert experiment is not None
     assert experiment.backend_name == ZERO_SHOT_BACKEND_NAME
@@ -107,6 +108,7 @@ def test_the_summary_counts_the_first_picks_and_their_agreement_with_the_hand_la
             vocabulary=VOCABULARY,
             suggestion_count=1,
             label=None,
+            key=None,
         ),
         prompts=prompts(),
     )
@@ -117,7 +119,9 @@ def test_the_summary_counts_the_first_picks_and_their_agreement_with_the_hand_la
 
 
 def test_an_experiment_without_vectors_says_so(connection: Connection) -> None:
-    empty = PostgresExperimentRepository(connection).create(backend_name=TEACHER_BACKEND_NAME, label=None, params={})
+    empty = PostgresExperimentRepository(connection).create(
+        backend_name=TEACHER_BACKEND_NAME, label=None, params={}, key=None
+    )
 
     with pytest.raises(ValueError, match="holds no vectors"):
         score_suggestions(
@@ -129,6 +133,7 @@ def test_an_experiment_without_vectors_says_so(connection: Connection) -> None:
                 vocabulary=VOCABULARY,
                 suggestion_count=1,
                 label=None,
+                key=None,
             ),
             prompts=prompts(),
         )
@@ -172,12 +177,13 @@ def test_a_scoring_interrupted_while_writing_leaves_no_experiment_behind(
                 vocabulary=VOCABULARY,
                 suggestion_count=1,
                 label=None,
+                key=None,
             ),
             prompts=prompts(),
         )
 
     assert connection.execute(select(func.count()).select_from(experiment)).scalar_one() == experiment_count_before
-    assert PostgresSampleLabelSuggestionRepository(connection).latest_experiment_id() is None
+    assert PostgresSampleLabelSuggestionRepository(connection).shown_experiment_id() is None
 
 
 @pytest.mark.parametrize(
@@ -194,4 +200,5 @@ def test_a_recipe_outside_its_bounds_is_refused(suggestion_count: int, vocabular
             vocabulary=vocabulary,
             suggestion_count=suggestion_count,
             label=None,
+            key=None,
         )

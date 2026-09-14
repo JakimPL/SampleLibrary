@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -9,13 +10,20 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.channels import ChannelLayout
-from samplecore.models.experiment import LEARNED_BACKEND_NAME, MODEL_PARAMETER, READING_PARAMETER, Reading
+from samplecore.models.experiment import (
+    LEARNED_BACKEND_NAME,
+    MODEL_PARAMETER,
+    READING_PARAMETER,
+    Reading,
+    SampleFeatureVector,
+)
 from samplecore.models.sample import Sample
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplemorph.descriptors import embedding
 from samplemorph.descriptors.descriptor_shape import DescriptorShape
-from samplemorph.descriptors.embedding import describe_cache, embed_cache
+from samplemorph.descriptors.embedding import EmbeddingFiling, describe_cache, embed_cache
 from samplemorph.descriptors.grid_descriptor import GridDescriptor
 from samplemorph.descriptors.learned import DescriptorDescription, LearnedDescriptor
 from samplemorph.registries import canonicalizer_for_geometry
@@ -77,13 +85,57 @@ def test_embedding_a_cache_opens_an_experiment_naming_the_descriptor(connection:
         repository.upsert(Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=4096))
     connection.commit()
 
-    summary = embed_cache(connection, descriptor=_descriptor(cache), cache=cache, model_name="tiny", label="a test")
+    summary = embed_cache(
+        connection,
+        descriptor=_descriptor(cache),
+        cache=cache,
+        filing=EmbeddingFiling(model_name="tiny", label="a test", key="learned-tiny"),
+    )
 
     experiment = PostgresExperimentRepository(connection).get(summary.experiment_id)
     assert experiment is not None
     assert experiment.backend_name == LEARNED_BACKEND_NAME
     assert experiment.params == {MODEL_PARAMETER: "tiny", READING_PARAMETER: Reading.NOMINAL.value}
     assert experiment.label == "a test"
+    assert experiment.key == "learned-tiny"
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(summary.experiment_id)
     assert summary.sample_count == len(vectors) == 6
     assert {vector.sample_hash for vector in vectors} == set(cache.hashes)
+
+
+class InsertStopped(RuntimeError):
+    pass
+
+
+def test_an_embedding_stopped_while_writing_leaves_no_experiment_behind(
+    connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = write_grid_cache(tmp_path / "cache", sample_count=6)
+    repository = PostgresSampleRepository(connection)
+    for sample_hash in cache.hashes:
+        repository.upsert(Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=4096))
+    connection.commit()
+    written_chunks: list[int] = []
+    insert_many = PostgresSampleFeatureVectorRepository.insert_many
+
+    def stop_after_the_first_chunk(
+        self: PostgresSampleFeatureVectorRepository, vectors: Sequence[SampleFeatureVector]
+    ) -> None:
+        if written_chunks:
+            raise InsertStopped("stopped between chunks")
+        written_chunks.append(len(vectors))
+        insert_many(self, vectors)
+
+    monkeypatch.setattr(embedding, "INSERT_CHUNK_SIZE", 2)
+    monkeypatch.setattr(PostgresSampleFeatureVectorRepository, "insert_many", stop_after_the_first_chunk)
+
+    with pytest.raises(InsertStopped):
+        embed_cache(
+            connection,
+            descriptor=_descriptor(cache),
+            cache=cache,
+            filing=EmbeddingFiling(model_name="tiny", label=None, key="learned-tiny"),
+        )
+
+    assert written_chunks == [2]
+    assert PostgresExperimentRepository(connection).get_by_key("learned-tiny") is None
