@@ -31,6 +31,41 @@
     --cloud-point-selected: var(--accent);
     --cloud-ping-color: var(--accent);
     --cloud-link-color: var(--accent);
+    --cloud-link-end-color: var(--cloud-link-color);
+    --cloud-link-node-color: var(--cloud-link-color);
+    --cloud-link-width: 1.5px;
+    --cloud-link-casing-width: 4px;
+    --cloud-band-dash: 2 4;
+    --cloud-ping-radius: 50%;
+    --cloud-ping-border-width: 3px;
+    --cloud-hover-color: var(--text-primary);
+
+    /* Read by cloud/cloudRenderSettings.ts: sizes in CSS pixels, opacities in [0, 1]. The substrate is
+       every point that names nothing, drawn fainter and beneath the rest. */
+    --cloud-point-shape: circle;
+    --cloud-point-size: 2.5;
+    --cloud-substrate-size: 1.8;
+    --cloud-point-opacity: 0.9;
+    --cloud-substrate-opacity: 0.6;
+    --cloud-point-size-selected: 2;
+    --cloud-point-outline-width: 0;
+    --cloud-point-scale-mode: asinh;
+    --cloud-marker-size: 13;
+    --cloud-marker-line-width: 1.5;
+    --cloud-marker-casing-width: 1.5;
+    --cloud-node-mode: detail;
+    --cloud-node-size: 7;
+    --cloud-node-line-width: 1;
+    --cloud-node-fill-opacity: 0.2;
+    --cloud-node-substrate-opacity: 0.8;
+    --cloud-grid-axes: both;
+    --cloud-grid-spacing: 44;
+    --cloud-grid-line-width: 1;
+    --cloud-grid-row: rgb(27 31 38 / 3.5%);
+    --cloud-grid-beat: rgb(27 31 38 / 6%);
+    --cloud-grid-measure: rgb(27 31 38 / 10%);
+    --cloud-grid-center: transparent;
+    --cloud-glow-opacity: 0;
 
     /* One hue per SampleCategory in samples/category.ts. Fourteen hues blur together for some
        viewers, so every place a color appears also names its category. */
@@ -104,6 +139,14 @@
         --category-loop: #8f82f0;
         --category-uncategorized: #a3a196;
         --cloud-point-uncategorized: #6e6d64;
+        --cloud-hover-color: #fff;
+        --cloud-point-opacity: 0.85;
+        --cloud-substrate-size: 1.6;
+        --cloud-substrate-opacity: 0.28;
+        --cloud-grid-row: rgb(236 232 222 / 4%);
+        --cloud-grid-beat: rgb(236 232 222 / 6.5%);
+        --cloud-grid-measure: rgb(236 232 222 / 10%);
+        --cloud-glow-opacity: 0.45;
         --label-lightness: 0.74;
         --label-chroma: 0.15;
     }
@@ -149,6 +192,14 @@
     --category-loop: #8f82f0;
     --category-uncategorized: #a3a196;
     --cloud-point-uncategorized: #6e6d64;
+    --cloud-hover-color: #fff;
+    --cloud-point-opacity: 0.85;
+    --cloud-substrate-size: 1.6;
+    --cloud-substrate-opacity: 0.28;
+    --cloud-grid-row: rgb(236 232 222 / 4%);
+    --cloud-grid-beat: rgb(236 232 222 / 6.5%);
+    --cloud-grid-measure: rgb(236 232 222 / 10%);
+    --cloud-glow-opacity: 0.45;
     --label-lightness: 0.74;
     --label-chroma: 0.15;
 }
@@ -182,9 +233,42 @@
     --wave-progress: var(--wave-fill);
     --cloud-bg: #000;
     --cloud-point: #fff;
-    --cloud-point-selected: var(--wave-fill);
+
+    /* OpenMPT's envelope editor: crisp square nodes, the dragged one yellow, joined by a yellow line. */
+    --cloud-point-selected: #ff0;
     --cloud-ping-color: #ff0;
     --cloud-link-color: #ff0;
+    --cloud-link-end-color: #fff;
+    --cloud-link-node-color: #fff;
+    --cloud-link-width: 1px;
+    --cloud-link-casing-width: 0;
+    --cloud-band-dash: 1 2;
+    --cloud-ping-radius: 0;
+    --cloud-ping-border-width: 1px;
+    --cloud-hover-color: #fff;
+    --cloud-point-shape: square;
+    --cloud-point-size: 2;
+    --cloud-substrate-size: 2;
+    --cloud-point-opacity: 1;
+    --cloud-substrate-opacity: 1;
+    --cloud-point-size-selected: 1;
+    --cloud-point-scale-mode: constant;
+    --cloud-marker-size: 7;
+    --cloud-marker-line-width: 1;
+    --cloud-marker-casing-width: 0;
+    --cloud-node-mode: always;
+    --cloud-node-size: 7;
+    --cloud-node-line-width: 1;
+    --cloud-node-fill-opacity: 0;
+    --cloud-node-substrate-opacity: 1;
+    --cloud-grid-axes: vertical;
+    --cloud-grid-spacing: 36;
+    --cloud-grid-line-width: 1;
+    --cloud-grid-row: #333;
+    --cloud-grid-beat: #555;
+    --cloud-grid-measure: #808080;
+    --cloud-grid-center: #8a8a8a;
+    --cloud-glow-opacity: 0;
 
     /* The dark theme's category steps, since this theme's cloud canvas is near-black too. */
     --category-kick: #3987e5;
@@ -920,22 +1004,59 @@ table.data td .annotation-editor-input {
     overflow: hidden;
 }
 
+/* regl-scatterplot clears its canvas to transparent; this background is what shows through every layer. */
 .cloud-wrap {
-    position: absolute;
-    inset: 0;
-}
-
-/* regl-scatterplot clears its canvas to transparent; this background is what shows through. */
-.cloud-canvas {
     position: absolute;
     inset: 0;
     background: var(--cloud-bg);
 }
 
-.cloud-canvas canvas {
+.cloud-underlay {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
     height: 100%;
+    pointer-events: none;
+}
+
+.cloud-canvas {
+    position: absolute;
+    inset: 0;
+}
+
+.cloud-dots {
+    display: block;
+    width: 100%;
+    height: 100%;
+    transition: opacity 160ms ease-out;
+}
+
+/* The node layer takes over from the dots it redraws as markers; the dots' canvas keeps the pointer. */
+.cloud-nodes {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease-out;
+}
+
+.cloud-wrap-nodes .cloud-nodes {
+    opacity: 1;
+}
+
+.cloud-wrap-nodes .cloud-dots {
+    opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cloud-nodes,
+    .cloud-dots {
+        transition: none;
+    }
 }
 
 .cloud-caption {
@@ -1094,6 +1215,35 @@ table.data td .annotation-editor-input {
     gap: 6px;
 }
 
+.cloud-markers {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+/* The background's own color beneath a marker's stroke keeps it legible over a dense patch of points. */
+.cloud-marker-casing {
+    fill: none;
+    stroke: var(--cloud-bg);
+    stroke-opacity: 0.85;
+}
+
+.cloud-marker-stroke {
+    fill: none;
+}
+
+.cloud-marker-selected {
+    stroke: var(--cloud-point-selected);
+}
+
+.cloud-marker-hover {
+    stroke: var(--cloud-hover-color);
+}
+
 .cloud-ping {
     position: absolute;
     z-index: 1;
@@ -1107,8 +1257,8 @@ table.data td .annotation-editor-input {
     position: absolute;
     top: 0;
     left: 0;
-    border-radius: 50%;
-    border: 3px solid var(--cloud-ping-color);
+    border-radius: var(--cloud-ping-radius);
+    border: var(--cloud-ping-border-width) solid var(--cloud-ping-color);
     animation: cloud-ping-expand 1400ms cubic-bezier(0.16, 0.6, 0.32, 1) forwards;
 }
 
@@ -1607,17 +1757,39 @@ table.data td .annotation-editor-input {
     overflow: visible;
 }
 
-.morph-link-line {
-    stroke: var(--cloud-link-color);
-    stroke-width: 2;
-    stroke-dasharray: 4 3;
+.morph-link-casing {
     fill: none;
+    stroke: var(--cloud-bg);
+    stroke-width: var(--cloud-link-casing-width);
+    stroke-linecap: round;
+    stroke-opacity: 0.85;
+}
+
+.morph-link-line {
+    fill: none;
+    stroke: var(--cloud-link-color);
+    stroke-width: var(--cloud-link-width);
+    stroke-linecap: round;
 }
 
 .morph-link-end {
-    fill: none;
-    stroke: var(--cloud-link-color);
-    stroke-width: 2;
+    stroke: var(--cloud-link-end-color);
+}
+
+.morph-link-node {
+    stroke: var(--cloud-link-node-color);
+}
+
+.morph-link-node .cloud-marker-filled {
+    fill: var(--cloud-link-node-color);
+}
+
+.morph-link-node-dragging {
+    stroke: var(--cloud-point-selected);
+}
+
+.morph-link-node-dragging .cloud-marker-filled {
+    fill: var(--cloud-point-selected);
 }
 
 .morph-link-marker {
@@ -1638,6 +1810,17 @@ table.data td .annotation-editor-input {
     cursor: grabbing;
 }
 
+/* The square node beneath is drawn on whole device pixels; this element keeps the pointer and the focus. */
+.morph-link-marker-square {
+    width: 13px;
+    height: 13px;
+    margin: -6.5px 0 0 -6.5px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
 .morph-band {
     position: absolute;
     inset: 0;
@@ -1649,17 +1832,15 @@ table.data td .annotation-editor-input {
 }
 
 .morph-band-line {
-    stroke: var(--cloud-link-color);
-    stroke-width: 1.5;
-    stroke-dasharray: 2 4;
-    opacity: 0.75;
     fill: none;
+    stroke: var(--cloud-link-color);
+    stroke-width: var(--cloud-link-width);
+    stroke-dasharray: var(--cloud-band-dash);
+    opacity: 0.75;
 }
 
 .morph-band-origin {
-    fill: none;
-    stroke: var(--cloud-link-color);
-    stroke-width: 2;
+    stroke: var(--cloud-link-end-color);
     opacity: 0.75;
 }
 

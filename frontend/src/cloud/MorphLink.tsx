@@ -1,15 +1,19 @@
 import type { KeyboardEvent, PointerEvent, ReactElement } from "react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { snapWeight, WEIGHT_STEP } from "../morph/morphStore";
+import { classNames } from "../shared/classNames";
 import { pointAlong, projectWeight, type ScreenPoint } from "./linkGeometry";
+import { lineBetweenMarkers, type MarkerAppearance, snapToDevicePixel } from "./markerGeometry";
+import { PointMarker } from "./PointMarker";
 
-const END_RADIUS_PX = 6;
+const SQUARE_SHAPE = "square";
 
 interface MorphLinkProps {
     readonly first: ScreenPoint;
     readonly second: ScreenPoint;
     readonly weight: number;
+    readonly appearance: MarkerAppearance;
     readonly onWeightChange: (weight: number) => void;
     readonly onWeightCommit: () => void;
     readonly onDragChange: (dragging: boolean) => void;
@@ -39,18 +43,29 @@ function nudgedWeight(key: string, weight: number): number | null {
  * other pointer through to the points. Dragging reports the projected, snapped weight as it moves
  * and a commit on release; the keyboard nudges by one step and commits on key release, so a held
  * key plays once.
+ *
+ * The ends are marked in the theme's point shape. Under round points the weight marker is the
+ * round knob the stylesheet draws; under square points it is a square node framed on whole device
+ * pixels, lit while dragged the way OpenMPT lights the envelope node under the mouse, and the line
+ * keeps hard pixel edges to match.
  */
 export function MorphLink({
     first,
     second,
     weight,
+    appearance,
     onWeightChange,
     onWeightCommit,
     onDragChange,
 }: MorphLinkProps): ReactElement {
     const wrapperRef = useRef<HTMLDivElement | null>(null);
     const draggingRef = useRef(false);
+    const [dragging, setDragging] = useState(false);
     const [markerX, markerY] = pointAlong(first, second, weight);
+    const line = lineBetweenMarkers(first, second, appearance, true);
+    const square = appearance.shape === SQUARE_SHAPE;
+    const knobLeft = square ? snapToDevicePixel(markerX, appearance.devicePixelRatio) : markerX;
+    const knobTop = square ? snapToDevicePixel(markerY, appearance.devicePixelRatio) : markerY;
 
     function weightAt(event: PointerEvent<HTMLDivElement>): number {
         const bounds = wrapperRef.current?.getBoundingClientRect();
@@ -58,10 +73,15 @@ export function MorphLink({
         return snapWeight(projectWeight(first, second, point));
     }
 
+    function changeDragging(next: boolean): void {
+        draggingRef.current = next;
+        setDragging(next);
+        onDragChange(next);
+    }
+
     function handlePointerDown(event: PointerEvent<HTMLDivElement>): void {
         event.currentTarget.setPointerCapture(event.pointerId);
-        draggingRef.current = true;
-        onDragChange(true);
+        changeDragging(true);
     }
 
     function handlePointerMove(event: PointerEvent<HTMLDivElement>): void {
@@ -74,9 +94,8 @@ export function MorphLink({
         if (!draggingRef.current) {
             return;
         }
-        draggingRef.current = false;
         event.currentTarget.releasePointerCapture(event.pointerId);
-        onDragChange(false);
+        changeDragging(false);
         onWeightCommit();
     }
 
@@ -97,19 +116,45 @@ export function MorphLink({
     return (
         <div className="morph-link" ref={wrapperRef}>
             <svg aria-hidden>
-                <line className="morph-link-line" x1={first[0]} y1={first[1]} x2={second[0]} y2={second[1]} />
-                <circle className="morph-link-end" cx={first[0]} cy={first[1]} r={END_RADIUS_PX} />
-                <circle className="morph-link-end" cx={second[0]} cy={second[1]} r={END_RADIUS_PX} />
+                {line !== null && (
+                    <>
+                        <line
+                            className="morph-link-casing"
+                            x1={line[0][0]}
+                            y1={line[0][1]}
+                            x2={line[1][0]}
+                            y2={line[1][1]}
+                        />
+                        <line
+                            className="morph-link-line"
+                            x1={line[0][0]}
+                            y1={line[0][1]}
+                            x2={line[1][0]}
+                            y2={line[1][1]}
+                            {...(square && { shapeRendering: "crispEdges" })}
+                        />
+                    </>
+                )}
+                <PointMarker className="morph-link-end" center={first} appearance={appearance} filled={false} />
+                <PointMarker className="morph-link-end" center={second} appearance={appearance} filled={false} />
+                {square && (
+                    <PointMarker
+                        className={classNames("morph-link-node", dragging && "morph-link-node-dragging")}
+                        center={[knobLeft, knobTop]}
+                        appearance={appearance}
+                        filled
+                    />
+                )}
             </svg>
             <div
                 role="slider"
                 tabIndex={0}
-                className="morph-link-marker"
+                className={classNames("morph-link-marker", square && "morph-link-marker-square")}
                 aria-label="Morph weight"
                 aria-valuemin={0}
                 aria-valuemax={1}
                 aria-valuenow={weight}
-                style={{ left: markerX, top: markerY }}
+                style={{ left: knobLeft, top: knobTop }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerEnd}

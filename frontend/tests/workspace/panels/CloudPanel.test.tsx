@@ -30,6 +30,9 @@ const {
         readonly destroy = vi.fn();
         readonly set = vi.fn().mockResolvedValue(undefined);
         readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
+        readonly get = vi.fn((property: string) =>
+            property === "cameraView" ? new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]) : undefined,
+        );
         private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 
         subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
@@ -110,7 +113,7 @@ function latestInstance(): (typeof instances)[number] {
 }
 
 function latestCanvas(): HTMLCanvasElement {
-    const canvas = document.querySelector("canvas");
+    const canvas = document.querySelector<HTMLCanvasElement>("canvas.cloud-dots");
     if (canvas === null) {
         throw new Error("canvas not found");
     }
@@ -146,7 +149,7 @@ describe("CloudPanel", () => {
         renderPanel();
 
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
     });
 
@@ -167,7 +170,7 @@ describe("CloudPanel", () => {
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
 
         latestInstance().emit("select", { points: [0] });
@@ -181,7 +184,7 @@ describe("CloudPanel", () => {
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         useSelectionStore.getState().highlightEntity({ kind: "sample", hash: sampleHash });
 
@@ -198,7 +201,7 @@ describe("CloudPanel", () => {
         getSamplePreview.mockReturnValue(new Promise(() => undefined));
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         latestInstance().emit("pointOver", 0);
 
@@ -217,7 +220,7 @@ describe("CloudPanel", () => {
 
         expect(screen.getByText(/spectral-distance embedding/)).toBeInTheDocument();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
     });
 
@@ -230,7 +233,7 @@ describe("CloudPanel", () => {
         renderPanel();
         fireEvent.click(screen.getByRole("button", { name: "Modules" }));
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         latestInstance().emit("pointOver", 0);
 
@@ -251,7 +254,7 @@ describe("CloudPanel", () => {
         });
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
 
         latestInstance().emit("pointOver", 0);
@@ -268,7 +271,7 @@ describe("CloudPanel", () => {
         getSuggestionTags.mockResolvedValue([{ path: ["BASS DRUM"], sample_count: 1, rank: 0 }]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
 
         fireEvent.click(screen.getByRole("button", { name: "Suggestions" }));
@@ -293,7 +296,7 @@ describe("CloudPanel", () => {
         });
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         latestInstance().emit("pointOver", 0);
         await screen.findByText("snare");
@@ -315,7 +318,7 @@ describe("CloudPanel", () => {
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         act(() => {
             useSelectionStore.getState().highlightEntity({ kind: "sample", hash: anchor });
@@ -340,7 +343,7 @@ describe("CloudPanel", () => {
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         latestInstance().emit("pointOver", 0);
 
@@ -363,7 +366,7 @@ describe("CloudPanel", () => {
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         act(() => {
             useMorphStore.getState().setPair(first, second);
@@ -409,7 +412,7 @@ describe("CloudPanel", () => {
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
 
         expect(getCloudSuggestions).not.toHaveBeenCalled();
