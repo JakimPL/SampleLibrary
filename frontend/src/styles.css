@@ -146,7 +146,7 @@
         --cloud-grid-row: rgb(236 232 222 / 4%);
         --cloud-grid-beat: rgb(236 232 222 / 6.5%);
         --cloud-grid-measure: rgb(236 232 222 / 10%);
-        --cloud-glow-opacity: 0.6;
+        --cloud-glow-opacity: 0.45;
         --label-lightness: 0.74;
         --label-chroma: 0.15;
     }
@@ -199,7 +199,7 @@
     --cloud-grid-row: rgb(236 232 222 / 4%);
     --cloud-grid-beat: rgb(236 232 222 / 6.5%);
     --cloud-grid-measure: rgb(236 232 222 / 10%);
-    --cloud-glow-opacity: 0.6;
+    --cloud-glow-opacity: 0.45;
     --label-lightness: 0.74;
     --label-chroma: 0.15;
 }
@@ -234,10 +234,10 @@
     --cloud-bg: #000;
     --cloud-point: #fff;
 
-    /* OpenMPT's envelope editor: crisp square nodes, the dragged one yellow, joined by a pure blue line. */
+    /* OpenMPT's envelope editor: crisp square nodes, the dragged one yellow, joined by a yellow line. */
     --cloud-point-selected: #ff0;
     --cloud-ping-color: #ff0;
-    --cloud-link-color: #00f;
+    --cloud-link-color: #ff0;
     --cloud-link-end-color: #fff;
     --cloud-link-node-color: #fff;
     --cloud-link-width: 1px;

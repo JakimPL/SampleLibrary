@@ -763,7 +763,7 @@ in tokens alone: `cloudRenderSettings.ts` reads the ones the canvases use into o
 dark and light themes draw round dots over their substrate, rings in detail, cased markers and a
 solid accent link. The OpenMPT theme draws its envelope editor: a black ground, a vertical grid,
 every point a hollow square in its category's color at every zoom, the selected point yellow and the
-morph pair joined by a blue line. A system dark preference applies the dark block beneath a chosen
+morph pair joined by a yellow line. A system dark preference applies the dark block beneath a chosen
 OpenMPT theme as well, so the OpenMPT block declares every token the dark block declares.
 
 ## Morphs in the application
