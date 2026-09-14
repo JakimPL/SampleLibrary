@@ -219,6 +219,25 @@ s3m_sample_properties = Table(
     ),
 )
 
+# A plain audio file read in place from a configured sample directory: the occurrence of a sample
+# that lives outside any module. Its audio stays where the file is, so the stat fingerprint recorded
+# beside the hash is what tells a reader whether the file still holds that sample.
+sample_file = Table(
+    "sample_file",
+    metadata,
+    Column("directory", String, nullable=False),
+    Column("relative_path", String, nullable=False),
+    Column("sample_hash", String(64), ForeignKey("sample.hash"), nullable=False),
+    Column("rate", UInteger, nullable=False),
+    Column("size_bytes", UBigInt, nullable=False),
+    Column("modified_ns", UBigInt, nullable=False),
+    PrimaryKeyConstraint("directory", "relative_path"),
+    Index("sample_file_sample_hash_index", "sample_hash"),
+    CheckConstraint(column("rate") > 0, name="sample_file_rate_check"),
+    CheckConstraint(non_negative("size_bytes"), name="sample_file_size_bytes_check"),
+    CheckConstraint(non_negative("modified_ns"), name="sample_file_modified_ns_check"),
+)
+
 sample_relation = Table(
     "sample_relation",
     metadata,

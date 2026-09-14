@@ -1,0 +1,140 @@
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from pathlib import Path
+
+from sqlalchemy import Connection
+
+from samplecore.models.sample import Sample
+from samplecore.models.sample_file import FileFingerprint, SampleFile
+from samplecore.models.sample_pcm import SamplePCM
+from samplecore.sample_files.decoding import UNREADABLE_SAMPLE_FILE_ERRORS, decode_sample_file, sample_file_frame_count
+from samplecore.storage import audio_store
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
+
+
+class SampleUnavailableError(Exception):
+    """Raised when a sample's audio lives only in sample files, and none of them holds it any more."""
+
+
+@dataclass(frozen=True)
+class SampleAudio:
+    """Where every sample's audio is read from: the content store, or the files it is cataloged in.
+
+    A sample extracted from a module has an object in the store; a sample found in a sample directory
+    is read from its file, in place. A file can be gone, unreadable, or rewritten since it was hashed,
+    so each of a sample's files is tried in location order and taken only while its fingerprint still
+    matches and it still decodes to the sample's hash. A pass meets a sample none of whose files
+    qualifies as ``SampleUnavailableError`` and carries on without it; a missing stored object is a
+    damaged store and surfaces as ``FileNotFoundError``.
+    """
+
+    library_root: Path
+    files_by_hash: Mapping[str, tuple[SampleFile, ...]]
+
+    @classmethod
+    def from_catalog(cls, connection: Connection, library_root: Path) -> SampleAudio:
+        """The audio of every sample the catalog holds, reading its sample files from the catalog."""
+        return cls.of_files(library_root, PostgresSampleFileRepository(connection).list_all())
+
+    @classmethod
+    def of_files(cls, library_root: Path, sample_files: Iterable[SampleFile]) -> SampleAudio:
+        """The audio of the store under ``library_root`` together with the given sample files."""
+        files_by_hash: dict[str, list[SampleFile]] = {}
+        for sample_file in sorted(sample_files, key=lambda found: found.location.sort_key):
+            files_by_hash.setdefault(sample_file.sample_hash, []).append(sample_file)
+        return cls(
+            library_root=library_root,
+            files_by_hash={sample_hash: tuple(found) for sample_hash, found in files_by_hash.items()},
+        )
+
+    def read(self, sample: Sample) -> SamplePCM:
+        """A cataloged sample's waveform, from its stored object or else from one of its files.
+
+        Raises:
+            SampleUnavailableError: the sample lives only in files, and none of them holds it now.
+            FileNotFoundError: the sample has neither a stored object nor a cataloged file.
+        """
+        if audio_store.object_path(self.library_root, sample.hash).is_file():
+            return audio_store.read(self.library_root, sample)
+        return self._read_from_files(sample.hash)
+
+    def read_by_hash(self, sample_hash: str) -> SamplePCM:
+        """A sample's waveform by its hash alone, for a process holding no catalog.
+
+        Raises:
+            SampleUnavailableError: the sample lives only in files, and none of them holds it now.
+            FileNotFoundError: the sample has neither a stored object nor a file given here.
+        """
+        if audio_store.object_path(self.library_root, sample_hash).is_file():
+            return audio_store.read_object(self.library_root, sample_hash)
+        return self._read_from_files(sample_hash)
+
+    def frame_count(self, sample_hash: str) -> int:
+        """How many frames a sample holds, read from a header alone.
+
+        Raises:
+            SampleUnavailableError: the sample lives only in files, and none of them holds it now.
+            FileNotFoundError: the sample has neither a stored object nor a file given here.
+        """
+        if audio_store.object_path(self.library_root, sample_hash).is_file():
+            return audio_store.stored_frame_count(self.library_root, sample_hash)
+        for sample_file in self._files_of(sample_hash):
+            if not is_unchanged(sample_file):
+                continue
+            try:
+                return sample_file_frame_count(sample_file.location.path)
+            except UNREADABLE_SAMPLE_FILE_ERRORS:
+                continue
+        raise _unavailable(sample_hash, self._files_of(sample_hash))
+
+    def is_available(self, sample_hash: str) -> bool:
+        """Whether the sample has a stored object, or a file whose fingerprint still matches."""
+        return audio_store.object_path(self.library_root, sample_hash).is_file() or any(
+            is_unchanged(sample_file) for sample_file in self.files_by_hash.get(sample_hash, ())
+        )
+
+    def _read_from_files(self, sample_hash: str) -> SamplePCM:
+        for sample_file in self._files_of(sample_hash):
+            sample_pcm = _decoded_if_unchanged(sample_file)
+            if sample_pcm is not None:
+                return sample_pcm
+        raise _unavailable(sample_hash, self._files_of(sample_hash))
+
+    def _files_of(self, sample_hash: str) -> tuple[SampleFile, ...]:
+        """The files a sample is cataloged in.
+
+        Raises:
+            FileNotFoundError: the sample has no stored object and no cataloged file.
+        """
+        sample_files = self.files_by_hash.get(sample_hash, ())
+        if not sample_files:
+            raise FileNotFoundError(f"no object is stored for sample {sample_hash}")
+        return sample_files
+
+
+def is_unchanged(sample_file: SampleFile) -> bool:
+    """Whether a cataloged file is still there with the size and write time it was hashed at."""
+    try:
+        status = sample_file.location.path.stat()
+    except OSError:
+        return False
+    return FileFingerprint.of(status) == sample_file.fingerprint
+
+
+def _decoded_if_unchanged(sample_file: SampleFile) -> SamplePCM | None:
+    if not is_unchanged(sample_file):
+        return None
+    try:
+        decoded = decode_sample_file(sample_file.location.path)
+    except UNREADABLE_SAMPLE_FILE_ERRORS:
+        return None
+    return decoded.sample_pcm if decoded.sample_pcm.sample.hash == sample_file.sample_hash else None
+
+
+def _unavailable(sample_hash: str, sample_files: tuple[SampleFile, ...]) -> SampleUnavailableError:
+    return SampleUnavailableError(
+        f"sample {sample_hash} is unavailable: {sample_files[0].location.path} and any other file it was "
+        "found in are gone, unreadable or changed since they were scanned"
+    )

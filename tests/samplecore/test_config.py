@@ -297,3 +297,65 @@ def test_the_inference_address_names_its_host_and_port() -> None:
     inference = InferenceConfig(url="http://render.local:9000/")
 
     assert (inference.host, inference.port) == ("render.local", 9000)
+
+
+def test_sample_directories_and_exclusions_are_read_with_relative_directories_anchored(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        _library_table(tmp_path)
+        + f'sample_directories = ["packs", "{(tmp_path / "recordings").as_posix()}"]\n'
+        + 'sample_exclusions = ["*loop*"]\n',
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert config.sample_directories == (tmp_path / "packs", tmp_path / "recordings")
+    assert config.sample_exclusions == ("*loop*",)
+
+
+@dataclass(frozen=True)
+class RejectedSampleDirectoriesCase:
+    directories: tuple[str, ...]
+    reason: str
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        RejectedSampleDirectoriesCase(directories=("packs",), reason="absolute"),
+        RejectedSampleDirectoriesCase(directories=("/samples", "/samples"), reason="overlap"),
+        RejectedSampleDirectoriesCase(directories=("/samples", "/samples/drums"), reason="overlap"),
+    ],
+    ids=("a relative directory", "one directory twice", "a directory inside another"),
+)
+def test_sample_directories_the_catalog_cannot_place_a_file_under_once_are_refused(
+    case: RejectedSampleDirectoriesCase,
+) -> None:
+    with pytest.raises(pydantic.ValidationError, match=case.reason):
+        LibraryConfig(
+            module_source_directory=Path("/modules"),
+            library_root=Path("/library"),
+            database_url="postgresql+psycopg://user:pass@host/db",
+            sample_directories=tuple(Path(directory) for directory in case.directories),
+        )
+
+
+def test_a_blank_sample_exclusion_is_refused() -> None:
+    with pytest.raises(pydantic.ValidationError, match="exclusion"):
+        LibraryConfig(
+            module_source_directory=Path("/modules"),
+            library_root=Path("/library"),
+            database_url="postgresql+psycopg://user:pass@host/db",
+            sample_exclusions=(" ",),
+        )
+
+
+def test_a_sample_directory_still_naming_the_stand_in_path_is_rejected(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        _library_table(tmp_path) + 'sample_directories = ["/path/to/your/sample/packs"]\n', encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigurationError, match="sample_directories"):
+        load_config(config_path)

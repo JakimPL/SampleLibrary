@@ -13,6 +13,13 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # The library keeps samples at least this many frames long.
 # minimum_sample_frames = 512
 
+# Folders of plain audio files (WAV, AIFF, FLAC) the library reads in place, without copying them.
+# sample_directories = ["/path/to/your/sample/packs"]
+
+# Patterns naming files and folders inside those folders to leave out, matched without regard to case
+# against each path relative to its folder, where * also crosses folders.
+# sample_exclusions = ["*loop*", "*.aif"]
+
 [inference]
 # Where the morph renderer listens, and where the app reaches it.
 # url = "http://127.0.0.1:8010"

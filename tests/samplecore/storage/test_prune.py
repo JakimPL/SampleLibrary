@@ -5,6 +5,8 @@ from pathlib import Path
 from sqlalchemy import Connection, ForeignKey, func, select
 
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.sample import Sample
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage import audio_store
 from samplecore.storage.atomic import PARTIAL_SUFFIX
@@ -16,9 +18,38 @@ from samplecore.storage.database import (
     sample_properties,
     sample_relation,
 )
-from samplecore.storage.prune import MODULE_ROW_TABLES, SAMPLE_ROW_TABLES, prune_modules
+from samplecore.storage.prune import (
+    MODULE_ROW_TABLES,
+    SAMPLE_HOLDER_TABLES,
+    SAMPLE_ROW_TABLES,
+    prune_modules,
+    prune_sample_files,
+)
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
+
+
+def _sample_file(sample_hash: str, relative_path: str) -> SampleFile:
+    return SampleFile(
+        sample_hash=sample_hash,
+        location=SampleFileLocation(directory=Path("/samples"), relative_path=relative_path),
+        rate=44100,
+        fingerprint=FileFingerprint(size_bytes=64, modified_ns=0),
+    )
+
+
+def _orphans_of_first_module(connection: Connection) -> tuple[str, frozenset[str]]:
+    """The first module's hash, with the samples that module alone holds."""
+    gone = PostgresModuleRepository(connection).list_all()[0]
+    holders = select(sample_properties.c.sample_hash)
+    held_by_gone = {
+        str(row.sample_hash) for row in connection.execute(holders.where(sample_properties.c.module_id == gone.id))
+    }
+    held_elsewhere = {
+        str(row.sample_hash) for row in connection.execute(holders.where(sample_properties.c.module_id != gone.id))
+    }
+    return gone.hash, frozenset(held_by_gone - held_elsewhere)
 
 
 def _hashes(connection: Connection, column_owner: str) -> set[str]:
@@ -28,7 +59,13 @@ def _hashes(connection: Connection, column_owner: str) -> set[str]:
 
 def test_every_table_referring_to_a_module_or_a_sample_is_pruned_through() -> None:
     """A table added to the catalog later is either named here or left holding rows of a pruned module."""
-    pruned_through = {*MODULE_ROW_TABLES, *SAMPLE_ROW_TABLES, sample_relation, module_cloud_coordinates}
+    pruned_through = {
+        *MODULE_ROW_TABLES,
+        *SAMPLE_ROW_TABLES,
+        *SAMPLE_HOLDER_TABLES,
+        sample_relation,
+        module_cloud_coordinates,
+    }
     referring = {
         table
         for table in metadata.sorted_tables
@@ -120,3 +157,35 @@ def test_pruning_sweeps_leftover_partial_files_and_objects_nothing_names(
     assert summary.objects_removed == 1
     assert not stray.exists()
     assert not partial.exists()
+
+
+def test_pruning_a_module_keeps_a_sample_a_sample_file_still_holds(
+    connection: Connection, populated_library: Path
+) -> None:
+    gone_hash, orphans = _orphans_of_first_module(connection)
+    kept = sorted(orphans)[0]
+    PostgresSampleFileRepository(connection).upsert(_sample_file(kept, "kick.wav"))
+    connection.commit()
+
+    summary = prune_modules(connection, populated_library, module_hashes=frozenset({gone_hash}))
+
+    assert summary.samples_removed == len(orphans) - 1
+    assert kept in _hashes(connection, "sample")
+
+
+def test_pruning_sample_files_removes_them_and_the_samples_nothing_else_holds(
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample, tmp_path: Path
+) -> None:
+    files = PostgresSampleFileRepository(connection)
+    gone = _sample_file(stored_sample.hash, "kick.wav")
+    copy_of_b = _sample_file(stored_sample_b.hash, "snare.wav")
+    also_b = _sample_file(stored_sample_b.hash, "snare copy.wav")
+    for sample_file in (gone, copy_of_b, also_b):
+        files.upsert(sample_file)
+    connection.commit()
+
+    summary = prune_sample_files(connection, tmp_path, locations=frozenset({gone.location, copy_of_b.location}))
+
+    assert (summary.sample_files_removed, summary.samples_removed) == (2, 1)
+    assert _hashes(connection, "sample") == {stored_sample_b.hash}
+    assert files.list_all() == (also_b,)
