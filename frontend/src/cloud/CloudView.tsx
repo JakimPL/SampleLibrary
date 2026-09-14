@@ -27,7 +27,10 @@ const UNCATEGORIZED_CATEGORY = "uncategorized";
 const UNCATEGORIZED_COLOR_PROPERTY = "--cloud-point-uncategorized";
 const UNCATEGORIZED_COLOR_FALLBACK = "#d5d4ce";
 const CATEGORICAL_COLOR_BY = "category";
+const LEFT_BUTTON = 0;
 const RIGHT_BUTTON = 2;
+// How far a press may travel and still read as a click rather than the end of a pan.
+const CLICK_DRAG_TOLERANCE_PX = 4;
 
 interface CloudColors {
     readonly pointColor: string;
@@ -248,6 +251,15 @@ async function applyPoints(
         return -1;
     }
 
+    return selectHighlighted(scatterplot, points, highlighted);
+}
+
+/** Selects the highlighted point within the drawn scatterplot, or deselects when it names none here, and reports its index. */
+function selectHighlighted(
+    scatterplot: Scatterplot,
+    points: readonly CloudEntityPoint[],
+    highlighted: EntityRef | null,
+): number {
     const highlightedIndex =
         highlighted === null ? -1 : points.findIndex((point) => sameEntity(point.ref, highlighted));
     if (highlightedIndex >= 0) {
@@ -326,6 +338,9 @@ export function CloudView({
     coloringRef.current = coloring;
     const hoveredIndexRef = useRef<number | null>(null);
     const previousHighlightedRef = useRef<EntityRef | null>(null);
+    const highlightedRef = useRef<EntityRef | null>(highlighted);
+    highlightedRef.current = highlighted;
+    const pressPositionRef = useRef<ScreenPosition | null>(null);
     const pingCounterRef = useRef(0);
     const pingRef = useRef<Ping | null>(null);
     const onSelectRef = useRef(onSelect);
@@ -496,6 +511,13 @@ export function CloudView({
             return [event.clientX - bounds.left, event.clientY - bounds.top];
         }
 
+        function handlePress(event: MouseEvent): void {
+            if (event.button === LEFT_BUTTON) {
+                pressPositionRef.current = cursorOf(event);
+            }
+            handleRightPress(event);
+        }
+
         function handleRightPress(event: MouseEvent): void {
             if (event.button !== RIGHT_BUTTON) {
                 return;
@@ -536,7 +558,15 @@ export function CloudView({
             event.preventDefault();
         }
 
-        function handleClick(): void {
+        function handleClick(event: MouseEvent): void {
+            const pressed = pressPositionRef.current;
+            pressPositionRef.current = null;
+            if (pressed !== null) {
+                const [x, y] = cursorOf(event);
+                if (Math.hypot(x - pressed[0], y - pressed[1]) > CLICK_DRAG_TOLERANCE_PX) {
+                    return;
+                }
+            }
             if (hoveredIndexRef.current === null) {
                 onClearRef.current();
             }
@@ -560,7 +590,7 @@ export function CloudView({
             repinBand();
         }
 
-        canvas.addEventListener("mousedown", handleRightPress);
+        canvas.addEventListener("mousedown", handlePress);
         canvas.addEventListener("contextmenu", handleContextMenu);
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("dblclick", handleDoubleClick);
@@ -570,7 +600,7 @@ export function CloudView({
 
         return (): void => {
             canceled = true;
-            canvas.removeEventListener("mousedown", handleRightPress);
+            canvas.removeEventListener("mousedown", handlePress);
             canvas.removeEventListener("contextmenu", handleContextMenu);
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("dblclick", handleDoubleClick);
@@ -590,6 +620,19 @@ export function CloudView({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    /** Pings a highlight that arrived from elsewhere in the shell, once per change of highlight. */
+    const pingNewHighlight = useCallback((scatterplot: Scatterplot, highlightedIndex: number): void => {
+        const current = highlightedRef.current;
+        if (highlightedIndex >= 0 && !sameHighlight(current, previousHighlightedRef.current)) {
+            const position = scatterplot.getScreenPosition(highlightedIndex);
+            if (position !== undefined) {
+                pingCounterRef.current += 1;
+                setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
+            }
+        }
+        previousHighlightedRef.current = current;
+    }, []);
+
     useEffect(() => {
         const scatterplot = scatterplotRef.current;
         if (scatterplot === null) {
@@ -597,7 +640,7 @@ export function CloudView({
         }
 
         let canceled = false;
-        void applyPoints(scatterplot, drawChainRef, points, coloring, highlighted, () => canceled).then(
+        void applyPoints(scatterplot, drawChainRef, points, coloring, highlightedRef.current, () => canceled).then(
             (highlightedIndex) => {
                 if (canceled) {
                     return;
@@ -605,20 +648,33 @@ export function CloudView({
 
                 pointsDrawnRef.current = true;
                 repinLink();
-                if (highlightedIndex >= 0 && !sameHighlight(highlighted, previousHighlightedRef.current)) {
-                    const position = scatterplot.getScreenPosition(highlightedIndex);
-                    if (position !== undefined) {
-                        pingCounterRef.current += 1;
-                        setPing({ key: pingCounterRef.current, pointIndex: highlightedIndex, position });
-                    }
-                }
-                previousHighlightedRef.current = highlighted;
+                pingNewHighlight(scatterplot, highlightedIndex);
             },
         );
         return (): void => {
             canceled = true;
         };
-    }, [points, coloring, highlighted, repinLink]);
+    }, [points, coloring, repinLink, pingNewHighlight]);
+
+    // A highlight moving from one point to another selects it among the points already drawn, so the
+    // cloud's hundred thousand points are drawn again only when they themselves change.
+    useEffect(() => {
+        const scatterplot = scatterplotRef.current;
+        if (scatterplot === null) {
+            return undefined;
+        }
+
+        let canceled = false;
+        void drawChainRef.current.then(() => {
+            if (canceled || !pointsDrawnRef.current) {
+                return;
+            }
+            pingNewHighlight(scatterplot, selectHighlighted(scatterplot, pointsRef.current, highlighted));
+        });
+        return (): void => {
+            canceled = true;
+        };
+    }, [highlighted, pingNewHighlight]);
 
     useEffect(() => {
         repinLink();

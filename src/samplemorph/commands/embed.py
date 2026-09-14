@@ -4,12 +4,11 @@ import argparse
 import logging
 from typing import Final
 
-import torch
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import add_subcommand
 from samplecore.config import LibraryConfig
-from samplemorph.descriptors.embedding import embed_cache
-from samplemorph.descriptors.learned import DEFAULT_DESCRIPTOR_NAME, descriptor_path, load_descriptor
+from samplemorph.model_paths import DEFAULT_DESCRIPTOR_NAME, descriptor_path
 from samplemorph.training.descriptor_cache import DEFAULT_GRID_CACHE_NAME, grid_cache_directory, open_grid_cache
 from samplemorph.training.run_settings import DEFAULT_ACCELERATOR
 
@@ -19,8 +18,8 @@ _logger = logging.getLogger(__name__)
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(
-        COMMAND_NAME, help="Describe every cached sample with a stored descriptor, as a new experiment."
+    parser = add_subcommand(
+        commands, COMMAND_NAME, summary="Describe every cached sample with a stored descriptor, as a new experiment."
     )
     parser.add_argument("--cache", type=str, default=DEFAULT_GRID_CACHE_NAME, help="Which grid cache to describe.")
     parser.add_argument(
@@ -32,6 +31,14 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
     """Write one experiment of vectors and report which experiment it became."""
+    # The descriptor's network is imported here, so parsing arguments and the commands that load no
+    # network stay clear of torch.
+    # pylint: disable=import-outside-toplevel
+    import torch
+
+    from samplemorph.descriptors.embedding import embed_cache
+    from samplemorph.descriptors.learned import load_descriptor
+
     cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))
     descriptor = load_descriptor(
         descriptor_path(config.library_root, name=arguments.descriptor), device=torch.device(arguments.device)

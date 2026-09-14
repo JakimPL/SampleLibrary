@@ -14,6 +14,7 @@ from samplecloud.evaluation.settings import EvaluationSettings
 from samplecore.models.category import SampleCategory
 
 MINIMUM_MEMBERS_PER_CATEGORY: Final[int] = 5
+MINIMUM_SCORED_CATEGORIES: Final[int] = 2
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,7 @@ class CategoryAgreement:
     per_category: tuple[CategoryScore, ...]
 
 
-def category_agreement(corpus: EvaluationCorpus, *, settings: EvaluationSettings) -> CategoryAgreement:
+def category_agreement(corpus: EvaluationCorpus, *, settings: EvaluationSettings) -> CategoryAgreement | None:
     """Classify each keyword-labeled sample from its neighbors, across grouped stratified folds.
 
     `UNCATEGORIZED` stays out: it records that no keyword matched rather than a class the samples
@@ -52,16 +53,16 @@ def category_agreement(corpus: EvaluationCorpus, *, settings: EvaluationSettings
     Categories too small to appear in every fold stay out as well, since a fold that holds none of a
     class cannot score it.
 
-    Raises:
-        ValueError: fewer than two categories carry enough samples to be scored.
+    Returns None when fewer than `MINIMUM_SCORED_CATEGORIES` categories carry enough samples, or the
+    scored samples fall into fewer equivalence groups than there are folds.
     """
     selected = _scorable(corpus, fold_count=settings.fold_count)
     labels = np.array([str(corpus.categories[position]) for position in selected])
-    if len(set(labels.tolist())) < 2:
-        raise ValueError("fewer than two categories carry enough samples to score a descriptor against")
+    groups = corpus.equivalence_groups[selected]
+    if len(set(labels.tolist())) < MINIMUM_SCORED_CATEGORIES or len(np.unique(groups)) < settings.fold_count:
+        return None
 
     vectors = corpus.vectors[selected]
-    groups = corpus.equivalence_groups[selected]
     predictions = np.empty_like(labels)
     splitter = StratifiedGroupKFold(n_splits=settings.fold_count, shuffle=True, random_state=settings.random_seed)
     for train_positions, test_positions in splitter.split(vectors, labels, groups=groups):

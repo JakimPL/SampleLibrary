@@ -1,11 +1,13 @@
-set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+set minimum-version := "1.56.0"
+set default-list := true
+
+[windows]
+set shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
 MEMORY_CAP := "16G"
 DEV_CONFIG := "dev-library/config.toml"
 DEV_PORT := "8001"
-
-default:
-    @{{ just_executable() }} --list --unsorted
+CAPPED_SAMPLELIBRARY := if os() == "linux" { "systemd-run --user --scope -p MemoryMax=" + MEMORY_CAP + " -p MemorySwapMax=0 -q -- uv run samplelibrary" } else { "uv run samplelibrary" }
 
 [group("setup")]
 install: && frontend-install
@@ -19,8 +21,8 @@ database:
 
 [group("quality")]
 format:
-    uv run isort src tests scripts
-    uv run black src tests scripts
+    uv run isort src tests scripts notebooks
+    uv run black src tests scripts notebooks
 
 [group("quality")]
 lint:
@@ -50,29 +52,38 @@ serve-inference:
 
 [group("library")]
 tracking-ui:
-    uv run mlflow ui --backend-store-uri "$(uv run samplelibrary tracking uri)"
+    uv run samplelibrary tracking ui
 
 [group("library")]
 rebuild:
-    uv run samplelibrary extract
-    uv run samplelibrary equivalence
-    uv run samplelibrary cloud embed
-    uv run samplelibrary cloud placeholders
+    {{ CAPPED_SAMPLELIBRARY }} extract
+    {{ CAPPED_SAMPLELIBRARY }} notes
+    {{ CAPPED_SAMPLELIBRARY }} thumbnails
+    {{ CAPPED_SAMPLELIBRARY }} cloud embed --resume-promoted
+    {{ CAPPED_SAMPLELIBRARY }} cloud placeholders
 
 [group("library")]
 [linux]
 [positional-arguments]
 capped *arguments:
-    systemd-run --user --scope -p MemoryMax={{ MEMORY_CAP }} -p MemorySwapMax=0 -q -- uv run samplelibrary "$@"
+    {{ CAPPED_SAMPLELIBRARY }} "$@"
 
 [group("library")]
-[confirm("Empty the configured library's catalog and content store for good?")]
-reset:
+reset: && _reset-confirmed
+    uv run samplelibrary reset
+
+[confirm("Empty the library named above?")]
+_reset-confirmed:
     uv run samplelibrary reset --confirm
 
 [group("dev")]
 dev-build:
     uv run python scripts/build_dev_library.py
+    uv run samplelibrary --config {{ DEV_CONFIG }} extract
+    uv run samplelibrary --config {{ DEV_CONFIG }} notes
+    uv run samplelibrary --config {{ DEV_CONFIG }} thumbnails
+    uv run samplelibrary --config {{ DEV_CONFIG }} cloud embed --resume-promoted
+    uv run samplelibrary --config {{ DEV_CONFIG }} cloud placeholders
 
 [group("dev")]
 [unix]
@@ -82,8 +93,11 @@ dev *arguments:
 
 [group("dev")]
 [windows]
+[positional-arguments]
+[script("powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File")]
 dev *arguments:
-    uv run samplelibrary --config {{ DEV_CONFIG }} {{ arguments }}
+    uv run samplelibrary --config {{ DEV_CONFIG }} @args
+    exit $LASTEXITCODE
 
 [group("dev")]
 serve-dev:
@@ -92,11 +106,13 @@ serve-dev:
 [group("dev")]
 [unix]
 dev-reset:
+    if [ -f {{ DEV_CONFIG }} ]; then uv run samplelibrary --config {{ DEV_CONFIG }} reset --confirm; fi
     rm -rf dev-library
 
 [group("dev")]
 [windows]
 dev-reset:
+    if (Test-Path {{ DEV_CONFIG }}) { uv run samplelibrary --config {{ DEV_CONFIG }} reset --confirm }
     if (Test-Path dev-library) { Remove-Item -Recurse -Force dev-library }
 
 [group("frontend")]
@@ -107,7 +123,7 @@ frontend-install:
 [group("frontend")]
 [working-directory("frontend")]
 frontend-dev:
-    npm run dev -- --host
+    npm run dev
 
 [group("frontend")]
 [working-directory("frontend")]
@@ -132,6 +148,18 @@ frontend-types:
 docker-build:
     docker build -t samplelibrary-server .
 
+LIBRARY_MOUNT := "type=bind,target=/library,readonly,source="
+CONFIG_MOUNT := "type=bind,target=/app/config.toml,readonly,source="
+
+# Both paths are read from where the recipe was run, and a mount of a path that is not there fails
+# rather than leaving an empty directory in its place.
 [group("docker")]
+[linux]
 docker-run library_root config_path:
-    docker run --rm -p 8000:8000 -v "{{ library_root }}:/library" -v "{{ config_path }}:/app/config.toml" -e SAMPLELIBRARY_CONFIG=/app/config.toml samplelibrary-server
+    docker run --rm --network host --mount "{{ LIBRARY_MOUNT }}{{ absolute_path(join(invocation_directory(), library_root)) }}" --mount "{{ CONFIG_MOUNT }}{{ absolute_path(join(invocation_directory(), config_path)) }}" samplelibrary-server serve --host 127.0.0.1 --port 8000
+
+[group("docker")]
+[macos]
+[windows]
+docker-run library_root config_path:
+    docker run --rm -p 127.0.0.1:8000:8000 --mount "{{ LIBRARY_MOUNT }}{{ absolute_path(join(invocation_directory(), library_root)) }}" --mount "{{ CONFIG_MOUNT }}{{ absolute_path(join(invocation_directory(), config_path)) }}" samplelibrary-server

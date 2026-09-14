@@ -3,17 +3,26 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from sqlalchemy import Connection
+from trackmod.core.samples.depth import BitDepth
 
 from samplecloud.evaluation.cli import _report, main
 from samplecloud.evaluation.harness import evaluate_experiment
 from samplecloud.evaluation.report import report_json
 from samplecloud.evaluation.settings import EvaluationSettings
 from samplecloud.evaluation.transposition import OffsetRetrieval, TranspositionRetrieval
+from samplecloud.experiments import ExperimentRefused
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.models.channels import ChannelLayout
+from samplecore.models.experiment import SampleFeatureVector
+from samplecore.models.sample import Sample
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
+from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.tracking.store import TRACKING_DATABASE_NAME
 from tests.samplecloud.evaluation.conftest import SeededCatalog, label_catalog
 
@@ -39,7 +48,7 @@ def test_a_pass_without_an_extractor_scores_the_stored_vectors_alone(
         connection,
         experiment_id=separable_catalog.experiment_id,
         library_root=tmp_path,
-        feature_extractor=None,
+        describer=None,
         settings=SETTINGS,
     )
 
@@ -60,7 +69,7 @@ def test_a_pass_scores_the_hand_labels_once_enough_samples_carry_one(
         connection,
         experiment_id=separable_catalog.experiment_id,
         library_root=tmp_path,
-        feature_extractor=None,
+        describer=None,
         settings=SETTINGS,
     )
 
@@ -68,11 +77,53 @@ def test_a_pass_scores_the_hand_labels_once_enough_samples_carry_one(
     assert report.hand_labels.labeled_sample_count == len(separable_catalog.sample_hashes)
 
 
-def test_an_unknown_experiment_says_so(connection: Connection, tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="holds no experiment"):
-        evaluate_experiment(
-            connection, experiment_id=9999, library_root=tmp_path, feature_extractor=None, settings=SETTINGS
+def test_a_corpus_too_small_to_fold_leaves_those_metrics_out(connection: Connection, tmp_path: Path) -> None:
+    """A library with a handful of uncategorized samples no pattern plays still gets a report."""
+    experiment_id = PostgresExperimentRepository(connection).create(backend_name="stub", label=None, params={})
+    for index in range(3):
+        sample_hash = format(index + 1, "064x")
+        PostgresSampleRepository(connection).upsert(
+            Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=32)
         )
+        PostgresSampleFeatureVectorRepository(connection).insert_many(
+            [
+                SampleFeatureVector(
+                    experiment_id=experiment_id,
+                    sample_hash=sample_hash,
+                    vector=(float(index), 1.0),
+                    computed_at=datetime.now(UTC),
+                )
+            ]
+        )
+    connection.commit()
+
+    report = evaluate_experiment(
+        connection, experiment_id=experiment_id, library_root=tmp_path, describer=None, settings=SETTINGS
+    )
+
+    assert (report.categories, report.notes, report.hand_labels) == (None, None, None)
+    assert json.loads(report_json(report))["categories"] is None
+
+
+def test_a_score_no_metric_could_read_is_written_as_null(
+    connection: Connection, tmp_path: Path, separable_catalog: SeededCatalog
+) -> None:
+    report = evaluate_experiment(
+        connection,
+        experiment_id=separable_catalog.experiment_id,
+        library_root=tmp_path,
+        describer=None,
+        settings=SETTINGS,
+    )
+    assert report.categories is not None
+    unreadable = replace(report, categories=replace(report.categories, macro_f1=float("nan")))
+
+    assert json.loads(report_json(unreadable))["categories"]["macro_f1"] is None
+
+
+def test_an_unknown_experiment_says_so(connection: Connection, tmp_path: Path) -> None:
+    with pytest.raises(ExperimentRefused, match="holds no experiment"):
+        evaluate_experiment(connection, experiment_id=9999, library_root=tmp_path, describer=None, settings=SETTINGS)
 
 
 def test_a_report_renders_as_json_a_tracker_can_read(
@@ -82,7 +133,7 @@ def test_a_report_renders_as_json_a_tracker_can_read(
         connection,
         experiment_id=separable_catalog.experiment_id,
         library_root=tmp_path,
-        feature_extractor=None,
+        describer=None,
         settings=SETTINGS,
     )
 
@@ -141,13 +192,18 @@ def test_the_command_reports_an_experiment_extracted_by_an_unknown_backend(
     _database_url: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     separable_catalog: SeededCatalog,
 ) -> None:
     """Retrieval describes audio again, so it needs the very extractor the vectors came from."""
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
 
-    with pytest.raises(ValueError, match="unknown stub backend"):
+    with pytest.raises(SystemExit) as raised:
         main(["--experiment-id", str(separable_catalog.experiment_id)], prog=PROGRAM)
+
+    assert raised.value.code == 1
+    assert "stub backend, unknown here" in capsys.readouterr().err
+    assert not (tmp_path / TRACKING_DATABASE_NAME).exists()
 
 
 def test_the_command_reports_every_metric_it_ran(
@@ -205,7 +261,7 @@ def test_the_command_reports_retrieval_offset_by_offset(
         connection,
         experiment_id=separable_catalog.experiment_id,
         library_root=tmp_path,
-        feature_extractor=None,
+        describer=None,
         settings=SETTINGS,
     )
     stubbed = replace(

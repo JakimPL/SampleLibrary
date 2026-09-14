@@ -29,3 +29,10 @@ def test_main_writes_the_same_document_to_a_named_file(tmp_path: Path, capsys: p
 
     assert output.read_text(encoding="utf-8") == printed
     assert capsys.readouterr().out == ""
+
+
+def test_writing_into_a_directory_that_is_not_there_ends_with_one_message(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["--output", str(tmp_path / "absent" / "openapi.json")], prog=PROGRAM)
+
+    assert "Wrote nothing" in str(raised.value.code)

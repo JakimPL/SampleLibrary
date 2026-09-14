@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from samplemorph.codecs.conditioned import codec_path
-from samplemorph.codecs.conditioned_model import ConditionedCodecShape
+from samplemorph.codecs.conditioned_shape import ConditionedCodecShape
+from samplemorph.model_paths import codec_path
 from samplemorph.training.codec_data import CodecCorpus, CodecDataModule
 from samplemorph.training.codec_export import CodecWriter
-from samplemorph.training.codec_module import CodecTrainingModule
+from samplemorph.training.codec_module import CodecTrainingModule, ConditioningDescriptor
 from samplemorph.training.codec_settings import CodecTrainingSettings
 from samplemorph.training.export import BestEpochExport
 from samplemorph.training.metrics import CODEC_MONITORED_METRIC
@@ -15,13 +15,13 @@ def run_codec_training(
     corpus: CodecCorpus, *, settings: CodecTrainingSettings, placement: RunPlacement
 ) -> TrainingOutcome:
     """Teach a conditioned codec over a cached corpus, writing what it learns as it learns it."""
+    data = CodecDataModule(corpus, settings=settings)
     begin_cached_run(
         placement,
         settings=settings.run,
         parameters=settings.as_parameters() | {"descriptor": corpus.descriptor_name},
         cache=corpus.cache,
     )
-    data = CodecDataModule(corpus, settings=settings)
     module = CodecTrainingModule(
         ConditionedCodecShape(
             band_count=corpus.cache.description.band_count,
@@ -31,7 +31,7 @@ def run_codec_training(
             width=settings.width,
             layout=settings.layout,
         ),
-        descriptor=corpus.descriptor.model,
+        descriptor=ConditioningDescriptor(network=corpus.descriptor.model, sha256=corpus.descriptor_sha256),
         learning_rate=settings.run.learning_rate,
         weights=settings.weights,
         prior_warmup_steps=settings.prior_warmup_steps,

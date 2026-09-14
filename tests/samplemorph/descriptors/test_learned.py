@@ -8,15 +8,12 @@ import torch
 
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.canonicalizers.log_frequency import build_log_frequency_canonicalizer
-from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
-from samplemorph.descriptors.learned import (
-    DescriptorDescription,
-    descriptor_path,
-    load_descriptor,
-    save_descriptor,
-)
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
+from samplemorph.descriptors.grid_descriptor import GridDescriptor
+from samplemorph.descriptors.learned import DescriptorDescription, load_descriptor, save_descriptor
 from samplemorph.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE, pooled_band_count
 from samplemorph.geometry import log_frequency_geometry
+from samplemorph.model_paths import descriptor_path
 
 EMBEDDING_SIZE = 16
 

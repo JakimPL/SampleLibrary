@@ -132,3 +132,86 @@ describe("the shared preview element", () => {
         vi.unstubAllGlobals();
     });
 });
+
+describe("a preview the browser cannot play", () => {
+    interface ScriptedAudio {
+        readonly element: {
+            src: string;
+            preservesPitch: boolean;
+            defaultPlaybackRate: number;
+            playbackRate: number;
+            readonly listeners: string[];
+            addEventListener: (event: string) => void;
+            play: () => Promise<void>;
+            pause: () => void;
+        };
+        readonly pauses: { count: number };
+    }
+
+    function scriptedAudio(outcomes: (() => Promise<void>)[]): ScriptedAudio {
+        const pauses = { count: 0 };
+        const element = {
+            src: "",
+            preservesPitch: true,
+            defaultPlaybackRate: 1,
+            playbackRate: 1,
+            listeners: [] as string[],
+            addEventListener(event: string): void {
+                this.listeners.push(event);
+            },
+            play: (): Promise<void> => (outcomes.shift() ?? (() => Promise.resolve()))(),
+            pause: (): void => {
+                pauses.count += 1;
+            },
+        };
+        vi.stubGlobal("Audio", function audioConstructorStub() {
+            return element;
+        });
+        return { element, pauses };
+    }
+
+    it("ignores the rejection of a play the next one cut off, leaving the new preview sounding", async () => {
+        let rejectFirst: (error: unknown) => void = () => undefined;
+        const { element, pauses } = scriptedAudio([
+            () =>
+                new Promise<void>((_resolve, reject) => {
+                    rejectFirst = reject;
+                }),
+            () => Promise.resolve(),
+        ]);
+        vi.resetModules();
+        const preview = await import("../../src/samples/useAudioPreview");
+        const { result } = renderHook(() => preview.useAudioPreview());
+
+        act(() => {
+            result.current.play(preview.samplePreview("first", null));
+            result.current.play(preview.samplePreview("second", null));
+        });
+        await act(async () => {
+            rejectFirst(new DOMException("The play() request was interrupted", "AbortError"));
+            await Promise.resolve();
+        });
+
+        expect(result.current.playingKey).toBe("second");
+        expect(result.current.failure).toBeNull();
+        expect(pauses.count).toBe(0);
+        expect(element.listeners).toEqual(["ended"]);
+        vi.unstubAllGlobals();
+    });
+
+    it("reports a preview that failed under its own key", async () => {
+        scriptedAudio([() => Promise.reject(new Error("no supported source"))]);
+        vi.resetModules();
+        const preview = await import("../../src/samples/useAudioPreview");
+        const { result } = renderHook(() => preview.useAudioPreview());
+
+        await act(async () => {
+            result.current.play(preview.samplePreview("broken", null));
+            await Promise.resolve();
+        });
+
+        expect(result.current.playingKey).toBeNull();
+        expect(result.current.failure).toEqual({ key: "broken", message: "no supported source" });
+        vi.unstubAllGlobals();
+    });
+});

@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import (
+    NO_DECISIONS,
+    AnnotationChanges,
+    AnnotationDecision,
+    AnnotationDecisions,
+    AnnotationSource,
+    SampleAnnotation,
+)
 from samplecore.models.sample_properties import SampleOccurrence
 
 
@@ -80,3 +88,45 @@ def test_an_annotation_records_which_gesture_applied_it(sample_hash_a: str) -> N
     )
 
     assert grouped.source is AnnotationSource.EQUIVALENCE_CLASS
+
+
+CURRENT = AnnotationDecisions(label="KICK", rating=4, favorite=True)
+
+
+@dataclass(frozen=True)
+class ChangeCase:
+    values: AnnotationDecisions
+    changed: frozenset[AnnotationDecision]
+    expected: AnnotationDecisions
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ChangeCase(
+            values=AnnotationDecisions(label=None, rating=2, favorite=False),
+            changed=frozenset({AnnotationDecision.RATING}),
+            expected=AnnotationDecisions(label="KICK", rating=2, favorite=True),
+        ),
+        ChangeCase(
+            values=AnnotationDecisions(label="SNARE", rating=None, favorite=False),
+            changed=frozenset({AnnotationDecision.LABEL}),
+            expected=AnnotationDecisions(label="SNARE", rating=4, favorite=True),
+        ),
+        ChangeCase(
+            values=NO_DECISIONS,
+            changed=frozenset({AnnotationDecision.FAVORITE, AnnotationDecision.RATING}),
+            expected=AnnotationDecisions(label="KICK", rating=None, favorite=False),
+        ),
+        ChangeCase(values=NO_DECISIONS, changed=frozenset(AnnotationDecision), expected=NO_DECISIONS),
+    ],
+    ids=("a rating alone", "a label alone", "clearing two", "clearing all three"),
+)
+def test_a_change_replaces_the_decisions_it_names_and_keeps_the_rest(case: ChangeCase) -> None:
+    changes = AnnotationChanges(values=case.values, changed=case.changed)
+
+    assert changes.applied_to(CURRENT) == case.expected
+
+
+def test_a_label_is_stored_in_its_one_spelling(sample_hash_a: str) -> None:
+    assert _annotation(sample_hash=sample_hash_a, label="hi-hat:closed,lo-fi").label == "HI-HAT: CLOSED, LO-FI"

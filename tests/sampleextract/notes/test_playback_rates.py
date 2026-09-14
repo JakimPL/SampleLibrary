@@ -37,7 +37,7 @@ def transposing_corpus(
     """
     corpus = config.model_copy(update={"minimum_sample_frames": NO_MINIMUM_FRAMES})
     (corpus.module_source_directory / "song.it").write_bytes(transposing_it_module_bytes)
-    run_extraction(corpus, connection, discover_modules(corpus.module_source_directory), progress=progress)
+    run_extraction(corpus, connection, discover_modules(corpus.module_source_directory).paths, progress=progress)
     connection.commit()
     return corpus
 

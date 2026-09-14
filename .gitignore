@@ -13,11 +13,14 @@ wheels/
 *.egg-info
 .venv/
 
-config.toml
+/config.toml
+# Compose reads the port a local PostgreSQL publishes on from here.
+.env
 
 notebooks/__marimo__/
 
 dev-library/
+/library/
 
 *.npz
 

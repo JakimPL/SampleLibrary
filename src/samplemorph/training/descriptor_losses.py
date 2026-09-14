@@ -7,27 +7,11 @@ import torch
 from torch import Tensor
 from torch.nn import functional
 
+from samplemorph.training.descriptor_settings import DescriptorLossWeights
+
 CONTRAST_TEMPERATURE: Final[float] = 0.1
-DEFAULT_DISTILLATION_WEIGHT: Final[float] = 1.0
-DEFAULT_RETUNING_WEIGHT: Final[float] = 0.5
-DEFAULT_LABEL_WEIGHT: Final[float] = 0.5
 # A logit this low leaves a masked pair with no share of the softmax at any temperature used here.
 MASKED_LOGIT: Final[float] = -1e9
-
-
-@dataclass(frozen=True)
-class DescriptorLossWeights:
-    """How much each of the three signals says in the total.
-
-    The teacher supplies what sounds alike to people, the retuned views supply that a retuning
-    changes nothing, and the labels supply what this listener called alike. Measured on a pilot,
-    the retuning term buys the octave at a cost in agreement that the label term buys back, so its
-    weight is the one worth sweeping.
-    """
-
-    distillation: float = DEFAULT_DISTILLATION_WEIGHT
-    retuning: float = DEFAULT_RETUNING_WEIGHT
-    labels: float = DEFAULT_LABEL_WEIGHT
 
 
 @dataclass(frozen=True)

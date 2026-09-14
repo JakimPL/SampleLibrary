@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type * as CloudApi from "../../../src/api/cloud";
 import type * as ModulesApi from "../../../src/api/modules";
+import type * as MorphApi from "../../../src/api/morph";
 import type * as SamplesApi from "../../../src/api/samples";
 import { useMorphStore } from "../../../src/morph/morphStore";
 import type * as AudioPreview from "../../../src/samples/useAudioPreview";
@@ -19,6 +20,7 @@ const {
     getSuggestionTags,
     getSamplePreview,
     getModule,
+    getMorphStatus,
     play,
 } = vi.hoisted(() => {
     class FakeScatterplot {
@@ -63,6 +65,7 @@ const {
         getSuggestionTags: vi.fn().mockResolvedValue([]),
         getSamplePreview: vi.fn(),
         getModule: vi.fn(),
+        getMorphStatus: vi.fn().mockResolvedValue({ available: true, service: null }),
         play: vi.fn(),
     };
 });
@@ -83,7 +86,12 @@ vi.mock("../../../src/api/samples", async () => {
 
 vi.mock("../../../src/samples/useAudioPreview", async () => {
     const actual = await vi.importActual<typeof AudioPreview>("../../../src/samples/useAudioPreview");
-    return { ...actual, useAudioPreview: () => ({ play, playingKey: null }) };
+    return { ...actual, useAudioPreview: () => ({ play, playingKey: null, failure: null }) };
+});
+
+vi.mock("../../../src/api/morph", async () => {
+    const actual = await vi.importActual<typeof MorphApi>("../../../src/api/morph");
+    return { ...actual, getMorphStatus };
 });
 
 vi.mock("../../../src/api/modules", async () => {
@@ -370,6 +378,30 @@ describe("CloudPanel", () => {
             url: `/api/morph/audio?first=${first}&second=${second}&weight=0.5`,
             playbackRateHz: null,
         });
+    });
+
+    it("plays no morph on a marker release while no renderer answers", async () => {
+        const first = "6".repeat(64);
+        const second = "7".repeat(64);
+        getMorphStatus.mockResolvedValue({ available: false, service: null });
+        getCloud.mockResolvedValue([
+            { sample_hash: first, x: 0, y: 0, category: "uncategorized", playback_rate_hz: 8363 },
+            { sample_hash: second, x: 1, y: 1, category: "uncategorized", playback_rate_hz: 16726 },
+        ]);
+        getModuleCloud.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(getMorphStatus).toHaveBeenCalled();
+        });
+        act(() => {
+            useMorphStore.getState().setPair(first, second);
+        });
+        const marker = await screen.findByRole("slider", { name: "Morph weight" });
+
+        fireEvent.pointerDown(marker, { pointerId: 1, clientX: 10, clientY: 20 });
+        fireEvent.pointerUp(marker, { pointerId: 1, clientX: 10, clientY: 20 });
+
+        expect(play).not.toHaveBeenCalled();
     });
     it("asks for the suggestions and their tags only once the Suggestions mode is chosen", async () => {
         const sampleHash = "8".repeat(64);

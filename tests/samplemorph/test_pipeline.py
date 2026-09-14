@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -28,13 +29,16 @@ from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.geometry import mel_geometry
-from samplemorph.model_store import PRINCIPAL_COMPONENT_CODEC_NAME, MorphModelDescription
+from samplemorph.model_store import PRINCIPAL_COMPONENT_CODEC_NAME, MorphModel, MorphModelDescription
 from samplemorph.morphers.linear import LinearMorpher
 from samplemorph.pipeline import (
     EncodedPair,
     HeardSample,
+    LoadedRoute,
     MorphRenderSummary,
     MorphRoute,
+    RouteChoice,
+    StoredFile,
     common_rate,
     decode_to_audio,
     encode_pair,
@@ -46,7 +50,14 @@ from samplemorph.pipeline import (
     render_morph,
 )
 from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
-from samplemorph.rendering import RenderedFile, RenderKind, wav_bytes, write_rendering
+from samplemorph.rendering import (
+    FULL_SCALE_CEILING,
+    RENDER_REVISION,
+    RenderedFile,
+    RenderKind,
+    wav_bytes,
+    write_rendering,
+)
 from samplemorph.vocoders.pghi import PghiVocoder
 from tests.samplemorph.conftest import harmonic_tone
 
@@ -257,14 +268,25 @@ def test_a_morph_at_the_first_endpoint_is_that_sample_s_own_reconstruction() -> 
     assert SAMPLE_FRAME_COUNT < halfway.shape[0] < 2 * SAMPLE_FRAME_COUNT
 
 
-def test_wav_bytes_read_back_at_the_stated_rate_under_headroom() -> None:
-    loud = np.linspace(-4.0, 4.0, 512)
+@dataclass(frozen=True)
+class LevelCase:
+    peak: float
+    written_peak: float
 
-    frames, rate = soundfile.read(io.BytesIO(wav_bytes(loud, rate_hz=FIRST_RATE_HZ)))
+
+@pytest.mark.parametrize(
+    "case",
+    [LevelCase(peak=0.1, written_peak=0.1), LevelCase(peak=4.0, written_peak=FULL_SCALE_CEILING)],
+    ids=("a quiet waveform keeps its level", "a loud one is lowered below full scale"),
+)
+def test_wav_bytes_read_back_at_the_stated_rate_and_level(case: LevelCase) -> None:
+    waveform = np.linspace(-case.peak, case.peak, 512)
+
+    frames, rate = soundfile.read(io.BytesIO(wav_bytes(waveform, rate_hz=FIRST_RATE_HZ)))
 
     assert rate == FIRST_RATE_HZ
-    assert frames.shape[0] == loud.shape[0]
-    assert float(np.abs(frames).max()) < 1.0
+    assert frames.shape[0] == waveform.shape[0]
+    assert float(np.abs(frames).max()) == pytest.approx(case.written_peak, abs=1.0 / 16384)
 
 
 def test_a_pair_is_heard_at_the_higher_of_its_two_rates() -> None:
@@ -273,15 +295,15 @@ def test_a_pair_is_heard_at_the_higher_of_its_two_rates() -> None:
     assert common_rate(SECOND_RATE_HZ, FIRST_RATE_HZ) == SECOND_RATE_HZ
 
 
-def test_a_rendered_file_carries_headroom_below_full_scale(tmp_path: Path) -> None:
-    loud = np.linspace(-4.0, 4.0, 512)
+def test_a_rendered_file_keeps_a_quiet_waveform_at_its_level(tmp_path: Path) -> None:
+    quiet = np.linspace(-0.2, 0.2, 512)
 
     written = write_rendering(
-        RenderedFile(path=tmp_path / "loud.wav", kind=RenderKind.ORIGINAL, rate_hz=FIRST_RATE_HZ, weight=None), loud
+        RenderedFile(path=tmp_path / "quiet.wav", kind=RenderKind.ORIGINAL, rate_hz=FIRST_RATE_HZ, weight=None), quiet
     )
 
     frames, _ = soundfile.read(written.path)
-    assert float(np.abs(frames).max()) < 1.0
+    assert float(np.abs(frames).max()) == pytest.approx(0.2, abs=1.0 / 16384)
 
 
 def test_note_matches_the_reference_key_the_library_counts_from() -> None:
@@ -289,8 +311,8 @@ def test_note_matches_the_reference_key_the_library_counts_from() -> None:
     assert Note(60).midi == 72
 
 
-def test_a_listening_set_manifest_names_the_samples_it_runs_between() -> None:
-    """A set is judged by ear days later, so it has to say which samples produced it."""
+def test_a_listening_set_manifest_names_the_samples_the_route_and_its_files() -> None:
+    """A set is judged by ear days later, so it has to say which samples and which route produced it."""
     description = MorphModelDescription(
         codec=PRINCIPAL_COMPONENT_CODEC_NAME,
         canonicalizer="mel",
@@ -300,15 +322,71 @@ def test_a_listening_set_manifest_names_the_samples_it_runs_between() -> None:
         random_seed=0,
         explained_variance=0.9,
     )
+    canonicalizer = CANONICALIZER_REGISTRY["mel"]()
+    loaded = LoadedRoute(
+        model=MorphModel(description=description, codec=IdentityCodec(canonicalizer.geometry)),
+        route=MorphRoute(
+            canonicalizer=canonicalizer,
+            codec=IdentityCodec(canonicalizer.geometry),
+            vocoder=PghiVocoder(),
+            morpher=LinearMorpher(),
+        ),
+        choice=RouteChoice(
+            model_name="pca", vocoder_name="pghi", restorer_name="restorer", morpher_name="linear", device="cpu"
+        ),
+        files=(StoredFile(path=Path("models/pca.npz"), sha256="c" * 64),),
+    )
     summary = MorphRenderSummary(
         first_hash="a" * 64,
         second_hash="b" * 64,
         files=(RenderedFile(path=Path("morph_050.wav"), kind=RenderKind.MORPH, rate_hz=8363.0, weight=0.5),),
     )
 
-    manifest = json.loads(listening_set_manifest(description, summary))
+    manifest = json.loads(listening_set_manifest(loaded, summary))
 
     assert manifest["first_hash"] == "a" * 64
     assert manifest["second_hash"] == "b" * 64
     assert manifest["model"]["canonicalizer"] == "mel"
+    assert (manifest["vocoder"], manifest["restorer"], manifest["morpher"], manifest["device"]) == (
+        "pghi",
+        None,
+        "linear",
+        "cpu",
+    )
+    assert manifest["loaded_files"] == [{"path": "models/pca.npz", "sha256": "c" * 64}]
+    assert manifest["fingerprint"] == loaded.fingerprint
+    assert manifest["render_revision"] == RENDER_REVISION
     assert manifest["files"] == [{"name": "morph_050.wav", "kind": "morph", "rate_hz": 8363.0, "weight": 0.5}]
+
+
+def test_the_fingerprint_follows_the_vocoder_and_the_file_bytes() -> None:
+    description = MorphModelDescription(
+        codec=PRINCIPAL_COMPONENT_CODEC_NAME,
+        canonicalizer="mel",
+        geometry=mel_geometry(),
+        latent_size=4,
+        fitted_sample_count=12,
+        random_seed=0,
+        explained_variance=0.9,
+    )
+    canonicalizer = CANONICALIZER_REGISTRY["mel"]()
+    loaded = LoadedRoute(
+        model=MorphModel(description=description, codec=IdentityCodec(canonicalizer.geometry)),
+        route=MorphRoute(
+            canonicalizer=canonicalizer,
+            codec=IdentityCodec(canonicalizer.geometry),
+            vocoder=PghiVocoder(),
+            morpher=LinearMorpher(),
+        ),
+        choice=RouteChoice(
+            model_name="pca", vocoder_name="pghi", restorer_name="restorer", morpher_name="linear", device="cpu"
+        ),
+        files=(StoredFile(path=Path("models/pca.npz"), sha256="c" * 64),),
+    )
+
+    assert replace(loaded, choice=replace(loaded.choice, vocoder_name="restored")).fingerprint != loaded.fingerprint
+    assert (
+        replace(loaded, files=(StoredFile(path=Path("models/pca.npz"), sha256="d" * 64),)).fingerprint
+        != loaded.fingerprint
+    )
+    assert replace(loaded, choice=replace(loaded.choice, model_name="renamed")).fingerprint == loaded.fingerprint

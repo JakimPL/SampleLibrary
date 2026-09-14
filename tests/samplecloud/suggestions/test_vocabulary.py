@@ -11,7 +11,9 @@ from samplecloud.suggestions.vocabulary import (
     HAND_LABELS_CHOICE,
     INSTRUMENT_VOCABULARY,
     INSTRUMENTS_CHOICE,
+    VocabularyRefused,
     prompt_for,
+    read_vocabulary_file,
     vocabulary_from,
 )
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
@@ -49,16 +51,39 @@ def test_a_file_names_one_label_per_line(tmp_path: Path, connection: Connection)
     assert vocabulary_from(str(listing), connection) == ("PIANO", "STRINGS: PIZZICATO")
 
 
-def test_an_empty_file_says_so(tmp_path: Path, connection: Connection) -> None:
+def test_a_file_passes_over_comments_and_names_each_label_once_in_its_canonical_spelling(tmp_path: Path) -> None:
     listing = tmp_path / "labels.txt"
-    listing.write_text("\n", encoding="utf-8")
+    listing.write_text("# drums first\nhi-hat:closed\nSNARE\nHI-HAT: CLOSED\n  # pitched\nsnare\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="holds no label"):
-        vocabulary_from(str(listing), connection)
+    assert read_vocabulary_file(listing) == ("HI-HAT: CLOSED", "SNARE")
+
+
+@dataclass(frozen=True)
+class RefusedFileCase:
+    content: str | None
+    reason: str
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        RefusedFileCase(content="\n# nothing here\n", reason="holds no label"),
+        RefusedFileCase(content="PIANO\nBASS, SYNTH\n", reason="line 2"),
+        RefusedFileCase(content=None, reason="cannot be read"),
+    ],
+    ids=("no label", "two tags on one line", "a missing file"),
+)
+def test_a_file_that_is_no_list_of_labels_is_refused(case: RefusedFileCase, tmp_path: Path) -> None:
+    listing = tmp_path / "labels.txt"
+    if case.content is not None:
+        listing.write_text(case.content, encoding="utf-8")
+
+    with pytest.raises(VocabularyRefused, match=case.reason):
+        read_vocabulary_file(listing)
 
 
 def test_the_hand_label_vocabulary_holds_the_categories_and_their_specifications(connection: Connection) -> None:
-    PostgresSampleAnnotationRepository(connection).replace_many(
+    PostgresSampleAnnotationRepository(connection).upsert_many(
         (
             _annotation("a" * 64, "HI-HAT: CLOSED, LO-FI"),
             _annotation("b" * 64, "HI-HAT: OPEN: TIGHT"),

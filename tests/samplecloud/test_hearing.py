@@ -4,8 +4,9 @@ import numpy as np
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
-from samplecloud.hearing import Hearing, Reading, hearing_for
+from samplecloud.hearing import Hearing, hearing_for
 from samplecore.models.channels import ChannelLayout
+from samplecore.models.experiment import Reading
 from samplecore.models.sample import Sample
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository

@@ -6,7 +6,7 @@ import pytest
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.tracking.store import tracking_uri
-from samplelibrary import tracking
+from samplelibrary.tracking import uri
 
 PROGRAM = "samplelibrary tracking uri"
 
@@ -25,7 +25,7 @@ def test_the_uri_is_the_only_line_printed(
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
 
-    tracking.main([], prog=PROGRAM)
+    uri.main([], prog=PROGRAM)
 
     assert capsys.readouterr().out.splitlines() == [tracking_uri(library_root)]
 
@@ -34,6 +34,6 @@ def test_a_missing_configuration_ends_the_process(tmp_path: Path, monkeypatch: p
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(tmp_path / "absent.toml"))
 
     with pytest.raises(SystemExit) as raised:
-        tracking.main([], prog=PROGRAM)
+        uri.main([], prog=PROGRAM)
 
     assert raised.value.code == 1

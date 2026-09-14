@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -18,6 +19,7 @@ from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from sampleextract.equivalence.candidates import CandidateBlock
 from sampleextract.equivalence.detect import EquivalenceSummary, detect_equivalences
 
 SAMPLE_RATE = 44100
@@ -43,6 +45,14 @@ def _store_sample(
 ) -> Sample:
     sample = Sample(hash=format(hash_seed, "064x"), depth=depth, channels=ChannelLayout.MONO, frames=pcm.shape[0])
     PostgresSampleRepository(connection).upsert(sample)
+    audio_store.write(library_root, SamplePCM(sample=sample, pcm=pcm))
+    return sample
+
+
+def _store_sample_file(library_root: Path, *, hash_seed: int, pcm: NDArray[np.float64]) -> Sample:
+    sample = Sample(
+        hash=format(hash_seed, "064x"), depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=pcm.shape[0]
+    )
     audio_store.write(library_root, SamplePCM(sample=sample, pcm=pcm))
     return sample
 
@@ -133,24 +143,75 @@ def test_sample_limit_of_zero_finds_nothing(connection: Connection, tmp_path: Pa
     summary = detect_equivalences(connection, tmp_path, sample_limit=0)
 
     assert summary == EquivalenceSummary(
-        samples_considered=0, bit_depth_relations=0, amplification_relations=0, resampled_relations=0
+        samples_considered=0,
+        silent_samples=0,
+        gain_candidates=0,
+        resampled_candidates=0,
+        bit_depth_relations=0,
+        amplification_relations=0,
+        resampled_relations=0,
     )
 
 
-def test_a_failure_partway_through_leaves_nothing_committed(
+def test_a_negative_sample_limit_is_refused(connection: Connection, tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="at least 0"):
+        detect_equivalences(connection, tmp_path, sample_limit=-1)
+
+
+def test_a_failure_in_a_later_block_keeps_the_relations_earlier_blocks_found(
     connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A long pass interrupted partway keeps what it found, and a rerun takes up the rest."""
     _seed_catalog(connection, tmp_path)
+    monkeypatch.setattr(detect_module, "NEIGHBOR_BLOCK_ROWS", 1)
+    scored_blocks: list[CandidateBlock] = []
+    record_block = detect_module._record_block
 
-    def _failing_fingerprint(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
-        raise OSError("simulated failure")
+    def fail_after_the_first_block_with_relations(*arguments: Any, **keywords: Any) -> None:
+        if len(scored_blocks) == 1:
+            raise OSError("simulated failure")
+        record_block(*arguments, **keywords)
+        if PostgresSampleRelationRepository(connection).list_all():
+            scored_blocks.append(arguments[1])
 
-    monkeypatch.setattr(detect_module, "compute_fingerprint", _failing_fingerprint)
+    monkeypatch.setattr(detect_module, "_record_block", fail_after_the_first_block_with_relations)
 
     with pytest.raises(OSError):
         detect_equivalences(connection, tmp_path)
 
+    kept = PostgresSampleRelationRepository(connection).list_all()
+    assert 0 < len(kept) < 3
+
+
+def test_silent_samples_are_counted_and_left_out_of_every_comparison(connection: Connection, tmp_path: Path) -> None:
+    """Silence of two different lengths holds no content a relation could be about."""
+    _store_sample(connection, tmp_path, hash_seed=21, depth=BitDepth.SIXTEEN, pcm=np.zeros((1024, 1)))
+    _store_sample(connection, tmp_path, hash_seed=22, depth=BitDepth.EIGHT, pcm=np.zeros((2048, 1)))
+
+    summary = detect_equivalences(connection, tmp_path)
+
+    assert summary.silent_samples == 2
     assert PostgresSampleRelationRepository(connection).list_all() == ()
+
+
+def test_a_trimmed_tail_pair_is_recorded_once_as_the_gain_variant_it_is(connection: Connection, tmp_path: Path) -> None:
+    content = _tonal_waveform(3000) * 0.5
+    _store_sample(connection, tmp_path, hash_seed=31, depth=BitDepth.SIXTEEN, pcm=content)
+    _store_sample(connection, tmp_path, hash_seed=32, depth=BitDepth.SIXTEEN, pcm=np.pad(content, ((0, 20), (0, 0))))
+
+    summary = detect_equivalences(connection, tmp_path)
+
+    assert (summary.amplification_relations, summary.resampled_relations) == (1, 0)
+
+
+def test_the_waveform_cache_lets_the_oldest_waveforms_go_once_its_budget_is_spent(tmp_path: Path) -> None:
+    samples = [_store_sample_file(tmp_path, hash_seed=seed, pcm=_tonal_waveform(1000)) for seed in range(41, 44)]
+    cache = detect_module._WaveformCache(tmp_path, byte_budget=2 * 1000 * 8)
+
+    for sample in samples:
+        cache.get(sample)
+
+    assert list(cache._waveforms) == [samples[1].hash, samples[2].hash]
 
 
 def test_detect_equivalences_finds_a_pair_differing_only_by_a_trimmed_silent_tail(

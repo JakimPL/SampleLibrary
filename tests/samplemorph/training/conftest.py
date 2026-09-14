@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from samplecore.labeling.labels import SampleLabel
 from samplecore.labeling.ranking import agreement_matrix
-from samplemorph.descriptors.grid_descriptor import DescriptorShape
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.training.descriptor_cache import (
     DESCRIPTION_FILE_NAME,
@@ -22,11 +22,11 @@ from samplemorph.training.descriptor_cache import (
     open_grid_cache,
 )
 from samplemorph.training.descriptor_data import NO_LABEL, DescriptorCorpus
-from samplemorph.training.descriptor_losses import DescriptorLossWeights
 from samplemorph.training.descriptor_module import DescriptorTrainingModule, TeachingMaterial
+from samplemorph.training.descriptor_settings import DescriptorLossWeights
 from samplemorph.training.restorer_dataset import RestorerBatchItem
 from samplemorph.training.restorer_module import RestorerTrainingModule
-from samplemorph.vocoders.restorer_model import RestorerShape
+from samplemorph.vocoders.restorer_shape import RestorerShape
 
 CROP_COUNT = 4
 LEARNING_RATE = 1e-3
@@ -81,18 +81,20 @@ VIEW_COUNT = 2
 LABELS = ("KICK: SOFT", "KICK: HARD", "SNARE", "SNARE, LO-FI", "BASS: SYNTH", "LEAD, SYNTH")
 
 
-def write_grid_cache(directory: Path, *, sample_count: int = CACHED_SAMPLE_COUNT) -> GridCache:
+def write_grid_cache(
+    directory: Path, *, sample_count: int = CACHED_SAMPLE_COUNT, view_count: int = VIEW_COUNT
+) -> GridCache:
     """A small cache whose grids say which of six sounds a sample is, plus a little noise per view."""
     generator = np.random.default_rng(0)
-    grids = np.zeros((sample_count, 1 + VIEW_COUNT, BAND_COUNT, TIME_COLUMNS), dtype=np.float16)
-    durations = np.zeros((sample_count, 1 + VIEW_COUNT), dtype=np.float32)
+    grids = np.zeros((sample_count, 1 + view_count, BAND_COUNT, TIME_COLUMNS), dtype=np.float16)
+    durations = np.zeros((sample_count, 1 + view_count), dtype=np.float32)
     for position in range(sample_count):
         kind = position % len(LABELS)
         pattern = np.zeros((BAND_COUNT, TIME_COLUMNS))
         pattern[kind * 2 : kind * 2 + 2] = 1.0
         # What tells one sample from another of its kind stays the same across its views.
         own = generator.normal(0.0, 0.2, pattern.shape)
-        for view in range(1 + VIEW_COUNT):
+        for view in range(1 + view_count):
             grids[position, view] = np.clip(pattern + own + generator.normal(0.0, 0.02, pattern.shape), 0.0, 1.0)
             durations[position, view] = float(kind) / len(LABELS)
     directory.mkdir(parents=True, exist_ok=True)
@@ -107,7 +109,7 @@ def write_grid_cache(directory: Path, *, sample_count: int = CACHED_SAMPLE_COUNT
         band_count=BAND_COUNT,
         time_columns=TIME_COLUMNS,
         sample_count=sample_count,
-        view_count=VIEW_COUNT,
+        view_count=view_count,
         view_range_semitones=12.0,
         random_seed=0,
     )
@@ -115,9 +117,9 @@ def write_grid_cache(directory: Path, *, sample_count: int = CACHED_SAMPLE_COUNT
     return open_grid_cache(directory)
 
 
-def synthetic_corpus(directory: Path, *, labeled_share: int = 2) -> DescriptorCorpus:
+def synthetic_corpus(directory: Path, *, labeled_share: int = 2, view_count: int = VIEW_COUNT) -> DescriptorCorpus:
     """The cache beside a teacher that already separates the six sounds, and a label on every `labeled_share`-th sample."""
-    cache = write_grid_cache(directory)
+    cache = write_grid_cache(directory, view_count=view_count)
     teacher = np.zeros((cache.sample_count, TEACHER_SIZE), dtype=np.float32)
     labels: list[SampleLabel] = []
     label_position = np.full(cache.sample_count, NO_LABEL, dtype=np.int64)

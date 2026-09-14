@@ -2,20 +2,24 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import Connection, create_engine, func, inspect, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
+from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.curation import CURATION_SCHEMA
 from samplecore.storage.database import (
     SCHEMA_LOCK_KEY,
     checkout_read_only,
+    chunks,
     connect,
     connect_for_curation,
     create_pooled_engine,
     create_schema,
+    module,
 )
 
 EXPECTED_TABLES = frozenset(
@@ -101,7 +105,21 @@ def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alo
         connection.close()
 
     assert catalog_tables == set()
-    assert curation_tables == {"sample_annotation"}
+    assert curation_tables == {"sample_annotation", "tag_rank"}
+
+
+def test_a_curation_connection_waits_for_the_schema_claim(connection: Connection, _database_url: str) -> None:
+    """Workers starting together each prepare the curation schema, one after another.
+
+    The other run asks with a short lock timeout, so the test reports the wait instead of blocking on it.
+    """
+    impatient_url = make_url(_database_url).update_query_dict({"options": "-c lock_timeout=200"})
+    connection.execute(select(func.pg_advisory_xact_lock(SCHEMA_LOCK_KEY)))
+    try:
+        with pytest.raises(DBAPIError, match="lock timeout"):
+            connect_for_curation(impatient_url.render_as_string(hide_password=False))
+    finally:
+        connection.rollback()
 
 
 def test_creating_the_schema_holds_a_claim_no_other_run_can_take(connection: Connection, _database_url: str) -> None:
@@ -132,5 +150,61 @@ def test_a_pooled_checkout_refuses_a_write_on_every_use(connection: Connection, 
                     checked_out.execute(text("INSERT INTO sample_playback_rate (sample_hash, rate) VALUES ('a', 1)"))
             finally:
                 checked_out.close()
+    finally:
+        engine.dispose()
+
+
+def _module_row(filename: str) -> dict[str, object]:
+    return {
+        "hash": "a" * 64,
+        "filename": filename,
+        "tracker": TrackerFormat.XM.value,
+        "title": "",
+        "channel_count": 1,
+        "pattern_count": 1,
+        "instrument_count": 1,
+        "sample_count": 1,
+        "file_size": 1,
+        "ingested_at": datetime.now(UTC),
+    }
+
+
+@pytest.mark.parametrize("filename", ["song.xm", "100% pure.it"], ids=("plain", "a percent sign"))
+def test_a_module_filename_naming_a_file_is_stored(connection: Connection, filename: str) -> None:
+    connection.execute(module.insert().values(_module_row(filename)))
+
+    assert connection.execute(select(module.c.filename)).scalar_one() == filename
+
+
+@pytest.mark.parametrize("filename", ["folder/song.xm", "folder\\song.xm"], ids=("a slash", "a backslash"))
+def test_a_module_filename_carrying_a_directory_is_refused(connection: Connection, filename: str) -> None:
+    with pytest.raises(IntegrityError, match="module_filename_check"):
+        connection.execute(module.insert().values(_module_row(filename)))
+
+
+@pytest.mark.parametrize(
+    ("size", "expected"), [(2, [[1, 2], [3, 4], [5]]), (5, [[1, 2, 3, 4, 5]]), (9, [[1, 2, 3, 4, 5]])]
+)
+def test_chunks_cover_every_item_in_order(size: int, expected: list[list[int]]) -> None:
+    assert [list(chunk) for chunk in chunks([1, 2, 3, 4, 5], size)] == expected
+
+
+def test_a_writable_checkout_between_read_only_ones_writes_and_leaves_the_next_read_only(
+    connection: Connection, _database_url: str
+) -> None:
+    """The curation routes write through the same pool the reading routes check read-only connections out of."""
+    engine = create_pooled_engine(_database_url, pool_size=1)
+    insert_rate = text("INSERT INTO curation.tag_rank (path, rank) VALUES ('KICK', 0)")
+    try:
+        checkout_read_only(engine).close()
+        with engine.connect() as writable:
+            writable.execute(insert_rate)
+            writable.commit()
+        checked_out = checkout_read_only(engine)
+        try:
+            with pytest.raises(DBAPIError, match="read-only"):
+                checked_out.execute(text("INSERT INTO curation.tag_rank (path, rank) VALUES ('SNARE', 1)"))
+        finally:
+            checked_out.close()
     finally:
         engine.dispose()

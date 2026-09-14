@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from trackmod.schema.scalars import Rate
 
 from samplecore.models.base import FROZEN
@@ -22,19 +22,7 @@ class MorphPoint(BaseModel):
 
     first: SampleHash
     second: SampleHash
-    weight: float = Field(ge=0.0, le=1.0)
-
-    @field_validator("weight")
-    @classmethod
-    def on_the_grid(cls, weight: float) -> float:
-        """Keep the weight to the grid of sixteenths.
-
-        Raises:
-            ValueError: the weight lies between two steps of the grid.
-        """
-        if not (weight * MORPH_WEIGHT_STEPS).is_integer():
-            raise ValueError(f"a morph weight is a multiple of 1/{MORPH_WEIGHT_STEPS}, got {weight}")
-        return weight
+    weight: float = Field(ge=0.0, le=1.0, multiple_of=1 / MORPH_WEIGHT_STEPS)
 
     @property
     def step(self) -> int:

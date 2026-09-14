@@ -8,22 +8,34 @@ import pytest
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import make_url
 
+from samplecore.config import ConfigurationError, load_config
 from samplecore.storage.curation import curation_metadata
 from samplecore.storage.database import connect, metadata
 
 SERVER_URL_VARIABLE: Final[str] = "SAMPLELIBRARY_TEST_DATABASE_URL"
-DEFAULT_SERVER_URL: Final[str] = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_test"
+TEST_DATABASE_NAME: Final[str] = "samplelibrary_test"
+DEFAULT_SERVER_URL: Final[str] = f"postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/{TEST_DATABASE_NAME}"
 
 
 @pytest.fixture(scope="session")
 def _server_url() -> str:
-    """A local Postgres server to run the suite against, overridable for a server reachable elsewhere.
+    """The Postgres server the suite runs against, and the database on it the suite starts from.
 
-    The database this URL names is only ever connected to in order to create and drop the
-    per-worker databases below, so it needs to exist but stays empty. The role it authenticates as
-    needs ``CREATEDB``.
+    ``SAMPLELIBRARY_TEST_DATABASE_URL`` names it outright; otherwise the server the configuration
+    names is used, under the ``samplelibrary_test`` database `just database` creates, so a library
+    set up on another port is tested on that port; with no configuration to read, a local server
+    on the default port. The database this URL names is only ever connected to in order to create
+    and drop the per-worker databases below, so it needs to exist but stays empty. The role it
+    authenticates as needs ``CREATEDB``.
     """
-    return os.environ.get(SERVER_URL_VARIABLE, DEFAULT_SERVER_URL)
+    named = os.environ.get(SERVER_URL_VARIABLE)
+    if named:
+        return named
+    try:
+        configured = load_config().database_url
+    except ConfigurationError:
+        return DEFAULT_SERVER_URL
+    return make_url(configured).set(database=TEST_DATABASE_NAME).render_as_string(hide_password=False)
 
 
 @pytest.fixture(scope="session")

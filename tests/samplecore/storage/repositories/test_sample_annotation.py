@@ -8,6 +8,7 @@ from sqlalchemy import Connection
 from sqlalchemy.exc import IntegrityError
 
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.curation import sample_annotation
 from samplecore.storage.repositories import sample_annotation as sample_annotation_repository
@@ -60,7 +61,7 @@ def test_an_annotation_round_trips_with_the_occurrence_it_was_anchored_to(
     repository = PostgresSampleAnnotationRepository(connection)
     annotation = _annotation(sample_hash_a, label="warm pad", rating=5, favorite=True)
 
-    repository.replace_many((annotation,))
+    repository.upsert_many((annotation,))
 
     assert repository.get(sample_hash_a) == annotation
 
@@ -80,7 +81,7 @@ def test_each_decision_a_person_can_record_alone_round_trips(
     repository = PostgresSampleAnnotationRepository(connection)
     annotation = _annotation(sample_hash_a, **decision)  # type: ignore[arg-type]
 
-    repository.replace_many((annotation,))
+    repository.upsert_many((annotation,))
 
     assert repository.get(sample_hash_a) == annotation
 
@@ -91,7 +92,7 @@ def test_an_annotation_is_kept_for_a_sample_the_catalog_does_not_hold(
     """No foreign key reaches the catalog, which lets a decision outlive the sample it names."""
     repository = PostgresSampleAnnotationRepository(connection)
 
-    repository.replace_many((_annotation(sample_hash_a, label="vocal chop"),))
+    repository.upsert_many((_annotation(sample_hash_a, label="vocal chop"),))
 
     assert repository.count() == 1
 
@@ -101,9 +102,9 @@ def test_writing_again_replaces_every_decision_including_the_ones_left_empty(
 ) -> None:
     """A write says what a sample carries from now on, so a decision left out is a decision undone."""
     repository = PostgresSampleAnnotationRepository(connection)
-    repository.replace_many((_annotation(sample_hash_a, label="lead", rating=5, favorite=True),))
+    repository.upsert_many((_annotation(sample_hash_a, label="lead", rating=5, favorite=True),))
 
-    repository.replace_many((_annotation(sample_hash_a, label="pluck"),))
+    repository.upsert_many((_annotation(sample_hash_a, label="pluck"),))
 
     stored = repository.get(sample_hash_a)
     assert stored is not None
@@ -134,7 +135,7 @@ def test_annotating_a_group_writes_one_row_per_member(
 ) -> None:
     repository = PostgresSampleAnnotationRepository(connection)
 
-    repository.replace_many(
+    repository.upsert_many(
         (
             _annotation(sample_hash_a, label="snare", source=AnnotationSource.EQUIVALENCE_CLASS),
             _annotation(sample_hash_b, label="snare", source=AnnotationSource.EQUIVALENCE_CLASS),
@@ -152,7 +153,7 @@ def test_annotations_by_hash_reports_only_the_hashes_carrying_one(
     connection: Connection, sample_hash_a: str, sample_hash_b: str
 ) -> None:
     repository = PostgresSampleAnnotationRepository(connection)
-    repository.replace_many((_annotation(sample_hash_a, label="kick"),))
+    repository.upsert_many((_annotation(sample_hash_a, label="kick"),))
 
     assert list(repository.annotations_by_hash([sample_hash_a, sample_hash_b])) == [sample_hash_a]
 
@@ -166,7 +167,7 @@ def test_annotations_by_hash_reads_more_hashes_than_one_statement_may_bind(
 ) -> None:
     monkeypatch.setattr(sample_annotation_repository, "HASH_CHUNK_SIZE", 1)
     repository = PostgresSampleAnnotationRepository(connection)
-    repository.replace_many((_annotation(sample_hash_a, label="kick"), _annotation(sample_hash_b, label="hat")))
+    repository.upsert_many((_annotation(sample_hash_a, label="kick"), _annotation(sample_hash_b, label="hat")))
 
     stored = repository.annotations_by_hash([sample_hash_a, sample_hash_b])
     assert {hash_: item.label for hash_, item in stored.items()} == {
@@ -178,7 +179,7 @@ def test_annotations_by_hash_reads_more_hashes_than_one_statement_may_bind(
 def test_writing_no_annotations_leaves_the_table_alone(connection: Connection) -> None:
     repository = PostgresSampleAnnotationRepository(connection)
 
-    repository.replace_many(())
+    repository.upsert_many(())
 
     assert repository.count() == 0
 
@@ -187,7 +188,7 @@ def test_deleting_reports_how_many_annotations_actually_went(
     connection: Connection, sample_hash_a: str, sample_hash_b: str
 ) -> None:
     repository = PostgresSampleAnnotationRepository(connection)
-    repository.replace_many((_annotation(sample_hash_a, label="kick"),))
+    repository.upsert_many((_annotation(sample_hash_a, label="kick"),))
 
     assert repository.delete_many((sample_hash_a, sample_hash_b)) == 1
     assert repository.get(sample_hash_a) is None
@@ -201,7 +202,7 @@ def test_the_vocabulary_offers_the_most_used_wording_first(
     connection: Connection, sample_hash_a: str, sample_hash_b: str
 ) -> None:
     repository = PostgresSampleAnnotationRepository(connection)
-    repository.replace_many(
+    repository.upsert_many(
         (
             _annotation(sample_hash_a, label="bass"),
             _annotation(sample_hash_b, label="bass"),
@@ -217,7 +218,7 @@ def test_the_vocabulary_passes_over_a_sample_carrying_no_wording(
 ) -> None:
     """A rating on its own says nothing about what to call a sample, so it offers no wording back."""
     repository = PostgresSampleAnnotationRepository(connection)
-    repository.replace_many(
+    repository.upsert_many(
         (
             _annotation(sample_hash_a, label="bass"),
             _annotation(sample_hash_b, rating=5, favorite=True),
@@ -229,3 +230,41 @@ def test_the_vocabulary_passes_over_a_sample_carrying_no_wording(
 
 def test_the_vocabulary_of_an_untouched_library_is_empty(connection: Connection) -> None:
     assert PostgresSampleAnnotationRepository(connection).vocabulary() == ()
+
+
+def _many_annotations(count: int) -> tuple[SampleAnnotation, ...]:
+    return tuple(_annotation(format(index, "064x"), rating=1 + index % 5) for index in range(count))
+
+
+def test_writing_more_annotations_than_one_statement_may_bind_keeps_them_all(connection: Connection) -> None:
+    repository = PostgresSampleAnnotationRepository(connection)
+    count = sample_annotation_repository.ANNOTATION_ROWS_PER_STATEMENT + 43
+
+    repository.upsert_many(_many_annotations(count))
+
+    assert repository.count() == count
+
+
+def test_deleting_more_hashes_than_one_statement_may_bind_removes_them_all(connection: Connection) -> None:
+    repository = PostgresSampleAnnotationRepository(connection)
+    written = _many_annotations(30)
+    repository.upsert_many(written)
+    far_more_hashes = tuple(format(index, "064x") for index in range(sample_annotation_repository.HASH_CHUNK_SIZE + 5))
+
+    assert repository.delete_many(far_more_hashes) == len(written)
+
+
+def test_a_write_naming_one_sample_twice_is_refused(connection: Connection, sample_hash_a: str) -> None:
+    with pytest.raises(ValueError, match=sample_hash_a):
+        PostgresSampleAnnotationRepository(connection).upsert_many(
+            (_annotation(sample_hash_a, label="kick"), _annotation(sample_hash_a, label="snare"))
+        )
+
+
+def test_labels_of_samples_the_catalog_holds_are_the_ones_listed(
+    connection: Connection, stored_sample: Sample, sample_hash_b: str
+) -> None:
+    repository = PostgresSampleAnnotationRepository(connection)
+    repository.upsert_many((_annotation(stored_sample.hash, label="kick"), _annotation(sample_hash_b, label="orphan")))
+
+    assert repository.cataloged_labels() == {stored_sample.hash: "KICK"}

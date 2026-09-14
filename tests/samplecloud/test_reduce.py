@@ -8,12 +8,12 @@ import pytest
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
-from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
+from samplecloud.reduce import MINIMUM_SAMPLES_FOR_REDUCTION, CloudSummary, reduce_and_persist_coordinates
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
 from samplecore.models.sample import Sample
-from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository
+from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository, PostgresCloudPromotionRepository
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
@@ -70,13 +70,36 @@ def test_reduce_also_persists_a_standardized_feature_vector_per_sample(connectio
     assert all(len(feature.vector) == FEATURE_DIMENSIONS for feature in features)
 
 
-def test_fewer_than_two_feature_vectors_is_a_no_op(connection: Connection) -> None:
-    experiment_id = _seed_samples_and_features(connection, count=1)
+@pytest.mark.parametrize("count", range(1, MINIMUM_SAMPLES_FOR_REDUCTION))
+def test_fewer_vectors_than_a_layout_needs_leave_the_cloud_and_its_record_alone(
+    count: int, connection: Connection
+) -> None:
+    experiment_id = _seed_samples_and_features(connection, count=count)
 
     summary = reduce_and_persist_coordinates(connection, experiment_id)
 
     assert summary == CloudSummary(samples_reduced=0)
     assert PostgresCloudCoordinateRepository(connection).list_all() == ()
+    assert PostgresCloudPromotionRepository(connection).current() is None
+
+
+@pytest.mark.parametrize("count", range(MINIMUM_SAMPLES_FOR_REDUCTION, MINIMUM_SAMPLES_FOR_REDUCTION + 5))
+def test_the_smallest_experiments_a_layout_accepts_are_laid_out(count: int, connection: Connection) -> None:
+    experiment_id = _seed_samples_and_features(connection, count=count)
+
+    summary = reduce_and_persist_coordinates(connection, experiment_id)
+
+    assert summary == CloudSummary(samples_reduced=count)
+
+
+def test_a_layout_records_its_experiment_as_the_one_the_cloud_shows(connection: Connection) -> None:
+    experiment_id = _seed_samples_and_features(connection)
+
+    reduce_and_persist_coordinates(connection, experiment_id)
+
+    promotion = PostgresCloudPromotionRepository(connection).current()
+    assert promotion is not None
+    assert promotion.experiment_id == experiment_id
 
 
 def test_an_experiment_with_no_feature_vectors_yet_is_a_no_op(connection: Connection) -> None:
@@ -102,6 +125,7 @@ def test_a_failure_partway_through_leaves_nothing_committed(
 
     assert PostgresCloudCoordinateRepository(connection).list_all() == ()
     assert PostgresSampleSpectralFeatureRepository(connection).list_all() == ()
+    assert PostgresCloudPromotionRepository(connection).current() is None
 
 
 def test_a_second_run_replaces_rather_than_duplicates_coordinates(connection: Connection) -> None:

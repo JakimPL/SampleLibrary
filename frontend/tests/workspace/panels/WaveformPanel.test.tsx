@@ -136,6 +136,9 @@ describe("WaveformPanel", () => {
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
+        await waitFor(() => {
+            expect(instances).not.toHaveLength(0);
+        });
 
         fireEvent.change(screen.getByLabelText("Rate"), { target: { value: "8363" } });
 

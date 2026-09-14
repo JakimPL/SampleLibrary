@@ -7,7 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplecore.waveform import triangular_weights
-from samplemorph.canonicalizers.common import analysis_transform, prepare_mono, restore_spectrogram, to_sound_image
+from samplemorph.canonicalizers.common import PreparedMono, analysis_transform, restore_spectrogram, to_sound_image
 from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, LogFrequencyGeometry, log_frequency_geometry
 from samplemorph.images import AnalysisSpectrogram, SoundImage
 
@@ -32,8 +32,7 @@ class LogFrequencyCanonicalizer:
     def geometry(self) -> LogFrequencyGeometry:
         return self._geometry
 
-    def canonicalize(self, waveform: NDArray[np.float64]) -> SoundImage:
-        mono = prepare_mono(waveform)
+    def canonicalize(self, mono: PreparedMono) -> SoundImage:
         linear = np.abs(analysis_transform(mono, geometry=self._geometry))
         return to_sound_image(
             _onto_log_axis(linear, geometry=self._geometry), geometry=self._geometry, frame_count=mono.shape[0]
@@ -48,6 +47,7 @@ def _onto_log_axis(linear: NDArray[np.float64], *, geometry: LogFrequencyGeometr
     return bands
 
 
+@cache
 def band_weights(geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
     """Weights averaging the linear Fourier bins each logarithmic band covers.
 
@@ -57,16 +57,19 @@ def band_weights(geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
     where the analysis found it.
 
     Bands narrower than one bin widen to that much, so every band draws on the grid it is read
-    from. Weights fall linearly from each band's center to its edge and sum to one per band.
+    from. Weights fall linearly from each band's center to its edge and sum to one per band. They
+    are computed once per geometry and shared read-only.
     """
     band_frequencies = geometry.band_frequencies
     step = 2.0 ** (1.0 / geometry.bins_per_octave)
     bin_spacing = geometry.analysis_rate_hz / geometry.fft_length
-    return triangular_weights(
+    weights = triangular_weights(
         source_positions=geometry.linear_frequencies,
         target_positions=band_frequencies,
         half_widths=np.maximum(band_frequencies * (step - 1.0 / step) / 2.0, bin_spacing),
     )
+    weights.setflags(write=False)
+    return weights
 
 
 @cache

@@ -10,14 +10,11 @@ from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig
 from torch import Tensor
 
 from samplecore.labeling.ranking import ndcg_per_query, nearest_first
-from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
+from samplemorph.descriptors.grid_descriptor import GridDescriptor
 from samplemorph.training.descriptor_data import NO_LABEL
-from samplemorph.training.descriptor_losses import (
-    DescriptorLossParts,
-    DescriptorLossWeights,
-    DescriptorTargets,
-    descriptor_loss,
-)
+from samplemorph.training.descriptor_losses import DescriptorLossParts, DescriptorTargets, descriptor_loss
+from samplemorph.training.descriptor_settings import DescriptorLossWeights
 from samplemorph.training.metrics import (
     DESCRIPTOR_TRAINING_DISTILLATION,
     DESCRIPTOR_TRAINING_LABELS,

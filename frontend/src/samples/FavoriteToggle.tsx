@@ -8,7 +8,6 @@ const EMPTY_HEART = "♡";
 
 interface FavoriteToggleProps {
     readonly favorite: boolean;
-    readonly isSaving: boolean;
     readonly onFavoriteChange: (favorite: boolean) => void;
 }
 
@@ -17,7 +16,7 @@ interface FavoriteToggleProps {
  * Pointing at the heart fills it, showing what the click would leave behind, the same way the stars
  * beside it answer to a pointer.
  */
-export function FavoriteToggle({ favorite, isSaving, onFavoriteChange }: FavoriteToggleProps): ReactElement {
+export function FavoriteToggle({ favorite, onFavoriteChange }: FavoriteToggleProps): ReactElement {
     const [isPointedAt, setIsPointedAt] = useState(false);
     const isShownFilled = favorite || isPointedAt;
 
@@ -25,7 +24,6 @@ export function FavoriteToggle({ favorite, isSaving, onFavoriteChange }: Favorit
         <button
             type="button"
             className={classNames("favorite-toggle", isShownFilled && "is-filled")}
-            disabled={isSaving}
             aria-label="Favorite"
             aria-pressed={favorite}
             onMouseEnter={() => {

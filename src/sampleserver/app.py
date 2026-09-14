@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
 from samplecore.storage.database import connect_for_curation, create_pooled_engine
+from sampleserver.frontend import FrontendMount
 from sampleserver.inference_client import build_inference_client
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers import cloud, curation, modules, morph, samples, stats
@@ -20,7 +21,9 @@ GZIP_COMPRESSION_LEVEL: Final[int] = 1
 READ_POOL_SIZE: Final[int] = 5
 
 
-def create_app(database_url: str, library_root: Path, inference_url: str) -> FastAPI:
+def create_app(
+    database_url: str, library_root: Path, inference_url: str, *, frontend_directory: Path | None
+) -> FastAPI:
     """Build the FastAPI app serving the catalog at the given database URL.
 
     Every route reads the catalog through a pooled connection Postgres itself refuses a write on. The
@@ -65,6 +68,9 @@ def create_app(database_url: str, library_root: Path, inference_url: str) -> Fas
             application.state.engine.dispose()
 
     application = FastAPI(
+        openapi_url=f"{API_PREFIX}/openapi.json",
+        docs_url=f"{API_PREFIX}/docs",
+        redoc_url=f"{API_PREFIX}/redoc",
         title="SampleLibrary",
         description="Read access to the sample catalog, with hand annotation and morphs between samples.",
         lifespan=lifespan,
@@ -78,4 +84,6 @@ def create_app(database_url: str, library_root: Path, inference_url: str) -> Fas
     application.state.suggestions_cache = RevisionedJsonCache()
     for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.router, morph.router):
         application.include_router(api_router, prefix=API_PREFIX)
+    if frontend_directory is not None:
+        application.router.routes.append(FrontendMount(frontend_directory, api_prefix=API_PREFIX))
     return application

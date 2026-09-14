@@ -7,6 +7,7 @@ import pytest
 
 from samplecore.waveform import resample_by_semitones
 from samplemorph.canonicalizers import Canonicalizer
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.geometry import Anchor
 from samplemorph.images import SoundImage
 from samplemorph.registries import CANONICALIZER_REGISTRY
@@ -48,7 +49,7 @@ def test_no_anchor_keeps_the_picture_where_the_analysis_read_it(case: AnchorCase
     """Every band holds its own frequency, the grid is as tall as the analysis, and nothing is recorded as moved."""
     tone = harmonic_tone(TEST_FRAME_COUNT, frequency=REFERENCE_FREQUENCY_HZ, weights=SECOND_HARMONIC_LOUDEST)
 
-    image = case.build(Anchor.NONE).canonicalize(tone)
+    image = case.build(Anchor.NONE).canonicalize(prepare_mono(tone))
 
     geometry = image.geometry
     loudest_band = int(np.argmax(image.grid.mean(axis=1)))
@@ -65,8 +66,8 @@ def test_the_loudest_anchor_follows_the_strongest_partial_and_the_fundamental_an
     """A tone whose second harmonic is loudest is anchored an octave apart by the two rules."""
     tone = harmonic_tone(TEST_FRAME_COUNT, frequency=REFERENCE_FREQUENCY_HZ, weights=SECOND_HARMONIC_LOUDEST)
 
-    by_loudest = case.build(Anchor.LOUDEST).canonicalize(tone)
-    by_fundamental = case.build(Anchor.FUNDAMENTAL).canonicalize(tone)
+    by_loudest = case.build(Anchor.LOUDEST).canonicalize(prepare_mono(tone))
+    by_fundamental = case.build(Anchor.FUNDAMENTAL).canonicalize(prepare_mono(tone))
 
     assert_anchored_at(by_loudest, 2 * REFERENCE_FREQUENCY_HZ)
     assert_anchored_at(by_fundamental, REFERENCE_FREQUENCY_HZ)
@@ -77,7 +78,7 @@ def test_the_fundamental_anchor_finds_a_series_whose_fundamental_is_silent(case:
     """The harmonics alone say where the series is built, an octave below the reference here."""
     tone = harmonic_tone(TEST_FRAME_COUNT, frequency=REFERENCE_FREQUENCY_HZ / 2, weights=MISSING_FUNDAMENTAL)
 
-    image = case.build(Anchor.FUNDAMENTAL).canonicalize(tone)
+    image = case.build(Anchor.FUNDAMENTAL).canonicalize(prepare_mono(tone))
 
     assert_anchored_at(image, REFERENCE_FREQUENCY_HZ / 2)
 
@@ -87,8 +88,8 @@ def test_the_fundamental_anchor_moves_with_a_retuning() -> None:
     canonicalizer = CANONICALIZER_REGISTRY["log_frequency"](anchor=Anchor.FUNDAMENTAL)
     tone = harmonic_tone(4 * TEST_FRAME_COUNT, frequency=REFERENCE_FREQUENCY_HZ, weights=SECOND_HARMONIC_LOUDEST)
 
-    stored = canonicalizer.canonicalize(tone)
-    retuned = canonicalizer.canonicalize(resample_by_semitones(tone, semitones=RETUNING_SEMITONES))
+    stored = canonicalizer.canonicalize(prepare_mono(tone))
+    retuned = canonicalizer.canonicalize(prepare_mono(resample_by_semitones(tone, semitones=RETUNING_SEMITONES)))
 
     assert retuned.conditioners.translation_semitones - stored.conditioners.translation_semitones == pytest.approx(
         RETUNING_SEMITONES, abs=TOLERANCE_SEMITONES
@@ -98,7 +99,7 @@ def test_the_fundamental_anchor_moves_with_a_retuning() -> None:
 
 @pytest.mark.parametrize("case", ANCHOR_CASES, ids=lambda case: case.name)
 def test_the_fundamental_anchor_takes_a_noise_burst_through_the_same_path(case: AnchorCase) -> None:
-    image = case.build(Anchor.FUNDAMENTAL).canonicalize(noise_burst(TEST_FRAME_COUNT, seed=2))
+    image = case.build(Anchor.FUNDAMENTAL).canonicalize(prepare_mono(noise_burst(TEST_FRAME_COUNT, seed=2)))
 
     assert np.all(np.isfinite(image.grid))
     assert image.grid.max() <= 1.0

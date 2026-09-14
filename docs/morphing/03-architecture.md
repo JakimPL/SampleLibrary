@@ -23,7 +23,8 @@ The new package owns codes and audio synthesis. Both feed the same tables.
 
 ## Registering a fifth package
 
-More than one file has to learn about it, and `just lint` fails on any of them being missed:
+More than one file has to learn about it. `just lint` catches a package missing from the import-linter
+settings; the rest rely on review:
 
 - `pyproject.toml`: `[project.optional-dependencies] morph`, `[tool.importlinter] root_packages`,
   a new contract (below), `[tool.isort] known_first_party`,
@@ -36,8 +37,8 @@ More than one file has to learn about it, and `just lint` fails on any of them b
 
 ### The import-linter contracts
 
-Three contracts exist today. `samplecore` may have no dependents among its peers; `sampleserver`
-may import neither `sampleextract` nor `samplecloud`; `sampleextract` and `samplecloud` are
+Three contracts existed when this package was proposed, and `pyproject.toml` holds nine now.
+`samplecore` may have no dependents among its peers; `sampleserver` may import neither `sampleextract` nor `samplecloud`; `sampleextract` and `samplecloud` are
 independent of each other. Guideline 11 under Shared Ownership calls these load-bearing rather than
 advisory.
 
@@ -62,14 +63,15 @@ codecs therefore **probe availability at runtime and degrade gracefully**, which
 Shared Ownership guideline 10 already requires for a heavy third-party boundary. A server without
 torch installed serves everything else and reports the morph route as unavailable.
 
-`samplecloud` and `samplemorph` are left free to import each other, because a codec adapting itself
-to `FeatureExtractor` is the point of the design. If that turns out to invite trouble, the adapter
-moves to `samplecloud` and a third independence contract goes in.
+`samplecloud` and `samplemorph` were left free to import each other, because a codec adapting itself
+to `FeatureExtractor` is the point of the design. The contracts settled it one way since:
+`samplemorph` never imports `samplecloud`, and the cloud's `learned` backend imports the morph
+pipeline's descriptor inside its factory.
 
 ## The four swappable axes
 
 Each is a `Protocol` in its own module, with a registry mirroring `BACKEND_REGISTRY` in
-`src/samplecloud/cli.py` — a `Final` dict from name to factory, whose keys feed argparse directly as
+`src/samplecloud/registries.py` — a `Final` dict from name to factory, whose keys feed argparse directly as
 `choices=sorted(REGISTRY)`. Adding an approach means adding a class and one registry entry.
 
 ### `Canonicalizer` — waveform ↔ sound image
@@ -123,9 +125,9 @@ The catalog already has the shape this needs.
   with a `COPY`-based bulk insert. Two experiments hold independent vectors for the same sample, so
   a codec and a descriptor coexist without collision.
 - **A run is an `Experiment` row.** `backend_name`, a human `label`, and `params`.
-- **`Experiment.params` is plumbed and unused.** `resolve_experiment` accepts it, the repository
-  round-trips it as structured JSON, and no caller has ever populated it. It is the natural home for
-  a codec's configuration and the identity of the checkpoint that produced the vectors.
+- **`Experiment.params` holds an experiment's recipe.** The repository round-trips it as structured
+  JSON, and `samplecloud.experiments.EmbeddingRecipe` writes the backend's reading and a learned
+  descriptor's name into it, which is what a resumed extraction follows.
 - **A codec adapted to `FeatureExtractor` gets the cloud for free.** `extract_features` and
   `reduce_and_persist_coordinates` take the extractor as an injected parameter and care about
   nothing else, so `samplelibrary cloud embed --backend <codec>` places a learned latent in the

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from samplemorph.model_paths import restorer_path
 from samplemorph.registries import RESTORED_VOCODER_NAME, VOCODER_REGISTRY
 from samplemorph.vocoders import Vocoder
 
@@ -22,7 +23,7 @@ def vocoder_named(name: str, *, library_root: Path, restorer_name: str, device: 
         import torch
 
         # pylint: disable-next=import-outside-toplevel
-        from samplemorph.vocoders.restored import load_restorer, restorer_path
+        from samplemorph.vocoders.restored import load_restorer
 
         return load_restorer(restorer_path(library_root, name=restorer_name), device=torch.device(device))
 

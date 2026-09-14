@@ -7,7 +7,7 @@ from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.signal import resample_poly
+from scipy.signal import fftconvolve, resample_poly
 from trackmod.core.samples.depth import BitDepth
 
 GAIN_VARIANT_RMS_ERROR_CEILING: Final[float] = 0.02
@@ -22,11 +22,11 @@ GAIN_UNITY_TOLERANCE: Final[float] = 0.05
 TRAILING_SILENCE_THRESHOLD: Final[float] = 1.0 / BitDepth.EIGHT.scale
 
 # How far two independently trailing-trimmed waveforms' lengths may still disagree and be treated as
-# the same content -- tight, since candidate generation's own MAX_TRAILING_TRIM_FRAMES already
-# absorbed the real silent-tail difference; this only absorbs noise in exactly where each waveform's
-# own trim boundary landed.
+# the same content: the waveforms are compared after trimming, so this only absorbs noise in exactly
+# where each waveform's own trim boundary landed.
 MAX_TRIM_MISMATCH_FRAMES: Final[int] = 32
 
+MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON: Final[int] = 64
 MAX_RESAMPLE_DENOMINATOR: Final[int] = 200
 MAX_TRIM_LAG_FRAMES: Final[int] = 64
 MAX_COMPARISON_FRAMES: Final[int] = 20_000
@@ -108,12 +108,15 @@ def score_resampled_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray
     computed on mean-centered, self-normalized signals), so this already recognizes a pair related by
     resampling and amplitude at once without any gain compensation of its own; the best-fitting gain
     is still recovered and reported in ``evidence``, purely as corroborating detail. Returns None
-    when every offset in the search window leaves one of the compared windows silent (zero
+    when the shorter waveform holds fewer than ``MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON`` frames, too
+    few for a rate ratio to mean anything, and when every offset in the search window leaves one of the compared windows silent (zero
     variance), since Pearson correlation is undefined there rather than meaningfully zero. Clamped to
     at most 1.0, since floating-point rounding on a near-perfect match can otherwise put the raw
     correlation a fraction above its mathematical ceiling.
     """
     short, long_ = (waveform_a, waveform_b) if waveform_a.shape[0] <= waveform_b.shape[0] else (waveform_b, waveform_a)
+    if short.shape[0] < MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON:
+        return None
     ratio = Fraction(long_.shape[0], short.shape[0]).limit_denominator(MAX_RESAMPLE_DENOMINATOR)
     resampled = _match_length(resample_poly(short, up=ratio.numerator, down=ratio.denominator, axis=0), long_.shape[0])
 
@@ -197,30 +200,59 @@ def _best_aligned_correlation(
 
     Searching a small window around zero absorbs the handful of frames of trim difference two
     independent exports of the same content commonly carry, without needing either one already
-    aligned to the other.
+    aligned to the other. Every lag's correlation comes from one cross-correlation and running sums
+    over both waveforms, so the whole window costs about what a single lag's windows would.
     """
-    best: _Alignment | None = None
-    for lag in range(-max_lag, max_lag + 1):
-        windows = _aligned_windows(resampled, reference, lag=lag)
-        if windows is None:
-            continue
-
-        correlation = _pearson_correlation(*windows)
-        if correlation is not None and (best is None or correlation > best.correlation):
-            best = _Alignment(
-                correlation=correlation, lag_frames=lag, windowed_resampled=windows[0], windowed_reference=windows[1]
-            )
-
-    return best
-
-
-def _pearson_correlation(first: NDArray[np.float64], second: NDArray[np.float64]) -> float | None:
-    first_centered = first.reshape(-1)
-    first_centered = first_centered - first_centered.mean()
-    second_centered = second.reshape(-1)
-    second_centered = second_centered - second_centered.mean()
-    denominator = np.sqrt(np.sum(first_centered**2) * np.sum(second_centered**2))
-    if denominator == 0.0:
+    frame_count = resampled.shape[0]
+    reach = min(max_lag, frame_count - 1)
+    if reach < 0:
+        return None
+    lags = np.arange(-reach, reach + 1)
+    cross = sum(
+        fftconvolve(reference[:, channel], resampled[::-1, channel], mode="full")[frame_count - 1 + lags]
+        for channel in range(resampled.shape[1])
+    )
+    resampled_sums = _window_sums(resampled, lags=lags, leading=True)
+    reference_sums = _window_sums(reference, lags=lags, leading=False)
+    samples = (frame_count - np.abs(lags)) * resampled.shape[1]
+    covariance = cross - resampled_sums.total * reference_sums.total / samples
+    resampled_spread = resampled_sums.squares - resampled_sums.total**2 / samples
+    reference_spread = reference_sums.squares - reference_sums.total**2 / samples
+    denominator = np.sqrt(np.clip(resampled_spread, 0.0, None) * np.clip(reference_spread, 0.0, None))
+    defined = denominator > 0.0
+    if not defined.any():
         return None
 
-    return float(np.sum(first_centered * second_centered) / denominator)
+    correlations = np.where(defined, covariance / np.where(defined, denominator, 1.0), -np.inf)
+    best = int(np.argmax(correlations))
+    windows = _aligned_windows(resampled, reference, lag=int(lags[best]))
+    if windows is None:
+        return None
+    return _Alignment(
+        correlation=float(correlations[best]),
+        lag_frames=int(lags[best]),
+        windowed_resampled=windows[0],
+        windowed_reference=windows[1],
+    )
+
+
+@dataclass(frozen=True)
+class _WindowSums:
+    total: NDArray[np.float64]
+    squares: NDArray[np.float64]
+
+
+def _window_sums(waveform: NDArray[np.float64], *, lags: NDArray[np.int64], leading: bool) -> _WindowSums:
+    """The sum and the sum of squares of the window each lag compares, over every channel.
+
+    At a lag of L, `_aligned_windows` compares the resampled waveform's first frames against the
+    reference from frame L on, for L at or above zero, and the other way round below zero; `leading`
+    names the resampled side.
+    """
+    frame_count = waveform.shape[0]
+    totals = np.concatenate([[0.0], np.cumsum(waveform.sum(axis=1))])
+    squares = np.concatenate([[0.0], np.cumsum((waveform**2).sum(axis=1))])
+    overlap = frame_count - np.abs(lags)
+    starts = np.where(lags >= 0, 0, -lags) if leading else np.where(lags >= 0, lags, 0)
+    ends = starts + overlap
+    return _WindowSums(total=totals[ends] - totals[starts], squares=squares[ends] - squares[starts])

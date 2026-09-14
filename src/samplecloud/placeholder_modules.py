@@ -9,6 +9,7 @@ from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.models.cloud import ModuleCloudCoordinate
 from samplecore.models.module import Module
@@ -79,5 +80,5 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog=prog, description="Place every cataloged module at a placeholder coordinate.")
+    parser = command_parser(prog=prog, description="Place every cataloged module at a placeholder cloud coordinate.")
     return parser.parse_args(argv)

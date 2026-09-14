@@ -33,7 +33,7 @@ function buildSample(id: number): SampleSummary {
 }
 
 describe("useWindowedSamples", () => {
-    it("loads the first window on mount", async () => {
+    it("loads the first window on mount, a short one ending the listing", async () => {
         listSamples.mockResolvedValue({
             items: [buildSample(1), buildSample(2)],
             total: 50,
@@ -48,7 +48,7 @@ describe("useWindowedSamples", () => {
         });
         expect(result.current.items).toHaveLength(2);
         expect(result.current.total).toBe(50);
-        expect(result.current.hasMore).toBe(true);
+        expect(result.current.hasMore).toBe(false);
         expect(listSamples).toHaveBeenCalledWith({
             limit: WINDOW_PAGE_LIMIT,
             offset: 0,
@@ -58,17 +58,18 @@ describe("useWindowedSamples", () => {
     });
 
     it("appends the next window when loadMore is called", async () => {
+        const firstWindow = Array.from({ length: WINDOW_PAGE_LIMIT }, (_, index) => buildSample(index));
         listSamples.mockResolvedValueOnce({
-            items: [buildSample(1)],
-            total: 2,
+            items: firstWindow,
+            total: WINDOW_PAGE_LIMIT + 1,
             limit: WINDOW_PAGE_LIMIT,
             offset: 0,
         });
         listSamples.mockResolvedValueOnce({
-            items: [buildSample(2)],
-            total: 2,
+            items: [buildSample(WINDOW_PAGE_LIMIT)],
+            total: WINDOW_PAGE_LIMIT + 1,
             limit: WINDOW_PAGE_LIMIT,
-            offset: 1,
+            offset: WINDOW_PAGE_LIMIT,
         });
 
         const { result } = renderHook(() => useWindowedSamples(false, WHOLE_CATALOG));
@@ -81,12 +82,12 @@ describe("useWindowedSamples", () => {
         });
 
         await waitFor(() => {
-            expect(result.current.items).toHaveLength(2);
+            expect(result.current.items).toHaveLength(WINDOW_PAGE_LIMIT + 1);
         });
         expect(result.current.hasMore).toBe(false);
         expect(listSamples).toHaveBeenCalledWith({
             limit: WINDOW_PAGE_LIMIT,
-            offset: 1,
+            offset: WINDOW_PAGE_LIMIT,
             groupByEquivalence: false,
             selection: WHOLE_CATALOG,
         });
@@ -112,40 +113,96 @@ describe("useWindowedSamples", () => {
         expect(listSamples).toHaveBeenCalledTimes(1);
     });
 
-    it("restarts the window from the first page when groupByEquivalence changes", async () => {
+    it("folds near-duplicates in the app, switching grouping with nothing refetched", async () => {
+        const grouped = (id: number, classHash: string): SampleSummary => ({
+            ...buildSample(id),
+            equivalence_class_hash: classHash,
+        });
         listSamples.mockResolvedValueOnce({
-            items: [buildSample(1)],
-            total: 2,
+            items: [grouped(1, "class-x"), buildSample(2), grouped(3, "class-x")],
+            total: 3,
             limit: WINDOW_PAGE_LIMIT,
             offset: 0,
         });
         const { result, rerender } = renderHook(
             ({ groupByEquivalence }) => useWindowedSamples(groupByEquivalence, WHOLE_CATALOG),
-            {
-                initialProps: { groupByEquivalence: false },
-            },
+            { initialProps: { groupByEquivalence: false } },
         );
         await waitFor(() => {
             expect(result.current.status).toBe("ready");
         });
+        expect(result.current.items.map((row) => row.hash)).toEqual(["hash-1", "hash-2", "hash-3"]);
 
-        listSamples.mockResolvedValueOnce({
-            items: [buildSample(2)],
-            total: 1,
-            limit: WINDOW_PAGE_LIMIT,
-            offset: 0,
-        });
         rerender({ groupByEquivalence: true });
 
-        await waitFor(() => {
-            expect(result.current.items).toEqual([buildSample(2)]);
+        expect(result.current.items.map((row) => row.hash)).toEqual(["hash-1", "hash-2"]);
+        expect(result.current.groupCount).toBe(2);
+        expect(result.current.loadedCount).toBe(3);
+        expect(listSamples).toHaveBeenCalledTimes(1);
+        expect(listSamples).toHaveBeenCalledWith(expect.objectContaining({ groupByEquivalence: false }));
+    });
+
+    it("asks for the next window at the count of raw rows held, however they fold", async () => {
+        const grouped = (id: number): SampleSummary => ({ ...buildSample(id), equivalence_class_hash: "class-y" });
+        const firstWindow = Array.from({ length: WINDOW_PAGE_LIMIT }, (_, index) => grouped(index));
+        listSamples.mockResolvedValueOnce({ items: firstWindow, total: 500, limit: WINDOW_PAGE_LIMIT, offset: 0 });
+        listSamples.mockResolvedValueOnce({
+            items: [buildSample(900)],
+            total: 500,
+            limit: WINDOW_PAGE_LIMIT,
+            offset: 200,
         });
-        expect(listSamples).toHaveBeenLastCalledWith({
+        const { result } = renderHook(() => useWindowedSamples(true, WHOLE_CATALOG));
+        await waitFor(() => {
+            expect(result.current.status).toBe("ready");
+        });
+        expect(result.current.items).toHaveLength(1);
+
+        act(() => {
+            result.current.loadMore();
+        });
+
+        await waitFor(() => {
+            expect(result.current.loadedCount).toBe(WINDOW_PAGE_LIMIT + 1);
+        });
+        expect(listSamples).toHaveBeenLastCalledWith(expect.objectContaining({ offset: WINDOW_PAGE_LIMIT }));
+        expect(result.current.hasMore).toBe(false);
+    });
+
+    it("drops a window that lands after the selection moved on", async () => {
+        let resolveStale: (page: unknown) => void = () => undefined;
+        listSamples.mockResolvedValueOnce({
+            items: Array.from({ length: WINDOW_PAGE_LIMIT }, (_, index) => buildSample(index + 10)),
+            total: 900,
             limit: WINDOW_PAGE_LIMIT,
             offset: 0,
-            groupByEquivalence: true,
-            selection: WHOLE_CATALOG,
         });
+        const { result, rerender } = renderHook(({ selection }) => useWindowedSamples(false, selection), {
+            initialProps: { selection: WHOLE_CATALOG },
+        });
+        await waitFor(() => {
+            expect(result.current.status).toBe("ready");
+        });
+        listSamples.mockReturnValueOnce(
+            new Promise((resolve) => {
+                resolveStale = resolve;
+            }),
+        );
+        listSamples.mockResolvedValueOnce({ items: [buildSample(5)], total: 1, limit: WINDOW_PAGE_LIMIT, offset: 0 });
+        act(() => {
+            result.current.loadMore();
+        });
+
+        rerender({ selection: { ...WHOLE_CATALOG, favoritesOnly: true } });
+        await waitFor(() => {
+            expect(result.current.items.map((row) => row.hash)).toEqual(["hash-5"]);
+        });
+        await act(async () => {
+            resolveStale({ items: [buildSample(2)], total: 900, limit: WINDOW_PAGE_LIMIT, offset: 1 });
+            await Promise.resolve();
+        });
+
+        expect(result.current.items.map((row) => row.hash)).toEqual(["hash-5"]);
     });
 
     it("restarts the window when the selection narrows, since it reaches the whole catalog", async () => {

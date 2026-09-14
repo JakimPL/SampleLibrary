@@ -17,6 +17,8 @@ from samplecore.models.sample_properties import (
     XMSampleProperties,
 )
 from samplecore.storage.database import (
+    HASH_CHUNK_SIZE,
+    chunks,
     it_sample_properties,
     module,
     s3m_sample_properties,
@@ -72,6 +74,8 @@ class SamplePropertiesRepository(Protocol):
 
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]: ...
 
+    def list_for_samples(self, sample_hashes: tuple[str, ...]) -> tuple[TrackerSampleProperties, ...]: ...
+
     def cataloged_slots(self, module_id: int) -> frozenset[tuple[int, int]]: ...
 
 
@@ -101,6 +105,14 @@ class PostgresSamplePropertiesRepository:
 
     def list_for_sample(self, sample_hash: str) -> tuple[TrackerSampleProperties, ...]:
         return self._list_by(sample_properties.c.sample_hash == sample_hash)
+
+    def list_for_samples(self, sample_hashes: tuple[str, ...]) -> tuple[TrackerSampleProperties, ...]:
+        """Every occurrence of any of ``sample_hashes``, asked for in parameter-sized chunks."""
+        return tuple(
+            properties
+            for chunk in chunks(sample_hashes, HASH_CHUNK_SIZE)
+            for properties in self._list_by(sample_properties.c.sample_hash.in_(chunk))
+        )
 
     def cataloged_slots(self, module_id: int) -> frozenset[tuple[int, int]]:
         """Every ``(instrument_index, sample_slot)`` pair this module actually holds an occurrence for.

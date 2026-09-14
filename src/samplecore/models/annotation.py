@@ -2,17 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum, unique
-from typing import Annotated, Self
+from typing import Annotated, Final, Self
 
-from pydantic import BaseModel, StringConstraints, model_validator
+from pydantic import AfterValidator, BaseModel, model_validator
 
+from samplecore.labeling.labels import canonical_label
 from samplecore.models.base import FROZEN
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.scalars import Rating, SampleHash
 
-# Upper case, so one wording is one label wherever it was typed: a label is stored as it is compared
-# and displayed, and "warm pad" and "Warm Pad" name the same thing to the person who wrote them.
-LabelText = Annotated[str, StringConstraints(strip_whitespace=True, to_upper=True, min_length=1)]
+# One spelling per label wherever it was typed: a label is stored as it is compared and displayed, and
+# "warm pad", "Warm Pad" and "WARM:PAD" name what "WARM PAD" and "WARM: PAD" do to the person who wrote them.
+LabelText = Annotated[str, AfterValidator(canonical_label)]
 
 
 @unique
@@ -47,6 +48,50 @@ class AnnotationDecisions(BaseModel):
     def records_a_decision(self) -> bool:
         """Whether anything at all is being said about the sample."""
         return self.label is not None or self.rating is not None or self.favorite
+
+    @property
+    def decisions(self) -> AnnotationDecisions:
+        """The three decisions alone, apart from whatever else a subclass records beside them."""
+        return AnnotationDecisions(label=self.label, rating=self.rating, favorite=self.favorite)
+
+
+NO_DECISIONS: Final[AnnotationDecisions] = AnnotationDecisions(label=None, rating=None, favorite=False)
+
+
+@unique
+class AnnotationDecision(StrEnum):
+    """One of the three things a person can decide about a sample, named the way a request names it."""
+
+    LABEL = "label"
+    RATING = "rating"
+    FAVORITE = "favorite"
+
+
+class AnnotationChanges(BaseModel):
+    """What one gesture changes about a sample: the decisions it names, each with the value it takes.
+
+    A star click changes the rating alone, so a sample keeps the label another gesture gave it a
+    moment earlier, and a group gesture keeps every member's own say on the decisions it leaves
+    alone. The values of decisions outside ``changed`` are carried along and read by nothing.
+    """
+
+    model_config = FROZEN
+
+    values: AnnotationDecisions
+    changed: frozenset[AnnotationDecision]
+
+    def applied_to(self, current: AnnotationDecisions) -> AnnotationDecisions:
+        """The decisions a sample holds once this change lands on what it holds now."""
+        label, rating, favorite = current.label, current.rating, current.favorite
+        for decision in self.changed:
+            match decision:
+                case AnnotationDecision.LABEL:
+                    label = self.values.label
+                case AnnotationDecision.RATING:
+                    rating = self.values.rating
+                case AnnotationDecision.FAVORITE:
+                    favorite = self.values.favorite
+        return AnnotationDecisions(label=label, rating=rating, favorite=favorite)
 
 
 class SampleAnnotation(AnnotationDecisions):

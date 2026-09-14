@@ -2,36 +2,35 @@ import { requestJson, sendJson } from "./client";
 import type { components } from "./schema";
 
 export type AnnotationDecisions = components["schemas"]["AnnotationDecisions"];
-export type AnnotationWritten = components["schemas"]["AnnotationWritten"];
+export type AnnotationsWritten = components["schemas"]["AnnotationsWritten"];
 
 /** How far one gesture reaches: this sample alone, or every near-duplicate grouped with it. */
 export type AnnotationScope = components["schemas"]["AnnotationSource"];
-/** One tag in use: its path, how many samples carry it, and the rank of its first use. */
+/** One tag in use: its path, how many samples carry it, and the rank that stays with it. */
 export type TagSummary = components["schemas"]["TagSummary"];
+/** The decisions one gesture changes; a decision left out stays as the sample holds it. */
+export type AnnotationChanges = Partial<AnnotationDecisions>;
 
 /** What a sample says when nobody has decided anything about it. */
 export const NO_DECISIONS: AnnotationDecisions = { label: null, rating: null, favorite: false };
 
 /**
- * Record the whole state a sample should carry from here on.
+ * Change the decisions one gesture names, on this sample or across its near-duplicates.
  *
- * Every decision travels on every write, so anything left empty is a decision undone; a state
- * saying nothing at all removes the annotation. An emptied label is sent as `null`, blank text
- * being malformed rather than a way to clear one.
+ * Every reached sample keeps whatever the change leaves out, so a star click leaves the label a
+ * moment-earlier gesture gave it. A decision is cleared by sending `null`, or `false` for the
+ * favorite mark; an emptied label is sent as `null`, blank text being malformed rather than a way to
+ * clear one.
  */
-export async function setSampleAnnotation(
+export async function changeSampleAnnotation(
     sampleHash: string,
-    decisions: AnnotationDecisions,
     scope: AnnotationScope,
-): Promise<AnnotationWritten> {
-    return sendJson<AnnotationWritten>(`/curation/annotations/${sampleHash}`, {
-        method: "PUT",
-        body: { ...decisions, scope },
+    changes: AnnotationChanges,
+): Promise<AnnotationsWritten> {
+    return sendJson<AnnotationsWritten>(`/curation/annotations/${sampleHash}`, {
+        method: "PATCH",
+        body: { ...changes, scope },
     });
-}
-
-export async function clearSampleAnnotation(sampleHash: string, scope: AnnotationScope): Promise<AnnotationWritten> {
-    return setSampleAnnotation(sampleHash, NO_DECISIONS, scope);
 }
 
 export async function getLabelVocabulary(): Promise<readonly string[]> {

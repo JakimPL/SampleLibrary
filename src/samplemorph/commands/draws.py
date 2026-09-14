@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Collection
 
 from sqlalchemy import Connection
 
@@ -12,11 +13,13 @@ from samplemorph.measurement.corpus import DEFAULT_PROBE_FRAME_CEILING, DEFAULT_
 from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
 
 
-def add_canonicalizer_argument(parser: argparse.ArgumentParser, *, help_text: str) -> None:
-    """The axis flags every command that canonicalizes shares, declared once so each reads the same."""
-    parser.add_argument(
-        "--canonicalizer", choices=sorted(CANONICALIZER_REGISTRY), default=DEFAULT_CANONICALIZER_NAME, help=help_text
-    )
+def add_canonicalizer_argument(parser: argparse.ArgumentParser, *, help_text: str, names: Collection[str]) -> None:
+    """The axis flags every command that canonicalizes shares, declared once so each reads the same.
+
+    `names` are the registered axes the command accepts: every one for a command that analyzes,
+    the renderable ones for a command that fits what is later heard.
+    """
+    parser.add_argument("--canonicalizer", choices=sorted(names), default=DEFAULT_CANONICALIZER_NAME, help=help_text)
     parser.add_argument(
         "--anchor",
         type=Anchor,
@@ -41,14 +44,18 @@ def draw_probe_samples(connection: Connection, *, count: int, random_seed: int) 
     )
 
 
+class SampleNotCataloged(ValueError):
+    """Raised when a command names a sample hash the catalog holds no sample under."""
+
+
 def require_sample(connection: Connection, sample_hash: str) -> Sample:
     """Look one sample up by hash.
 
     Raises:
-        ValueError: the catalog holds no sample under that hash.
+        SampleNotCataloged: the catalog holds no sample under that hash.
     """
     sample = PostgresSampleRepository(connection).get(sample_hash)
     if sample is None:
-        raise ValueError(f"the catalog holds no sample {sample_hash}")
+        raise SampleNotCataloged(f"the catalog holds no sample {sample_hash}")
 
     return sample

@@ -32,14 +32,11 @@ CANONICALIZER_REGISTRY: Final[dict[str, CanonicalizerFactory]] = {
     "mel": build_mel_canonicalizer,
 }
 
-SYNTHESIS_CANONICALIZER_NAMES: Final[frozenset[str]] = frozenset({"log_frequency", "mel"})
-"""The axes audio is rendered from, whose bands state amplitude per Fourier bin.
+RENDERABLE_CANONICALIZER_NAMES: Final[frozenset[str]] = frozenset({DEFAULT_CANONICALIZER_NAME})
+"""The axes a model fitted on them can be heard from: a log-frequency analysis under a Gaussian taper.
 
-A vocoder reads a magnitude as the Fourier magnitude of the signal it is recovering, so an axis
-serves synthesis when its bands carry that same quantity. These do, and a round trip through them
-lands far nearer its source than an unrelated sample does. `constant_q` measures amplitude per
-constant-Q band instead, which makes it the axis that locates a retuning best and keeps it to
-analysis.
+Every vocoder that renders a morph integrates a phase for that analysis, so a codec or a restorer
+fitted on another axis stores a model nothing can play.
 """
 
 VOCODER_REGISTRY: Final[dict[str, Callable[[], Vocoder]]] = {

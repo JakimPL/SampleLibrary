@@ -59,14 +59,15 @@ describe("SamplesListPanel", () => {
         expect(screen.getByText("3")).toBeInTheDocument();
     });
 
-    it("requests samples grouped by acoustic identity by default", async () => {
+    it("groups samples by acoustic identity by default, folding the raw rows it pages through", async () => {
         listSamples.mockResolvedValue({ items: [SAMPLE_SUMMARY], total: 1, limit: 50, offset: 0 });
 
         renderPanel();
 
         await waitFor(() => {
-            expect(listSamples).toHaveBeenCalledWith(expect.objectContaining({ groupByEquivalence: true }));
+            expect(screen.getByText(/1 of 1 loaded · 1 groups/)).toBeInTheDocument();
         });
+        expect(listSamples).toHaveBeenCalledWith(expect.objectContaining({ groupByEquivalence: false }));
     });
 
     it("shows an error notice when the request fails", async () => {

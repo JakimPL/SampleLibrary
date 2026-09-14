@@ -80,7 +80,7 @@ directly at some point.
 - **No `gh` or `glab`** without asking; they may be tied to the wrong account.
 - **`config.toml` is gitignored and holds real local paths.** It never gets committed, and its
   contents never get pasted anywhere.
-- **`just check` after each phase**, and `pre-commit run --all-files` before pushing anything large.
+- **`just check` after each phase**, and `uv run pre-commit run --all-files` before pushing anything large.
 - **Experiments stay out of the repository.** The repository holds the machinery — protocols,
   codecs, entry points, the harness, tests. Runs, metrics and checkpoints live outside it. Clean
   repository, experimental work; the two are compatible.

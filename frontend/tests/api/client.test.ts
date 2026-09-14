@@ -23,3 +23,22 @@ describe("requestJson", () => {
         await expect(requestJson("/missing")).rejects.toMatchObject({ status: 404 } satisfies Partial<ApiError>);
     });
 });
+
+describe("a refused request", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it("carries the server's own detail in its message", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue({
+                ok: false,
+                status: 422,
+                json: () => Promise.resolve({ detail: "no such sample" }),
+            }),
+        );
+
+        await expect(requestJson("/samples/x")).rejects.toThrow("no such sample");
+    });
+});

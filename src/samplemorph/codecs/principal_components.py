@@ -23,9 +23,9 @@ class PrincipalComponentCodec:
     def __init__(
         self,
         *,
-        mean: NDArray[np.float64],
-        components: NDArray[np.float64],
-        explained_variance_ratio: NDArray[np.float64],
+        mean: NDArray[np.float32],
+        components: NDArray[np.float32],
+        explained_variance_ratio: NDArray[np.float32],
         geometry: Geometry,
     ) -> None:
         self._mean = mean
@@ -38,15 +38,15 @@ class PrincipalComponentCodec:
         return int(self._components.shape[0])
 
     @property
-    def mean(self) -> NDArray[np.float64]:
+    def mean(self) -> NDArray[np.float32]:
         return self._mean
 
     @property
-    def components(self) -> NDArray[np.float64]:
+    def components(self) -> NDArray[np.float32]:
         return self._components
 
     @property
-    def explained_variance_ratio(self) -> NDArray[np.float64]:
+    def explained_variance_ratio(self) -> NDArray[np.float32]:
         """The share of the fitted body's variance each retained direction accounts for."""
         return self._explained_variance_ratio
 

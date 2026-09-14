@@ -7,23 +7,20 @@ import pytest
 import torch
 from lightning.pytorch import Trainer
 
+from samplecore.hashing import file_sha256
 from samplemorph.codecs.conditioned import load_conditioned_codec
-from samplemorph.codecs.conditioned_model import ConditionedCodecShape, ResidualLayout
-from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
-from samplemorph.descriptors.learned import DescriptorDescription, LearnedDescriptor, descriptor_path, save_descriptor
+from samplemorph.codecs.conditioned_shape import ConditionedCodecShape, ResidualLayout
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
+from samplemorph.descriptors.grid_descriptor import GridDescriptor
+from samplemorph.descriptors.learned import DescriptorDescription, LearnedDescriptor, save_descriptor
 from samplemorph.geometry import log_frequency_geometry
+from samplemorph.model_paths import descriptor_path
 from samplemorph.registries import canonicalizer_for_geometry
 from samplemorph.training.codec_data import CodecCorpus, CodecDataModule
 from samplemorph.training.codec_export import CodecWriter
-from samplemorph.training.codec_losses import (
-    CodecLossWeights,
-    CodecPrediction,
-    codec_loss,
-    prior_divergence,
-    reconstruction_error,
-)
-from samplemorph.training.codec_module import CodecTrainingModule
-from samplemorph.training.codec_settings import CodecTrainingSettings
+from samplemorph.training.codec_losses import CodecPrediction, codec_loss, prior_divergence, reconstruction_error
+from samplemorph.training.codec_module import DESCRIPTOR_DIGEST_KEY, CodecTrainingModule, ConditioningDescriptor
+from samplemorph.training.codec_settings import CodecLossWeights, CodecTrainingSettings
 from samplemorph.training.descriptor_cache import (
     DESCRIPTION_FILE_NAME,
     DURATIONS_FILE_NAME,
@@ -35,6 +32,7 @@ from samplemorph.training.descriptor_cache import (
 )
 from samplemorph.training.export import BestEpochExport
 from samplemorph.training.metrics import CODEC_MONITORED_METRIC, CODEC_VALIDATION_RECONSTRUCTION
+from samplemorph.training.refusals import ResumeRefused, TrainingDataShortfall, TrainingRefused
 from samplemorph.training.run_settings import RunSettings
 from tests.samplemorph.training.test_tracked_logger import RecordingRun
 
@@ -106,6 +104,7 @@ def _corpus(tmp_path: Path) -> CodecCorpus:
         library_root=tmp_path,
         descriptor=_descriptor(tmp_path),
         descriptor_name=DESCRIPTOR_NAME,
+        descriptor_sha256=file_sha256(descriptor_path(tmp_path, name=DESCRIPTOR_NAME)),
     )
 
 
@@ -131,7 +130,7 @@ def _module(corpus: CodecCorpus, settings: CodecTrainingSettings) -> CodecTraini
             width=settings.width,
             layout=settings.layout,
         ),
-        descriptor=corpus.descriptor.model,
+        descriptor=ConditioningDescriptor(network=corpus.descriptor.model, sha256=corpus.descriptor_sha256),
         learning_rate=settings.run.learning_rate,
         weights=settings.weights,
         prior_warmup_steps=settings.prior_warmup_steps,
@@ -168,12 +167,13 @@ def test_the_prior_counts_for_as_much_of_its_weight_as_the_warm_up_has_reached()
 def test_a_pooled_cache_is_refused_as_a_codec_corpus(tmp_path: Path) -> None:
     from tests.samplemorph.training.conftest import write_grid_cache
 
-    with pytest.raises(ValueError, match="was pooled"):
+    with pytest.raises(TrainingRefused, match="was pooled; build it with --bands-per-semitone"):
         CodecCorpus(
             cache=write_grid_cache(tmp_path / "cache" / "grids" / "pooled", sample_count=4),
             library_root=tmp_path,
             descriptor=_descriptor(tmp_path),
             descriptor_name=DESCRIPTOR_NAME,
+            descriptor_sha256="0" * 64,
         )
 
 
@@ -221,3 +221,28 @@ def test_the_descriptor_rides_along_frozen(tmp_path: Path) -> None:
 
     assert all(not parameter.requires_grad for parameter in module.descriptor.parameters())
     assert all(parameter.requires_grad for parameter in module.model.parameters())
+
+
+def test_a_codec_run_resumed_beside_another_descriptor_is_refused(tmp_path: Path) -> None:
+    """The frozen descriptor's weights ride in the checkpoint, so resuming beside another file would mix the two."""
+    module = _module(_corpus(tmp_path), _settings())
+    checkpoint: dict[str, object] = {}
+    module.on_save_checkpoint(checkpoint)
+    module.on_load_checkpoint(checkpoint)
+
+    with pytest.raises(ResumeRefused, match="another descriptor file"):
+        module.on_load_checkpoint({DESCRIPTOR_DIGEST_KEY: "0" * 64})
+
+
+def test_a_cache_too_small_for_one_batch_names_the_flag_that_shrinks_it(tmp_path: Path) -> None:
+    settings = CodecTrainingSettings(
+        run=RunSettings(epochs=1, batch_size=64, learning_rate=1e-3, worker_count=0, random_seed=0),
+        residual_size=4,
+        layout=ResidualLayout.VECTOR,
+        width=4,
+        prior_warmup_steps=2,
+        validation_share=0.25,
+    )
+
+    with pytest.raises(TrainingDataShortfall, match="fill no batch of 64; set --batch"):
+        CodecDataModule(_corpus(tmp_path), settings=settings)

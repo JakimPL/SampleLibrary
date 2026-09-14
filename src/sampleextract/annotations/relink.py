@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 
 from sqlalchemy import Connection
 
 from samplecore.anchoring import relinked_hash
 from samplecore.models.annotation import SampleAnnotation
+from samplecore.storage.curation import claim_annotation_writes
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
@@ -13,12 +15,23 @@ from samplecore.storage.repositories.sample_annotation import PostgresSampleAnno
 
 @dataclass(frozen=True)
 class RelinkSummary:
-    """What one relink pass did with the annotations whose sample the catalog no longer holds."""
+    """What one relink pass did with the annotations whose sample the catalog no longer holds.
+
+    ``conflicting`` holds stale annotations left where they are because the sample their slot holds
+    today already carries an annotation, or because another stale annotation resolves to it too;
+    which decision that sample should carry is a person's call.
+    """
 
     checked: int
     stale: int
     relinked: int
     unresolved: tuple[SampleAnnotation, ...]
+    conflicting: tuple[SampleAnnotation, ...]
+
+    @property
+    def needs_a_person(self) -> bool:
+        """Whether any annotation is left for a person to decide about."""
+        return bool(self.unresolved or self.conflicting)
 
 
 def relink_annotations(connection: Connection) -> RelinkSummary:
@@ -31,26 +44,39 @@ def relink_annotations(connection: Connection) -> RelinkSummary:
     this is safe to run at any time.
 
     An annotation whose module or slot is gone from the catalog too comes back under
-    ``unresolved``, for a person to decide about; it stays on file untouched.
+    ``unresolved``, and one whose sample already speaks for itself under ``conflicting``; both stay
+    on file untouched, for a person to decide about.
     """
     repository = PostgresSampleAnnotationRepository(connection)
-    annotations = repository.list_all()
-    cataloged = PostgresSampleRepository(connection).get_many([annotation.sample_hash for annotation in annotations])
-    stale = tuple(annotation for annotation in annotations if annotation.sample_hash not in cataloged)
-
-    recovered: list[tuple[str, SampleAnnotation]] = []
-    unresolved: list[SampleAnnotation] = []
-    for annotation in stale:
-        current_hash = relinked_hash(connection, annotation)
-        if current_hash is None:
-            unresolved.append(annotation)
-        else:
-            recovered.append((annotation.sample_hash, annotation.model_copy(update={"sample_hash": current_hash})))
-
     with start_batch(connection):
-        repository.delete_many(tuple(previous_hash for previous_hash, _ in recovered))
-        repository.replace_many(tuple(annotation for _, annotation in recovered))
+        claim_annotation_writes(connection)
+        annotations = repository.list_all()
+        annotated_hashes = {annotation.sample_hash for annotation in annotations}
+        cataloged = PostgresSampleRepository(connection).get_many(list(annotated_hashes))
+        stale = tuple(annotation for annotation in annotations if annotation.sample_hash not in cataloged)
+
+        resolved = [(annotation, relinked_hash(connection, annotation)) for annotation in stale]
+        target_counts = Counter(target for _, target in resolved if target is not None)
+        recovered: list[tuple[SampleAnnotation, str]] = []
+        unresolved: list[SampleAnnotation] = []
+        conflicting: list[SampleAnnotation] = []
+        for annotation, target in resolved:
+            if target is None:
+                unresolved.append(annotation)
+            elif target in annotated_hashes or target_counts[target] > 1:
+                conflicting.append(annotation)
+            else:
+                recovered.append((annotation, target))
+
+        repository.delete_many(tuple(annotation.sample_hash for annotation, _ in recovered))
+        repository.upsert_many(
+            tuple(annotation.model_copy(update={"sample_hash": target}) for annotation, target in recovered)
+        )
 
     return RelinkSummary(
-        checked=len(annotations), stale=len(stale), relinked=len(recovered), unresolved=tuple(unresolved)
+        checked=len(annotations),
+        stale=len(stale),
+        relinked=len(recovered),
+        unresolved=tuple(unresolved),
+        conflicting=tuple(conflicting),
     )

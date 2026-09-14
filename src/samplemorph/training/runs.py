@@ -1,24 +1,43 @@
 from __future__ import annotations
 
+import logging
+import math
 import sys
 from dataclasses import dataclass
+from enum import StrEnum, unique
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
+import torch
+from lightning.fabric.plugins import TorchCheckpointIO
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
 
+from samplecore.storage.atomic import write_atomically
 from samplecore.tracking import TrackedRun
 from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
 from samplemorph.training.descriptor_cache import GridCache
 from samplemorph.training.export import BestEpochExport
 from samplemorph.training.progress import ProgressLines
+from samplemorph.training.refusals import ResumeRefused
 from samplemorph.training.run_settings import GRADIENT_CLIP, RunSettings
 from samplemorph.training.tracked_logger import TrackedRunLogger
 
 RUNS_DIRECTORY_NAME: Final[str] = "runs"
-LAST_CHECKPOINT_NAME: Final[str] = "last"
+RESUME_CHECKPOINT_NAME: Final[str] = "resume"
+CHECKPOINT_SUFFIX: Final[str] = ".ckpt"
+
+_logger = logging.getLogger(__name__)
+
+
+@unique
+class RunFamily(StrEnum):
+    """Which kind of network a run teaches, which keeps runs of one name in different families apart."""
+
+    CODEC = "codec"
+    DESCRIPTOR = "descriptor"
+    RESTORER = "restorer"
 
 
 @dataclass(frozen=True)
@@ -30,28 +49,64 @@ class TrainingOutcome:
     model_path: Path
     resume_path: Path
 
+    @property
+    def exported(self) -> bool:
+        """Whether an epoch finished validation with a score, which is what writes the model."""
+        return math.isfinite(self.best_validation_loss)
 
-def run_directory(library_root: Path, *, name: str) -> Path:
-    """Where one run's metrics and resume points are kept, beside the library rather than the repo."""
-    return library_root / RUNS_DIRECTORY_NAME / name
+
+def run_directory(library_root: Path, *, family: RunFamily, name: str) -> Path:
+    """Where one run's metrics and resume point are kept, beside the library rather than the repo."""
+    return library_root / RUNS_DIRECTORY_NAME / family.value / name
 
 
-def resume_path(library_root: Path, *, name: str) -> Path:
+def resume_path(library_root: Path, *, family: RunFamily, name: str) -> Path:
     """The checkpoint an interrupted run of this name picks up from."""
-    return run_directory(library_root, name=name) / f"{LAST_CHECKPOINT_NAME}.ckpt"
+    return run_directory(library_root, family=family, name=name) / f"{RESUME_CHECKPOINT_NAME}{CHECKPOINT_SUFFIX}"
 
 
-def last_checkpoint(directory: Path, *, monitored: str) -> ModelCheckpoint:
-    """The resume point, rewritten each epoch so an interrupted run loses at most that epoch."""
+def check_resume_point(library_root: Path, *, family: RunFamily, name: str, resume: bool) -> None:
+    """Make sure a continued run has a point to continue from, and say when a fresh run replaces one.
+
+    Raises:
+        ResumeRefused: the run was asked to continue and no resume point is stored for it.
+    """
+    path = resume_path(library_root, family=family, name=name)
+    if resume and not path.is_file():
+        raise ResumeRefused(f"--resume continues from {path}, and no run of that name stopped there")
+    if not resume and path.is_file():
+        _logger.warning("A fresh run replaces the resume point at %s; pass --resume to continue it instead.", path)
+
+
+def resume_checkpoint(directory: Path) -> ModelCheckpoint:
+    """The resume point, rewritten after every epoch so an interrupted run loses at most the epoch it was in.
+
+    Nothing is monitored, so the latest epoch is kept whatever it scored; the best epoch lives in
+    the exported model instead.
+    """
     return ModelCheckpoint(
         dirpath=directory,
-        filename=LAST_CHECKPOINT_NAME,
-        monitor=monitored,
-        mode="min",
+        filename=RESUME_CHECKPOINT_NAME,
+        monitor=None,
         save_top_k=1,
-        save_last=True,
+        save_last=False,
+        every_n_epochs=1,
+        save_on_train_epoch_end=True,
         enable_version_counter=False,
     )
+
+
+class SameDirectoryCheckpointIO(TorchCheckpointIO):
+    """Writes each checkpoint beside its destination and moves it into place whole.
+
+    An interruption while the resume point is being rewritten leaves the previous one readable.
+    """
+
+    def save_checkpoint(
+        self, checkpoint: dict[str, Any], path: str | Path, storage_options: object | None = None
+    ) -> None:
+        del storage_options
+        write_atomically(Path(path), lambda stream: torch.save(checkpoint, stream))
 
 
 @dataclass(frozen=True)
@@ -59,17 +114,18 @@ class RunPlacement:
     """Where one named run keeps its files, which record it reports to, and whether it picks up where it stopped."""
 
     library_root: Path
+    family: RunFamily
     model_name: str
     tracker: TrackedRun
     resume: bool
 
     @property
     def directory(self) -> Path:
-        return run_directory(self.library_root, name=self.model_name)
+        return run_directory(self.library_root, family=self.family, name=self.model_name)
 
     @property
     def resume_path(self) -> Path:
-        return resume_path(self.library_root, name=self.model_name)
+        return resume_path(self.library_root, family=self.family, name=self.model_name)
 
 
 def fit_and_export(
@@ -83,9 +139,10 @@ def fit_and_export(
     """Drive one run to its end: the trainer, its three loggers, its resume point, and what it left behind.
 
     Two files come out, for two different purposes. The trainer's own checkpoint carries the
-    optimizer, the schedule and the epoch reached, so a run cut short continues from where it
-    stopped. The export carries the network alone, which is what a reader of the model loads.
-    Progress reaches the log as lines throughout, and the progress bar draws on a terminal.
+    optimizer, the schedule, the epoch reached and the best score exported so far, so a run cut
+    short continues from the epoch it stopped at. The export carries the network alone, which is
+    what a reader of the model loads. Progress reaches the log as lines throughout, and the
+    progress bar draws on a terminal.
     """
     trainer = Trainer(
         max_epochs=settings.epochs,
@@ -94,18 +151,16 @@ def fit_and_export(
         gradient_clip_val=GRADIENT_CLIP,
         default_root_dir=placement.directory,
         logger=[CSVLogger(save_dir=placement.directory, name=""), TrackedRunLogger(placement.tracker)],
-        callbacks=[export, last_checkpoint(placement.directory, monitored=export.monitored), ProgressLines()],
+        callbacks=[export, resume_checkpoint(placement.directory), ProgressLines()],
+        plugins=[SameDirectoryCheckpointIO()],
         enable_progress_bar=sys.stdout.isatty(),
     )
-    started_from = placement.resume_path
-    trainer.fit(
-        module, datamodule=data, ckpt_path=str(started_from) if placement.resume and started_from.is_file() else None
-    )
+    trainer.fit(module, datamodule=data, ckpt_path=str(placement.resume_path) if placement.resume else None)
     return TrainingOutcome(
         best_validation_loss=export.best_loss,
         epochs_completed=trainer.current_epoch,
         model_path=export.path,
-        resume_path=started_from,
+        resume_path=placement.resume_path,
     )
 
 

@@ -80,7 +80,7 @@ def stored_annotation(connection: Connection, cataloged_sample: str) -> SampleAn
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC),
     )
-    PostgresSampleAnnotationRepository(connection).replace_many((annotation,))
+    PostgresSampleAnnotationRepository(connection).upsert_many((annotation,))
     connection.commit()
     return annotation
 

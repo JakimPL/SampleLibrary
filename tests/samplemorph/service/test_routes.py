@@ -7,11 +7,12 @@ import pytest
 import soundfile
 from fastapi.testclient import TestClient
 
-from samplecore.models.morph import MORPH_WEIGHT_STEPS
+from samplecore.models.morph import MORPH_WEIGHT_STEPS, HeardMorphPoint
 from samplemorph.model_store import DEFAULT_MODEL_NAME
 from samplemorph.registries import PGHI_VOCODER_NAME
+from samplemorph.rendering import FULL_SCALE_CEILING
 from samplemorph.service.app import create_app
-from samplemorph.service.renderer import MorphRenderer
+from samplemorph.service.renderer import MorphRenderer, load_renderer
 from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
 from tests.samplemorph.service.conftest import StoredLibrary
 
@@ -56,7 +57,7 @@ def test_a_point_renders_as_a_wav_at_the_rate_the_pair_is_heard_at_with_its_cach
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/wav"
     assert response.headers["etag"].startswith('"')
-    assert "max-age" in response.headers["cache-control"]
+    assert response.headers["cache-control"] == "private, no-cache"
     frames, rate = soundfile.read(io.BytesIO(response.content))
     assert rate == SECOND_RATE_HZ
     assert frames.shape[0] > 0
@@ -111,10 +112,45 @@ def test_a_pair_is_encoded_once_however_many_weights_are_asked_for(client: TestC
 
 
 def test_the_restored_route_renders_end_to_end(restored_settings: ServiceSettings, library: StoredLibrary) -> None:
-    with TestClient(create_app(restored_settings)) as client:
+    with TestClient(create_app(load_renderer(restored_settings))) as client:
         status = client.get(STATUS_PATH).json()
         response = client.get(AUDIO_PATH, params=_params(library, 0.5))
 
     assert status["restorer"] is not None
     assert response.status_code == 200
     assert soundfile.read(io.BytesIO(response.content))[1] == SECOND_RATE_HZ
+
+
+@pytest.mark.parametrize(
+    "condition",
+    ['"stale", {etag}', "W/{etag}", "*"],
+    ids=("a list naming it", "a weak tag", "any tag"),
+)
+def test_every_form_of_a_matching_validator_is_answered_without_rendering(
+    client: TestClient, library: StoredLibrary, condition: str
+) -> None:
+    etag = _renderer(client).etag(HeardMorphPoint.model_validate(_params(library, 0.75)))
+    rendered = _renderer(client).render_count
+
+    response = client.get(
+        AUDIO_PATH, params=_params(library, 0.75), headers={"If-None-Match": condition.format(etag=etag)}
+    )
+
+    assert response.status_code == 304
+    assert _renderer(client).render_count == rendered
+
+
+def test_a_point_past_the_process_limits_is_refused(client: TestClient, library: StoredLibrary) -> None:
+    response = client.get(
+        AUDIO_PATH, params={**_params(library, 0.5), "first_rate_hz": 1_000, "second_rate_hz": 32_000}
+    )
+
+    assert response.status_code == 422
+    assert "times apart" in response.json()["detail"]
+
+
+def test_a_quiet_point_keeps_its_level(client: TestClient, library: StoredLibrary) -> None:
+    """A render is lowered only to keep from clipping, so two quiet ends stay quiet between them."""
+    frames, _ = soundfile.read(io.BytesIO(client.get(AUDIO_PATH, params=_params(library, 0.5)).content))
+
+    assert float(np.abs(frames).max()) <= FULL_SCALE_CEILING + 1.0 / 32768

@@ -5,7 +5,8 @@ import pytest
 import torch
 
 from samplemorph.vocoders.levels import peak_level
-from samplemorph.vocoders.restorer_model import Restorer, RestorerShape, compress, expand
+from samplemorph.vocoders.restorer_model import Restorer, compress, expand
+from samplemorph.vocoders.restorer_shape import RestorerShape
 
 BIN_COUNT = 33
 DYNAMIC_RANGE_DB = 100.0

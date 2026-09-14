@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
 
 import numpy as np
 import torch
@@ -10,15 +9,14 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
+from samplecore.storage.atomic import write_atomically
 from samplemorph.canonicalizers.linear_axis import onto_linear_axis
 from samplemorph.geometry import LogFrequencyGeometry
 from samplemorph.images import AnalysisSpectrogram
 from samplemorph.vocoders.levels import peak_level
 from samplemorph.vocoders.pghi import gaussian_log_frequency, integrate_and_synthesize
-from samplemorph.vocoders.restorer_model import Restorer, RestorerShape, compress, expand
-
-RESTORER_SUFFIX: Final[str] = ".pt"
-DEFAULT_RESTORER_NAME: Final[str] = "restorer"
+from samplemorph.vocoders.restorer_model import Restorer, compress, expand
+from samplemorph.vocoders.restorer_shape import RestorerShape
 
 
 class RestorerDescription(BaseModel):
@@ -94,15 +92,10 @@ def same_analysis(first: LogFrequencyGeometry, second: LogFrequencyGeometry) -> 
     return first.model_copy(update={"anchor": second.anchor}) == second
 
 
-def restorer_path(library_root: Path, *, name: str = DEFAULT_RESTORER_NAME) -> Path:
-    """Where a fitted restorer is written, under the configured library root rather than the repo."""
-    return library_root / "models" / f"{name}{RESTORER_SUFFIX}"
-
-
 def save_restorer(path: Path, model: Restorer, description: RestorerDescription) -> None:
-    """Write the weights beside the description that says how to rebuild the network around them."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"description": description.model_dump_json(), "state": model.state_dict()}, path)
+    """Write the weights beside the description that says how to rebuild the network around them, in place whole."""
+    stored = {"description": description.model_dump_json(), "state": model.state_dict()}
+    write_atomically(path, lambda stream: torch.save(stored, stream))
 
 
 def load_restorer(path: Path, *, device: torch.device) -> RestoredPghiVocoder:
@@ -112,7 +105,10 @@ def load_restorer(path: Path, *, device: torch.device) -> RestoredPghiVocoder:
         FileNotFoundError: no restorer is stored at that path.
     """
     if not path.exists():
-        raise FileNotFoundError(f"no restorer is stored at {path}")
+        raise FileNotFoundError(
+            f"no restorer is stored at {path}: `samplelibrary morph train-restorer` writes one, "
+            "and `--vocoder pghi` renders without it"
+        )
 
     stored = torch.load(path, map_location=device, weights_only=True)
     description = RestorerDescription.model_validate_json(str(stored["description"]))

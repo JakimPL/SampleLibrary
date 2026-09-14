@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Final
+from typing import Final, NewType
 
 import librosa
 import numpy as np
@@ -23,16 +23,19 @@ HARMONIC_COUNT: Final[int] = 8
 HARMONIC_DECAY: Final[float] = 0.84
 SHORT_SIGNAL_WARNING: Final[str] = r"n_fft=\d+ is too large for input signal"
 
+# One channel of frames that has come in through `prepare_mono`, or a retuning of such frames.
+PreparedMono = NewType("PreparedMono", NDArray[np.float64])
 
-def prepare_mono(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
+
+def prepare_mono(waveform: NDArray[np.float64]) -> PreparedMono:
     """Fold a stored waveform to the one audible channel every frequency axis analyzes.
 
-    The band below hearing leaves here, at the pipeline's way in, so every analysis, every
-    reconstruction and every reference a reconstruction is measured against carries the same
-    content a listener does. The filter is designed at the nominal container rate, which is the
-    rate every frequency axis reads its frames at.
+    The band below hearing leaves here, at the pipeline's way in and nowhere else, so every
+    analysis, every reconstruction and every reference a reconstruction is measured against carries
+    the same content a listener does, filtered once. The filter is designed at the nominal
+    container rate, which is the rate every frequency axis reads its frames at.
     """
-    return remove_subsonic(fold_to_mono(waveform), sample_rate_hz=NOMINAL_WAV_RATE)
+    return PreparedMono(remove_subsonic(fold_to_mono(waveform), sample_rate_hz=NOMINAL_WAV_RATE))
 
 
 def analysis_transform(mono: NDArray[np.float64], *, geometry: Geometry) -> NDArray[np.complex128]:

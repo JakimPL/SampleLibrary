@@ -160,7 +160,7 @@ def label_catalog(connection: Connection, catalog: SeededCatalog, *, every: int 
                 annotated_at=datetime.now(UTC),
             )
         )
-    PostgresSampleAnnotationRepository(connection).replace_many(tuple(annotations))
+    PostgresSampleAnnotationRepository(connection).upsert_many(tuple(annotations))
     connection.commit()
     return tuple(annotation.sample_hash for annotation in annotations)
 

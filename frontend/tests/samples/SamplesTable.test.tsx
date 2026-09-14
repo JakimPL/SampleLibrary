@@ -36,6 +36,8 @@ const SAMPLES: readonly SampleSummary[] = [
 function renderTable(
     overrides: Partial<{
         readonly samples: readonly SampleSummary[];
+        readonly loadedCount: number;
+        readonly groupCount: number;
         readonly total: number;
         readonly hasMore: boolean;
         readonly onLoadMore: () => void;
@@ -49,6 +51,8 @@ function renderTable(
         <MemoryRouter>
             <SamplesTable
                 samples={overrides.samples ?? SAMPLES}
+                loadedCount={overrides.loadedCount ?? (overrides.samples ?? SAMPLES).length}
+                groupCount={overrides.groupCount ?? (overrides.samples ?? SAMPLES).length}
                 total={overrides.total ?? SAMPLES.length}
                 hasMore={overrides.hasMore ?? false}
                 isLoadingMore={false}
@@ -146,6 +150,50 @@ describe("SamplesTable", () => {
         fireEvent.click(screen.getByLabelText("Group similar"));
 
         expect(onGroupByEquivalenceChange).toHaveBeenCalledWith(true);
+    });
+
+    it("names the groups the loaded rows fold into when grouping", () => {
+        renderTable({ total: 40, loadedCount: 5, groupCount: 3, groupByEquivalence: true });
+
+        expect(screen.getByText(/5 of 40 loaded · 3 groups/)).toBeInTheDocument();
+    });
+
+    it("asks for one window per loaded row count however often the table redraws", () => {
+        const onLoadMore = vi.fn();
+        const { rerender } = renderTable({ onLoadMore, hasMore: true });
+
+        rerender(
+            <MemoryRouter>
+                <SamplesTable
+                    samples={SAMPLES}
+                    loadedCount={SAMPLES.length}
+                    groupCount={SAMPLES.length}
+                    total={40}
+                    hasMore
+                    isLoadingMore={false}
+                    onLoadMore={onLoadMore}
+                    loadMoreError={null}
+                    groupByEquivalence={false}
+                    onGroupByEquivalenceChange={vi.fn()}
+                    selection={WHOLE_CATALOG}
+                    onSelectionChange={vi.fn()}
+                />
+            </MemoryRouter>,
+        );
+
+        expect(onLoadMore).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves loading to a button while a filter narrows the loaded rows", () => {
+        const onLoadMore = vi.fn();
+        renderTable({ onLoadMore, hasMore: true });
+        onLoadMore.mockClear();
+
+        fireEvent.change(screen.getByPlaceholderText("Filter samples…"), { target: { value: "nothing matches" } });
+        expect(onLoadMore).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+        expect(onLoadMore).toHaveBeenCalledTimes(1);
     });
 
     it("requests the next window once scrolled near the end of the loaded rows", () => {

@@ -11,10 +11,10 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecloud import features as features_module
 from samplecloud.backends import FeatureExtractor
-from samplecloud.features import FeatureExtractionSummary, FeaturePass, extract_features
-from samplecloud.hearing import Hearing, Reading, hearing_for
+from samplecloud.features import FeatureExtractionSummary, FeaturePass, extract_features, pending_samples
+from samplecloud.hearing import Hearing, hearing_for
 from samplecore.models.channels import ChannelLayout
-from samplecore.models.experiment import Experiment
+from samplecore.models.experiment import Experiment, Reading
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
@@ -54,19 +54,22 @@ def _create_experiment(connection: Connection) -> int:
     return experiment_id
 
 
-def _pass(
+def _extract(
+    connection: Connection,
+    library_root: Path,
     experiment_id: int,
     *,
     extractor: FeatureExtractor | None = None,
     hearing: Hearing = NOMINAL,
     sample_limit: int | None = None,
-) -> FeaturePass:
-    return FeaturePass(
+) -> FeatureExtractionSummary:
+    feature_pass = FeaturePass(
         experiment_id=experiment_id,
         feature_extractor=extractor if extractor is not None else _StubFeatureExtractor(),
         hearing=hearing,
-        sample_limit=sample_limit,
     )
+    pending = pending_samples(connection, experiment_id, sample_limit=sample_limit)
+    return extract_features(connection, library_root, feature_pass, pending)
 
 
 def test_extract_features_writes_a_vector_for_every_cataloged_sample(connection: Connection, tmp_path: Path) -> None:
@@ -74,7 +77,7 @@ def test_extract_features_writes_a_vector_for_every_cataloged_sample(connection:
     second = _store_sample(connection, tmp_path, hash_seed=2)
     experiment_id = _create_experiment(connection)
 
-    summary = extract_features(connection, tmp_path, _pass(experiment_id))
+    summary = _extract(connection, tmp_path, experiment_id)
 
     assert summary == FeatureExtractionSummary(cataloged=2, already_extracted=0, newly_extracted=2)
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
@@ -84,10 +87,10 @@ def test_extract_features_writes_a_vector_for_every_cataloged_sample(connection:
 def test_a_second_run_skips_already_extracted_samples(connection: Connection, tmp_path: Path) -> None:
     _store_sample(connection, tmp_path, hash_seed=1)
     experiment_id = _create_experiment(connection)
-    extract_features(connection, tmp_path, _pass(experiment_id))
+    _extract(connection, tmp_path, experiment_id)
     _store_sample(connection, tmp_path, hash_seed=2)
 
-    summary = extract_features(connection, tmp_path, _pass(experiment_id))
+    summary = _extract(connection, tmp_path, experiment_id)
 
     assert summary == FeatureExtractionSummary(cataloged=2, already_extracted=1, newly_extracted=1)
 
@@ -95,10 +98,10 @@ def test_a_second_run_skips_already_extracted_samples(connection: Connection, tm
 def test_a_different_experiment_extracts_independently(connection: Connection, tmp_path: Path) -> None:
     _store_sample(connection, tmp_path, hash_seed=1)
     first_experiment_id = _create_experiment(connection)
-    extract_features(connection, tmp_path, _pass(first_experiment_id))
+    _extract(connection, tmp_path, first_experiment_id)
 
     second_experiment_id = _create_experiment(connection)
-    summary = extract_features(connection, tmp_path, _pass(second_experiment_id))
+    summary = _extract(connection, tmp_path, second_experiment_id)
 
     assert summary == FeatureExtractionSummary(cataloged=1, already_extracted=0, newly_extracted=1)
 
@@ -108,7 +111,7 @@ def test_sample_limit_bounds_how_many_new_samples_are_extracted(connection: Conn
     _store_sample(connection, tmp_path, hash_seed=2)
     experiment_id = _create_experiment(connection)
 
-    summary = extract_features(connection, tmp_path, _pass(experiment_id, sample_limit=1))
+    summary = _extract(connection, tmp_path, experiment_id, sample_limit=1)
 
     assert summary.newly_extracted == 1
 
@@ -122,7 +125,7 @@ def test_a_heard_rate_reading_hands_the_extractor_the_frames_as_the_library_play
     PostgresSamplePlaybackRateRepository(connection).replace_all({played.hash: NOMINAL_WAV_RATE // 2})
     experiment_id = _create_experiment(connection)
 
-    extract_features(connection, tmp_path, _pass(experiment_id, hearing=hearing_for(connection, Reading.HEARD_RATE)))
+    _extract(connection, tmp_path, experiment_id, hearing=hearing_for(connection, Reading.HEARD_RATE))
 
     frames_by_hash = {
         vector.sample_hash: vector.vector[0]
@@ -131,10 +134,29 @@ def test_a_heard_rate_reading_hands_the_extractor_the_frames_as_the_library_play
     assert frames_by_hash == {played.hash: 2 * SAMPLE_FRAMES, silent.hash: SAMPLE_FRAMES}
 
 
+def test_pending_samples_lists_only_what_the_experiment_lacks_in_hash_order(
+    connection: Connection, tmp_path: Path
+) -> None:
+    for hash_seed in (3, 1, 2):
+        _store_sample(connection, tmp_path, hash_seed=hash_seed)
+    experiment_id = _create_experiment(connection)
+    _extract(connection, tmp_path, experiment_id, sample_limit=1)
+
+    pending = pending_samples(connection, experiment_id, sample_limit=None)
+
+    assert (pending.cataloged, pending.already_extracted) == (3, 1)
+    assert [sample.hash for sample in pending.samples] == [format(2, "064x"), format(3, "064x")]
+
+
+def test_a_sample_limit_below_one_is_refused(connection: Connection) -> None:
+    with pytest.raises(ValueError, match="at least 1"):
+        pending_samples(connection, _create_experiment(connection), sample_limit=0)
+
+
 def test_an_empty_catalog_extracts_nothing(connection: Connection, tmp_path: Path) -> None:
     experiment_id = _create_experiment(connection)
 
-    summary = extract_features(connection, tmp_path, _pass(experiment_id))
+    summary = _extract(connection, tmp_path, experiment_id)
 
     assert summary == FeatureExtractionSummary(cataloged=0, already_extracted=0, newly_extracted=0)
 
@@ -161,7 +183,7 @@ def test_an_interruption_loses_at_most_one_checkpoint_of_work(
     experiment_id = _create_experiment(connection)
 
     with pytest.raises(OSError, match="simulated interruption"):
-        extract_features(connection, tmp_path, _pass(experiment_id, extractor=_InterruptingFeatureExtractor()))
+        _extract(connection, tmp_path, experiment_id, extractor=_InterruptingFeatureExtractor())
 
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
     assert len(vectors) == 2

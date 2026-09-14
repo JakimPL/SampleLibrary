@@ -47,12 +47,16 @@ def _claim(connection: Connection, *, module_hash: str, filename: str, file_size
 def config(tmp_path: Path) -> LibraryConfig:
     source = tmp_path / "source"
     source.mkdir()
-    return LibraryConfig(module_source_directory=source, library_root=tmp_path / "library", database_url="unused")
+    return LibraryConfig(
+        module_source_directory=source,
+        library_root=tmp_path / "library",
+        database_url="postgresql+psycopg://unused@localhost/unused",
+    )
 
 
 def _corpus(config: LibraryConfig) -> tuple[Path, ...]:
     """Every module under the configured source directory, the share a lone pass covers."""
-    return discover_modules(config.module_source_directory)
+    return discover_modules(config.module_source_directory).paths
 
 
 def _write_corpus(config: LibraryConfig, *, xm_module_bytes: bytes, it_module_bytes: bytes) -> None:

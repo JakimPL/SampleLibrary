@@ -8,17 +8,21 @@ import type { SampleSummary } from "../../src/api/samples";
 import { SampleRow } from "../../src/samples/SampleRow";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 
-const { setSampleAnnotation, getLabelVocabulary } = vi.hoisted(() => ({
-    setSampleAnnotation: vi.fn(),
+const { changeSampleAnnotation, getLabelVocabulary } = vi.hoisted(() => ({
+    changeSampleAnnotation: vi.fn(),
     getLabelVocabulary: vi.fn(),
 }));
 
 vi.mock("../../src/api/curation", async () => {
     const actual = await vi.importActual<typeof CurationApi>("../../src/api/curation");
-    return { ...actual, setSampleAnnotation, getLabelVocabulary };
+    return { ...actual, changeSampleAnnotation, getLabelVocabulary };
 });
 
 const NOTHING = { label: null, rating: null, favorite: false };
+
+function resolvesTo(annotation: CurationApi.AnnotationDecisions | null): void {
+    changeSampleAnnotation.mockResolvedValue({ samples: [{ sample_hash: "abc123", annotation }], skipped: [] });
+}
 
 function buildSample(overrides: Partial<SampleSummary> = {}): SampleSummary {
     return {
@@ -89,22 +93,19 @@ describe("SampleRow", () => {
     });
 
     it("names a sample from the listing itself, without opening it first", async () => {
-        setSampleAnnotation.mockResolvedValue({
-            annotation: { ...NOTHING, label: "warm pad" },
-            sample_hashes: ["abc123"],
-        });
+        resolvesTo({ ...NOTHING, label: "WARM PAD" });
         renderRow();
 
         await userEvent.click(screen.getByRole("button", { name: "Edit category" }));
         await userEvent.type(screen.getByLabelText("Hand label"), "warm pad{Enter}");
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith("abc123", { ...NOTHING, label: "warm pad" }, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith("abc123", "sample", { label: "warm pad" });
         });
     });
 
     it("takes a hand label back when the field is emptied, leaving the guess showing", async () => {
-        setSampleAnnotation.mockResolvedValue({ annotation: null, sample_hashes: ["abc123"] });
+        resolvesTo(null);
         renderRow({ sample: buildSample({ hand_label: "warm pad" }) });
 
         await userEvent.click(screen.getByRole("button", { name: "Edit category" }));
@@ -112,52 +113,83 @@ describe("SampleRow", () => {
         await userEvent.keyboard("{Enter}");
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith("abc123", NOTHING, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith("abc123", "sample", { label: null });
         });
         expect(await screen.findByText("Kick")).toBeInTheDocument();
     });
 
-    it("rates a sample from the listing, keeping the wording it already carries", async () => {
-        setSampleAnnotation.mockResolvedValue({
-            annotation: { label: "warm pad", rating: 4, favorite: false },
-            sample_hashes: ["abc123"],
-        });
-        renderRow({ sample: buildSample({ hand_label: "warm pad" }) });
+    it("rates a sample from the listing by sending the rating alone", async () => {
+        resolvesTo({ label: "WARM PAD", rating: 4, favorite: false });
+        renderRow({ sample: buildSample({ hand_label: "WARM PAD" }) });
 
         await userEvent.click(screen.getByRole("button", { name: "Rate 4" }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith(
-                "abc123",
-                { label: "warm pad", rating: 4, favorite: false },
-                "sample",
-            );
+            expect(changeSampleAnnotation).toHaveBeenCalledWith("abc123", "sample", { rating: 4 });
         });
     });
 
     it("marks a favorite from the listing", async () => {
-        setSampleAnnotation.mockResolvedValue({
-            annotation: { ...NOTHING, favorite: true },
-            sample_hashes: ["abc123"],
-        });
+        resolvesTo({ ...NOTHING, favorite: true });
         renderRow();
 
         await userEvent.click(screen.getByRole("button", { name: "Favorite" }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith("abc123", { ...NOTHING, favorite: true }, "sample");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith("abc123", "sample", { favorite: true });
         });
     });
 
     it("reaches every near-duplicate while the listing groups them", async () => {
-        setSampleAnnotation.mockResolvedValue({ annotation: { ...NOTHING, rating: 2 }, sample_hashes: ["abc123"] });
+        resolvesTo({ ...NOTHING, rating: 2 });
         renderRow({ sample: buildSample({ equivalence_member_count: 3 }), groupByEquivalence: true });
 
         await userEvent.click(screen.getByRole("button", { name: "Rate 2" }));
 
         await waitFor(() => {
-            expect(setSampleAnnotation).toHaveBeenCalledWith("abc123", { ...NOTHING, rating: 2 }, "equivalence_class");
+            expect(changeSampleAnnotation).toHaveBeenCalledWith("abc123", "equivalence_class", { rating: 2 });
         });
+    });
+
+    it("says in the row when a change could not be saved", async () => {
+        changeSampleAnnotation.mockRejectedValue(new Error("request failed with status 500"));
+        renderRow();
+
+        await userEvent.click(screen.getByRole("button", { name: "Rate 3" }));
+
+        expect(await screen.findByRole("alert")).toHaveAttribute("title", "request failed with status 500");
+        expect(screen.getByRole("button", { name: "Rate 3" })).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("sends a label and a star given in quick succession one after the other, each naming its own decision", async () => {
+        let answerLabel: (written: CurationApi.AnnotationsWritten) => void = () => undefined;
+        changeSampleAnnotation
+            .mockImplementationOnce(
+                () =>
+                    new Promise<CurationApi.AnnotationsWritten>((resolve) => {
+                        answerLabel = resolve;
+                    }),
+            )
+            .mockResolvedValueOnce({
+                samples: [{ sample_hash: "abc123", annotation: { label: "BASS", rating: 5, favorite: false } }],
+                skipped: [],
+            });
+        renderRow();
+
+        await userEvent.click(screen.getByRole("button", { name: "Edit category" }));
+        await userEvent.type(screen.getByLabelText("Hand label"), "bass{Enter}");
+        await userEvent.click(screen.getByRole("button", { name: "Rate 5" }));
+
+        expect(changeSampleAnnotation).toHaveBeenCalledTimes(1);
+        answerLabel({
+            samples: [{ sample_hash: "abc123", annotation: { label: "BASS", rating: null, favorite: false } }],
+            skipped: [],
+        });
+
+        await waitFor(() => {
+            expect(changeSampleAnnotation).toHaveBeenLastCalledWith("abc123", "sample", { rating: 5 });
+        });
+        expect(await screen.findByText("BASS")).toBeInTheDocument();
     });
 
     it("fills the heart under the pointer, showing what the click would leave behind", async () => {

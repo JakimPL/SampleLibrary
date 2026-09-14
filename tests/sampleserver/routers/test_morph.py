@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 import httpx
@@ -14,7 +15,7 @@ from samplecore.models.sample import Sample
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from sampleserver.dependencies import get_inference_client
+from sampleserver.dependencies import get_connection_opener, get_inference_client
 from tests.sampleserver.conftest import INFERENCE_URL
 
 FIRST = "a" * 64
@@ -153,3 +154,63 @@ def test_the_status_carries_what_the_process_serves(client: TestClient) -> None:
     response = client.get("/morph/status")
 
     assert response.json() == {"available": True, "service": STATUS}
+
+
+@pytest.mark.parametrize(
+    ("answer", "status", "detail"),
+    [
+        (httpx.Response(500, text="Internal Server Error"), 502, "answered 500: Internal Server Error"),
+        (httpx.Response(422, json={"detail": "the two ends are heard 32.0 times apart"}), 422, "32.0 times apart"),
+        (httpx.Response(404, text="not json"), 404, "Not Found"),
+    ],
+    ids=("a failure of its own", "a refusal with its detail", "a refusal without a JSON body"),
+)
+def test_the_process_s_other_answers_are_read_defensively(
+    client: TestClient, answer: httpx.Response, status: int, detail: str
+) -> None:
+    _serve(client, lambda request: answer)
+
+    response = client.get("/morph/audio", params={"first": FIRST, "second": SECOND, "weight": 0.5})
+
+    assert response.status_code == status
+    assert detail in response.json()["detail"]
+
+
+def test_a_render_taking_longer_than_it_is_waited_for_reads_as_a_gateway_timeout(client: TestClient) -> None:
+    def slow(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("the render took too long", request=request)
+
+    _serve(client, slow)
+
+    response = client.get("/morph/audio", params={"first": FIRST, "second": SECOND, "weight": 0.5})
+
+    assert response.status_code == 504
+    assert "did not finish the render" in response.json()["detail"]
+
+
+def test_a_status_the_process_cannot_state_reads_as_unavailable(client: TestClient) -> None:
+    _serve(client, lambda request: httpx.Response(200, text="<html>not a status</html>"))
+
+    assert client.get("/morph/status").json() == {"available": False, "service": None}
+
+
+def test_the_catalog_connection_is_closed_before_the_render_is_awaited(
+    client: TestClient, connection: Connection
+) -> None:
+    held: list[bool] = []
+
+    @contextmanager
+    def tracked() -> Iterator[Connection]:
+        held.append(True)
+        yield connection
+        held[-1] = False
+
+    client.app.dependency_overrides[get_connection_opener] = lambda: tracked
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        assert held == [False]
+        return _rendered(request)
+
+    _serve(client, answer)
+
+    assert client.get("/morph/audio", params={"first": FIRST, "second": SECOND, "weight": 0.5}).status_code == 200

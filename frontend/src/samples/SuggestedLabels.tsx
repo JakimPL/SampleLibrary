@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 
+import type { AnnotationScope } from "../api/curation";
 import type { SampleDetail } from "../api/samples";
-import { defaultScopeFor } from "./AnnotationEditor";
 import { decisionsOf, useSampleAnnotation } from "./annotationStore";
 import { holdsTag, withTag } from "./labelText";
 import { useAnnotationWriter } from "./useAnnotationWriter";
@@ -12,6 +12,8 @@ export const NO_SUGGESTIONS = "No suggestions yet — a scoring of the listening
 
 interface SuggestedLabelsProps {
     readonly sample: SampleDetail;
+    /** How far a click reaches, the same reach the annotation editor's own gestures have. */
+    readonly scope: AnnotationScope;
 }
 
 /**
@@ -19,15 +21,13 @@ interface SuggestedLabelsProps {
  *
  * A click appends the tag to the wording the sample carries, through the one write path every
  * annotation gesture takes, so the badge, the row and the cloud follow at once; the write reaches
- * the sample's near-duplicates the way the editor's own default does. A tag the label already
- * holds shows as taken.
+ * as far as the editor's near-duplicates checkbox says and changes the label alone. A tag the label
+ * already holds shows as taken.
  */
-export function SuggestedLabels({ sample }: SuggestedLabelsProps): ReactElement {
+export function SuggestedLabels({ sample, scope }: SuggestedLabelsProps): ReactElement {
     const current = useSampleAnnotation(sample.hash, decisionsOf(sample));
-    const { write, isSaving, message } = useAnnotationWriter(sample.hash, defaultScopeFor(sample));
+    const { change, message } = useAnnotationWriter(sample.hash, scope);
     const label = current?.label ?? null;
-    const rating = current?.rating ?? null;
-    const favorite = current?.favorite ?? false;
 
     if (sample.suggested_labels.length === 0) {
         return <p className="placeholder-box">{NO_SUGGESTIONS}</p>;
@@ -44,9 +44,9 @@ export function SuggestedLabels({ sample }: SuggestedLabelsProps): ReactElement 
                             type="button"
                             className="badge badge-suggestion"
                             aria-pressed={taken}
-                            disabled={isSaving || taken}
+                            disabled={taken}
                             onClick={() => {
-                                write({ label: withTag(label, suggestion.label), rating, favorite });
+                                change({ label: withTag(label, suggestion.label) });
                             }}
                         >
                             {suggestion.label}

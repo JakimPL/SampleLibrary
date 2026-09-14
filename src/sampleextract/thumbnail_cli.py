@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 
+from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from sampleextract.thumbnail import compute_missing_thumbnails
 
@@ -25,9 +26,7 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Compute and cache a waveform-preview thumbnail for each sample."
-    )
+    parser = command_parser(prog=prog, description="Compute a waveform thumbnail for each cataloged sample.")
     parser.add_argument(
         "--force",
         action="store_true",

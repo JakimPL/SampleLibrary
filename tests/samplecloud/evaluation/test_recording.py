@@ -45,7 +45,7 @@ def test_every_metric_a_report_holds_reaches_the_run(
         connection,
         experiment_id=separable_catalog.experiment_id,
         library_root=tmp_path,
-        feature_extractor=None,
+        describer=None,
         settings=SETTINGS,
     )
     run = RecordingRun()
@@ -72,7 +72,7 @@ def test_a_retuning_is_named_by_its_direction_and_size(
         connection,
         experiment_id=separable_catalog.experiment_id,
         library_root=tmp_path,
-        feature_extractor=None,
+        describer=None,
         settings=SETTINGS,
     )
     offsets = tuple(

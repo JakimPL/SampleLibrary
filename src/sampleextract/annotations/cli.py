@@ -8,11 +8,17 @@ from pathlib import Path
 
 from sqlalchemy import Connection
 
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.cli_parsing import add_subcommand, command_parser
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection, open_catalog_reader
 from samplecore.labeling.vocabulary import read_vocabulary
 from samplecore.models.annotation import SampleAnnotation
 from sampleextract.annotations.relink import RelinkSummary, relink_annotations
-from sampleextract.annotations.transfer import DEFAULT_ANNOTATION_FILE, export_annotations, import_annotations
+from sampleextract.annotations.transfer import (
+    DEFAULT_ANNOTATION_FILE,
+    AnnotationFileRefused,
+    export_annotations,
+    import_annotations,
+)
 from sampleextract.annotations.vocabulary import vocabulary_lines
 
 _logger = logging.getLogger(__name__)
@@ -27,13 +33,28 @@ class AnnotationCommand(StrEnum):
     RELINK = "relink"
     VOCABULARY = "vocabulary"
 
+    @property
+    def reads_only(self) -> bool:
+        """Whether the command reports what the catalog holds, leaving every row as it is."""
+        match self:
+            case AnnotationCommand.EXPORT | AnnotationCommand.VOCABULARY:
+                return True
+            case AnnotationCommand.IMPORT | AnnotationCommand.RELINK:
+                return False
+
 
 def main(argv: list[str], *, prog: str) -> None:
     """Move hand annotations between the catalog and a file, reattach ones whose sample moved, or list their wording."""
     arguments = _parse_arguments(argv, prog=prog)
+    command = AnnotationCommand(arguments.command)
     config = bootstrap_cli()
-    with open_catalog_connection(config.database_url) as connection:
-        _run(AnnotationCommand(arguments.command), arguments, connection)
+    open_catalog = open_catalog_reader if command.reads_only else open_catalog_connection
+    with open_catalog(config.database_url) as connection:
+        try:
+            _run(command, arguments, connection)
+        except AnnotationFileRefused as error:
+            _logger.error("Moved nothing: %s.", error)
+            sys.exit(1)
 
 
 def _run(command: AnnotationCommand, arguments: argparse.Namespace, connection: Connection) -> None:
@@ -47,8 +68,7 @@ def _run(command: AnnotationCommand, arguments: argparse.Namespace, connection: 
         case AnnotationCommand.RELINK:
             _report_relink(relink_annotations(connection))
         case AnnotationCommand.VOCABULARY:
-            for line in vocabulary_lines(read_vocabulary(connection)):
-                _logger.info("%s", line)
+            print("\n".join(vocabulary_lines(read_vocabulary(connection))))
 
 
 def _report_relink(summary: RelinkSummary) -> None:
@@ -68,8 +88,17 @@ def _report_relink(summary: RelinkSummary) -> None:
             annotation.occurrence.sample_slot,
             annotation.module_filename,
         )
+    for annotation in summary.conflicting:
+        _logger.warning(
+            "Left alone: %s on %s, whose slot %d/%d in %s now holds a sample with a decision of its own.",
+            _describe(annotation),
+            annotation.sample_hash,
+            annotation.occurrence.instrument_index,
+            annotation.occurrence.sample_slot,
+            annotation.module_filename,
+        )
 
-    if summary.unresolved:
+    if summary.needs_a_person:
         sys.exit(1)
 
 
@@ -91,33 +120,35 @@ def _describe(annotation: SampleAnnotation) -> str:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Move hand-made sample annotations in and out of the catalog."
-    )
+    parser = command_parser(prog=prog, description="Move hand-made sample annotations in and out of the catalog.")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    export_parser = commands.add_parser(
+    export_parser = add_subcommand(
+        commands,
         AnnotationCommand.EXPORT.value,
-        help="Write every annotation to a JSONL file, the copy that outlives the database.",
+        summary="Write every annotation to a JSONL file, the copy that outlives the database.",
     )
     export_parser.add_argument(
         "--path", type=Path, default=DEFAULT_ANNOTATION_FILE, help="Where to write the annotations."
     )
 
-    import_parser = commands.add_parser(
+    import_parser = add_subcommand(
+        commands,
         AnnotationCommand.IMPORT.value,
-        help="Read annotations from a JSONL file, merging them into whatever is on file.",
+        summary="Read annotations from a JSONL file, merging them into whatever is on file.",
     )
     import_parser.add_argument(
         "--path", type=Path, default=DEFAULT_ANNOTATION_FILE, help="Where to read the annotations from."
     )
 
-    commands.add_parser(
+    add_subcommand(
+        commands,
         AnnotationCommand.RELINK.value,
-        help="Reattach annotations whose sample hash the catalog no longer holds, through their anchors.",
+        summary="Reattach annotations whose sample hash the catalog no longer holds, through their anchors.",
     )
-    commands.add_parser(
+    add_subcommand(
+        commands,
         AnnotationCommand.VOCABULARY.value,
-        help="List every tag in use as a tree with counts, and the wording worth a second look.",
+        summary="List every tag in use as a tree with counts, and the wording worth a second look.",
     )
     return parser.parse_args(argv)

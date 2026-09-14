@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Final, cast
+import collections.abc
+from collections.abc import Iterable, Iterator
+from typing import Final, TypeVar, cast
 
 from psycopg import Connection as PsycopgConnection
 from sqlalchemy import (
@@ -61,11 +62,20 @@ _HIGHEST_NOTE: Final[int] = NOTE_COUNT - 1
 # Postgres binds at most 65535 parameters to one statement, a limit of its own wire protocol rather
 # than a tunable setting. A whole-catalog lookup passes far more hashes than that, so queries taking
 # one parameter per hash run in chunks comfortably inside the ceiling.
+POSTGRES_PARAMETER_LIMIT: Final[int] = 65_535
 HASH_CHUNK_SIZE: Final[int] = 20_000
 
-# An arbitrary number, needing only to be one no other advisory lock in this database picks.
-SCHEMA_LOCK_KEY: Final[int] = 6_853_197_402_115_308_001
+# LIKE reads a backslash as its escape character, so the pattern spells a literal one twice.
+MODULE_FILENAME_BACKSLASH_PATTERN: Final[str] = "%\\\\%"
 
+# Arbitrary numbers, each needing only to be one no other advisory lock in this database picks.
+SCHEMA_LOCK_KEY: Final[int] = 6_853_197_402_115_308_001
+EXTRACTION_LOCK_KEY: Final[int] = 2_940_318_775_601_922_553
+# The promotion table holds one row, the cloud being shown, and this is its key.
+PROMOTION_SLOT: Final[int] = 0
+CONNECT_TIMEOUT_SECONDS: Final[int] = 10
+
+Item = TypeVar("Item")
 
 metadata = MetaData()
 
@@ -100,7 +110,8 @@ module = Table(
     Column("file_size", UBigInt, nullable=False),
     Column("ingested_at", DateTime(timezone=True), nullable=False),
     CheckConstraint(
-        column("filename").not_like("%/%") & column("filename").not_like(r"%\%"), name="module_filename_check"
+        column("filename").not_like("%/%") & column("filename").not_like(MODULE_FILENAME_BACKSLASH_PATTERN),
+        name="module_filename_check",
     ),
     CheckConstraint(column("tracker").in_(_TRACKER_FORMAT_VALUES), name="module_tracker_check"),
     CheckConstraint(non_negative("channel_count"), name="module_channel_count_check"),
@@ -286,6 +297,15 @@ experiment = Table(
     Column("label", String, nullable=True),
 )
 
+cloud_promotion = Table(
+    "cloud_promotion",
+    metadata,
+    Column("slot", Integer, primary_key=True),
+    Column("experiment_id", Integer, ForeignKey("experiment.id"), nullable=False),
+    Column("promoted_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(column("slot") == PROMOTION_SLOT, name="cloud_promotion_slot_check"),
+)
+
 sample_feature_vector = Table(
     "sample_feature_vector",
     metadata,
@@ -427,13 +447,16 @@ def connect_for_curation(database_url: str) -> Connection:
     the pipelines that build one. The caller owns the transaction and commits its own work.
     """
     connection = _open(database_url)
+    _claim_schema_creation(connection)
     create_curation_schema(connection)
     connection.commit()
     return connection
 
 
 def _open(database_url: str) -> Connection:
-    return create_engine(database_url, poolclass=NullPool).connect()
+    return create_engine(
+        database_url, poolclass=NullPool, connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS}
+    ).connect()
 
 
 def create_pooled_engine(database_url: str, *, pool_size: int) -> Engine:
@@ -444,7 +467,12 @@ def create_pooled_engine(database_url: str, *, pool_size: int) -> Engine:
     before handing it out, so a connection the server dropped is replaced rather than failing a
     request.
     """
-    return create_engine(database_url, pool_size=pool_size, pool_pre_ping=True)
+    return create_engine(
+        database_url,
+        pool_size=pool_size,
+        pool_pre_ping=True,
+        connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
+    )
 
 
 def checkout_read_only(engine: Engine) -> Connection:
@@ -452,7 +480,7 @@ def checkout_read_only(engine: Engine) -> Connection:
     return engine.connect().execution_options(postgresql_readonly=True)
 
 
-def create_schema(bind: Connection | Engine) -> None:
+def create_schema(connection: Connection) -> None:
     """Create every table and sequence the catalog needs, where it does not already exist.
 
     The curation schema comes with it, so hand-curated work is readable wherever the catalog is,
@@ -461,11 +489,9 @@ def create_schema(bind: Connection | Engine) -> None:
     Safe to call from several processes opening the same fresh catalog at once: each waits its turn
     on `_claim_schema_creation`, and every one after the first finds the tables already standing.
     """
-    if isinstance(bind, Connection):
-        _claim_schema_creation(bind)
-
-    metadata.create_all(bind)
-    create_curation_schema(bind)
+    _claim_schema_creation(connection)
+    metadata.create_all(connection)
+    create_curation_schema(connection)
 
 
 def _claim_schema_creation(connection: Connection) -> None:
@@ -478,6 +504,27 @@ def _claim_schema_creation(connection: Connection) -> None:
     that publishes the tables.
     """
     connection.execute(select(func.pg_advisory_xact_lock(SCHEMA_LOCK_KEY)))
+
+
+def chunks(items: collections.abc.Sequence[Item], size: int) -> Iterator[collections.abc.Sequence[Item]]:
+    """Consecutive runs of at most ``size`` items, so one statement per run stays inside ``POSTGRES_PARAMETER_LIMIT``."""
+    for start in range(0, len(items), size):
+        yield items[start : start + size]
+
+
+def share_extraction_lock(connection: Connection) -> None:
+    """Hold the extraction lock alongside every other pass adding to the catalog, for as long as the connection is open.
+
+    Extraction and note reading add rows and stored objects side by side, and each holds the lock in
+    shared mode for its whole run. Pruning takes it alone (``claim_extraction_lock``), so a pass
+    adding a sample and a prune removing samples no module holds never run at once.
+    """
+    connection.execute(select(func.pg_advisory_lock_shared(EXTRACTION_LOCK_KEY)))
+
+
+def claim_extraction_lock(connection: Connection) -> bool:
+    """Take the extraction lock alone for as long as the connection is open, reporting whether it was free."""
+    return bool(connection.execute(select(func.pg_try_advisory_lock(EXTRACTION_LOCK_KEY))).scalar_one())
 
 
 def start_batch(connection: Connection) -> RootTransaction:

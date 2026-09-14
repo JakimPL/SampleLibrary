@@ -16,7 +16,10 @@ from samplecore.storage.database import connect
 
 _LOG_FORMAT: Final[str] = "%(asctime)s  %(message)s"
 _LOG_DATE_FORMAT: Final[str] = "%H:%M:%S"
-_CONFIRM_FLAG_HINT: Final[str] = "Nothing has been changed. Re-run with --confirm to actually do this."
+_CONFIRM_FLAG_HINT: Final[str] = "Nothing has been changed. Pass --confirm to carry it out."
+
+MINIMUM_PORT: Final[int] = 1
+MAXIMUM_PORT: Final[int] = 65_535
 
 _logger = logging.getLogger(__name__)
 
@@ -103,6 +106,20 @@ def redact_database_url(database_url: str) -> str:
 
 
 @contextmanager
+def open_catalog_reader(database_url: str) -> Iterator[Connection]:
+    """Open the catalog read-only for one console entry point's operation, closing it again afterward.
+
+    For a command that reports what the catalog holds: it attaches to a catalog another process
+    prepared, and Postgres refuses any write it attempts.
+    """
+    connection = connect(database_url, read_only=True)
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+
+@contextmanager
 def open_catalog_connection(database_url: str) -> Iterator[Connection]:
     """Open the catalog for one console entry point's operation, closing it again afterward.
 
@@ -116,30 +133,82 @@ def open_catalog_connection(database_url: str) -> Iterator[Connection]:
         connection.close()
 
 
-def report_dry_run(description: str) -> None:
-    """Log what a confirm-gated destructive script would do, and that nothing has happened yet.
+@contextmanager
+def ending_in_one_line(outcome: str, refusals: tuple[type[ValueError], ...]) -> Iterator[None]:
+    """End the process with one message when the work inside is refused, saying what was left undone.
 
-    Shared by every such script's ``main()``, so the "nothing changes without --confirm" contract
-    reads identically regardless of which script reports it.
+    A refusal is a request this command cannot carry out as asked -- an experiment it cannot resume,
+    a file it cannot read as what it names -- which a person fixes in the command line, so it reads
+    as one line rather than a traceback.
+
+    Raises:
+        SystemExit: one of `refusals` was raised inside.
+    """
+    try:
+        yield
+    except refusals as error:
+        _logger.error("%s: %s.", outcome, error)
+        sys.exit(1)
+
+
+def report_dry_run(description: str) -> None:
+    """Log what a confirm-gated destructive command would do, and that it waits for `--confirm`.
+
+    Shared by every such command, so the dry run reads identically whichever command reports it.
     """
     _logger.info("%s %s", description, _CONFIRM_FLAG_HINT)
 
 
-def confirmed(
-    argv: list[str],
-    parse_arguments: Callable[[list[str]], argparse.Namespace],
-    dry_run_message: str,
-) -> bool:
-    """Set up logging and parse a confirm-gated script's arguments, reporting when not confirmed.
+def integer_at_least(minimum: int) -> Callable[[str], int]:
+    """An argparse type reading a whole number no smaller than ``minimum``, reported the way argparse reports its own errors."""
+    return lambda raw_value: _bounded_integer(raw_value, minimum=minimum, maximum=None)
 
-    Shared by every destructive maintenance script's ``main()``: a false result means ``--confirm``
-    was not passed, the dry-run description has already been logged, and the caller's own body
-    should simply return without doing anything else. ``parse_arguments`` must produce a namespace
-    carrying a ``confirm: bool`` field, matching the ``--confirm`` flag every such script defines.
+
+def integer_between(minimum: int, maximum: int) -> Callable[[str], int]:
+    """An argparse type reading a whole number from ``minimum`` to ``maximum`` inclusive."""
+    return lambda raw_value: _bounded_integer(raw_value, minimum=minimum, maximum=maximum)
+
+
+def positive_multiple_of(step: int) -> Callable[[str], int]:
+    """An argparse type reading a whole number of at least ``step`` that ``step`` divides."""
+
+    def read(raw_value: str) -> int:
+        value = _bounded_integer(raw_value, minimum=step, maximum=None)
+        if value % step:
+            raise argparse.ArgumentTypeError(f"must be a multiple of {step}, not {value}")
+        return value
+
+    return read
+
+
+def positive_integer(raw_value: str) -> int:
+    """An argparse type reading a count of at least one."""
+    return _bounded_integer(raw_value, minimum=1, maximum=None)
+
+
+def non_negative_integer(raw_value: str) -> int:
+    """An argparse type reading a count that may be zero, such as a number of helper processes."""
+    return _bounded_integer(raw_value, minimum=0, maximum=None)
+
+
+def port_number(raw_value: str) -> int:
+    """An argparse type reading a TCP port."""
+    return _bounded_integer(raw_value, minimum=MINIMUM_PORT, maximum=MAXIMUM_PORT)
+
+
+def _bounded_integer(raw_value: str, *, minimum: int, maximum: int | None) -> int:
+    """Read one option value.
+
+    Raises:
+        argparse.ArgumentTypeError: the value is not a whole number, or lies outside the bounds.
     """
-    configure_logging()
-    arguments = parse_arguments(argv)
-    if arguments.confirm:
-        return True
-    report_dry_run(dry_run_message)
-    return False
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"expected a whole number, not {raw_value!r}") from error
+
+    if value < minimum:
+        raise argparse.ArgumentTypeError(f"must be at least {minimum}, not {value}")
+    if maximum is not None and value > maximum:
+        raise argparse.ArgumentTypeError(f"must be at most {maximum}, not {value}")
+    return value

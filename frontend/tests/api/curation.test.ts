@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { clearSampleAnnotation, getLabelTags, getLabelVocabulary, setSampleAnnotation } from "../../src/api/curation";
+import { changeSampleAnnotation, getLabelTags, getLabelVocabulary } from "../../src/api/curation";
 
 const SAMPLE_HASH = "a".repeat(64);
-const NOTHING = { label: null, rating: null, favorite: false };
 
 function stubFetch(payload: unknown): ReturnType<typeof vi.fn> {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(payload) });
@@ -15,52 +14,41 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
-describe("setSampleAnnotation", () => {
-    it("sends every decision and the scope as a PUT", async () => {
-        const fetchMock = stubFetch({ annotation: null, sample_hashes: [SAMPLE_HASH] });
+describe("changeSampleAnnotation", () => {
+    it("sends the decisions a gesture changes and the scope as a PATCH", async () => {
+        const fetchMock = stubFetch({ samples: [], skipped: [] });
 
-        await setSampleAnnotation(SAMPLE_HASH, { label: "warm pad", rating: 4, favorite: true }, "sample");
+        await changeSampleAnnotation(SAMPLE_HASH, "sample", { rating: 4 });
 
         expect(fetchMock).toHaveBeenCalledWith(`/api/curation/annotations/${SAMPLE_HASH}`, {
-            method: "PUT",
+            method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ label: "warm pad", rating: 4, favorite: true, scope: "sample" }),
+            body: JSON.stringify({ rating: 4, scope: "sample" }),
         });
     });
 
-    it("carries a group scope through to the server", async () => {
-        const fetchMock = stubFetch({ annotation: null, sample_hashes: [SAMPLE_HASH] });
+    it("sends a cleared decision as null", async () => {
+        const fetchMock = stubFetch({ samples: [], skipped: [] });
 
-        await setSampleAnnotation(SAMPLE_HASH, { ...NOTHING, label: "snare" }, "equivalence_class");
+        await changeSampleAnnotation(SAMPLE_HASH, "equivalence_class", { label: null });
 
         expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
-            body: JSON.stringify({ label: "snare", rating: null, favorite: false, scope: "equivalence_class" }),
+            body: JSON.stringify({ label: null, scope: "equivalence_class" }),
         });
     });
 
-    it("reports back which samples the gesture reached", async () => {
+    it("reports what every reached sample says afterward", async () => {
         stubFetch({
-            annotation: { label: "snare", rating: null, favorite: false },
-            sample_hashes: [SAMPLE_HASH, "b".repeat(64)],
+            samples: [
+                { sample_hash: SAMPLE_HASH, annotation: { label: "SNARE", rating: null, favorite: false } },
+                { sample_hash: "b".repeat(64), annotation: null },
+            ],
+            skipped: [],
         });
 
-        const written = await setSampleAnnotation(SAMPLE_HASH, { ...NOTHING, label: "snare" }, "equivalence_class");
+        const written = await changeSampleAnnotation(SAMPLE_HASH, "equivalence_class", { label: "snare" });
 
-        expect(written.sample_hashes).toHaveLength(2);
-    });
-});
-
-describe("clearSampleAnnotation", () => {
-    it("sends a state recording nothing, which is what takes every decision back", async () => {
-        const fetchMock = stubFetch({ annotation: null, sample_hashes: [SAMPLE_HASH] });
-
-        await clearSampleAnnotation(SAMPLE_HASH, "sample");
-
-        expect(fetchMock).toHaveBeenCalledWith(`/api/curation/annotations/${SAMPLE_HASH}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ label: null, rating: null, favorite: false, scope: "sample" }),
-        });
+        expect(written.samples).toHaveLength(2);
     });
 });
 

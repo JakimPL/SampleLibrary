@@ -1,58 +1,57 @@
 from __future__ import annotations
 
-from datetime import datetime
+from dataclasses import dataclass
 
 from sqlalchemy import Connection
 
-from samplecore.models.annotation import AnnotationDecisions, AnnotationSource, SampleAnnotation
-from samplecore.models.sample_properties import TrackerSampleProperties
+from samplecore.models.annotation import SampleAnnotation
+from samplecore.models.sample_properties import SampleOccurrence, TrackerSampleProperties
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 
 
-def anchored_annotations(
-    connection: Connection,
-    *,
-    sample_hashes: tuple[str, ...],
-    decisions: AnnotationDecisions,
-    source: AnnotationSource,
-    annotated_at: datetime,
-) -> tuple[SampleAnnotation, ...]:
-    """One annotation per sample, each anchored to a module slot it stays findable through.
+@dataclass(frozen=True)
+class Anchor:
+    """The module slot an annotation stays findable through, with the names a person recognizes it by."""
+
+    occurrence: SampleOccurrence
+    module_filename: str
+    sample_name: str
+
+    @classmethod
+    def of(cls, annotation: SampleAnnotation) -> Anchor:
+        """The anchor an annotation already carries."""
+        return cls(
+            occurrence=annotation.occurrence,
+            module_filename=annotation.module_filename,
+            sample_name=annotation.sample_name,
+        )
+
+
+def anchors_by_hash(connection: Connection, sample_hashes: tuple[str, ...]) -> dict[str, Anchor]:
+    """The anchor each of ``sample_hashes`` gets from the catalog, for the samples it holds an occurrence of.
 
     A sample's hash depends on how this project hashes audio, so an annotation keyed on the hash
     alone would be lost the moment that changes. The anchor is the occurrence lowest in
     ``(module_hash, instrument_index, sample_slot)`` order -- a deterministic choice, so revisiting
     the same sample keeps naming the same slot -- recorded together with the module's filename and
     the occurrence's name, which stay readable to a person even when neither hash resolves.
-
-    Only samples the catalog holds an occurrence for come back, an occurrence being the anchor's
-    whole source. A caller writing a whole group takes the samples left out as the ones whose
-    annotation it should remove, so a group ends up saying one thing throughout.
     """
-    properties_repository = PostgresSamplePropertiesRepository(connection)
-    anchor_by_hash = {
-        sample_hash: _lowest_occurrence(properties_repository.list_for_sample(sample_hash))
-        for sample_hash in sample_hashes
-    }
-    anchored = {sample_hash: anchor for sample_hash, anchor in anchor_by_hash.items() if anchor is not None}
-    module_hashes = sorted({anchor.occurrence.module_hash for anchor in anchored.values()})
-    modules_by_hash = PostgresModuleRepository(connection).get_many(module_hashes)
+    occurrences_by_hash: dict[str, list[TrackerSampleProperties]] = {}
+    for properties in PostgresSamplePropertiesRepository(connection).list_for_samples(sample_hashes):
+        occurrences_by_hash.setdefault(properties.sample_hash, []).append(properties)
 
-    return tuple(
-        SampleAnnotation(
-            sample_hash=sample_hash,
-            label=decisions.label,
-            rating=decisions.rating,
-            favorite=decisions.favorite,
-            occurrence=anchor.occurrence,
-            module_filename=modules_by_hash[anchor.occurrence.module_hash].filename,
-            sample_name=anchor.name,
-            source=source,
-            annotated_at=annotated_at,
+    lowest_by_hash = {sample_hash: _lowest_occurrence(found) for sample_hash, found in occurrences_by_hash.items()}
+    module_hashes = sorted({lowest.occurrence.module_hash for lowest in lowest_by_hash.values()})
+    modules_by_hash = PostgresModuleRepository(connection).get_many(module_hashes)
+    return {
+        sample_hash: Anchor(
+            occurrence=lowest.occurrence,
+            module_filename=modules_by_hash[lowest.occurrence.module_hash].filename,
+            sample_name=lowest.name,
         )
-        for sample_hash, anchor in anchored.items()
-    )
+        for sample_hash, lowest in lowest_by_hash.items()
+    }
 
 
 def relinked_hash(connection: Connection, annotation: SampleAnnotation) -> str | None:
@@ -69,9 +68,8 @@ def relinked_hash(connection: Connection, annotation: SampleAnnotation) -> str |
     return None
 
 
-def _lowest_occurrence(properties: tuple[TrackerSampleProperties, ...]) -> TrackerSampleProperties | None:
+def _lowest_occurrence(properties: list[TrackerSampleProperties]) -> TrackerSampleProperties:
     return min(
         properties,
         key=lambda item: (item.occurrence.module_hash, item.occurrence.instrument_index, item.occurrence.sample_slot),
-        default=None,
     )

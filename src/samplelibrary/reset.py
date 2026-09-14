@@ -2,76 +2,49 @@ from __future__ import annotations
 
 import argparse
 import logging
-import shutil
-from functools import partial
-from pathlib import Path
+from typing import Final
 
-from sqlalchemy import Connection
+from samplecore.cli_parsing import command_parser
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection, redact_database_url, report_dry_run
+from samplecore.storage.reset import reset_library
 
-from samplecore.cli_support import bootstrap_cli, confirmed, open_catalog_connection, redact_database_url
-from samplecore.storage.audio_store import OBJECTS_DIRECTORY_NAME
-from samplecore.storage.database import metadata
+EMPTIED: Final[str] = (
+    "every cataloged module, sample, note event, relation, playback rate, cloud coordinate and promotion, "
+    "experiment, feature vector and label suggestion, and every stored audio object"
+)
+KEPT: Final[str] = "hand annotations, fitted models, grid caches, training runs and the MLflow record"
+REFILLING_PASSES: Final[str] = (
+    "`just rebuild` for the catalog, notes, thumbnails and cloud, then `samplelibrary equivalence` and "
+    "`samplelibrary cloud suggest`, and `samplelibrary annotations relink` for the annotations"
+)
 
 _logger = logging.getLogger(__name__)
 
 
-def reset_library(connection: Connection, library_root: Path) -> None:
-    """Empty every catalog table (feature vectors and experiments included) and the content store.
-
-    The database and its schema are left in place, ready for a fresh extraction pass to rebuild
-    them from nothing. Tables are cleared one at a time, each committed before the next starts, in
-    reverse dependency order (children before parents) -- Postgres's own foreign-key checking does
-    not reliably see an earlier delete in the same still-open transaction once composite keys are
-    involved, so a single all-or-nothing batch is not available here the way
-    ``detect_equivalences``'s own transaction is. The content store's ``objects`` directory is
-    removed and recreated empty, rather than left for a fresh run to overwrite piecemeal --
-    content addressing means a stale object could otherwise survive under a hash extraction never
-    revisits again.
-    """
-    for table in reversed(metadata.sorted_tables):
-        _logger.info("Emptying %s...", table.name)
-        connection.execute(table.delete())
-        connection.commit()
-
-    _logger.info("Recreating the content store...")
-    _recreate_empty(library_root / OBJECTS_DIRECTORY_NAME)
-
-
-def _recreate_empty(directory: Path) -> None:
-    if directory.is_dir():
-        shutil.rmtree(directory)
-    directory.mkdir(parents=True)
-
-
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = command_parser(
         prog=prog,
-        description="Permanently empty the configured library's catalog and content store, so the "
-        "next extraction pass starts from nothing. Destructive and irreversible.",
+        description="Empty the configured library's catalog and content store. "
+        "The next extraction pass starts from nothing; hand annotations, models, caches and runs stay.",
     )
     parser.add_argument(
-        "--confirm", action="store_true", help="Actually perform the reset. Without this flag, nothing is changed."
+        "--confirm", action="store_true", help="Perform the reset; left out, the command names what it would empty."
     )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str], *, prog: str) -> None:
-    if not confirmed(
-        argv,
-        partial(_parse_arguments, prog=prog),
-        "This would permanently delete every cataloged module, sample, relation, cloud "
-        "coordinate, experiment, and feature vector, and every stored audio object, for the "
-        "library named in your config.toml.",
-    ):
+    """Empty the configured library once `--confirm` is given, and name what that would empty otherwise."""
+    arguments = _parse_arguments(argv, prog=prog)
+    config = bootstrap_cli()
+    target = f"the library at {config.library_root} (database: {redact_database_url(config.database_url)})"
+    if not arguments.confirm:
+        report_dry_run(f"This would permanently delete {EMPTIED} for {target}; {KEPT} stay.")
         return
 
-    config = bootstrap_cli()
-    _logger.info(
-        "Resetting the library at %s (database: %s)...",
-        config.library_root,
-        redact_database_url(config.database_url),
-    )
+    _logger.info("Resetting %s...", target)
     with open_catalog_connection(config.database_url) as connection:
         reset_library(connection, config.library_root)
 
-    _logger.info("Done. The catalog and content store are empty; run extraction again to rebuild them.")
+    _logger.info("Done. The catalog and content store are empty; %s stay.", KEPT)
+    _logger.info("To fill the library again: %s.", REFILLING_PASSES)

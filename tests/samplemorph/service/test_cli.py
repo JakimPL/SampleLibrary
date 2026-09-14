@@ -4,11 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+import uvicorn
 from fastapi import FastAPI
 
-from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, InferenceConfig
 from samplemorph.cli import MorphCommand, main
-from samplemorph.service import cli
+from samplemorph.service import renderer as renderer_module
+from samplemorph.service.renderer import load_renderer
+from samplemorph.service.settings import ServiceSettings
 
 PROGRAM = "samplelibrary morph"
 CONFIGURED_HOST = "0.0.0.0"
@@ -35,16 +38,18 @@ def _write_config(tmp_path: Path, *, inference_url: str | None) -> Path:
 
 
 @pytest.fixture
-def recorded(monkeypatch: pytest.MonkeyPatch) -> RecordedRun:
-    """Captures what the serve command hands uvicorn, in place of binding a socket."""
+def recorded(monkeypatch: pytest.MonkeyPatch, settings: ServiceSettings) -> RecordedRun:
+    """Captures what the serve command hands uvicorn, in place of binding a socket, over a renderer loaded once."""
     run = RecordedRun()
+    renderer = load_renderer(settings)
 
     def record(application: FastAPI, *, host: str, port: int) -> None:
         run.application = application
         run.host = host
         run.port = port
 
-    monkeypatch.setattr(cli.uvicorn, "run", record)
+    monkeypatch.setattr(uvicorn, "run", record)
+    monkeypatch.setattr(renderer_module, "load_renderer", lambda loaded_settings: renderer)
     return run
 
 
@@ -58,19 +63,35 @@ def test_the_process_binds_the_address_the_configuration_names(
 
     assert (recorded.host, recorded.port) == (CONFIGURED_HOST, CONFIGURED_PORT)
     assert recorded.application is not None
-    assert recorded.application.state.settings.choice.device == "cpu"
-    assert recorded.application.state.settings.library_root == tmp_path
+    assert recorded.application.state.renderer.status().device == "cpu"
 
 
-def test_a_flag_overrides_the_configured_port_and_the_default_address_serves_when_none_is_named(
+def test_a_flag_overrides_the_configured_port(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recorded: RecordedRun
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, inference_url=None)))
 
     main([MorphCommand.SERVE, "--port", str(OVERRIDING_PORT)], prog=PROGRAM)
 
-    assert recorded.host == cli.FALLBACK_HOST
+    assert recorded.host == InferenceConfig().host
     assert recorded.port == OVERRIDING_PORT
+
+
+def test_serving_a_model_the_library_lacks_ends_with_one_message_before_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bound: list[str] = []
+    monkeypatch.setattr(uvicorn, "run", lambda *arguments, **options: bound.append("bound"))
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, inference_url=None)))
+
+    with pytest.raises(SystemExit) as raised:
+        main([MorphCommand.SERVE, "--vocoder", "pghi"], prog=PROGRAM)
+
+    assert raised.value.code == 1
+    reported = capsys.readouterr().err
+    assert "Serving nothing: no model named" in reported
+    assert "Traceback" not in reported
+    assert not bound
 
 
 def test_a_missing_configuration_ends_the_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -9,13 +9,14 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.channels import ChannelLayout
-from samplecore.models.experiment import LEARNED_BACKEND_NAME, MODEL_PARAMETER
+from samplecore.models.experiment import LEARNED_BACKEND_NAME, MODEL_PARAMETER, READING_PARAMETER, Reading
 from samplecore.models.sample import Sample
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
 from samplemorph.descriptors.embedding import describe_cache, embed_cache
-from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
+from samplemorph.descriptors.grid_descriptor import GridDescriptor
 from samplemorph.descriptors.learned import DescriptorDescription, LearnedDescriptor
 from samplemorph.registries import canonicalizer_for_geometry
 from samplemorph.training.descriptor_cache import GridCache
@@ -81,7 +82,7 @@ def test_embedding_a_cache_opens_an_experiment_naming_the_descriptor(connection:
     experiment = PostgresExperimentRepository(connection).get(summary.experiment_id)
     assert experiment is not None
     assert experiment.backend_name == LEARNED_BACKEND_NAME
-    assert experiment.params == {MODEL_PARAMETER: "tiny"}
+    assert experiment.params == {MODEL_PARAMETER: "tiny", READING_PARAMETER: Reading.NOMINAL.value}
     assert experiment.label == "a test"
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(summary.experiment_id)
     assert summary.sample_count == len(vectors) == 6

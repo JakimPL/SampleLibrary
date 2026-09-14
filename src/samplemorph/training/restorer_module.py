@@ -13,7 +13,8 @@ from samplemorph.training.metrics import (
 )
 from samplemorph.training.optimizers import scheduled_over_the_run
 from samplemorph.training.restorer_losses import RestorerLossParts, restorer_loss
-from samplemorph.vocoders.restorer_model import Restorer, RestorerShape
+from samplemorph.vocoders.restorer_model import Restorer
+from samplemorph.vocoders.restorer_shape import RestorerShape
 
 RestorerBatch = tuple[Tensor, Tensor]
 

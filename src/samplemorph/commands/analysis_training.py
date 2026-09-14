@@ -8,15 +8,17 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import Connection
 
+from samplecore.cli_support import positive_integer, positive_multiple_of
 from samplecore.config import LibraryConfig
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplemorph.commands.draws import add_canonicalizer_argument, canonicalizer_from, draw_probe_samples
-from samplemorph.commands.run_arguments import add_run_arguments, report_outcome, run_settings_from
+from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from, train_and_report
+from samplemorph.registries import RENDERABLE_CANONICALIZER_NAMES
 from samplemorph.training.settings import DEFAULT_CROP_FRAMES, AnalysisTrainingSettings
 
 if TYPE_CHECKING:
     from samplemorph.training.analysis_data import AnalysisCorpus
-    from samplemorph.training.runs import RunPlacement, TrainingOutcome
+    from samplemorph.training.runs import RunFamily, RunPlacement, TrainingOutcome
 
 _logger = logging.getLogger(__name__)
 
@@ -27,12 +29,14 @@ class AnalysisTrainingFlags:
 
     A `sample_count` of `None` trains on every sample the catalog holds, which is what a model of
     this library's own sounds is taught from; a count draws that many reproducibly within the
-    probe bounds.
+    probe bounds. `channel_step` is the count every layer's channels divide into, the groups its
+    normalization reads.
     """
 
     axis_help: str
     sample_count: int | None
     channels: int
+    channel_step: int
     model_flag: str
     model_name: str
 
@@ -42,24 +46,31 @@ class AnalysisTrainer:
     """One family's trainer as a command drives it: the experiment it records under, the model name, and the run itself."""
 
     experiment_name: str
+    family: RunFamily
     model_name: str
     train: Callable[[AnalysisCorpus, AnalysisTrainingSettings, RunPlacement], TrainingOutcome]
 
 
 def add_analysis_training_arguments(parser: argparse.ArgumentParser, flags: AnalysisTrainingFlags) -> None:
     """The flags every trainer taught on the pipeline's own magnitudes shares, declared once so each reads the same."""
-    add_canonicalizer_argument(parser, help_text=flags.axis_help)
+    add_canonicalizer_argument(parser, help_text=flags.axis_help, names=RENDERABLE_CANONICALIZER_NAMES)
     parser.add_argument(
         "--samples",
-        type=int,
+        type=positive_integer,
         default=flags.sample_count,
         help="How many samples to train on; every sample the catalog holds when left out.",
     )
     parser.add_argument(
-        "--channels", type=int, default=flags.channels, help="How much capacity the network spends per layer."
+        "--channels",
+        type=positive_multiple_of(flags.channel_step),
+        default=flags.channels,
+        help=f"How much capacity the network spends per layer, in steps of {flags.channel_step}.",
     )
     parser.add_argument(
-        "--crop", type=int, default=DEFAULT_CROP_FRAMES, help="How many analysis frames one training crop spans."
+        "--crop",
+        type=positive_integer,
+        default=DEFAULT_CROP_FRAMES,
+        help="How many analysis frames one training crop spans.",
     )
     parser.add_argument(flags.model_flag, type=str, default=flags.model_name, help="The name to store the model under.")
     add_run_arguments(parser)
@@ -74,7 +85,7 @@ def train_on_analysis_corpus(
     # pylint: disable=import-outside-toplevel
     from samplecore.tracking.session import open_run
     from samplemorph.training.analysis_data import AnalysisCorpus
-    from samplemorph.training.runs import RunPlacement
+    from samplemorph.training.runs import RunPlacement, check_resume_point
 
     samples = (
         PostgresSampleRepository(connection).list_all()
@@ -90,16 +101,23 @@ def train_on_analysis_corpus(
     settings = AnalysisTrainingSettings(
         channels=arguments.channels, run=run_settings_from(arguments), crop_frames=arguments.crop
     )
-    _logger.info("Training over %d samples on the %s axis.", len(samples), arguments.canonicalizer)
-    with open_run(
-        config.library_root,
-        recorded=not arguments.no_tracking,
-        experiment_name=trainer.experiment_name,
-        run_name=trainer.model_name,
-    ) as tracker:
-        placement = RunPlacement(
-            library_root=config.library_root, model_name=trainer.model_name, tracker=tracker, resume=arguments.resume
-        )
-        outcome = trainer.train(corpus, settings, placement)
 
-    report_outcome(outcome)
+    def train() -> TrainingOutcome:
+        check_resume_point(config.library_root, family=trainer.family, name=trainer.model_name, resume=arguments.resume)
+        _logger.info("Training over %d samples on the %s axis.", len(samples), arguments.canonicalizer)
+        with open_run(
+            config.library_root,
+            recorded=not arguments.no_tracking,
+            experiment_name=trainer.experiment_name,
+            run_name=trainer.model_name,
+        ) as tracker:
+            placement = RunPlacement(
+                library_root=config.library_root,
+                family=trainer.family,
+                model_name=trainer.model_name,
+                tracker=tracker,
+                resume=arguments.resume,
+            )
+            return trainer.train(corpus, settings, placement)
+
+    train_and_report(train)

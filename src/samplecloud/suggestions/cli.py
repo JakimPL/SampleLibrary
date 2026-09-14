@@ -7,11 +7,25 @@ from typing import Final
 from sqlalchemy import Connection
 
 from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME, TEACHER_CHECKPOINT, load_teacher
-from samplecloud.suggestions.scoring import DEFAULT_SUGGESTION_COUNT, ScoringRecipe, ScoringSummary, score_suggestions
-from samplecloud.suggestions.vocabulary import INSTRUMENTS_CHOICE, prompt_for, vocabulary_from
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecloud.experiments import ExperimentRefused, experiment_named
+from samplecloud.suggestions.scoring import (
+    DEFAULT_SUGGESTION_COUNT,
+    MAXIMUM_SUGGESTION_COUNT,
+    ScoringRecipe,
+    ScoringSummary,
+    score_suggestions,
+)
+from samplecloud.suggestions.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, prompt_for, vocabulary_from
+from samplecore.cli_parsing import command_parser
+from samplecore.cli_support import (
+    bootstrap_cli,
+    ending_in_one_line,
+    integer_between,
+    open_catalog_connection,
+    positive_integer,
+)
 from samplecore.models.experiment import Experiment
-from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 
 DEFAULT_TEXT_DEVICE: Final[str] = "cpu"
 
@@ -23,8 +37,9 @@ def main(argv: list[str], *, prog: str) -> None:
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
-        source = _listening_experiment(connection, arguments.experiment_id)
-        vocabulary = vocabulary_from(arguments.vocabulary, connection)
+        with ending_in_one_line("Suggested nothing", (ExperimentRefused, VocabularyRefused)):
+            source = _listening_experiment(connection, arguments.experiment_id)
+            vocabulary = vocabulary_from(arguments.vocabulary, connection)
         prompts = load_teacher(device=arguments.device).embed_text([prompt_for(label) for label in vocabulary])
         summary = score_suggestions(
             connection,
@@ -44,16 +59,16 @@ def _listening_experiment(connection: Connection, experiment_id: int) -> Experim
     """The experiment whose vectors are scored, which has to come from the listening model the prompts share a space with.
 
     Raises:
-        ValueError: the catalog holds no such experiment, or another backend extracted it.
+        ExperimentRefused: the catalog holds no such experiment, another backend extracted it, or it holds no vectors.
     """
-    experiment = PostgresExperimentRepository(connection).get(experiment_id)
-    if experiment is None:
-        raise ValueError(f"the catalog holds no experiment {experiment_id}")
+    experiment = experiment_named(connection, experiment_id)
     if experiment.backend_name != TEACHER_BACKEND_NAME:
-        raise ValueError(
+        raise ExperimentRefused(
             f"experiment {experiment_id} was extracted by the {experiment.backend_name} backend; "
             f"suggestions read the {TEACHER_BACKEND_NAME} backend's vectors"
         )
+    if not PostgresSampleFeatureVectorRepository(connection).first_vectors(experiment_id, count=1):
+        raise ExperimentRefused(f"experiment {experiment_id} holds no vectors to score")
     return experiment
 
 
@@ -74,11 +89,12 @@ def _report(summary: ScoringSummary) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Suggest labels for every sample from a listening-model experiment."
-    )
+    parser = command_parser(prog=prog, description="Suggest labels for every sample of a listening-model experiment.")
     parser.add_argument(
-        "--experiment-id", type=int, required=True, help="The listening-model experiment whose vectors are scored."
+        "--experiment-id",
+        type=positive_integer,
+        required=True,
+        help="The listening-model experiment whose vectors are scored.",
     )
     parser.add_argument(
         "--vocabulary",
@@ -87,7 +103,10 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         help="Which labels to rank: instruments, hand-labels, or a file with one label per line.",
     )
     parser.add_argument(
-        "--top", type=int, default=DEFAULT_SUGGESTION_COUNT, help="How many labels each sample keeps, closest first."
+        "--top",
+        type=integer_between(1, MAXIMUM_SUGGESTION_COUNT),
+        default=DEFAULT_SUGGESTION_COUNT,
+        help="How many labels each sample keeps, closest first.",
     )
     parser.add_argument(
         "--device", type=str, default=DEFAULT_TEXT_DEVICE, help="Which device the text tower reads the prompts on."

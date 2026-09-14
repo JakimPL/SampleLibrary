@@ -8,10 +8,12 @@ import numpy as np
 from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
+from samplecore.storage.atomic import write_atomically
 from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.codecs.principal_components import PrincipalComponentCodec
 from samplemorph.geometry import Geometry
+from samplemorph.model_paths import CONDITIONED_CODEC_NAME, codec_path, descriptor_path
 
 MODELS_DIRECTORY_NAME: Final[str] = "models"
 MODEL_SUFFIX: Final[str] = ".npz"
@@ -57,24 +59,39 @@ def model_path(library_root: Path, *, name: str) -> Path:
     return library_root / MODELS_DIRECTORY_NAME / f"{name}{MODEL_SUFFIX}"
 
 
-def load_named_model(library_root: Path, *, name: str, device: str) -> MorphModel:
+@dataclass(frozen=True)
+class LoadedModel:
+    """A stored model as loaded, beside every file it was read from."""
+
+    model: MorphModel
+    files: tuple[Path, ...]
+
+
+def load_named_model(library_root: Path, *, name: str, device: str) -> LoadedModel:
     """A fitted model by name, from whichever store holds it: arrays for a linear codec, weights for a learned one.
+
+    A learned codec is read beside its descriptor, so both files are named among those it came from.
 
     Raises:
         FileNotFoundError: no model of that name is stored in either.
     """
     array_path = model_path(library_root, name=name)
     if array_path.exists():
-        return load_model(array_path)
+        return LoadedModel(model=load_model(array_path), files=(array_path,))
 
     # pylint: disable=import-outside-toplevel
     import torch
 
-    from samplemorph.codecs.conditioned import CONDITIONED_CODEC_NAME, codec_path, load_conditioned_codec
+    from samplemorph.codecs.conditioned import load_conditioned_codec
 
-    codec = load_conditioned_codec(
-        codec_path(library_root, name=name), library_root=library_root, device=torch.device(device)
-    )
+    stored_codec_path = codec_path(library_root, name=name)
+    if not stored_codec_path.exists():
+        raise FileNotFoundError(
+            f"no model named {name!r} is stored: `samplelibrary morph fit` writes {array_path}, "
+            f"and `samplelibrary morph train-codec` writes {stored_codec_path}"
+        )
+
+    codec = load_conditioned_codec(stored_codec_path, library_root=library_root, device=torch.device(device))
     stored = codec.model.shape
     description = MorphModelDescription(
         codec=CONDITIONED_CODEC_NAME,
@@ -85,21 +102,22 @@ def load_named_model(library_root: Path, *, name: str, device: str) -> MorphMode
         random_seed=codec.description.random_seed,
         explained_variance=None,
     )
-    return MorphModel(description=description, codec=codec)
+    return LoadedModel(
+        model=MorphModel(description=description, codec=codec),
+        files=(stored_codec_path, descriptor_path(library_root, name=codec.description.descriptor)),
+    )
 
 
 def save_model(path: Path, model: MorphModel) -> None:
-    """Write a fitted codec's arrays and its description into one file.
+    """Write a fitted codec's arrays and its description into one file, put in place whole.
 
     Raises:
         ValueError: the codec is of a kind this store has no writer for.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
     stored = dict(_codec_arrays(model.codec))
     stored[DESCRIPTION_KEY] = np.array(model.description.model_dump_json())
-    with path.open("wb") as handle:
-        # savez names every array through **kwds, which its own stub types as the bool `allow_pickle`.
-        np.savez(handle, **stored)  # type: ignore[arg-type]
+    # savez names every array through **kwds, which its own stub types as the bool `allow_pickle`.
+    write_atomically(path, lambda stream: np.savez(stream, **stored))  # type: ignore[arg-type]
 
 
 def load_model(path: Path) -> MorphModel:

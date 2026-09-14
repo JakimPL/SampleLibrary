@@ -13,9 +13,10 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.pool import NullPool
 
+from samplecore.config import DATABASE_URL_ENVIRONMENT_VARIABLE, resolve_config_path
 from samplecore.storage.cluster.quoting import UnsafeValueError, identifier, literal
 from samplecore.storage.cluster.statements import create_database, create_role, database_owner, role_attributes
-from samplecore.storage.database import connect
+from samplecore.storage.database import CONNECT_TIMEOUT_SECONDS, connect
 
 # The disposable sandbox and the database the test suite bootstraps from keep names of their own,
 # matching the config the dev library builder writes and the suite's own default server. Naming them
@@ -26,6 +27,7 @@ DEVELOPMENT_DATABASE: Final[str] = "samplelibrary_dev"
 TEST_DATABASE: Final[str] = "samplelibrary_test"
 
 ADMIN_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_ADMIN_DATABASE_URL"
+DEFAULT_POSTGRES_PORT: Final[int] = 5432
 
 # Server-level work connects to a database other than the ones it creates. `postgres` is present on
 # every ordinary cluster, `template1` on every cluster there is.
@@ -41,6 +43,7 @@ _PASSWORD_REJECTED_FRAGMENT: Final[str] = "password authentication failed"
 _ROLE_MISSING_FRAGMENTS: Final[tuple[str, str]] = ('role "', "does not exist")
 _DATABASE_MISSING_FRAGMENTS: Final[tuple[str, str]] = ('database "', "does not exist")
 _UNNAMED_ROLE: Final[str] = "(none)"
+_LOCAL_HOST: Final[str] = "localhost"
 _CONTAINER_COMMAND: Final[str] = "docker compose up -d postgres"
 _ALTERNATIVE_CONTAINER_PORT: Final[int] = 5433
 
@@ -54,7 +57,8 @@ _SERVER_ERROR_MARKER: Final[str] = "FATAL:"
 class ConnectionSource(StrEnum):
     """Where the connection one pass tried was named, so advice points at the right place."""
 
-    CONFIGURATION = "config.toml's database_url"
+    CONFIGURATION = "configuration"
+    DATABASE_VARIABLE = DATABASE_URL_ENVIRONMENT_VARIABLE
     ADMIN_VARIABLE = ADMIN_URL_ENVIRONMENT_VARIABLE
 
 
@@ -91,7 +95,10 @@ class ProvisioningSummary:
 
 
 def library_databases(database_url: str) -> tuple[str, ...]:
-    """The three databases this project keeps on one server, the configured library leading.
+    """The databases this project keeps on one server, the configured library leading.
+
+    A library configured as the sandbox itself, the way `just dev` runs every command, names the
+    sandbox once.
 
     Raises:
         ProvisioningError: the URL names no database.
@@ -103,7 +110,12 @@ def library_databases(database_url: str) -> tuple[str, ...]:
             remedy=("Name one, as in postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary",),
         )
 
-    return (library, DEVELOPMENT_DATABASE, TEST_DATABASE)
+    return tuple(dict.fromkeys((library, DEVELOPMENT_DATABASE, TEST_DATABASE)))
+
+
+def development_database_url(database_url: str) -> str:
+    """The sandbox's database on the server, role and password the library's own URL names."""
+    return make_url(database_url).set(database=DEVELOPMENT_DATABASE).render_as_string(hide_password=False)
 
 
 def login_role(database_url: str) -> str:
@@ -131,7 +143,7 @@ def admin_urls(database_url: str) -> tuple[URL, ...]:
     the databases it will own.
     """
     explicit_url = os.environ.get(ADMIN_URL_ENVIRONMENT_VARIABLE)
-    if explicit_url is not None:
+    if explicit_url:
         return (make_url(explicit_url),)
 
     library_url = make_url(database_url)
@@ -139,8 +151,18 @@ def admin_urls(database_url: str) -> tuple[URL, ...]:
 
 
 def describe_server(url: URL) -> str:
-    """A server named the way a person recognizes it, carrying no password."""
-    return f"{url.host}:{url.port}"
+    """A server named the way a person recognizes it, carrying no password.
+
+    A URL leaving out the port reaches Postgres on its default one, and a URL leaving out the host
+    reaches it through the local socket, so each is named the way the driver will reach it.
+    """
+    port = url.port or DEFAULT_POSTGRES_PORT
+    return f"{url.host}:{port}" if url.host is not None else f"the local socket for port {port}"
+
+
+def server_address(url: URL) -> str:
+    """The host and port to write into a connection URL reaching the same server over TCP."""
+    return f"{url.host or _LOCAL_HOST}:{url.port or DEFAULT_POSTGRES_PORT}"
 
 
 @contextmanager
@@ -177,18 +199,15 @@ def provision(database_url: str) -> ProvisioningSummary:
     """
     library_url = make_url(database_url)
     role = login_role(database_url)
-    library_name, development_name, _ = library_databases(database_url)
-    _require_nameable(role, library_name, development_name, TEST_DATABASE)
+    databases = library_databases(database_url)
+    _require_nameable(role, *databases)
 
     with open_admin_connection(database_url) as connection:
         role_created = _claim_role(connection, url=library_url, role=role)
-        outcomes = tuple(
-            _claim_database(connection, name=name, owner=role)
-            for name in (library_name, DEVELOPMENT_DATABASE, TEST_DATABASE)
-        )
+        outcomes = tuple(_claim_database(connection, name=name, owner=role) for name in databases)
         attributes = role_attributes(connection, role=role)
 
-    prepared = (library_name, development_name)
+    prepared = tuple(dict.fromkeys((databases[0], DEVELOPMENT_DATABASE)))
     for outcome in outcomes:
         if outcome.name in prepared:
             _require_ownership(outcome, role=role)
@@ -222,10 +241,21 @@ def _require_nameable(*values: str) -> None:
 
 def connection_source() -> ConnectionSource:
     """Where the connection for server-level work is named this run."""
-    if os.environ.get(ADMIN_URL_ENVIRONMENT_VARIABLE) is not None:
+    if os.environ.get(ADMIN_URL_ENVIRONMENT_VARIABLE):
         return ConnectionSource.ADMIN_VARIABLE
+    if os.environ.get(DATABASE_URL_ENVIRONMENT_VARIABLE):
+        return ConnectionSource.DATABASE_VARIABLE
 
     return ConnectionSource.CONFIGURATION
+
+
+def describe_source(source: ConnectionSource) -> str:
+    """The place a person edits to change the connection one source names."""
+    match source:
+        case ConnectionSource.CONFIGURATION:
+            return f"the database_url in {resolve_config_path()}"
+        case ConnectionSource.DATABASE_VARIABLE | ConnectionSource.ADMIN_VARIABLE:
+            return source.value
 
 
 def connection_remedy(url: URL, message: str, *, source: ConnectionSource) -> tuple[str, ...]:
@@ -242,7 +272,7 @@ def connection_remedy(url: URL, message: str, *, source: ConnectionSource) -> tu
     if any(fragment in message for fragment in _SERVER_UNREACHABLE_FRAGMENTS):
         return (
             *said,
-            f"Start Postgres, or correct the host and port in {source.value} ({describe_server(url)}).",
+            f"Start Postgres, or correct the host and port in {describe_source(source)} ({describe_server(url)}).",
             f"If there is no Postgres on this machine, `{_CONTAINER_COMMAND}` starts one.",
         )
 
@@ -250,7 +280,8 @@ def connection_remedy(url: URL, message: str, *, source: ConnectionSource) -> tu
         if source is ConnectionSource.ADMIN_VARIABLE:
             return (*said, *_role_diagnosis(source), "", *container_route())
 
-        return (*said, *_role_diagnosis(source), "", *role_creation_remedy(url, role, password))
+        password_route = _password_route(role, password) if _PASSWORD_REJECTED_FRAGMENT in message else ()
+        return (*said, *_role_diagnosis(source), "", *password_route, *role_creation_remedy(url, role, password))
 
     if all(fragment in message for fragment in _DATABASE_MISSING_FRAGMENTS):
         return (
@@ -271,12 +302,22 @@ def _role_diagnosis(source: ConnectionSource) -> tuple[str, ...]:
     if source is ConnectionSource.ADMIN_VARIABLE:
         return (
             f"That role and password come from {ADMIN_URL_ENVIRONMENT_VARIABLE}. Correct it, or unset it",
-            f"to use {ConnectionSource.CONFIGURATION.value} instead.",
+            "to use your library's own database_url instead.",
         )
 
     return (
-        f"That role and password come from {source.value}. Either the role does not exist on this",
-        "server, or its password there is different.",
+        f"That role and password come from {describe_source(source)}.",
+        "Either the role does not exist on this server, or its password there is different.",
+    )
+
+
+def _password_route(role: str, password: str) -> tuple[str, ...]:
+    """The statement that gives an existing role the password the configuration carries."""
+    return (
+        f"If role {role!r} exists with another password, give it this one at a superuser prompt, such as",
+        "`sudo -u postgres psql`, then run `samplelibrary setup database` again:",
+        f"        ALTER ROLE {statement_value(role)} WITH PASSWORD {statement_value(password, quoted=False)};",
+        "",
     )
 
 
@@ -296,10 +337,9 @@ def role_creation_remedy(url: URL, role: str, password: str) -> tuple[str, ...]:
         f"PASSWORD {statement_value(password, quoted=False)};",
         "",
         "  * If you know the password of a superuser on this server, usually the `postgres`",
-        f"    account, give it to {ADMIN_URL_ENVIRONMENT_VARIABLE} and this command creates the",
-        "    role for you. Replace <password> with that account's own:",
-        f"        {ADMIN_URL_ENVIRONMENT_VARIABLE}=postgresql+psycopg://postgres:<password>@"
-        f"{describe_server(url)}/{MAINTENANCE_DATABASES[0]} uv run samplelibrary setup database",
+        f"    account, set {ADMIN_URL_ENVIRONMENT_VARIABLE} to this URL, then run `samplelibrary setup database`",
+        "    again and it creates the role for you. Replace <password> with that account's own:",
+        f"        postgresql+psycopg://postgres:<password>@{server_address(url)}/{MAINTENANCE_DATABASES[0]}",
         "",
         *container_route(),
     )
@@ -310,8 +350,8 @@ def container_route() -> tuple[str, ...]:
     return (
         "  * If you have no superuser on this machine, a container comes with one:",
         f"        {_CONTAINER_COMMAND}",
-        f"    Add POSTGRES_PORT={_ALTERNATIVE_CONTAINER_PORT} if something already holds 5432, then set that",
-        "    port in config.toml's database_url.",
+        f"    Add POSTGRES_PORT={_ALTERNATIVE_CONTAINER_PORT} if something already holds {DEFAULT_POSTGRES_PORT}, then set",
+        "    that port in your database_url.",
     )
 
 
@@ -334,7 +374,12 @@ def _open_admin(database_url: str) -> tuple[Engine, Connection]:
     candidates = admin_urls(database_url)
     refusal = ""
     for url in candidates:
-        engine = create_engine(url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+        engine = create_engine(
+            url,
+            isolation_level="AUTOCOMMIT",
+            poolclass=NullPool,
+            connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
+        )
         try:
             return engine, engine.connect()
         except OperationalError as error:
@@ -356,6 +401,11 @@ def server_message(error: DBAPIError) -> str:
     suggesting what to look at, so the whole of it is what a remedy reads.
     """
     return str(error.orig).strip() if error.orig is not None else str(error)
+
+
+def is_connection_failure(error: DBAPIError) -> bool:
+    """Whether the error arose while opening a connection, which carries no statement, rather than running one."""
+    return error.statement is None
 
 
 def headline(message: str) -> str:
@@ -463,12 +513,13 @@ def _prepare_schemas(url: URL, *, role: str) -> None:
         match error.orig:
             case postgres_errors.InsufficientPrivilege():
                 raise ProvisioningError(
-                    f"Role {role!r} may not create this project's tables in database {url.database!r}.",
+                    f"Role {role!r} owns database {url.database!r} and still may not create tables in its "
+                    "public schema.",
                     remedy=(
-                        "Change its owner at a superuser prompt, such as `sudo -u postgres psql`, "
-                        "then run `samplelibrary setup database` again:",
+                        "Grant it at a superuser prompt connected to that database, such as "
+                        f"`sudo -u postgres psql -d {url.database}`, then run `samplelibrary setup database` again:",
                         "",
-                        f"    ALTER DATABASE {statement_value(str(url.database))} OWNER TO {statement_value(role)};",
+                        f"    GRANT CREATE ON SCHEMA public TO {statement_value(role)};",
                     ),
                 ) from error
             case _:

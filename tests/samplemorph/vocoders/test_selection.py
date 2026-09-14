@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
+from samplemorph.model_paths import DEFAULT_RESTORER_NAME
 from samplemorph.registries import PGHI_VOCODER_NAME, RESTORED_VOCODER_NAME
 from samplemorph.vocoders.pghi import PghiVocoder
-from samplemorph.vocoders.restored import DEFAULT_RESTORER_NAME
 from samplemorph.vocoders.selection import vocoder_named
 
 

@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 import logging
 
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection
+from samplecore.cli_parsing import command_parser
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
 from sampleextract.equivalence.detect import detect_equivalences
 
 _logger = logging.getLogger(__name__)
@@ -17,8 +18,12 @@ def main(argv: list[str], *, prog: str) -> None:
         summary = detect_equivalences(connection, config.library_root, sample_limit=arguments.limit)
 
     _logger.info(
-        "Considered %d samples: %d bit-depth variants, %d amplification variants, %d resampled variants.",
+        "Considered %d samples (%d silent), scored %d gain and %d resampled candidates: "
+        "%d bit-depth variants, %d amplification variants, %d resampled variants.",
         summary.samples_considered,
+        summary.silent_samples,
+        summary.gain_candidates,
+        summary.resampled_candidates,
         summary.bit_depth_relations,
         summary.amplification_relations,
         summary.resampled_relations,
@@ -26,12 +31,12 @@ def main(argv: list[str], *, prog: str) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        prog=prog, description="Detect bit-depth, amplification, and resampled equivalence classes in the catalog."
+    parser = command_parser(
+        prog=prog, description="Detect bit-depth, amplification and resampled variants among the cataloged samples."
     )
     parser.add_argument(
         "--limit",
-        type=int,
+        type=positive_integer,
         default=None,
         help="Consider only the first N cataloged samples, for a quick run over a small slice.",
     )

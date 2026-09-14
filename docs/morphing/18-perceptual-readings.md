@@ -209,7 +209,7 @@ and the direction closes with numbers rather than a night of training.
   read by every analysis and inversion through `analysis_taper`, so a Gaussian analysis and the
   phase-gradient constant PGHI needs (`phase_gradient_spread`) travel with the geometry.
 - **PGHI as a registered vocoder** (`samplemorph.vocoders.pghi.PghiVocoder`, `--vocoder pghi`,
-  the `pghi` extra), which reads a Gaussian log-frequency analysis and refuses any other by name.
+  in the `morph` extra), which reads a Gaussian log-frequency analysis and refuses any other by name.
 
 ### The candidates for tomorrow, through the whole pipeline
 

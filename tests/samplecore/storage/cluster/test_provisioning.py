@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from sqlalchemy import Connection, create_engine, inspect, text
 from sqlalchemy.engine import URL, make_url
 
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.cluster.provisioning import (
@@ -21,8 +24,12 @@ from samplecore.storage.cluster.provisioning import (
     admin_urls,
     connection_remedy,
     connection_source,
+    describe_server,
+    describe_source,
+    development_database_url,
     library_databases,
     login_role,
+    server_address,
     statement_value,
 )
 from samplecore.storage.curation import CURATION_SCHEMA
@@ -71,13 +78,20 @@ def test_library_databases_leads_with_the_configured_library() -> None:
     assert (development, test_database) == (DEVELOPMENT_DATABASE, TEST_DATABASE)
 
 
-def test_library_databases_keeps_the_companions_of_a_sandbox_url_unsuffixed() -> None:
-    """A URL already naming the sandbox yields the same companions, rather than nesting suffixes."""
-    _, development, test_database = library_databases(
+def test_library_databases_names_the_sandbox_once_for_a_sandbox_url() -> None:
+    """A URL already naming the sandbox yields the same companions, each named once."""
+    databases = library_databases(
         f"postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/{DEVELOPMENT_DATABASE}"
     )
 
-    assert (development, test_database) == (DEVELOPMENT_DATABASE, TEST_DATABASE)
+    assert databases == (DEVELOPMENT_DATABASE, TEST_DATABASE)
+
+
+def test_the_development_database_shares_the_library_server_role_and_password() -> None:
+    url = make_url(development_database_url("postgresql+psycopg://someone:secret@elsewhere:5433/my_own_library"))
+
+    assert (url.host, url.port, url.username, url.password) == ("elsewhere", 5433, "someone", "secret")
+    assert url.database == DEVELOPMENT_DATABASE
 
 
 def test_library_databases_reports_a_url_naming_no_database() -> None:
@@ -192,7 +206,7 @@ def test_preparing_a_database_twice_keeps_the_annotations_it_holds(prepared_data
 
     connection = connect(prepared_database_url)
     try:
-        PostgresSampleAnnotationRepository(connection).replace_many((annotation,))
+        PostgresSampleAnnotationRepository(connection).upsert_many((annotation,))
         connection.commit()
     finally:
         connection.close()
@@ -222,7 +236,7 @@ def test_advice_names_the_place_a_refused_connection_was_read_from() -> None:
     )
 
     assert ADMIN_URL_ENVIRONMENT_VARIABLE in from_variable
-    assert "config.toml's database_url" in from_variable
+    assert "your library's own database_url" in from_variable
 
 
 def test_a_refused_admin_connection_is_never_told_to_set_the_variable_it_came_from() -> None:
@@ -256,7 +270,73 @@ def test_a_connection_url_says_what_to_put_in_it_before_showing_the_line() -> No
 
 def test_the_connection_source_follows_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(ADMIN_URL_ENVIRONMENT_VARIABLE, raising=False)
+    monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
     assert connection_source() is ConnectionSource.CONFIGURATION
+
+    monkeypatch.setenv(DATABASE_URL_ENVIRONMENT_VARIABLE, "postgresql+psycopg://someone:secret@localhost:5432/library")
+    assert connection_source() is ConnectionSource.DATABASE_VARIABLE
 
     monkeypatch.setenv(ADMIN_URL_ENVIRONMENT_VARIABLE, "postgresql+psycopg://root:root@localhost:5432/postgres")
     assert connection_source() is ConnectionSource.ADMIN_VARIABLE
+
+
+def test_an_empty_environment_variable_names_no_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(ADMIN_URL_ENVIRONMENT_VARIABLE, "")
+    monkeypatch.setenv(DATABASE_URL_ENVIRONMENT_VARIABLE, "")
+
+    assert connection_source() is ConnectionSource.CONFIGURATION
+    assert tuple(url.database for url in admin_urls(_LIBRARY_URL.render_as_string())) == MAINTENANCE_DATABASES
+
+
+def test_a_configured_connection_is_described_by_the_file_it_came_from(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "sandbox.toml"
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+
+    assert str(config_path) in describe_source(ConnectionSource.CONFIGURATION)
+
+
+@dataclass(frozen=True)
+class ServerCase:
+    url: str
+    described: str
+    address: str
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        ServerCase("postgresql+psycopg://someone:secret@db.test:5433/library", "db.test:5433", "db.test:5433"),
+        ServerCase("postgresql+psycopg://someone:secret@db.test/library", "db.test:5432", "db.test:5432"),
+        ServerCase("postgresql+psycopg://someone:secret@/library", "the local socket for port 5432", "localhost:5432"),
+    ],
+    ids=("host and port", "default port", "local socket"),
+)
+def test_a_server_is_named_the_way_the_driver_reaches_it(case: ServerCase) -> None:
+    url = make_url(case.url)
+
+    assert describe_server(url) == case.described
+    assert server_address(url) == case.address
+
+
+def test_a_rejected_password_offers_to_set_it_on_the_existing_role() -> None:
+    remedy = "\n".join(_remedy('FATAL:  password authentication failed for user "samplelibrary"'))
+
+    assert "ALTER ROLE \"samplelibrary\" WITH PASSWORD 'samplelibrary';" in remedy
+
+
+def test_a_missing_role_is_offered_its_creation_alone() -> None:
+    remedy = "\n".join(_remedy('FATAL:  role "samplelibrary" does not exist'))
+
+    assert "ALTER ROLE" not in remedy
+    assert "CREATE ROLE" in remedy
+
+
+def test_advice_for_a_url_without_a_port_names_a_connection_url_that_parses() -> None:
+    url = make_url("postgresql+psycopg://samplelibrary:samplelibrary@localhost/samplelibrary")
+
+    remedy = _remedy('FATAL:  password authentication failed for user "samplelibrary"', url=url)
+
+    admin_line = next(line.strip() for line in remedy if "<password>@" in line)
+    assert make_url(admin_line).port == 5432

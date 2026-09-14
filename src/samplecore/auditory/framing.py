@@ -21,8 +21,10 @@ def frame_series(values: NDArray[np.float64], *, window_length: int, hop_length:
     """Read a series along its last axis as frames `window_length` long, placed `hop_length` apart.
 
     Frames start at the series' first point and each lies fully inside it, so every frame reads
-    real values and a series shorter than one window yields no frames. A frame axis is added before
-    the window axis, giving ``(..., frames, window_length)``.
+    real values. A frame axis is added before the window axis, giving ``(..., frames, window_length)``.
+
+    Raises:
+        ValueError: the series is shorter than one window.
     """
     windows = sliding_window_view(values, window_length, axis=-1)
     framed: NDArray[np.float64] = windows[..., ::hop_length, :]

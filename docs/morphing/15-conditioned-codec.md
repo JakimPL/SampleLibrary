@@ -35,7 +35,8 @@ the weight store beside the array store the linear codecs use.
 ## The run
 
 `samplelibrary morph cache-grids --cache codec --samples 30000 --bands-per-semitone 12 --views 0`
-canonicalized a 30,000-sample draw at full resolution in three minutes, 9.6 GB.
+canonicalized a 30,000-sample draw at full resolution in three minutes, 9.6 GB. That was full
+resolution on the 144 bands per octave of the time; on today's 288 it is `--bands-per-semitone 24`.
 `samplelibrary morph train-codec --cache codec --descriptor descriptor --epochs 15 --workers 4` ran
 890 steps of 32 per epoch, 3.5 minutes an epoch, 52 minutes in all under the 16 GB ceiling, 5% of
 the draw held out:

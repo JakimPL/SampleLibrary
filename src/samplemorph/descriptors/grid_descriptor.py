@@ -3,28 +3,12 @@ from __future__ import annotations
 from typing import Final
 
 import torch
-from pydantic import BaseModel
 from torch import Tensor, nn
 
-from samplecore.models.base import FROZEN
+from samplemorph.descriptors.descriptor_shape import DescriptorShape
 
-DESCRIPTOR_SIZE: Final[int] = 512
-DEFAULT_WIDTH: Final[int] = 32
-DEFAULT_STAGE_COUNT: Final[int] = 4
 CHANNELS_PER_GROUP: Final[int] = 4
 KERNEL_SIZE: Final[int] = 3
-
-
-class DescriptorShape(BaseModel):
-    """The dimensions that fix a descriptor network, recorded beside its weights."""
-
-    model_config = FROZEN
-
-    band_count: int
-    time_columns: int
-    width: int = DEFAULT_WIDTH
-    stage_count: int = DEFAULT_STAGE_COUNT
-    embedding_size: int = DESCRIPTOR_SIZE
 
 
 class GridDescriptor(nn.Module):

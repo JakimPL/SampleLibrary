@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.codecs.identity import IdentityCodec
-from samplemorph.geometry import mel_geometry
+from samplemorph.geometry import Geometry, mel_geometry
 from samplemorph.images import Conditioners, SoundImage
 from samplemorph.registries import CANONICALIZER_REGISTRY
-from samplemorph.training.principal_components import PrincipalComponentTrainer
+from samplemorph.training.principal_components import PrincipalComponentTrainer, stack_grids
 from tests.samplemorph.conftest import harmonic_tone, noise_burst
 
 LATENT_SIZE = 6
@@ -26,7 +28,7 @@ def _images(count: int) -> list[SoundImage]:
             if index % 2 == 0
             else noise_burst(FIT_FRAME_COUNT, seed=index)
         )
-        built.append(canonicalizer.canonicalize(waveform))
+        built.append(canonicalizer.canonicalize(prepare_mono(waveform)))
     return built
 
 
@@ -51,7 +53,9 @@ def test_the_identity_codec_reports_a_latent_the_size_of_the_grid() -> None:
 def test_a_projection_keeps_the_conditioners_untouched() -> None:
     """The conditioners describe the frame the grid was normalized into, so a codec passes them on."""
     images = _images(IMAGE_COUNT)
-    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(images)
+    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(
+        _stacked(images, geometry=mel_geometry())
+    )
 
     decoded = codec.decode(codec.encode(images[0]))
 
@@ -59,7 +63,9 @@ def test_a_projection_keeps_the_conditioners_untouched() -> None:
 
 
 def test_a_projection_reports_the_latent_size_it_was_asked_for() -> None:
-    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(_images(IMAGE_COUNT))
+    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(
+        _stacked(_images(IMAGE_COUNT), geometry=mel_geometry())
+    )
 
     assert codec.latent_size == LATENT_SIZE
     assert codec.encode(_images(1)[0]).latent_size == LATENT_SIZE
@@ -68,7 +74,9 @@ def test_a_projection_reports_the_latent_size_it_was_asked_for() -> None:
 def test_a_projection_reconstructs_a_fitted_image_more_closely_than_the_body_average() -> None:
     """A projection is worth having when it beats simply returning the mean of what it was fitted on."""
     images = _images(IMAGE_COUNT)
-    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(images)
+    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(
+        _stacked(images, geometry=mel_geometry())
+    )
 
     decoded = codec.decode(codec.encode(images[0]))
     average = np.mean([image.grid for image in images], axis=0)
@@ -81,8 +89,12 @@ def test_a_projection_reconstructs_a_fitted_image_more_closely_than_the_body_ave
 def test_a_projection_holds_more_of_the_variance_as_it_keeps_more_components() -> None:
     images = _images(IMAGE_COUNT)
 
-    narrow = PrincipalComponentTrainer(mel_geometry(), latent_size=2, random_seed=0).fit(images)
-    wide = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(images)
+    narrow = PrincipalComponentTrainer(mel_geometry(), latent_size=2, random_seed=0).fit(
+        _stacked(images, geometry=mel_geometry())
+    )
+    wide = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(
+        _stacked(images, geometry=mel_geometry())
+    )
 
     assert wide.explained_variance > narrow.explained_variance
     assert wide.explained_variance_ratio.shape == (LATENT_SIZE,)
@@ -91,7 +103,9 @@ def test_a_projection_holds_more_of_the_variance_as_it_keeps_more_components() -
 def test_a_decoded_grid_stays_within_the_range_an_image_occupies() -> None:
     """Clipping is what keeps a point between two grids on the manifold a real image describes."""
     images = _images(IMAGE_COUNT)
-    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(images)
+    codec = PrincipalComponentTrainer(mel_geometry(), latent_size=LATENT_SIZE, random_seed=0).fit(
+        _stacked(images, geometry=mel_geometry())
+    )
     latent = codec.encode(images[0])
     exaggerated = type(latent)(values=latent.values * 20.0, conditioners=latent.conditioners, geometry=latent.geometry)
 
@@ -103,7 +117,9 @@ def test_a_decoded_grid_stays_within_the_range_an_image_occupies() -> None:
 
 def test_fitting_more_components_than_images_says_so() -> None:
     with pytest.raises(ValueError, match="at least that many images"):
-        PrincipalComponentTrainer(mel_geometry(), latent_size=IMAGE_COUNT + 1, random_seed=0).fit(_images(IMAGE_COUNT))
+        PrincipalComponentTrainer(mel_geometry(), latent_size=IMAGE_COUNT + 1, random_seed=0).fit(
+            _stacked(_images(IMAGE_COUNT), geometry=mel_geometry())
+        )
 
 
 def test_a_latent_must_be_one_dimensional() -> None:
@@ -113,3 +129,7 @@ def test_a_latent_must_be_one_dimensional() -> None:
 
     with pytest.raises(ValueError, match="1-D"):
         latent_type(values=np.zeros((2, 2)), conditioners=conditioners, geometry=geometry)
+
+
+def _stacked(images: list[SoundImage], *, geometry: Geometry) -> NDArray[np.float32]:
+    return stack_grids(images, count=len(images), geometry=geometry)

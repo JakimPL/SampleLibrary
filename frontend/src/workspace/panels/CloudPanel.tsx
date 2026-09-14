@@ -19,6 +19,7 @@ import { useModuleCloud } from "../../cloud/useModuleCloud";
 import { useSuggestionTags } from "../../cloud/useSuggestionTags";
 import { morphPreview } from "../../morph/morphPreview";
 import { useMorphStore } from "../../morph/morphStore";
+import { useMorphStatus } from "../../morph/useMorphStatus";
 import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
 import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
@@ -164,6 +165,7 @@ export function CloudPanel(): ReactElement {
     const join = useMorphStore((morph) => morph.join);
     const setWeight = useMorphStore((morph) => morph.setWeight);
     const { play } = useAudioPreview();
+    const morphStatus = useMorphStatus();
     const link = useMemo(
         (): CloudLink | null =>
             morphFirst !== null && morphSecond !== null ? { first: morphFirst, second: morphSecond, weight } : null,
@@ -215,7 +217,7 @@ export function CloudPanel(): ReactElement {
     }
 
     function handleWeightCommit(): void {
-        if (playOnRelease && link !== null) {
+        if (playOnRelease && link !== null && morphStatus.available) {
             play(morphPreview(link.first, link.second, link.weight));
         }
     }

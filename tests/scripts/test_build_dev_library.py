@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Connection
 
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE, DEFAULT_INFERENCE_URL
 from samplecore.hashing import compute_module_hash
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
@@ -16,6 +17,8 @@ from sampleextract.ingest import ingest_module
 from sampleextract.parsing import parse_module
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "build_dev_library.py"
+SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
+LIBRARY_ON_ANOTHER_PORT = "postgresql+psycopg://someone:secret@localhost:5433/my_library"
 
 
 def _load_build_dev_library() -> types.ModuleType:
@@ -48,32 +51,54 @@ def _ingest_all(connection: Connection, library_root: Path, modules_directory: P
 
 
 def test_build_dev_library_writes_every_scenario_module_and_a_config(tmp_path: Path) -> None:
-    written_paths = build_dev_library.build_dev_library(tmp_path)
+    written_paths = build_dev_library.build_dev_library(tmp_path, database_url=SANDBOX_DATABASE_URL)
 
     assert len(written_paths) == len(build_dev_library._all_modules())
     assert (tmp_path / "config.toml").is_file()
 
 
-def test_build_dev_library_config_names_the_sandbox_database(tmp_path: Path) -> None:
-    build_dev_library.build_dev_library(tmp_path)
+def test_build_dev_library_config_names_the_database_and_an_inference_address_of_its_own(tmp_path: Path) -> None:
+    build_dev_library.build_dev_library(tmp_path, database_url=LIBRARY_ON_ANOTHER_PORT)
 
     with (tmp_path / "config.toml").open("rb") as config_file:
-        library = tomllib.load(config_file)["library"]
+        config = tomllib.load(config_file)
 
-    assert library["database_url"] == build_dev_library.DEVELOPMENT_DATABASE_URL
+    assert config["library"]["database_url"] == LIBRARY_ON_ANOTHER_PORT
+    assert config["inference"]["url"] != DEFAULT_INFERENCE_URL
+
+
+def test_the_sandbox_shares_the_configured_server_under_a_database_of_its_own(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "[library]\n"
+        f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
+        f'library_root = "{(tmp_path / "library").as_posix()}"\n'
+        f'database_url = "{LIBRARY_ON_ANOTHER_PORT}"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+    monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
+
+    build_dev_library.main(["--output", str(tmp_path / "sandbox"), "--target-module-count", "13"])
+
+    with (tmp_path / "sandbox" / "config.toml").open("rb") as config_file:
+        sandbox_url = tomllib.load(config_file)["library"]["database_url"]
+    assert sandbox_url == "postgresql+psycopg://someone:secret@localhost:5433/samplelibrary_dev"
 
 
 def test_build_dev_library_regenerating_replaces_rather_than_accumulates_modules(tmp_path: Path) -> None:
-    first_paths = build_dev_library.build_dev_library(tmp_path)
+    first_paths = build_dev_library.build_dev_library(tmp_path, database_url=SANDBOX_DATABASE_URL)
 
-    second_paths = build_dev_library.build_dev_library(tmp_path)
+    second_paths = build_dev_library.build_dev_library(tmp_path, database_url=SANDBOX_DATABASE_URL)
 
     assert len(second_paths) == len(first_paths)
 
 
 @pytest.mark.parametrize(
     ("relation_type", "expected_count"),
-    [("bit_depth_variant", 1), ("amplification_variant", 3), ("resampled_variant", 2)],
+    [("bit_depth_variant", 1), ("amplification_variant", 3), ("resampled_variant", 1)],
 )
 def test_the_generated_corpus_yields_exactly_the_intended_relations(
     connection: Connection, tmp_path: Path, relation_type: str, expected_count: int
@@ -81,7 +106,7 @@ def test_the_generated_corpus_yields_exactly_the_intended_relations(
     """A regression check on the corpus itself: every scenario must survive both candidate
     generation and scoring, and no two scenarios may coincidentally relate to each other.
     """
-    build_dev_library.build_dev_library(tmp_path)
+    build_dev_library.build_dev_library(tmp_path, database_url=SANDBOX_DATABASE_URL)
     _ingest_all(connection, tmp_path / "catalog", tmp_path / "modules")
 
     summary = detect_equivalences(connection, tmp_path / "catalog")

@@ -18,7 +18,7 @@ def test_get_connection_opens_a_real_read_only_connection_to_the_configured_data
     depended on only for this test's isolation from others sharing the same database, not used
     directly: the schema it creates on first connect is already in place by the time this runs.
     """
-    application = create_app(_database_url, tmp_path, INFERENCE_URL)
+    application = create_app(_database_url, tmp_path, INFERENCE_URL, frontend_directory=None)
     with TestClient(application) as client:
         response = client.get(f"{API_PREFIX}/stats")
 
@@ -37,7 +37,7 @@ def test_starting_the_app_prepares_the_curation_schema_a_listing_reads_through(
     connection.execute(text(f"DROP SCHEMA IF EXISTS {CURATION_SCHEMA} CASCADE"))
     connection.commit()
 
-    with TestClient(create_app(_database_url, tmp_path, INFERENCE_URL)) as client:
+    with TestClient(create_app(_database_url, tmp_path, INFERENCE_URL, frontend_directory=None)) as client:
         assert client.get(f"{API_PREFIX}/samples").status_code == 200
 
     schema = connection.execute(
@@ -51,8 +51,8 @@ def test_a_response_past_a_kilobyte_goes_out_gzipped_when_the_caller_accepts_it(
     connection: Connection, _database_url: str, tmp_path: Path
 ) -> None:
     """The cloud's payload is text that compresses several-fold, and every route shares the middleware."""
-    with TestClient(create_app(_database_url, tmp_path, INFERENCE_URL)) as client:
-        response = client.get("/openapi.json", headers={"Accept-Encoding": "gzip"})
+    with TestClient(create_app(_database_url, tmp_path, INFERENCE_URL, frontend_directory=None)) as client:
+        response = client.get(f"{API_PREFIX}/openapi.json", headers={"Accept-Encoding": "gzip"})
 
     assert response.headers["content-encoding"] == "gzip"
     assert "paths" in response.json()
@@ -66,7 +66,7 @@ def test_every_route_is_served_under_the_api_prefix(connection: Connection, _dat
     whole API under one prefix is what keeps the two apart, which makes it worth pinning here
     rather than leaving it to the paths the other tests happen to name.
     """
-    served = set(create_app(_database_url, tmp_path, INFERENCE_URL).openapi()["paths"])
+    served = set(create_app(_database_url, tmp_path, INFERENCE_URL, frontend_directory=None).openapi()["paths"])
 
     assert f"{API_PREFIX}/samples" in served
     assert f"{API_PREFIX}/curation/annotations/{{sample_hash}}" in served

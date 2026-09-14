@@ -73,6 +73,21 @@ def test_a_transposed_occurrence_played_lower_meets_an_untransposed_one_at_the_s
     assert transposed == effective_playback_rate(reference_rate_hz=8363, sounded_note=RATE_KEY)
 
 
+def test_a_rate_rounding_below_a_hertz_is_no_playback_rate() -> None:
+    assert effective_playback_rate(reference_rate_hz=16, sounded_note=Note(0)) is None
+
+
+def test_usage_heard_below_a_hertz_is_left_out_of_the_tally() -> None:
+    tally = tally_playback_rates(
+        (
+            SampleNoteUsage(reference_rate_hz=16, sounded_note=Note(0), event_count=9),
+            _usage(reference_rate_hz=8363, semitones=0, event_count=2),
+        )
+    )
+
+    assert playback_rates_of(tally) == (SamplePlaybackRate(rate_hz=8363, event_count=2),)
+
+
 def test_usage_meeting_at_one_rate_is_counted_as_one_rate() -> None:
     tally = tally_playback_rates(
         (

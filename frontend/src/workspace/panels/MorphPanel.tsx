@@ -1,4 +1,5 @@
 import type { ChangeEvent, ReactElement } from "react";
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 
 import { morphPreview } from "../../morph/morphPreview";
@@ -100,8 +101,9 @@ function MorphPair({ first, second, status }: MorphPairProps): ReactElement {
     const clear = useMorphStore((state) => state.clear);
     const firstReading = useEndpoint(first);
     const secondReading = useEndpoint(second);
-    const { play, playingKey } = useAudioPreview();
+    const { play, playingKey, failure } = useAudioPreview();
     const source = morphPreview(first, second, weight);
+    const committedWeightRef = useRef(weight);
 
     function playMorph(): void {
         if (status.available) {
@@ -109,7 +111,12 @@ function MorphPair({ first, second, status }: MorphPairProps): ReactElement {
         }
     }
 
+    // A pointer or a key let go with the weight where it was, such as a Tab moving focus, plays nothing.
     function commitWeight(): void {
+        if (weight === committedWeightRef.current) {
+            return;
+        }
+        committedWeightRef.current = weight;
         if (playOnRelease) {
             playMorph();
         }
@@ -165,6 +172,11 @@ function MorphPair({ first, second, status }: MorphPairProps): ReactElement {
                     Play on release
                 </label>
             </div>
+            {failure?.key === source.key && (
+                <p className="panel-status error-notice" role="alert">
+                    {`The morph could not be played: ${failure.message}.`}
+                </p>
+            )}
         </>
     );
 }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
+import sys
 from collections import defaultdict
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
@@ -13,6 +14,8 @@ import soundfile
 from sqlalchemy import Connection
 
 from samplecore.auditory.sound_type import SoundType, sound_type_reading
+from samplecore.cli_parsing import add_subcommand
+from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.sample import Sample
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
@@ -20,6 +23,7 @@ from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.commands.draws import (
+    SampleNotCataloged,
     add_canonicalizer_argument,
     canonicalizer_from,
     draw_probe_samples,
@@ -30,10 +34,9 @@ from samplemorph.measurement.loudness import match_loudness
 from samplemorph.measurement.readings import ReconstructionReadings, read_reconstruction
 from samplemorph.model_store import DEFAULT_MODEL_NAME, load_named_model
 from samplemorph.pipeline import encode_sample
-from samplemorph.registries import canonicalizer_for_geometry
+from samplemorph.registries import RENDERABLE_CANONICALIZER_NAMES, canonicalizer_for_geometry
 from samplemorph.route_arguments import add_vocoder_arguments
-from samplemorph.training.principal_components import DEFAULT_RANDOM_SEED
-from samplemorph.training.run_settings import DEFAULT_ACCELERATOR
+from samplemorph.training.run_settings import DEFAULT_ACCELERATOR, DEFAULT_RANDOM_SEED
 from samplemorph.vocoders import Vocoder
 
 COMMAND_NAME: Final[str] = "measure"
@@ -85,8 +88,10 @@ class ProbeReading:
 
 
 def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    parser = commands.add_parser(
-        COMMAND_NAME, help="Reconstruct probe samples through a stored model and read what the reconstruction costs."
+    parser = add_subcommand(
+        commands,
+        COMMAND_NAME,
+        summary="Reconstruct probe samples through a stored model and read what the reconstruction costs.",
     )
     parser.add_argument(
         "--model",
@@ -95,11 +100,16 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help=f"Which stored model to reconstruct through, or {IDENTITY_MODEL_NAME} for the representation alone.",
     )
     add_canonicalizer_argument(
-        parser, help_text=f"The axis the {IDENTITY_MODEL_NAME} model reads; a stored model brings its own."
+        parser,
+        help_text=f"The axis the {IDENTITY_MODEL_NAME} model reads; a stored model brings its own.",
+        names=RENDERABLE_CANONICALIZER_NAMES,
     )
     add_vocoder_arguments(parser, device_default=DEFAULT_ACCELERATOR)
     parser.add_argument(
-        "--samples", type=int, default=DEFAULT_MEASURE_SAMPLE_COUNT, help="How many probes the seeded draw reads."
+        "--samples",
+        type=positive_integer,
+        default=DEFAULT_MEASURE_SAMPLE_COUNT,
+        help="How many probes the seeded draw reads.",
     )
     parser.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed of the draw.")
     parser.add_argument(
@@ -115,8 +125,21 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
 
     Each probe comes back as `<sound type>_<hash prefix>/original.wav` and `reconstruction.wav`,
     matched in loudness under one headroom, at the rate the sample is heard at; `readings.csv`
-    holds one row per probe, and the log the medians per sound type.
+    holds one row per probe, and the log the medians per sound type. The probes are resolved
+    before any model loads, so a draw or a hashes file naming none ends the process at once.
+
+    Raises:
+        SystemExit: no probe was named or drawn, the hashes file cannot be read, or it names a hash
+            the catalog holds no sample under.
     """
+    try:
+        probes = _probes(connection, arguments)
+    except (SampleNotCataloged, OSError) as error:
+        _logger.error("Measured nothing: %s.", error)
+        sys.exit(1)
+    if not probes:
+        _logger.error("No probe to measure: the draw or the hashes file names no sample.")
+        sys.exit(1)
     canonicalizer, codec = _codec_for(config, arguments)
     route = MeasuredRoute(
         model=arguments.model,
@@ -125,9 +148,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         vocoder=vocoder_from(arguments, library_root=config.library_root),
         output_directory=Path(arguments.output),
     )
-    readings = tuple(
-        _measure(connection, config.library_root, sample, route=route) for sample in _probes(connection, arguments)
-    )
+    readings = tuple(_measure(connection, config.library_root, sample, route=route) for sample in probes)
     _write_table(route.output_directory / READINGS_FILE_NAME, readings)
     _report(readings)
     _logger.info("Wrote %d probes through %s into %s.", len(readings), route.model, route.output_directory)
@@ -139,7 +160,7 @@ def _codec_for(config: LibraryConfig, arguments: argparse.Namespace) -> tuple[Ca
         canonicalizer = canonicalizer_from(arguments)
         return canonicalizer, IdentityCodec(canonicalizer.geometry)
 
-    model = load_named_model(config.library_root, name=arguments.model, device=arguments.device)
+    model = load_named_model(config.library_root, name=arguments.model, device=arguments.device).model
     return canonicalizer_for_geometry(model.description.geometry), model.codec
 
 

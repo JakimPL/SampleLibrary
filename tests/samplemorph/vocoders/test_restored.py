@@ -6,19 +6,21 @@ import numpy as np
 import pytest
 import torch
 
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.canonicalizers.log_frequency import LogFrequencyCanonicalizer
 from samplemorph.geometry import AnalysisWindow, Anchor, LogFrequencyGeometry, log_frequency_geometry
 from samplemorph.images import AnalysisSpectrogram
+from samplemorph.model_paths import restorer_path
 from samplemorph.vocoders.pghi import PghiVocoder
 from samplemorph.vocoders.restored import (
     RestoredPghiVocoder,
     RestorerDescription,
     load_restorer,
-    restorer_path,
     same_analysis,
     save_restorer,
 )
-from samplemorph.vocoders.restorer_model import Restorer, RestorerShape
+from samplemorph.vocoders.restorer_model import Restorer
+from samplemorph.vocoders.restorer_shape import RestorerShape
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone
 
 TONE_FREQUENCY_HZ = 330.0
@@ -48,7 +50,7 @@ def _untrained_vocoder(geometry: LogFrequencyGeometry) -> RestoredPghiVocoder:
 def _tone_spectrogram(geometry: LogFrequencyGeometry) -> AnalysisSpectrogram:
     canonicalizer = LogFrequencyCanonicalizer(geometry)
     tone = harmonic_tone(2 * TEST_FRAME_COUNT, frequency=TONE_FREQUENCY_HZ)[:, 0]
-    return canonicalizer.restore(canonicalizer.canonicalize(tone))
+    return canonicalizer.restore(canonicalizer.canonicalize(prepare_mono(tone)))
 
 
 def test_an_untrained_restorer_reads_exactly_as_the_integration_alone() -> None:

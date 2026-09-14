@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any, Final
+
 import torch
 from lightning.pytorch import LightningModule
 from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig
 from torch import Tensor, nn
 
-from samplemorph.codecs.conditioned_model import ConditionedCodecModel, ConditionedCodecShape
+from samplemorph.codecs.conditioned_model import ConditionedCodecModel
+from samplemorph.codecs.conditioned_shape import ConditionedCodecShape
 from samplemorph.descriptors.grid_descriptor import GridDescriptor
-from samplemorph.training.codec_losses import CodecLossParts, CodecLossWeights, CodecPrediction, codec_loss
+from samplemorph.training.codec_losses import CodecLossParts, CodecPrediction, codec_loss
+from samplemorph.training.codec_settings import CodecLossWeights
 from samplemorph.training.metrics import (
     CODEC_TRAINING_CYCLE,
     CODEC_TRAINING_LOSS,
@@ -19,9 +24,19 @@ from samplemorph.training.metrics import (
     CODEC_VALIDATION_RECONSTRUCTION,
 )
 from samplemorph.training.optimizers import scheduled_over_the_run
+from samplemorph.training.refusals import ResumeRefused
 
 # (positions, grids, canonical durations)
 CodecBatch = tuple[Tensor, Tensor, Tensor]
+DESCRIPTOR_DIGEST_KEY: Final[str] = "descriptor_sha256"
+
+
+@dataclass(frozen=True)
+class ConditioningDescriptor:
+    """The frozen descriptor a codec is taught beside, and the digest of the file it was loaded from."""
+
+    network: GridDescriptor
+    sha256: str
 
 
 # pylint: disable=arguments-differ
@@ -32,26 +47,43 @@ class CodecTrainingModule(LightningModule):
 
     The descriptor network rides along frozen: it reads each grid's pooled form to say what the
     sound is, which the codec is conditioned on, and reads the decoded grid the same way for the
-    cycle term. Its weights stay out of the optimizer and out of the checkpoint.
+    cycle term. Its weights stay out of the optimizer. The checkpoint records the descriptor file's
+    digest, and a run resumed beside a different descriptor is refused.
     """
 
     def __init__(
         self,
         shape: ConditionedCodecShape,
         *,
-        descriptor: GridDescriptor,
+        descriptor: ConditioningDescriptor,
         learning_rate: float,
         weights: CodecLossWeights,
         prior_warmup_steps: int,
     ) -> None:
         super().__init__()
         self.model = ConditionedCodecModel(shape)
-        self.descriptor = descriptor.eval()
+        self.descriptor = descriptor.network.eval()
         for parameter in self.descriptor.parameters():
             parameter.requires_grad_(False)
+        self._descriptor_sha256 = descriptor.sha256
         self._learning_rate = learning_rate
         self._weights = weights
         self._prior_warmup_steps = prior_warmup_steps
+
+    def on_save_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        checkpoint[DESCRIPTOR_DIGEST_KEY] = self._descriptor_sha256
+
+    def on_load_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        """Refuse to continue a run beside another descriptor than the one it began with.
+
+        Raises:
+            ResumeRefused: the checkpoint names another descriptor file's digest.
+        """
+        if checkpoint.get(DESCRIPTOR_DIGEST_KEY) != self._descriptor_sha256:
+            raise ResumeRefused(
+                "the run being resumed was training beside another descriptor file; "
+                "start it afresh, or resume beside the descriptor it began with"
+            )
 
     def describe(self, grid: Tensor, duration: Tensor) -> Tensor:
         """What the descriptor says about a grid, read at the resolution it was taught on."""

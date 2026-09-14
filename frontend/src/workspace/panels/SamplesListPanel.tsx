@@ -24,6 +24,8 @@ export function SamplesListPanel(): ReactElement {
     return (
         <SamplesTable
             samples={state.items}
+            loadedCount={state.loadedCount}
+            groupCount={state.groupCount}
             total={state.total}
             hasMore={state.hasMore}
             isLoadingMore={state.isLoadingMore}

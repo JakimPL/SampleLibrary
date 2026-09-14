@@ -15,7 +15,7 @@ export class ApiError extends Error {
     }
 }
 
-export type WriteMethod = "PUT" | "DELETE";
+export type WriteMethod = "PATCH";
 
 export interface JsonRequest {
     readonly method: WriteMethod;
@@ -25,9 +25,21 @@ export interface JsonRequest {
 
 async function readJson<T>(url: string, response: Response): Promise<T> {
     if (!response.ok) {
-        throw new ApiError(response.status, `request to ${url} failed with status ${String(response.status)}`);
+        throw new ApiError(response.status, await failureMessage(url, response));
     }
     return (await response.json()) as T;
+}
+
+/** What went wrong with a request, in the server's own words where it gave a `detail`. */
+async function failureMessage(url: string, response: Response): Promise<string> {
+    const general = `request to ${url} failed with status ${String(response.status)}`;
+    const body: unknown = await Promise.resolve()
+        .then(() => response.json())
+        .catch(() => null);
+    if (typeof body === "object" && body !== null && "detail" in body && typeof body.detail === "string") {
+        return `${general}: ${body.detail}`;
+    }
+    return general;
 }
 
 export async function requestJson<T>(path: string): Promise<T> {
