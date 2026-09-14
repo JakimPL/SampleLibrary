@@ -11,7 +11,7 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecore.hashing import compute_module_hash
 from samplecore.models.channels import ChannelLayout
-from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
+from samplecore.models.cloud import CloudPromotion, ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
 from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.models.module import Module
@@ -22,6 +22,7 @@ from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.database import metadata
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
+    PostgresCloudPromotionRepository,
     PostgresModuleCloudCoordinateRepository,
 )
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
@@ -174,6 +175,7 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
             )
         ]
     )
+    PostgresCloudPromotionRepository(connection).record(CloudPromotion(experiment_id=experiment_id, promoted_at=now))
     PostgresSampleLabelSuggestionRepository(connection).insert_many(
         [
             SampleLabelSuggestion(

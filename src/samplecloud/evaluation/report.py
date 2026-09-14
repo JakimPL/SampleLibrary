@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
@@ -35,5 +36,20 @@ class EvaluationReport:
 
 
 def report_json(report: EvaluationReport) -> str:
-    """The report as indented JSON, for a file a person reads and a tracker later ingests."""
-    return json.dumps(asdict(report), indent=2, default=str)
+    """The report as indented JSON, for a file a person reads and a tracker later ingests.
+
+    A score a metric could not read, such as a correlation over a constant target, is written as null.
+    """
+    return json.dumps(_with_null_scores(asdict(report)), indent=2, default=str, allow_nan=False)
+
+
+def _with_null_scores(value: object) -> object:
+    match value:
+        case float() if math.isnan(value):
+            return None
+        case dict():
+            return {key: _with_null_scores(item) for key, item in value.items()}
+        case list() | tuple():
+            return [_with_null_scores(item) for item in value]
+        case _:
+            return value

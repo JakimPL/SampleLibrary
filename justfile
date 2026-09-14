@@ -59,7 +59,7 @@ rebuild:
     {{ CAPPED_SAMPLELIBRARY }} extract
     {{ CAPPED_SAMPLELIBRARY }} notes
     {{ CAPPED_SAMPLELIBRARY }} thumbnails
-    {{ CAPPED_SAMPLELIBRARY }} cloud embed
+    {{ CAPPED_SAMPLELIBRARY }} cloud embed --resume-promoted
     {{ CAPPED_SAMPLELIBRARY }} cloud placeholders
 
 [group("library")]

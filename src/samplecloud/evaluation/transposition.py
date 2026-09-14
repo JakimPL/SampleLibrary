@@ -12,6 +12,7 @@ from tqdm import tqdm
 from samplecloud.backends import FeatureExtractor
 from samplecloud.evaluation.corpus import EvaluationCorpus
 from samplecloud.evaluation.settings import EvaluationSettings
+from samplecloud.hearing import Hearing
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.waveform import resample_by_semitones
@@ -61,22 +62,28 @@ class TranspositionRetrieval:
         return float(np.median([offset.median_rank for offset in self.offsets])) if self.offsets else 0.0
 
 
+@dataclass(frozen=True)
+class ProbeDescriber:
+    """What describes a retuned probe again: the experiment's own extractor, hearing samples its own way."""
+
+    feature_extractor: FeatureExtractor
+    hearing: Hearing
+
+
 def transposition_retrieval(
     connection: Connection,
     corpus: EvaluationCorpus,
     *,
     library_root: Path,
-    feature_extractor: FeatureExtractor,
+    describer: ProbeDescriber,
     settings: EvaluationSettings,
-) -> TranspositionRetrieval:
+) -> TranspositionRetrieval | None:
     """Retune each probe sample by every offset and ask where its own original ranks.
 
-    Raises:
-        ValueError: the corpus holds no samples the probe can be drawn from.
+    Each probe is heard the way the experiment heard its samples before it is retuned, so an
+    unretuned probe is described exactly as its stored vector was. Returns None when the corpus
+    offers no probe the catalog still holds.
     """
-    if corpus.sample_count == 0:
-        raise ValueError("an empty corpus offers no samples to retune")
-
     offsets = settings.semitone_offsets
     positions = _probe_positions(corpus, settings=settings)
     samples = PostgresSampleRepository(connection).get_many([corpus.sample_hashes[position] for position in positions])
@@ -89,12 +96,14 @@ def transposition_retrieval(
         if sample is None:
             continue
 
-        waveform = audio_store.read(library_root, sample).pcm
+        waveform = describer.hearing.hear(sample.hash, audio_store.read(library_root, sample).pcm)
         for offset in offsets:
             retuned = resample_by_semitones(waveform, semitones=offset)
-            queries.append(np.asarray(feature_extractor.extract(retuned), dtype=np.float64))
+            queries.append(np.asarray(describer.feature_extractor.extract(retuned), dtype=np.float64))
             targets.append(position)
             query_offsets.append(offset)
+    if not queries:
+        return None
 
     for rank, offset in zip(_ranks_of(corpus, np.stack(queries), targets), query_offsets, strict=True):
         ranks_by_offset[offset].append(rank)

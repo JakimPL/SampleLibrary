@@ -8,11 +8,17 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
 from samplecloud.cli import main
+from samplecloud.experiments import EmbeddingRecipe
+from samplecloud.registries import DEFAULT_BACKEND_NAME
+from samplecloud.run import create_experiment
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.models.channels import ChannelLayout
+from samplecore.models.experiment import Reading
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
+from samplecore.storage.repositories.cloud import PostgresCloudPromotionRepository
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 
 PROGRAM = "samplelibrary cloud embed"
@@ -84,3 +90,130 @@ def test_main_rejects_an_unknown_backend(capsys: pytest.CaptureFixture[str]) -> 
         main(["--backend", "does-not-exist"], prog=PROGRAM)
 
     assert "invalid choice" in capsys.readouterr().err
+
+
+def _refusal(raised: pytest.ExceptionInfo[SystemExit], capsys: pytest.CaptureFixture[str]) -> str:
+    assert raised.value.code == 1
+    captured = capsys.readouterr()
+    return captured.out + captured.err
+
+
+def test_a_rebuild_of_an_empty_cloud_starts_and_shows_the_default_experiment(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    main(["--resume-promoted"], prog=PROGRAM)
+
+    promotion = PostgresCloudPromotionRepository(connection).current()
+    assert promotion is not None
+    experiment = PostgresExperimentRepository(connection).get(promotion.experiment_id)
+    assert experiment is not None
+    assert experiment.backend_name == DEFAULT_BACKEND_NAME
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [["--backend", "invariant"], ["--heard-rate"], ["--extract-only"], ["--label", "again"]],
+    ids=("a backend", "a reading", "an unshown pass", "a label"),
+)
+def test_a_rebuild_takes_no_flag_it_settles_itself(
+    flags: list[str],
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    with pytest.raises(SystemExit) as raised:
+        main(["--resume-promoted", *flags], prog=PROGRAM)
+
+    assert flags[0] in _refusal(raised, capsys)
+    assert PostgresCloudPromotionRepository(connection).current() is None
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [["--backend", "invariant"], ["--model", "descriptor"], ["--heard-rate"], ["--label", "again"]],
+    ids=("another backend", "a model", "another reading", "a label"),
+)
+def test_resuming_an_experiment_refuses_flags_naming_another_recipe(
+    flags: list[str],
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    experiment_id = create_experiment(
+        connection,
+        EmbeddingRecipe(backend_name=DEFAULT_BACKEND_NAME, reading=Reading.NOMINAL, model_name=None),
+        label=None,
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main(["--experiment-id", str(experiment_id), *flags], prog=PROGRAM)
+
+    assert flags[0] in _refusal(raised, capsys)
+
+
+def test_resuming_an_experiment_accepts_flags_repeating_its_recipe(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    experiment_id = create_experiment(
+        connection,
+        EmbeddingRecipe(backend_name=DEFAULT_BACKEND_NAME, reading=Reading.NOMINAL, model_name=None),
+        label=None,
+    )
+
+    main(["--experiment-id", str(experiment_id), "--backend", DEFAULT_BACKEND_NAME, "--extract-only"], prog=PROGRAM)
+
+    assert f"Experiment {experiment_id}: extracted features for 0 new samples" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("flags", "reason"),
+    [
+        (["--experiment-id", "999999"], "holds no experiment 999999"),
+        (["--backend", "learned"], "needs --model"),
+        (["--model", "descriptor"], "learned backend reads"),
+    ],
+    ids=("an unknown experiment", "a learned backend naming no model", "a model with another backend"),
+)
+def test_a_request_naming_no_embeddable_experiment_ends_with_one_message(
+    flags: list[str],
+    reason: str,
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    experiments_before = PostgresExperimentRepository(connection).next_id()
+
+    with pytest.raises(SystemExit) as raised:
+        main(flags, prog=PROGRAM)
+
+    reported = _refusal(raised, capsys)
+    assert reason in reported
+    assert "Traceback" not in reported
+    assert PostgresExperimentRepository(connection).get(experiments_before + 1) is None
+
+
+def test_a_rebuild_and_a_named_experiment_are_one_choice() -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["--resume-promoted", "--experiment-id", "1"], prog=PROGRAM)
+
+    assert raised.value.code == 2

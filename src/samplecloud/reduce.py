@@ -10,10 +10,14 @@ import umap
 from sqlalchemy import Connection
 
 from samplecloud.standardization import standardize
-from samplecore.models.cloud import SampleCloudCoordinate
+from samplecore.models.cloud import CloudPromotion, SampleCloudCoordinate
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.storage.database import start_batch
-from samplecore.storage.repositories.cloud import CloudCoordinateRepository, PostgresCloudCoordinateRepository
+from samplecore.storage.repositories.cloud import (
+    CloudCoordinateRepository,
+    PostgresCloudCoordinateRepository,
+    PostgresCloudPromotionRepository,
+)
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.spectral import (
     PostgresSampleSpectralFeatureRepository,
@@ -21,7 +25,8 @@ from samplecore.storage.repositories.spectral import (
 )
 
 DEFAULT_N_NEIGHBORS: Final[int] = 15
-MINIMUM_SAMPLES_FOR_REDUCTION: Final[int] = 2
+MINIMUM_SAMPLES_FOR_REDUCTION: Final[int] = 4
+MINIMUM_N_NEIGHBORS: Final[int] = 2
 RANDOM_SEED: Final[int] = 0
 DISTANCE_METRIC: Final[str] = "euclidean"
 
@@ -41,7 +46,8 @@ def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -
     A full recompute every run, rather than placing only new points into an already-fitted model,
     is a deliberate simplification: UMAP has no natural per-point incremental update without
     persisting and versioning a fitted model, and a full fit is cheap enough at a personal
-    library's scale not to need that complexity yet. The whole pass runs as one transaction,
+    library's scale not to need that complexity yet. The experiment is recorded as the one the cloud
+    shows in the same transaction. The whole pass runs as one transaction,
     mirroring ``detect_equivalences``'s crash-safety pattern -- a recompute either lands
     completely or not at all. Each sample's standardized feature vector -- the same one the
     projection below is fit from -- is persisted alongside its coordinate, so a named, reusable
@@ -53,12 +59,18 @@ def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -
     """
     feature_vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
     if len(feature_vectors) < MINIMUM_SAMPLES_FOR_REDUCTION:
+        _logger.info(
+            "Experiment %d holds %d feature vectors; a layout needs %d, so the cloud stays as it is.",
+            experiment_id,
+            len(feature_vectors),
+            MINIMUM_SAMPLES_FOR_REDUCTION,
+        )
         return CloudSummary(samples_reduced=0)
 
     sample_hashes = [vector.sample_hash for vector in feature_vectors]
     feature_matrix = np.stack([np.array(vector.vector, dtype=np.float64) for vector in feature_vectors])
     standardized = standardize(feature_matrix)
-    n_neighbors = min(DEFAULT_N_NEIGHBORS, len(sample_hashes) - 1)
+    n_neighbors = max(MINIMUM_N_NEIGHBORS, min(DEFAULT_N_NEIGHBORS, len(sample_hashes) - 1))
     _logger.info("Fitting UMAP over %d feature vectors...", len(sample_hashes))
     coordinates = umap.UMAP(
         n_neighbors=n_neighbors, metric=DISTANCE_METRIC, random_state=RANDOM_SEED, verbose=True
@@ -84,6 +96,9 @@ def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -
     with start_batch(connection):
         coordinate_repository.replace_all(new_coordinates)
         spectral_feature_repository.replace_all(new_features)
+        PostgresCloudPromotionRepository(connection).record(
+            CloudPromotion(experiment_id=experiment_id, promoted_at=computed_at)
+        )
     _logger.info("Persisting complete.")
 
     return CloudSummary(samples_reduced=len(sample_hashes))

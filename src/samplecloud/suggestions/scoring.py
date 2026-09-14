@@ -11,16 +11,18 @@ from sqlalchemy import Connection
 
 from samplecloud.suggestions.vocabulary import PROMPT_TEMPLATE
 from samplecore.labeling.labels import SampleLabel, written_paths
-from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
+from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME, Experiment
 from samplecore.models.label_suggestion import SampleLabelSuggestion
+from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
 DEFAULT_SUGGESTION_COUNT: Final[int] = 3
+MINIMUM_SUGGESTION_COUNT: Final[int] = 1
 MAXIMUM_SUGGESTION_COUNT: Final[int] = 256
-INSERT_CHUNK_SIZE: Final[int] = 5_000
+INSERT_CHUNK_SAMPLES: Final[int] = 2_000
 SOURCE_EXPERIMENT_PARAMETER: Final[str] = "source_experiment_id"
 CHECKPOINT_PARAMETER: Final[str] = "checkpoint"
 TEMPLATE_PARAMETER: Final[str] = "template"
@@ -36,6 +38,15 @@ class ScoringRecipe:
     vocabulary: tuple[str, ...]
     suggestion_count: int
     label: str | None
+
+    def __post_init__(self) -> None:
+        if not MINIMUM_SUGGESTION_COUNT <= self.suggestion_count <= MAXIMUM_SUGGESTION_COUNT:
+            raise ValueError(
+                f"a sample keeps between {MINIMUM_SUGGESTION_COUNT} and {MAXIMUM_SUGGESTION_COUNT} suggestions, "
+                f"got {self.suggestion_count}"
+            )
+        if not self.vocabulary:
+            raise ValueError("a scoring ranks at least one label")
 
     def parameters(self) -> dict[str, Any]:
         return {
@@ -75,7 +86,8 @@ def score_suggestions(connection: Connection, *, recipe: ScoringRecipe, prompts:
 
     Both the stored audio vectors and the prompt vectors are unit length, so one matrix product
     reads every cosine at once; the top `suggestion_count` labels of each sample are written
-    under a new experiment, committed in chunks so a long scoring lands as it goes.
+    under a new experiment. The experiment and every suggestion land in one transaction, so a
+    reader sees a scoring whole or sees none of it.
 
     Raises:
         ValueError: the source experiment holds no vectors to score.
@@ -89,30 +101,35 @@ def score_suggestions(connection: Connection, *, recipe: ScoringRecipe, prompts:
     scores = matrix @ prompts.T
     kept = min(recipe.suggestion_count, len(recipe.vocabulary))
     order = np.argsort(-scores, axis=1)[:, :kept]
-    experiment_id = PostgresExperimentRepository(connection).create(
-        backend_name=ZERO_SHOT_BACKEND_NAME, label=recipe.label, params=recipe.parameters()
-    )
     computed_at = datetime.now(UTC)
-    repository = PostgresSampleLabelSuggestionRepository(connection)
-    pending: list[SampleLabelSuggestion] = []
-    for row, vector in enumerate(vectors):
-        for rank, index in enumerate(order[row]):
-            pending.append(
-                SampleLabelSuggestion(
-                    experiment_id=experiment_id,
-                    sample_hash=vector.sample_hash,
-                    rank=rank,
-                    label=recipe.vocabulary[index],
-                    score=float(scores[row, index]),
-                    computed_at=computed_at,
-                )
+    with start_batch(connection):
+        experiments = PostgresExperimentRepository(connection)
+        experiment_id = experiments.next_id()
+        experiments.insert(
+            Experiment(
+                id=experiment_id,
+                backend_name=ZERO_SHOT_BACKEND_NAME,
+                params=recipe.parameters(),
+                created_at=computed_at,
+                label=recipe.label,
             )
-        if len(pending) >= INSERT_CHUNK_SIZE:
-            repository.insert_many(pending)
-            connection.commit()
-            pending = []
-    repository.insert_many(pending)
-    connection.commit()
+        )
+        repository = PostgresSampleLabelSuggestionRepository(connection)
+        for chunk_start in range(0, len(vectors), INSERT_CHUNK_SAMPLES):
+            repository.insert_many(
+                [
+                    SampleLabelSuggestion(
+                        experiment_id=experiment_id,
+                        sample_hash=vectors[row].sample_hash,
+                        rank=rank,
+                        label=recipe.vocabulary[index],
+                        score=float(scores[row, index]),
+                        computed_at=computed_at,
+                    )
+                    for row in range(chunk_start, min(chunk_start + INSERT_CHUNK_SAMPLES, len(vectors)))
+                    for rank, index in enumerate(order[row])
+                ]
+            )
 
     first_pick_by_hash = {vector.sample_hash: recipe.vocabulary[order[row, 0]] for row, vector in enumerate(vectors)}
     return ScoringSummary(

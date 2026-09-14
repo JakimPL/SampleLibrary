@@ -12,7 +12,6 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
-from samplecloud.run import resolve_experiment
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import LEARNED_BACKEND_NAME, SampleFeatureVector
@@ -419,7 +418,7 @@ def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(
     """The three passes end to end at the smallest size that still exercises them, on the processor."""
     hashes = _seed_catalog(connection, tmp_path)
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
-    teacher_id = resolve_experiment(connection, backend_name="stub", label="teacher")
+    teacher_id = PostgresExperimentRepository(connection).create(backend_name="stub", label="teacher", params={})
     generator = np.random.default_rng(0)
     PostgresSampleFeatureVectorRepository(connection).insert_many(
         [

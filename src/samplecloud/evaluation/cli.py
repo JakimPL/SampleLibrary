@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 from sqlalchemy import Connection
 
-from samplecloud.backends import FeatureExtractor
-from samplecloud.backends.learned_backend import DEFAULT_LEARNED_DEVICE, build_learned_extractor
+from samplecloud.backends.learned_backend import DEFAULT_LEARNED_DEVICE
 from samplecloud.evaluation.categories import CategoryAgreement
 from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.harness import evaluate_experiment
@@ -20,12 +20,12 @@ from samplecloud.evaluation.settings import (
     DEFAULT_RANDOM_SEED,
     EvaluationSettings,
 )
-from samplecloud.evaluation.transposition import TranspositionRetrieval
-from samplecloud.registries import BACKEND_REGISTRY
+from samplecloud.evaluation.transposition import ProbeDescriber, TranspositionRetrieval
+from samplecloud.experiments import ExperimentRefused, experiment_named, extractor_for, recipe_of
+from samplecloud.hearing import hearing_for
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
-from samplecore.models.experiment import LEARNED_BACKEND_NAME, MODEL_PARAMETER, Experiment
-from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.models.experiment import Experiment
 from samplecore.tracking.session import open_run
 
 _logger = logging.getLogger(__name__)
@@ -36,7 +36,13 @@ def main(argv: list[str], *, prog: str) -> None:
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
-        experiment = _experiment(connection, arguments.experiment_id)
+        try:
+            experiment = experiment_named(connection, arguments.experiment_id)
+            describer = _describer(connection, experiment, config=config, arguments=arguments)
+        except ExperimentRefused as error:
+            _logger.error("Scored nothing: %s.", error)
+            sys.exit(1)
+
         with open_run(
             config.library_root,
             recorded=not arguments.no_tracking,
@@ -47,7 +53,7 @@ def main(argv: list[str], *, prog: str) -> None:
                 connection,
                 experiment_id=experiment.id,
                 library_root=config.library_root,
-                feature_extractor=_extractor_for(experiment, config=config, arguments=arguments),
+                describer=describer,
                 settings=EvaluationSettings(
                     random_seed=arguments.seed, probe_count=arguments.probes, label_depth=arguments.label_depth
                 ),
@@ -63,39 +69,22 @@ def main(argv: list[str], *, prog: str) -> None:
     _report(report)
 
 
-def _experiment(connection: Connection, experiment_id: int) -> Experiment:
-    """The experiment being scored, which names both the run and the extractor.
+def _describer(
+    connection: Connection, experiment: Experiment, *, config: LibraryConfig, arguments: argparse.Namespace
+) -> ProbeDescriber | None:
+    """The extractor and reading that produced this experiment, which retrieval needs to describe audio again.
 
     Raises:
-        ValueError: the catalog holds no such experiment.
-    """
-    experiment = PostgresExperimentRepository(connection).get(experiment_id)
-    if experiment is None:
-        raise ValueError(f"the catalog holds no experiment {experiment_id}")
-    return experiment
-
-
-def _extractor_for(
-    experiment: Experiment, *, config: LibraryConfig, arguments: argparse.Namespace
-) -> FeatureExtractor | None:
-    """The extractor that produced this experiment, which retrieval needs to describe audio again.
-
-    A learned descriptor is found by the model name the experiment recorded when it was extracted.
-
-    Raises:
-        ValueError: the experiment names a backend this build lacks, or a learned one without its model.
+        ExperimentRefused: the experiment records no recipe this build can follow.
     """
     if arguments.skip_transposition:
         return None
-    if experiment.backend_name == LEARNED_BACKEND_NAME:
-        model_name = experiment.params.get(MODEL_PARAMETER)
-        if not isinstance(model_name, str):
-            raise ValueError(f"experiment {experiment.id} was extracted by a learned descriptor it does not name")
-        return build_learned_extractor(config.library_root, model_name=model_name, device=arguments.device)
-    if experiment.backend_name not in BACKEND_REGISTRY:
-        raise ValueError(f"experiment {experiment.id} was extracted by the unknown {experiment.backend_name} backend")
 
-    return BACKEND_REGISTRY[experiment.backend_name]()
+    recipe = recipe_of(experiment)
+    return ProbeDescriber(
+        feature_extractor=extractor_for(recipe, library_root=config.library_root, device=arguments.device),
+        hearing=hearing_for(connection, recipe.reading),
+    )
 
 
 def _report(report: EvaluationReport) -> None:

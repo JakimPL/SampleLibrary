@@ -4,16 +4,22 @@ from datetime import UTC, datetime
 
 import numpy as np
 import pytest
-from sqlalchemy import Connection
+from sqlalchemy import Connection, func, select
 from trackmod.core.samples.depth import BitDepth
 
 from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME, TEACHER_EMBEDDING_SIZE
-from samplecloud.suggestions.scoring import HandLabelAgreement, ScoringRecipe, score_suggestions
+from samplecloud.suggestions.scoring import (
+    MAXIMUM_SUGGESTION_COUNT,
+    HandLabelAgreement,
+    ScoringRecipe,
+    score_suggestions,
+)
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import ZERO_SHOT_BACKEND_NAME, SampleFeatureVector
 from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import SampleOccurrence
+from samplecore.storage.database import experiment
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
@@ -125,3 +131,44 @@ def _annotation(sample_hash: str, label: str) -> SampleAnnotation:
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC),
     )
+
+
+def test_a_scoring_interrupted_while_writing_leaves_no_experiment_behind(
+    connection: Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A reader takes the newest scoring as the one to show, so a partial one never becomes visible."""
+    source = seed_listening_experiment(connection)
+    experiment_count_before = connection.execute(select(func.count()).select_from(experiment)).scalar_one()
+
+    def failing_insert(self: PostgresSampleLabelSuggestionRepository, suggestions: object) -> None:
+        raise OSError("simulated failure")
+
+    monkeypatch.setattr(PostgresSampleLabelSuggestionRepository, "insert_many", failing_insert)
+
+    with pytest.raises(OSError, match="simulated failure"):
+        score_suggestions(
+            connection,
+            recipe=ScoringRecipe(
+                source_experiment_id=source, checkpoint="stub", vocabulary=VOCABULARY, suggestion_count=1, label=None
+            ),
+            prompts=prompts(),
+        )
+
+    assert connection.execute(select(func.count()).select_from(experiment)).scalar_one() == experiment_count_before
+    assert PostgresSampleLabelSuggestionRepository(connection).latest_experiment_id() is None
+
+
+@pytest.mark.parametrize(
+    ("suggestion_count", "vocabulary"),
+    [(0, VOCABULARY), (MAXIMUM_SUGGESTION_COUNT + 1, VOCABULARY), (1, ())],
+    ids=("no suggestion", "past the bound", "no label to rank"),
+)
+def test_a_recipe_outside_its_bounds_is_refused(suggestion_count: int, vocabulary: tuple[str, ...]) -> None:
+    with pytest.raises(ValueError, match="at least one label|between"):
+        ScoringRecipe(
+            source_experiment_id=1,
+            checkpoint="stub",
+            vocabulary=vocabulary,
+            suggestion_count=suggestion_count,
+            label=None,
+        )

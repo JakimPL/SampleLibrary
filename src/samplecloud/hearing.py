@@ -2,31 +2,18 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import StrEnum, unique
 
 import numpy as np
 from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
+from samplecore.models.experiment import Reading
 from samplecore.pitch import choose_playback_rate
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.waveform import heard_at_rate
-
-
-@unique
-class Reading(StrEnum):
-    """How a pass reads a stored sample before an extractor hears it.
-
-    `NOMINAL` reads the frames at the rate the store writes, the reading every cloud so far was
-    built on. `HEARD_RATE` reads them at the rate the library plays the sample at, so a bass played
-    two octaves below its file's rate reaches the extractor as a bass.
-    """
-
-    NOMINAL = "nominal"
-    HEARD_RATE = "heard_rate"
 
 
 @dataclass(frozen=True)

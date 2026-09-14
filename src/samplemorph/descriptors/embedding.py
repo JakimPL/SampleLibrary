@@ -9,7 +9,13 @@ import torch
 from numpy.typing import NDArray
 from sqlalchemy import Connection
 
-from samplecore.models.experiment import LEARNED_BACKEND_NAME, MODEL_PARAMETER, SampleFeatureVector
+from samplecore.models.experiment import (
+    LEARNED_BACKEND_NAME,
+    MODEL_PARAMETER,
+    READING_PARAMETER,
+    Reading,
+    SampleFeatureVector,
+)
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplemorph.descriptors.learned import LearnedDescriptor
@@ -61,12 +67,15 @@ def embed_cache(
 ) -> EmbeddingSummary:
     """Open an experiment for this descriptor and write every cached sample's vector into it.
 
-    The experiment records the model's name, which is how the cloud's evaluation rebuilds the
-    extractor when it needs to describe retuned audio, and how a promotion finds the same vectors.
+    The experiment records the model's name and the nominal reading its grids were cached under,
+    which is how the cloud's evaluation rebuilds the extractor when it needs to describe retuned
+    audio, and how resuming the experiment reads new samples the way these were read.
     """
     vectors = describe_cache(descriptor, cache)
     experiment_id = PostgresExperimentRepository(connection).create(
-        backend_name=LEARNED_BACKEND_NAME, label=label, params={MODEL_PARAMETER: model_name}
+        backend_name=LEARNED_BACKEND_NAME,
+        label=label,
+        params={MODEL_PARAMETER: model_name, READING_PARAMETER: Reading.NOMINAL.value},
     )
     repository = PostgresSampleFeatureVectorRepository(connection)
     now = datetime.now(UTC)

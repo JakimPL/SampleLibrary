@@ -1,18 +1,28 @@
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final
+from datetime import UTC, datetime
 
 from sqlalchemy import Connection
 
 from samplecloud.backends import FeatureExtractor
-from samplecloud.features import FeatureExtractionSummary, FeaturePass, extract_features
-from samplecloud.hearing import Reading, hearing_for
+from samplecloud.experiments import EmbeddingRecipe, ExperimentRefused, require_reproducible
+from samplecloud.features import FeatureExtractionSummary, FeaturePass, extract_features, pending_samples
+from samplecloud.hearing import hearing_for
 from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
+from samplecloud.registries import DEFAULT_BACKEND_NAME
 from samplecore.config import LibraryConfig
+from samplecore.models.cloud import CloudPromotion
+from samplecore.models.experiment import Experiment, Reading
+from samplecore.storage.database import start_batch
+from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository, PostgresCloudPromotionRepository
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 
-READING_PARAMETER: Final[str] = "reading"
+REBUILT_RECIPE = EmbeddingRecipe(backend_name=DEFAULT_BACKEND_NAME, reading=Reading.NOMINAL, model_name=None)
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -28,11 +38,6 @@ class EmbeddingOptions:
     promote: bool
 
 
-def reading_parameters(reading: Reading) -> dict[str, Any]:
-    """The reading an experiment was extracted under, in the form its row records it."""
-    return {READING_PARAMETER: reading.value}
-
-
 @dataclass(frozen=True)
 class EmbeddingSummary:
     """What one embedding run did: its extraction stage, and its reduction stage when it ran one."""
@@ -42,56 +47,106 @@ class EmbeddingSummary:
     reduction: CloudSummary | None
 
 
-def resolve_experiment(
-    connection: Connection,
-    *,
-    backend_name: str,
-    label: str | None = None,
-    params: dict[str, Any] | None = None,
-    experiment_id: int | None = None,
-) -> int:
-    """Return the id of the experiment a caller's extraction run should write into.
+def create_experiment(connection: Connection, recipe: EmbeddingRecipe, *, label: str | None) -> int:
+    """Open a new experiment recording ``recipe``, committed at once so a later resume can find it."""
+    return PostgresExperimentRepository(connection).create(
+        backend_name=recipe.backend_name, label=label, params=recipe.parameters
+    )
 
-    Creates a new ``Experiment`` row, committed immediately so a later resume can find it even if
-    extraction itself is interrupted, when ``experiment_id`` is not given. Passing an existing one
-    instead resumes that experiment, verified to actually exist first -- two experiments, whether
-    different backends or different parameters of the same backend, extract independently, so
-    resuming the wrong id would silently mix one experiment's vectors into another's.
+
+def experiment_to_rebuild(connection: Connection) -> int:
+    """The experiment a rebuild resumes: the one the cloud shows, or a new librosa one for a library with no cloud yet.
+
+    A new experiment is recorded as the one on show in the same commit that opens it, so a first
+    rebuild interrupted during extraction resumes that experiment the next time rather than opening
+    another.
 
     Raises:
-        ValueError: ``experiment_id`` is given but no such experiment exists to resume.
+        ExperimentRefused: the catalog holds cloud coordinates but no record of the experiment they came from.
     """
-    experiment_repository = PostgresExperimentRepository(connection)
-    if experiment_id is not None:
-        if experiment_repository.get(experiment_id) is None:
-            raise ValueError(f"No experiment with id {experiment_id} exists to resume.")
-        return experiment_id
+    promotion = PostgresCloudPromotionRepository(connection).current()
+    if promotion is not None:
+        return promotion.experiment_id
+    if PostgresCloudCoordinateRepository(connection).revision()[0] > 0:
+        raise ExperimentRefused(
+            "the cloud shows coordinates with no record of the experiment they came from; "
+            "`samplelibrary cloud embed --experiment-id N` lays out experiment N and records it"
+        )
 
-    return experiment_repository.create(backend_name=backend_name, label=label, params=params or {})
+    with start_batch(connection):
+        experiments = PostgresExperimentRepository(connection)
+        experiment_id = experiments.next_id()
+        experiments.insert(
+            Experiment(
+                id=experiment_id,
+                backend_name=REBUILT_RECIPE.backend_name,
+                params=REBUILT_RECIPE.parameters,
+                created_at=datetime.now(UTC),
+                label=None,
+            )
+        )
+        PostgresCloudPromotionRepository(connection).record(
+            CloudPromotion(experiment_id=experiment_id, promoted_at=datetime.now(UTC))
+        )
+    return experiment_id
 
 
 def run_embedding(
     config: LibraryConfig,
     connection: Connection,
-    feature_extractor: FeatureExtractor,
     experiment_id: int,
     *,
+    extractor: Callable[[], FeatureExtractor],
     options: EmbeddingOptions,
 ) -> EmbeddingSummary:
-    """Extract every missing sample's feature vector for the given experiment, then re-fit its 2D layout.
+    """Extract every missing sample's feature vector for the given experiment, then lay the cloud out from it.
 
-    ``experiment_id`` must already exist -- see ``resolve_experiment`` for creating a new experiment
-    or validating one to resume before calling this.
+    The extractor is built only once a sample is found missing, so a pass with nothing new to
+    describe loads no model. Before new vectors join an experiment that already holds some, a few of
+    its samples are described again and must match (see ``require_reproducible``). A promoting run
+    that adds nothing to the experiment the cloud already shows keeps the cloud's layout as it is.
+
+    Raises:
+        ExtractorChanged: the extractor no longer reproduces the experiment's own vectors.
     """
-    extraction = extract_features(
-        connection,
-        config.library_root,
-        FeaturePass(
-            experiment_id=experiment_id,
-            feature_extractor=feature_extractor,
-            hearing=hearing_for(connection, options.reading),
-            sample_limit=options.sample_limit,
-        ),
+    pending = pending_samples(connection, experiment_id, sample_limit=options.sample_limit)
+    if pending.samples:
+        feature_extractor = extractor()
+        hearing = hearing_for(connection, options.reading)
+        if pending.already_extracted:
+            require_reproducible(
+                connection,
+                config.library_root,
+                experiment_id=experiment_id,
+                extractor=feature_extractor,
+                hearing=hearing,
+            )
+        extraction = extract_features(
+            connection,
+            config.library_root,
+            FeaturePass(experiment_id=experiment_id, feature_extractor=feature_extractor, hearing=hearing),
+            pending,
+        )
+    else:
+        extraction = FeatureExtractionSummary(
+            cataloged=pending.cataloged, already_extracted=pending.already_extracted, newly_extracted=0
+        )
+
+    return EmbeddingSummary(
+        experiment_id=experiment_id,
+        extraction=extraction,
+        reduction=_laid_out(connection, experiment_id, extraction=extraction) if options.promote else None,
     )
-    reduction = reduce_and_persist_coordinates(connection, experiment_id) if options.promote else None
-    return EmbeddingSummary(experiment_id=experiment_id, extraction=extraction, reduction=reduction)
+
+
+def _laid_out(
+    connection: Connection, experiment_id: int, *, extraction: FeatureExtractionSummary
+) -> CloudSummary | None:
+    promotion = PostgresCloudPromotionRepository(connection).current()
+    shown = promotion is not None and promotion.experiment_id == experiment_id
+    if shown and extraction.newly_extracted == 0 and PostgresCloudCoordinateRepository(connection).revision()[0] > 0:
+        _logger.info(
+            "The cloud already shows experiment %d with every sample it holds, so its layout stays.", experiment_id
+        )
+        return None
+    return reduce_and_persist_coordinates(connection, experiment_id)

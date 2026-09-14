@@ -71,6 +71,8 @@ MODULE_FILENAME_BACKSLASH_PATTERN: Final[str] = "%\\\\%"
 # Arbitrary numbers, each needing only to be one no other advisory lock in this database picks.
 SCHEMA_LOCK_KEY: Final[int] = 6_853_197_402_115_308_001
 EXTRACTION_LOCK_KEY: Final[int] = 2_940_318_775_601_922_553
+# The promotion table holds one row, the cloud being shown, and this is its key.
+PROMOTION_SLOT: Final[int] = 0
 CONNECT_TIMEOUT_SECONDS: Final[int] = 10
 
 Item = TypeVar("Item")
@@ -293,6 +295,15 @@ experiment = Table(
     Column("params", String, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("label", String, nullable=True),
+)
+
+cloud_promotion = Table(
+    "cloud_promotion",
+    metadata,
+    Column("slot", Integer, primary_key=True),
+    Column("experiment_id", Integer, ForeignKey("experiment.id"), nullable=False),
+    Column("promoted_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(column("slot") == PROMOTION_SLOT, name="cloud_promotion_slot_check"),
 )
 
 sample_feature_vector = Table(

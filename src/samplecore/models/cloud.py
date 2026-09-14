@@ -5,7 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
-from samplecore.models.scalars import ModuleHash, SampleHash
+from samplecore.models.scalars import Index, ModuleHash, SampleHash
 
 
 class SampleCloudCoordinate(BaseModel):
@@ -39,3 +39,16 @@ class ModuleCloudCoordinate(BaseModel):
     x: float
     y: float
     computed_at: datetime
+
+
+class CloudPromotion(BaseModel):
+    """Which experiment's vectors the cloud shows, and since when.
+
+    Recorded in the same transaction that writes the coordinates, so the record and the points never
+    disagree, and it is what lets a rebuild resume the experiment on show rather than start another.
+    """
+
+    model_config = FROZEN
+
+    experiment_id: Index
+    promoted_at: datetime

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum, unique
 from typing import Any, Final
 
 from pydantic import BaseModel
@@ -16,6 +17,20 @@ LEARNED_BACKEND_NAME: Final[str] = "learned"
 ZERO_SHOT_BACKEND_NAME: Final[str] = "zero_shot"
 MODEL_PARAMETER: Final[str] = "model"
 VOCABULARY_PARAMETER: Final[str] = "vocabulary"
+READING_PARAMETER: Final[str] = "reading"
+
+
+@unique
+class Reading(StrEnum):
+    """How a pass reads a stored sample before an extractor hears it, recorded on the experiment it fills.
+
+    `NOMINAL` reads the frames at the rate the store writes, the reading every cloud so far was
+    built on. `HEARD_RATE` reads them at the rate the library plays the sample at, so a bass played
+    two octaves below its file's rate reaches the extractor as a bass.
+    """
+
+    NOMINAL = "nominal"
+    HEARD_RATE = "heard_rate"
 
 
 class Experiment(BaseModel):

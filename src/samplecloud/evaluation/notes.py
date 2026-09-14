@@ -53,22 +53,22 @@ class NoteAgreement:
     fold_count: int
 
 
-def note_agreement(corpus: EvaluationCorpus, *, settings: EvaluationSettings) -> NoteAgreement:
+def note_agreement(corpus: EvaluationCorpus, *, settings: EvaluationSettings) -> NoteAgreement | None:
     """Predict each sample's pitch count and span from its neighbors, and rank the agreement.
 
-    Raises:
-        ValueError: the note events reach too few of this experiment's samples to fold.
+    Returns None when the samples the note events reach fall into fewer equivalence groups than
+    there are folds.
     """
     reached = np.flatnonzero(corpus.note_reached)
-    if len(reached) < settings.fold_count:
-        raise ValueError(f"note events reach {len(reached)} of this experiment's samples, too few to score")
+    groups = corpus.equivalence_groups[reached]
+    if len(np.unique(groups)) < settings.fold_count:
+        return None
 
     statistics = [corpus.note_statistics[position] for position in reached]
     pitch_counts = np.array([entry.distinct_pitch_count for entry in statistics if entry is not None], dtype=np.float64)
     spans = np.array([entry.pitch_span_semitones for entry in statistics if entry is not None], dtype=np.float64)
     strikes = np.array([entry.strike_count for entry in statistics if entry is not None], dtype=np.float64)
     vectors = corpus.vectors[reached]
-    groups = corpus.equivalence_groups[reached]
 
     targets = {"log2_pitch_count": np.log2(pitch_counts), "log2_span": np.log2(spans + 1.0)}
     predictions = {name: _predicted(vectors, values, groups, settings=settings) for name, values in targets.items()}

@@ -7,8 +7,14 @@ from typing import Protocol
 from sqlalchemy import Connection, Row, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as upsert
 
-from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
-from samplecore.storage.database import bulk_insert, module_cloud_coordinates, sample_cloud_coordinates
+from samplecore.models.cloud import CloudPromotion, ModuleCloudCoordinate, SampleCloudCoordinate
+from samplecore.storage.database import (
+    PROMOTION_SLOT,
+    bulk_insert,
+    cloud_promotion,
+    module_cloud_coordinates,
+    sample_cloud_coordinates,
+)
 
 
 class CloudCoordinateRepository(Protocol):
@@ -158,3 +164,26 @@ class PostgresModuleCloudCoordinateRepository:
 def _row_to_module_coordinate(row: Row[tuple[str, float, float, object]]) -> ModuleCloudCoordinate:
     """Reconstruct a ModuleCloudCoordinate from a Core row, addressed by its own column names."""
     return ModuleCloudCoordinate(module_hash=row.module_hash, x=row.x, y=row.y, computed_at=row.computed_at)
+
+
+class PostgresCloudPromotionRepository:
+    """The one-row record of which experiment the cloud shows."""
+
+    def __init__(self, connection: Connection) -> None:
+        self._connection = connection
+
+    def record(self, promotion: CloudPromotion) -> None:
+        """Make ``promotion`` the experiment on show, replacing whichever one was."""
+        statement = upsert(cloud_promotion).values(
+            slot=PROMOTION_SLOT, experiment_id=promotion.experiment_id, promoted_at=promotion.promoted_at
+        )
+        statement = statement.on_conflict_do_update(
+            index_elements=[cloud_promotion.c.slot],
+            set_={"experiment_id": statement.excluded.experiment_id, "promoted_at": statement.excluded.promoted_at},
+        )
+        self._connection.execute(statement)
+
+    def current(self) -> CloudPromotion | None:
+        """The experiment on show, or nothing when no experiment has been promoted."""
+        row = self._connection.execute(select(cloud_promotion)).fetchone()
+        return CloudPromotion(experiment_id=row.experiment_id, promoted_at=row.promoted_at) if row is not None else None

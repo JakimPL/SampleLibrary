@@ -2,15 +2,18 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Connection
+from sqlalchemy import Connection, func, select
 
-from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
+from samplecore.models.cloud import CloudPromotion, ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
+from samplecore.storage.database import cloud_promotion
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
+    PostgresCloudPromotionRepository,
     PostgresModuleCloudCoordinateRepository,
 )
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 
 
 def _coordinate(sample_hash: str, *, x: float = 1.0, y: float = 2.0) -> SampleCloudCoordinate:
@@ -135,3 +138,23 @@ def test_module_replace_all_with_an_empty_sequence_clears_the_table(
     repository.replace_all([])
 
     assert repository.list_all() == ()
+
+
+def _experiment(connection: Connection) -> int:
+    return PostgresExperimentRepository(connection).create(backend_name="librosa", label=None, params={})
+
+
+def test_no_experiment_is_on_show_before_one_is_recorded(connection: Connection) -> None:
+    assert PostgresCloudPromotionRepository(connection).current() is None
+
+
+def test_recording_a_promotion_replaces_the_one_on_show(connection: Connection) -> None:
+    repository = PostgresCloudPromotionRepository(connection)
+    first, second = _experiment(connection), _experiment(connection)
+    repository.record(CloudPromotion(experiment_id=first, promoted_at=datetime.now(UTC)))
+    promoted = CloudPromotion(experiment_id=second, promoted_at=datetime.now(UTC))
+
+    repository.record(promoted)
+
+    assert repository.current() == promoted
+    assert connection.execute(select(func.count()).select_from(cloud_promotion)).scalar_one() == 1

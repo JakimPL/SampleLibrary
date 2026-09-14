@@ -21,6 +21,7 @@ def test_a_descriptor_that_separates_the_categories_scores_well(
     corpus = load_corpus(connection, experiment_id=separable_catalog.experiment_id)
 
     agreement = category_agreement(corpus, settings=SETTINGS)
+    assert agreement is not None
 
     assert agreement.accuracy > 0.9
     assert agreement.macro_f1 > 0.9
@@ -33,6 +34,7 @@ def test_a_descriptor_carrying_no_structure_scores_near_chance(connection: Conne
     corpus = load_corpus(connection, experiment_id=catalog.experiment_id)
 
     agreement = category_agreement(corpus, settings=SETTINGS)
+    assert agreement is not None
 
     assert agreement.accuracy < 0.6
 
@@ -44,6 +46,7 @@ def test_the_category_score_reports_the_share_of_the_catalog_it_describes(
     corpus = load_corpus(connection, experiment_id=separable_catalog.experiment_id)
 
     agreement = category_agreement(corpus, settings=SETTINGS)
+    assert agreement is not None
 
     assert agreement.coverage == pytest.approx(1.0)
     assert agreement.scored_sample_count == corpus.sample_count
@@ -56,6 +59,7 @@ def test_uncategorized_samples_stay_out_of_the_category_score(
     corpus = load_corpus(connection, experiment_id=separable_catalog.experiment_id)
 
     agreement = category_agreement(corpus, settings=SETTINGS)
+    assert agreement is not None
 
     assert str(SampleCategory.UNCATEGORIZED) not in {score.category for score in agreement.per_category}
 
@@ -67,6 +71,7 @@ def test_a_descriptor_that_separates_the_categories_agrees_with_the_note_events(
     corpus = load_corpus(connection, experiment_id=separable_catalog.experiment_id)
 
     agreement = note_agreement(corpus, settings=SETTINGS)
+    assert agreement is not None
 
     by_target = {score.target: score.spearman for score in agreement.targets}
     assert by_target["log2_pitch_count"] > 0.8
@@ -80,6 +85,7 @@ def test_the_note_score_reports_how_many_samples_were_struck_often_enough(
     corpus = load_corpus(connection, experiment_id=separable_catalog.experiment_id)
 
     agreement = note_agreement(corpus, settings=SETTINGS)
+    assert agreement is not None
 
     assert agreement.well_struck_sample_count == corpus.sample_count
     assert {score.target for score in agreement.well_struck_targets} == {"log2_pitch_count", "log2_span"}
@@ -110,8 +116,7 @@ def test_a_corpus_carrying_one_category_cannot_be_scored(connection: Connection)
     corpus = load_corpus(connection, experiment_id=catalog.experiment_id)
     single = replace(corpus, categories=tuple(SampleCategory.KICK for _ in corpus.categories))
 
-    with pytest.raises(ValueError, match="fewer than two categories"):
-        category_agreement(single, settings=SETTINGS)
+    assert category_agreement(single, settings=SETTINGS) is None
 
 
 def test_a_corpus_the_note_events_barely_reach_cannot_be_folded(connection: Connection) -> None:
@@ -119,8 +124,7 @@ def test_a_corpus_the_note_events_barely_reach_cannot_be_folded(connection: Conn
     corpus = load_corpus(connection, experiment_id=catalog.experiment_id)
     unreached = replace(corpus, note_statistics=tuple(None for _ in corpus.note_statistics))
 
-    with pytest.raises(ValueError, match="too few to score"):
-        note_agreement(unreached, settings=SETTINGS)
+    assert note_agreement(unreached, settings=SETTINGS) is None
 
 
 def test_settings_reject_a_pass_with_no_neighbors() -> None:

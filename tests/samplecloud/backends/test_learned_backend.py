@@ -5,8 +5,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from samplecloud.backends.learned_backend import build_learned_extractor, learned_parameters
-from samplecore.models.experiment import MODEL_PARAMETER
+from samplecloud.backends.learned_backend import build_learned_extractor
 from samplemorph.descriptors.grid_descriptor import DescriptorShape, GridDescriptor
 from samplemorph.descriptors.learned import DescriptorDescription, descriptor_path, save_descriptor
 from samplemorph.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE, pooled_band_count
@@ -41,7 +40,3 @@ def test_a_stored_descriptor_serves_as_an_extractor_by_name(tmp_path: Path) -> N
     vector = extractor.extract(np.sin(np.linspace(0.0, 400.0, 5000))[:, None])
     assert vector.shape == (EMBEDDING_SIZE,)
     assert isinstance(torch.from_numpy(vector), torch.Tensor)
-
-
-def test_an_experiment_records_the_model_it_was_extracted_by() -> None:
-    assert learned_parameters("tiny") == {MODEL_PARAMETER: "tiny"}
