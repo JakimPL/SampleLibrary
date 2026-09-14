@@ -91,8 +91,8 @@ without a ceiling, and `just capped` is Linux's alone.
 
 Near-duplicate detection is a command of its own, `uv run samplelibrary equivalence`. It reads every
 sample once into a short fingerprint, then compares only the samples whose fingerprints are alike,
-in about two gigabytes of memory; over a hundred thousand samples it takes a few hours, and an
-interrupted run keeps what it finished.
+in under three gigabytes of memory; over 127,588 samples it took two and a quarter hours on one
+core, and an interrupted run keeps what it finished.
 
 `just reset` empties the catalog and the stored audio. To fill the library again, run `just rebuild`,
 then `uv run samplelibrary equivalence`, and `uv run samplelibrary cloud suggest` for label
