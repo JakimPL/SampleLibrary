@@ -456,7 +456,9 @@ reading the listening model or training a network run their real command lines a
 that write the real outputs (`harness/stand_ins.py`). Faults script a step's exit, a gate stops it
 before, partway through or after its output for the scenario to interrupt or kill it, and a sink
 kills the run's own process at a chosen event. `just test-pipeline` runs the same stories with every
-real program on the processor.
+real program on the processor, and `just explore-pipeline` draws sequences of acts with Hypothesis
+(`test_exploration.py`) and holds every run to the same checks, shrinking a divergence to the
+shortest sequence showing it.
 
 ## Deployment
 

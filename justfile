@@ -40,6 +40,10 @@ test-pipeline:
     uv run pytest -m pipeline_real tests/samplelibrary/pipeline/scenarios/real
 
 [group("quality")]
+explore-pipeline:
+    uv run pytest -m pipeline_explore tests/samplelibrary/pipeline/scenarios/test_exploration.py
+
+[group("quality")]
 coverage:
     uv run pytest --cov --cov-report=term-missing
 

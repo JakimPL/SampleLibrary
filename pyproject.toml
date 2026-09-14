@@ -66,6 +66,7 @@ dev = [
     "import-linter>=2.5",
     "pre-commit==4.6.0",
     "marimo>=0.23",
+    "hypothesis==6.168.0",
 ]
 
 [build-system]
@@ -104,8 +105,11 @@ skip = ["trackmod"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--import-mode=importlib -m 'not pipeline_real'"
-markers = ["pipeline_real: runs the pipeline's real programs, listening model and training included; `just test-pipeline` runs them"]
+addopts = "--import-mode=importlib -m 'not pipeline_real and not pipeline_explore'"
+markers = [
+    "pipeline_real: runs the pipeline's real programs, listening model and training included; `just test-pipeline` runs them",
+    "pipeline_explore: acts on a library in orders Hypothesis draws, for minutes; `just explore-pipeline` runs it",
+]
 
 [tool.coverage.run]
 source = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "samplelibrary"]

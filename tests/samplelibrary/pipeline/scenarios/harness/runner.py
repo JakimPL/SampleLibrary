@@ -33,7 +33,7 @@ from tests.samplelibrary.pipeline.scenarios.harness.plans import (
     KillPoint,
     gate_path,
 )
-from tests.samplelibrary.pipeline.scenarios.harness.world import World
+from tests.samplelibrary.pipeline.scenarios.harness.world import CATALOG_PARTS, World
 
 HOST_MODULE: Final[str] = "tests.samplelibrary.pipeline.scenarios.harness.host"
 REPOSITORY_ROOT: Final[Path] = Path(__file__).resolve().parents[5]
@@ -110,6 +110,18 @@ class Host:
                 raise TimeoutError(f"{step} reached no {moment} gate in {GATE_DEADLINE_SECONDS} seconds")
             time.sleep(POLL_SECONDS)
         return int(reached.read_text(encoding="utf-8"))
+
+    def reaches(self, step: str, moment: GateMoment) -> bool:
+        """Wait until a scripted step stands at its gate or the run ends, answering whether the step got there."""
+        reached = _gate(self.gates, step, moment, REACHED_SUFFIX)
+        deadline = time.monotonic() + GATE_DEADLINE_SECONDS
+        while not reached.is_file():
+            if self.process.poll() is not None:
+                return reached.is_file()
+            if time.monotonic() > deadline:
+                raise TimeoutError(f"{step} reached no {moment} gate in {GATE_DEADLINE_SECONDS} seconds")
+            time.sleep(POLL_SECONDS)
+        return True
 
     def wait_for_output(self, text: str) -> None:
         """Wait until the run's own output says something, which is how a scenario meets it between signals."""
@@ -202,23 +214,48 @@ class ScenarioRunner:
     def finish(
         self, host: Host, expect: Expect, *, story: str, settles: bool = True, still_running: tuple[str, ...] = ()
     ) -> RunObservation:
-        """Wait for a started run to end, then hold it to every oracle.
+        """Wait for a started run to end, then hold it to its expectation and every oracle.
 
         `settles` is false for a run whose library a scenario changed while it ran, which leaves a
         later run work to do, and `still_running` names the locks another run still holds.
         """
-        exit_status = host.wait()
-        observation = observe_run(self.world.layout, host.events, exit_status)
+        observation = observe_run(self.world.layout, host.events, host.wait())
         check_expectation(observation, expect, story)
-        check_evidence(observation, read_evidence(observation, host.ledger), story, expect)
+        after = self._hold_to_oracles(
+            host, observation, expect, story=story, settles=settles, still_running=still_running
+        )
+        check_delta(host.before, after, expect, story)
+        return observation
+
+    def explore(self, host: Host, *, story: str) -> RunObservation:
+        """Wait for a started run to end, then hold it to every oracle, stating nothing about what it should have done."""
+        observation = observe_run(self.world.layout, host.events, host.wait())
+        self._hold_to_oracles(
+            host, observation, Expect.observed(observation), story=story, settles=True, still_running=()
+        )
+        return observation
+
+    def _hold_to_oracles(  # pylint: disable=too-many-arguments
+        self,
+        host: Host,
+        observation: RunObservation,
+        shown: Expect,
+        *,
+        story: str,
+        settles: bool,
+        still_running: tuple[str, ...],
+    ) -> dict[str, str]:
+        """Hold a run to what it left behind, what status said before and after it, and the locks it let go; answer the world after it."""
+        check_evidence(observation, read_evidence(observation, host.ledger), story, shown)
+        after = self.world.catalog_digests()
         if host.statuses is not None and settles:
-            check_status_agreement(host.statuses, observation, self.graph, story, expect)
-        check_delta(host.before, self.world.catalog_digests(), expect, story)
+            catalog_moved = any(host.before[part] != after[part] for part in CATALOG_PARTS)
+            check_status_agreement(host.statuses, observation, self.graph, story, shown, catalog_moved=catalog_moved)
         if observation.outcome is RunOutcome.COMPLETED and settles:
             check_settled(self.status(host.request.targets), self.graph, story)
-        if exit_status != KILLED_STATUS:
+        if observation.exit_status != KILLED_STATUS:
             check_hygiene(tuple(lock for lock in self.world.stray_locks() if lock not in still_running), story)
-        return observation
+        return after
 
     def _status_before(self, request: Run) -> tuple[StepStatus, ...] | None:
         """What `status` says right before a run, where it describes what the run decides and can be read at all."""

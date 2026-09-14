@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, replace
 
 from samplecore.exit_status import ExitStatus
 from samplelibrary.pipeline.results import AttemptOutcome, RunOutcome, StepVerdict
+from tests.samplelibrary.pipeline.scenarios.harness.observe import RunObservation
 from tests.samplelibrary.pipeline.scenarios.harness.world import PARTS
 
 
@@ -32,6 +33,16 @@ class Expect:
             outcome=RunOutcome.COMPLETED,
             exit_status=ExitStatus.COMPLETED,
             steps={step: verdict for step in steps},
+        )
+
+    @classmethod
+    def observed(cls, observation: RunObservation) -> Expect:
+        """What a run did, read back as an expectation, for holding a run nobody stated anything about to the oracles."""
+        return cls(
+            outcome=observation.outcome,
+            exit_status=observation.exit_status,
+            steps=observation.verdicts,
+            outcomes=observation.outcomes,
         )
 
     @classmethod

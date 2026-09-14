@@ -170,6 +170,7 @@ together with the API at `http://127.0.0.1:8000`. The Docker image does the same
 | `just check` | Formats, lints and tests the Python code and the frontend |
 | `just format`, `just lint`, `just test`, `just coverage` | Runs one part of the Python checks; `coverage` also reports the lines the tests leave unrun |
 | `just test-pipeline` | Builds a tiny library with every real program, the listening model and training included, on the processor |
+| `just explore-pipeline` | Acts on a small library in orders drawn at random for a few minutes, holding every run of the pipeline to its checks |
 | `just frontend-install`, `just frontend-dev` | Installs the frontend's dependencies; starts its development server |
 | `just frontend-check`, `just frontend-build`, `just frontend-types` | Checks the frontend, builds it for production, and regenerates its API types from the schema |
 | `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Writes a sandbox of 30 modules, 300 one-shots and ten labels in `dev-library` and builds it, runs a `samplelibrary` command on it, serves it on port 8001, and empties its database and deletes its files |

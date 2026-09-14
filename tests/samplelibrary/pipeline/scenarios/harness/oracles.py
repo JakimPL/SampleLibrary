@@ -75,16 +75,28 @@ def check_delta(before: Mapping[str, str], after: Mapping[str, str], expect: Exp
         )
 
 
-def check_status_agreement(
-    statuses: Sequence[StepStatus], observation: RunObservation, graph: StepGraph, story: str, expect: Expect
+def check_status_agreement(  # pylint: disable=too-many-arguments
+    statuses: Sequence[StepStatus],
+    observation: RunObservation,
+    graph: StepGraph,
+    story: str,
+    expect: Expect,
+    *,
+    catalog_moved: bool,
 ) -> None:
     """Hold what `status` said right before a run to what the run then did.
 
-    A step status calls satisfied stands satisfied unless a step it needs ran first; one status says
-    runs, runs, for at least the reasons status named; one it says seals, seals.
+    A step status calls satisfied stands satisfied unless a step it needs changed something first --
+    a pass counts as changing something only where the catalog moved; one status says runs, runs,
+    for at least the reasons status named; one it says seals, seals.
     """
     verdicts = observation.verdicts
-    ran = {step for step, verdict in verdicts.items() if verdict in (StepVerdict.RAN, StepVerdict.RESEALED)}
+    ran = {
+        step
+        for step, verdict in verdicts.items()
+        if verdict in (StepVerdict.RAN, StepVerdict.RESEALED)
+        and (catalog_moved or not isinstance(graph.step(step), PassStep))
+    }
     problems: list[str] = []
     for status in statuses:
         observed = verdicts.get(status.step)
