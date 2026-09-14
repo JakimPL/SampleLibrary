@@ -10,7 +10,7 @@ from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.equivalence_classes import EquivalenceClass
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.category import SampleCategory
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
@@ -371,9 +371,11 @@ def _annotate(
                 label=None,
                 rating=rating,
                 favorite=favorite,
-                occurrence=SampleOccurrence(module_hash=format(1, "064x"), instrument_index=0, sample_slot=0),
-                module_filename="song.xm",
-                sample_name="smp01",
+                anchor=ModuleSlotAnchor(
+                    occurrence=SampleOccurrence(module_hash=format(1, "064x"), instrument_index=0, sample_slot=0),
+                    module_filename="song.xm",
+                    sample_name="smp01",
+                ),
                 source=AnnotationSource.SAMPLE,
                 annotated_at=datetime.now(UTC),
             ),

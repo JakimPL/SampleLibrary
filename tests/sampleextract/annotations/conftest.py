@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import Connection, delete
 from trackmod.core.samples.depth import BitDepth
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
@@ -74,9 +74,7 @@ def stored_annotation(connection: Connection, cataloged_sample: str) -> SampleAn
         label="warm pad",
         rating=4,
         favorite=True,
-        occurrence=_OCCURRENCE,
-        module_filename="song.mod",
-        sample_name="smp01",
+        anchor=ModuleSlotAnchor(occurrence=_OCCURRENCE, module_filename="song.mod", sample_name="smp01"),
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC),
     )

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sqlalchemy import Connection, func, select
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.module import Module
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.tracker import TrackerFormat
@@ -63,13 +63,15 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, popu
                 label="warm pad",
                 rating=None,
                 favorite=False,
-                occurrence=SampleOccurrence(
-                    module_hash=module.hash,
-                    instrument_index=occurrence_row.instrument_index,
-                    sample_slot=occurrence_row.sample_slot,
+                anchor=ModuleSlotAnchor(
+                    occurrence=SampleOccurrence(
+                        module_hash=module.hash,
+                        instrument_index=occurrence_row.instrument_index,
+                        sample_slot=occurrence_row.sample_slot,
+                    ),
+                    module_filename=module.filename,
+                    sample_name=occurrence_row.name,
                 ),
-                module_filename=module.filename,
-                sample_name=occurrence_row.name,
                 source=AnnotationSource.SAMPLE,
                 annotated_at=datetime.now(UTC),
             ),
@@ -84,7 +86,8 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, popu
     surviving = annotation_repository.get(occurrence_row.sample_hash)
     assert surviving is not None
     assert surviving.label == "WARM PAD"
-    assert surviving.occurrence.module_hash == module.hash
+    assert isinstance(surviving.anchor, ModuleSlotAnchor)
+    assert surviving.anchor.occurrence.module_hash == module.hash
 
 
 def test_reset_library_leaves_the_schema_usable_afterward(connection: Connection, populated_library: Path) -> None:

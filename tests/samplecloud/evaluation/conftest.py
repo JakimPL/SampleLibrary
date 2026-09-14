@@ -10,7 +10,7 @@ from trackmod.core.notes.pitch import Note
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import Experiment, SampleFeatureVector
 from samplecore.models.module import Module
@@ -151,11 +151,13 @@ def label_catalog(connection: Connection, catalog: SeededCatalog, *, every: int 
                 label=wordings[index % len(wordings)],
                 rating=None,
                 favorite=False,
-                occurrence=SampleOccurrence(
-                    module_hash=format(index + 5001, "064x"), instrument_index=0, sample_slot=0
+                anchor=ModuleSlotAnchor(
+                    occurrence=SampleOccurrence(
+                        module_hash=format(index + 5001, "064x"), instrument_index=0, sample_slot=0
+                    ),
+                    module_filename=f"song{index + 1}.xm",
+                    sample_name=f"{category} {index}",
                 ),
-                module_filename=f"song{index + 1}.xm",
-                sample_name=f"{category} {index}",
                 source=AnnotationSource.SAMPLE,
                 annotated_at=datetime.now(UTC),
             )

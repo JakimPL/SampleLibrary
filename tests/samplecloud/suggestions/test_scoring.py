@@ -14,7 +14,7 @@ from samplecloud.suggestions.scoring import (
     ScoringRecipe,
     score_suggestions,
 )
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import ZERO_SHOT_BACKEND_NAME, SampleFeatureVector
 from samplecore.models.sample import Sample
@@ -125,9 +125,11 @@ def _annotation(sample_hash: str, label: str) -> SampleAnnotation:
         rating=None,
         favorite=False,
         sample_hash=sample_hash,
-        occurrence=SampleOccurrence(module_hash="c" * 64, instrument_index=0, sample_slot=0),
-        module_filename="song.xm",
-        sample_name="a sample",
+        anchor=ModuleSlotAnchor(
+            occurrence=SampleOccurrence(module_hash="c" * 64, instrument_index=0, sample_slot=0),
+            module_filename="song.xm",
+            sample_name="a sample",
+        ),
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC),
     )

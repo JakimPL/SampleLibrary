@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Connection
 
-from samplecore.models.annotation import SampleAnnotation
+from samplecore.models.annotation import SampleAnnotation, SampleFileAnchor
+from samplecore.models.sample_file import SampleFileLocation
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from sampleextract.annotations.transfer import AnnotationFileRefused, export_annotations, import_annotations
 
@@ -22,6 +23,29 @@ def test_a_label_survives_a_round_trip_through_a_file(
     import_annotations(connection, path=path)
 
     assert repository.get(stored_annotation.sample_hash) == stored_annotation
+
+
+def test_a_label_anchored_to_a_sample_file_survives_a_round_trip_through_a_file(
+    connection: Connection, stored_annotation: SampleAnnotation, tmp_path: Path
+) -> None:
+    path = tmp_path / "labels.jsonl"
+    anchored_to_a_file = stored_annotation.model_copy(
+        update={
+            "anchor": SampleFileAnchor(
+                location=SampleFileLocation(directory=Path("/samples"), relative_path="Kicks/Deep 01.wav")
+            )
+        }
+    )
+    repository = PostgresSampleAnnotationRepository(connection)
+    repository.upsert_many((anchored_to_a_file,))
+    connection.commit()
+    export_annotations(connection, path=path)
+    repository.delete_many((anchored_to_a_file.sample_hash,))
+    connection.commit()
+
+    import_annotations(connection, path=path)
+
+    assert repository.get(anchored_to_a_file.sample_hash) == anchored_to_a_file
 
 
 def test_an_export_writes_one_line_per_label(

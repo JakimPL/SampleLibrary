@@ -8,7 +8,7 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
@@ -356,9 +356,11 @@ def _annotation(sample_hash: str, *, label: str | None, rating: int | None) -> S
         rating=rating,
         favorite=False,
         sample_hash=sample_hash,
-        occurrence=SampleOccurrence(module_hash=MODULE_HASH, instrument_index=0, sample_slot=0),
-        module_filename="song.xm",
-        sample_name="a sample",
+        anchor=ModuleSlotAnchor(
+            occurrence=SampleOccurrence(module_hash=MODULE_HASH, instrument_index=0, sample_slot=0),
+            module_filename="song.xm",
+            sample_name="a sample",
+        ),
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC),
     )

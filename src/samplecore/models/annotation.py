@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum, unique
-from typing import Annotated, Final, Self
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, model_validator
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 
 from samplecore.labeling.labels import canonical_label
 from samplecore.models.base import FROZEN
+from samplecore.models.sample_file import SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.scalars import Rating, SampleHash
 
@@ -22,6 +23,45 @@ class AnnotationSource(StrEnum):
 
     SAMPLE = "sample"
     EQUIVALENCE_CLASS = "equivalence_class"
+
+
+@unique
+class AnchorKind(StrEnum):
+    """Where an annotated sample was found: a module slot, or a file of a sample directory."""
+
+    MODULE_SLOT = "module_slot"
+    SAMPLE_FILE = "sample_file"
+
+
+class ModuleSlotAnchor(BaseModel):
+    """The module slot an annotation stays findable through, with the names a person recognizes it by.
+
+    Reading the current hash out of the slot is what relinks the annotation to its sample.
+    ``module_filename`` and ``sample_name`` are the same anchor in human-readable form, for the case
+    where even the module is no longer recognized.
+    """
+
+    model_config = FROZEN
+
+    kind: Literal[AnchorKind.MODULE_SLOT] = AnchorKind.MODULE_SLOT
+    occurrence: SampleOccurrence
+    module_filename: str
+    sample_name: str
+
+
+class SampleFileAnchor(BaseModel):
+    """The sample file an annotation stays findable through, whose path a person recognizes as it is.
+
+    Reading the sample the catalog holds for that file today is what relinks the annotation.
+    """
+
+    model_config = FROZEN
+
+    kind: Literal[AnchorKind.SAMPLE_FILE] = AnchorKind.SAMPLE_FILE
+    location: SampleFileLocation
+
+
+AnnotationAnchor = Annotated[ModuleSlotAnchor | SampleFileAnchor, Field(discriminator="kind")]
 
 
 class AnnotationDecisions(BaseModel):
@@ -100,11 +140,9 @@ class SampleAnnotation(AnnotationDecisions):
     A row exists because at least one decision was made, which the validator below and the table's
     own CHECK both hold to. Taking back the last of them removes the row.
 
-    An occurrence travels with every annotation so a sample stays findable when its hash changes --
-    reading the current hash out of that module slot is what relinks the annotation to its sample,
-    which is the whole reason it is worth more than the hash it happens to carry today.
-    `module_filename` and `sample_name` are the same anchor in human-readable form, for the case
-    where even the module is no longer recognized.
+    An anchor travels with every annotation so a sample stays findable when its hash changes -- the
+    module slot or the sample file it was found in, whose current sample is what the annotation
+    relinks to, which is the whole reason it is worth more than the hash it happens to carry today.
 
     `source` keeps the difference between a sample a person listened to individually and one that
     inherited its annotation from the near-duplicates it was grouped with, since that distinction
@@ -112,9 +150,7 @@ class SampleAnnotation(AnnotationDecisions):
     """
 
     sample_hash: SampleHash
-    occurrence: SampleOccurrence
-    module_filename: str
-    sample_name: str
+    anchor: AnnotationAnchor
     source: AnnotationSource
     annotated_at: datetime
 

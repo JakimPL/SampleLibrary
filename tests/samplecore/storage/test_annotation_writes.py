@@ -5,12 +5,12 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Connection
 
-from samplecore.anchoring import Anchor
 from samplecore.models.annotation import (
     AnnotationChanges,
     AnnotationDecision,
     AnnotationDecisions,
     AnnotationSource,
+    ModuleSlotAnchor,
     SampleAnnotation,
 )
 from samplecore.models.sample_properties import SampleOccurrence
@@ -28,7 +28,7 @@ FIRST = "a" * 64
 SECOND = "b" * 64
 EARLIER = datetime(2026, 1, 1, tzinfo=UTC)
 NOW = datetime(2026, 9, 14, tzinfo=UTC)
-ANCHOR = Anchor(
+ANCHOR = ModuleSlotAnchor(
     occurrence=SampleOccurrence(module_hash="c" * 64, instrument_index=0, sample_slot=1),
     module_filename="song.xm",
     sample_name="lead",
@@ -41,9 +41,7 @@ def _stored(sample_hash: str, *, label: str | None, rating: int | None = None) -
         label=label,
         rating=rating,
         favorite=False,
-        occurrence=ANCHOR.occurrence,
-        module_filename=ANCHOR.module_filename,
-        sample_name=ANCHOR.sample_name,
+        anchor=ANCHOR,
         source=AnnotationSource.SAMPLE,
         annotated_at=EARLIER,
     )
@@ -158,6 +156,8 @@ def _row(sample_hash: str, *, label: str, annotated_at: datetime) -> dict[str, o
         "instrument_index": ANCHOR.occurrence.instrument_index,
         "sample_slot": ANCHOR.occurrence.sample_slot,
         "sample_name": ANCHOR.sample_name,
+        "file_directory": None,
+        "file_relative_path": None,
         "source": AnnotationSource.SAMPLE.value,
         "annotated_at": annotated_at,
     }

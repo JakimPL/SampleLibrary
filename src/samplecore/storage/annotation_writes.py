@@ -6,9 +6,9 @@ from datetime import datetime
 
 from sqlalchemy import Connection
 
-from samplecore.anchoring import Anchor
 from samplecore.models.annotation import (
     NO_DECISIONS,
+    AnnotationAnchor,
     AnnotationChanges,
     AnnotationDecisions,
     AnnotationSource,
@@ -42,8 +42,8 @@ class AnnotationWritePlan:
     """The rows one change writes and removes, and what every reached sample says afterward.
 
     ``skipped`` names the samples a change would give their first decision to while nothing anchors
-    them: the catalog holds no occurrence of them and no annotation of theirs carries one, so they
-    are left saying nothing.
+    them: the catalog holds neither a module occurrence nor a file of them, and no annotation of
+    theirs carries an anchor, so they are left saying nothing.
     """
 
     upserts: tuple[SampleAnnotation, ...]
@@ -53,7 +53,7 @@ class AnnotationWritePlan:
 
 
 def plan_annotation_write(
-    write: AnnotationWrite, *, existing: Mapping[str, SampleAnnotation], anchors: Mapping[str, Anchor]
+    write: AnnotationWrite, *, existing: Mapping[str, SampleAnnotation], anchors: Mapping[str, AnnotationAnchor]
 ) -> AnnotationWritePlan:
     """Merge one change into every reached sample's own annotation, deciding what to write and remove.
 
@@ -76,7 +76,7 @@ def plan_annotation_write(
             removals.append(sample_hash)
             written.append(WrittenDecisions(sample_hash, None))
         else:
-            anchor = anchors.get(sample_hash) or (Anchor.of(stored) if stored is not None else None)
+            anchor = anchors.get(sample_hash) or (stored.anchor if stored is not None else None)
             if anchor is None:
                 skipped.append(sample_hash)
                 continue
@@ -89,7 +89,7 @@ def plan_annotation_write(
 
 
 def write_annotation_changes(
-    curation_connection: Connection, write: AnnotationWrite, *, anchors: Mapping[str, Anchor]
+    curation_connection: Connection, write: AnnotationWrite, *, anchors: Mapping[str, AnnotationAnchor]
 ) -> AnnotationWritePlan:
     """Apply one change to every reached sample in one transaction, under the annotation write lock.
 
@@ -110,16 +110,14 @@ def write_annotation_changes(
 
 
 def _annotation(
-    sample_hash: str, decisions: AnnotationDecisions, *, anchor: Anchor, write: AnnotationWrite
+    sample_hash: str, decisions: AnnotationDecisions, *, anchor: AnnotationAnchor, write: AnnotationWrite
 ) -> SampleAnnotation:
     return SampleAnnotation(
         sample_hash=sample_hash,
         label=decisions.label,
         rating=decisions.rating,
         favorite=decisions.favorite,
-        occurrence=anchor.occurrence,
-        module_filename=anchor.module_filename,
-        sample_name=anchor.sample_name,
+        anchor=anchor,
         source=write.source,
         annotated_at=write.annotated_at,
     )

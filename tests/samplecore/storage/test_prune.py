@@ -4,7 +4,7 @@ from pathlib import Path
 
 from sqlalchemy import Connection, ForeignKey, func, select
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.sample import Sample
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence
@@ -123,13 +123,15 @@ def test_pruning_leaves_hand_annotations_for_relinking(connection: Connection, p
                 label="kick",
                 rating=None,
                 favorite=False,
-                occurrence=SampleOccurrence(
-                    module_hash=gone.hash,
-                    instrument_index=occurrence.instrument_index,
-                    sample_slot=occurrence.sample_slot,
+                anchor=ModuleSlotAnchor(
+                    occurrence=SampleOccurrence(
+                        module_hash=gone.hash,
+                        instrument_index=occurrence.instrument_index,
+                        sample_slot=occurrence.sample_slot,
+                    ),
+                    module_filename=gone.filename,
+                    sample_name=occurrence.name,
                 ),
-                module_filename=gone.filename,
-                sample_name=occurrence.name,
                 source=AnnotationSource.SAMPLE,
                 annotated_at=gone.ingested_at,
             ),

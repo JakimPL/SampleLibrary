@@ -7,19 +7,14 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import Connection, select
-from trackmod.core.samples.depth import BitDepth
 
 from samplecore.hashing import compute_module_hash
-from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import CloudPromotion, ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
 from samplecore.models.label_suggestion import SampleLabelSuggestion
-from samplecore.models.module import Module
-from samplecore.models.sample import Sample
 from samplecore.models.sample_file import FileFingerprint
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
-from samplecore.models.tracker import TrackerFormat
 from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage.database import metadata
 from samplecore.storage.repositories.cloud import (
@@ -31,7 +26,6 @@ from samplecore.storage.repositories.experiment import PostgresExperimentReposit
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
-from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 from sampleextract.discovery import FORMAT_LOADERS
@@ -41,65 +35,6 @@ from sampleextract.files.ingest import ingest_sample_file
 from sampleextract.ingest import ingest_module
 from sampleextract.notes.playback_rates import record_playback_rates
 from sampleextract.parsing import parse_module
-
-
-@pytest.fixture
-def stored_sample(connection: Connection, sample_hash_a: str) -> Sample:
-    sample = Sample(hash=sample_hash_a, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
-    PostgresSampleRepository(connection).upsert(sample)
-    connection.commit()
-    return sample
-
-
-@pytest.fixture
-def stored_sample_b(connection: Connection, sample_hash_b: str) -> Sample:
-    sample = Sample(hash=sample_hash_b, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
-    PostgresSampleRepository(connection).upsert(sample)
-    connection.commit()
-    return sample
-
-
-@pytest.fixture
-def stored_module(connection: Connection, module_hash_a: str) -> Module:
-    repository = PostgresModuleRepository(connection)
-    module = Module(
-        hash=module_hash_a,
-        id=repository.next_id(),
-        filename="song.it",
-        tracker=TrackerFormat.IT,
-        title="untitled",
-        channel_count=4,
-        pattern_count=1,
-        instrument_count=1,
-        sample_count=1,
-        file_size=1024,
-        ingested_at=datetime.now(UTC),
-    )
-    repository.insert(module)
-    connection.commit()
-    return module
-
-
-@pytest.fixture
-def stored_module_b(connection: Connection, module_hash_b: str) -> Module:
-    repository = PostgresModuleRepository(connection)
-    module = Module(
-        hash=module_hash_b,
-        id=repository.next_id(),
-        filename="song2.it",
-        tracker=TrackerFormat.IT,
-        title="untitled 2",
-        channel_count=4,
-        pattern_count=1,
-        instrument_count=1,
-        sample_count=1,
-        file_size=1024,
-        ingested_at=datetime.now(UTC),
-    )
-    repository.insert(module)
-    connection.commit()
-    return module
-
 
 SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
 

@@ -6,7 +6,7 @@ from sqlalchemy import Connection
 
 from samplecore.labeling.labels import SampleLabel
 from samplecore.labeling.vocabulary import LabelVocabulary, TagUsage, read_vocabulary
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
@@ -68,9 +68,11 @@ def _annotation(label: str | None, *, days_ago: int, sample_hash: str) -> Sample
         rating=None if label is not None else 3,
         favorite=False,
         sample_hash=sample_hash,
-        occurrence=SampleOccurrence(module_hash="c" * 64, instrument_index=0, sample_slot=0),
-        module_filename="song.xm",
-        sample_name="a sample",
+        anchor=ModuleSlotAnchor(
+            occurrence=SampleOccurrence(module_hash="c" * 64, instrument_index=0, sample_slot=0),
+            module_filename="song.xm",
+            sample_name="a sample",
+        ),
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC) - timedelta(days=days_ago),
     )
