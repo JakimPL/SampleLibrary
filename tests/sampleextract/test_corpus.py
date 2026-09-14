@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 
 from samplecore.config import LibraryConfig
 from samplecore.storage.repositories.module import PostgresModuleRepository
-from sampleextract.parallel.supervisor import extract_corpus
+from sampleextract.corpus import extract_corpus
 
 WORKER_COUNT = 2
 UNREACHABLE_DATABASE_URL = "postgresql+psycopg://nobody:nobody@127.0.0.1:1/absent"

@@ -51,6 +51,12 @@ def _extract(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _files(argv: list[str], *, prog: str) -> None:
+    from sampleextract.files.cli import main
+
+    main(argv, prog=prog)
+
+
 def _equivalence(argv: list[str], *, prog: str) -> None:
     from sampleextract.equivalence.cli import main
 
@@ -133,6 +139,7 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
     Command(name="setup", summary="Put a config file in place, or prepare the databases it names.", run=_setup),
     Command(name="reset", summary="Empty the configured library's catalog and content store.", run=_reset),
     Command(name="extract", summary="Catalog every module under the configured source directory.", run=_extract),
+    Command(name="files", summary="Catalog the audio files in the configured sample directories.", run=_files),
     Command(
         name="equivalence",
         summary="Detect bit-depth, amplification and resampled variants among the cataloged samples.",

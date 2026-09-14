@@ -5,9 +5,7 @@ import types
 from datetime import UTC, datetime
 from pathlib import Path
 
-import numpy as np
 import pytest
-import soundfile
 from sqlalchemy import Connection, select
 from trackmod.core.samples.depth import BitDepth
 
@@ -18,7 +16,7 @@ from samplecore.models.experiment import Experiment, SampleFeatureVector
 from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
-from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
+from samplecore.models.sample_file import FileFingerprint
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
@@ -34,11 +32,12 @@ from samplecore.storage.repositories.feature_vector import PostgresSampleFeature
 from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
+from sampleextract.files.discovery import discover_sample_files
+from sampleextract.files.ingest import ingest_sample_file
 from sampleextract.ingest import ingest_module
 from sampleextract.notes.playback_rates import record_playback_rates
 from sampleextract.parsing import parse_module
@@ -136,20 +135,14 @@ def _ingest_all(connection: Connection, library_root: Path, modules_directory: P
         )
 
 
-def _catalog_a_sample_file(connection: Connection, sample_directory: Path) -> None:
-    path = sample_directory / "tone.wav"
-    path.parent.mkdir(parents=True)
-    soundfile.write(path, np.linspace(-0.5, 0.5, 1024), 44100, subtype="PCM_16")
-    decoded = decode_sample_file(path)
-    PostgresSampleRepository(connection).upsert(decoded.sample_pcm.sample)
-    PostgresSampleFileRepository(connection).upsert(
-        SampleFile(
-            sample_hash=decoded.sample_pcm.sample.hash,
-            location=SampleFileLocation(directory=sample_directory, relative_path=path.name),
-            rate=decoded.rate,
-            fingerprint=FileFingerprint.of(path.stat()),
+def _catalog_the_sample_pack(connection: Connection, sample_pack_directory: Path) -> None:
+    for location in discover_sample_files((sample_pack_directory,), exclusions=()).locations:
+        ingest_sample_file(
+            connection,
+            location=location,
+            decoded=decode_sample_file(location.path),
+            fingerprint=FileFingerprint.of(location.path.stat()),
         )
-    )
 
 
 @pytest.fixture
@@ -197,7 +190,7 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
         ]
     )
     PostgresCloudPromotionRepository(connection).record(CloudPromotion(experiment_id=experiment_id, promoted_at=now))
-    _catalog_a_sample_file(connection, tmp_path / "samples")
+    _catalog_the_sample_pack(connection, tmp_path / build_dev_library.SAMPLE_PACK_DIRECTORY_NAME)
     PostgresSampleLabelSuggestionRepository(connection).insert_many(
         [
             SampleLabelSuggestion(

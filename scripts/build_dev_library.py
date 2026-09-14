@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable, Final, NamedTuple
 
 import numpy as np
+import soundfile
 from numpy.typing import NDArray
 from scipy.signal import resample_poly
 from trackmod.core.instruments.instrument import Instrument
@@ -39,6 +40,7 @@ SAMPLE_VOICES_PATTERN_ROWS: Final[int] = 64
 DEFAULT_OUTPUT_DIRECTORY: Final[Path] = Path("dev-library")
 MODULES_DIRECTORY_NAME: Final[str] = "modules"
 CATALOG_DIRECTORY_NAME: Final[str] = "catalog"
+SAMPLE_PACK_DIRECTORY_NAME: Final[str] = "samples"
 SANDBOX_INFERENCE_URL: Final[str] = "http://127.0.0.1:8011"
 
 # Below LibraryConfig.minimum_sample_frames' own default (512), so a sample this short is the
@@ -67,6 +69,16 @@ FILLER_SEED_OFFSET: Final[int] = 100
 PLAYED_ROW_COUNT: Final[int] = 4
 LOWEST_PLAYED_NOTE: Final[Note] = Note(48)
 PLAYED_NOTE_STEP: Final[int] = 3
+
+# A folder of plain audio files beside the modules, for `samplelibrary files`: two drums whose names
+# the keyword table recognizes, a stereo pad at a rate other than the nominal one, and a loop the
+# sandbox's own exclusion leaves out.
+SAMPLE_PACK_EXCLUSIONS: Final[tuple[str, ...]] = ("*loop*",)
+PACK_PAD_RATE: Final[int] = 48000
+PACK_DRUM_FRAMES: Final[int] = SAMPLE_RATE // 2
+PACK_PAD_FRAMES: Final[int] = PACK_PAD_RATE * 2
+PACK_DECAY_PER_SECOND: Final[float] = 8.0
+PACK_SEED_OFFSET: Final[int] = 200
 
 
 def _tonal_waveform(frame_count: int, *, frequency: float, seed: int) -> NDArray[np.float64]:
@@ -353,15 +365,62 @@ def _all_modules(target_module_count: int = TARGET_MODULE_COUNT) -> dict[str, by
     return modules
 
 
+class PackFile(NamedTuple):
+    """One file of the sandbox's sample pack: its frames as ``(frames, channels)``, its rate and its encoding."""
+
+    waveform: NDArray[np.float64]
+    rate: int
+    subtype: str
+
+
+def _decaying(waveform: NDArray[np.float64], *, rate: int) -> NDArray[np.float64]:
+    envelope = np.exp(-PACK_DECAY_PER_SECOND * np.arange(waveform.shape[0]) / rate)
+    decayed: NDArray[np.float64] = 0.9 * waveform * envelope
+    return decayed
+
+
+def _sample_pack() -> dict[str, PackFile]:
+    kick = _decaying(_tonal_waveform(PACK_DRUM_FRAMES, frequency=55.0, seed=PACK_SEED_OFFSET), rate=SAMPLE_RATE)
+    noise = np.random.default_rng(PACK_SEED_OFFSET + 1).uniform(-1.0, 1.0, PACK_DRUM_FRAMES)
+    pad = np.stack(
+        [
+            _tonal_waveform(PACK_PAD_FRAMES, frequency=261.63, seed=PACK_SEED_OFFSET + 2),
+            _tonal_waveform(PACK_PAD_FRAMES, frequency=261.63, seed=PACK_SEED_OFFSET + 3),
+        ],
+        axis=1,
+    )
+    return {
+        "Drums/Kick 01.wav": PackFile(kick.reshape(-1, 1), SAMPLE_RATE, "PCM_16"),
+        "Drums/Snare 01.wav": PackFile(_decaying(noise, rate=SAMPLE_RATE).reshape(-1, 1), SAMPLE_RATE, "PCM_24"),
+        "Tonal/Pad C.flac": PackFile(0.5 * pad, PACK_PAD_RATE, "PCM_16"),
+        "Loops/Drum Loop 01.wav": PackFile(np.tile(kick, 4).reshape(-1, 1), SAMPLE_RATE, "PCM_16"),
+    }
+
+
+def _write_sample_pack(sample_pack_directory: Path) -> None:
+    for relative_path, pack_file in _sample_pack().items():
+        path = sample_pack_directory / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        soundfile.write(path, pack_file.waveform, pack_file.rate, subtype=pack_file.subtype)
+
+
 def _write_config(
-    output_directory: Path, *, modules_directory: Path, catalog_directory: Path, database_url: str
+    output_directory: Path,
+    *,
+    modules_directory: Path,
+    catalog_directory: Path,
+    sample_pack_directory: Path,
+    database_url: str,
 ) -> None:
     config_path = output_directory / "config.toml"
+    exclusions = ", ".join(_toml_string(pattern) for pattern in SAMPLE_PACK_EXCLUSIONS)
     config_path.write_text(
         "[library]\n"
         f"module_source_directory = {_toml_string(modules_directory.resolve().as_posix())}\n"
         f"library_root = {_toml_string(catalog_directory.resolve().as_posix())}\n"
         f"database_url = {_toml_string(database_url)}\n"
+        f"sample_directories = [{_toml_string(sample_pack_directory.resolve().as_posix())}]\n"
+        f"sample_exclusions = [{exclusions}]\n"
         "\n"
         "[inference]\n"
         f"url = {_toml_string(SANDBOX_INFERENCE_URL)}\n",
@@ -382,16 +441,19 @@ def build_dev_library(
     The config names ``database_url`` and an inference address of the sandbox's own, so passing it
     with `--config` points every command at the sandbox alone.
 
-    ``modules_directory`` is wiped and rewritten every call, so this stays safe to rerun whenever
-    the scenarios change; ``catalog_directory`` is left untouched, since a developer may still want
-    the catalog a prior extraction run built from it.
+    ``modules_directory`` and ``sample_pack_directory`` are wiped and rewritten every call, so this
+    stays safe to rerun whenever the scenarios change; ``catalog_directory`` is left untouched, since
+    a developer may still want the catalog a prior extraction run built from it.
     """
     modules_directory = output_directory / MODULES_DIRECTORY_NAME
     catalog_directory = output_directory / CATALOG_DIRECTORY_NAME
-    if modules_directory.is_dir():
-        shutil.rmtree(modules_directory)
+    sample_pack_directory = output_directory / SAMPLE_PACK_DIRECTORY_NAME
+    for rewritten in (modules_directory, sample_pack_directory):
+        if rewritten.is_dir():
+            shutil.rmtree(rewritten)
     modules_directory.mkdir(parents=True)
     catalog_directory.mkdir(parents=True, exist_ok=True)
+    _write_sample_pack(sample_pack_directory)
 
     written_paths: list[Path] = []
     for filename, data in _all_modules(target_module_count).items():
@@ -403,6 +465,7 @@ def build_dev_library(
         output_directory,
         modules_directory=modules_directory,
         catalog_directory=catalog_directory,
+        sample_pack_directory=sample_pack_directory,
         database_url=database_url,
     )
     return tuple(written_paths)
@@ -432,7 +495,10 @@ def main(argv: list[str] | None = None) -> None:
     written_paths = build_dev_library(
         arguments.output, database_url=database_url, target_module_count=arguments.target_module_count
     )
-    print(f"Wrote {len(written_paths)} modules and config.toml under {arguments.output.resolve()}")
+    print(
+        f"Wrote {len(written_paths)} modules, {len(_sample_pack())} sample files and config.toml "
+        f"under {arguments.output.resolve()}"
+    )
 
 
 if __name__ == "__main__":

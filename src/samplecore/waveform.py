@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from scipy.signal import butter, buttord, resample_poly, sosfiltfilt
 
 from samplecore.models.base import FROZEN
+from samplecore.models.thumbnail import SampleThumbnail
 
 DEFAULT_WAVEFORM_BUCKET_COUNT: Final[int] = 200
 DEFAULT_THUMBNAIL_BUCKET_COUNT: Final[int] = 32
@@ -224,3 +225,14 @@ def compute_waveform_peaks(pcm: NDArray[np.float64], *, bucket_count: int) -> tu
     effective_bucket_count = min(bucket_count, mono.shape[0])
     buckets = np.array_split(mono, effective_bucket_count)
     return tuple(WaveformPeak(minimum=float(bucket.min()), maximum=float(bucket.max())) for bucket in buckets)
+
+
+def compute_thumbnail(sample_hash: str, pcm: NDArray[np.float64]) -> SampleThumbnail:
+    """The waveform preview every listing shows for a sample, at the library's thumbnail resolution."""
+    peaks = compute_waveform_peaks(pcm, bucket_count=DEFAULT_THUMBNAIL_BUCKET_COUNT)
+    return SampleThumbnail(
+        sample_hash=sample_hash,
+        bucket_count=len(peaks),
+        minimums=tuple(peak.minimum for peak in peaks),
+        maximums=tuple(peak.maximum for peak in peaks),
+    )

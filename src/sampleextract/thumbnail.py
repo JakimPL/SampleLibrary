@@ -6,12 +6,11 @@ from pathlib import Path
 from sqlalchemy import Connection
 from tqdm import tqdm
 
-from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.storage import audio_store
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, SampleThumbnailRepository
-from samplecore.waveform import DEFAULT_THUMBNAIL_BUCKET_COUNT, compute_waveform_peaks
+from samplecore.waveform import compute_thumbnail
 
 
 @dataclass(frozen=True)
@@ -43,16 +42,7 @@ def compute_missing_thumbnails(connection: Connection, library_root: Path, *, fo
                 already_thumbnailed += 1
                 continue
 
-            pcm = audio_store.read(library_root, sample).pcm
-            peaks = compute_waveform_peaks(pcm, bucket_count=DEFAULT_THUMBNAIL_BUCKET_COUNT)
-            thumbnail_repository.upsert(
-                SampleThumbnail(
-                    sample_hash=sample.hash,
-                    bucket_count=len(peaks),
-                    minimums=tuple(peak.minimum for peak in peaks),
-                    maximums=tuple(peak.maximum for peak in peaks),
-                )
-            )
+            thumbnail_repository.upsert(compute_thumbnail(sample.hash, audio_store.read(library_root, sample).pcm))
             computed += 1
 
     return ThumbnailBackfillSummary(cataloged=len(samples), already_thumbnailed=already_thumbnailed, computed=computed)

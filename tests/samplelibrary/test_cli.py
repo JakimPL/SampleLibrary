@@ -45,6 +45,7 @@ ROUTE_CASES = (
     RouteCase(["setup", "database"], "samplelibrary.setup.main", ["database"], "samplelibrary setup"),
     RouteCase(["reset", "--confirm"], "samplelibrary.reset.main", ["--confirm"], "samplelibrary reset"),
     RouteCase(["extract", "--workers", "2"], "sampleextract.cli.main", ["--workers", "2"], "samplelibrary extract"),
+    RouteCase(["files", "--prune"], "sampleextract.files.cli.main", ["--prune"], "samplelibrary files"),
     RouteCase(
         ["equivalence", "--limit", "5"],
         "sampleextract.equivalence.cli.main",

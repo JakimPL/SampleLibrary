@@ -7,8 +7,8 @@ from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
 from samplecore.storage.database import connect, share_extraction_lock
+from sampleextract.corpus import CorpusOutcome
 from sampleextract.discovery import Discovery
-from sampleextract.parallel.supervisor import CorpusOutcome
 from sampleextract.parsing import ExtractionFailure, FailureStage
 from sampleextract.prune import PruneRefused, gone_modules, prune_gone_modules
 from sampleextract.run import ExtractionSummary

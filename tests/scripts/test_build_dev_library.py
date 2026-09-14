@@ -13,6 +13,7 @@ from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENV
 from samplecore.hashing import compute_module_hash
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
+from sampleextract.files.discovery import discover_sample_files
 from sampleextract.ingest import ingest_module
 from sampleextract.parsing import parse_module
 
@@ -117,3 +118,20 @@ def test_the_generated_corpus_yields_exactly_the_intended_relations(
         "resampled_variant": summary.resampled_relations,
     }
     assert counts[relation_type] == expected_count
+
+
+def test_the_sandbox_config_names_a_sample_pack_whose_loop_its_exclusions_leave_out(tmp_path: Path) -> None:
+    build_dev_library.build_dev_library(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    with (tmp_path / "config.toml").open("rb") as config_file:
+        library = tomllib.load(config_file)["library"]
+
+    discovery = discover_sample_files(
+        tuple(Path(directory) for directory in library["sample_directories"]),
+        exclusions=tuple(library["sample_exclusions"]),
+    )
+
+    assert [location.relative_path for location in discovery.locations] == [
+        "Drums/Kick 01.wav",
+        "Drums/Snare 01.wav",
+        "Tonal/Pad C.flac",
+    ]

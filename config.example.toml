@@ -14,6 +14,7 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # minimum_sample_frames = 512
 
 # Folders of plain audio files (WAV, AIFF, FLAC) the library reads in place, without copying them.
+# `samplelibrary files` catalogs them; a file that goes missing later is skipped until it is back.
 # sample_directories = ["/path/to/your/sample/packs"]
 
 # Patterns naming files and folders inside those folders to leave out, matched without regard to case

@@ -5,10 +5,10 @@ import logging
 import sys
 
 from samplecore.cli_parsing import command_parser
-from samplecore.cli_support import bootstrap_cli, integer_at_least, open_catalog_connection
+from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.config import LibraryConfig
-from samplecore.models.scalars import MINIMUM_WORKER_COUNT
-from sampleextract.parallel.supervisor import CorpusOutcome, default_worker_count, extract_corpus
+from sampleextract.corpus import CorpusOutcome, extract_corpus
+from sampleextract.parallel.cli import add_workers_argument, raise_worker_errors
 from sampleextract.prune import PruneRefused, prune_gone_modules
 from sampleextract.run import ExtractionSummary
 
@@ -31,7 +31,7 @@ def main(argv: list[str], *, prog: str) -> None:
         sys.exit(1)
 
     _report(outcome.summary)
-    _raise_a_worker_error(outcome)
+    raise_worker_errors(outcome.worker_errors)
     if arguments.prune:
         _prune(config, outcome)
 
@@ -54,14 +54,6 @@ def _report(summary: ExtractionSummary) -> None:
         _logger.warning("Could not %s %s: %s", failure.stage.value, failure.path, failure.reason)
 
 
-def _raise_a_worker_error(outcome: CorpusOutcome) -> None:
-    """Report every share that stopped, then raise the first error, which is what the run ends with."""
-    for error in outcome.worker_errors:
-        _logger.error("A worker process stopped: %s", error, exc_info=error)
-    if outcome.worker_errors:
-        raise outcome.worker_errors[0]
-
-
 def _prune(config: LibraryConfig, outcome: CorpusOutcome) -> None:
     with open_catalog_connection(config.database_url) as connection:
         try:
@@ -71,7 +63,7 @@ def _prune(config: LibraryConfig, outcome: CorpusOutcome) -> None:
             sys.exit(1)
 
     _logger.info(
-        "Pruned %d module(s) whose file is gone, %d sample(s) no module holds, and %d stored object(s).",
+        "Pruned %d module(s) whose file is gone, %d sample(s) nothing else holds, and %d stored object(s).",
         summary.modules_removed,
         summary.samples_removed,
         summary.objects_removed,
@@ -80,12 +72,7 @@ def _prune(config: LibraryConfig, outcome: CorpusOutcome) -> None:
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = command_parser(prog=prog, description="Catalog every module under the configured source directory.")
-    parser.add_argument(
-        "--workers",
-        type=integer_at_least(MINIMUM_WORKER_COUNT),
-        default=default_worker_count(),
-        help=f"How many processes to spend on the corpus: one per core, up to {default_worker_count()} here.",
-    )
+    add_workers_argument(parser, work="the corpus")
     parser.add_argument(
         "--prune",
         action="store_true",
