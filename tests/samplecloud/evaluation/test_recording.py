@@ -8,7 +8,7 @@ from sqlalchemy import Connection
 
 from samplecloud.evaluation.harness import evaluate_experiment
 from samplecloud.evaluation.recording import record_report, run_name_for
-from samplecloud.evaluation.settings import EvaluationSettings
+from samplecloud.evaluation.settings import EvaluationScope, EvaluationSettings
 from samplecloud.evaluation.transposition import OffsetRetrieval, TranspositionRetrieval
 from tests.samplecloud.evaluation.conftest import SeededCatalog, label_catalog
 
@@ -94,4 +94,4 @@ def test_a_retuning_is_named_by_its_direction_and_size(
 
 
 def test_a_run_is_named_after_the_descriptor_and_its_experiment() -> None:
-    assert run_name_for(backend_name="librosa", experiment_id=3) == "librosa-3"
+    assert run_name_for(backend_name="librosa", experiment_id=3, scope=EvaluationScope.MODULES) == "librosa-3-modules"

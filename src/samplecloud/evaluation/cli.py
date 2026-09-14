@@ -14,9 +14,11 @@ from samplecloud.evaluation.notes import NoteAgreement
 from samplecloud.evaluation.recording import EVALUATION_EXPERIMENT_NAME, record_report, run_name_for
 from samplecloud.evaluation.report import EvaluationReport, report_json
 from samplecloud.evaluation.settings import (
+    DEFAULT_EVALUATION_SCOPE,
     DEFAULT_LABEL_DEPTH,
     DEFAULT_PROBE_COUNT,
     DEFAULT_RANDOM_SEED,
+    EvaluationScope,
     EvaluationSettings,
 )
 from samplecloud.evaluation.transposition import ProbeDescriber, TranspositionRetrieval
@@ -46,14 +48,19 @@ def main(argv: list[str], *, prog: str) -> None:
             config.library_root,
             recorded=not arguments.no_tracking,
             experiment_name=EVALUATION_EXPERIMENT_NAME,
-            run_name=run_name_for(backend_name=experiment.backend_name, experiment_id=experiment.id),
+            run_name=run_name_for(
+                backend_name=experiment.backend_name, experiment_id=experiment.id, scope=arguments.scope
+            ),
         ) as tracker:
             report = evaluate_experiment(
                 connection,
                 experiment_id=experiment.id,
                 describer=describer,
                 settings=EvaluationSettings(
-                    random_seed=arguments.seed, probe_count=arguments.probes, label_depth=arguments.label_depth
+                    random_seed=arguments.seed,
+                    probe_count=arguments.probes,
+                    label_depth=arguments.label_depth,
+                    scope=arguments.scope,
                 ),
             )
             record_report(report, tracker)
@@ -88,10 +95,11 @@ def _describer(
 def _report(report: EvaluationReport) -> None:
     """Log what the pass measured, in the order the metrics answer their questions."""
     _logger.info(
-        "Experiment %d (%s), %d samples, seed %d.",
+        "Experiment %d (%s), %d samples in the %s scope, seed %d.",
         report.experiment_id,
         report.backend_name,
         report.sample_count,
+        report.scope.value,
         report.random_seed,
     )
     if report.transposition is not None:
@@ -185,6 +193,13 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         help="How many samples to retune for transposition retrieval.",
     )
     parser.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed every split and draw uses.")
+    parser.add_argument(
+        "--scope",
+        type=EvaluationScope,
+        choices=tuple(EvaluationScope),
+        default=DEFAULT_EVALUATION_SCOPE,
+        help="Which samples to score: every one the experiment describes, or the ones tracker modules hold.",
+    )
     parser.add_argument("--output", type=str, default=None, help="Where to write the report as JSON, if anywhere.")
     parser.add_argument(
         "--skip-transposition",

@@ -501,3 +501,14 @@ def test_sampling_reproducibly_keeps_to_the_frame_bounds(connection: Connection)
     )
 
     assert [sample_.frames for sample_ in drawn] == [10_000]
+
+
+def test_the_membership_digest_moves_with_the_samples_the_catalog_holds(
+    connection: Connection, stored_sample: Sample, sample_hash_b: str
+) -> None:
+    repository = PostgresSampleRepository(connection)
+    before = repository.membership_digest()
+
+    repository.upsert(Sample(hash=sample_hash_b, depth=BitDepth.EIGHT, channels=ChannelLayout.MONO, frames=64))
+
+    assert repository.membership_digest() != before

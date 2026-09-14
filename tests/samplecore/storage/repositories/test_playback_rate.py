@@ -42,3 +42,13 @@ def test_a_sample_with_no_recorded_rate_is_left_out_of_a_lookup(connection: Conn
 
 def test_a_lookup_naming_no_hashes_returns_nothing(connection: Connection) -> None:
     assert PostgresSamplePlaybackRateRepository(connection).get_many([]) == {}
+
+
+def test_the_rate_digest_moves_with_any_sample_s_rate(connection: Connection, stored_sample: Sample) -> None:
+    repository = PostgresSamplePlaybackRateRepository(connection)
+    repository.replace_all({stored_sample.hash: 22050})
+    before = repository.rate_digest()
+
+    repository.replace_all({stored_sample.hash: 11025})
+
+    assert repository.rate_digest() != before

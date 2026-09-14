@@ -11,6 +11,7 @@ from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
 from samplecore.categorization import classify_sample_names
+from samplecore.digests import digest_of_rows
 from samplecore.equivalence_classes import EquivalenceClass
 from samplecore.models.annotation import SampleAnnotation
 from samplecore.models.channels import ChannelLayout
@@ -234,6 +235,16 @@ class PostgresSampleRepository:
             rows.extend(self._connection.execute(statement.where(hash_column.in_(chunk))).fetchall())
 
         return rows
+
+    def membership_digest(self) -> str:
+        """One digest over every cataloged sample's hash, so a pass reading the catalog can tell whether the set moved."""
+        rows = self._connection.execute(select(sample.c.hash).order_by(sample.c.hash)).scalars()
+        return digest_of_rows((str(sample_hash),) for sample_hash in rows)
+
+    def hashes_held_by_modules(self) -> frozenset[str]:
+        """Every sample a module occurrence holds, which is the part of the catalog the tracker modules supply."""
+        rows = self._connection.execute(select(sample_properties.c.sample_hash).distinct()).scalars()
+        return frozenset(str(sample_hash) for sample_hash in rows)
 
 
 _OCCURRENCE_NAMES_AND_RATES: Final[Select[Any]] = select(

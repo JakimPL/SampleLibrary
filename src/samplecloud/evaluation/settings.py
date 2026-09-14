@@ -1,8 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum, unique
 from typing import Final
 
+
+@unique
+class EvaluationScope(StrEnum):
+    """Which samples an evaluation scores: every one the experiment describes, or the ones tracker modules hold.
+
+    The modules scope reads the same samples whatever sample directories the catalog adds, so two
+    descriptors trained with and without a sample pack are scored over one corpus.
+    """
+
+    CATALOG = "catalog"
+    MODULES = "modules"
+
+
+DEFAULT_EVALUATION_SCOPE: Final[EvaluationScope] = EvaluationScope.CATALOG
 DEFAULT_RANDOM_SEED: Final[int] = 0
 DEFAULT_PROBE_COUNT: Final[int] = 200
 DEFAULT_NEIGHBOR_COUNT: Final[int] = 5
@@ -31,7 +46,7 @@ class EvaluationSettings:
     Every metric reads the same settings, so one seed fixes every split and every draw and a second
     run of the same pass reproduces every number. The offsets form a fixed mirrored grid rather than
     a random draw, which is what lets two runs compare offset by offset. `label_depth` reads the
-    hand labels to that many levels, and `None` reads them whole.
+    hand labels to that many levels, and `None` reads them whole. `scope` names the samples scored.
     """
 
     random_seed: int = DEFAULT_RANDOM_SEED
@@ -40,6 +55,7 @@ class EvaluationSettings:
     fold_count: int = DEFAULT_FOLD_COUNT
     semitone_offsets: tuple[float, ...] = field(default=DEFAULT_SEMITONE_OFFSETS)
     label_depth: int | None = DEFAULT_LABEL_DEPTH
+    scope: EvaluationScope = DEFAULT_EVALUATION_SCOPE
 
     def __post_init__(self) -> None:
         if self.fold_count < 2:

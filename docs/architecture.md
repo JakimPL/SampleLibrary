@@ -623,6 +623,11 @@ carries, so a change to an extractor is answered by numbers rather than by an im
   bootstrap interval over the queries and every score its chance level. A label depth reads the
   labels to that many levels, for a coarser reading of the same set.
 
+`--scope modules` scores the samples tracker modules hold and leaves the ones found only in sample
+directories out, fitting the standardization over that corpus alone, so a descriptor trained with a
+sample pack and one trained without it are read over one body of samples; every report carries its
+scope and a digest of the samples it scored, which the run store records beside the numbers.
+
 Each metric reports the share of the catalog it describes, so a reader sees which part of the
 library a score speaks for. Splits are grouped by equivalence class, which changes nothing while
 `sample_relation` is empty and becomes correct on its own once it is not. One seed fixes every split

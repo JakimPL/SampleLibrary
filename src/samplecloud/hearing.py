@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
+from samplecore.digests import digest_of_rows
 from samplecore.models.experiment import Reading
 from samplecore.pitch import choose_playback_rate
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
@@ -22,6 +23,13 @@ class Hearing:
 
     reading: Reading
     playback_rate_by_hash: Mapping[str, Rate]
+
+    @property
+    def rates_digest(self) -> str:
+        """One digest over every rate this hearing plays a sample at, so a pass can tell whether any moved."""
+        return digest_of_rows(
+            (sample_hash, int(rate)) for sample_hash, rate in sorted(self.playback_rate_by_hash.items())
+        )
 
     def rate_for(self, sample_hash: str) -> Rate | None:
         """The rate this pass hears a sample at, recorded beside its vector; nothing under the nominal reading.

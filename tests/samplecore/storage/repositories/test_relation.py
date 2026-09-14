@@ -104,3 +104,19 @@ def test_list_for_sample_finds_a_relation_by_either_subject_or_reference_hash(
 
 def test_list_for_sample_finds_nothing_for_an_unrelated_sample(connection: Connection, sample_hash_a: str) -> None:
     assert PostgresSampleRelationRepository(connection).list_for_sample(sample_hash_a) == ()
+
+
+def test_the_relations_digest_moves_with_a_new_pair_and_stays_through_a_review(
+    connection: Connection, stored_sample: Sample, stored_sample_b: Sample
+) -> None:
+    repository = PostgresSampleRelationRepository(connection)
+    empty = repository.membership_digest()
+    relation = _relation(repository.next_id(), stored_sample.hash, stored_sample_b.hash)
+    repository.upsert(relation)
+    related = repository.membership_digest()
+
+    repository.review(relation.id, RelationReview(confirmed=False, reviewed_at=datetime.now(UTC), reviewed_by="jakim"))
+    repository.upsert(_relation(relation.id, stored_sample.hash, stored_sample_b.hash, confidence=0.5))
+
+    assert related != empty
+    assert repository.membership_digest() == related

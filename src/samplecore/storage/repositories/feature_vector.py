@@ -6,6 +6,7 @@ from typing import Any, Protocol
 from sqlalchemy import Connection, Row, delete, select
 from trackmod.schema.scalars import Rate
 
+from samplecore.digests import digest_of_rows
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, chunks, sample_feature_vector
 
@@ -97,6 +98,18 @@ class PostgresSampleFeatureVectorRepository:
         )
         rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_feature_vector(row) for row in rows)
+
+    def membership_digest(self, experiment_id: int) -> str:
+        """One digest over which samples an experiment describes and the rate each was heard at, read without the vectors."""
+        statement = (
+            select(sample_feature_vector.c.sample_hash, sample_feature_vector.c.heard_rate)
+            .where(sample_feature_vector.c.experiment_id == experiment_id)
+            .order_by(sample_feature_vector.c.sample_hash)
+        )
+        return digest_of_rows(
+            (str(row.sample_hash), None if row.heard_rate is None else int(row.heard_rate))
+            for row in self._connection.execute(statement)
+        )
 
 
 def _row_to_feature_vector(row: Row[Any]) -> SampleFeatureVector:

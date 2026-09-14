@@ -36,7 +36,7 @@ def evaluate_experiment(
     """
     experiment = experiment_named(connection, experiment_id)
     _logger.info("Loading experiment %d and its evaluation targets...", experiment_id)
-    corpus = load_corpus(connection, experiment_id=experiment_id)
+    corpus = load_corpus(connection, experiment_id=experiment_id, scope=settings.scope)
     _logger.info(
         "Scoring %d vectors: %d keyword-labeled, %d reached by note events, %d labeled by hand.",
         corpus.sample_count,
@@ -54,6 +54,8 @@ def evaluate_experiment(
     return EvaluationReport(
         experiment_id=experiment_id,
         backend_name=experiment.backend_name,
+        scope=corpus.scope,
+        corpus_digest=corpus.membership_digest,
         sample_count=corpus.sample_count,
         random_seed=settings.random_seed,
         evaluated_at=datetime.now(UTC),

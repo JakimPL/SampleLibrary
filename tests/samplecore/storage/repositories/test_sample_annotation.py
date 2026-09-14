@@ -329,3 +329,16 @@ def test_labels_of_samples_the_catalog_holds_are_the_ones_listed(
     repository.upsert_many((_annotation(stored_sample.hash, label="kick"), _annotation(sample_hash_b, label="orphan")))
 
     assert repository.cataloged_labels() == {stored_sample.hash: "KICK"}
+
+
+def test_the_label_digest_moves_with_a_label_s_text_alone(connection: Connection, stored_sample: Sample) -> None:
+    repository = PostgresSampleAnnotationRepository(connection)
+    repository.upsert_many((_annotation(stored_sample.hash, label="SNARE", rating=3),))
+    labeled = repository.label_digest()
+
+    repository.upsert_many((_annotation(stored_sample.hash, label="SNARE", rating=5, favorite=True),))
+    rated = repository.label_digest()
+    repository.upsert_many((_annotation(stored_sample.hash, label="SNARE: RIM", rating=5),))
+
+    assert rated == labeled
+    assert repository.label_digest() != labeled

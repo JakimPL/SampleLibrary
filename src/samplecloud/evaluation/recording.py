@@ -8,6 +8,7 @@ from samplecloud.evaluation.categories import CategoryAgreement
 from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.notes import NoteAgreement
 from samplecloud.evaluation.report import EvaluationReport, report_json
+from samplecloud.evaluation.settings import EvaluationScope
 from samplecloud.evaluation.transposition import TranspositionRetrieval
 from samplecore.tracking import TrackedRun
 
@@ -17,9 +18,9 @@ REPORT_ARTIFACT_NAME: Final[str] = "report.json"
 REPORT_STEP: Final[int] = 0
 
 
-def run_name_for(*, backend_name: str, experiment_id: int) -> str:
-    """The name a recorded evaluation goes by: the descriptor and the experiment it was read from."""
-    return f"{backend_name}-{experiment_id}"
+def run_name_for(*, backend_name: str, experiment_id: int, scope: EvaluationScope) -> str:
+    """The name a recorded evaluation goes by: the descriptor, the experiment it was read from, and the scope it scored."""
+    return f"{backend_name}-{experiment_id}-{scope.value}"
 
 
 def record_report(report: EvaluationReport, tracker: TrackedRun) -> None:
@@ -33,6 +34,8 @@ def record_report(report: EvaluationReport, tracker: TrackedRun) -> None:
         {
             "experiment_id": str(report.experiment_id),
             "backend": report.backend_name,
+            "scope": report.scope.value,
+            "corpus_digest": report.corpus_digest,
             "sample_count": str(report.sample_count),
             "random_seed": str(report.random_seed),
         }

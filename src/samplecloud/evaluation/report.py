@@ -8,6 +8,7 @@ from datetime import datetime
 from samplecloud.evaluation.categories import CategoryAgreement
 from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.notes import NoteAgreement
+from samplecloud.evaluation.settings import EvaluationScope
 from samplecloud.evaluation.transposition import TranspositionRetrieval
 
 
@@ -18,7 +19,8 @@ class EvaluationReport:
     The four metrics answer four separate questions -- whether pitch moves a descriptor, whether it
     groups what a keyword calls alike, whether it groups what the library plays alike, and whether
     it groups what a person labeled alike -- and each carries its own coverage, so a reader sees
-    which part of the catalog each score describes.
+    which part of the catalog each score describes. `scope` and `corpus_digest` name the samples the
+    pass scored, so two reports read side by side say whether they scored one corpus.
 
     The report holds numbers and writes nothing. A run tracker, when one is chosen, reads this tree
     rather than the harness reading the tracker.
@@ -26,6 +28,8 @@ class EvaluationReport:
 
     experiment_id: int
     backend_name: str
+    scope: EvaluationScope
+    corpus_digest: str
     sample_count: int
     random_seed: int
     evaluated_at: datetime

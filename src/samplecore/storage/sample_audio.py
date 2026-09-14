@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import Connection, select
+from sqlalchemy import Connection
 
 from samplecore.digests import digest_of_rows
 from samplecore.models.sample import Sample
@@ -12,7 +12,7 @@ from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFil
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.sample_files.decoding import UNREADABLE_SAMPLE_FILE_ERRORS, decode_sample_file, sample_file_frame_count
 from samplecore.storage import audio_store
-from samplecore.storage.database import sample_properties
+from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 
 
@@ -141,8 +141,7 @@ def readable_sample_hashes(connection: Connection) -> frozenset[str]:
     unchanged decodes the way it did when it was scanned, the formats read being lossless, so this
     is the set a pass reading every sample reaches, told without decoding anything.
     """
-    held_by_modules = connection.execute(select(sample_properties.c.sample_hash).distinct()).scalars()
-    readable = {str(sample_hash) for sample_hash in held_by_modules}
+    readable = set(PostgresSampleRepository(connection).hashes_held_by_modules())
     readable.update(
         sample_file.sample_hash
         for sample_file in PostgresSampleFileRepository(connection).list_all()

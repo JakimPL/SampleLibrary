@@ -11,7 +11,7 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecloud.backends import FeatureExtractor
 from samplecloud.evaluation.corpus import load_corpus
-from samplecloud.evaluation.settings import EvaluationSettings
+from samplecloud.evaluation.settings import EvaluationScope, EvaluationSettings
 from samplecloud.evaluation.transposition import ProbeDescriber, TranspositionRetrieval, transposition_retrieval
 from samplecloud.hearing import Hearing, hearing_for
 from samplecore.models.channels import ChannelLayout
@@ -113,7 +113,7 @@ def _retrieve(
     hearing: Hearing = NOMINAL,
     settings: EvaluationSettings = SETTINGS,
 ) -> TranspositionRetrieval:
-    corpus = load_corpus(connection, experiment_id=experiment_id)
+    corpus = load_corpus(connection, experiment_id=experiment_id, scope=EvaluationScope.CATALOG)
     retrieval = transposition_retrieval(
         connection,
         corpus,
@@ -196,7 +196,7 @@ def test_probes_are_heard_the_way_the_experiment_heard_its_samples(connection: C
 def test_a_corpus_whose_probes_left_the_catalog_retrieves_nothing(connection: Connection, tmp_path: Path) -> None:
     extractor = LoudnessShapeExtractor()
     experiment_id = _seed(connection, tmp_path, extractor)
-    corpus = load_corpus(connection, experiment_id=experiment_id)
+    corpus = load_corpus(connection, experiment_id=experiment_id, scope=EvaluationScope.CATALOG)
     connection.execute(delete(sample_feature_vector))
     connection.execute(delete(sample))
     connection.commit()

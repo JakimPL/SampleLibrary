@@ -6,8 +6,10 @@ import numpy as np
 from numpy.typing import NDArray
 from sqlalchemy import Connection
 
+from samplecloud.evaluation.settings import EvaluationScope
 from samplecloud.standardization import Standardization, fit_standardization
 from samplecore.categorization import classify_sample_names
+from samplecore.digests import digest_of_rows
 from samplecore.labeling.labels import SampleLabel
 from samplecore.models.category import SampleCategory
 from samplecore.models.note_event import SampleNoteStatistics
@@ -29,6 +31,7 @@ class EvaluationCorpus:
     far, which is why each metric reports its own coverage rather than the harness reporting one.
     """
 
+    scope: EvaluationScope
     sample_hashes: tuple[str, ...]
     vectors: NDArray[np.float64]
     categories: tuple[SampleCategory, ...]
@@ -57,6 +60,11 @@ class EvaluationCorpus:
         return len(self.sample_hashes)
 
     @property
+    def membership_digest(self) -> str:
+        """One digest over the samples scored, so two passes can tell they read one corpus."""
+        return digest_of_rows((sample_hash,) for sample_hash in self.sample_hashes)
+
+    @property
     def categorized(self) -> NDArray[np.bool_]:
         """Which samples a keyword matched, which is what a category metric can be scored over."""
         return np.array([category is not SampleCategory.UNCATEGORIZED for category in self.categories])
@@ -72,18 +80,28 @@ class EvaluationCorpus:
         return np.array([label is not None for label in self.labels])
 
 
-def load_corpus(connection: Connection, *, experiment_id: int) -> EvaluationCorpus:
-    """Read one experiment's feature vectors and every target the catalog can score them against.
+def load_corpus(connection: Connection, *, experiment_id: int, scope: EvaluationScope) -> EvaluationCorpus:
+    """Read one experiment's feature vectors within the scope and every target the catalog can score them against.
 
     Vectors arrive standardized, on the same definition the promoted cloud's projection is fitted
-    from, so a distance here and a distance there describe one space.
+    from, so a distance here and a distance there describe one space. The standardization is fitted
+    over the scoped vectors alone, so a scope reads the same numbers whatever lies outside it.
 
     Raises:
-        ValueError: the experiment holds no feature vectors, leaving nothing to score.
+        ValueError: the experiment holds no feature vectors within the scope, leaving nothing to score.
     """
     feature_vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
+    match scope:
+        case EvaluationScope.CATALOG:
+            pass
+        case EvaluationScope.MODULES:
+            held = PostgresSampleRepository(connection).hashes_held_by_modules()
+            feature_vectors = tuple(vector for vector in feature_vectors if vector.sample_hash in held)
     if not feature_vectors:
-        raise ValueError(f"experiment {experiment_id} holds no feature vectors, so there is nothing to evaluate")
+        raise ValueError(
+            f"experiment {experiment_id} holds no feature vectors within the {scope.value} scope, "
+            "so there is nothing to evaluate"
+        )
 
     sample_hashes = tuple(vector.sample_hash for vector in feature_vectors)
     raw = np.stack([np.array(vector.vector, dtype=np.float64) for vector in feature_vectors])
@@ -91,6 +109,7 @@ def load_corpus(connection: Connection, *, experiment_id: int) -> EvaluationCorp
     statistics_by_hash = PostgresNoteEventRepository(connection).note_statistics_for_every_sample()
     categories = _categories_for(connection, sample_hashes)
     return EvaluationCorpus(
+        scope=scope,
         sample_hashes=sample_hashes,
         vectors=standardization.apply(raw),
         categories=categories,

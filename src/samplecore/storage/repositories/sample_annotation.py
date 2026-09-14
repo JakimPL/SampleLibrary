@@ -7,6 +7,7 @@ from typing import Any, Final, Protocol
 from sqlalchemy import Connection, Row, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
+from samplecore.digests import digest_of_rows
 from samplecore.models.annotation import (
     AnnotationAnchor,
     AnnotationSource,
@@ -149,6 +150,18 @@ class PostgresSampleAnnotationRepository:
             .order_by(usage.desc(), sample_annotation.c.label)
         )
         return tuple(row.label for row in self._connection.execute(statement).fetchall())
+
+    def label_digest(self) -> str:
+        """One digest over every hand label by sample, so a pass taught by the labels can tell whether one changed.
+
+        Ratings and favorites stay out of it, since nothing trained on the labels reads them.
+        """
+        statement = (
+            select(sample_annotation.c.sample_hash, sample_annotation.c.label)
+            .where(sample_annotation.c.label.is_not(None))
+            .order_by(sample_annotation.c.sample_hash)
+        )
+        return digest_of_rows((str(row.sample_hash), str(row.label)) for row in self._connection.execute(statement))
 
 
 def _sample_annotation_to_values(annotation: SampleAnnotation) -> dict[str, Any]:
