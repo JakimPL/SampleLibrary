@@ -7,7 +7,7 @@ set shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "By
 MEMORY_CAP := "16G"
 DEV_CONFIG := "dev-library/config.toml"
 DEV_PORT := "8001"
-CAPPED_SAMPLELIBRARY := if os() == "linux" { "systemd-run --user --scope -p MemoryMax=" + MEMORY_CAP + " -p MemorySwapMax=0 -q -- uv run samplelibrary" } else { "uv run samplelibrary" }
+CAPPED_SAMPLELIBRARY := "uv run samplelibrary --memory-cap " + MEMORY_CAP
 
 [group("setup")]
 install: && frontend-install
@@ -64,10 +64,18 @@ rebuild:
     {{ CAPPED_SAMPLELIBRARY }} cloud placeholders
 
 [group("library")]
-[linux]
+[unix]
 [positional-arguments]
 capped *arguments:
     {{ CAPPED_SAMPLELIBRARY }} "$@"
+
+[group("library")]
+[windows]
+[positional-arguments]
+[script("powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File")]
+capped *arguments:
+    {{ CAPPED_SAMPLELIBRARY }} @args
+    exit $LASTEXITCODE
 
 [group("library")]
 reset: && _reset-confirmed

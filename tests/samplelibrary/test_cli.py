@@ -9,8 +9,11 @@ import pytest
 from sqlalchemy.exc import OperationalError
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE, load_config
+from samplecore.exit_status import ExitStatus
+from sampleextract import thumbnail_cli
 from samplelibrary.cli import PROGRAM_NAME, dispatch
 from samplelibrary.commands import COMMANDS, Command, CommandGroup, CommandRunner
+from samplelibrary.limits import probe
 
 PACKAGES_A_COMMAND_LOADS = (
     "sampleextract",
@@ -228,7 +231,7 @@ def test_config_after_a_grouped_command_is_shown_before_its_whole_name(
     with pytest.raises(SystemExit):
         dispatch(["cloud", "embed", "--config", "sandbox.toml"])
 
-    assert "samplelibrary --config PATH cloud embed" in capsys.readouterr().err
+    assert "samplelibrary --config VALUE cloud embed" in capsys.readouterr().err
 
 
 @dataclass(frozen=True)
@@ -311,3 +314,91 @@ def test_the_package_runs_as_a_module_the_way_the_console_script_does() -> None:
     )
 
     assert "commands" in completed.stdout
+
+
+class RecordingScope:
+    """A memory scope that remembers what it was asked to hold, in place of one the system enforces."""
+
+    def __init__(self, *, peak_bytes: int | None = 2_000_000_000, reached: bool = False) -> None:
+        self.entered: list[tuple[str, str, list[str]]] = []
+        self._peak = peak_bytes
+        self._reached = reached
+
+    def enter(self, name: str, ceiling: object, argv: list[str]) -> None:
+        self.entered.append((name, str(ceiling), argv))
+
+    def is_running(self, name: str) -> bool:
+        return False
+
+    def terminate(self, name: str) -> None:
+        pass
+
+    def peak_bytes(self) -> int | None:
+        return self._peak
+
+    def reached_the_ceiling(self) -> bool:
+        return self._reached
+
+
+@pytest.fixture(name="recording_scope")
+def fixture_recording_scope(monkeypatch: pytest.MonkeyPatch) -> RecordingScope:
+    scope = RecordingScope()
+    monkeypatch.setattr(probe, "memory_scope", lambda: scope)
+    return scope
+
+
+def test_a_ceiling_holds_the_command_and_is_reported_when_it_ends(
+    recording_scope: RecordingScope, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorded = RecordedCall()
+    monkeypatch.setattr(thumbnail_cli, "main", _recorder(recorded))
+
+    dispatch(["--memory-cap", "16G", "--memory-scope", "samplelibrary-run-thumbnails", "thumbnails"])
+
+    assert recording_scope.entered == [
+        (
+            "samplelibrary-run-thumbnails",
+            "16G",
+            ["--memory-cap", "16G", "--memory-scope", "samplelibrary-run-thumbnails", "thumbnails"],
+        )
+    ]
+    assert recorded.argv == []
+    assert "Held at most 2.00 GB" in capsys.readouterr().out
+
+
+def test_a_run_that_reached_its_ceiling_ends_as_one(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(probe, "memory_scope", lambda: RecordingScope(reached=True))
+    monkeypatch.setattr(thumbnail_cli, "main", _recorder(RecordedCall()))
+
+    with pytest.raises(SystemExit) as raised:
+        dispatch(["--memory-cap", "16G", "thumbnails"])
+
+    assert raised.value.code == ExitStatus.MEMORY_CAP_REACHED
+    assert "Reached the memory ceiling" in capsys.readouterr().err
+
+
+def test_a_ceiling_written_another_way_runs_nothing(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorded = RecordedCall()
+    monkeypatch.setattr(thumbnail_cli, "main", _recorder(recorded))
+
+    with pytest.raises(SystemExit) as raised:
+        dispatch(["--memory-cap", "16 gigabytes", "thumbnails"])
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert "memory ceiling reads as" in capsys.readouterr().err
+    assert recorded.argv is None
+
+
+@pytest.mark.parametrize("option", ["--config", "--memory-cap", "--memory-scope"])
+def test_an_option_of_the_command_line_itself_goes_before_the_command_name(
+    option: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        dispatch(["thumbnails", option, "value"])
+
+    assert raised.value.code == ExitStatus.USAGE
+    assert f"{option} goes before the command name" in capsys.readouterr().err

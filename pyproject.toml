@@ -160,6 +160,12 @@ source_modules = ["samplecore", "sampleextract", "samplecloud", "sampleserver", 
 forbidden_modules = ["samplelibrary"]
 
 [[tool.importlinter.contracts]]
+name = "the memory ceiling boundary reaches the core alone"
+type = "forbidden"
+source_modules = ["samplelibrary.limits"]
+forbidden_modules = ["sampleextract", "samplecloud", "sampleserver", "samplemorph"]
+
+[[tool.importlinter.contracts]]
 name = "core has no dependents among peer packages"
 type = "forbidden"
 source_modules = ["samplecore"]

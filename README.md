@@ -101,10 +101,11 @@ nothing.
 
 Every operation on the library is a `samplelibrary` command: `uv run samplelibrary --help` lists
 them, and each command's own `--help` lists its options — `uv run samplelibrary extract --workers 2`
-holds extraction to two processes, for example. On Linux, `just rebuild` and `just capped <command>`
-run under a memory ceiling, so the kernel stops a pass that outgrows the machine and the machine
-stays up; this uses a systemd user session. On macOS and Windows `just rebuild` runs the same passes
-without a ceiling, and `just capped` is Linux's alone.
+holds extraction to two processes, for example. Any command takes `--memory-cap 16G`, which holds it
+and every process it starts to that much memory, so a pass that outgrows the machine is stopped and
+the machine stays up: Linux holds it in a systemd user scope, Windows in a job object. `just rebuild`
+and `just capped <command>` pass a 16 GB ceiling for you. A system offering neither way to hold a
+process runs the command only with `--memory-cap none`.
 
 Near-duplicate detection is a command of its own, `uv run samplelibrary equivalence`. It reads every
 sample once into a short fingerprint, then compares only the samples whose fingerprints are alike,
@@ -142,11 +143,11 @@ together with the API at `http://127.0.0.1:8000`. The Docker image does the same
 |---|---|
 | `just install` | Installs the Python and frontend dependencies and the git hooks, and puts `config.toml` in place |
 | `just database` | Creates the role and the library, sandbox and test databases on the configured server, wherever they are missing |
-| `just rebuild` | Extracts your modules, scans your sample folders, reads the modules' notes, draws thumbnails and lays out the cloud, capped on Linux |
+| `just rebuild` | Extracts your modules, scans your sample folders, reads the modules' notes, draws thumbnails and lays out the cloud, under a memory ceiling |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
 | `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
-| `just capped <command>` | Runs a `samplelibrary` command under a 16 GB memory ceiling, on Linux alone; `just MEMORY_CAP=24G capped …` raises it |
+| `just capped <command>` | Runs a `samplelibrary` command under a 16 GB memory ceiling; `just MEMORY_CAP=24G capped …` raises it |
 | `just reset` | Names the library and database it would empty, then empties the catalog and stored audio once you confirm; labels, ratings, favorites, models and runs stay |
 | `just check` | Formats, lints and tests the Python code and the frontend |
 | `just format`, `just lint`, `just test`, `just coverage` | Runs one part of the Python checks; `coverage` also reports the lines the tests leave unrun |

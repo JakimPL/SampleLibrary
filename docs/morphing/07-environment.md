@@ -104,8 +104,8 @@ failure is yours.
 just capped extract --workers 4
 ```
 
-`just capped` runs a command under a memory ceiling through a systemd user session, on Linux; on
-another system, run `uv run samplelibrary extract --workers 4` directly.
+`just capped` runs a command under a memory ceiling: a systemd user scope on Linux, a job object on
+Windows. A system with neither takes `uv run samplelibrary extract --workers 4` directly.
 
 Four worker processes, all pointed at the one database. Each takes every fourth file of the sorted
 discovery, so between them they cover the collection exactly once, and striding rather than slicing
