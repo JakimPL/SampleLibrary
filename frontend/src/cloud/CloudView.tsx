@@ -7,6 +7,7 @@ import { classNames } from "../shared/classNames";
 import type { EntityRef } from "../workspace/selectionStore";
 import { CloudMarkers, type MarkerPositions, NO_MARKERS, sameMarkers } from "./CloudMarkers";
 import { type CloudRenderSettings, type NodeStyle, useCloudRenderSettings } from "./cloudRenderSettings";
+import { glowImageOf } from "./densityGlow";
 import { countVisibleUpTo, detailNodeLimit } from "./detailLevel";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
 import type { NodeFrameStyle } from "./hollowPointRenderer";
@@ -371,7 +372,9 @@ function selectHighlighted(
  * one that shows them in detail once the view holds few enough points for the markers to stay
  * legible. It follows the view within the same frame the overlays do, and so does the underlay: a
  * canvas beneath the dots that paints the theme's grid, its lines ranked as rows, beats and measures
- * and locked to the camera, so the grid pans and zooms with the points on it.
+ * and locked to the camera, so the grid pans and zooms with the points on it. Under a theme with a
+ * glow, the underlay also lays a blurred haze over the grid wherever the named points gather, each
+ * cluster in its own colors.
  */
 export function CloudView({
     points: rawPoints,
@@ -484,7 +487,11 @@ export function CloudView({
     );
     const nodeLayer = useNodeLayer(nodeCanvasRef, nodeGeometry, nodePalette, nodeFrameStyle);
     const underlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const underlay = useUnderlay(underlayCanvasRef, settings.grid);
+    const glow = useMemo(
+        () => glowImageOf(nodeGeometry, nodePalette, slotting?.substrateSlot ?? null, settings.glow.opacity),
+        [nodeGeometry, nodePalette, slotting, settings],
+    );
+    const underlay = useUnderlay(underlayCanvasRef, settings.grid, glow);
 
     /**
      * Pins the link to both ends' screen positions, hiding it while an end is outside this view or the first

@@ -29,6 +29,7 @@ const PROPERTIES = [
     "--cloud-grid-beat",
     "--cloud-grid-measure",
     "--cloud-grid-center",
+    "--cloud-glow-opacity",
 ];
 
 function declare(values: Readonly<Record<string, string>>): void {
@@ -128,12 +129,17 @@ describe("readCloudRenderSettings", () => {
         });
     });
 
-    it("holds node opacities to the unit interval", () => {
-        declare({ "--cloud-node-fill-opacity": "-1", "--cloud-node-substrate-opacity": "3" });
+    it("holds node and glow opacities to the unit interval", () => {
+        declare({
+            "--cloud-node-fill-opacity": "-1",
+            "--cloud-node-substrate-opacity": "3",
+            "--cloud-glow-opacity": "2",
+        });
 
-        const { node } = readCloudRenderSettings();
+        const { node, glow } = readCloudRenderSettings();
 
         expect(node.fillOpacity).toBe(0);
         expect(node.substrateOpacity).toBe(1);
+        expect(glow.opacity).toBe(1);
     });
 });

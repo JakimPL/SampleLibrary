@@ -65,6 +65,7 @@
     --cloud-grid-beat: rgb(27 31 38 / 6%);
     --cloud-grid-measure: rgb(27 31 38 / 10%);
     --cloud-grid-center: transparent;
+    --cloud-glow-opacity: 0;
 
     /* One hue per SampleCategory in samples/category.ts. Fourteen hues blur together for some
        viewers, so every place a color appears also names its category. */
@@ -145,6 +146,7 @@
         --cloud-grid-row: rgb(236 232 222 / 4%);
         --cloud-grid-beat: rgb(236 232 222 / 6.5%);
         --cloud-grid-measure: rgb(236 232 222 / 10%);
+        --cloud-glow-opacity: 0.6;
         --label-lightness: 0.74;
         --label-chroma: 0.15;
     }
@@ -197,6 +199,7 @@
     --cloud-grid-row: rgb(236 232 222 / 4%);
     --cloud-grid-beat: rgb(236 232 222 / 6.5%);
     --cloud-grid-measure: rgb(236 232 222 / 10%);
+    --cloud-glow-opacity: 0.6;
     --label-lightness: 0.74;
     --label-chroma: 0.15;
 }
@@ -265,6 +268,7 @@
     --cloud-grid-beat: #555;
     --cloud-grid-measure: #808080;
     --cloud-grid-center: #8a8a8a;
+    --cloud-glow-opacity: 0;
 
     /* The dark theme's category steps, since this theme's cloud canvas is near-black too. */
     --category-kick: #3987e5;

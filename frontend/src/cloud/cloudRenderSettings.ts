@@ -85,6 +85,12 @@ export interface GridStyle {
     readonly centerColor: string;
 }
 
+/** How the theme draws the density glow beneath the points. */
+export interface GlowStyle {
+    /** How opaque the densest glow is, zero turning the glow off. */
+    readonly opacity: number;
+}
+
 /** Everything the current theme says about how the cloud is drawn, read once per theme change. */
 export interface CloudRenderSettings {
     readonly point: PointStyle;
@@ -92,6 +98,7 @@ export interface CloudRenderSettings {
     readonly marker: MarkerStyle;
     readonly node: NodeStyle;
     readonly grid: GridStyle;
+    readonly glow: GlowStyle;
 }
 
 interface Token<Value> {
@@ -128,6 +135,7 @@ const GRID_ROW_COLOR: Token<string> = { property: "--cloud-grid-row", fallback: 
 const GRID_BEAT_COLOR: Token<string> = { property: "--cloud-grid-beat", fallback: "rgb(27 31 38 / 6%)" };
 const GRID_MEASURE_COLOR: Token<string> = { property: "--cloud-grid-measure", fallback: "rgb(27 31 38 / 10%)" };
 const GRID_CENTER_COLOR: Token<string> = { property: "--cloud-grid-center", fallback: "transparent" };
+const GLOW_OPACITY: Token<number> = { property: "--cloud-glow-opacity", fallback: 0 };
 const MINIMUM_GRID_SPACING_PX = 4;
 
 const UNCATEGORIZED_CATEGORY = "uncategorized";
@@ -226,6 +234,7 @@ export function readCloudRenderSettings(): CloudRenderSettings {
         marker: readMarkerStyle(),
         node: readNodeStyle(),
         grid: readGridStyle(),
+        glow: { opacity: readUnitInterval(GLOW_OPACITY) },
     };
 }
 
