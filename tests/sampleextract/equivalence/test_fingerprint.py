@@ -79,3 +79,10 @@ def test_compute_shape_fingerprint_separates_unrelated_content() -> None:
 
 def test_the_rate_fingerprint_of_silence_is_the_zero_vector() -> None:
     assert np.array_equal(compute_rate_fingerprint(np.zeros((4410, 1))), np.zeros(TIME_BINS * FREQUENCY_BANDS))
+
+
+def test_the_rate_fingerprint_reads_a_waveform_shorter_than_its_time_bins() -> None:
+    """A waveform of fewer frames than time bins leaves some bins empty, and a descriptor still comes back."""
+    fingerprint = compute_rate_fingerprint(_tonal_waveform(TIME_BINS - 6))
+
+    assert fingerprint.shape == (TIME_BINS * FREQUENCY_BANDS,)

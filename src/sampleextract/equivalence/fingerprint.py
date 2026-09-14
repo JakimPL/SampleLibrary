@@ -56,6 +56,8 @@ def compute_rate_fingerprint(waveform: NDArray[np.float64]) -> NDArray[np.float6
     """
     features = np.zeros((TIME_BINS, FREQUENCY_BANDS))
     for time_bin, segment in enumerate(_segments(waveform.mean(axis=1))):
+        if segment.shape[0] == 0:
+            continue
         spectrum = np.abs(np.fft.rfft(segment))
         for band in range(FREQUENCY_BANDS):
             lowest_cycles, highest_cycles = 2**band, 2 ** (band + 1)
