@@ -5,11 +5,36 @@ from dataclasses import dataclass
 from typing import Final
 
 from samplelibrary.environment import PACKAGE_NAME
+from samplelibrary.pipeline.steps.cloud import CLOUD
+from samplelibrary.pipeline.steps.descriptor import (
+    COMPLETION,
+    DESCRIPTOR,
+    EMBEDDING,
+    EVALUATION,
+    GRID_CACHE,
+    MODULE_EVALUATION,
+)
 from samplelibrary.pipeline.steps.listening import HEARING_TEACHER, SUGGESTIONS, TEACHER
+from samplelibrary.pipeline.steps.morph import MORPH_CODEC, RESTORER
 from tests.samplelibrary.pipeline.scenarios.harness.plans import FaultPlan
 from tests.samplelibrary.pipeline.scenarios.harness.scripted_child import SCRIPTED_CHILD_MODULE
 
-STOOD_IN_STEPS: Final[frozenset[str]] = frozenset({TEACHER, HEARING_TEACHER, SUGGESTIONS})
+STOOD_IN_STEPS: Final[frozenset[str]] = frozenset(
+    {
+        TEACHER,
+        HEARING_TEACHER,
+        SUGGESTIONS,
+        GRID_CACHE,
+        DESCRIPTOR,
+        EMBEDDING,
+        COMPLETION,
+        EVALUATION,
+        MODULE_EVALUATION,
+        CLOUD,
+        MORPH_CODEC,
+        RESTORER,
+    }
+)
 
 
 @dataclass(frozen=True)

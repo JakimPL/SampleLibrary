@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Final, Protocol
 
 from samplecore.models.experiment import ExperimentKey
+from samplecore.storage.atomic import copy_atomically
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplelibrary.pipeline.artifacts import (
+    CONTENT_KEY,
     artifact_holds_its_content,
     content_digest,
     read_sidecar,
@@ -21,6 +23,7 @@ from samplelibrary.pipeline.results import StepAction, StepPlan
 NO_EXPERIMENT: Final[str] = "no experiment"
 SAMPLES_TO_DESCRIBE: Final[str] = "samples to describe"
 NOT_SHOWN: Final[str] = "not shown"
+SEALED_COPY_MISSING: Final[str] = "sealed copy missing"
 
 Inputs = Mapping[str, str]
 InputReader = Callable[[PipelineContext], Inputs]
@@ -176,12 +179,24 @@ class DerivedExperimentStep:
 
 
 @dataclass(frozen=True)
+class TrainingRecords:
+    """Where a training run keeps what it leaves beside its model: its directory, its resume point, and its finished record."""
+
+    directory: Path
+    resume_point: Path
+    finished: Path
+
+
+@dataclass(frozen=True)
 class FileArtifactStep:
     """A file or directory named by the digest of what it was built from, bound to those inputs when complete.
 
     A build that ended leaves the artifact under that name; the sidecar beside it says which inputs
     it came from. An artifact standing complete without a sidecar -- a run whose process died between
-    the two -- is sealed rather than built again.
+    the two -- is sealed rather than built again. A training run is complete once its finished record
+    stands beside its model, and continues from its resume point where it stopped short of it. A
+    step naming a sealed copy keeps one under the artifact's content, which an experiment names so the
+    model it loads by that name is always the one it was described by.
     """
 
     name: str
@@ -190,7 +205,8 @@ class FileArtifactStep:
     artifact: ArtifactNamer
     command: ArtifactCommandBuilder
     complete: Callable[[Path], bool]
-    resume_state: Callable[[PipelineContext, str], Path] | None = None
+    training: Callable[[PipelineContext, str], TrainingRecords] | None = None
+    sealed_as: Callable[[PipelineContext, str], Path] | None = None
 
     def evaluate(self, context: PipelineContext) -> StepPlan:
         inputs = self.inputs(context)
@@ -198,8 +214,10 @@ class FileArtifactStep:
         artifact = self.artifact(context, plan.digest)
         sidecar = read_sidecar(artifact)
         if sidecar is not None and sidecar.digest == plan.digest and artifact_holds_its_content(artifact, sidecar):
-            return plan
-        if self.complete(artifact):
+            if self._sealed_copy_stands(context, sidecar.content):
+                return plan
+            return StepPlan(inputs=inputs, action=StepAction.SEAL, reasons=frozenset({SEALED_COPY_MISSING}))
+        if self._complete(context, plan.digest):
             return StepPlan(inputs=inputs, action=StepAction.SEAL)
         return StepPlan(
             inputs=inputs,
@@ -209,23 +227,50 @@ class FileArtifactStep:
 
     def seal(self, context: PipelineContext, plan: StepPlan) -> Inputs:
         artifact = self.artifact(context, plan.digest)
-        if not self.complete(artifact):
+        if not self._complete(context, plan.digest):
             raise MissingOutput(f"{self.name} left no complete {artifact}")
         sidecar = seal_artifact(artifact, inputs=plan.inputs, digest=plan.digest)
-        return {"artifact": artifact.name, "content": sidecar.content}
+        outputs = {"artifact": artifact.name, CONTENT_KEY: sidecar.content}
+        if self.sealed_as is not None:
+            sealed = self.sealed_as(context, sidecar.content)
+            copy_atomically(artifact, sealed)
+            seal_artifact(sealed, inputs=plan.inputs, digest=plan.digest)
+            outputs["sealed"] = sealed.name
+        return outputs
+
+    def content(self, context: PipelineContext) -> str | None:
+        """What this step's artifact for the inputs it reads now holds, or nothing where no sealed build stands."""
+        plan = StepPlan(inputs=self.inputs(context), action=StepAction.SKIP)
+        sidecar = read_sidecar(self.artifact(context, plan.digest))
+        return None if sidecar is None or sidecar.digest != plan.digest else sidecar.content
 
     def forget(self, context: PipelineContext) -> tuple[Path, ...]:
-        """Remove what this step built for the inputs it reads now, so a redo builds it again."""
+        """Remove what this step built for the inputs it reads now, so a redo builds it again; a sealed copy stays."""
         plan = StepPlan(inputs=self.inputs(context), action=StepAction.SKIP)
         artifact = self.artifact(context, plan.digest)
         removed = remove_path(sidecar_path(artifact)) + remove_path(artifact)
-        if self.resume_state is not None:
-            removed += remove_path(self.resume_state(context, plan.digest))
+        if self.training is not None:
+            removed += remove_path(self.training(context, plan.digest).directory)
         return removed
 
+    def _complete(self, context: PipelineContext, digest: str) -> bool:
+        if not self.complete(self.artifact(context, digest)):
+            return False
+        return self.training is None or self.training(context, digest).finished.is_file()
+
     def _resumes(self, context: PipelineContext, digest: str) -> bool:
-        """Whether a run of these inputs stopped partway and left a point to continue from."""
-        return self.resume_state is not None and self.resume_state(context, digest).exists()
+        """Whether a training run of these inputs stopped short of finishing and left a point to continue from."""
+        if self.training is None:
+            return False
+        records = self.training(context, digest)
+        return records.resume_point.is_file() and not records.finished.is_file()
+
+    def _sealed_copy_stands(self, context: PipelineContext, content: str) -> bool:
+        if self.sealed_as is None:
+            return True
+        sealed = self.sealed_as(context, content)
+        sidecar = read_sidecar(sealed)
+        return sidecar is not None and artifact_holds_its_content(sealed, sidecar)
 
 
 @dataclass(frozen=True)

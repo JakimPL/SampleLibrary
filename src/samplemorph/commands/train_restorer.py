@@ -44,7 +44,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     # clear of it.
     # pylint: disable=import-outside-toplevel
     from samplemorph.training.restorer_run import run_restorer_training
-    from samplemorph.training.runs import RunFamily
+    from samplemorph.training.run_paths import RunFamily
 
     trainer = AnalysisTrainer(
         experiment_name=RESTORER_EXPERIMENT_NAME,

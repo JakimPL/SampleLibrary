@@ -33,6 +33,7 @@ def _graph() -> StepGraph:
     )
     return StepGraph(
         steps=steps,
+        owned_outputs=(),
         targets={
             "catalog": ("labels", "modules", "files"),
             "cloud": ("descriptor",),
@@ -80,9 +81,9 @@ def test_a_name_that_is_neither_a_target_nor_a_step_is_refused() -> None:
 )
 def test_a_graph_no_order_satisfies_is_refused(steps: tuple[NamedStep, ...], reason: str) -> None:
     with pytest.raises(MalformedGraph, match=reason):
-        StepGraph(steps=steps, targets={})
+        StepGraph(steps=steps, owned_outputs=(), targets={})
 
 
 def test_a_target_naming_an_unknown_step_is_refused() -> None:
     with pytest.raises(MalformedGraph, match="the cloud target names"):
-        StepGraph(steps=(NamedStep("one"),), targets={"cloud": ("two",)})
+        StepGraph(steps=(NamedStep("one"),), owned_outputs=(), targets={"cloud": ("two",)})

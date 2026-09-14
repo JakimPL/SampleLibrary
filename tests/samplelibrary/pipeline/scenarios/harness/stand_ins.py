@@ -1,31 +1,64 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Sequence
+import json
+import os
+import shutil
+import sys
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
 
-from samplecloud.backends import FeatureExtractor
+from samplecore.cli_support import load_config_or_exit
+from samplecore.exit_status import ExitStatus
+from samplecore.storage.atomic import write_bytes_atomically
 
 VECTOR_SIZE: Final[int] = 512
 MIDWAY_CHECKPOINT_INTERVAL: Final[int] = 2
+MIDWAY_EPOCH: Final[int] = 1
 SEED_BYTES: Final[int] = 8
 PROGRAM: Final[str] = "samplelibrary"
+# The machine a command runs on names nothing it builds, and neither does the number the catalog
+# happened to give an experiment, which a catalog rebuilt from nothing numbers again.
+UNNAMING_WORDS: Final[frozenset[str]] = frozenset({"--workers", "--device", "--teacher-experiment"})
+BEST_VALIDATION_LOSS: Final[float] = 0.5
 
 Gate = Callable[[], None]
+
+
+@dataclass(frozen=True)
+class StandIn:
+    """How a stood-in command behaves this attempt: where it stops partway, and whether its bytes differ from the last."""
+
+    midway: Gate | None
+    varies: bool
+    notes: Path
+
+    def note(self, **entry: object) -> None:
+        """Say something about what the stand-in did, for a scenario reading more than the pipeline reports."""
+        with self.notes.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(entry) + "\n")
 
 
 def _seeded(content: bytes) -> np.random.Generator:
     return np.random.default_rng(int.from_bytes(hashlib.sha256(content).digest()[:SEED_BYTES], "little"))
 
 
-class HeardContentExtractor:
-    """Describes a sample by the frames it hears alone, so the same frames give the same vector in any process.
+def describe_frames(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
+    """A vector standing for a sample's frames alone, so the same frames give the same vector in any process."""
+    return _seeded(np.ascontiguousarray(waveform, dtype=np.float32).tobytes()).standard_normal(VECTOR_SIZE)
 
-    It stands in for a listening model, which describes a sample the same way every time too, and
-    stops at the scenario's midway gate before the sample after the first checkpoint.
+
+class HeardContentExtractor:
+    """Describes a sample by the frames it hears, standing in for a model that describes a sample the same way every time.
+
+    It stops at the scenario's midway gate before the sample after the first checkpoint.
     """
 
     def __init__(self, midway: Gate | None) -> None:
@@ -36,7 +69,7 @@ class HeardContentExtractor:
         self._described += 1
         if self._midway is not None and self._described == MIDWAY_CHECKPOINT_INTERVAL + 1:
             self._midway()
-        return _seeded(np.ascontiguousarray(waveform, dtype=np.float32).tobytes()).standard_normal(VECTOR_SIZE)
+        return describe_frames(waveform)
 
 
 class WordedTeacher:
@@ -48,42 +81,221 @@ class WordedTeacher:
         )
 
 
-def run_stand_in(command: Sequence[str], *, midway: Gate | None) -> bool:
-    """Run a command whose model a scenario cannot load as the real command, with the model stood in for.
+def run_stand_in(command: Sequence[str], stand_in: StandIn) -> None:
+    """Run a command whose model a scenario cannot load or train as the real command does, with the model stood in for.
 
-    Answers whether the command is one a stand-in exists for; every other command a scripted step
-    names does nothing of its own.
+    A command reading a model runs for real with the model replaced; a command training one writes
+    what training leaves -- the model, a resume point each epoch, the finished record -- under the
+    real paths; every other command a scripted step names does nothing of its own.
     """
-    words = tuple(command)
-    match words[:2]:
+    words = list(command)
+    match tuple(words[:2]):
         case ("cloud", "embed"):
-            _embed(list(words[2:]), midway=midway)
+            _cloud_embed(words[2:], stand_in)
         case ("cloud", "suggest"):
-            _suggest(list(words[2:]))
-        case _:
-            return False
-    return True
+            _suggest(words[2:])
+        case ("cloud", "evaluate"):
+            _evaluate(words[2:], stand_in)
+        case ("morph", "cache-grids"):
+            _cache_grids(words[2:], stand_in)
+        case ("morph", "train-descriptor"):
+            _train_descriptor(words[2:], stand_in)
+        case ("morph", "embed"):
+            _embed_cache(words[2:])
+        case ("morph", "fit"):
+            _fit(words[2:], stand_in)
+        case ("morph", "train-restorer"):
+            _train_restorer(words[2:], stand_in)
 
 
-def _embed(argv: list[str], *, midway: Gate | None) -> None:
-    # Each command is imported only by the stand-in running it, so a scripted pass loads none of them.
-    # pylint: disable=import-outside-toplevel
+# Each command below is imported only by the stand-in running it, so a scripted pass loads none of them.
+# pylint: disable=import-outside-toplevel
+
+
+def _cloud_embed(argv: list[str], stand_in: StandIn) -> None:
     import samplecloud.cli
     import samplecloud.features
 
-    extractor = HeardContentExtractor(midway)
-
-    def stood_in_extractor(recipe: object, *, library_root: object, device: str) -> FeatureExtractor:
-        return extractor
-
-    samplecloud.cli.extractor_for = stood_in_extractor  # type: ignore[assignment]
-    if midway is not None:
+    extractor = HeardContentExtractor(stand_in.midway)
+    samplecloud.cli.extractor_for = lambda recipe, *, library_root, device: extractor  # type: ignore[assignment]
+    if stand_in.midway is not None:
         samplecloud.features.EXTRACTION_CHECKPOINT_INTERVAL = MIDWAY_CHECKPOINT_INTERVAL  # type: ignore[misc]
     samplecloud.cli.main(argv, prog=f"{PROGRAM} cloud embed")
 
 
 def _suggest(argv: list[str]) -> None:
-    import samplecloud.suggestions.cli  # pylint: disable=import-outside-toplevel
+    import samplecloud.suggestions.cli
 
     samplecloud.suggestions.cli.load_teacher = lambda *, device: WordedTeacher()  # type: ignore[assignment]
     samplecloud.suggestions.cli.main(argv, prog=f"{PROGRAM} cloud suggest")
+
+
+@contextmanager
+def _silent_run(library_root: Path, *, recorded: bool, experiment_name: str, run_name: str) -> Iterator[object]:
+    from samplecore.tracking.silent import SilentRun
+
+    yield SilentRun()
+
+
+def _evaluate(argv: list[str], stand_in: StandIn) -> None:
+    import samplecloud.evaluation.cli
+
+    extractor = HeardContentExtractor(stand_in.midway)
+    samplecloud.evaluation.cli.extractor_for = lambda recipe, *, library_root, device: extractor  # type: ignore[assignment]
+    samplecloud.evaluation.cli.open_run = _silent_run  # type: ignore[assignment]
+    samplecloud.evaluation.cli.main(argv, prog=f"{PROGRAM} cloud evaluate")
+
+
+def _morph_arguments(argv: list[str]) -> object:
+    from samplemorph.cli import parse_arguments
+
+    return parse_arguments(argv, prog=f"{PROGRAM} morph")
+
+
+def _content(argv: list[str], stand_in: StandIn) -> bytes:
+    """The bytes a stood-in model holds: what its command asked for, and something new each attempt where it varies.
+
+    The machine a command runs on, the catalog's numbering and whether it resumes stay out of them,
+    as they stay out of what a real training run converges to.
+    """
+    asked = [
+        word for index, word in enumerate(argv) if word not in UNNAMING_WORDS and argv[index - 1] not in UNNAMING_WORDS
+    ]
+    nonce = os.urandom(SEED_BYTES) if stand_in.varies else b""
+    return hashlib.sha256(json.dumps([word for word in asked if word != "--resume"]).encode("utf-8") + nonce).digest()
+
+
+def _cache_grids(argv: list[str], stand_in: StandIn) -> None:
+    from samplecore.storage.database import connect
+    from samplecore.storage.sample_audio import readable_sample_hashes
+    from samplemorph.commands.cache_grids import COMMAND_NAME
+    from samplemorph.training.descriptor_cache import (
+        DESCRIPTION_FILE_NAME,
+        GRIDS_FILE_NAME,
+        HASHES_FILE_NAME,
+        STAGING_SUFFIX,
+        grid_cache_directory,
+    )
+
+    arguments = _morph_arguments([COMMAND_NAME, *argv])
+    config = load_config_or_exit()
+    with connect(config.database_url) as connection:
+        hashes = sorted(readable_sample_hashes(connection))
+    directory = grid_cache_directory(config.library_root, name=arguments.cache)  # type: ignore[attr-defined]
+    staging = directory.with_name(directory.name + STAGING_SUFFIX)
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    grids = _seeded(_content(argv, stand_in)).standard_normal((len(hashes), 4, 4)).astype(np.float32)
+    np.save(staging / GRIDS_FILE_NAME, grids)
+    (staging / HASHES_FILE_NAME).write_text("\n".join(hashes), encoding="utf-8")
+    (staging / DESCRIPTION_FILE_NAME).write_text(json.dumps({"samples": len(hashes)}), encoding="utf-8")
+    shutil.rmtree(directory, ignore_errors=True)
+    staging.replace(directory)
+
+
+def _train_descriptor(argv: list[str], stand_in: StandIn) -> None:
+    from samplemorph.commands.train_descriptor import COMMAND_NAME
+    from samplemorph.model_paths import descriptor_path
+    from samplemorph.training.run_paths import RunFamily
+
+    arguments = _morph_arguments([COMMAND_NAME, *argv])
+    root = load_config_or_exit().library_root
+    name = arguments.descriptor  # type: ignore[attr-defined]
+    _train(arguments, argv, stand_in, family=RunFamily.DESCRIPTOR, name=name, model=descriptor_path(root, name=name))
+
+
+def _train_restorer(argv: list[str], stand_in: StandIn) -> None:
+    from samplemorph.commands.train_restorer import COMMAND_NAME
+    from samplemorph.model_paths import restorer_path
+    from samplemorph.training.run_paths import RunFamily
+
+    arguments = _morph_arguments([COMMAND_NAME, *argv])
+    root = load_config_or_exit().library_root
+    name = arguments.restorer  # type: ignore[attr-defined]
+    _train(arguments, argv, stand_in, family=RunFamily.RESTORER, name=name, model=restorer_path(root, name=name))
+
+
+def _train(arguments: object, argv: list[str], stand_in: StandIn, *, family: object, name: str, model: Path) -> None:
+    """Leave what a training run leaves: the best model after every epoch, a resume point, and the finished record last."""
+    from samplemorph.training.run_paths import RunFinished, finished_record_path, resume_path
+
+    root = load_config_or_exit().library_root
+    resume = resume_path(root, family=family, name=name)  # type: ignore[arg-type]
+    finished = finished_record_path(root, family=family, name=name)  # type: ignore[arg-type]
+    resuming = bool(arguments.resume)  # type: ignore[attr-defined]
+    if resuming and not resume.is_file():
+        print(f"Trained nothing: --resume continues from {resume}, and no run of that name stopped there.")
+        sys.exit(ExitStatus.REFUSED)
+    start = int(json.loads(resume.read_text(encoding="utf-8"))["epoch"]) if resuming else 0
+    if not resuming:
+        finished.unlink(missing_ok=True)
+    stand_in.note(trained=name, resumed_from=start)
+    content = _content(argv, stand_in)
+    epochs = int(arguments.epochs)  # type: ignore[attr-defined]
+    for epoch in range(start, epochs):
+        write_bytes_atomically(model, content + epoch.to_bytes(4, "little"))
+        write_bytes_atomically(resume, json.dumps({"epoch": epoch + 1}).encode("utf-8"))
+        if stand_in.midway is not None and epoch + 1 == MIDWAY_EPOCH:
+            stand_in.midway()
+    record = RunFinished(epochs_completed=epochs, best_validation_loss=BEST_VALIDATION_LOSS)
+    write_bytes_atomically(finished, record.model_dump_json().encode("utf-8"))
+
+
+def _embed_cache(argv: list[str]) -> None:
+    """File an experiment of every cached sample's vector in one transaction, the way a descriptor's embedding lands."""
+    from samplecore.models.experiment import (
+        LEARNED_BACKEND_NAME,
+        MODEL_PARAMETER,
+        READING_PARAMETER,
+        Reading,
+        SampleFeatureVector,
+    )
+    from samplecore.storage.database import connect, start_batch
+    from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+    from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
+    from samplecore.storage.sample_audio import SampleAudio
+    from samplemorph.commands.embed import COMMAND_NAME
+    from samplemorph.model_paths import descriptor_path
+    from samplemorph.training.descriptor_cache import HASHES_FILE_NAME, grid_cache_directory
+
+    arguments = _morph_arguments([COMMAND_NAME, *argv])
+    config = load_config_or_exit()
+    descriptor = descriptor_path(config.library_root, name=arguments.descriptor)  # type: ignore[attr-defined]
+    if not descriptor.is_file():
+        print(f"No descriptor is stored at {descriptor}.")
+        sys.exit(ExitStatus.FAILED)
+    cache = grid_cache_directory(config.library_root, name=arguments.cache)  # type: ignore[attr-defined]
+    hashes = (cache / HASHES_FILE_NAME).read_text(encoding="utf-8").split("\n")
+    with connect(config.database_url) as connection:
+        experiments = PostgresExperimentRepository(connection)
+        if experiments.get_by_key(arguments.key) is not None:  # type: ignore[attr-defined]
+            return
+        audio = SampleAudio.from_catalog(connection, config.library_root)
+        now = datetime.now(UTC)
+        with start_batch(connection):
+            experiment_id = experiments.insert_new(
+                backend_name=LEARNED_BACKEND_NAME,
+                label=None,
+                params={MODEL_PARAMETER: descriptor.stem, READING_PARAMETER: Reading.NOMINAL.value},
+                key=arguments.key,  # type: ignore[attr-defined]
+            )
+            PostgresSampleFeatureVectorRepository(connection).insert_many(
+                [
+                    SampleFeatureVector(
+                        experiment_id=experiment_id,
+                        sample_hash=sample_hash,
+                        vector=tuple(float(value) for value in describe_frames(audio.read_by_hash(sample_hash).pcm)),
+                        computed_at=now,
+                    )
+                    for sample_hash in hashes
+                ]
+            )
+
+
+def _fit(argv: list[str], stand_in: StandIn) -> None:
+    from samplemorph.commands.fit import COMMAND_NAME
+    from samplemorph.model_store import model_path
+
+    arguments = _morph_arguments([COMMAND_NAME, *argv])
+    root = load_config_or_exit().library_root
+    write_bytes_atomically(model_path(root, name=arguments.model), _content(argv, stand_in))  # type: ignore[attr-defined]

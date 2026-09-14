@@ -19,7 +19,10 @@ class MalformedGraph(ValueError):
 
 @dataclass(frozen=True)
 class StepGraph:
-    """Every step a pipeline holds, what each needs before it, and the targets a run names them by.
+    """Every step a pipeline holds, what each needs before it, the targets a run names them by, and what it owns.
+
+    `owned_outputs` are the patterns, under the library root, of everything the steps build, which a
+    run from scratch removes along with whatever else the pipeline sealed.
 
     Steps are declared in the order they read, and a run keeps that order wherever the requirements
     leave a choice, so two runs over one target do the same things in the same sequence.
@@ -27,6 +30,7 @@ class StepGraph:
 
     steps: tuple[Step, ...]
     targets: Mapping[str, tuple[str, ...]]
+    owned_outputs: tuple[str, ...]
 
     def __post_init__(self) -> None:
         names = [step.name for step in self.steps]

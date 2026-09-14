@@ -49,6 +49,7 @@ class StepFault(BaseModel):
     exit_status: int = 1
     gate: GateMoment | None = None
     ignores_interrupts: bool = False
+    varies: bool = False
 
 
 class FaultPlan(BaseModel):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,11 +18,13 @@ from samplecore.models.pass_completion import PassKind
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.database import (
     claim_named_lock,
+    cloud_promotion,
     connect,
     experiment,
     named_lock_key,
     suggestion_promotion,
 )
+from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
@@ -31,6 +34,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from samplelibrary.pipeline.artifacts import SIDECAR_SUFFIX, ArtifactSidecar, read_step_record
 from samplelibrary.pipeline.context import PipelineContext
 from samplelibrary.pipeline.layout import PipelineLayout
 from samplelibrary.pipeline.locks import pipeline_lock_name, step_is_running
@@ -40,6 +44,7 @@ from samplelibrary.pipeline.steps.library import library_graph
 from samplelibrary.sandbox.modules import sandbox_modules
 from samplelibrary.sandbox.sample_pack import sample_pack
 from samplelibrary.sandbox.waveforms import SAMPLE_RATE, decaying, tonal_waveform
+from samplemorph.published import read_published
 
 # The first six of the sandbox's modules are four unrelated songs and one deliberate pair, so a
 # world of this size carries an equivalence relation for the detection pass to find.
@@ -56,6 +61,8 @@ PARTS: Final[tuple[str, ...]] = (
     "passes",
     "experiments",
     "suggestions",
+    "cloud",
+    "artifacts",
 )
 
 
@@ -216,13 +223,19 @@ class World:
         self.write_config()
         return self.labels_file
 
-    def label_a_sample(self, label: str) -> None:
-        """Write a label the way the application does, on a sample the first module holds."""
+    def label_a_sample(self, label: str, rating: int | None = None) -> None:
+        """Write a label and a rating the way the application does, on a sample the first module holds."""
         sample_hash, occurrence, filename = self.first_module_sample()
         PostgresSampleAnnotationRepository(self.connection).upsert_many(
-            (_annotation(sample_hash, occurrence, filename, label=label),)
+            (_annotation(sample_hash, occurrence, filename, label=label, rating=rating),)
         )
         self.connection.commit()
+
+    def step_outputs(self, step: str) -> Mapping[str, str]:
+        """What a step's last complete run produced, as its record names it."""
+        record = read_step_record(self.layout.step_record(step))
+        assert record is not None, f"{step} never completed"
+        return record.outputs
 
     def hold_the_pipeline_lock(self) -> str:
         """Hold this library's pipeline lock from a connection of its own, as another run would."""
@@ -328,9 +341,39 @@ class World:
             ),
             "experiments": self._experiments_digest(),
             "suggestions": self._shown_digest(suggestion_promotion.c.experiment_id),
+            "cloud": digest_of_rows(
+                [
+                    (self._shown_digest(cloud_promotion.c.experiment_id),),
+                    *sorted(
+                        (row.sample_hash,) for row in PostgresCloudCoordinateRepository(self.connection).list_all()
+                    ),
+                ]
+            ),
+            "artifacts": self._artifacts_digest(),
         }
         self.connection.rollback()
         return digests
+
+    def _artifacts_digest(self) -> str:
+        """Every artifact the pipeline sealed under the library root, by its place and what it holds, and what is published.
+
+        An evaluation report records when it was made, so it counts by its place alone.
+        """
+        sealed = sorted(
+            (
+                sidecar.relative_to(self.library_root).as_posix(),
+                None if sidecar.is_relative_to(self.layout.evaluations) else read_sidecar_content(sidecar),
+            )
+            for sidecar in self.library_root.rglob(f"*{SIDECAR_SUFFIX}")
+        )
+        published = read_published(self.library_root)
+        return digest_of_rows(
+            [
+                *sealed,
+                ("published", None if published is None else published.codec.content),
+                ("published", None if published is None else published.restorer.content),
+            ]
+        )
 
     def _experiments_digest(self) -> str:
         """Every experiment by its key and backend, with the samples it describes, its id aside."""
@@ -366,13 +409,20 @@ class World:
             self.release(held)
 
 
-def _annotation(sample_hash: str, occurrence: SampleOccurrence, filename: str, *, label: str) -> SampleAnnotation:
+def _annotation(
+    sample_hash: str, occurrence: SampleOccurrence, filename: str, *, label: str, rating: int | None = None
+) -> SampleAnnotation:
     return SampleAnnotation(
         sample_hash=sample_hash,
         label=label,
-        rating=None,
+        rating=rating,
         favorite=False,
         anchor=ModuleSlotAnchor(occurrence=occurrence, module_filename=filename, sample_name="scenario"),
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC),
     )
+
+
+def read_sidecar_content(sidecar: Path) -> str:
+    """What the artifact a sidecar describes held when it was sealed."""
+    return ArtifactSidecar.model_validate_json(sidecar.read_text(encoding="utf-8")).content

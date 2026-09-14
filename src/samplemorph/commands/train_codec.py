@@ -105,7 +105,8 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     from samplemorph.descriptors.learned import load_descriptor
     from samplemorph.training.codec_data import CodecCorpus
     from samplemorph.training.codec_run import run_codec_training
-    from samplemorph.training.runs import RunFamily, RunPlacement, TrainingOutcome, check_resume_point
+    from samplemorph.training.run_paths import RunFamily
+    from samplemorph.training.runs import RunPlacement, TrainingOutcome, check_resume_point
 
     del connection
     cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))

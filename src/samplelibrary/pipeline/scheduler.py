@@ -123,7 +123,7 @@ def run_pipeline(
         return refuse_run(sinks, redo_refusal)
 
     if request.from_scratch or scratch_is_unfinished(session.context.layout):
-        stopped = start_from_scratch(session, sinks)
+        stopped = start_from_scratch(session, sinks, graph.owned_outputs)
         if stopped is not None:
             sinks.emit(RunEnded(outcome=RunOutcome.STOPPED))
             return RunReport(outcome=RunOutcome.STOPPED, verdicts={}, attempts=(stopped,), refusal="")

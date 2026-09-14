@@ -19,7 +19,7 @@ SEARCHED_DIRECTORIES: Final[tuple[str, ...]] = ("cache", "models", "runs", "pipe
 _logger = logging.getLogger(__name__)
 
 
-def start_from_scratch(session: RunSession, sinks: Sinks) -> Attempt | None:
+def start_from_scratch(session: RunSession, sinks: Sinks, owned_outputs: tuple[str, ...]) -> Attempt | None:
     """Empty the catalog and everything the pipeline built, so every step has all its work to do.
 
     The intent is recorded before anything goes and removed once everything has, so a run stopped
@@ -44,7 +44,7 @@ def start_from_scratch(session: RunSession, sinks: Sinks) -> Attempt | None:
     if not attempt.completed:
         return attempt
 
-    removed = remove_pipeline_outputs(layout)
+    removed = remove_pipeline_outputs(layout, owned_outputs)
     layout.scratch_intent.unlink(missing_ok=True)
     sinks.emit(ScratchCompleted(removed=tuple(str(path) for path in removed)))
     return None
@@ -55,13 +55,17 @@ def scratch_is_unfinished(layout: PipelineLayout) -> bool:
     return layout.scratch_intent.is_file()
 
 
-def remove_pipeline_outputs(layout: PipelineLayout) -> tuple[Path, ...]:
-    """Delete everything the pipeline sealed under this library, and the records describing it.
+def remove_pipeline_outputs(layout: PipelineLayout, owned_outputs: tuple[str, ...]) -> tuple[Path, ...]:
+    """Delete everything the pipeline built under this library, and the records describing it.
 
-    What the pipeline built is exactly what it sealed, so the sidecars name it: each one goes along
-    with the artifact beside it. The store of extracted audio and a person's own files are untouched.
+    What the steps own goes by the patterns they name, a build stopped partway included, and anything
+    else the pipeline sealed goes along with its sidecar. The store of extracted audio and a person's
+    own files stay.
     """
     removed: list[Path] = []
+    for pattern in owned_outputs:
+        for path in sorted(layout.library_root.glob(pattern)):
+            removed.extend(remove_path(path))
     for directory in SEARCHED_DIRECTORIES:
         root = layout.library_root / directory
         if not root.is_dir():

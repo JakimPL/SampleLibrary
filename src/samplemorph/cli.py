@@ -14,6 +14,7 @@ from samplemorph.commands import (
     embed,
     fit,
     measure,
+    publish,
     render,
     train_codec,
     train_descriptor,
@@ -36,6 +37,7 @@ class MorphCommand(StrEnum):
     TRAIN_RESTORER = train_restorer.COMMAND_NAME
     RENDER = render.COMMAND_NAME
     MEASURE = measure.COMMAND_NAME
+    PUBLISH = publish.COMMAND_NAME
     SERVE = service_cli.COMMAND_NAME
 
 
@@ -62,6 +64,8 @@ def main(argv: list[str], *, prog: str) -> None:
             _on_catalog(render.run, config, arguments)
         case MorphCommand.MEASURE:
             _on_catalog(measure.run, config, arguments)
+        case MorphCommand.PUBLISH:
+            publish.run(config, arguments)
 
 
 def _on_catalog(run: CatalogCommand, config: LibraryConfig, arguments: argparse.Namespace) -> None:
@@ -82,5 +86,6 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     train_restorer.add_parser(commands)
     render.add_parser(commands)
     measure.add_parser(commands)
+    publish.add_parser(commands)
     service_cli.add_parser(commands)
     return parser.parse_args(argv)

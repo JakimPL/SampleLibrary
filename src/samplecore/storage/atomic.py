@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -42,6 +43,16 @@ def write_atomically(path: Path, write: Callable[[IO[bytes]], None]) -> None:
         staged.chmod(PLAIN_FILE_MODE)
         staged.replace(path)
     synchronize_directory(path.parent)
+
+
+def copy_atomically(source: Path, destination: Path) -> None:
+    """Put a copy of ``source`` in place at ``destination`` whole, read in chunks so a file of any size copies in flat memory."""
+
+    def write(file: IO[bytes]) -> None:
+        with source.open("rb") as stream:
+            shutil.copyfileobj(stream, file)
+
+    write_atomically(destination, write)
 
 
 def write_bytes_atomically(path: Path, content: bytes) -> None:

@@ -12,8 +12,6 @@ from samplecloud.suggestions.scoring import DEFAULT_SUGGESTION_COUNT, MAXIMUM_SU
 from samplecloud.suggestions.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, vocabulary_from
 from samplecore.digests import digest_of_rows
 from samplecore.models.experiment import ExperimentKey, Reading
-from samplecore.storage.repositories.experiment import PostgresExperimentRepository
-from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.label_suggestion import PostgresSuggestionPromotionRepository
 from samplecore.storage.sample_audio import readable_membership_digest
 from samplelibrary.pipeline.context import PipelineContext
@@ -26,6 +24,7 @@ from samplelibrary.pipeline.steps.kinds import (
     Step,
     StepRefused,
 )
+from samplelibrary.pipeline.steps.shared import PARAMETERS, READABLE_SAMPLES, filed_experiment, vectors_digest
 
 TEACHER: Final[str] = "teacher"
 HEARING_TEACHER: Final[str] = "hearing-teacher"
@@ -34,12 +33,10 @@ REVISION_CHARACTERS: Final[int] = 12
 TEACHER_KEY: Final[ExperimentKey] = f"teacher-nominal-{TEACHER_REVISION[:REVISION_CHARACTERS]}"
 HEARING_TEACHER_KEY: Final[ExperimentKey] = f"teacher-heard-{TEACHER_REVISION[:REVISION_CHARACTERS]}"
 SUGGESTIONS_KEY_PREFIX: Final[str] = "suggestions"
-READABLE_SAMPLES: Final[str] = "readable samples"
 LISTENING_MODEL: Final[str] = "listening model"
 PLAYBACK_RATES: Final[str] = "playback rates"
 HEARD_VECTORS: Final[str] = "heard vectors"
 VOCABULARY: Final[str] = "vocabulary"
-PARAMETERS: Final[str] = "parameters"
 
 
 class SuggestionSettings(StepSettings):
@@ -128,35 +125,20 @@ def _suggestion_inputs(context: PipelineContext) -> Inputs:
     except VocabularyRefused as error:
         raise StepRefused(str(error)) from error
     return {
-        HEARD_VECTORS: _vectors_digest(context, HEARING_TEACHER_KEY),
+        HEARD_VECTORS: vectors_digest(context, HEARING_TEACHER_KEY),
         VOCABULARY: digest_of_rows((label,) for label in vocabulary),
         PARAMETERS: settings.parameters_digest,
     }
 
 
-def _vectors_digest(context: PipelineContext, key: ExperimentKey) -> str:
-    """Which samples the experiment under this key describes and at which rates, or its absence where none is filed."""
-    filed = PostgresExperimentRepository(context.connection).get_by_key(key)
-    if filed is None:
-        return f"no experiment under {key}"
-    return PostgresSampleFeatureVectorRepository(context.connection).membership_digest(filed.id)
-
-
 def _suggest_command(context: PipelineContext, key: ExperimentKey) -> tuple[str, ...]:
-    """The scoring of the heard vectors, filed under this key.
-
-    Raises:
-        StepRefused: no heard experiment is filed to score.
-    """
-    heard = PostgresExperimentRepository(context.connection).get_by_key(HEARING_TEACHER_KEY)
-    if heard is None:
-        raise StepRefused(f"no experiment is filed under {HEARING_TEACHER_KEY} to suggest labels from")
+    """The scoring of the heard vectors, filed under this key."""
     settings = _suggestion_settings(context)
     return (
         "cloud",
         "suggest",
         "--experiment-id",
-        str(heard.id),
+        str(filed_experiment(context, HEARING_TEACHER_KEY)),
         "--vocabulary",
         settings.vocabulary,
         "--top",

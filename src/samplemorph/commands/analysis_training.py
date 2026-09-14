@@ -24,7 +24,8 @@ from samplemorph.training.settings import DEFAULT_CROP_FRAMES, AnalysisTrainingS
 
 if TYPE_CHECKING:
     from samplemorph.training.analysis_data import AnalysisCorpus
-    from samplemorph.training.runs import RunFamily, RunPlacement, TrainingOutcome
+    from samplemorph.training.run_paths import RunFamily
+    from samplemorph.training.runs import RunPlacement, TrainingOutcome
 
 _logger = logging.getLogger(__name__)
 

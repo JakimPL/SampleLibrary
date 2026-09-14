@@ -4,18 +4,15 @@ import logging
 import math
 import sys
 from dataclasses import dataclass
-from enum import StrEnum, unique
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
 
 import torch
 from lightning.fabric.plugins import TorchCheckpointIO
 from lightning.pytorch import LightningDataModule, LightningModule, Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
-from pydantic import BaseModel
 
-from samplecore.models.base import FROZEN
 from samplecore.storage.atomic import write_atomically, write_bytes_atomically
 from samplecore.tracking import TrackedRun
 from samplemorph.geometry import ConstantQGeometry, Geometry, LogFrequencyGeometry, MelGeometry
@@ -23,24 +20,18 @@ from samplemorph.training.descriptor_cache import GridCache
 from samplemorph.training.export import BestEpochExport
 from samplemorph.training.progress import ProgressLines
 from samplemorph.training.refusals import ResumeRefused
+from samplemorph.training.run_paths import (
+    RESUME_CHECKPOINT_NAME,
+    RunFamily,
+    RunFinished,
+    finished_record_path,
+    resume_path,
+    run_directory,
+)
 from samplemorph.training.run_settings import GRADIENT_CLIP, RunSettings
 from samplemorph.training.tracked_logger import TrackedRunLogger
 
-RUNS_DIRECTORY_NAME: Final[str] = "runs"
-RESUME_CHECKPOINT_NAME: Final[str] = "resume"
-CHECKPOINT_SUFFIX: Final[str] = ".ckpt"
-FINISHED_RECORD_NAME: Final[str] = "finished.json"
-
 _logger = logging.getLogger(__name__)
-
-
-@unique
-class RunFamily(StrEnum):
-    """Which kind of network a run teaches, which keeps runs of one name in different families apart."""
-
-    CODEC = "codec"
-    DESCRIPTOR = "descriptor"
-    RESTORER = "restorer"
 
 
 @dataclass(frozen=True)
@@ -56,43 +47,6 @@ class TrainingOutcome:
     def exported(self) -> bool:
         """Whether an epoch finished validation with a score, which is what writes the model."""
         return math.isfinite(self.best_validation_loss)
-
-
-class RunFinished(BaseModel):
-    """What a run that reached its last epoch records beside its files: how far it went and the best score it kept.
-
-    It is written once the trainer finishes every epoch it was asked for, and removed when a run of
-    the same name starts again, so a model file standing beside it is the complete outcome of that
-    run rather than an epoch a stopped run happened to export.
-    """
-
-    model_config = FROZEN
-
-    epochs_completed: int
-    best_validation_loss: float
-
-
-def finished_record_path(library_root: Path, *, family: RunFamily, name: str) -> Path:
-    """Where a run that reached its last epoch records that it did."""
-    return run_directory(library_root, family=family, name=name) / FINISHED_RECORD_NAME
-
-
-def read_run_finished(library_root: Path, *, family: RunFamily, name: str) -> RunFinished | None:
-    """The record of a run that reached its last epoch, or ``None`` for a run that has not, or never ran."""
-    path = finished_record_path(library_root, family=family, name=name)
-    if not path.is_file():
-        return None
-    return RunFinished.model_validate_json(path.read_text(encoding="utf-8"))
-
-
-def run_directory(library_root: Path, *, family: RunFamily, name: str) -> Path:
-    """Where one run's metrics and resume point are kept, beside the library rather than the repo."""
-    return library_root / RUNS_DIRECTORY_NAME / family.value / name
-
-
-def resume_path(library_root: Path, *, family: RunFamily, name: str) -> Path:
-    """The checkpoint an interrupted run of this name picks up from."""
-    return run_directory(library_root, family=family, name=name) / f"{RESUME_CHECKPOINT_NAME}{CHECKPOINT_SUFFIX}"
 
 
 def check_resume_point(library_root: Path, *, family: RunFamily, name: str, resume: bool) -> None:

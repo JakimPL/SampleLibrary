@@ -94,7 +94,8 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     from samplecore.tracking.session import open_run
     from samplemorph.training.descriptor_data import load_descriptor_corpus
     from samplemorph.training.descriptor_run import run_descriptor_training
-    from samplemorph.training.runs import RunFamily, RunPlacement, TrainingOutcome, check_resume_point
+    from samplemorph.training.run_paths import RunFamily
+    from samplemorph.training.runs import RunPlacement, TrainingOutcome, check_resume_point
 
     cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))
 
