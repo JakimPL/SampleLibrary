@@ -107,7 +107,7 @@ def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alo
         connection.close()
 
     assert catalog_tables == set()
-    assert curation_tables == {"sample_annotation", "tag_rank"}
+    assert curation_tables == {"sample_annotation", "tag_rank", "annotation_import"}
 
 
 def test_a_curation_connection_waits_for_the_schema_claim(connection: Connection, _database_url: str) -> None:

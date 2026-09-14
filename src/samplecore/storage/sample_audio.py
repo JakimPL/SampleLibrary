@@ -4,13 +4,15 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import Connection
+from sqlalchemy import Connection, select
 
+from samplecore.digests import digest_of_rows
 from samplecore.models.sample import Sample
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.sample_files.decoding import UNREADABLE_SAMPLE_FILE_ERRORS, decode_sample_file, sample_file_frame_count
 from samplecore.storage import audio_store
+from samplecore.storage.database import sample_properties
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 
 
@@ -129,6 +131,29 @@ class SampleAudio:
         if not sample_files:
             raise FileNotFoundError(f"no object is stored for sample {sample_hash}")
         return sample_files
+
+
+def readable_sample_hashes(connection: Connection) -> frozenset[str]:
+    """Every cataloged sample whose audio can be read now as far as a status call tells.
+
+    A sample a module holds is read from the store; one found only in sample directories is read
+    from a file still standing with the size and write time it was scanned at. A file that stands
+    unchanged decodes the way it did when it was scanned, the formats read being lossless, so this
+    is the set a pass reading every sample reaches, told without decoding anything.
+    """
+    held_by_modules = connection.execute(select(sample_properties.c.sample_hash).distinct()).scalars()
+    readable = {str(sample_hash) for sample_hash in held_by_modules}
+    readable.update(
+        sample_file.sample_hash
+        for sample_file in PostgresSampleFileRepository(connection).list_all()
+        if is_unchanged(sample_file)
+    )
+    return frozenset(readable)
+
+
+def readable_membership_digest(connection: Connection) -> str:
+    """One digest over the samples whose audio can be read now, so a pass can tell whether that set moved."""
+    return digest_of_rows((sample_hash,) for sample_hash in sorted(readable_sample_hashes(connection)))
 
 
 def is_unchanged(sample_file: SampleFile) -> bool:

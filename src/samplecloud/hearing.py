@@ -23,6 +23,17 @@ class Hearing:
     reading: Reading
     playback_rate_by_hash: Mapping[str, Rate]
 
+    def rate_for(self, sample_hash: str) -> Rate | None:
+        """The rate this pass hears a sample at, recorded beside its vector; nothing under the nominal reading.
+
+        A sample the library has no playback rate for is heard as stored, at the nominal rate.
+        """
+        match self.reading:
+            case Reading.NOMINAL:
+                return None
+            case Reading.HEARD_RATE:
+                return self.playback_rate_by_hash.get(sample_hash, NOMINAL_WAV_RATE)
+
     def hear(self, sample_hash: str, pcm: NDArray[np.float64]) -> NDArray[np.float64]:
         """The stored frames as this pass hands them to the extractor.
 
@@ -30,14 +41,10 @@ class Hearing:
         sound at the stored rate the way it sounds when played; a sample the library never plays
         keeps the nominal reading, the only one there is for it.
         """
-        match self.reading:
-            case Reading.NOMINAL:
-                return pcm
-            case Reading.HEARD_RATE:
-                rate = self.playback_rate_by_hash.get(sample_hash)
-                if rate is None or rate == NOMINAL_WAV_RATE:
-                    return pcm
-                return heard_at_rate(pcm, playback_rate_hz=float(rate), stored_rate_hz=NOMINAL_WAV_RATE)
+        rate = self.rate_for(sample_hash)
+        if rate is None or rate == NOMINAL_WAV_RATE:
+            return pcm
+        return heard_at_rate(pcm, playback_rate_hz=float(rate), stored_rate_hz=NOMINAL_WAV_RATE)
 
 
 def hearing_for(connection: Connection, reading: Reading) -> Hearing:

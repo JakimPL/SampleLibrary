@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ from sqlalchemy import Connection
 
 from samplecore.models.annotation import SampleAnnotation, SampleFileAnchor
 from samplecore.models.sample_file import SampleFileLocation
+from samplecore.storage.repositories.annotation_import import PostgresAnnotationImportRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from sampleextract.annotations.transfer import AnnotationFileRefused, export_annotations, import_annotations
 
@@ -173,3 +175,54 @@ def test_an_export_replacing_an_earlier_one_leaves_no_partial_file_beside_it(
 
     assert path.read_text(encoding="utf-8") == ""
     assert [entry.name for entry in tmp_path.iterdir()] == ["labels.jsonl"]
+
+
+def test_an_import_records_the_file_it_read_by_the_digest_of_its_bytes(
+    connection: Connection, stored_annotation: SampleAnnotation, tmp_path: Path
+) -> None:
+    path = tmp_path / "labels.jsonl"
+    export_annotations(connection, path=path)
+    moved = tmp_path / "elsewhere" / "the same labels.jsonl"
+    moved.parent.mkdir()
+    moved.write_bytes(path.read_bytes())
+    imports = PostgresAnnotationImportRepository(connection)
+
+    import_annotations(connection, path=path)
+    first = imports.get(hashlib.sha256(path.read_bytes()).hexdigest())
+    import_annotations(connection, path=moved)
+    again = imports.get(hashlib.sha256(path.read_bytes()).hexdigest())
+
+    assert first is not None and again is not None
+    assert first.annotation_count == again.annotation_count == 1
+    assert again.imported_at >= first.imported_at
+
+
+def test_a_refused_import_records_nothing(connection: Connection, tmp_path: Path) -> None:
+    path = tmp_path / "labels.jsonl"
+    path.write_bytes(b"\xff\xfe not text\n")
+
+    with pytest.raises(AnnotationFileRefused, match="cannot be read"):
+        import_annotations(connection, path=path)
+
+    assert PostgresAnnotationImportRepository(connection).get(hashlib.sha256(path.read_bytes()).hexdigest()) is None
+
+
+def test_a_carriage_return_inside_a_line_keeps_the_line_whole(
+    connection: Connection, stored_annotation: SampleAnnotation, tmp_path: Path
+) -> None:
+    """A module's text can hold a bare carriage return, and the file splits on the newlines the export writes alone."""
+    named = stored_annotation.model_copy(
+        update={"anchor": stored_annotation.anchor.model_copy(update={"sample_name": "kick\rsnare"})}
+    )
+    repository = PostgresSampleAnnotationRepository(connection)
+    repository.upsert_many((named,))
+    connection.commit()
+    path = tmp_path / "labels.jsonl"
+    export_annotations(connection, path=path)
+    repository.delete_many((named.sample_hash,))
+    connection.commit()
+
+    summary = import_annotations(connection, path=path)
+
+    assert summary.annotations == 1
+    assert repository.get(named.sample_hash) == named

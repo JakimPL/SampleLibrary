@@ -27,6 +27,7 @@ from samplecore.models.sample import Sample
 from samplecore.models.sample_file import SampleFile
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
+from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
@@ -217,3 +218,25 @@ def test_an_experiment_none_of_whose_samples_can_be_read_is_refused(
             extractor=_ShapeExtractor(swapped=False),
             hearing=NOMINAL,
         )
+
+
+def test_an_experiment_all_of_whose_samples_moved_rate_holds_nothing_to_check(
+    connection: Connection, tmp_path: Path
+) -> None:
+    """Every vector is described again on the resume, so a changed extractor has no stored vector to disagree with."""
+    experiment_id = _seed_experiment(connection, tmp_path)
+    moved = Hearing(
+        reading=Reading.HEARD_RATE,
+        playback_rate_by_hash={
+            vector.sample_hash: NOMINAL_WAV_RATE // 2
+            for vector in PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
+        },
+    )
+
+    require_reproducible(
+        connection,
+        SampleAudio.from_catalog(connection, tmp_path),
+        experiment_id=experiment_id,
+        extractor=_ShapeExtractor(swapped=True),
+        hearing=moved,
+    )

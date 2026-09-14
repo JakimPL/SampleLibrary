@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError
 from samplecore.config import LibraryConfig
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from sampleextract.corpus import extract_corpus
+from sampleextract.discovery import discover_modules
 
 WORKER_COUNT = 2
 UNREACHABLE_DATABASE_URL = "postgresql+psycopg://nobody:nobody@127.0.0.1:1/absent"
@@ -27,7 +28,7 @@ def test_workers_between_them_ingest_the_whole_corpus_exactly_once(
     (config.module_source_directory / "first.xm").write_bytes(xm_module_bytes)
     (config.module_source_directory / "second.it").write_bytes(it_module_bytes)
 
-    summary = extract_corpus(config, workers=WORKER_COUNT).summary
+    summary = extract_corpus(config, discover_modules(config.module_source_directory), workers=WORKER_COUNT).summary
 
     assert summary.discovered == 2
     assert summary.failures == ()
@@ -43,7 +44,7 @@ def test_a_single_worker_covers_the_corpus_in_this_process(
     config = _config(tmp_path, _database_url)
     (config.module_source_directory / "first.xm").write_bytes(xm_module_bytes)
 
-    summary = extract_corpus(config, workers=1).summary
+    summary = extract_corpus(config, discover_modules(config.module_source_directory), workers=1).summary
 
     assert len(summary.ingested) == 1
 
@@ -55,7 +56,7 @@ def test_more_workers_than_modules_still_covers_the_corpus_once(
     (config.module_source_directory / "first.xm").write_bytes(xm_module_bytes)
     (config.module_source_directory / "second.it").write_bytes(it_module_bytes)
 
-    summary = extract_corpus(config, workers=8).summary
+    summary = extract_corpus(config, discover_modules(config.module_source_directory), workers=8).summary
 
     assert summary.discovered == 2
     assert len(PostgresModuleRepository(connection).list_all()) == 2
@@ -69,7 +70,7 @@ def test_a_worker_that_cannot_reach_the_catalog_reports_its_error_to_the_run(
     (config.module_source_directory / "first.xm").write_bytes(xm_module_bytes)
     (config.module_source_directory / "second.it").write_bytes(it_module_bytes)
 
-    outcome = extract_corpus(config, workers=WORKER_COUNT)
+    outcome = extract_corpus(config, discover_modules(config.module_source_directory), workers=WORKER_COUNT)
 
     assert len(outcome.worker_errors) == WORKER_COUNT
     assert all(isinstance(error, OperationalError) for error in outcome.worker_errors)
@@ -90,7 +91,7 @@ def test_the_shares_that_finish_keep_their_summary_when_another_stops(
     unreadable.chmod(0)
 
     try:
-        outcome = extract_corpus(config, workers=WORKER_COUNT)
+        outcome = extract_corpus(config, discover_modules(config.module_source_directory), workers=WORKER_COUNT)
     finally:
         unreadable.chmod(0o644)
 

@@ -215,6 +215,9 @@ one write at once.
 database, and `import` merges a file back without clearing anything, in one transaction under the
 same lock; a file naming one sample on two lines is refused whole, naming the lines. `relink` leaves
 an annotation alone when the sample now in its slot carries a decision of its own, and names it.
+Every import records the file it read in `curation.annotation_import`, named by the SHA-256 of its
+bytes with the count it held, in the transaction that lands the annotations, so whether a library
+already took in a given file is one lookup, wherever that file sits now.
 
 Local, machine-specific configuration (the module source directory, the library root, the catalog's
 connection URL) is read from a gitignored `config.toml` via `samplecore.config.load_config`, never
@@ -377,6 +380,18 @@ apart, and only those pairs are read again and scored on the waveforms themselve
 through a cache that keeps the most recently read waveforms. Each block of pairs is scored and written in its own
 transaction, so an interrupted run keeps the blocks it finished and a rerun writes the same rows.
 Silent samples take no part.
+
+`pass_completion` holds one row per kind of whole-library pass that finished completely, naming a
+digest of what it had in front of it (`samplecore.digests`), so a pass finding the same digest again
+ends with nothing to do. `extract --prune` records a digest of every module file's path, size and
+write time once its prune succeeded and a second listing finds the collection unchanged, since only a
+pruned pass leaves a catalog mirroring the collection; `notes` records the cataloged modules it read
+every file of; `equivalence` records the samples that can be read as far as a status call tells
+(`readable_sample_hashes`: every sample a module holds, and every sample file standing with its
+scanned size and write time), taken before and after its pass, unless the two differ or the pass was
+limited to a slice. A pass that goes ahead drops its record first, so an interrupted pass leaves none,
+and `--force` goes ahead whatever the record says. The records live in the catalog, so a reset forgets
+them along with the rows they describe.
 
 ## Deployment
 
@@ -562,7 +577,11 @@ parameters as `reading`: at the nominal rate the store writes, the reading every
 on, or, with `--heard-rate`, at the rate the library plays the sample at, resampled through
 `samplecore.waveform.heard_at_rate` so a bass played two octaves below its file's rate reaches the
 extractor as a bass. The heard-rate reading is what naming an instrument needs, since the
-listening model's rate invariance ends within a whole tone.
+listening model's rate invariance ends within a whole tone. A vector keeps the rate it was heard at
+(`sample_feature_vector.heard_rate`, empty under the nominal reading), so a sample the library comes
+to play at another rate -- a new module playing it, or a sample file declaring another rate beside its
+occurrences -- is pending again, its vector replaced in the checkpoint that stores the new one, and
+the reproducibility probe checks only samples still heard at their vectors' rates.
 
 `samplelibrary cloud suggest` turns a `clap` experiment's vectors into labels. The text tower reads
 a vocabulary of prompts in the hand-label grammar -- the shipped instrument list, the tags people

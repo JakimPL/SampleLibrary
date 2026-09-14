@@ -6,14 +6,21 @@ from pathlib import Path
 import numpy as np
 import pytest
 import soundfile
-from sqlalchemy import Connection
+from sqlalchemy import Connection, select
 
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage import audio_store
+from samplecore.storage.database import sample, sample_properties
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
-from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError, is_unchanged
+from samplecore.storage.sample_audio import (
+    SampleAudio,
+    SampleUnavailableError,
+    is_unchanged,
+    readable_membership_digest,
+    readable_sample_hashes,
+)
 
 RATE = 44100
 FRAMES = 256
@@ -146,3 +153,25 @@ def test_the_catalog_supplies_every_sample_file(
     connection.commit()
 
     assert SampleAudio.from_catalog(connection, library_root).files_by_hash == {kick.sample_hash: (kick,)}
+
+
+def test_every_sample_a_module_or_an_unchanged_file_holds_can_be_read(
+    connection: Connection, populated_library: Path
+) -> None:
+    every_sample = frozenset(str(value) for value in connection.execute(select(sample.c.hash)).scalars())
+    held_by_modules = frozenset(
+        str(value) for value in connection.execute(select(sample_properties.c.sample_hash)).scalars()
+    )
+    pack_file = next(
+        cataloged
+        for cataloged in PostgresSampleFileRepository(connection).list_all()
+        if cataloged.sample_hash not in held_by_modules
+    )
+    assert readable_sample_hashes(connection) == every_sample
+    before = readable_membership_digest(connection)
+
+    status = pack_file.location.path.stat()
+    os.utime(pack_file.location.path, ns=(status.st_atime_ns, status.st_mtime_ns + 1_000_000_000))
+
+    assert readable_sample_hashes(connection) == every_sample - {pack_file.sample_hash}
+    assert readable_membership_digest(connection) != before

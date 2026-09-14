@@ -95,6 +95,17 @@ tag_rank = Table(
     CheckConstraint(non_negative("rank"), name="tag_rank_rank_check"),
 )
 
+# One row per labels file read into the table, named by the digest of its bytes, so a pipeline can
+# tell a file the library already took in from one it has not.
+annotation_import = Table(
+    "annotation_import",
+    curation_metadata,
+    Column("file_sha256", String(64), primary_key=True),
+    Column("annotation_count", Integer, nullable=False),
+    Column("imported_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(non_negative("annotation_count"), name="annotation_import_annotation_count_check"),
+)
+
 # SQLAlchemy creates tables but never the schema qualifying them, so the CREATE SCHEMA is attached
 # as the event that runs first on this metadata's own create_all.
 event.listen(curation_metadata, "before_create", CreateSchema(CURATION_SCHEMA, if_not_exists=True))

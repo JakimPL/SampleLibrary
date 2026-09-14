@@ -171,3 +171,96 @@ def test_pruning_is_refused_when_the_source_directory_holds_no_module_at_all(
     assert raised.value.code == ExitStatus.REFUSED
     assert "Pruned nothing" in capsys.readouterr().err
     assert len(PostgresModuleRepository(connection).list_all()) == 1
+
+
+NOTHING_TO_EXTRACT = "nothing to extract"
+
+
+def _two_module_collection(tmp_path: Path, xm_module_bytes: bytes, it_module_bytes: bytes) -> Path:
+    source = tmp_path / "modules"
+    (source / "first.xm").write_bytes(xm_module_bytes)
+    (source / "second.it").write_bytes(it_module_bytes)
+    return source
+
+
+def test_a_pruned_pass_over_an_unchanged_collection_is_not_read_again(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    _two_module_collection(tmp_path, xm_module_bytes, it_module_bytes)
+    main(["--prune", "--workers", "1"], prog=PROGRAM)
+    capsys.readouterr()
+
+    main(["--prune", "--workers", "1"], prog=PROGRAM)
+
+    assert NOTHING_TO_EXTRACT in capsys.readouterr().out
+
+
+def test_a_pass_without_a_prune_leaves_the_collection_to_be_read_again(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+) -> None:
+    """Only a pruned pass leaves a catalog mirroring the collection, so only it lets the next pass end at once."""
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    _two_module_collection(tmp_path, xm_module_bytes, it_module_bytes)
+    main(["--workers", "1"], prog=PROGRAM)
+    capsys.readouterr()
+
+    main(["--prune", "--workers", "1"], prog=PROGRAM)
+
+    assert NOTHING_TO_EXTRACT not in capsys.readouterr().out
+
+
+def test_a_collection_changed_since_the_pruned_pass_is_read_again(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    source = _two_module_collection(tmp_path, xm_module_bytes, it_module_bytes)
+    main(["--prune", "--workers", "1"], prog=PROGRAM)
+    (source / "second.it").unlink()
+    capsys.readouterr()
+
+    main(["--prune", "--workers", "1"], prog=PROGRAM)
+
+    output = capsys.readouterr().out
+    assert NOTHING_TO_EXTRACT not in output
+    assert "Pruned 1 module(s)" in output
+    assert len(PostgresModuleRepository(connection).list_all()) == 1
+
+
+def test_forcing_a_pass_reads_a_collection_its_last_pruned_pass_left_unchanged(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    xm_module_bytes: bytes,
+    it_module_bytes: bytes,
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    _two_module_collection(tmp_path, xm_module_bytes, it_module_bytes)
+    main(["--prune", "--workers", "1"], prog=PROGRAM)
+    capsys.readouterr()
+
+    main(["--prune", "--force", "--workers", "1"], prog=PROGRAM)
+
+    output = capsys.readouterr().out
+    assert NOTHING_TO_EXTRACT not in output
+    assert "2 already known" in output

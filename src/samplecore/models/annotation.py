@@ -160,3 +160,17 @@ class SampleAnnotation(AnnotationDecisions):
             raise ValueError("an annotation records a label, a rating or a favorite mark")
 
         return self
+
+
+class AnnotationImport(BaseModel):
+    """A labels file read into the catalog: the digest of its bytes, how many annotations it held, and when.
+
+    The same bytes read twice are one import, taken again at the later time, so whether a library
+    already holds what a file says is one lookup by the file's digest.
+    """
+
+    model_config = FROZEN
+
+    file_sha256: str = Field(min_length=64, max_length=64)
+    annotation_count: int = Field(ge=0)
+    imported_at: datetime

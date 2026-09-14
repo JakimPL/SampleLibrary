@@ -70,7 +70,7 @@ def _extract(
         feature_extractor=extractor if extractor is not None else _StubFeatureExtractor(),
         hearing=hearing,
     )
-    pending = pending_samples(connection, experiment_id, sample_limit=sample_limit)
+    pending = pending_samples(connection, experiment_id, hearing=hearing, sample_limit=sample_limit)
     return extract_features(connection, SampleAudio.from_catalog(connection, library_root), feature_pass, pending)
 
 
@@ -144,7 +144,7 @@ def test_pending_samples_lists_only_what_the_experiment_lacks_in_hash_order(
     experiment_id = _create_experiment(connection)
     _extract(connection, tmp_path, experiment_id, sample_limit=1)
 
-    pending = pending_samples(connection, experiment_id, sample_limit=None)
+    pending = pending_samples(connection, experiment_id, hearing=NOMINAL, sample_limit=None)
 
     assert (pending.cataloged, pending.already_extracted) == (3, 1)
     assert [sample.hash for sample in pending.samples] == [format(2, "064x"), format(3, "064x")]
@@ -152,7 +152,7 @@ def test_pending_samples_lists_only_what_the_experiment_lacks_in_hash_order(
 
 def test_a_sample_limit_below_one_is_refused(connection: Connection) -> None:
     with pytest.raises(ValueError, match="at least 1"):
-        pending_samples(connection, _create_experiment(connection), sample_limit=0)
+        pending_samples(connection, _create_experiment(connection), hearing=NOMINAL, sample_limit=0)
 
 
 def test_an_empty_catalog_extracts_nothing(connection: Connection, tmp_path: Path) -> None:
@@ -200,5 +200,55 @@ def test_a_sample_whose_file_is_gone_is_counted_and_stays_pending(
     summary = _extract(connection, tmp_path, experiment_id)
 
     assert (summary.newly_extracted, summary.unavailable) == (1, 1)
-    still_pending = pending_samples(connection, experiment_id, sample_limit=None).samples
+    still_pending = pending_samples(connection, experiment_id, hearing=NOMINAL, sample_limit=None).samples
     assert [pending.hash for pending in still_pending] == [vanished_sample_file.sample_hash]
+
+
+def test_a_sample_the_library_plays_at_another_rate_now_is_described_again_in_place(
+    connection: Connection, tmp_path: Path
+) -> None:
+    """A new module playing a sample, or a file declaring another rate, moves its heard rate, and its vector follows."""
+    played = _store_sample(connection, tmp_path, hash_seed=1)
+    steady = _store_sample(connection, tmp_path, hash_seed=2)
+    rates = PostgresSamplePlaybackRateRepository(connection)
+    rates.replace_all({played.hash: NOMINAL_WAV_RATE // 2, steady.hash: NOMINAL_WAV_RATE})
+    experiment_id = _create_experiment(connection)
+    _extract(connection, tmp_path, experiment_id, hearing=hearing_for(connection, Reading.HEARD_RATE))
+    assert (
+        pending_samples(
+            connection, experiment_id, hearing=hearing_for(connection, Reading.HEARD_RATE), sample_limit=None
+        ).samples
+        == ()
+    )
+
+    rates.replace_all({played.hash: NOMINAL_WAV_RATE // 4, steady.hash: NOMINAL_WAV_RATE})
+    moved_hearing = hearing_for(connection, Reading.HEARD_RATE)
+    pending = pending_samples(connection, experiment_id, hearing=moved_hearing, sample_limit=None)
+    summary = _extract(connection, tmp_path, experiment_id, hearing=moved_hearing)
+
+    assert [sample.hash for sample in pending.samples] == [played.hash]
+    assert pending.moved == frozenset({played.hash})
+    assert summary == FeatureExtractionSummary(cataloged=2, already_extracted=1, newly_extracted=1, unavailable=0)
+    vectors = {
+        vector.sample_hash: vector
+        for vector in PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
+    }
+    assert {sample_hash: vector.heard_rate for sample_hash, vector in vectors.items()} == {
+        played.hash: NOMINAL_WAV_RATE // 4,
+        steady.hash: NOMINAL_WAV_RATE,
+    }
+    assert vectors[played.hash].vector[0] == 4 * SAMPLE_FRAMES
+
+
+def test_a_nominal_reading_records_no_rate_and_ignores_the_library_s_rates(
+    connection: Connection, tmp_path: Path
+) -> None:
+    sample = _store_sample(connection, tmp_path, hash_seed=1)
+    experiment_id = _create_experiment(connection)
+    _extract(connection, tmp_path, experiment_id)
+
+    PostgresSamplePlaybackRateRepository(connection).replace_all({sample.hash: NOMINAL_WAV_RATE // 2})
+
+    assert pending_samples(connection, experiment_id, hearing=NOMINAL, sample_limit=None).samples == ()
+    (vector,) = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
+    assert vector.heard_rate is None

@@ -10,6 +10,7 @@ from samplecore.hashing import compute_module_hash
 from samplecore.models.cloud import CloudPromotion, ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
 from samplecore.models.label_suggestion import SampleLabelSuggestion, SuggestionPromotion
+from samplecore.models.pass_completion import PassCompletion, PassKind
 from samplecore.models.sample_file import FileFingerprint
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
@@ -27,6 +28,7 @@ from samplecore.storage.repositories.label_suggestion import (
     PostgresSuggestionPromotionRepository,
 )
 from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.pass_completion import PostgresPassCompletionRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 from samplecore.storage.sample_audio import SampleAudio
@@ -129,6 +131,9 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
     )
     PostgresSuggestionPromotionRepository(connection).record(
         SuggestionPromotion(experiment_id=experiment_id, promoted_at=now)
+    )
+    PostgresPassCompletionRepository(connection).record(
+        PassCompletion(kind=PassKind.MODULES, digest="0" * 64, completed_at=now)
     )
     connection.commit()
 

@@ -39,6 +39,7 @@ from trackmod.spec.levels import MAX_INSTRUMENT_VOLUME, MAX_PANNING, MIN_INSTRUM
 from trackmod.spec.pitch import NOTE_COUNT
 
 from samplecore.models.channels import ChannelLayout
+from samplecore.models.pass_completion import PassKind
 from samplecore.models.relation import RelationType
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.constraints import all_null_together, non_negative
@@ -335,6 +336,7 @@ sample_feature_vector = Table(
     Column("sample_hash", String(64), ForeignKey("sample.hash"), nullable=False),
     Column("vector", ARRAY(Double), nullable=False),
     Column("computed_at", DateTime(timezone=True), nullable=False),
+    Column("heard_rate", UInteger, nullable=True),
     PrimaryKeyConstraint("experiment_id", "sample_hash"),
 )
 
@@ -350,6 +352,17 @@ sample_label_suggestion = Table(
     PrimaryKeyConstraint("experiment_id", "sample_hash", "rank"),
     CheckConstraint(non_negative("rank"), name="sample_label_suggestion_rank_check"),
     CheckConstraint(column("label") != "", name="sample_label_suggestion_label_check"),
+)
+
+# One row per pass over the whole library that finished completely, naming the digest of what it had
+# in front of it, so a pass finding that digest again ends with nothing to do.
+pass_completion = Table(
+    "pass_completion",
+    metadata,
+    Column("kind", String, primary_key=True),
+    Column("digest", String(64), nullable=False),
+    Column("completed_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(column("kind").in_([kind.value for kind in PassKind]), name="pass_completion_kind_check"),
 )
 
 # The scoring the application shows, one row like the cloud's own promotion, written in the

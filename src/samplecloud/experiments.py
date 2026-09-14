@@ -126,15 +126,20 @@ def require_reproducible(
 
     A learned descriptor is found by name, so retraining it under that name, or a backend changing
     with a library upgrade, would add vectors of another kind to an experiment resumed later. The
-    probe is the experiment's first samples in hash order whose audio can be read now, so every resume
-    checks the same ones for as long as their files stay where they are.
+    probe is the experiment's first samples in hash order whose audio can be read now and which the
+    library still plays at the rate their vectors were heard at, so every resume checks the same ones
+    for as long as their files and their rates stay as they were.
+
+    An experiment all of whose samples moved to other rates holds nothing to check against, and a
+    resume describes every one of them again.
 
     Raises:
         ExtractorChanged: a probe sample's new vector points elsewhere than its stored one.
-        ExperimentRefused: none of the experiment's samples can be read now to check against.
+        ExperimentRefused: samples still heard at their vectors' rates exist, and none of them can be read now.
     """
     vector_repository = PostgresSampleFeatureVectorRepository(connection)
     compared = 0
+    unmoved = 0
     offset = 0
     while compared < REPRODUCTION_PROBE_COUNT:
         page = vector_repository.vectors_in_hash_order(experiment_id, count=REPRODUCTION_PAGE_ROWS, offset=offset)
@@ -143,6 +148,9 @@ def require_reproducible(
         offset += len(page)
         samples = PostgresSampleRepository(connection).get_many([vector.sample_hash for vector in page])
         for vector in page:
+            if vector.heard_rate != hearing.rate_for(vector.sample_hash):
+                continue
+            unmoved += 1
             try:
                 sample_pcm = audio.read(samples[vector.sample_hash])
             except SampleUnavailableError:
@@ -152,7 +160,7 @@ def require_reproducible(
             if compared == REPRODUCTION_PROBE_COUNT:
                 return
 
-    if compared == 0 and offset > 0:
+    if compared == 0 and unmoved > 0:
         raise ExperimentRefused(
             f"none of experiment {experiment_id}'s samples can be read now, so its extractor cannot be checked "
             "against the vectors it holds; bring its sample files back first"

@@ -5,6 +5,7 @@ from enum import StrEnum, unique
 from typing import Annotated, Any, Final
 
 from pydantic import BaseModel, StringConstraints
+from trackmod.schema.scalars import Rate
 
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import Index, SampleHash
@@ -67,6 +68,10 @@ class SampleFeatureVector(BaseModel):
     Distinct from ``SampleSpectralFeature``: this holds a ``FeatureExtractor``'s direct output for
     one named experiment, not the standardized vector a promoted experiment's UMAP fit was computed
     from -- the two stay separate tables and separate models for that reason.
+
+    ``heard_rate`` is the rate a heard-rate reading played the sample at when it was described, and
+    stays empty under the nominal reading, so a vector whose sample the library now plays at another
+    rate is told apart from one that still describes what a listener hears.
     """
 
     model_config = FROZEN
@@ -75,3 +80,4 @@ class SampleFeatureVector(BaseModel):
     sample_hash: SampleHash
     vector: tuple[float, ...]
     computed_at: datetime
+    heard_rate: Rate | None = None

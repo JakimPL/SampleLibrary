@@ -105,10 +105,10 @@ def run_embedding(
         ExtractorChanged: the extractor no longer reproduces the experiment's own vectors.
         ExperimentRefused: none of the experiment's samples can be read now to check the extractor against.
     """
-    pending = pending_samples(connection, experiment_id, sample_limit=options.sample_limit)
+    hearing = hearing_for(connection, options.reading)
+    pending = pending_samples(connection, experiment_id, hearing=hearing, sample_limit=options.sample_limit)
     if pending.samples:
         feature_extractor = extractor()
-        hearing = hearing_for(connection, options.reading)
         audio = SampleAudio.from_catalog(connection, config.library_root)
         if pending.already_extracted:
             require_reproducible(
