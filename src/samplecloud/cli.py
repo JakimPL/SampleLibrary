@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from sqlalchemy import Connection
 
@@ -18,7 +19,7 @@ from samplecloud.experiments import (
 from samplecloud.registries import BACKEND_REGISTRY, DEFAULT_BACKEND_NAME
 from samplecloud.run import EmbeddingOptions, EmbeddingSummary, create_experiment, experiment_to_rebuild, run_embedding
 from samplecore.cli_parsing import command_parser
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
+from samplecore.cli_support import bootstrap_cli, ending_in_one_line, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import LEARNED_BACKEND_NAME, Reading
 
@@ -29,68 +30,76 @@ def main(argv: list[str], *, prog: str) -> None:
     """Run one embedding pass over the catalog and report the result."""
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
-    with open_catalog_connection(config.database_url) as connection:
-        try:
-            summary = _embed(config, connection, arguments)
-        except ExperimentRefused as error:
-            _logger.error("Embedded nothing: %s.", error)
-            sys.exit(1)
+    with (
+        open_catalog_connection(config.database_url) as connection,
+        ending_in_one_line("Embedded nothing", (ExperimentRefused,)),
+    ):
+        summary = _embed(config, connection, arguments)
 
     _report(summary)
+
+
+@dataclass(frozen=True)
+class ChosenExperiment:
+    """The experiment a run fills, the recipe it follows, whether the cloud shows it after, and what builds its extractor."""
+
+    experiment_id: int
+    recipe: EmbeddingRecipe
+    promote: bool
+    extractor: Callable[[], FeatureExtractor]
 
 
 def _embed(config: LibraryConfig, connection: Connection, arguments: argparse.Namespace) -> EmbeddingSummary:
     """Pick the experiment the arguments name, then extract and lay out what it still lacks.
 
-    A new experiment's extractor is built before its row is written, so a descriptor that fails to
-    load leaves the catalog as it was.
+    Raises:
+        ExperimentRefused: the arguments name an experiment that cannot be resumed as asked.
+    """
+    chosen = _chosen_experiment(config, connection, arguments)
+    return run_embedding(
+        config,
+        connection,
+        chosen.experiment_id,
+        extractor=chosen.extractor,
+        options=EmbeddingOptions(reading=chosen.recipe.reading, sample_limit=arguments.limit, promote=chosen.promote),
+    )
+
+
+def _chosen_experiment(
+    config: LibraryConfig, connection: Connection, arguments: argparse.Namespace
+) -> ChosenExperiment:
+    """The experiment the arguments name: the one the cloud shows, one resumed by its id, or a new one.
+
+    A resumed experiment builds its extractor only when a sample is missing from it. A new
+    experiment's extractor is built before its row is written, so a descriptor that fails to load
+    leaves the catalog as it was.
 
     Raises:
         ExperimentRefused: the arguments name an experiment that cannot be resumed as asked.
     """
-    promote = not arguments.extract_only
+
+    def resumed(experiment_id: int, recipe: EmbeddingRecipe, *, promote: bool) -> ChosenExperiment:
+        def build_extractor() -> FeatureExtractor:
+            return extractor_for(recipe, library_root=config.library_root, device=arguments.device)
+
+        return ChosenExperiment(experiment_id=experiment_id, recipe=recipe, promote=promote, extractor=build_extractor)
+
     if arguments.resume_promoted:
         _refuse_beside_resume_promoted(arguments)
         experiment_id = experiment_to_rebuild(connection)
-        recipe = recipe_of(experiment_named(connection, experiment_id))
-        return _run(config, connection, arguments, experiment_id=experiment_id, recipe=recipe, promote=True)
+        return resumed(experiment_id, recipe_of(experiment_named(connection, experiment_id)), promote=True)
     if arguments.experiment_id is not None:
         recipe = recipe_of(experiment_named(connection, arguments.experiment_id))
         _refuse_conflicts(arguments, recipe)
-        return _run(
-            config, connection, arguments, experiment_id=arguments.experiment_id, recipe=recipe, promote=promote
-        )
+        return resumed(arguments.experiment_id, recipe, promote=not arguments.extract_only)
 
     recipe = _requested_recipe(arguments)
     feature_extractor = extractor_for(recipe, library_root=config.library_root, device=arguments.device)
-    experiment_id = create_experiment(connection, recipe, label=arguments.label)
-    return run_embedding(
-        config,
-        connection,
-        experiment_id,
+    return ChosenExperiment(
+        experiment_id=create_experiment(connection, recipe, label=arguments.label),
+        recipe=recipe,
+        promote=not arguments.extract_only,
         extractor=lambda: feature_extractor,
-        options=EmbeddingOptions(reading=recipe.reading, sample_limit=arguments.limit, promote=promote),
-    )
-
-
-def _run(
-    config: LibraryConfig,
-    connection: Connection,
-    arguments: argparse.Namespace,
-    *,
-    experiment_id: int,
-    recipe: EmbeddingRecipe,
-    promote: bool,
-) -> EmbeddingSummary:
-    def build_extractor() -> FeatureExtractor:
-        return extractor_for(recipe, library_root=config.library_root, device=arguments.device)
-
-    return run_embedding(
-        config,
-        connection,
-        experiment_id,
-        extractor=build_extractor,
-        options=EmbeddingOptions(reading=recipe.reading, sample_limit=arguments.limit, promote=promote),
     )
 
 

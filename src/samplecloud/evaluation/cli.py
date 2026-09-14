@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 from pathlib import Path
 
 from sqlalchemy import Connection
@@ -24,7 +23,7 @@ from samplecloud.evaluation.transposition import ProbeDescriber, TranspositionRe
 from samplecloud.experiments import ExperimentRefused, experiment_named, extractor_for, recipe_of
 from samplecloud.hearing import hearing_for
 from samplecore.cli_parsing import command_parser
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection, positive_integer
+from samplecore.cli_support import bootstrap_cli, ending_in_one_line, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import Experiment
 from samplecore.tracking.session import open_run
@@ -37,12 +36,9 @@ def main(argv: list[str], *, prog: str) -> None:
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
-        try:
+        with ending_in_one_line("Scored nothing", (ExperimentRefused,)):
             experiment = experiment_named(connection, arguments.experiment_id)
             describer = _describer(connection, experiment, config=config, arguments=arguments)
-        except ExperimentRefused as error:
-            _logger.error("Scored nothing: %s.", error)
-            sys.exit(1)
 
         with open_run(
             config.library_root,

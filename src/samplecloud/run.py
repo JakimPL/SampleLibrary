@@ -15,7 +15,7 @@ from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
 from samplecloud.registries import DEFAULT_BACKEND_NAME
 from samplecore.config import LibraryConfig
 from samplecore.models.cloud import CloudPromotion
-from samplecore.models.experiment import Experiment, Reading
+from samplecore.models.experiment import Reading
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository, PostgresCloudPromotionRepository
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
@@ -74,16 +74,8 @@ def experiment_to_rebuild(connection: Connection) -> int:
         )
 
     with start_batch(connection):
-        experiments = PostgresExperimentRepository(connection)
-        experiment_id = experiments.next_id()
-        experiments.insert(
-            Experiment(
-                id=experiment_id,
-                backend_name=REBUILT_RECIPE.backend_name,
-                params=REBUILT_RECIPE.parameters,
-                created_at=datetime.now(UTC),
-                label=None,
-            )
+        experiment_id = PostgresExperimentRepository(connection).insert_new(
+            backend_name=REBUILT_RECIPE.backend_name, label=None, params=REBUILT_RECIPE.parameters
         )
         PostgresCloudPromotionRepository(connection).record(
             CloudPromotion(experiment_id=experiment_id, promoted_at=datetime.now(UTC))

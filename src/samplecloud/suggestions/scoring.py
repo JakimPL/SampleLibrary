@@ -11,7 +11,7 @@ from sqlalchemy import Connection
 
 from samplecloud.suggestions.vocabulary import PROMPT_TEMPLATE
 from samplecore.labeling.labels import SampleLabel, written_paths
-from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME, Experiment
+from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
 from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
@@ -103,16 +103,8 @@ def score_suggestions(connection: Connection, *, recipe: ScoringRecipe, prompts:
     order = np.argsort(-scores, axis=1)[:, :kept]
     computed_at = datetime.now(UTC)
     with start_batch(connection):
-        experiments = PostgresExperimentRepository(connection)
-        experiment_id = experiments.next_id()
-        experiments.insert(
-            Experiment(
-                id=experiment_id,
-                backend_name=ZERO_SHOT_BACKEND_NAME,
-                params=recipe.parameters(),
-                created_at=computed_at,
-                label=recipe.label,
-            )
+        experiment_id = PostgresExperimentRepository(connection).insert_new(
+            backend_name=ZERO_SHOT_BACKEND_NAME, label=recipe.label, params=recipe.parameters()
         )
         repository = PostgresSampleLabelSuggestionRepository(connection)
         for chunk_start in range(0, len(vectors), INSERT_CHUNK_SAMPLES):

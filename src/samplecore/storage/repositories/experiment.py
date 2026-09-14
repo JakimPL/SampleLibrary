@@ -19,6 +19,8 @@ class ExperimentRepository(Protocol):
 
     def create(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int: ...
 
+    def insert_new(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int: ...
+
     def get(self, experiment_id: int) -> Experiment | None: ...
 
 
@@ -38,11 +40,16 @@ class PostgresExperimentRepository:
 
     def create(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int:
         """Open a new experiment now, committed at once so a later resume finds it whatever happens next."""
+        new_id = self.insert_new(backend_name=backend_name, label=label, params=params)
+        self._connection.commit()
+        return new_id
+
+    def insert_new(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int:
+        """Open a new experiment inside the caller's transaction, which lands it together with whatever else it writes."""
         new_id = self.next_id()
         self.insert(
             Experiment(id=new_id, backend_name=backend_name, params=params, created_at=datetime.now(UTC), label=label)
         )
-        self._connection.commit()
         return new_id
 
     def insert(self, experiment_: Experiment) -> None:

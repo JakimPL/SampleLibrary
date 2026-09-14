@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
 from typing import Final
 
 from sqlalchemy import Connection
@@ -18,7 +17,13 @@ from samplecloud.suggestions.scoring import (
 )
 from samplecloud.suggestions.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, prompt_for, vocabulary_from
 from samplecore.cli_parsing import command_parser
-from samplecore.cli_support import bootstrap_cli, integer_between, open_catalog_connection, positive_integer
+from samplecore.cli_support import (
+    bootstrap_cli,
+    ending_in_one_line,
+    integer_between,
+    open_catalog_connection,
+    positive_integer,
+)
 from samplecore.models.experiment import Experiment
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 
@@ -32,12 +37,9 @@ def main(argv: list[str], *, prog: str) -> None:
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
-        try:
+        with ending_in_one_line("Suggested nothing", (ExperimentRefused, VocabularyRefused)):
             source = _listening_experiment(connection, arguments.experiment_id)
             vocabulary = vocabulary_from(arguments.vocabulary, connection)
-        except (ExperimentRefused, VocabularyRefused) as error:
-            _logger.error("Suggested nothing: %s.", error)
-            sys.exit(1)
         prompts = load_teacher(device=arguments.device).embed_text([prompt_for(label) for label in vocabulary])
         summary = score_suggestions(
             connection,

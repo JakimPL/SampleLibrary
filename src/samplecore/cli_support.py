@@ -133,6 +133,24 @@ def open_catalog_connection(database_url: str) -> Iterator[Connection]:
         connection.close()
 
 
+@contextmanager
+def ending_in_one_line(outcome: str, refusals: tuple[type[ValueError], ...]) -> Iterator[None]:
+    """End the process with one message when the work inside is refused, saying what was left undone.
+
+    A refusal is a request this command cannot carry out as asked -- an experiment it cannot resume,
+    a file it cannot read as what it names -- which a person fixes in the command line, so it reads
+    as one line rather than a traceback.
+
+    Raises:
+        SystemExit: one of `refusals` was raised inside.
+    """
+    try:
+        yield
+    except refusals as error:
+        _logger.error("%s: %s.", outcome, error)
+        sys.exit(1)
+
+
 def report_dry_run(description: str) -> None:
     """Log what a confirm-gated destructive command would do, and that it waits for `--confirm`.
 
