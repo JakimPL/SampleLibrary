@@ -98,6 +98,14 @@ async function flushDraw(): Promise<void> {
     });
 }
 
+let viewCounter = 0;
+
+/** A camera view no frame has drawn yet, as a pan or zoom would hand the library's `drawing` event. */
+function movedView(): Float32Array {
+    viewCounter += 1;
+    return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, viewCounter, 0, 0, 1]);
+}
+
 async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnType<typeof render>> {
     const result = render(
         <CloudView
@@ -498,7 +506,7 @@ describe("CloudView", () => {
 
         latestInstance().getScreenPosition.mockReturnValue([120, 340]);
         act(() => {
-            latestInstance().emit("view");
+            latestInstance().emit("drawing", { view: movedView() });
         });
 
         expect(ping.style.left).toBe("120px");
@@ -604,7 +612,7 @@ describe("CloudView morph link", () => {
 
         latestInstance().getScreenPosition.mockReturnValue([120, 340]);
         act(() => {
-            latestInstance().emit("view");
+            latestInstance().emit("drawing", { view: movedView() });
         });
 
         const marker = screen.getByRole("slider", { name: "Morph weight" });
@@ -626,22 +634,56 @@ describe("CloudView right-button pairing", () => {
         return container.querySelector<SVGLineElement>(".morph-band-line");
     }
 
-    it("stretches a band from the pressed point to the cursor while the right button is held", async () => {
+    interface Segment {
+        readonly x1: number;
+        readonly y1: number;
+        readonly x2: number;
+        readonly y2: number;
+    }
+
+    function segmentOf(line: SVGLineElement | null): Segment {
+        if (line === null) {
+            throw new Error("band line not found");
+        }
+        const read = (name: string): number => Number(line.getAttribute(name));
+        return { x1: read("x1"), y1: read("y1"), x2: read("x2"), y2: read("y2") };
+    }
+
+    /** Whether `point` lies on the ray from `from` toward `toward`, strictly past `from`. */
+    function liesAhead(
+        from: readonly [number, number],
+        toward: readonly [number, number],
+        point: readonly [number, number],
+    ): boolean {
+        const alongX = toward[0] - from[0];
+        const alongY = toward[1] - from[1];
+        const offsetX = point[0] - from[0];
+        const offsetY = point[1] - from[1];
+        return Math.abs(alongX * offsetY - alongY * offsetX) < 1e-6 && alongX * offsetX + alongY * offsetY > 0;
+    }
+
+    /** Spreads the fake's points far enough apart that a band between two of them outreaches their markers. */
+    function spreadPoints(): void {
+        latestInstance().getScreenPosition.mockImplementation((index: number) => [10 + index * 100, 20 + index * 100]);
+    }
+
+    it("stretches a band from the pressed point's marker to the cursor while the right button is held", async () => {
         const { container } = await renderCloudView({ points: TWO_POINTS });
         latestInstance().emit("pointOver", 0);
 
         fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 10, clientY: 20 });
         fireEvent.mouseMove(latestCanvas(), { clientX: 50, clientY: 60 });
 
-        const line = bandLine(container);
-        expect(line).toHaveAttribute("x1", "10");
-        expect(line).toHaveAttribute("y1", "20");
-        expect(line).toHaveAttribute("x2", "50");
-        expect(line).toHaveAttribute("y2", "60");
+        const segment = segmentOf(bandLine(container));
+        expect(liesAhead([10, 20], [50, 60], [segment.x1, segment.y1])).toBe(true);
+        expect(container.querySelector(".morph-band-origin .cloud-marker-stroke")).toHaveAttribute("cx", "10");
+        expect(segment.x2).toBe(50);
+        expect(segment.y2).toBe(60);
     });
 
-    it("snaps the band's far end to the point under the cursor", async () => {
+    it("snaps the band's far end to the point under the cursor, stopping at its marker", async () => {
         const { container } = await renderCloudView({ points: TWO_POINTS });
+        spreadPoints();
         latestInstance().emit("pointOver", 0);
         fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 10, clientY: 20 });
         fireEvent.mouseMove(latestCanvas(), { clientX: 50, clientY: 60 });
@@ -650,8 +692,9 @@ describe("CloudView right-button pairing", () => {
             latestInstance().emit("pointOver", 1);
         });
 
-        expect(bandLine(container)).toHaveAttribute("x2", "11");
-        expect(bandLine(container)).toHaveAttribute("y2", "21");
+        const segment = segmentOf(bandLine(container));
+        expect(liesAhead([110, 120], [10, 20], [segment.x2, segment.y2])).toBe(true);
+        expect(container.querySelector(".cloud-marker-hover .cloud-marker-stroke")).toHaveAttribute("cx", "110");
     });
 
     it("joins the pressed point to the one the button is released over, and drops the band", async () => {
@@ -676,9 +719,10 @@ describe("CloudView right-button pairing", () => {
         fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 50, clientY: 60 });
         fireEvent.mouseMove(latestCanvas(), { clientX: 70, clientY: 80 });
 
-        expect(bandLine(container)).toHaveAttribute("x1", "10");
-        expect(bandLine(container)).toHaveAttribute("y1", "20");
-        expect(bandLine(container)).toHaveAttribute("x2", "70");
+        const segment = segmentOf(bandLine(container));
+        expect(container.querySelector(".morph-band-origin .cloud-marker-stroke")).toHaveAttribute("cx", "10");
+        expect(liesAhead([10, 20], [70, 80], [segment.x1, segment.y1])).toBe(true);
+        expect(segment.x2).toBe(70);
 
         act(() => {
             latestInstance().emit("pointOver", 1);
@@ -829,5 +873,84 @@ describe("CloudView point appearance", () => {
         await flushDraw();
 
         expect(instances).toHaveLength(1);
+    });
+});
+
+describe("CloudView markers", () => {
+    const TWO_POINTS: readonly CloudEntityPoint[] = [point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)];
+
+    afterEach(() => {
+        document.documentElement.style.removeProperty("--cloud-point-shape");
+    });
+
+    function marker(container: HTMLElement, kind: "hover" | "selected"): SVGElement | null {
+        return container.querySelector<SVGElement>(`.cloud-marker-${kind} .cloud-marker-stroke`);
+    }
+
+    it("marks the hovered point, and drops the mark once the cursor leaves it", async () => {
+        const { container } = await renderCloudView({ points: TWO_POINTS });
+
+        act(() => {
+            latestInstance().emit("pointOver", 1);
+        });
+
+        expect(marker(container, "hover")).toHaveAttribute("cx", "11");
+        expect(marker(container, "hover")).toHaveAttribute("cy", "21");
+
+        act(() => {
+            latestInstance().emit("pointOut");
+        });
+
+        expect(marker(container, "hover")).not.toBeInTheDocument();
+    });
+
+    it("marks the highlighted point, and hovering it keeps the one mark", async () => {
+        const { container } = await renderCloudView({ points: TWO_POINTS, highlighted: MODULE_REF });
+
+        expect(marker(container, "selected")).toHaveAttribute("cx", "11");
+
+        act(() => {
+            latestInstance().emit("pointOver", 1);
+        });
+
+        expect(marker(container, "selected")).toBeInTheDocument();
+        expect(marker(container, "hover")).not.toBeInTheDocument();
+    });
+
+    it("moves the marks with a frame that draws a moved view", async () => {
+        const { container } = await renderCloudView({ points: TWO_POINTS, highlighted: SAMPLE_REF });
+        act(() => {
+            latestInstance().emit("pointOver", 1);
+        });
+
+        latestInstance().getScreenPosition.mockReturnValue([120, 340]);
+        act(() => {
+            latestInstance().emit("drawing", { view: movedView() });
+        });
+
+        expect(marker(container, "selected")).toHaveAttribute("cx", "120");
+        expect(marker(container, "hover")).toHaveAttribute("cy", "340");
+    });
+
+    it("keeps the marks in place through a frame that draws the view already shown", async () => {
+        const { container } = await renderCloudView({ points: TWO_POINTS, highlighted: SAMPLE_REF });
+        const view = movedView();
+        act(() => {
+            latestInstance().emit("drawing", { view });
+        });
+
+        latestInstance().getScreenPosition.mockReturnValue([120, 340]);
+        act(() => {
+            latestInstance().emit("drawing", { view: Float32Array.from(view) });
+        });
+
+        expect(marker(container, "selected")).toHaveAttribute("cx", "10");
+    });
+
+    it("draws square marks under a theme with square points", async () => {
+        document.documentElement.style.setProperty("--cloud-point-shape", "square");
+        const { container } = await renderCloudView({ points: TWO_POINTS, highlighted: SAMPLE_REF });
+
+        expect(container.querySelector(".cloud-marker-selected rect.cloud-marker-stroke")).toBeInTheDocument();
     });
 });

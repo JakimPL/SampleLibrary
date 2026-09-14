@@ -44,10 +44,20 @@ export interface CloudColors {
     readonly labels: LabelPaletteParameters;
 }
 
+/** How the theme draws the markers over single points: the hovered, the selected, and a morph's two ends. */
+export interface MarkerStyle {
+    /** The marker's outer size, edge to edge. */
+    readonly sizePx: number;
+    readonly lineWidthPx: number;
+    /** How far the background-colored band beneath a marker's stroke reaches past it on either side. */
+    readonly casingWidthPx: number;
+}
+
 /** Everything the current theme says about how the cloud is drawn, read once per theme change. */
 export interface CloudRenderSettings {
     readonly point: PointStyle;
     readonly colors: CloudColors;
+    readonly marker: MarkerStyle;
 }
 
 interface Token<Value> {
@@ -69,6 +79,9 @@ const POINT_COLOR: Token<string> = { property: "--cloud-point", fallback: "#1b1f
 const SELECTED_COLOR: Token<string> = { property: "--cloud-point-selected", fallback: "#a8690f" };
 const HOVER_COLOR: Token<string> = { property: "--cloud-hover-color", fallback: "#1b1f26" };
 const UNCATEGORIZED_COLOR: Token<string> = { property: "--cloud-point-uncategorized", fallback: "#d5d4ce" };
+const MARKER_SIZE: Token<number> = { property: "--cloud-marker-size", fallback: 13 };
+const MARKER_LINE_WIDTH: Token<number> = { property: "--cloud-marker-line-width", fallback: 1.5 };
+const MARKER_CASING_WIDTH: Token<number> = { property: "--cloud-marker-casing-width", fallback: 1.5 };
 
 const UNCATEGORIZED_CATEGORY = "uncategorized";
 const MINIMUM_OPACITY = 0.01;
@@ -125,8 +138,16 @@ function readCloudColors(): CloudColors {
     };
 }
 
+function readMarkerStyle(): MarkerStyle {
+    return {
+        sizePx: Math.max(0, readNumber(MARKER_SIZE)),
+        lineWidthPx: Math.max(0, readNumber(MARKER_LINE_WIDTH)),
+        casingWidthPx: Math.max(0, readNumber(MARKER_CASING_WIDTH)),
+    };
+}
+
 export function readCloudRenderSettings(): CloudRenderSettings {
-    return { point: readPointStyle(), colors: readCloudColors() };
+    return { point: readPointStyle(), colors: readCloudColors(), marker: readMarkerStyle() };
 }
 
 /**

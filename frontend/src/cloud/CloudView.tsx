@@ -1,11 +1,14 @@
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import createScatterplot from "regl-scatterplot";
 
 import type { EntityRef } from "../workspace/selectionStore";
+import { CloudMarkers, type MarkerPositions, NO_MARKERS, sameMarkers } from "./CloudMarkers";
 import { type CloudRenderSettings, useCloudRenderSettings } from "./cloudRenderSettings";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
 import type { PointColoring } from "./labelColoring";
+import type { MarkerAppearance } from "./markerGeometry";
 import { MorphBand } from "./MorphBand";
 import { MorphLink } from "./MorphLink";
 import { drawOrder, paletteColors, type PointSlots, slotPoints, slotValues } from "./pointPalette";
@@ -144,6 +147,11 @@ interface ScreenSegment {
     readonly second: ScreenPosition;
 }
 
+interface BandSegment extends ScreenSegment {
+    /** Whether the far end snapped to the point under the cursor. */
+    readonly endsOnPoint: boolean;
+}
+
 interface DragOrigin {
     readonly index: number;
     readonly pressedOnPoint: boolean;
@@ -157,12 +165,26 @@ function sameSegment(a: ScreenSegment | null, b: ScreenSegment | null): boolean 
     return a === null || b === null ? a === b : samePosition(a.first, b.first) && samePosition(a.second, b.second);
 }
 
+function sameBand(a: BandSegment | null, b: BandSegment | null): boolean {
+    return a === null || b === null ? a === b : a.endsOnPoint === b.endsOnPoint && sameSegment(a, b);
+}
+
 function sameEntity(a: EntityRef, b: EntityRef): boolean {
     return a.kind === b.kind && a.hash === b.hash;
 }
 
 function sameHighlight(a: EntityRef | null, b: EntityRef | null): boolean {
     return a === null || b === null ? a === b : sameEntity(a, b);
+}
+
+/** Whether two camera views hold the same matrix; a missing one matches nothing. */
+function sameView(first: Float32Array | null, second: Float32Array | null): boolean {
+    return (
+        first !== null &&
+        second !== null &&
+        first.length === second.length &&
+        first.every((value, index) => value === second[index])
+    );
 }
 
 /** The first index each hash takes among `points`, the same point `selectHighlighted` finds for it. */
@@ -292,8 +314,7 @@ function selectHighlighted(
  * Pressing Escape while the canvas has focus clears the highlight too, through the library's own
  * built-in `deselect` behavior. Whenever `highlighted` changes to a point present in this view (a
  * click elsewhere in the shell just located a sample or module here), a brief sonar-style ping
- * marks its screen position -- tracking the library's own `view` event so the ping stays pinned to
- * the point through any pan or zoom while it plays, rather than drifting off it. Selecting a point
+ * marks its screen position, pinned to the point through any pan or zoom while it plays. Selecting a point
  * this way also reports it through `onActivate` (a sample tab's caller uses this to start playback),
  * but skips its own ping for that one transition: the click that just selected it is already looking
  * straight at it, so the locate cue is reserved for a highlight arriving from somewhere else in the
@@ -304,10 +325,13 @@ function selectHighlighted(
  * join from its own anchor. While the button is held, a band runs from the point pressed, or from
  * `anchor` when the press landed on empty space, to the cursor, snapping to the point under it,
  * so the pair a release would join is visible before it lands. When
- * `link` names two points in view, a dashed line joins them and its marker is the weight, kept
- * pinned through the library's `view` event the way the ping is and re-read when the container
- * resizes; the hover tracking pauses while the marker is dragged, since the library keeps
- * hit-testing beneath it.
+ * `link` names two points in view, a line joins them and its marker is the weight; the hover
+ * tracking pauses while the marker is dragged, since the library keeps hit-testing beneath it.
+ *
+ * The selected and the hovered point each carry a marker in the theme's point shape. Every overlay
+ * -- the markers, the ping, the band and the link -- follows the library's `drawing` event, which
+ * arrives within the frame that drew a moved view, and a resize of the container, and commits
+ * before that frame paints, so the overlays move in step with the points.
  *
  * How the points look comes from the theme through `useCloudRenderSettings`: size, shape, opacity
  * and colors are handed to the library at creation and re-applied through its own `set` whenever
@@ -345,6 +369,8 @@ export function CloudView({
     const pointsDrawnRef = useRef(false);
     const pointsRef = useRef<readonly CloudEntityPoint[]>([]);
     const hoveredIndexRef = useRef<number | null>(null);
+    const selectedIndexRef = useRef(-1);
+    const lastViewRef = useRef<Float32Array | null>(null);
     const previousHighlightedRef = useRef<EntityRef | null>(null);
     const highlightedRef = useRef<EntityRef | null>(highlighted);
     highlightedRef.current = highlighted;
@@ -380,10 +406,16 @@ export function CloudView({
     const [ping, setPing] = useState<Ping | null>(null);
     pingRef.current = ping;
     const [linkScreen, setLinkScreen] = useState<ScreenSegment | null>(null);
-    const [band, setBand] = useState<ScreenSegment | null>(null);
+    const [band, setBand] = useState<BandSegment | null>(null);
+    const [markers, setMarkers] = useState<MarkerPositions>(NO_MARKERS);
 
     const settings = useCloudRenderSettings();
     const pointShape = settings.point.shape;
+    const devicePixelRatio = window.devicePixelRatio;
+    const markerAppearance = useMemo(
+        (): MarkerAppearance => ({ ...settings.marker, shape: pointShape, devicePixelRatio }),
+        [settings, pointShape, devicePixelRatio],
+    );
     const points = useMemo(() => normalizePoints(rawPoints), [rawPoints]);
     pointsRef.current = points;
     const slotting = useMemo(() => slotPoints(points, coloring), [points, coloring]);
@@ -437,9 +469,58 @@ export function CloudView({
             hoveredIndex === null || hoveredIndex === origin.index
                 ? undefined
                 : scatterplot.getScreenPosition(hoveredIndex);
-        const next: ScreenSegment = { first: originPosition, second: hoveredPosition ?? cursor };
-        setBand((current) => (sameSegment(current, next) ? current : next));
+        const next: BandSegment = {
+            first: originPosition,
+            second: hoveredPosition ?? cursor,
+            endsOnPoint: hoveredPosition !== undefined,
+        };
+        setBand((current) => (sameBand(current, next) ? current : next));
     }, []);
+
+    /** Pins the selected and hovered markers to their points, marking the hovered one only while it is another point. */
+    const repinMarkers = useCallback((): void => {
+        const scatterplot = scatterplotRef.current;
+        if (scatterplot === null || !pointsDrawnRef.current) {
+            setMarkers(NO_MARKERS);
+            return;
+        }
+        const selectedIndex = selectedIndexRef.current;
+        const hoveredIndex = hoveredIndexRef.current;
+        const next: MarkerPositions = {
+            selected: selectedIndex < 0 ? null : (scatterplot.getScreenPosition(selectedIndex) ?? null),
+            hovered:
+                hoveredIndex === null || hoveredIndex === selectedIndex
+                    ? null
+                    : (scatterplot.getScreenPosition(hoveredIndex) ?? null),
+        };
+        setMarkers((current) => (sameMarkers(current, next) ? current : next));
+    }, []);
+
+    const repinPing = useCallback((): void => {
+        const scatterplot = scatterplotRef.current;
+        const activePing = pingRef.current;
+        if (scatterplot === null || activePing === null || !pointsDrawnRef.current) {
+            return;
+        }
+        const position = scatterplot.getScreenPosition(activePing.pointIndex);
+        if (position !== undefined && !samePosition(position, activePing.position)) {
+            setPing({ ...activePing, position });
+        }
+    }, []);
+
+    /**
+     * Pins every overlay to the points it marks, committed before the frame paints: called from the
+     * scatterplot's own drawing of a moved view and from a resize, so a ring, the link and the ping
+     * move in the very frame the points do.
+     */
+    const repinOverlays = useCallback((): void => {
+        flushSync(() => {
+            repinLink();
+            repinBand();
+            repinPing();
+            repinMarkers();
+        });
+    }, [repinLink, repinBand, repinPing, repinMarkers]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -462,6 +543,7 @@ export function CloudView({
         scatterplotGenerationRef.current += 1;
         const generation = scatterplotGenerationRef.current;
         pointsDrawnRef.current = false;
+        lastViewRef.current = null;
         drawChainRef.current = Promise.resolve();
         let canceled = false;
         const isCanceled = (): boolean => canceled || scatterplotGenerationRef.current !== generation;
@@ -475,10 +557,12 @@ export function CloudView({
                 highlighted: highlightedRef.current,
             },
             isCanceled,
-        ).then(() => {
+        ).then((highlightedIndex) => {
             if (!isCanceled()) {
                 pointsDrawnRef.current = true;
+                selectedIndexRef.current = highlightedIndex;
                 repinLink();
+                repinMarkers();
             }
         });
 
@@ -503,26 +587,24 @@ export function CloudView({
                 onHoverRef.current(entity, position);
             }
             repinBand();
+            repinMarkers();
         });
         const pointOutSubscription = scatterplot.subscribe("pointOut", () => {
             hoveredIndexRef.current = null;
             onHoverRef.current(null, null);
             repinBand();
+            repinMarkers();
         });
         const deselectSubscription = scatterplot.subscribe("deselect", () => {
             onClearRef.current();
         });
-        const viewSubscription = scatterplot.subscribe("view", () => {
-            repinLink();
-            repinBand();
-            const activePing = pingRef.current;
-            if (activePing === null || !pointsDrawnRef.current) {
+        // The library publishes `view` a task after the frame it drew; `drawing` arrives within that frame.
+        const drawingSubscription = scatterplot.subscribe("drawing", ({ view }) => {
+            if (sameView(lastViewRef.current, view)) {
                 return;
             }
-            const position = scatterplot.getScreenPosition(activePing.pointIndex);
-            if (position !== undefined) {
-                setPing({ ...activePing, position });
-            }
+            lastViewRef.current = Float32Array.from(view);
+            repinOverlays();
         });
 
         function cursorOf(event: MouseEvent): ScreenPosition {
@@ -630,7 +712,7 @@ export function CloudView({
             scatterplot.unsubscribe(pointOverSubscription);
             scatterplot.unsubscribe(pointOutSubscription);
             scatterplot.unsubscribe(deselectSubscription);
-            scatterplot.unsubscribe(viewSubscription);
+            scatterplot.unsubscribe(drawingSubscription);
             cameraViewRef.current = Float32Array.from(scatterplot.get(CAMERA_VIEW_PROPERTY));
             scatterplot.destroy();
             scatterplotRef.current = null;
@@ -678,13 +760,15 @@ export function CloudView({
             }
 
             pointsDrawnRef.current = true;
+            selectedIndexRef.current = highlightedIndex;
             repinLink();
+            repinMarkers();
             pingNewHighlight(scatterplot, highlightedIndex);
         });
         return (): void => {
             canceled = true;
         };
-    }, [points, slotting, repinLink, pingNewHighlight]);
+    }, [points, slotting, repinLink, repinMarkers, pingNewHighlight]);
 
     // A highlight moving from one point to another selects it among the points already drawn, so the
     // cloud's hundred thousand points are drawn again only when they themselves change.
@@ -699,12 +783,15 @@ export function CloudView({
             if (canceled || !pointsDrawnRef.current) {
                 return;
             }
-            pingNewHighlight(scatterplot, selectHighlighted(scatterplot, pointsRef.current, highlighted));
+            const highlightedIndex = selectHighlighted(scatterplot, pointsRef.current, highlighted);
+            selectedIndexRef.current = highlightedIndex;
+            repinMarkers();
+            pingNewHighlight(scatterplot, highlightedIndex);
         });
         return (): void => {
             canceled = true;
         };
-    }, [highlighted, pingNewHighlight]);
+    }, [highlighted, repinMarkers, pingNewHighlight]);
 
     useEffect(() => {
         repinLink();
@@ -716,13 +803,13 @@ export function CloudView({
             return undefined;
         }
         const observer = new ResizeObserver(() => {
-            repinLink();
+            repinOverlays();
         });
         observer.observe(container);
         return (): void => {
             observer.disconnect();
         };
-    }, [repinLink]);
+    }, [repinOverlays]);
 
     // A new theme reaches the live scatterplot through `set`; a new coloring reaches it with its own draw.
     useEffect(() => {
@@ -745,18 +832,27 @@ export function CloudView({
     return (
         <div className="cloud-wrap">
             <div className="cloud-canvas" ref={containerRef} />
+            <CloudMarkers positions={markers} appearance={markerAppearance} />
             {ping !== null && (
                 <span key={ping.key} className="cloud-ping" style={{ left: ping.position[0], top: ping.position[1] }}>
                     <span className="cloud-ping-ring" />
                     <span className="cloud-ping-ring cloud-ping-ring-delayed" />
                 </span>
             )}
-            {band !== null && <MorphBand origin={band.first} cursor={band.second} />}
+            {band !== null && (
+                <MorphBand
+                    origin={band.first}
+                    cursor={band.second}
+                    endsOnPoint={band.endsOnPoint}
+                    appearance={markerAppearance}
+                />
+            )}
             {link !== null && linkScreen !== null && (
                 <MorphLink
                     first={linkScreen.first}
                     second={linkScreen.second}
                     weight={link.weight}
+                    appearance={markerAppearance}
                     onWeightChange={(weight) => {
                         onWeightChangeRef.current(weight);
                     }}
