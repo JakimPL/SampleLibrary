@@ -105,6 +105,12 @@ def _cloud_suggest(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _pipeline(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.pipeline.cli import main
+
+    main(argv, prog=prog)
+
+
 def _morph(argv: list[str], *, prog: str) -> None:
     from samplemorph.cli import main
 
@@ -175,6 +181,11 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
                 run=_cloud_suggest,
             ),
         ),
+    ),
+    Command(
+        name="pipeline",
+        summary="Build the library through its steps, or say what each would do.",
+        run=_pipeline,
     ),
     Command(
         name="morph",

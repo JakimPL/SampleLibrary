@@ -11,7 +11,12 @@ from samplecore.cli_parsing import command_parser
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplecore.exit_status import ExitStatus
 from samplelibrary.commands import COMMANDS, Command, CommandGroup
-from samplelibrary.environment import STEP_LOCK_ENVIRONMENT_VARIABLE
+from samplelibrary.environment import (
+    CONFIG_OPTION,
+    MEMORY_CAP_OPTION,
+    MEMORY_SCOPE_OPTION,
+    STEP_LOCK_ENVIRONMENT_VARIABLE,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy import Connection
@@ -20,9 +25,6 @@ if TYPE_CHECKING:
 
 PROGRAM_NAME: Final[str] = "samplelibrary"
 COMMAND_METAVAR: Final[str] = "<command>"
-CONFIG_OPTION: Final[str] = "--config"
-MEMORY_CAP_OPTION: Final[str] = "--memory-cap"
-MEMORY_SCOPE_OPTION: Final[str] = "--memory-scope"
 GLOBAL_OPTIONS: Final[tuple[str, ...]] = (CONFIG_OPTION, MEMORY_CAP_OPTION, MEMORY_SCOPE_OPTION)
 
 _logger = logging.getLogger(__name__)
@@ -98,7 +100,8 @@ def _run_reporting_an_unreachable_catalog(
 def _entered_memory_scope(ceiling_value: str | None, scope_name: str | None, argv: list[str]) -> MemoryScope | None:
     """Hold this process to the ceiling a command line names, starting it again inside one where that is how it is held.
 
-    A command naming no ceiling loads none of this, so a run by hand keeps needing nothing of it.
+    A command naming no ceiling loads none of this, so a run by hand keeps needing nothing of it, and
+    one naming none in words runs as any process does, reporting nothing about memory afterwards.
 
     Raises:
         SystemExit: the ceiling is written some other way than this project reads, or this system
@@ -116,6 +119,8 @@ def _entered_memory_scope(ceiling_value: str | None, scope_name: str | None, arg
     scope = memory_scope()
     try:
         ceiling = MemoryCeiling.parse(ceiling_value)
+        if not ceiling.enforced:
+            return None
         scope.enter(scope_name if scope_name is not None else f"{PROGRAM_NAME}-{os.getpid()}", ceiling, argv)
     except (MalformedCeiling, MemoryScopeUnavailable) as error:
         _logger.error("Ran nothing: %s.", error)

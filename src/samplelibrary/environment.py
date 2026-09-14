@@ -12,3 +12,8 @@ PACKAGE_NAME: Final[str] = "samplelibrary"
 # A process started again under a memory ceiling carries the name of the scope holding it, so the
 # process that comes back knows it is already inside one.
 MEMORY_SCOPE_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_MEMORY_SCOPE"
+
+# The options this command line reads before a command's name, which a pipeline passes to every step.
+CONFIG_OPTION: Final[str] = "--config"
+MEMORY_CAP_OPTION: Final[str] = "--memory-cap"
+MEMORY_SCOPE_OPTION: Final[str] = "--memory-scope"

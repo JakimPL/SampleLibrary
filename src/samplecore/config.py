@@ -19,6 +19,9 @@ DEFAULT_SAMPLE_EXCLUSIONS: Final[tuple[str, ...]] = ()
 DEFAULT_INFERENCE_URL: Final[str] = "http://127.0.0.1:8010"
 LIBRARY_TABLE: Final[str] = "library"
 INFERENCE_TABLE: Final[str] = "inference"
+# The pipeline reads its own table, since what it holds is named by the steps rather than by the
+# settings every command shares.
+PIPELINE_TABLE: Final[str] = "pipeline"
 INFERENCE_SCHEME: Final[str] = "http"
 CONFIG_RELATIVE_PATH_SETTINGS: Final[tuple[str, ...]] = ("module_source_directory", "library_root")
 CONFIG_RELATIVE_PATH_LIST_SETTINGS: Final[tuple[str, ...]] = ("sample_directories",)
@@ -199,6 +202,9 @@ def create_config_file(path: Path) -> bool:
 def _read_tables(config_path: Path) -> dict[str, object]:
     """The file's top-level tables, each of them one this project reads.
 
+    The pipeline's own table is read by the pipeline rather than here, since the steps it names
+    settle what belongs in it.
+
     Raises:
         ConfigurationError: the file is not valid TOML, or it holds a table this project does not read.
     """
@@ -208,11 +214,11 @@ def _read_tables(config_path: Path) -> dict[str, object]:
     except tomllib.TOMLDecodeError as error:
         raise ConfigurationError(f"{config_path} is not valid TOML: {error}") from error
 
-    unknown_tables = sorted(set(data) - {LIBRARY_TABLE, INFERENCE_TABLE})
+    unknown_tables = sorted(set(data) - {LIBRARY_TABLE, INFERENCE_TABLE, PIPELINE_TABLE})
     if unknown_tables:
         raise ConfigurationError(
             f"{config_path} holds settings this project does not read: {', '.join(unknown_tables)}. "
-            f"Settings belong under [{LIBRARY_TABLE}] and [{INFERENCE_TABLE}]."
+            f"Settings belong under [{LIBRARY_TABLE}], [{INFERENCE_TABLE}] and [{PIPELINE_TABLE}]."
         )
     return data
 

@@ -85,6 +85,12 @@ ROUTE_CASES = (
         "samplelibrary cloud suggest",
     ),
     RouteCase(
+        ["pipeline", "run", "catalog"],
+        "samplelibrary.pipeline.cli.main",
+        ["run", "catalog"],
+        "samplelibrary pipeline",
+    ),
+    RouteCase(
         ["morph", "cache-grids", "--cache", "codec", "--views", "0"],
         "samplemorph.cli.main",
         ["cache-grids", "--cache", "codec", "--views", "0"],
