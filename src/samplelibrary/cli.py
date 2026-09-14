@@ -15,6 +15,7 @@ from samplelibrary.environment import (
     CONFIG_OPTION,
     MEMORY_CAP_OPTION,
     MEMORY_SCOPE_OPTION,
+    PACKAGE_NAME,
     STEP_LOCK_ENVIRONMENT_VARIABLE,
 )
 
@@ -121,7 +122,8 @@ def _entered_memory_scope(ceiling_value: str | None, scope_name: str | None, arg
         ceiling = MemoryCeiling.parse(ceiling_value)
         if not ceiling.enforced:
             return None
-        scope.enter(scope_name if scope_name is not None else f"{PROGRAM_NAME}-{os.getpid()}", ceiling, argv)
+        name = scope_name if scope_name is not None else f"{PROGRAM_NAME}-{os.getpid()}"
+        scope.enter(name, ceiling, [sys.executable, "-m", PACKAGE_NAME, *argv])
     except (MalformedCeiling, MemoryScopeUnavailable) as error:
         _logger.error("Ran nothing: %s.", error)
         sys.exit(ExitStatus.REFUSED)

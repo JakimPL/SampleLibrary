@@ -3,11 +3,10 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Final
 
-from samplelibrary.environment import MEMORY_SCOPE_ENVIRONMENT_VARIABLE, PACKAGE_NAME
+from samplelibrary.environment import MEMORY_SCOPE_ENVIRONMENT_VARIABLE
 from samplelibrary.limits.ceiling import MemoryCeiling
 from samplelibrary.limits.scope import MemoryScopeUnavailable
 
@@ -33,7 +32,7 @@ class SystemdScope:
     the machine into swapping.
     """
 
-    def enter(self, name: str, ceiling: MemoryCeiling, argv: list[str]) -> None:
+    def enter(self, name: str, ceiling: MemoryCeiling, restart: list[str]) -> None:
         """Start this process again inside a scope of this name, and verify the kernel holds it there.
 
         Raises:
@@ -61,10 +60,7 @@ class SystemdScope:
             "-p",
             "MemorySwapMax=0",
             "--",
-            sys.executable,
-            "-m",
-            PACKAGE_NAME,
-            *argv,
+            *restart,
         ]
         os.execvp(command[0], command)
 

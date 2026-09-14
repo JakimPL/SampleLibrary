@@ -12,7 +12,8 @@ class ExitStatus(IntEnum):
     request the command declines as asked -- a missing directory, a refused prune, an experiment it
     cannot resume -- which a person settles before running it again, apart from `FAILED`, where
     something broke while the work ran. `USAGE` is argparse's own status for a malformed command
-    line, and `MEMORY_CAP_REACHED` is a process that outgrew the memory ceiling it ran under.
+    line, `MEMORY_CAP_REACHED` is a process that outgrew the memory ceiling it ran under, and
+    `INTERRUPTED` is the status a shell gives a process a person stopped with Ctrl+C.
     """
 
     COMPLETED = 0
@@ -20,3 +21,4 @@ class ExitStatus(IntEnum):
     USAGE = 2
     REFUSED = 3
     MEMORY_CAP_REACHED = 4
+    INTERRUPTED = 130

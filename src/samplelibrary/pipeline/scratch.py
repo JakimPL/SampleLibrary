@@ -7,33 +7,45 @@ from typing import Final
 
 from samplecore.storage.atomic import write_bytes_atomically
 from samplelibrary.pipeline.artifacts import SIDECAR_SUFFIX, ScratchIntent, remove_path
-from samplelibrary.pipeline.context import PipelineContext
-from samplelibrary.pipeline.events import ScratchCompleted, ScratchStarted, Sinks
+from samplelibrary.pipeline.context import RunSession
+from samplelibrary.pipeline.events import AttemptEnded, AttemptStarted, ScratchCompleted, ScratchStarted, Sinks
 from samplelibrary.pipeline.execution import Attempt, record_attempt, run_step_command
 from samplelibrary.pipeline.layout import PipelineLayout
 
 RESET_STEP: Final[str] = "reset"
+RESET_COMMAND: Final[tuple[str, ...]] = ("reset", "--confirm")
 SEARCHED_DIRECTORIES: Final[tuple[str, ...]] = ("cache", "models", "runs", "pipeline")
 
 _logger = logging.getLogger(__name__)
 
 
-def start_from_scratch(context: PipelineContext, sinks: Sinks) -> Attempt | None:
+def start_from_scratch(session: RunSession, sinks: Sinks) -> Attempt | None:
     """Empty the catalog and everything the pipeline built, so every step has all its work to do.
 
     The intent is recorded before anything goes and removed once everything has, so a run stopped
     partway through finishes the emptying before it builds anything. Hand labels stay, as they do
     through any reset, and so does everything under the library root the pipeline never sealed.
+    Answers the reset's attempt where it ended some other way than completed.
     """
+    layout = session.context.layout
+    _record_intent(layout)
     sinks.emit(ScratchStarted())
-    _record_intent(context.layout)
-    attempt = run_step_command(context, step=RESET_STEP, command=("reset", "--confirm"), follow=False)
-    record_attempt(context.run.attempts, attempt)
+    sinks.emit(
+        AttemptStarted(
+            step=RESET_STEP,
+            argv=RESET_COMMAND,
+            log=str(session.run.log(RESET_STEP)),
+            scope=session.context.scope_name(RESET_STEP),
+        )
+    )
+    attempt = run_step_command(session, step=RESET_STEP, command=RESET_COMMAND, follow=False)
+    record_attempt(session.run.attempts, attempt)
+    sinks.emit(AttemptEnded(step=RESET_STEP, outcome=attempt.outcome, exit_status=attempt.exit_status))
     if not attempt.completed:
         return attempt
 
-    removed = remove_pipeline_outputs(context.layout)
-    context.layout.scratch_intent.unlink(missing_ok=True)
+    removed = remove_pipeline_outputs(layout)
+    layout.scratch_intent.unlink(missing_ok=True)
     sinks.emit(ScratchCompleted(removed=tuple(str(path) for path in removed)))
     return None
 

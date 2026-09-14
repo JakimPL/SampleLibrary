@@ -44,7 +44,9 @@ def test_a_capped_command_starts_again_inside_a_scope_of_its_own_name(monkeypatc
     monkeypatch.delenv(MEMORY_SCOPE_ENVIRONMENT_VARIABLE, raising=False)
     executed = _recorded_execution(monkeypatch)
 
-    SystemdScope().enter(SCOPE_NAME, CEILING, ["--memory-cap", "2G", "extract", "--workers", "2"])
+    SystemdScope().enter(
+        SCOPE_NAME, CEILING, [sys.executable, "-m", "samplelibrary", "--memory-cap", "2G", "extract", "--workers", "2"]
+    )
 
     (command,) = executed
     assert command[:5] == ["systemd-run", "--user", "--scope", "--collect", "--quiet"]

@@ -11,7 +11,7 @@ class BareScope:  # pylint: disable=unused-argument
     ceiling a configuration names is one the run is actually held to.
     """
 
-    def enter(self, name: str, ceiling: MemoryCeiling, argv: list[str]) -> None:
+    def enter(self, name: str, ceiling: MemoryCeiling, restart: list[str]) -> None:
         """Run on without a ceiling, or refuse the ceiling this system cannot hold a process to.
 
         Raises:

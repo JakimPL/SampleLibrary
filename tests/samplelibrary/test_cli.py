@@ -330,8 +330,8 @@ class RecordingScope:
         self._peak = peak_bytes
         self._reached = reached
 
-    def enter(self, name: str, ceiling: object, argv: list[str]) -> None:
-        self.entered.append((name, str(ceiling), argv))
+    def enter(self, name: str, ceiling: object, restart: list[str]) -> None:
+        self.entered.append((name, str(ceiling), restart))
 
     def is_running(self, name: str) -> bool:
         return False
@@ -365,7 +365,16 @@ def test_a_ceiling_holds_the_command_and_is_reported_when_it_ends(
         (
             "samplelibrary-run-thumbnails",
             "16G",
-            ["--memory-cap", "16G", "--memory-scope", "samplelibrary-run-thumbnails", "thumbnails"],
+            [
+                sys.executable,
+                "-m",
+                "samplelibrary",
+                "--memory-cap",
+                "16G",
+                "--memory-scope",
+                "samplelibrary-run-thumbnails",
+                "thumbnails",
+            ],
         )
     ]
     assert recorded.argv == []

@@ -24,7 +24,7 @@ from samplelibrary.environment import (
     STEP_LOCK_ENVIRONMENT_VARIABLE,
 )
 from samplelibrary.limits.scope import MemoryScope
-from samplelibrary.pipeline.context import PipelineContext
+from samplelibrary.pipeline.context import RunSession
 from samplelibrary.pipeline.results import AttemptOutcome
 
 INTERRUPT_STATUSES: Final[frozenset[int]] = frozenset({130, -signal.SIGINT, -signal.SIGTERM, 143, -1073741510})
@@ -75,17 +75,20 @@ class AttemptRecord(BaseModel):
 
 
 class InterruptWatch:
-    """Counts the interrupts a person sends while a child runs, and stops that child on the second.
+    """Passes the interrupts a person sends on to the step's process while it runs, harder each time.
 
-    The first interrupt lets the child end as it chooses, which is how a pass keeps the work it has
-    committed; the second kills everything under the step's memory scope, and further ones do the
-    same. The handlers stay installed only while a child runs, so a run outside this behaves as any
-    program does.
+    The step runs in a session of its own, so an interrupt reaches it once, through this watch,
+    however the interrupt arrived. The first lets the step end as it chooses, which is how a pass
+    keeps the work it has committed; the second terminates everything the step started, and any
+    later one kills it. The handlers stay installed only while a step runs, so a run outside this
+    behaves as any program does.
     """
 
     def __init__(self, scope: MemoryScope, scope_name: str) -> None:
         self._scope = scope
         self._scope_name = scope_name
+        self._process: subprocess.Popen[bytes] | None = None
+        self._first: int | None = None
         self.count = 0
         self._previous: dict[int, object] = {}
 
@@ -100,6 +103,12 @@ class InterruptWatch:
             signal.signal(number, handler)  # type: ignore[arg-type]
         self._previous.clear()
 
+    def watch(self, process: subprocess.Popen[bytes]) -> None:
+        """Name the step's process, which every later interrupt is passed on to."""
+        self._process = process
+        if self.count > 0:
+            self._forward(self.count)
+
     def _watched(self) -> tuple[int, ...]:
         if sys.platform == "win32":
             return (signal.SIGINT,)
@@ -107,12 +116,29 @@ class InterruptWatch:
 
     def _received(self, number: int, frame: FrameType | None) -> None:  # pylint: disable=unused-argument
         self.count += 1
-        _logger.warning("Interrupted; %s.", "stopping the step" if self.count > 1 else "waiting for the step to end")
-        if self.count > 1:
-            self._scope.terminate(self._scope_name)
+        self._first = self._first if self._first is not None else number
+        _logger.warning(
+            "Interrupted; %s.",
+            "waiting for the step to end" if self.count == 1 else "stopping the step",
+        )
+        if self._process is not None:
+            self._forward(self.count)
+
+    def _forward(self, count: int) -> None:
+        """Pass the interrupt on: as it arrived first, then as a termination, then as a kill.
+
+        A termination or a hangup reaches the step as a termination, and an interrupt as an interrupt.
+        """
+        if self._process is None or sys.platform == "win32" or self._process.poll() is not None:
+            return
+        if count == 1:
+            os.killpg(self._process.pid, signal.SIGINT if self._first == signal.SIGINT else signal.SIGTERM)
+            return
+        self._scope.terminate(self._scope_name)
+        os.killpg(self._process.pid, signal.SIGTERM if count == 2 else signal.SIGKILL)
 
 
-def run_step_command(context: PipelineContext, *, step: str, command: tuple[str, ...], follow: bool) -> Attempt:
+def run_step_command(session: RunSession, *, step: str, command: tuple[str, ...], follow: bool) -> Attempt:
     """Run one step's command as a process of its own, under its memory ceiling and its own lock.
 
     The child writes straight into the step's log, so nothing of a long pass waits on a pipe, and a
@@ -120,14 +146,14 @@ def run_step_command(context: PipelineContext, *, step: str, command: tuple[str,
     snapshotted and the lock its step is held under, and nothing this process was started with that
     would point it at another library.
     """
-    ceiling = context.settings.ceiling_for(step)
-    scope_name = context.scope_name(step)
-    log = context.run.log(step)
+    ceiling = session.context.settings.ceiling_for(step)
+    scope_name = session.context.scope_name(step)
+    log = session.run.log(step)
     argv = tuple(
         [
-            *context.resolver.program(command),
+            *session.resolver.program(step, command),
             CONFIG_OPTION,
-            str(context.run.config_snapshot),
+            str(session.run.config_snapshot),
             MEMORY_CAP_OPTION,
             str(ceiling),
             MEMORY_SCOPE_OPTION,
@@ -137,7 +163,7 @@ def run_step_command(context: PipelineContext, *, step: str, command: tuple[str,
     )
     log.parent.mkdir(parents=True, exist_ok=True)
     started_at = datetime.now(UTC)
-    with log.open("ab") as stream, InterruptWatch(context.scope, scope_name) as interrupts:
+    with log.open("ab") as stream, InterruptWatch(session.scope, scope_name) as interrupts:
         process = subprocess.Popen(  # pylint: disable=consider-using-with
             argv,
             stdout=stream,
@@ -145,6 +171,7 @@ def run_step_command(context: PipelineContext, *, step: str, command: tuple[str,
             env=_child_environment(step_lock=scope_name),
             start_new_session=sys.platform != "win32",
         )
+        interrupts.watch(process)
         if follow:
             _logger.info("Following %s.", log)
         status = process.wait()

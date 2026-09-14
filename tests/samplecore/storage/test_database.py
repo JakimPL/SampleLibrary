@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -24,6 +25,7 @@ from samplecore.storage.database import (
     named_lock_key,
 )
 
+LOCK_RELEASE_DEADLINE_SECONDS = 10.0
 EXPECTED_TABLES = frozenset(
     {
         "sample",
@@ -229,5 +231,9 @@ def test_a_named_lock_is_free_again_once_the_connection_holding_it_closes(
 
     assert not claim_named_lock(connection, "samplelibrary-held-step")
     holder.close()
-    assert claim_named_lock(connection, "samplelibrary-held-step")
+    # The server lets go of a closed session's locks as its backend exits, a moment after the close.
+    deadline = time.monotonic() + LOCK_RELEASE_DEADLINE_SECONDS
+    while not claim_named_lock(connection, "samplelibrary-held-step"):
+        assert time.monotonic() < deadline, "the lock stayed held after its connection closed"
+        time.sleep(0.05)
     connection.execute(select(func.pg_advisory_unlock(named_lock_key("samplelibrary-held-step"))))

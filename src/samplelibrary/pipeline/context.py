@@ -18,19 +18,17 @@ SCOPE_PREFIX = "samplelibrary"
 
 @dataclass(frozen=True)
 class PipelineContext:
-    """Everything a step reads about the library it acts on and the run acting on it.
+    """Everything a step reads about the library it acts on.
 
-    One connection serves the whole run's reading, so every step's inputs describe the catalog as it
-    stands the moment that step is decided.
+    One connection serves all the reading, so every step's inputs describe the catalog as it stands
+    the moment that step is decided. `status` reads through this alone, so asking what a run would do
+    leaves nothing behind.
     """
 
     config: LibraryConfig
     settings: PipelineSettings
     connection: Connection
     layout: PipelineLayout
-    run: RunPaths
-    resolver: ProgramResolver
-    scope: MemoryScope
 
     @property
     def library_identity(self) -> str:
@@ -44,3 +42,13 @@ class PipelineContext:
     def artifact(self, *parts: str) -> Path:
         """A path under the library root, which is where every artifact a step builds lives."""
         return self.config.library_root.joinpath(*parts)
+
+
+@dataclass(frozen=True)
+class RunSession:
+    """One run acting on a library: the library it reads, where it records itself, and how it starts each step."""
+
+    context: PipelineContext
+    run: RunPaths
+    resolver: ProgramResolver
+    scope: MemoryScope

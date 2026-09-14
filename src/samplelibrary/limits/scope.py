@@ -17,8 +17,10 @@ class MemoryScope(Protocol):
     under something that enforces it, ``enter`` never returns.
     """
 
-    def enter(self, name: str, ceiling: MemoryCeiling, argv: list[str]) -> None:
+    def enter(self, name: str, ceiling: MemoryCeiling, restart: list[str]) -> None:
         """Put this process under ``ceiling``, or start it again as a process that is.
+
+        ``restart`` is the whole command line that starts this process again, its program included.
 
         Raises:
             MemoryScopeUnavailable: the ceiling cannot be enforced here.

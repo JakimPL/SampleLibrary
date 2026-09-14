@@ -68,7 +68,7 @@ class JobObjectScope:  # pylint: disable=invalid-name,attribute-defined-outside-
         self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
         self._held: list[int] = []
 
-    def enter(self, name: str, ceiling: MemoryCeiling, argv: list[str]) -> None:
+    def enter(self, name: str, ceiling: MemoryCeiling, restart: list[str]) -> None:
         """Assign this process to a job of this name holding the ceiling.
 
         Raises:

@@ -7,6 +7,7 @@ from samplelibrary.pipeline.artifacts import read_step_record
 from samplelibrary.pipeline.context import PipelineContext
 from samplelibrary.pipeline.execution import read_attempts
 from samplelibrary.pipeline.graph import StepGraph
+from samplelibrary.pipeline.layout import ATTEMPTS_FILE_NAME, PipelineLayout
 from samplelibrary.pipeline.results import StepAction, changed_components
 from samplelibrary.pipeline.steps.kinds import Step
 
@@ -61,11 +62,11 @@ def report_status(statuses: tuple[StepStatus, ...]) -> None:
         _logger.info("%-22s %s", status.step, status.described())
 
 
-def report_last_attempts(context: PipelineContext) -> None:
+def report_last_attempts(layout: PipelineLayout) -> None:
     """Name how each step ended the last time a run of this library tried it."""
     latest = {}
-    for run in sorted(context.layout.runs.glob("*")):
-        for attempt in read_attempts(run / context.run.attempts.name):
+    for run in sorted(layout.runs.glob("*")):
+        for attempt in read_attempts(run / ATTEMPTS_FILE_NAME):
             latest[attempt.step] = attempt
     for step, attempt in sorted(latest.items()):
         _logger.info("%-22s last %s (%s)", step, attempt.outcome.value, attempt.log)
