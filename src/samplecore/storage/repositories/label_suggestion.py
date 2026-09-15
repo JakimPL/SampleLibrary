@@ -31,6 +31,8 @@ class SampleLabelSuggestionRepository(Protocol):
         self, experiment_id: int, sample_hashes: list[str]
     ) -> dict[str, tuple[SampleLabelSuggestion, ...]]: ...
 
+    def first_pick_labels(self, experiment_id: int, sample_hashes: list[str]) -> dict[str, str]: ...
+
     def first_picks_for_experiment(self, experiment_id: int) -> tuple[SampleFirstPick, ...]: ...
 
     def first_pick_counts(self, experiment_id: int) -> dict[str, int]: ...
@@ -96,6 +98,27 @@ class PostgresSampleLabelSuggestionRepository:
                 by_hash[row.sample_hash].append(_row_to_suggestion(row))
 
         return {sample_hash: tuple(suggestions) for sample_hash, suggestions in by_hash.items()}
+
+    def first_pick_labels(self, experiment_id: int, sample_hashes: list[str]) -> dict[str, str]:
+        """One scoring's closest suggested label for the given samples, leaving out those it reached none of.
+
+        The label alone, which is what names a sample wherever it is listed; a reader wanting the
+        score behind it asks for the sample's whole ranking. Chunked by ``HASH_CHUNK_SIZE`` like
+        every other by-hash lookup, so a whole page of hashes stays within Postgres's parameter
+        ceiling.
+        """
+        labels: dict[str, str] = {}
+        for chunk in chunks(sample_hashes, HASH_CHUNK_SIZE):
+            statement = (
+                select(sample_label_suggestion.c.sample_hash, sample_label_suggestion.c.label)
+                .where(sample_label_suggestion.c.experiment_id == experiment_id)
+                .where(sample_label_suggestion.c.rank == 0)
+                .where(sample_label_suggestion.c.sample_hash.in_(chunk))
+            )
+            for row in self._connection.execute(statement):
+                labels[row.sample_hash] = str(row.label)
+
+        return labels
 
     def first_picks_for_experiment(self, experiment_id: int) -> tuple[SampleFirstPick, ...]:
         """One scoring's closest suggestion per sample: the three columns a whole-catalog view paints by."""

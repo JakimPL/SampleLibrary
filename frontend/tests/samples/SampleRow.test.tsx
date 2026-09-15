@@ -29,6 +29,7 @@ function buildSample(overrides: Partial<SampleSummary> = {}): SampleSummary {
         hash: "abc123",
         display_name: "kick",
         category: "kick",
+        suggested_label: null,
         hand_label: null,
         rating: null,
         favorite: false,

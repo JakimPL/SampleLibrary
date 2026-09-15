@@ -53,6 +53,7 @@ from sampleserver.dependencies import (
     get_connection,
     get_connection_opener,
     get_library_root,
+    get_shown_experiment_id,
     get_spectral_vectors,
 )
 from sampleserver.equivalence import equivalence_class_members
@@ -110,16 +111,18 @@ class SampleDistance(BaseModel):
 
 
 class SamplePreview(BaseModel):
-    """What a glance at a sample shows: its name, category and hand label, and the stored thumbnail of its waveform.
+    """What a glance at a sample shows: its name, what it is taken to be, and the stored thumbnail of its waveform.
 
-    ``thumbnail`` is ``None`` for a sample the thumbnail pass has not reached, since a preview
-    with nothing to draw is still a preview with a name.
+    ``suggested_label`` is the closest label the scoring on show heard the sample as, beside the
+    ``hand_label`` a person wrote. ``thumbnail`` is ``None`` for a sample the thumbnail pass has not
+    reached, since a preview with nothing to draw is still a preview with a name.
     """
 
     model_config = FROZEN
 
     display_name: str
     category: SampleCategory
+    suggested_label: str | None
     hand_label: str | None
     thumbnail: tuple[WaveformPeak, ...] | None
 
@@ -150,8 +153,9 @@ class SampleDetail(DescribedSample):
 
     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
-    ``suggested_labels`` are what the scoring on show of the listening model hears the sample as,
-    closest first, for a person to accept into the hand label or pass over.
+    ``suggestions`` are what the scoring on show of the listening model hears the sample as, closest
+    first, for a person to accept into the hand label or pass over; ``suggested_label`` is the first
+    of them.
     """
 
     occurrences: tuple[SampleOccurrenceDetail, ...]
@@ -159,7 +163,7 @@ class SampleDetail(DescribedSample):
     duration_seconds: float
     playback_rates: tuple[SamplePlaybackRate, ...]
     equivalence_member_count: Count
-    suggested_labels: tuple[SuggestedLabel, ...]
+    suggestions: tuple[SuggestedLabel, ...]
 
 
 def get_selection(
@@ -177,12 +181,16 @@ def get_selection(
 
 
 @router.get("")
+# FastAPI reads a route's query parameters and dependencies off its signature, which is what makes
+# this one long; each entry is one of the two, with nothing to group them under.
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def list_samples(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)] = DEFAULT_PAGE_LIMIT,
     offset: Annotated[int, Query(ge=0, le=MAX_PAGE_OFFSET)] = 0,
     group_by_equivalence: bool = False,
     selection: SampleSelection = Depends(get_selection),
     connection: Connection = Depends(get_connection),
+    shown_experiment_id: int | None = Depends(get_shown_experiment_id),
 ) -> Page[SampleSummary]:
     """A page of the catalog's samples, narrowed and ordered by what a person has decided.
 
@@ -195,7 +203,13 @@ def list_samples(
     class_by_hash = classes_by_member_hash(compute_equivalence_classes(relations))
 
     repository = PostgresSampleRepository(connection)
-    items = repository.list_page(limit=limit, offset=offset, class_by_hash=class_by_hash, selection=selection)
+    items = repository.list_page(
+        limit=limit,
+        offset=offset,
+        class_by_hash=class_by_hash,
+        selection=selection,
+        shown_experiment_id=shown_experiment_id,
+    )
     total = repository.count(selection=selection)
     if group_by_equivalence:
         items = _collapse_by_equivalence(items)
@@ -236,7 +250,11 @@ def _collapse_by_equivalence(items: tuple[SampleSummary, ...]) -> tuple[SampleSu
 
 
 @router.get("/{sample_hash}", responses=NOT_FOUND_RESPONSE)
-def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get_connection)) -> SampleDetail:
+def get_sample(
+    sample_hash: SampleHashPath,
+    connection: Connection = Depends(get_connection),
+    shown_experiment_id: int | None = Depends(get_shown_experiment_id),
+) -> SampleDetail:
     """One sample's own fields plus every module occurrence and sample file holding it.
 
     ``equivalence_member_count`` travels with the sample so a caller labeling it knows how many
@@ -261,6 +279,7 @@ def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get
     tally = tally_playback_rates(PostgresNoteEventRepository(connection).note_usage_for_sample(sample_hash))
     names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash([sample_hash])
     names = names_by_hash.get(sample_hash, NO_SAMPLE_NAMES)
+    suggestions = _suggestions(connection, sample_hash, shown_experiment_id=shown_experiment_id)
     return SampleDetail(
         hash=sample.hash,
         depth=sample.depth,
@@ -274,6 +293,7 @@ def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get
         size_bytes=sample.stored_bytes,
         display_name=names.display_name,
         category=classify_sample_names(names),
+        suggested_label=suggestions[0].label if suggestions else None,
         hand_label=annotation.label if annotation is not None else None,
         rating=annotation.rating if annotation is not None else None,
         favorite=annotation.favorite if annotation is not None else False,
@@ -281,19 +301,20 @@ def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
         playback_rates=playback_rates_of(tally),
         equivalence_member_count=len(equivalence_class_members(connection, sample_hash)),
-        suggested_labels=_suggested_labels(connection, sample_hash),
+        suggestions=suggestions,
     )
 
 
-def _suggested_labels(connection: Connection, sample_hash: str) -> tuple[SuggestedLabel, ...]:
+def _suggestions(
+    connection: Connection, sample_hash: str, *, shown_experiment_id: int | None
+) -> tuple[SuggestedLabel, ...]:
     """The shown scoring's suggestions for one sample, closest first; none for a sample it did not reach."""
-    repository = PostgresSampleLabelSuggestionRepository(connection)
-    shown = repository.shown_experiment_id()
-    if shown is None:
+    if shown_experiment_id is None:
         return ()
+    repository = PostgresSampleLabelSuggestionRepository(connection)
     return tuple(
         SuggestedLabel(label=suggestion.label, score=suggestion.score)
-        for suggestion in repository.get_many(shown, [sample_hash]).get(sample_hash, ())
+        for suggestion in repository.get_many(shown_experiment_id, [sample_hash]).get(sample_hash, ())
     )
 
 
@@ -340,10 +361,14 @@ def get_sample_audio(
 
 
 @router.get("/{sample_hash}/preview", responses=NOT_FOUND_RESPONSE)
-def get_sample_preview(sample_hash: SampleHashPath, connection: Connection = Depends(get_connection)) -> SamplePreview:
+def get_sample_preview(
+    sample_hash: SampleHashPath,
+    connection: Connection = Depends(get_connection),
+    shown_experiment_id: int | None = Depends(get_shown_experiment_id),
+) -> SamplePreview:
     """A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
 
-    Four narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
+    Five narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
     point a cursor crosses, so it costs what a glance is worth.
 
     Raises:
@@ -352,14 +377,21 @@ def get_sample_preview(sample_hash: SampleHashPath, connection: Connection = Dep
     if PostgresSampleRepository(connection).get(sample_hash) is None:
         raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
-    return _previews_by_hash(connection, [sample_hash])[sample_hash]
+    return _previews_by_hash(connection, [sample_hash], shown_experiment_id=shown_experiment_id)[sample_hash]
 
 
-def _previews_by_hash(connection: Connection, sample_hashes: list[str]) -> dict[str, SamplePreview]:
-    """A glance at each given sample, from four lookups over the whole list at once."""
+def _previews_by_hash(
+    connection: Connection, sample_hashes: list[str], *, shown_experiment_id: int | None
+) -> dict[str, SamplePreview]:
+    """A glance at each given sample, from five lookups over the whole list at once."""
     names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash(sample_hashes)
     annotations_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(sample_hashes)
     thumbnails_by_hash = PostgresSampleThumbnailRepository(connection).get_many(sample_hashes)
+    suggested_label_by_hash = (
+        {}
+        if shown_experiment_id is None
+        else PostgresSampleLabelSuggestionRepository(connection).first_pick_labels(shown_experiment_id, sample_hashes)
+    )
     previews: dict[str, SamplePreview] = {}
     for sample_hash in sample_hashes:
         names = names_by_hash.get(sample_hash, NO_SAMPLE_NAMES)
@@ -367,6 +399,7 @@ def _previews_by_hash(connection: Connection, sample_hashes: list[str]) -> dict[
         previews[sample_hash] = SamplePreview(
             display_name=names.display_name,
             category=classify_sample_names(names),
+            suggested_label=suggested_label_by_hash.get(sample_hash),
             hand_label=annotation.label if annotation is not None else None,
             thumbnail=peaks_from_thumbnail(thumbnails_by_hash.get(sample_hash)),
         )
@@ -417,6 +450,7 @@ def get_similar_samples(
     limit: Annotated[int, Query(ge=1, le=MAX_SIMILAR_SAMPLES_LIMIT)] = DEFAULT_SIMILAR_SAMPLES_LIMIT,
     connection: Connection = Depends(get_connection),
     vectors: SpectralVectors = Depends(get_spectral_vectors),
+    shown_experiment_id: int | None = Depends(get_shown_experiment_id),
 ) -> tuple[SimilarSample, ...]:
     """The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
 
@@ -433,7 +467,7 @@ def get_similar_samples(
 
     neighbors = nearest_neighbors(sample_hash, vectors, limit=limit)
     neighbor_hashes = [neighbor_hash for neighbor_hash, _ in neighbors]
-    previews_by_hash = _previews_by_hash(connection, neighbor_hashes)
+    previews_by_hash = _previews_by_hash(connection, neighbor_hashes, shown_experiment_id=shown_experiment_id)
     playback_rate_by_hash = resolved_playback_rates(connection, neighbor_hashes)
     return tuple(
         _similar_sample(
@@ -462,6 +496,7 @@ def _similar_sample(
     return SimilarSample(
         display_name=preview.display_name,
         category=preview.category,
+        suggested_label=preview.suggested_label,
         hand_label=preview.hand_label,
         thumbnail=preview.thumbnail,
         hash=sample_hash,

@@ -42,6 +42,8 @@ class DescribedSample(Sample):
     and each sample file's name -- via `samplecore.naming.choose_dominant_name`, and ``category``
     resolves via `samplecore.categorization.classify_sample_names`, against those names together
     with the names of the instruments reaching the sample and the folders its files sit in.
+    ``suggested_label`` is the closest label the scoring on show heard the sample as, and is ``None``
+    where no scoring is shown or the scoring reached other samples than this one.
     ``hand_label`` is the category a person chose; where it is filled in it is what the sample is,
     and ``category`` beside it stays the keyword table's own guess. ``rating`` and ``favorite``
     carry what that person thought of the sample, which is what makes a collection of their own.
@@ -55,6 +57,7 @@ class DescribedSample(Sample):
 
     display_name: str
     category: SampleCategory
+    suggested_label: str | None
     hand_label: str | None
     rating: Rating | None
     favorite: bool

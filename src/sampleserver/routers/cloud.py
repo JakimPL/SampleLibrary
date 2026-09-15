@@ -33,7 +33,13 @@ from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
-from sampleserver.dependencies import get_cloud_cache, get_connection, get_suggestions_cache
+from sampleserver.dependencies import (
+    get_cloud_cache,
+    get_connection,
+    get_shown_experiment_id,
+    get_suggestion_tags_cache,
+    get_suggestions_cache,
+)
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers.curation import TagSummary
 
@@ -171,6 +177,7 @@ class CloudSuggestion(BaseModel):
 
 
 CLOUD_SUGGESTIONS: Final = TypeAdapter(tuple[CloudSuggestion, ...])
+CLOUD_SUGGESTION_TAGS: Final = TypeAdapter(tuple[TagSummary, ...])
 
 
 @router.get("/suggestions", response_model=tuple[CloudSuggestion, ...])
@@ -214,8 +221,13 @@ def _cached_json(
     return Response(content=body, media_type=JSON_MEDIA_TYPE, headers=headers)
 
 
-@router.get("/suggestion-tags")
-def get_cloud_suggestion_tags(connection: Connection = Depends(get_connection)) -> tuple[TagSummary, ...]:
+@router.get("/suggestion-tags", response_model=tuple[TagSummary, ...])
+def get_cloud_suggestion_tags(
+    request: Request,
+    connection: Connection = Depends(get_connection),
+    cache: RevisionedJsonCache = Depends(get_suggestion_tags_cache),
+    shown_experiment_id: int | None = Depends(get_shown_experiment_id),
+) -> Response:
     """Every tag the scoring on show suggests first for some sample, with how many and a lasting rank.
 
     A specification counts toward its category the way a written label's does, so the legend can
@@ -223,17 +235,30 @@ def get_cloud_suggestion_tags(connection: Connection = Depends(get_connection)) 
     the vocabulary the scoring ranked, recorded with the scoring, a category taking the place of
     its first entry, so a tag keeps its color across the scorings that share a vocabulary; a tag
     the vocabulary leaves unnamed ranks after the vocabulary, by name.
+
+    The counts come from a group-by over every first pick in the catalog, and every badge naming a
+    sample reads these ranks, so the answer is held like the suggestions beside it: a scoring's
+    picks never change once written, which makes the id of the scoring on show the whole revision.
     """
-    repository = PostgresSampleLabelSuggestionRepository(connection)
-    shown = repository.shown_experiment_id()
-    if shown is None:
+    return _cached_json(
+        request,
+        cache,
+        shown_experiment_id,
+        lambda: CLOUD_SUGGESTION_TAGS.dump_json(_tags(connection, shown_experiment_id)),
+    )
+
+
+def _tags(connection: Connection, experiment_id: int | None) -> tuple[TagSummary, ...]:
+    """The tags one scoring suggests first, each counting toward its category, in vocabulary order."""
+    if experiment_id is None:
         return ()
 
+    repository = PostgresSampleLabelSuggestionRepository(connection)
     first_picks: Counter[LabelPath] = Counter()
-    for label, sample_count in repository.first_pick_counts(shown).items():
+    for label, sample_count in repository.first_pick_counts(experiment_id).items():
         for prefix in _prefixes(_path_of(label)):
             first_picks[prefix] += sample_count
-    ranks = _vocabulary_ranks(connection, shown, first_picks)
+    ranks = _vocabulary_ranks(connection, experiment_id, first_picks)
     return tuple(
         TagSummary(path=path, sample_count=count, rank=ranks[path])
         for path, count in sorted(first_picks.items(), key=lambda item: ranks[item[0]])

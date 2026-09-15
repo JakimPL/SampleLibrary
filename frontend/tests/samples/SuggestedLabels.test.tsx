@@ -33,6 +33,7 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         size_bytes: 8192,
         display_name: "smp01",
         category: "uncategorized",
+        suggested_label: null,
         hand_label: null,
         rating: null,
         favorite: false,
@@ -40,7 +41,7 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         duration_seconds: 0.1,
         playback_rates: [],
         equivalence_member_count: 1,
-        suggested_labels: SUGGESTED,
+        suggestions: SUGGESTED,
         ...overrides,
     };
 }
@@ -103,7 +104,7 @@ describe("SuggestedLabels", () => {
     });
 
     it("says so when no scoring has reached the sample", () => {
-        render(<SuggestedLabels sample={buildSample({ suggested_labels: [] })} scope="sample" />);
+        render(<SuggestedLabels sample={buildSample({ suggestions: [] })} scope="sample" />);
 
         expect(screen.getByText(NO_SUGGESTIONS)).toBeInTheDocument();
     });

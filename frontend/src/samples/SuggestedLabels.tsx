@@ -29,14 +29,14 @@ export function SuggestedLabels({ sample, scope }: SuggestedLabelsProps): ReactE
     const { change, message } = useAnnotationWriter(sample.hash, scope);
     const label = current?.label ?? null;
 
-    if (sample.suggested_labels.length === 0) {
+    if (sample.suggestions.length === 0) {
         return <p className="placeholder-box">{NO_SUGGESTIONS}</p>;
     }
 
     return (
         <div className="suggested-labels">
             <div className="suggested-labels-row" role="group" aria-label="Suggested labels">
-                {sample.suggested_labels.map((suggestion) => {
+                {sample.suggestions.map((suggestion) => {
                     const taken = holdsTag(label, suggestion.label);
                     return (
                         <button

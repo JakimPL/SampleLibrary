@@ -10,6 +10,7 @@ from sqlalchemy import Connection
 
 from samplecore.spectral_distance import SpectralVectors
 from samplecore.storage.database import checkout_read_only
+from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.spectral_cache import SpectralVectorCache
 
@@ -76,6 +77,15 @@ def get_spectral_vectors(request: Request, connection: Connection = Depends(get_
     return cache.vectors(connection)
 
 
+def get_shown_experiment_id(connection: Connection = Depends(get_connection)) -> int | None:
+    """The scoring on show, read once for a request rather than once per sample it answers with.
+
+    FastAPI resolves a dependency once per request and hands every route the same value, so a page
+    of a hundred rows and the tags beside it cost one read of the promotion row.
+    """
+    return PostgresSampleLabelSuggestionRepository(connection).shown_experiment_id()
+
+
 def get_cloud_cache(request: Request) -> RevisionedJsonCache:
     """The finished answer to the cloud's points, kept per application across requests."""
     cache: RevisionedJsonCache = request.app.state.cloud_cache
@@ -85,4 +95,10 @@ def get_cloud_cache(request: Request) -> RevisionedJsonCache:
 def get_suggestions_cache(request: Request) -> RevisionedJsonCache:
     """The finished answer to the cloud's suggestions, kept per application across requests."""
     cache: RevisionedJsonCache = request.app.state.suggestions_cache
+    return cache
+
+
+def get_suggestion_tags_cache(request: Request) -> RevisionedJsonCache:
+    """The finished answer to the suggested tags, kept per application across requests."""
+    cache: RevisionedJsonCache = request.app.state.suggestion_tags_cache
     return cache

@@ -29,6 +29,7 @@ from samplecore.storage.database import (
     sample_file,
     sample_properties,
 )
+from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
@@ -52,7 +53,13 @@ class SampleRepository(Protocol):
     ) -> tuple[Sample, ...]: ...
 
     def list_page(
-        self, *, limit: int, offset: int, class_by_hash: dict[str, EquivalenceClass], selection: SampleSelection
+        self,
+        *,
+        limit: int,
+        offset: int,
+        class_by_hash: dict[str, EquivalenceClass],
+        selection: SampleSelection,
+        shown_experiment_id: int | None,
     ) -> tuple[SampleSummary, ...]: ...
 
     def count(self, *, selection: SampleSelection) -> int: ...
@@ -121,8 +128,17 @@ class PostgresSampleRepository:
         rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_sample(row) for row in rows)
 
+    # The page is assembled from one row query and the by-hash lookups that fill it out, each an
+    # independent source with nothing to group them under.
+    # pylint: disable-next=too-many-locals
     def list_page(
-        self, *, limit: int, offset: int, class_by_hash: dict[str, EquivalenceClass], selection: SampleSelection
+        self,
+        *,
+        limit: int,
+        offset: int,
+        class_by_hash: dict[str, EquivalenceClass],
+        selection: SampleSelection,
+        shown_experiment_id: int | None,
     ) -> tuple[SampleSummary, ...]:
         """A page of samples, one row per exact content hash, in the order ``selection`` asks for.
 
@@ -134,6 +150,9 @@ class PostgresSampleRepository:
         ``selection`` narrows and orders the page through the annotation a person made, joined
         here rather than filtered afterwards: a favorite is rare and scattered, so a page walked
         over the whole catalog would hold almost none of them.
+
+        ``shown_experiment_id`` names the scoring whose first picks fill each row's suggested label,
+        resolved once by the caller; with no scoring on show every row carries none.
         """
         # func.count()/func.coalesce() are SQLAlchemy's dynamically-generated SQL functions, invisible
         # to pylint's static analysis -- both false positives below are this same proxy limitation.
@@ -164,6 +183,13 @@ class PostgresSampleRepository:
         playback_rate_by_hash = PostgresSamplePlaybackRateRepository(self._connection).get_many(hashes)
         thumbnails_by_hash = PostgresSampleThumbnailRepository(self._connection).get_many(hashes)
         annotation_by_hash = PostgresSampleAnnotationRepository(self._connection).annotations_by_hash(hashes)
+        suggested_label_by_hash = (
+            {}
+            if shown_experiment_id is None
+            else PostgresSampleLabelSuggestionRepository(self._connection).first_pick_labels(
+                shown_experiment_id, hashes
+            )
+        )
         return tuple(
             _row_to_sample_summary(
                 row,
@@ -173,6 +199,7 @@ class PostgresSampleRepository:
                 thumbnail=thumbnails_by_hash.get(row.hash),
                 equivalence_class=class_by_hash.get(row.hash),
                 annotation=annotation_by_hash.get(row.hash),
+                suggested_label=suggested_label_by_hash.get(row.hash),
             )
             for row in rows
         )
@@ -358,14 +385,15 @@ def _row_to_sample_summary(
     thumbnail: SampleThumbnail | None,
     equivalence_class: EquivalenceClass | None,
     annotation: SampleAnnotation | None,
+    suggested_label: str | None,
 ) -> SampleSummary:
     """Reconstruct a SampleSummary from a Core row plus its names and rates, thumbnail, and class.
 
     The display name is drawn from the names the waveform itself is stored under, keeping it the
     label a tracker or a file shows, while the category reads the instrument and folder names too,
     since a voice is often described where the waveform it reaches is only numbered. Both stay filled
-    in beside what a person decided, so a reader sees their own wording next to what the keyword
-    table guessed.
+    in beside what a person decided and what a listening model heard, so a reader meets every
+    reading of the sample at once.
     """
     sample_ = _row_to_sample(row)
     return SampleSummary(
@@ -376,6 +404,7 @@ def _row_to_sample_summary(
         occurrence_count=row.occurrence_count,
         display_name=names.display_name,
         category=classify_sample_names(names),
+        suggested_label=suggested_label,
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),
         playback_rate_hz=choose_playback_rate(note_event_rate=recorded_playback_rate, occurrence_rates=rates),

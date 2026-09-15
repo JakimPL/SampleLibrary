@@ -141,7 +141,7 @@ export interface paths {
          * Get Sample Preview
          * @description A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
          *
-         *     Four narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
+         *     Five narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
          *     point a cursor crosses, so it costs what a glance is worth.
          *
          *     Raises:
@@ -310,11 +310,11 @@ export interface paths {
         };
         /**
          * Get Cloud Suggestions
-         * @description Every sample's first suggested tag from the newest scoring, for coloring the cloud by what a model hears.
+         * @description Every sample's first suggested tag from the scoring on show, for coloring the cloud by what a model hears.
          *
-         *     These travel apart from the points the way the hand labels do: a scoring changes only when a
-         *     pass writes a new one, so the newest scoring's id is the whole revision, and a viewer joins
-         *     them to the points by hash. An empty answer says no scoring has been written.
+         *     These travel apart from the points the way the hand labels do: a scoring's suggestions never
+         *     change once written, so the id of the scoring on show is the whole revision, and a viewer joins
+         *     them to the points by hash. An empty answer says no scoring is shown.
          */
         readonly get: operations["get_cloud_suggestions_api_cloud_suggestions_get"];
         readonly put?: never;
@@ -334,13 +334,17 @@ export interface paths {
         };
         /**
          * Get Cloud Suggestion Tags
-         * @description Every tag the newest scoring suggests first for some sample, with how many and a lasting rank.
+         * @description Every tag the scoring on show suggests first for some sample, with how many and a lasting rank.
          *
          *     A specification counts toward its category the way a written label's does, so the legend can
          *     paint by category while the suggestions name what is under it. The rank is the tag's place in
          *     the vocabulary the scoring ranked, recorded with the scoring, a category taking the place of
          *     its first entry, so a tag keeps its color across the scorings that share a vocabulary; a tag
          *     the vocabulary leaves unnamed ranks after the vocabulary, by name.
+         *
+         *     The counts come from a group-by over every first pick in the catalog, and every badge naming a
+         *     sample reads these ranks, so the answer is held like the suggestions beside it: a scoring's
+         *     picks never change once written, which makes the id of the scoring on show the whole revision.
          */
         readonly get: operations["get_cloud_suggestion_tags_api_cloud_suggestion_tags_get"];
         readonly put?: never;
@@ -1025,8 +1029,9 @@ export interface components {
          *
          *     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
          *     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
-         *     ``suggested_labels`` are what the newest scoring of the listening model hears the sample as,
-         *     closest first, for a person to accept into the hand label or pass over.
+         *     ``suggestions`` are what the scoring on show of the listening model hears the sample as, closest
+         *     first, for a person to accept into the hand label or pass over; ``suggested_label`` is the first
+         *     of them.
          */
         readonly SampleDetail: {
             /** Hash */
@@ -1038,6 +1043,8 @@ export interface components {
             /** Display Name */
             readonly display_name: string;
             readonly category: components["schemas"]["SampleCategory"];
+            /** Suggested Label */
+            readonly suggested_label: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Rating */
@@ -1058,8 +1065,8 @@ export interface components {
             readonly playback_rates: readonly components["schemas"]["SamplePlaybackRate"][];
             /** Equivalence Member Count */
             readonly equivalence_member_count: number;
-            /** Suggested Labels */
-            readonly suggested_labels: readonly components["schemas"]["SuggestedLabel"][];
+            /** Suggestions */
+            readonly suggestions: readonly components["schemas"]["SuggestedLabel"][];
         };
         /**
          * SampleDistance
@@ -1158,15 +1165,18 @@ export interface components {
         };
         /**
          * SamplePreview
-         * @description What a glance at a sample shows: its name, category and hand label, and the stored thumbnail of its waveform.
+         * @description What a glance at a sample shows: its name, what it is taken to be, and the stored thumbnail of its waveform.
          *
-         *     ``thumbnail`` is ``None`` for a sample the thumbnail pass has not reached, since a preview
-         *     with nothing to draw is still a preview with a name.
+         *     ``suggested_label`` is the closest label the scoring on show heard the sample as, beside the
+         *     ``hand_label`` a person wrote. ``thumbnail`` is ``None`` for a sample the thumbnail pass has not
+         *     reached, since a preview with nothing to draw is still a preview with a name.
          */
         readonly SamplePreview: {
             /** Display Name */
             readonly display_name: string;
             readonly category: components["schemas"]["SampleCategory"];
+            /** Suggested Label */
+            readonly suggested_label: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Thumbnail */
@@ -1234,6 +1244,8 @@ export interface components {
             /** Display Name */
             readonly display_name: string;
             readonly category: components["schemas"]["SampleCategory"];
+            /** Suggested Label */
+            readonly suggested_label: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Rating */
@@ -1264,6 +1276,8 @@ export interface components {
             /** Display Name */
             readonly display_name: string;
             readonly category: components["schemas"]["SampleCategory"];
+            /** Suggested Label */
+            readonly suggested_label: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Thumbnail */
