@@ -9,6 +9,7 @@ from samplemorph.measurement.comparison import held_out_distance_db, held_out_sp
 from samplemorph.measurement.loudness import integrated_loudness, match_loudness
 from samplemorph.measurement.modulation_spectrum import ModulationLobeDepths, modulation_lobe_depths
 from samplemorph.measurement.morph_path.loudness_path import LoudnessPath
+from samplemorph.measurement.morph_path.partial_wobble import partial_wobble_cents
 from samplemorph.measurement.morph_path.spectra import (
     BlendFit,
     blend_fit,
@@ -58,7 +59,10 @@ class PointScreen:
     dissolve reads near two. `spread_excess` is its spectral entropy over the wider end's, in nats.
     `crest_excess_db`, `fluctuation_excess` and `roughness_excess` are its crest factor and its
     modulation depths over the values interpolated between the ends', the readings that tracked
-    a heard phase artifact on percussive and tonal material.
+    a heard phase artifact on percussive and tonal material. `wobble_cents` is how far its partials
+    move in pitch every 3 ms (`partial_wobble_cents`), and `wobble_excess_cents` that over the value
+    interpolated between the ends, which a vibrato the ends lack reads above zero; a point or an end
+    holding no partial reads not a number on both.
     """
 
     peak_count_ratio: float
@@ -66,6 +70,8 @@ class PointScreen:
     crest_excess_db: float
     fluctuation_excess: float
     roughness_excess: float
+    wobble_cents: float
+    wobble_excess_cents: float
 
 
 @dataclass(frozen=True)
@@ -101,6 +107,7 @@ class _PointFeatures:
     entropy: float
     crest_db: float
     depths: ModulationLobeDepths
+    wobble_cents: float
 
 
 def read_path(path: HeardPath) -> PathReadings:
@@ -162,6 +169,7 @@ def _features(waveform: NDArray[np.float64], *, rate_hz: int) -> _PointFeatures:
         entropy=mean_spectral_entropy(resolved),
         crest_db=crest_factor_db(waveform),
         depths=modulation_lobe_depths(waveform, source_rate_hz=rate_hz),
+        wobble_cents=partial_wobble_cents(waveform, rate_hz=rate_hz),
     )
 
 
@@ -176,6 +184,8 @@ def _screen(point: _PointFeatures, *, first: _PointFeatures, second: _PointFeatu
         crest_excess_db=point.crest_db - between(first.crest_db, second.crest_db),
         fluctuation_excess=point.depths.fluctuation - between(first.depths.fluctuation, second.depths.fluctuation),
         roughness_excess=point.depths.roughness - between(first.depths.roughness, second.depths.roughness),
+        wobble_cents=point.wobble_cents,
+        wobble_excess_cents=point.wobble_cents - between(first.wobble_cents, second.wobble_cents),
     )
 
 

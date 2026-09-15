@@ -126,8 +126,7 @@ class LogFrequencyGeometry(BaseModel):
 
     @property
     def gaussian_spread(self) -> float:
-        """The time spread of the Gaussian taper, chosen so it falls to `GAUSSIAN_EDGE_LEVEL` at the frame's edge."""
-        return float(np.sqrt(-(self.fft_length**2) / (8.0 * np.log(GAUSSIAN_EDGE_LEVEL))))
+        return gaussian_spread(self.fft_length)
 
     @property
     def phase_gradient_spread(self) -> float:
@@ -278,12 +277,25 @@ def analysis_taper(geometry: Geometry) -> NDArray[np.float64]:
     """
     match geometry:
         case LogFrequencyGeometry(analysis_window=AnalysisWindow.GAUSSIAN):
-            length = geometry.fft_length
-            taper: NDArray[np.float64] = gaussian(2 * length + 1, 2.0 * geometry.gaussian_spread, sym=False)
-            return taper[1 : 2 * length + 1 : 2]
+            return gaussian_taper(geometry.fft_length)
         case _:
             hann: NDArray[np.float64] = get_window("hann", geometry.fft_length, fftbins=True)
             return hann
+
+
+def gaussian_spread(length: int) -> float:
+    """The time spread, in samples, of a Gaussian taper `length` samples long that falls to `GAUSSIAN_EDGE_LEVEL` at its edges."""
+    return float(np.sqrt(-(length**2) / (8.0 * np.log(GAUSSIAN_EDGE_LEVEL))))
+
+
+def gaussian_taper(length: int) -> NDArray[np.float64]:
+    """A Gaussian taper `length` samples long, drawn at twice the length with every other point kept.
+
+    The peak lands between two samples, which is the sampling phase gradient heap integration is
+    derived for, and every analysis under a Gaussian reads through the same rule whatever its length.
+    """
+    taper: NDArray[np.float64] = gaussian(2 * length + 1, 2.0 * gaussian_spread(length), sym=False)
+    return taper[1 : 2 * length + 1 : 2]
 
 
 def fourier_bin_count(*, fft_length: int) -> int:
