@@ -53,7 +53,8 @@ def test_every_metric_a_report_holds_reaches_the_run(
 
     assert run.parameters["backend"] == "stub"
     assert run.parameters["experiment_id"] == str(separable_catalog.experiment_id)
-    assert {"categories/accuracy", "categories/kick/f1", "notes/single_pitch_auc"} <= set(run.metrics)
+    assert "notes/single_pitch_auc" in run.metrics
+    assert not any(name.startswith("categories/") for name in run.metrics)
     assert {
         "hand_labels/ndcg",
         "hand_labels/snare/average_precision",

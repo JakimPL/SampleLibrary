@@ -7,7 +7,6 @@ from pathlib import Path
 from sqlalchemy import Connection
 
 from samplecloud.backends.learned_backend import DEFAULT_LEARNED_DEVICE
-from samplecloud.evaluation.categories import CategoryAgreement
 from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.harness import evaluate_experiment
 from samplecloud.evaluation.notes import NoteAgreement
@@ -104,8 +103,6 @@ def _report(report: EvaluationReport) -> None:
     )
     if report.transposition is not None:
         _report_transposition(report.transposition)
-    if report.categories is not None:
-        _report_categories(report.categories)
     if report.notes is not None:
         _report_notes(report.notes)
     if report.hand_labels is not None:
@@ -131,18 +128,6 @@ def _report_transposition(retrieval: TranspositionRetrieval) -> None:
             offset.median_rank,
             offset.trial_count,
         )
-
-
-def _report_categories(agreement: CategoryAgreement) -> None:
-    _logger.info(
-        "Category agreement over %d keyword-labeled samples (%.1f%% of the catalog): accuracy %.3f, macro-F1 %.3f.",
-        agreement.scored_sample_count,
-        100.0 * agreement.coverage,
-        agreement.accuracy,
-        agreement.macro_f1,
-    )
-    for score in sorted(agreement.per_category, key=lambda entry: entry.support, reverse=True):
-        _logger.info("  %-14s F1 %.3f over %5d samples.", score.category, score.f1, score.support)
 
 
 def _report_notes(agreement: NoteAgreement) -> None:

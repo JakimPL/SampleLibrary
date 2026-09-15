@@ -110,8 +110,8 @@ def _percussiveness(mono: NDArray[np.float64], *, sample_rate_hz: int) -> float:
     `PERCUSSIVE_DECAY_SECONDS`, scaled by how promptly the peak arrived, none at
     `PERCUSSIVE_ATTACK_SECONDS`. Absolute times keep a kick a kick whatever the clip's length, and
     a struck sound that rings on -- a cymbal, a plucked string -- reads low, since its identity is
-    carried by what sustains. Against the keyword categories, nine in ten leads, pads and vocals
-    read under the percussive bar, and the struck categories split along exactly that ring.
+    carried by what sustains. Checked against sample names that state a role, nine in ten leads,
+    pads and vocals read under the percussive bar, and the struck roles split along exactly that ring.
     """
     level = local_rms_envelope(mono, sample_rate_hz=sample_rate_hz)
     decibels = 20.0 * np.log10(level / float(level.max()))

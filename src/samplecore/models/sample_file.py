@@ -72,11 +72,6 @@ class SampleFileLocation(BaseModel):
         return stem_of(self.relative_path)
 
     @property
-    def folder_names(self) -> tuple[str, ...]:
-        """The folders between the directory and the file, nearest the file first."""
-        return folder_names_of(self.relative_path)
-
-    @property
     def sort_key(self) -> tuple[str, str]:
         """The order locations are listed and chosen in, the same on every system."""
         return (self.directory.as_posix(), self.relative_path)
@@ -119,8 +114,3 @@ class SampleFile(BaseModel):
 def stem_of(relative_path: str) -> str:
     """A sample file's name without its suffix, from its path inside its directory."""
     return PurePosixPath(relative_path).stem
-
-
-def folder_names_of(relative_path: str) -> tuple[str, ...]:
-    """The folders a sample file sits in inside its directory, nearest the file first."""
-    return tuple(reversed(PurePosixPath(relative_path).parts[:-1]))

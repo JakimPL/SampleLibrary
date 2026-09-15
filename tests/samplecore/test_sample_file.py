@@ -10,12 +10,11 @@ from samplecore.models.sample_file import SampleFileLocation
 DIRECTORY = Path("/samples/packs")
 
 
-def test_a_location_names_the_file_its_stem_and_its_folders_nearest_first() -> None:
+def test_a_location_names_the_file_and_its_stem() -> None:
     location = SampleFileLocation(directory=DIRECTORY, relative_path="Club Sounds/Kicks/Kick 01.wav")
 
     assert location.path == DIRECTORY / "Club Sounds" / "Kicks" / "Kick 01.wav"
     assert location.stem == "Kick 01"
-    assert location.folder_names == ("Kicks", "Club Sounds")
 
 
 @pytest.mark.parametrize(

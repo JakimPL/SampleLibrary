@@ -8,12 +8,9 @@ from sqlalchemy import Connection
 
 from samplecloud.evaluation.settings import EvaluationScope
 from samplecloud.standardization import Standardization, fit_standardization
-from samplecore.categorization import classify_sample_names
 from samplecore.digests import digest_of_rows
 from samplecore.labeling.labels import SampleLabel
-from samplecore.models.category import SampleCategory
 from samplecore.models.note_event import SampleNoteStatistics
-from samplecore.naming import NO_SAMPLE_NAMES
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
@@ -26,15 +23,14 @@ class EvaluationCorpus:
     """One experiment's vectors beside everything a descriptor is scored against.
 
     The rows line up: index `i` names one sample throughout, so a metric selects the samples it can
-    score and reads the same row from every array. Categories reach a tenth of the catalog, note
-    statistics reach almost all of it and hand labels reach whatever the person has listened to so
-    far, which is why each metric reports its own coverage rather than the harness reporting one.
+    score and reads the same row from every array. Note statistics reach almost all of the catalog
+    and hand labels reach whatever the person has listened to so far, which is why each metric
+    reports its own coverage rather than the harness reporting one.
     """
 
     scope: EvaluationScope
     sample_hashes: tuple[str, ...]
     vectors: NDArray[np.float64]
-    categories: tuple[SampleCategory, ...]
     note_statistics: tuple[SampleNoteStatistics | None, ...]
     labels: tuple[SampleLabel | None, ...]
     equivalence_groups: NDArray[np.int64]
@@ -43,7 +39,6 @@ class EvaluationCorpus:
     def __post_init__(self) -> None:
         counts = {
             "vectors": self.vectors.shape[0],
-            "categories": len(self.categories),
             "note statistics": len(self.note_statistics),
             "labels": len(self.labels),
             "equivalence groups": int(self.equivalence_groups.shape[0]),
@@ -63,11 +58,6 @@ class EvaluationCorpus:
     def membership_digest(self) -> str:
         """One digest over the samples scored, so two passes can tell they read one corpus."""
         return digest_of_rows((sample_hash,) for sample_hash in self.sample_hashes)
-
-    @property
-    def categorized(self) -> NDArray[np.bool_]:
-        """Which samples a keyword matched, which is what a category metric can be scored over."""
-        return np.array([category is not SampleCategory.UNCATEGORIZED for category in self.categories])
 
     @property
     def note_reached(self) -> NDArray[np.bool_]:
@@ -107,24 +97,14 @@ def load_corpus(connection: Connection, *, experiment_id: int, scope: Evaluation
     raw = np.stack([np.array(vector.vector, dtype=np.float64) for vector in feature_vectors])
     standardization = fit_standardization(raw)
     statistics_by_hash = PostgresNoteEventRepository(connection).note_statistics_for_every_sample()
-    categories = _categories_for(connection, sample_hashes)
     return EvaluationCorpus(
         scope=scope,
         sample_hashes=sample_hashes,
         vectors=standardization.apply(raw),
-        categories=categories,
         note_statistics=tuple(statistics_by_hash.get(sample_hash) for sample_hash in sample_hashes),
         labels=_labels_for(connection, sample_hashes),
         equivalence_groups=equivalence_groups(connection, sample_hashes),
         standardization=standardization,
-    )
-
-
-def _categories_for(connection: Connection, sample_hashes: tuple[str, ...]) -> tuple[SampleCategory, ...]:
-    """Classify every sample from every name it goes by: its own, its instruments' and its folders'."""
-    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash(list(sample_hashes))
-    return tuple(
-        classify_sample_names(names_by_hash.get(sample_hash, NO_SAMPLE_NAMES)) for sample_hash in sample_hashes
     )
 
 

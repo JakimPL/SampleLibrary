@@ -143,7 +143,7 @@ class PostgresNoteEventRepository:
 
         Read together with a descriptor, these say whether an embedding puts samples used the same
         way near one another, over the part of the catalog note events cover -- which is most of it,
-        and far more than any keyword label reaches. One aggregate query serves the whole catalog,
+        and far more than the hand labels reach. One aggregate query serves the whole catalog,
         since naming a hash per sample would pass Postgres's parameter ceiling many times over.
         """
         # pylint: disable-next=not-callable

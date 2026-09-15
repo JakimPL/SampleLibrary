@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from itertools import zip_longest
 from typing import Any, Final, Protocol, TypeVar
 
 from sqlalchemy import ColumnElement, Connection, Row, Select, func, select
@@ -15,15 +14,14 @@ from samplecore.equivalence_classes import EquivalenceClass
 from samplecore.models.annotation import SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSelection, SampleSort, SampleSummary
-from samplecore.models.sample_file import folder_names_of, stem_of
+from samplecore.models.sample_file import stem_of
 from samplecore.models.thumbnail import SampleThumbnail
-from samplecore.naming import NO_SAMPLE_NAMES, SampleNames
+from samplecore.naming import NO_DISPLAY_NAME, choose_dominant_name
 from samplecore.pitch import choose_playback_rate
 from samplecore.storage.curation import sample_annotation
 from samplecore.storage.database import (
     HASH_CHUNK_SIZE,
     chunks,
-    module_instrument,
     sample,
     sample_file,
     sample_properties,
@@ -63,11 +61,9 @@ class SampleRepository(Protocol):
 
     def count(self, *, selection: SampleSelection) -> int: ...
 
-    def names_and_rates_by_hash(
+    def display_names_and_rates_by_hash(
         self, hashes: list[str]
-    ) -> tuple[dict[str, SampleNames], dict[str, tuple[Rate, ...]]]: ...
-
-    def names_and_rates_for_every_sample(self) -> tuple[dict[str, SampleNames], dict[str, tuple[Rate, ...]]]: ...
+    ) -> tuple[dict[str, str], dict[str, tuple[Rate, ...]]]: ...
 
     def rates_by_hash(self, hashes: list[str]) -> dict[str, tuple[Rate, ...]]: ...
 
@@ -178,7 +174,7 @@ class PostgresSampleRepository:
         )
         rows = self._connection.execute(_with_selection(statement, selection)).fetchall()
         hashes = [row.hash for row in rows]
-        names_by_hash, rates_by_hash = self.names_and_rates_by_hash(hashes)
+        display_names, rates_by_hash = self.display_names_and_rates_by_hash(hashes)
         playback_rate_by_hash = PostgresSamplePlaybackRateRepository(self._connection).get_many(hashes)
         thumbnails_by_hash = PostgresSampleThumbnailRepository(self._connection).get_many(hashes)
         annotation_by_hash = PostgresSampleAnnotationRepository(self._connection).annotations_by_hash(hashes)
@@ -192,7 +188,7 @@ class PostgresSampleRepository:
         return tuple(
             _row_to_sample_summary(
                 row,
-                names=names_by_hash.get(row.hash, NO_SAMPLE_NAMES),
+                display_name=display_names.get(row.hash, NO_DISPLAY_NAME),
                 rates=rates_by_hash.get(row.hash, ()),
                 recorded_playback_rate=playback_rate_by_hash.get(row.hash),
                 thumbnail=thumbnails_by_hash.get(row.hash),
@@ -213,31 +209,16 @@ class PostgresSampleRepository:
         statement = select(func.count()).select_from(sample)
         return self._connection.execute(_with_selection(statement, selection)).scalar_one()
 
-    def names_and_rates_by_hash(self, hashes: list[str]) -> tuple[dict[str, SampleNames], dict[str, tuple[Rate, ...]]]:
-        """Every name each given sample goes by, and every rate it is declared at, in chunked queries.
+    def display_names_and_rates_by_hash(self, hashes: list[str]) -> tuple[dict[str, str], dict[str, tuple[Rate, ...]]]:
+        """The name each given sample is shown by, and every rate it is declared at, in chunked queries.
 
-        The names and rates come from each module occurrence and each sample file, and the names
-        also from the instruments reaching the sample and the folders its files sit in. Chunked by
-        ``HASH_CHUNK_SIZE`` so each lookup stays within Postgres's own parameter ceiling, which a
-        page of any size stays comfortably inside.
+        Both come from each module occurrence and each sample file; a sample neither names is left
+        out of the names. Chunked by ``HASH_CHUNK_SIZE`` so each lookup stays within Postgres's own
+        parameter ceiling, which a page of any size stays comfortably inside.
         """
-        return _names_and_rates_of(
+        return _display_names_and_rates_of(
             occurrences=self._chunked(_OCCURRENCE_NAMES_AND_RATES, sample_properties.c.sample_hash, hashes),
             files=self._chunked(_FILE_PATHS_AND_RATES, sample_file.c.sample_hash, hashes),
-            instruments=self._chunked(_INSTRUMENT_NAMES, sample_properties.c.sample_hash, hashes),
-        )
-
-    def names_and_rates_for_every_sample(self) -> tuple[dict[str, SampleNames], dict[str, tuple[Rate, ...]]]:
-        """The same, for the whole catalog, in one scan of each table holding them.
-
-        A whole-catalog reader arrives here rather than at ``names_and_rates_by_hash``: naming a
-        hundred thousand hashes costs Postgres more in parameters alone than reading every
-        occurrence there is, and the answer covers the same rows either way.
-        """
-        return _names_and_rates_of(
-            occurrences=self._connection.execute(_OCCURRENCE_NAMES_AND_RATES).fetchall(),
-            files=self._connection.execute(_FILE_PATHS_AND_RATES).fetchall(),
-            instruments=self._connection.execute(_INSTRUMENT_NAMES).fetchall(),
         )
 
     def rates_by_hash(self, hashes: list[str]) -> dict[str, tuple[Rate, ...]]:
@@ -281,43 +262,19 @@ _FILE_PATHS_AND_RATES: Final[Select[Any]] = select(
     sample_file.c.sample_hash, sample_file.c.relative_path, sample_file.c.rate
 ).order_by(sample_file.c.directory, sample_file.c.relative_path)
 
-_INSTRUMENT_NAMES: Final[Select[Any]] = (
-    select(sample_properties.c.sample_hash, module_instrument.c.name)
-    .select_from(
-        sample_properties.join(
-            module_instrument,
-            (module_instrument.c.module_id == sample_properties.c.module_id)
-            & (module_instrument.c.instrument_index == sample_properties.c.instrument_index),
-        )
-    )
-    .where(module_instrument.c.name != "")
-)
 
-
-def _names_and_rates_of(
-    *, occurrences: Sequence[Row[Any]], files: Sequence[Row[Any]], instruments: Sequence[Row[Any]]
-) -> tuple[dict[str, SampleNames], dict[str, tuple[Rate, ...]]]:
-    """Gather occurrence, file and instrument rows into the names and the rates each sample hash carries."""
+def _display_names_and_rates_of(
+    *, occurrences: Sequence[Row[Any]], files: Sequence[Row[Any]]
+) -> tuple[dict[str, str], dict[str, tuple[Rate, ...]]]:
+    """Gather occurrence and file rows into the name each sample hash is shown by and the rates it is declared at."""
     own_names: dict[str, list[str]] = defaultdict(list)
-    folders_by_file: dict[str, list[tuple[str, ...]]] = defaultdict(list)
-    instrument_names: dict[str, list[str]] = defaultdict(list)
     for row in occurrences:
         own_names[row.sample_hash].append(row.name)
     for row in files:
         own_names[row.sample_hash].append(stem_of(row.relative_path))
-        folders_by_file[row.sample_hash].append(folder_names_of(row.relative_path))
-    for row in instruments:
-        instrument_names[row.sample_hash].append(row.name)
 
-    names_by_hash = {
-        sample_hash: SampleNames(
-            own_names=tuple(own_names.get(sample_hash, ())),
-            instrument_names=tuple(instrument_names.get(sample_hash, ())),
-            folder_names=_by_nearness(folders_by_file.get(sample_hash, [])),
-        )
-        for sample_hash in own_names.keys() | instrument_names.keys()
-    }
-    return names_by_hash, _rates_of(occurrences, files)
+    display_names = {sample_hash: choose_dominant_name(names) for sample_hash, names in own_names.items()}
+    return display_names, _rates_of(occurrences, files)
 
 
 def _rates_of(occurrences: Sequence[Row[Any]], files: Sequence[Row[Any]]) -> dict[str, tuple[Rate, ...]]:
@@ -327,12 +284,6 @@ def _rates_of(occurrences: Sequence[Row[Any]], files: Sequence[Row[Any]]) -> dic
         rates_by_hash[row.sample_hash].append(row.rate)
 
     return {hash_: tuple(rates) for hash_, rates in rates_by_hash.items()}
-
-
-def _by_nearness(folders_by_file: list[tuple[str, ...]]) -> tuple[str, ...]:
-    """Every file's folders, the folder each file sits in first, then the one above each, and so on."""
-    levels = zip_longest(*folders_by_file)
-    return tuple(folder for level in levels for folder in level if folder is not None)
 
 
 def _row_to_sample(row: Row[Any]) -> Sample:
@@ -378,7 +329,7 @@ def _order_by(sort: SampleSort, occurrence_count: ColumnElement[int]) -> tuple[C
 def _row_to_sample_summary(
     row: Row[Any],
     *,
-    names: SampleNames,
+    display_name: str,
     rates: tuple[Rate, ...],
     recorded_playback_rate: Rate | None,
     thumbnail: SampleThumbnail | None,
@@ -386,7 +337,7 @@ def _row_to_sample_summary(
     annotation: SampleAnnotation | None,
     suggested_label: str | None,
 ) -> SampleSummary:
-    """Reconstruct a SampleSummary from a Core row plus its names and rates, thumbnail, and class.
+    """Reconstruct a SampleSummary from a Core row plus its display name and rates, thumbnail, and class.
 
     The display name is drawn from the names the waveform itself is stored under, keeping it the
     label a tracker or a file shows. It stays filled in beside what a person decided and what a
@@ -399,7 +350,7 @@ def _row_to_sample_summary(
         channels=sample_.channels,
         frames=sample_.frames,
         occurrence_count=row.occurrence_count,
-        display_name=names.display_name,
+        display_name=display_name,
         suggested_label=suggested_label,
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),

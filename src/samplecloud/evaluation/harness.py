@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 
 from sqlalchemy import Connection
 
-from samplecloud.evaluation.categories import category_agreement
 from samplecloud.evaluation.corpus import EvaluationCorpus, load_corpus
 from samplecloud.evaluation.hand_labels import MINIMUM_LABELED_SAMPLES, HandLabelAgreement, hand_label_agreement
 from samplecloud.evaluation.notes import note_agreement
@@ -38,15 +37,11 @@ def evaluate_experiment(
     _logger.info("Loading experiment %d and its evaluation targets...", experiment_id)
     corpus = load_corpus(connection, experiment_id=experiment_id, scope=settings.scope)
     _logger.info(
-        "Scoring %d vectors: %d keyword-labeled, %d reached by note events, %d labeled by hand.",
+        "Scoring %d vectors: %d reached by note events, %d labeled by hand.",
         corpus.sample_count,
-        int(corpus.categorized.sum()),
         int(corpus.note_reached.sum()),
         int(corpus.labeled.sum()),
     )
-    categories = category_agreement(corpus, settings=settings)
-    if categories is None:
-        _logger.info("Too few keyword categories or equivalence groups to fold, so category agreement is left out.")
     notes = note_agreement(corpus, settings=settings)
     if notes is None:
         _logger.info("The note events reach too few equivalence groups to fold, so note agreement is left out.")
@@ -60,7 +55,6 @@ def evaluate_experiment(
         random_seed=settings.random_seed,
         evaluated_at=datetime.now(UTC),
         transposition=_transposition(connection, corpus, describer=describer, settings=settings),
-        categories=categories,
         notes=notes,
         hand_labels=hand_labels,
     )

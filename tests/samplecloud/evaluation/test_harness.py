@@ -53,7 +53,6 @@ def test_a_pass_without_an_extractor_scores_the_stored_vectors_alone(
     )
 
     assert report.transposition is None
-    assert report.categories is not None
     assert report.notes is not None
     assert report.hand_labels is None
     assert report.sample_count == len(separable_catalog.sample_hashes)
@@ -77,7 +76,7 @@ def test_a_pass_scores_the_hand_labels_once_enough_samples_carry_one(
 
 
 def test_a_corpus_too_small_to_fold_leaves_those_metrics_out(connection: Connection, tmp_path: Path) -> None:
-    """A library with a handful of uncategorized samples no pattern plays still gets a report."""
+    """A library with a handful of samples no pattern plays and nobody labeled still gets a report."""
     experiment_id = PostgresExperimentRepository(connection).create(
         backend_name="stub", label=None, params={}, key=None
     )
@@ -100,8 +99,8 @@ def test_a_corpus_too_small_to_fold_leaves_those_metrics_out(connection: Connect
 
     report = evaluate_experiment(connection, experiment_id=experiment_id, describer=None, settings=SETTINGS)
 
-    assert (report.categories, report.notes, report.hand_labels) == (None, None, None)
-    assert json.loads(report_json(report))["categories"] is None
+    assert (report.notes, report.hand_labels) == (None, None)
+    assert json.loads(report_json(report))["notes"] is None
 
 
 def test_a_score_no_metric_could_read_is_written_as_null(
@@ -113,10 +112,10 @@ def test_a_score_no_metric_could_read_is_written_as_null(
         describer=None,
         settings=SETTINGS,
     )
-    assert report.categories is not None
-    unreadable = replace(report, categories=replace(report.categories, macro_f1=float("nan")))
+    assert report.notes is not None
+    unreadable = replace(report, notes=replace(report.notes, single_pitch_auc=float("nan")))
 
-    assert json.loads(report_json(unreadable))["categories"]["macro_f1"] is None
+    assert json.loads(report_json(unreadable))["notes"]["single_pitch_auc"] is None
 
 
 def test_an_unknown_experiment_says_so(connection: Connection, tmp_path: Path) -> None:
@@ -137,7 +136,6 @@ def test_a_report_renders_as_json_a_tracker_can_read(
     rendered = json.loads(report_json(report))
 
     assert rendered["backend_name"] == "stub"
-    assert rendered["categories"]["per_category"]
     assert rendered["notes"]["targets"]
 
 
@@ -217,7 +215,6 @@ def test_the_command_reports_every_metric_it_ran(
     main(["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition"], prog=PROGRAM)
 
     reported = capsys.readouterr().out
-    assert "Category agreement" in reported
     assert "of the catalog" in reported
     assert "Note-event agreement" in reported
     assert "single-pitch AUC" in reported

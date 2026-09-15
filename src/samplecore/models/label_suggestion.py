@@ -12,7 +12,7 @@ from samplecore.models.scalars import Index, SampleHash
 class SampleLabelSuggestion(BaseModel):
     """One tag a listening model proposes for a sample, as of one scoring's run.
 
-    A suggestion stands apart from a hand label and from a category: it is what a pretrained model
+    A suggestion stands apart from a hand label: it is what a pretrained model
     hears the sample as, scored against a vocabulary of prompts, and it is kept in the hand-label
     grammar so a person accepts it into their own label as it is. `rank` orders one sample's
     suggestions from the closest match, and `score` is the cosine the model read between the sound

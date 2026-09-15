@@ -3,13 +3,13 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Iterable
-from dataclasses import dataclass
 from typing import Final, TypeVar
 
 from trackmod.schema.scalars import Rate
 
 _SANITIZED_NAME_PATTERN: Final = re.compile(r"[^a-z0-9 _-]")
 _WHITESPACE_PATTERN: Final = re.compile(r"\s+")
+NO_DISPLAY_NAME: Final[str] = ""
 
 _Candidate = TypeVar("_Candidate", str, int)
 
@@ -46,7 +46,7 @@ def choose_dominant_name(names: Iterable[str]) -> str:
     """
     sanitized_names = [sanitize_sample_name(name) for name in names]
     non_empty_names = [name for name in sanitized_names if name != ""]
-    return _choose_by_frequency(non_empty_names) or ""
+    return _choose_by_frequency(non_empty_names) or NO_DISPLAY_NAME
 
 
 def choose_dominant_rate(rates: Iterable[Rate]) -> Rate | None:
@@ -57,25 +57,3 @@ def choose_dominant_rate(rates: Iterable[Rate]) -> Rate | None:
     rate value works as a sentinel for "unknown".
     """
     return _choose_by_frequency(rates)
-
-
-@dataclass(frozen=True)
-class SampleNames:
-    """Every name a sample goes by, kept apart by where it was written.
-
-    ``own_names`` are the names the waveform itself is stored under: each module occurrence's name
-    and each sample file's name without its suffix. ``instrument_names`` name the instrument slots
-    reaching it, and ``folder_names`` the folders its sample files sit in, nearest a file first.
-    """
-
-    own_names: tuple[str, ...]
-    instrument_names: tuple[str, ...]
-    folder_names: tuple[str, ...]
-
-    @property
-    def display_name(self) -> str:
-        """The one name a reader sees the sample by, drawn from the names the waveform is stored under."""
-        return choose_dominant_name(self.own_names)
-
-
-NO_SAMPLE_NAMES: Final[SampleNames] = SampleNames(own_names=(), instrument_names=(), folder_names=())

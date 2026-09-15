@@ -25,7 +25,7 @@ from samplecore.models.scalars import (
     SampleHash,
 )
 from samplecore.models.tracker import TrackerFormat
-from samplecore.naming import NO_SAMPLE_NAMES
+from samplecore.naming import NO_DISPLAY_NAME
 from samplecore.pitch import (
     playback_rates_of,
     tally_playback_rates,
@@ -274,8 +274,7 @@ def get_sample(
         for item in properties
     )
     tally = tally_playback_rates(PostgresNoteEventRepository(connection).note_usage_for_sample(sample_hash))
-    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash([sample_hash])
-    names = names_by_hash.get(sample_hash, NO_SAMPLE_NAMES)
+    display_names, _ = PostgresSampleRepository(connection).display_names_and_rates_by_hash([sample_hash])
     suggestions = _suggestions(connection, sample_hash, shown_experiment_id=shown_experiment_id)
     return SampleDetail(
         hash=sample.hash,
@@ -288,7 +287,7 @@ def get_sample(
             for found in PostgresSampleFileRepository(connection).list_for_samples([sample_hash])
         ),
         size_bytes=sample.stored_bytes,
-        display_name=names.display_name,
+        display_name=display_names.get(sample_hash, NO_DISPLAY_NAME),
         suggested_label=suggestions[0].label if suggestions else None,
         hand_label=annotation.label if annotation is not None else None,
         rating=annotation.rating if annotation is not None else None,
@@ -380,7 +379,7 @@ def _previews_by_hash(
     connection: Connection, sample_hashes: list[str], *, shown_experiment_id: int | None
 ) -> dict[str, SamplePreview]:
     """A glance at each given sample, from five lookups over the whole list at once."""
-    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash(sample_hashes)
+    display_names, _ = PostgresSampleRepository(connection).display_names_and_rates_by_hash(sample_hashes)
     annotations_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(sample_hashes)
     thumbnails_by_hash = PostgresSampleThumbnailRepository(connection).get_many(sample_hashes)
     suggested_label_by_hash = (
@@ -390,10 +389,9 @@ def _previews_by_hash(
     )
     previews: dict[str, SamplePreview] = {}
     for sample_hash in sample_hashes:
-        names = names_by_hash.get(sample_hash, NO_SAMPLE_NAMES)
         annotation = annotations_by_hash.get(sample_hash)
         previews[sample_hash] = SamplePreview(
-            display_name=names.display_name,
+            display_name=display_names.get(sample_hash, NO_DISPLAY_NAME),
             suggested_label=suggested_label_by_hash.get(sample_hash),
             hand_label=annotation.label if annotation is not None else None,
             thumbnail=peaks_from_thumbnail(thumbnails_by_hash.get(sample_hash)),

@@ -11,7 +11,6 @@ from trackmod.core.samples.depth import BitDepth
 from samplecloud.evaluation.corpus import EvaluationCorpus, equivalence_groups, load_corpus
 from samplecloud.evaluation.settings import EvaluationScope
 from samplecloud.standardization import Standardization
-from samplecore.models.category import SampleCategory
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.models.relation import RelationType, SampleRelation
@@ -28,17 +27,6 @@ def test_a_corpus_carries_one_row_per_feature_vector(connection: Connection, sep
 
     assert corpus.sample_count == len(separable_catalog.sample_hashes)
     assert corpus.vectors.shape[0] == corpus.sample_count
-    assert len(corpus.categories) == corpus.sample_count
-
-
-def test_a_corpus_classifies_each_sample_from_the_names_its_occurrences_carry(
-    connection: Connection, separable_catalog: SeededCatalog
-) -> None:
-    corpus = load_corpus(connection, experiment_id=separable_catalog.experiment_id, scope=EvaluationScope.CATALOG)
-
-    found = {str(category) for category in corpus.categories}
-    assert found == set(SEEDED_CATEGORIES)
-    assert corpus.categorized.all()
 
 
 def test_a_corpus_reads_how_often_and_how_widely_each_sample_is_played(
@@ -46,9 +34,10 @@ def test_a_corpus_reads_how_often_and_how_widely_each_sample_is_played(
 ) -> None:
     corpus = load_corpus(connection, experiment_id=separable_catalog.experiment_id, scope=EvaluationScope.CATALOG)
 
+    group_by_hash = dict(zip(separable_catalog.sample_hashes, separable_catalog.categories, strict=True))
     statistics = {
-        str(category): entry
-        for category, entry in zip(corpus.categories, corpus.note_statistics, strict=True)
+        group_by_hash[sample_hash]: entry
+        for sample_hash, entry in zip(corpus.sample_hashes, corpus.note_statistics, strict=True)
         if entry is not None
     }
     assert corpus.note_reached.all()
@@ -85,20 +74,18 @@ def test_a_corpus_whose_arrays_disagree_says_so() -> None:
             scope=EvaluationScope.CATALOG,
             sample_hashes=("a" * 64, "b" * 64),
             vectors=np.zeros((2, 3)),
-            categories=(SampleCategory.KICK,),
-            note_statistics=(None, None),
+            note_statistics=(None,),
             labels=(None, None),
             equivalence_groups=np.array([0, 1]),
             standardization=Standardization(center=np.zeros(3), scale=np.ones(3)),
         )
 
 
-def test_a_body_of_noise_leaves_every_sample_categorized_but_unstructured(connection: Connection) -> None:
+def test_a_body_of_noise_is_read_whole(connection: Connection) -> None:
     catalog = seed_catalog(connection, separable=False)
 
     corpus = load_corpus(connection, experiment_id=catalog.experiment_id, scope=EvaluationScope.CATALOG)
 
-    assert corpus.categorized.all()
     assert corpus.sample_count == len(catalog.sample_hashes)
 
 

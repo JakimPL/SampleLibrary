@@ -67,9 +67,9 @@ AnnotationAnchor = Annotated[ModuleSlotAnchor | SampleFileAnchor, Field(discrimi
 class AnnotationDecisions(BaseModel):
     """The three things a person can decide about a sample.
 
-    The label says what the sample is, as free text: it records what a listener actually decided,
-    ahead of any vocabulary being settled, so it stays unconstrained by `SampleCategory`'s fourteen
-    guessed roles and wins wherever it exists. It is kept in upper case, which is the case it is
+    The label says what the sample is, as free text: it records what a listener actually decided, in
+    their own words ahead of any vocabulary being settled, and wins over what the listening model
+    suggests wherever it exists. It is kept in upper case, which is the case it is
     shown in, so the vocabulary a person builds by habit collects one entry per wording. The rating and the favorite mark say what the
     listener thought of it, which is what turns browsing the library into a collection of a person's
     own.

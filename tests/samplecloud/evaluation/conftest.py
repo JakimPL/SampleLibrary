@@ -41,7 +41,7 @@ SAMPLE_RATE_HZ = 8_363
 
 @dataclass(frozen=True)
 class SeededCatalog:
-    """A small catalog whose categories and note usage a descriptor can be scored against."""
+    """A small catalog whose sounds, labels and note usage a descriptor can be scored against."""
 
     experiment_id: int
     sample_hashes: tuple[str, ...]
@@ -49,7 +49,7 @@ class SeededCatalog:
 
 
 def seed_catalog(connection: Connection, *, separable: bool) -> SeededCatalog:
-    """Put a few samples per keyword category in the catalog, each played at a known set of pitches.
+    """Put a few samples per seeded category in the catalog, each played at a known set of pitches.
 
     `separable` decides whether a sample's feature vector says which category it belongs to. A
     separable body lets a test assert that a working metric finds the structure; a body of noise

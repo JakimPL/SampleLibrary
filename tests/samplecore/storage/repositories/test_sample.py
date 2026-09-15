@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import Connection
-from trackmod.core.instruments.behavior import DuplicateAction, DuplicateCheck, NewNoteAction
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
@@ -13,14 +12,11 @@ from samplecore.equivalence_classes import EquivalenceClass
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
-from samplecore.models.module_instrument import ModuleInstrument
 from samplecore.models.sample import Sample, SampleSelection, SampleSort
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.thumbnail import SampleThumbnail
-from samplecore.naming import SampleNames
 from samplecore.storage.repositories import sample as sample_repository
-from samplecore.storage.repositories.module_instrument import PostgresModuleInstrumentRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
@@ -265,7 +261,7 @@ def test_count_reflects_every_stored_sample(
     assert PostgresSampleRepository(connection).count(selection=EVERYTHING) == 2
 
 
-def test_names_and_rates_by_hash_covers_hashes_spanning_several_chunks(
+def test_display_names_and_rates_by_hash_covers_hashes_spanning_several_chunks(
     connection: Connection,
     monkeypatch: pytest.MonkeyPatch,
     stored_sample: Sample,
@@ -282,48 +278,16 @@ def test_names_and_rates_by_hash_covers_hashes_spanning_several_chunks(
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="kick", rate=8363)
     _add_occurrence(connection, sample=stored_sample_b, module=stored_module, slot=1, name="snare", rate=16000)
 
-    names_by_hash, rates_by_hash = PostgresSampleRepository(connection).names_and_rates_by_hash(
+    display_names, rates_by_hash = PostgresSampleRepository(connection).display_names_and_rates_by_hash(
         [stored_sample.hash, stored_sample_b.hash]
     )
 
-    assert names_by_hash == {
-        stored_sample.hash: SampleNames(own_names=("kick",), instrument_names=(), folder_names=()),
-        stored_sample_b.hash: SampleNames(own_names=("snare",), instrument_names=(), folder_names=()),
-    }
+    assert display_names == {stored_sample.hash: "kick", stored_sample_b.hash: "snare"}
     assert rates_by_hash == {stored_sample.hash: (8363,), stored_sample_b.hash: (16000,)}
 
 
-def test_names_and_rates_by_hash_with_no_hashes_returns_nothing(connection: Connection) -> None:
-    assert PostgresSampleRepository(connection).names_and_rates_by_hash([]) == ({}, {})
-
-
-def _add_instrument(connection: Connection, *, module: Module, instrument_index: int, name: str) -> None:
-    PostgresModuleInstrumentRepository(connection).insert_many(
-        [
-            ModuleInstrument(
-                module_id=module.id,
-                instrument_index=instrument_index,
-                name=name,
-                fadeout=0,
-                global_volume=128,
-                panning=None,
-                new_note_action=NewNoteAction.CUT,
-                duplicate_check=DuplicateCheck.OFF,
-                duplicate_action=DuplicateAction.CUT,
-            )
-        ]
-    )
-
-
-def test_names_include_the_voice_each_occurrence_is_reached_through(
-    connection: Connection, stored_sample: Sample, stored_module: Module
-) -> None:
-    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="smp03")
-    _add_instrument(connection, module=stored_module, instrument_index=0, name="warm pad")
-
-    names_by_hash, _ = PostgresSampleRepository(connection).names_and_rates_by_hash([stored_sample.hash])
-
-    assert names_by_hash[stored_sample.hash].instrument_names == ("warm pad",)
+def test_display_names_and_rates_by_hash_with_no_hashes_returns_nothing(connection: Connection) -> None:
+    assert PostgresSampleRepository(connection).display_names_and_rates_by_hash([]) == ({}, {})
 
 
 def _add_sample_file(connection: Connection, *, sample: Sample, relative_path: str, rate: int) -> None:
@@ -338,24 +302,21 @@ def _add_sample_file(connection: Connection, *, sample: Sample, relative_path: s
     connection.commit()
 
 
-def test_a_sample_file_names_a_sample_by_its_stem_and_its_folders_nearest_first(
+def test_a_sample_file_names_a_sample_by_its_stem_beside_its_occurrences(
     connection: Connection, stored_sample: Sample, stored_module: Module
 ) -> None:
+    """Each name is written once here, so the tie goes to the name first in alphabetical order."""
     _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="smp03", rate=8363)
     _add_sample_file(connection, sample=stored_sample, relative_path="Club Pack/Kicks/Deep 01.wav", rate=44100)
     _add_sample_file(connection, sample=stored_sample, relative_path="House/Deep 01 copy.flac", rate=48000)
 
     repository = PostgresSampleRepository(connection)
-    names_by_hash, rates_by_hash = repository.names_and_rates_by_hash([stored_sample.hash])
+    display_names, rates_by_hash = repository.display_names_and_rates_by_hash([stored_sample.hash])
 
-    assert names_by_hash[stored_sample.hash] == SampleNames(
-        own_names=("smp03", "Deep 01", "Deep 01 copy"),
-        instrument_names=(),
-        folder_names=("Kicks", "House", "Club Pack"),
-    )
+    assert display_names[stored_sample.hash] == "deep 01"
     assert rates_by_hash[stored_sample.hash] == (8363, 44100, 48000)
     assert repository.rates_by_hash([stored_sample.hash]) == rates_by_hash
-    assert repository.names_and_rates_for_every_sample() == (names_by_hash, rates_by_hash)
+    assert repository.rates_for_every_sample() == rates_by_hash
 
 
 def test_a_sample_found_only_in_a_file_is_listed_with_its_name_and_rate(

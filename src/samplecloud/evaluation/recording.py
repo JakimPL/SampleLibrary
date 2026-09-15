@@ -4,7 +4,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Final
 
-from samplecloud.evaluation.categories import CategoryAgreement
 from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.notes import NoteAgreement
 from samplecloud.evaluation.report import EvaluationReport, report_json
@@ -43,8 +42,6 @@ def record_report(report: EvaluationReport, tracker: TrackedRun) -> None:
     metrics: dict[str, float] = {}
     if report.transposition is not None:
         metrics.update(_transposition_metrics(report.transposition))
-    if report.categories is not None:
-        metrics.update(_category_metrics(report.categories))
     if report.notes is not None:
         metrics.update(_note_metrics(report.notes))
     if report.hand_labels is not None:
@@ -73,17 +70,6 @@ def _offset_name(semitones: float) -> str:
     """A retuning as a metric name, since a sign is not a character a metric name may carry."""
     direction = "down" if semitones < 0 else "up"
     return f"{direction}_{abs(semitones):g}"
-
-
-def _category_metrics(agreement: CategoryAgreement) -> dict[str, float]:
-    metrics = {
-        "categories/accuracy": agreement.accuracy,
-        "categories/macro_f1": agreement.macro_f1,
-        "categories/coverage": agreement.coverage,
-    }
-    for score in agreement.per_category:
-        metrics[f"categories/{score.category}/f1"] = score.f1
-    return metrics
 
 
 def _note_metrics(agreement: NoteAgreement) -> dict[str, float]:

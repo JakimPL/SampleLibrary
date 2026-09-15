@@ -9,9 +9,9 @@ from numpy.typing import NDArray
 
 from samplelibrary.sandbox.waveforms import SAMPLE_RATE, decaying, tonal_waveform
 
-# A folder of plain audio files beside the modules, for `samplelibrary files`: two drums whose names
-# the keyword table recognizes, a stereo pad at a rate other than the nominal one, and a loop the
-# sandbox's own exclusion leaves out.
+# A folder of plain audio files beside the modules, for `samplelibrary files`: two drums named for
+# what they are, a stereo pad at a rate other than the nominal one, and a loop the sandbox's own
+# exclusion leaves out.
 SAMPLE_PACK_EXCLUSIONS: Final[tuple[str, ...]] = ("*loop*",)
 PACK_PAD_RATE: Final[int] = 48000
 PACK_DRUM_FRAMES: Final[int] = SAMPLE_RATE // 2
