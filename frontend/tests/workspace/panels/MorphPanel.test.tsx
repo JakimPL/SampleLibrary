@@ -15,17 +15,20 @@ const SECOND = "b".repeat(64);
 const FIRST_RATE_HZ = 8363;
 const SECOND_RATE_HZ = 16726;
 
-const { getSample, getSampleRelations, getSimilarSamples, getMorphStatus, play } = vi.hoisted(() => ({
-    getSample: vi.fn(),
-    getSampleRelations: vi.fn().mockResolvedValue([]),
-    getSimilarSamples: vi.fn().mockResolvedValue([]),
-    getMorphStatus: vi.fn(),
-    play: vi.fn(),
-}));
+const { getSample, getSampleRelations, getSimilarSamples, getSampleDistance, getMorphStatus, play } = vi.hoisted(
+    () => ({
+        getSample: vi.fn(),
+        getSampleRelations: vi.fn().mockResolvedValue([]),
+        getSimilarSamples: vi.fn().mockResolvedValue([]),
+        getSampleDistance: vi.fn().mockReturnValue(new Promise(() => undefined)),
+        getMorphStatus: vi.fn(),
+        play: vi.fn(),
+    }),
+);
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations, getSimilarSamples };
+    return { ...actual, getSample, getSampleRelations, getSimilarSamples, getSampleDistance };
 });
 
 vi.mock("../../../src/api/morph", async () => {
@@ -72,27 +75,36 @@ function serveSamples(): void {
 }
 
 describe("MorphPanel", () => {
-    it("asks for a pair when none is joined, and offers the selection once it holds two samples", () => {
+    it("asks for a pair when none is joined, and shows it once a gesture joins two samples", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
+        useMorphStore.getState().clear();
+        serveSamples();
         renderPanel();
 
         expect(screen.getByText(/No morph pair yet/)).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Use selection" })).toBeDisabled();
 
         act(() => {
-            useSelectionStore.getState().focusSample(FIRST);
-            useSelectionStore.getState().setComparisonSample(SECOND);
+            useMorphStore.getState().join(FIRST, SECOND);
         });
-        serveSamples();
-        fireEvent.click(screen.getByRole("button", { name: "Use selection" }));
 
-        expect(useMorphStore.getState()).toMatchObject({ first: FIRST, second: SECOND });
+        expect(await screen.findByText("kick_808")).toBeInTheDocument();
+    });
+
+    it("states how far apart the two ends of the pair sit", async () => {
+        getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
+        serveSamples();
+        getSampleDistance.mockResolvedValue({ sample_hash: FIRST, other_hash: SECOND, distance: 25.2468 });
+        useMorphStore.getState().join(FIRST, SECOND);
+        renderPanel();
+
+        expect(await screen.findByText("distance 25.247")).toBeInTheDocument();
+        expect(getSampleDistance).toHaveBeenCalledWith(FIRST, SECOND);
     });
 
     it("names both ends and states the weight", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
-        useMorphStore.getState().setPair(FIRST, SECOND);
+        useMorphStore.getState().join(FIRST, SECOND);
         renderPanel();
 
         expect(await screen.findByText("kick_808")).toBeInTheDocument();
@@ -103,7 +115,7 @@ describe("MorphPanel", () => {
     it("moves the shared weight from the slider and plays the morph on release, as its file states", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
-        useMorphStore.getState().setPair(FIRST, SECOND);
+        useMorphStore.getState().join(FIRST, SECOND);
         renderPanel();
         await screen.findByText("kick_808");
         await waitFor(() => {
@@ -124,7 +136,7 @@ describe("MorphPanel", () => {
     it("highlights an end on a click of its hash, staying on the panel", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
-        useMorphStore.getState().setPair(FIRST, SECOND);
+        useMorphStore.getState().join(FIRST, SECOND);
         renderPanel();
         await screen.findByText("kick_808");
 
@@ -137,7 +149,7 @@ describe("MorphPanel", () => {
     it("opens an end in the sample detail on a double-click of its hash", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
-        useMorphStore.getState().setPair(FIRST, SECOND);
+        useMorphStore.getState().join(FIRST, SECOND);
         renderPanel();
         await screen.findByText("kick_808");
 
@@ -149,7 +161,7 @@ describe("MorphPanel", () => {
     it("swaps the ends with the weight mirrored, and clears the pair", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
-        useMorphStore.getState().setPair(FIRST, SECOND);
+        useMorphStore.getState().join(FIRST, SECOND);
         useMorphStore.getState().setWeight(0.25);
         renderPanel();
         await screen.findByText("kick_808");
@@ -165,7 +177,7 @@ describe("MorphPanel", () => {
     it("says so while no inference process answers, and looks again on request", async () => {
         getMorphStatus.mockResolvedValue({ available: false, service: null });
         serveSamples();
-        useMorphStore.getState().setPair(FIRST, SECOND);
+        useMorphStore.getState().join(FIRST, SECOND);
         renderPanel();
 
         expect(await screen.findByRole("status")).toHaveTextContent("Morphing is offline");
@@ -183,7 +195,7 @@ describe("MorphPanel", () => {
     it("plays nothing when a key is let go with the weight where it was", async () => {
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         serveSamples();
-        useMorphStore.getState().setPair(FIRST, SECOND);
+        useMorphStore.getState().join(FIRST, SECOND);
         renderPanel();
         await screen.findByText("kick_808");
         await waitFor(() => {

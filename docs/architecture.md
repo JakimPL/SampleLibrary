@@ -836,11 +836,13 @@ OpenMPT theme as well, so the OpenMPT block declares every token the dark block 
 ## Morphs in the application
 
 A morph is a pair of samples and a weight between them, held in `frontend/src/morph/morphStore.ts`
-apart from the shell's focus and comparison slots: comparing two samples and morphing between two
-are different acts, and clearing one leaves the other. The cloud fills the pair with the right
+apart from the shell's focus and highlight: the pairing gestures alone fill it, so it stays where it
+was put while a person goes on browsing. The cloud fills the pair with the right
 mouse button, which regl-scatterplot leaves alone (it pans and selects on the left button only), so
 the browser's menu is the one thing `CloudView` keeps off the canvas: a right-drag from one point to
-another joins the two, and a right-click on a point joins it to the highlighted or focused sample.
+another joins the two, and a right-click on a point joins it to the sample in hand. A Shift-click on
+a sample row makes the same join from a listing, both reading the anchor through `morphAnchorOf` in
+`frontend/src/workspace/selectionStore.ts`: the highlighted sample, or the focused one.
 While the button is held, a band runs from the point the drag started at, or from that sample when
 the press landed on empty space, to the cursor, snapping to the point under it
 (`frontend/src/cloud/MorphBand.tsx`), so the pair a release would join is visible before it lands;
@@ -851,7 +853,9 @@ panel mirrors the same weight as a slider, names both ends with the
 link every listing row carries (a click highlights the end, a double-click opens it in the Sample
 Detail), and plays the render on release through the one preview element every sample plays
 through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is keyed by its own
-render's address). Both ends are carried into one frame before they blend: the API resolves the
+render's address). Beneath the play row it states how far apart the two ends sit
+(`frontend/src/morph/MorphDistance.tsx`, over `GET /samples/{hash}/distance/{other}`), so the length
+of the path is read where the path is traveled. Both ends are carried into one frame before they blend: the API resolves the
 rate each is heard at by the one rule every reader of the catalog applies and hands both to the
 inference process, which resamples the slower sample up to the faster one's rate, the higher of
 the two, so the faster keeps its whole band and the slower loses nothing, and states that rate in

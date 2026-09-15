@@ -329,7 +329,6 @@ describe("CloudPanel", () => {
         fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
 
         expect(useMorphStore.getState()).toMatchObject({ first: anchor, second: other });
-        expect(useSelectionStore.getState().comparisonSampleHash).toBe(other);
         expect(play).not.toHaveBeenCalled();
     });
 
@@ -352,7 +351,6 @@ describe("CloudPanel", () => {
         fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
 
         expect(useMorphStore.getState()).toMatchObject({ first, second });
-        expect(useSelectionStore.getState().comparisonSampleHash).toBe(second);
         expect(useSelectionStore.getState().highlighted).toBeNull();
     });
 
@@ -369,7 +367,7 @@ describe("CloudPanel", () => {
             expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         act(() => {
-            useMorphStore.getState().setPair(first, second);
+            useMorphStore.getState().join(first, second);
         });
         const marker = await screen.findByRole("slider", { name: "Morph weight" });
 
@@ -397,7 +395,7 @@ describe("CloudPanel", () => {
             expect(getMorphStatus).toHaveBeenCalled();
         });
         act(() => {
-            useMorphStore.getState().setPair(first, second);
+            useMorphStore.getState().join(first, second);
         });
         const marker = await screen.findByRole("slider", { name: "Morph weight" });
 

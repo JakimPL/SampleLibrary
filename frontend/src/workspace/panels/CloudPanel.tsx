@@ -25,7 +25,7 @@ import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
 import { Loading } from "../../shared/Loading";
-import { type EntityRef, useSelectionStore } from "../selectionStore";
+import { type EntityRef, morphAnchorOf, useSelectionStore } from "../selectionStore";
 import { entityRoute } from "../useEntityRowInteractions";
 import { CloudHoverTooltip } from "./CloudHoverTooltip";
 
@@ -154,10 +154,9 @@ export function CloudPanel(): ReactElement {
     const { coloring, tags, painted, togglePainted } = useSampleColoring(mode);
     const navigate = useNavigate();
     const highlighted = useSelectionStore((selection) => selection.highlighted);
-    const focusedSampleHash = useSelectionStore((selection) => selection.focusedSampleHash);
+    const morphAnchor = useSelectionStore(morphAnchorOf);
     const highlightEntity = useSelectionStore((selection) => selection.highlightEntity);
     const clearHighlight = useSelectionStore((selection) => selection.clearHighlight);
-    const setComparisonSample = useSelectionStore((selection) => selection.setComparisonSample);
     const morphFirst = useMorphStore((morph) => morph.first);
     const morphSecond = useMorphStore((morph) => morph.second);
     const weight = useMorphStore((morph) => morph.weight);
@@ -171,7 +170,6 @@ export function CloudPanel(): ReactElement {
             morphFirst !== null && morphSecond !== null ? { first: morphFirst, second: morphSecond, weight } : null,
         [morphFirst, morphSecond, weight],
     );
-    const morphAnchor = highlighted?.kind === "sample" ? highlighted.hash : focusedSampleHash;
     const rateByHash = useMemo(() => {
         const rates = new Map<string, number>();
         if (state.status === "success") {
@@ -202,16 +200,14 @@ export function CloudPanel(): ReactElement {
         void navigate(entityRoute(entity));
     }
 
-    function handleCompare(entity: EntityRef): void {
+    function handleJoinToAnchor(entity: EntityRef): void {
         if (entity.kind === "sample") {
-            setComparisonSample(entity.hash);
             join(morphAnchor, entity.hash);
         }
     }
 
     function handleJoin(first: EntityRef, second: EntityRef): void {
         if (first.kind === "sample" && second.kind === "sample") {
-            setComparisonSample(second.hash);
             join(first.hash, second.hash);
         }
     }
@@ -300,7 +296,7 @@ export function CloudPanel(): ReactElement {
                             onFocus={handleFocus}
                             onClear={clearHighlight}
                             onHover={handleHover}
-                            onCompare={handleCompare}
+                            onJoinToAnchor={handleJoinToAnchor}
                             onJoin={handleJoin}
                             onActivate={handleActivate}
                             link={tab === "samples" ? link : null}

@@ -4,7 +4,6 @@ import type { SampleDetail, SampleRelation, SimilarSample } from "../api/samples
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
-import { SpectralDistanceReadout } from "../workspace/panels/SpectralDistanceReadout";
 import { AnnotationRows } from "./AnnotationRows";
 import { CategoryBadge } from "./CategoryBadge";
 import { SampleFileRow } from "./SampleFileRow";
@@ -186,7 +185,6 @@ export function SampleDetailView({
                 <OptionalLabel value={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} />
             </h2>
             <p className="hash mono cell-muted">{sample.hash}</p>
-            <SpectralDistanceReadout />
             <dl className="kv">
                 <dt>Category</dt>
                 <dd>

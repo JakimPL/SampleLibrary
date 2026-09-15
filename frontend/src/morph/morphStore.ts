@@ -22,7 +22,6 @@ interface MorphState {
 }
 
 interface MorphActions {
-    readonly setPair: (first: string | null, second: string | null) => void;
     readonly join: (anchor: string | null, hash: string) => void;
     readonly swap: () => void;
     readonly setWeight: (weight: number) => void;
@@ -39,10 +38,9 @@ export const INITIAL_MORPH_STATE: MorphState = {
 
 /**
  * The pair a morph runs between and how far along it the listener stands, shared by the Morph
- * panel's slider and the marker on the cloud so the two are one control. The pair is its own
- * state, seeded from the shell's focus and comparison slots on request rather than tied to them:
- * comparing two samples and morphing between two are different acts, and clearing one leaves the
- * other where it was.
+ * panel's slider and the marker on the cloud so the two are one control. The pair is its own state,
+ * set by the pairing gestures alone -- the cloud's right button and a Shift-click on a sample row --
+ * so it stays where it was put while the shell's highlight and focus move on.
  *
  * `join` is the cloud's gesture: the anchor, the sample already in view, becomes the first end and
  * the newly chosen one the second; with no anchor the chosen sample opens a pair, or closes one
@@ -51,9 +49,6 @@ export const INITIAL_MORPH_STATE: MorphState = {
  */
 export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
     ...INITIAL_MORPH_STATE,
-    setPair: (first, second) => {
-        set({ first, second });
-    },
     join: (anchor, hash) => {
         if (anchor === hash) {
             return;

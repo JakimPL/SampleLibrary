@@ -39,7 +39,7 @@ describe("morphStore", () => {
     });
 
     it("swaps the ends and mirrors the weight, so the audible point stays put", () => {
-        useMorphStore.getState().setPair(A, B);
+        useMorphStore.getState().join(A, B);
         useMorphStore.getState().setWeight(0.25);
 
         useMorphStore.getState().swap();
@@ -54,7 +54,7 @@ describe("morphStore", () => {
     });
 
     it("clears the pair and returns the weight to its default", () => {
-        useMorphStore.getState().setPair(A, B);
+        useMorphStore.getState().join(A, B);
         useMorphStore.getState().setWeight(0.75);
 
         useMorphStore.getState().clear();

@@ -84,7 +84,7 @@ interface RenderOverrides {
     readonly onFocus?: (entity: EntityRef) => void;
     readonly onClear?: () => void;
     readonly onHover?: (entity: EntityRef | null, screenPosition: readonly [number, number] | null) => void;
-    readonly onCompare?: (entity: EntityRef) => void;
+    readonly onJoinToAnchor?: (entity: EntityRef) => void;
     readonly onJoin?: (first: EntityRef, second: EntityRef) => void;
     readonly onActivate?: (entity: EntityRef) => void;
     readonly link?: CloudLink | null;
@@ -116,7 +116,7 @@ async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnT
             onFocus={overrides.onFocus ?? vi.fn()}
             onClear={overrides.onClear ?? vi.fn()}
             onHover={overrides.onHover ?? vi.fn()}
-            onCompare={overrides.onCompare ?? vi.fn()}
+            onJoinToAnchor={overrides.onJoinToAnchor ?? vi.fn()}
             onJoin={overrides.onJoin ?? vi.fn()}
             onActivate={overrides.onActivate ?? vi.fn()}
             link={overrides.link ?? null}
@@ -185,7 +185,7 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onCompare={vi.fn()}
+                onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 link={null}
@@ -228,15 +228,15 @@ describe("CloudView", () => {
     });
 
     it("reports a point right-clicked in place as a comparison target", async () => {
-        const onCompare = vi.fn();
+        const onJoinToAnchor = vi.fn();
         const onJoin = vi.fn();
-        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onCompare, onJoin });
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onJoinToAnchor, onJoin });
         latestInstance().emit("pointOver", 0);
 
         fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON });
         fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
 
-        expect(onCompare).toHaveBeenCalledWith(SAMPLE_REF);
+        expect(onJoinToAnchor).toHaveBeenCalledWith(SAMPLE_REF);
         expect(onJoin).not.toHaveBeenCalled();
     });
 
@@ -247,13 +247,13 @@ describe("CloudView", () => {
     });
 
     it("does not report a comparison target on a plain click", async () => {
-        const onCompare = vi.fn();
-        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onCompare });
+        const onJoinToAnchor = vi.fn();
+        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onJoinToAnchor });
         latestInstance().emit("pointOver", 0);
 
         fireEvent.click(latestCanvas());
 
-        expect(onCompare).not.toHaveBeenCalled();
+        expect(onJoinToAnchor).not.toHaveBeenCalled();
     });
 
     it("does not clear the highlight on a click over a point", async () => {
@@ -300,7 +300,7 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onCompare={vi.fn()}
+                onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 link={null}
@@ -331,7 +331,7 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onCompare={vi.fn()}
+                onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 link={null}
@@ -374,7 +374,7 @@ describe("CloudView", () => {
                     onFocus={vi.fn()}
                     onClear={vi.fn()}
                     onHover={vi.fn()}
-                    onCompare={vi.fn()}
+                    onJoinToAnchor={vi.fn()}
                     onJoin={vi.fn()}
                     onActivate={vi.fn()}
                     link={null}
@@ -452,7 +452,7 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onCompare={vi.fn()}
+                onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 link={null}
@@ -482,7 +482,7 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onCompare={vi.fn()}
+                onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 link={null}
@@ -699,8 +699,8 @@ describe("CloudView right-button pairing", () => {
 
     it("joins the pressed point to the one the button is released over, and drops the band", async () => {
         const onJoin = vi.fn();
-        const onCompare = vi.fn();
-        const { container } = await renderCloudView({ points: TWO_POINTS, onJoin, onCompare });
+        const onJoinToAnchor = vi.fn();
+        const { container } = await renderCloudView({ points: TWO_POINTS, onJoin, onJoinToAnchor });
         latestInstance().emit("pointOver", 0);
         fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 10, clientY: 20 });
         latestInstance().emit("pointOver", 1);
@@ -708,7 +708,7 @@ describe("CloudView right-button pairing", () => {
         fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
 
         expect(onJoin).toHaveBeenCalledWith(SAMPLE_REF, MODULE_REF);
-        expect(onCompare).not.toHaveBeenCalled();
+        expect(onJoinToAnchor).not.toHaveBeenCalled();
         expect(bandLine(container)).not.toBeInTheDocument();
     });
 
@@ -734,8 +734,8 @@ describe("CloudView right-button pairing", () => {
 
     it("joins nothing when the button is released over empty space", async () => {
         const onJoin = vi.fn();
-        const onCompare = vi.fn();
-        await renderCloudView({ points: TWO_POINTS, onJoin, onCompare });
+        const onJoinToAnchor = vi.fn();
+        await renderCloudView({ points: TWO_POINTS, onJoin, onJoinToAnchor });
         latestInstance().emit("pointOver", 0);
         fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 10, clientY: 20 });
         latestInstance().emit("pointOut");
@@ -743,7 +743,7 @@ describe("CloudView right-button pairing", () => {
         fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
 
         expect(onJoin).not.toHaveBeenCalled();
-        expect(onCompare).not.toHaveBeenCalled();
+        expect(onJoinToAnchor).not.toHaveBeenCalled();
     });
 
     it("draws no band for the left button", async () => {

@@ -7,16 +7,15 @@ import type * as SamplesApi from "../../../src/api/samples";
 import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { getSample, getSampleRelations, getSimilarSamples, getSampleDistance } = vi.hoisted(() => ({
+const { getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => ({
     getSample: vi.fn(),
     getSampleRelations: vi.fn(),
     getSimilarSamples: vi.fn(),
-    getSampleDistance: vi.fn(),
 }));
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations, getSimilarSamples, getSampleDistance };
+    return { ...actual, getSample, getSampleRelations, getSimilarSamples };
 });
 
 function renderPanel(): ReturnType<typeof render> {
@@ -173,24 +172,6 @@ describe("SampleDetailPanel", () => {
         await waitFor(() => {
             expect(screen.getByRole("alert")).toHaveTextContent("no sample cataloged with hash 'abc'");
         });
-    });
-
-    it("shows the spectral distance to a comparison sample and clears it on request", async () => {
-        getSample.mockResolvedValue(SAMPLE_DETAIL);
-        getSampleRelations.mockResolvedValue([]);
-        getSimilarSamples.mockResolvedValue([]);
-        getSampleDistance.mockResolvedValue({ sample_hash: "abc", other_hash: "def", distance: 2.5 });
-        useSelectionStore.getState().focusSample("abc");
-        useSelectionStore.getState().setComparisonSample("def");
-
-        renderPanel();
-
-        expect(await screen.findByText("distance 2.500")).toBeInTheDocument();
-        expect(getSampleDistance).toHaveBeenCalledWith("abc", "def");
-
-        fireEvent.click(screen.getByRole("button", { name: "Clear comparison" }));
-
-        expect(useSelectionStore.getState().comparisonSampleHash).toBeNull();
     });
 
     it("highlights an occurrence's module row on a plain click and navigates to it on a double-click", async () => {

@@ -136,7 +136,7 @@ interface CloudViewProps {
     readonly onFocus: (entity: EntityRef) => void;
     readonly onClear: () => void;
     readonly onHover: (entity: EntityRef | null, screenPosition: ScreenPosition | null) => void;
-    readonly onCompare: (entity: EntityRef) => void;
+    readonly onJoinToAnchor: (entity: EntityRef) => void;
     readonly onJoin: (first: EntityRef, second: EntityRef) => void;
     readonly onActivate: (entity: EntityRef) => void;
     readonly link: CloudLink | null;
@@ -343,8 +343,8 @@ function selectHighlighted(
  * shell. The right button is the pairing gesture, which the library leaves alone (it pans, selects
  * and lassos on the left button only), so the browser's menu is the one thing kept off the canvas:
  * a right-drag from one point to another reports both through `onJoin`, and a right-click on a
- * point, pressed and released in place, reports that point through `onCompare` for the caller to
- * join from its own anchor. While the button is held, a band runs from the point pressed, or from
+ * point, pressed and released in place, reports that point through `onJoinToAnchor` for the caller
+ * to join from its own anchor. While the button is held, a band runs from the point pressed, or from
  * `anchor` when the press landed on empty space, to the cursor, snapping to the point under it,
  * so the pair a release would join is visible before it lands. When
  * `link` names two points in view, a line joins them and its marker is the weight; the hover
@@ -384,7 +384,7 @@ export function CloudView({
     onFocus,
     onClear,
     onHover,
-    onCompare,
+    onJoinToAnchor,
     onJoin,
     onActivate,
     link,
@@ -413,14 +413,14 @@ export function CloudView({
     const onFocusRef = useRef(onFocus);
     const onClearRef = useRef(onClear);
     const onHoverRef = useRef(onHover);
-    const onCompareRef = useRef(onCompare);
+    const onJoinToAnchorRef = useRef(onJoinToAnchor);
     const onJoinRef = useRef(onJoin);
     const onActivateRef = useRef(onActivate);
     onSelectRef.current = onSelect;
     onFocusRef.current = onFocus;
     onClearRef.current = onClear;
     onHoverRef.current = onHover;
-    onCompareRef.current = onCompare;
+    onJoinToAnchorRef.current = onJoinToAnchor;
     onJoinRef.current = onJoin;
     onActivateRef.current = onActivate;
     const linkRef = useRef<CloudLink | null>(link);
@@ -744,7 +744,7 @@ export function CloudView({
             if (targetIndex !== origin.index) {
                 onJoinRef.current(first, second);
             } else if (origin.pressedOnPoint) {
-                onCompareRef.current(second);
+                onJoinToAnchorRef.current(second);
             }
         }
 

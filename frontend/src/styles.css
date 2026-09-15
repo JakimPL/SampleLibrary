@@ -954,7 +954,6 @@ table.data td .annotation-editor-input {
 .panel-filter button,
 .detail-tabs button,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
-.spectral-distance-readout button,
 .morph-panel button:not(.thumbnail-button) {
     border: 1px solid var(--border);
     background: var(--surface-0);
@@ -967,16 +966,14 @@ table.data td .annotation-editor-input {
 }
 
 .panel-filter button:disabled,
-.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):disabled,
-.spectral-distance-readout button:disabled {
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):disabled {
     color: var(--text-faint);
     cursor: default;
 }
 
 .panel-filter button:hover:enabled,
 .detail-tabs button:hover:enabled,
-.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled,
-.spectral-distance-readout button:hover:enabled {
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled {
     color: var(--text-primary);
     border-color: var(--border-strong);
 }
@@ -1439,18 +1436,6 @@ table.data td .annotation-editor-input {
     font-weight: 600;
 }
 
-.spectral-distance-readout {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 14px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    background: var(--accent-soft);
-    font-size: 11px;
-}
-
 .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1722,6 +1707,12 @@ table.data td .annotation-editor-input {
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+}
+
+.morph-distance {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-muted);
 }
 
 .morph-actions label {

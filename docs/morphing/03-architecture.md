@@ -181,7 +181,10 @@ The two-sample selection this feature needs was built for the spectral-distance 
   filled, and already shows the pair and their distance. A weight slider belongs beside it.
   (Shipped 2026-09-12 in its own Morph panel and as a marker on the cloud, over a pair the morph
   store holds apart from the comparison slot; `useAudioPreview.play` now takes a source with its
-  own URL, key and rate, which is the generalization named below.)
+  own URL, key and rate, which is the generalization named below. Since 2026-09-15 the comparison
+  slot is gone: the pairing gestures -- the cloud's right button, and a Shift-click on a sample row
+  -- are the only ones that fill the pair, and the distance reads inside the Morph panel over the
+  pair itself, as `frontend/src/morph/MorphDistance.tsx`.)
 
 One coupling has to be generalized. Both players build their URL from a hash:
 `useWaveformPlayer(sampleAudioUrl(sampleHash), ...)` at `frontend/src/samples/WaveformPlayer.tsx:48`,
