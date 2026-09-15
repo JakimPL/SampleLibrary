@@ -15,7 +15,7 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 |---|---|---|
 | `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the reading of a hand label as tag paths and the agreement between two of them (`samplecore.labeling`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the pitch rule that turns an occurrence rate and a pressed key into the one rate a sample is really played at, the anchoring rule that keeps a hand label attached to its sample, the sample files read in place from configured sample directories (`samplecore.sample_files` decodes one into the sample it holds, and `samplecore.storage.sample_audio.SampleAudio` is the one reader of every sample's audio, from the store or from its files), the waveform hygiene every analysis shares (folding to mono, the subsonic high-pass), the auditory front end (`samplecore.auditory`: an ERB-spaced gammatone bank, subband envelopes and the two-lobe modulation spectrum a listener hears flutter and roughness on, designed once as data so a numpy reading and a torch loss apply the same kernels), and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `scipy`, `pydantic`, `soundfile` |
 | `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, scanning the configured sample directories into the catalog in place (`sampleextract.files`, the `samplelibrary files` command), spreading either pass over worker processes (`sampleextract.parallel`), computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each) and folding those notes into the rate each sample is heard at, the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
-| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `samplemorph` trains, and through its text tower suggests labels for every sample from a vocabulary of prompts (`samplecloud.suggestions`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the keyword table names alike, and whether it groups what the note events say the library plays alike. Depends on `samplecore`, and on `samplemorph` inside its `learned` backend's factory, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `samplemorph` (the `learned` backend), `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn`, `mlflow` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
+| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `samplemorph` trains, and through its text tower suggests labels for every sample from a vocabulary of prompts (`samplecloud.suggestions`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the note events say the library plays alike, and whether it groups what a person labeled alike. Depends on `samplecore`, and on `samplemorph` inside its `learned` backend's factory, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `samplemorph` (the `learned` backend), `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn`, `mlflow` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
 | `samplemorph` | The decodable-representation pipeline: canonicalizing a sample into a fixed-size sound image on a log-frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a pluggable `Vocoder` turning a magnitude spectrogram back into audible frames -- in production a restorer taught what the grid's band averaging removes from this library's own sounds, followed by phase gradient heap integration under a Gaussian analysis -- and a learned `Descriptor` (`samplemorph.descriptors`) that reads the canonical grid as one vector: distilled from the pretrained listening model, taught by retuned views that a retuning changes nothing, and by the hand labels what the listener calls alike. A conditioned codec (`samplemorph.codecs.conditioned`) decodes the grid from that descriptor beside a small residual under a prior, so a morph moves a sound's identity through the space the harness judges and its particulars through a space where every point decodes. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner -- which is what leaves the representation invertible where the sample cloud's descriptors are not. Training passes (`samplemorph.training`) run under a run tracker and read a grid cache canonicalized once under the library root. Each shell command is one module under `samplemorph.commands`, and the ones that train import the trainer only when they run, so parsing arguments and the commands that train nothing stay clear of it. `samplemorph.service` is the same pipeline over HTTP: the morph inference process (`samplelibrary morph serve`), which loads the fitted models once, renders any point between two cataloged samples on request, reading a sample found in a sample directory from the file the request names inside the directories its own configuration lists, and is what the web API dials for a morph. Depends on `samplecore` only. | `samplecore`, `librosa`, `scikit-learn`, `torch`, `fastapi`, `uvicorn` (the `morph` extra) |
 | `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples, and the morph routes, which relay renders from the inference process over HTTP. Every route is served under `API_PREFIX` (`/api`), which keeps the whole API inside one path segment and leaves every other path to the single-page application's own routes. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn`, `httpx` (the `server` extra) |
 | `samplelibrary` | The `samplelibrary` command line: one parser naming every operation on the library, which hands the rest of a command line to the module owning that command and imports that module as the command runs, so listing the commands stays instant and each command needs its own package's extras alone. A global `--config` sets `SAMPLELIBRARY_CONFIG` and drops any exported `SAMPLELIBRARY_DATABASE_URL`, so the file it names supplies the database too, and every process a command starts inherits both -- uvicorn's workers and a pipeline's worker processes included. The dispatcher accepts a command's own arguments only after its name. It also holds the commands that belong to no pipeline: `setup` (the config file and the databases), `reset`, and `tracking uri` / `tracking ui`, and the sandbox's synthetic modules and sample pack (`samplelibrary.sandbox`). Every command ends with one of the statuses `samplecore.exit_status.ExitStatus` names: 0 once its work is committed, per-item failures included as warnings, 1 when something broke, 2 for a malformed command line, 3 for a request it refuses, and 4 for a process that outgrew its memory ceiling. `--memory-cap 16G` holds the command and everything it starts to a memory ceiling before it loads anything of its own (`samplelibrary.limits`): on Linux the process starts again inside a systemd user scope with swap closed off and reads the ceiling back from its own control group, on Windows it assigns itself to a job object of that name, and a system offering neither refuses a ceiling rather than running uncapped. `--memory-scope` names the scope, which is what another process finds a running step by. When `SAMPLELIBRARY_STEP_LOCK` names a lock, the dispatcher holds that Postgres advisory lock for the life of the command, which is how a pipeline recognizes a step still running. It sits over every other package. | every package above |
@@ -103,9 +103,8 @@ being whole numbers and a fraction of a hertz sitting far below hearing.
 A key reaching a sample below `minimum_sample_frames` keeps its note and
 leaves its slot open, since the catalog holds no occurrence to name; a cell stating no instrument
 leaves both open, its routing being a fact about how the song is played rather than what the cell
-holds. `module_instrument` records each voice slot the same numbering addresses, and its names feed
-`classify_sample_category` alongside the occurrence names -- a tracker names an instrument apart from
-the waveforms its keys reach, so a sample stored as "smp03" is described only there.
+holds. `module_instrument` records each voice slot the same numbering addresses, with the name its
+author gave the voice -- a tracker names an instrument apart from the waveforms its keys reach.
 `module_note_extraction` records which modules have been read, so a module whose patterns press no
 keys still reads as finished and a resumed pass spares it a second parse.
 
@@ -201,10 +200,11 @@ schema, `create_app`'s startup prepares it once: the read-only connection every 
 nothing, so a database the offline pipelines have never written to would otherwise fail to serve a
 listing at all.
 
-Every one of these decisions is made where a sample is met: the samples listing edits a category,
-a rating and a favorite mark in the row itself, and the detail panel offers the same three. A
-wording is recorded on Enter or on leaving the field, and emptying the field takes the hand label
-back so the guessed category shows again -- one gesture to correct a wrong guess and one to undo it.
+Every one of these decisions is made where a sample is met: the samples listing edits the label
+behind a sample's category, a rating and a favorite mark in the row itself, and the detail panel
+offers the same three. A wording is recorded on Enter or on leaving the field, and emptying the
+field takes the hand label back so what the listening model heard shows again -- one gesture to
+correct a wrong suggestion and one to undo it.
 An edit reaches exactly what the row it was made in stands for: the whole equivalence class while
 the listing groups near-duplicates together, and the one sample otherwise. `useAnnotationWriter` is
 the single path all of them write through, so every row, badge and panel showing that sample follows
@@ -298,12 +298,10 @@ cache left in place. A missing stored object is a damaged store and still raises
 with the same nominal header rate and the same year-long cache lifetime, and answers 404 naming the
 file when none can be read; the sample detail lists its files, each with whether it is available now.
 
-Names, categories and rates read files beside occurrences. A file's name without its suffix counts
-among the names the waveform is stored under, which the display name is drawn from; its folders
-serve the keyword table as a fallback, nearest the file first (see
-[Sample categorization](#sample-categorization)); and its declared rate joins the occurrence rates a
-sample with no note events is played at, which the frontend applies to the nominal header the way it
-does for every sample.
+Names and rates read files beside occurrences. A file's name without its suffix counts among the
+names the waveform is stored under, which the display name is drawn from; and its declared rate
+joins the occurrence rates a sample with no note events is played at, which the frontend applies to
+the nominal header the way it does for every sample.
 
 ## Running extraction in parallel
 
@@ -510,10 +508,11 @@ whether or not a frontend is served beside it.
 The dev server also grows the cloud on request: with `VITE_CLOUD_DENSIFY` set, a plugin in
 `frontend/dev/` answers `/api/cloud` (and `/api/cloud/modules` under `VITE_CLOUD_DENSIFY_MODULES`)
 with the backend's own points followed by seeded clones of them, laid out in Gaussian clusters and
-each carrying its parent's hash and category, so the sandbox's few dozen samples show the density of
-a library of a hundred thousand and every interaction still reaches the catalog. A catalog whose
-embedding has yet to run is laid out from its own listing first, one cluster per category, which
-keeps every point on a real hash. The plugin runs under `vite` serve alone.
+each carrying its parent's hash and rate, so the sandbox's few dozen samples show the density of a
+library of a hundred thousand and every interaction still reaches the catalog. A catalog whose
+embedding has yet to run is laid out from its own listing first, one cluster per category its badge
+names -- the hand label, else the first suggestion, else the first word of its name -- which keeps
+every point on a real hash. The plugin runs under `vite` serve alone.
 
 `samplelibrary serve` loads the configuration and opens the catalog once before uvicorn starts, so a
 missing or incomplete config ends the start with one message and exit status 3, a database that
@@ -598,7 +597,10 @@ cloud's points without the hand label a viewer never read and with coordinates r
 decimals; the module points without a timestamp each; the suggestions as each sample's first pick
 alone; a hover served by one preview route reading the stored thumbnail; the points cached for
 the session in the browser and the label and suggestion sources fetched only in the mode that
-paints by them. Measured on the same body, gzip alone takes the cloud's response to 9 MB and the
+paints by them. The classification term in the build belonged to the keyword categories the points
+carried then; the points now carry coordinates and rates alone, and the Cloud panel opens painted
+by category from the suggestions, fetching `/api/cloud/suggestions` and the cached
+`/api/cloud/suggestion-tags` as it mounts. Measured on the same body, gzip alone takes the cloud's response to 9 MB and the
 trims together to 6.7 MB; a binary columnar layout would reach 5.2 MB, most of it the hashes, and
 is worth its own format only if the gzipped body passes 10 MB or the download and parse pass a
 second on a real link.
@@ -674,7 +676,7 @@ recipe is refused.
 
 ### Judging a descriptor
 
-`samplecloud.evaluation` scores any experiment's vectors against four targets the catalog already
+`samplecloud.evaluation` scores any experiment's vectors against three targets the catalog already
 carries, so a change to an extractor is answered by numbers rather than by an impression.
 
 - **Transposition retrieval** retunes a sample by a fixed mirrored grid of semitone offsets,
@@ -682,9 +684,6 @@ carries, so a change to an extractor is answered by numbers rather than by an im
   label at all, since retuning produces a query the catalog holds the answer to. Rank-1 and rank-5
   shares travel beside the median rank, because a descriptor placing the original second every time
   and one placing it forty-thousandth both score zero at rank one.
-- **Category agreement** classifies each keyword-labeled sample from its neighbors. `UNCATEGORIZED`
-  stays out, since it records that no keyword matched rather than a class the samples share, and
-  macro-F1 sits beside accuracy because supports run from about a hundred to a few thousand.
 - **Note-event agreement** predicts how many distinct pitches a sample is played at and how wide a
   span it covers, scored by rank correlation. Both are continuous, because the percussive and tonal
   split they were once read as is a tendency rather than a division. A second reading covers only
@@ -722,55 +721,44 @@ samples asks for a representation carrying a decoder as well, which is a separat
 research behind it, the measured facts about the corpus it rests on, and the staged plan for the
 `samplemorph` package live under [`morphing/`](morphing/00-handover.md).
 
-## Sample categorization
+## Labels on a sample
 
-`SampleCategory` (`samplecore.models.category`) is a coarse, guessed instrument role -- kick,
-snare, bass, and so on -- attached to every sample summary, detail, and cloud point. It is not a
-stored column: mirroring equivalence classes, `samplecore.categorization.classify_sample_category`
-derives it at read time from the sample's own occurrence names, the same name data
-`samplecore.naming.choose_dominant_name` already reads to resolve `display_name`. Classification is
-one plain, ordered keyword table matched against each name with its separators stripped, deliberately
-a first-pass heuristic rather than a tuned classifier -- expect to retune the keyword table against
-how well it agrees with real listening. A sample found in sample directories is named by its files'
-names too, and `classify_sample_names` falls back to the folders its files sit in when every name
-leaves it uncategorized, one folder at a time and nearest the file first: a pack's "Kicks" folder
-holding a file called "Snare 01" holds a snare, and a keyword buried in a pack's title reaches a
-sample last. A hand label wins wherever one exists (`SampleSummary.hand_label`,
-and the same field on the detail and cloud-point models): the guessed category travels beside it, so
-a reader sees both what a person decided and what the keyword table inferred, and `CategoryBadge` is
-the single place that rule is applied. The frontend colors the sample cloud by category
-(`regl-scatterplot`'s own categorical coloring, one fixed hue per `SampleCategory` declared as a CSS
-custom property per theme in `styles.css`, the uncategorized samples drawn first as a finer, fainter
-substrate; [The cloud on screen](#the-cloud-on-screen) describes the drawing) and shows the category
-as a badge everywhere a sample's name appears; the same color and label always travel together,
-since fourteen categories are too many to stay reliably distinguishable by hue alone for every
-viewer. In the badge a hand label wears one style of its own, being free text.
+A sample is named by two kinds of label. The hand label is what a person wrote
+(`SampleSummary.hand_label`, and the same field on the detail and preview models); the suggested
+label is what the listening model heard first, the closest pick of the scoring on show
+(`suggested_label`, read per request through `first_pick_labels` in
+`samplecore.storage.repositories.label_suggestion`, the shown scoring resolved once per request by
+the `get_shown_experiment_id` dependency). Everywhere a sample is named the app calls this its
+category, and `CategoryBadge` is the single place the rule is applied: the hand label wins in a solid
+badge of its own, the first suggestion stands in a dashed one, and a sample neither names reads as
+unlabeled. A suggestion badge carries a swatch in its top-level tag's color, from the same ranks the
+cloud paints by, so a badge and its point agree; a label too long for its cell ends in an ellipsis
+with the whole wording in its tooltip.
 
-The cloud can also color by the hand labels' own tags, with nothing about any tag known to the
-frontend. `GET /curation/annotations/tags` reads the tag tree out of the labels through
+The cloud colors by the hand labels' own tags or by the suggestions, with nothing about any tag
+known to the frontend. `GET /curation/annotations/tags` reads the tag tree out of the labels through
 `samplecore.labeling`, each tag with its count and a rank by the order it was first used, and
 `GET /cloud/labels` carries every labeled sample's tags in the order the person wrote them, apart
 from the points because a few hundred labels change with every label written while a hundred
-thousand points change only with the embedding. The frontend paints a tag in a color that is a
-function of its rank alone (`labelPalette.ts`: hues a golden angle apart, at the lightness and
-chroma each theme declares), so a tag keeps its color as the vocabulary grows and a new one takes
-the next hue; the legend is the picker, painting the most used top-level tags until a person
-chooses their own, listing the painted ones with the rest behind a toggle inside a strip of at
-most three rows, and a sample carrying several painted tags takes the first it was given
-(`labelColoring.ts`). Every point outside the painted tags joins the uncategorized ones in the
-substrate, on its recessive tone.
-
-A third kind of label travels beside the two: what the listening model hears a sample as, the
-suggestions a `zero_shot` scoring wrote. `GET /cloud/suggestions` carries each sample's first
-suggested tag path with its score, apart from the points like the hand labels, and
+thousand points change only with the embedding. `GET /cloud/suggestions` carries each sample's first
+suggested tag path with its score, apart from the points in the same way, and
 `GET /cloud/suggestion-tags` the tags suggested first with their counts, each counting toward its
-category and ranked by its place in the scoring's vocabulary, so the same legend and palette paint
-the cloud by suggestion. A sample's detail carries `suggested_labels`, and `SuggestedLabels` shows
-each as a dashed badge with its score: a click appends the tag to the hand label through
-`useAnnotationWriter`, the one write path every annotation gesture takes, reaching the sample's
-near-duplicates the way the editor's own default does, and a tag the label already holds shows as
-taken. The suggestion stays a suggestion until a person accepts it: the hand label wins wherever
-one exists, and the badge that names a sample never shows a suggestion.
+category and ranked by its place in the scoring's vocabulary; both answers are cached under the id of
+the scoring on show, since a scoring's picks never change once written. The frontend paints a tag in
+a color that is a function of its rank alone (`labelPalette.ts`: hues a golden angle apart, at the
+lightness and chroma each theme declares), so a tag keeps its color as the vocabulary grows and a new
+one takes the next hue; the legend is the picker, painting the most used top-level tags until a
+person chooses their own, listing the painted ones with the rest behind a toggle inside a strip of at
+most three rows, and a sample carrying several painted tags takes the first it was given
+(`labelColoring.ts`). The Cloud panel opens in the category mode, painted from the suggestions, with
+the labels one click away. Every point outside the painted tags joins the substrate, on its
+recessive tone, and while a mode's sources load every point waits there.
+
+A sample's detail lists every pick of the scoring on show as its categories (`SampleDetail.suggestions`,
+closest first), each a dashed badge with its score beneath the label editor: a click appends the tag
+to the hand label through `useAnnotationWriter`, the one write path every annotation gesture takes,
+reaching the sample's near-duplicates the way the editor's own default does, and a tag the label
+already holds shows as taken.
 
 ## The cloud on screen
 
@@ -829,7 +817,7 @@ in tokens alone: `cloudRenderSettings.ts` reads the ones the canvases use into o
 `CloudRenderSettings` whenever the theme changes, and the SVG overlays take theirs through CSS. The
 dark and light themes draw round dots over their substrate, rings in detail, cased markers and a
 solid accent link. The OpenMPT theme draws its envelope editor: a black ground, a vertical grid,
-every point a hollow square in its category's color at every zoom, the selected point yellow and the
+every point a hollow square in its painted tag's color at every zoom, the selected point yellow and the
 morph pair joined by a yellow line. A system dark preference applies the dark block beneath a chosen
 OpenMPT theme as well, so the OpenMPT block declares every token the dark block declares.
 

@@ -202,7 +202,7 @@ installs cleanly and then fails the moment it is first asked to compute.
 
 Click a sample's category in the list and type what it is; words you have used before are suggested
 as you type, and Enter records it. Labels are kept in one spelling — capitals, one space after each
-colon and comma, each tag once — so one wording stays one label however you typed it. Emptying the field brings back the app's own guess. Five stars
+colon and comma, each tag once — so one wording stays one label however you typed it. Emptying the field brings back what the listening model heard. Five stars
 and a heart sit in the same row, saved as you click, and a sample's own page offers all three as
 well. Near-duplicates get the same decision by default, whenever the list has them grouped. The
 samples list can then show only your favorites, or put your best-rated first, across the whole
@@ -219,9 +219,10 @@ The listening model can suggest labels for every sample.
 with it, hearing each sample at the rate it is played at (about an hour), and
 `uv run samplelibrary cloud suggest --experiment-id <that experiment's id>` ranks a vocabulary of
 instruments against every sample in minutes; `--vocabulary hand-labels` ranks the wordings you have
-used instead, and a file with one label per line works too. The cloud then colors by suggestion, and
-a sample's page lists its suggestions with the model's confidence: a click adds one to the label,
-and the rest stay suggestions.
+used instead, and a file with one label per line works too. A sample's category is then what the
+model heard first, wherever you have not written a label of your own, and the cloud colors by it. A
+sample's page lists every category the model heard with its confidence: a click adds one to your
+label.
 
 ## Morphing two samples
 
@@ -244,8 +245,9 @@ takes about an hour an epoch over a large library.
 With the renderer running, in the cloud, press the right mouse button on one sample and release it
 on another: a line follows your cursor while the button is down, and the release joins the two with
 a dashed line whose marker is how far from the first sample toward the second you stand. A plain
-right-click on a sample joins it to the one you last clicked instead. Drag the marker, or move the
-slider in the Morph panel, and the morph plays when you let go. The two ends play as
+right-click on a sample joins it to the one you last clicked instead, and so does a Shift-click on a
+sample in any list. Drag the marker, or move the slider in the Morph panel, and the morph plays when
+you let go; beneath the play button the panel shows how far apart the two samples sound. The two ends play as
 the model reconstructs them, with each original one click away beside its name, and a double-click
 on either name opens it in the Sample Detail. Without the renderer running, the panel says so and
 offers to check again.
