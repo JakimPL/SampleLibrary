@@ -33,6 +33,7 @@ from samplecore.storage.repositories.sample_properties import PostgresSampleProp
 from samplemorph.cli import main
 from samplemorph.descriptors.descriptor_shape import DESCRIPTOR_SIZE
 from samplemorph.geometry import Anchor, log_frequency_geometry
+from samplemorph.listening.pairs import CatalogPair, PairEnd, PairSet, write_pair_set
 from samplemorph.model_paths import codec_path, descriptor_path, restorer_path
 from samplemorph.model_store import model_path
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
@@ -637,7 +638,7 @@ def test_a_teacher_whose_vectors_a_descriptor_cannot_answer_in_is_refused(
 
 LISTENED_PIANO_COUNT = 5
 LISTENED_TONES = tuple(
-    CatalogedTone(suggested_label="CHORD", score=0.1, module_index=index, hand_label="PIANO")
+    CatalogedTone(suggested_label="CHORD", score=0.1, module_index=index, hand_label="PIANO", audible=True)
     for index in range(LISTENED_PIANO_COUNT)
 )
 COMPARED_WEIGHTS = ("0", "0.5", "1")
@@ -739,6 +740,46 @@ def test_a_blind_comparison_names_the_routes_by_letter_and_keeps_the_key(
     assert sorted(key) == ["A", "B"]
     assert sorted(route["kind"] for route in key.values()) == ["blend", "transport"]
     assert {row["route"] for row in _rows(output / "verdicts.csv")} == {"A", "B"}
+
+
+def test_comparing_a_pair_with_a_silent_end_ends_before_any_route_loads(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    audible, silent = seed_labeled_tones(
+        connection,
+        tmp_path,
+        (
+            CatalogedTone(suggested_label="PIANO", score=0.5, module_index=0, hand_label=None, audible=True),
+            CatalogedTone(suggested_label="PIANO", score=0.5, module_index=1, hand_label=None, audible=False),
+        ),
+    )
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    pairs = tmp_path / "pairs.json"
+    write_pair_set(
+        pairs,
+        PairSet(
+            seed=0,
+            experiment_id=0,
+            pairs=(
+                CatalogPair(
+                    name="01-same-piano",
+                    first=PairEnd(sample_hash=audible, label="PIANO"),
+                    second=PairEnd(sample_hash=silent, label="PIANO"),
+                ),
+            ),
+        ),
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        main(["compare", "--pairs", str(pairs), "--output", str(tmp_path / "out"), "--model", "absent"], prog=PROGRAM)
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert f"Compared nothing: pair 01-same-piano names sample {silent}" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
 
 
 def test_drawing_from_a_catalog_showing_no_scoring_says_so(

@@ -15,6 +15,7 @@ from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.geometry import SEMITONES_PER_OCTAVE
 from samplemorph.listening.candidates import Candidate, CatalogCandidates
+from samplemorph.listening.heard_pairs import is_audible
 from samplemorph.listening.kinds import (
     CROSS_KINDS,
     PERCUSSIVE_KINDS,
@@ -65,8 +66,8 @@ def draw_pairs(connection: Connection, audio: SampleAudio, *, random_seed: int) 
 
     Two pairs of each kind of sound, six pairs across kinds, one tonal and one percussive sample
     each heard at two rates, a short hit against a long sustain, two pairs of loops, and a sample
-    at a low rate and depth against one at a high rate and depth. Each sample is drawn once at
-    most, the two ends of a pair come from different modules and different groups of
+    at a low rate and depth against one at a high rate and depth. Every sample drawn is audible and
+    drawn once at most, the two ends of a pair come from different modules and different groups of
     near-duplicates, and they lie at least `MINIMUM_END_DISTANCE_DB` apart as heard, so every pair
     has a way to travel. The log names every slot the catalog leaves empty.
 
@@ -96,6 +97,7 @@ class PairDrawer:
         self._pairs: list[DrawnPair] = []
         self._used: set[str] = set()
         self._strike_counts: dict[str, int] = {}
+        self._audible: dict[str, bool] = {}
 
     @property
     def pairs(self) -> tuple[DrawnPair, ...]:
@@ -150,12 +152,16 @@ class PairDrawer:
         ]
         for candidate in fitting:
             declared = _declared_retuning(candidate.declared_rates_hz)
-            if declared is not None and ONE_SHOT_SECONDS.holds(candidate.sample.frames / declared[1]):
+            if (
+                declared is not None
+                and ONE_SHOT_SECONDS.holds(candidate.sample.frames / declared[1])
+                and self._is_audible(candidate)
+            ):
                 self._add_retuned(f"retuned-{slug}", candidate, rates_hz=declared)
                 return
         for candidate in fitting:
             higher = candidate.rate_hz * 2.0 ** (SHORTEST_RETUNING_SEMITONES / SEMITONES_PER_OCTAVE)
-            if ONE_SHOT_SECONDS.holds(candidate.sample.frames / higher):
+            if ONE_SHOT_SECONDS.holds(candidate.sample.frames / higher) and self._is_audible(candidate):
                 self._add_retuned(f"retuned-{slug}", candidate, rates_hz=(candidate.rate_hz, higher))
                 return
         _logger.warning("The catalog offers no sample for the retuned-%s slot.", slug)
@@ -183,18 +189,23 @@ class PairDrawer:
         first_fits: Fits,
         second_fits: Fits,
     ) -> tuple[Candidate, Candidate] | None:
-        """The first two free, unrelated candidates that fit their slots and sound far enough apart.
+        """The first two free, unrelated, audible candidates that fit their slots and sound far enough apart.
 
         At most `MAXIMUM_DISTANCE_CHECKS` pairs are listened to, which bounds how much audio a
         slot the catalog can hardly fill reads before it is given up.
         """
         checks = 0
         for first in first_pool:
-            if not self._is_free(first) or not first_fits(first):
+            if not self._is_free(first) or not first_fits(first) or not self._is_audible(first):
                 continue
             first_pcm = self._audio.read(first.sample).pcm
             for second in second_pool:
-                if not self._is_free(second) or first.is_related_to(second) or not second_fits(second):
+                if (
+                    not self._is_free(second)
+                    or first.is_related_to(second)
+                    or not second_fits(second)
+                    or not self._is_audible(second)
+                ):
                     continue
                 if checks == MAXIMUM_DISTANCE_CHECKS:
                     return None
@@ -228,8 +239,13 @@ class PairDrawer:
     def _merged_pool(self, kinds: tuple[SoundKind, ...]) -> tuple[Candidate, ...]:
         return tuple(candidate for kind in kinds for candidate in self._candidates.pool(kind))
 
+    def _is_audible(self, candidate: Candidate) -> bool:
+        if candidate.sample_hash not in self._audible:
+            self._audible[candidate.sample_hash] = is_audible(prepare_mono(self._audio.read(candidate.sample).pcm))
+        return self._audible[candidate.sample_hash]
+
     def _is_loop(self, candidate: Candidate) -> bool:
-        if not LOOP_SECONDS.holds(candidate.seconds):
+        if not LOOP_SECONDS.holds(candidate.seconds) or not self._is_audible(candidate):
             return False
         if candidate.sample_hash not in self._strike_counts:
             self._strike_counts[candidate.sample_hash] = _loud_strike_count(

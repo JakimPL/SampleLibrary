@@ -118,9 +118,14 @@ def compare_routes(
     holding both ends and every listening weight, one file each, beside ``path.wav``: every path
     weight in order, a short silence apart. Files keep the level they were rendered at. The
     readings go to ``readings.csv``, one row per point, and ``paths.csv``, one row per path;
-    ``verdicts.csv`` waits for the listener, and ``manifest.json`` names the routes, the weights
-    and the pairs.
+    ``verdicts.csv`` waits for the listener, and ``manifest.json``, written first, names the routes,
+    the weights and the pairs. The tables are written again after every pair, so they hold every
+    pair rendered so far.
     """
+    output_directory.mkdir(parents=True, exist_ok=True)
+    (output_directory / MANIFEST_FILE_NAME).write_text(
+        json.dumps(_manifest(pair_set, routes=routes, weights=weights), indent=2), encoding="utf-8"
+    )
     canonicalizer = CANONICALIZER_REGISTRY[DEFAULT_CANONICALIZER_NAME]()
     runs: list[RouteOnPair] = []
     for heard in heard_pairs:
@@ -137,12 +142,7 @@ def compare_routes(
             _write_path(pair_directory / compared.folder, run=run, heard=heard, weights=weights)
             runs.append(run.table)
             _logger.info("%s through %s in %.1f s.", pair.name, compared.folder, time.perf_counter() - started)
-    write_table(output_directory / READINGS_FILE_NAME, [row for run in runs for row in point_rows(run)])
-    write_table(output_directory / PATHS_FILE_NAME, [path_row(run) for run in runs])
-    write_table(output_directory / VERDICTS_FILE_NAME, verdict_rows(tuple(runs)))
-    (output_directory / MANIFEST_FILE_NAME).write_text(
-        json.dumps(_manifest(pair_set, routes=routes, weights=weights), indent=2), encoding="utf-8"
-    )
+        _write_tables(output_directory, runs=tuple(runs))
     return ComparisonSummary(pair_count=len(heard_pairs), route_count=len(routes), output_directory=output_directory)
 
 
@@ -184,6 +184,12 @@ def _run_route(
             transposition_distances_db=transposition_distances_db(points[1:-1], references) if references else (),
         ),
     )
+
+
+def _write_tables(output_directory: Path, *, runs: tuple[RouteOnPair, ...]) -> None:
+    write_table(output_directory / READINGS_FILE_NAME, [row for run in runs for row in point_rows(run)])
+    write_table(output_directory / PATHS_FILE_NAME, [path_row(run) for run in runs])
+    write_table(output_directory / VERDICTS_FILE_NAME, verdict_rows(runs))
 
 
 def _render_points(

@@ -24,7 +24,7 @@ from samplemorph.listening.comparing import (
     compare_routes,
     named_folders,
 )
-from samplemorph.listening.heard_pairs import PairSampleMissing, read_heard_pair
+from samplemorph.listening.heard_pairs import PairSampleMissing, SilentPairEnd, read_heard_pair
 from samplemorph.listening.pairs import PairSet, read_pair_set
 from samplemorph.pipeline import latent_route_description, load_route
 from samplemorph.route_arguments import (
@@ -89,7 +89,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
 
     Raises:
         SystemExit: the pairs file cannot be read, the weights do not describe a path, or a pair names
-            a sample that cannot be read.
+            a sample that cannot be read or is too quiet to hear.
     """
     with ending_in_one_line("Compared nothing", (ValueError,)):
         pair_set = _read_pairs(Path(arguments.pairs))
@@ -97,7 +97,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     audio = SampleAudio.from_catalog(connection, config.library_root)
     try:
         heard = tuple(read_heard_pair(connection, audio, pair, weights=weights.path) for pair in pair_set.pairs)
-    except (PairSampleMissing, SampleUnavailableError) as error:
+    except (PairSampleMissing, SilentPairEnd, SampleUnavailableError) as error:
         _logger.error("Compared nothing: %s.", error)
         sys.exit(ExitStatus.REFUSED)
     kinds = tuple(dict.fromkeys(arguments.routes))

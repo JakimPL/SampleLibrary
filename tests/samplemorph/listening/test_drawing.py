@@ -23,19 +23,21 @@ HAND_LABELED_PIANO_COUNT: Final[int] = 6
 LOW_PAD_COUNT: Final[int] = 6
 TONES: Final[tuple[CatalogedTone, ...]] = (
     *(
-        CatalogedTone(suggested_label=CHORD, score=0.1, module_index=index, hand_label=PIANO)
+        CatalogedTone(suggested_label=CHORD, score=0.1, module_index=index, hand_label=PIANO, audible=True)
         for index in range(HAND_LABELED_PIANO_COUNT)
     ),
-    CatalogedTone(suggested_label=PIANO, score=0.9, module_index=10, hand_label=SNARE),
-    CatalogedTone(suggested_label=PAD, score=0.9, module_index=11, hand_label=None),
-    CatalogedTone(suggested_label=PAD, score=0.8, module_index=11, hand_label=None),
+    CatalogedTone(suggested_label=PIANO, score=0.9, module_index=10, hand_label=SNARE, audible=True),
+    CatalogedTone(suggested_label=CHORD, score=0.1, module_index=12, hand_label=PIANO, audible=False),
+    CatalogedTone(suggested_label=PAD, score=0.9, module_index=11, hand_label=None, audible=True),
+    CatalogedTone(suggested_label=PAD, score=0.8, module_index=11, hand_label=None, audible=True),
     *(
-        CatalogedTone(suggested_label=PAD, score=0.2, module_index=20 + index, hand_label=None)
+        CatalogedTone(suggested_label=PAD, score=0.2, module_index=20 + index, hand_label=None, audible=True)
         for index in range(LOW_PAD_COUNT)
     ),
 )
 RELABELED_INDEX: Final[int] = HAND_LABELED_PIANO_COUNT
-TOP_PAD_INDICES: Final[tuple[int, int]] = (HAND_LABELED_PIANO_COUNT + 1, HAND_LABELED_PIANO_COUNT + 2)
+SILENT_INDEX: Final[int] = HAND_LABELED_PIANO_COUNT + 1
+TOP_PAD_INDICES: Final[tuple[int, int]] = (HAND_LABELED_PIANO_COUNT + 2, HAND_LABELED_PIANO_COUNT + 3)
 
 
 @pytest.fixture
@@ -70,6 +72,12 @@ def test_no_sample_is_drawn_twice(drawn: tuple[PairSet, tuple[str, ...]]) -> Non
 
     assert hashes
     assert len(hashes) == len(set(hashes))
+
+
+def test_a_silent_sample_is_never_drawn(drawn: tuple[PairSet, tuple[str, ...]]) -> None:
+    pair_set, hashes = drawn
+
+    assert hashes[SILENT_INDEX] not in _drawn_hashes(pair_set)
 
 
 def test_a_hand_label_decides_the_kind_a_sample_is_drawn_as(drawn: tuple[PairSet, tuple[str, ...]]) -> None:

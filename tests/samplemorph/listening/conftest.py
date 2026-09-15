@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
+import numpy as np
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
@@ -40,13 +41,15 @@ TONE_STEP_SEMITONES: Final[float] = 3.0
 class CatalogedTone:
     """One tone a test catalog holds: the label the scoring on show suggests first at its score, and the module holding it.
 
-    `hand_label` is what a person wrote the tone is, where they wrote anything.
+    `hand_label` is what a person wrote the tone is, where they wrote anything, and an inaudible
+    tone is stored as frames of zeros, the way a module keeps an empty slot.
     """
 
     suggested_label: str
     score: float
     module_index: int
     hand_label: str | None
+    audible: bool
 
 
 def seed_labeled_tones(connection: Connection, library_root: Path, tones: tuple[CatalogedTone, ...]) -> tuple[str, ...]:
@@ -65,9 +68,8 @@ def seed_labeled_tones(connection: Connection, library_root: Path, tones: tuple[
         )
         PostgresSampleRepository(connection).upsert(sample)
         frequency = LOWEST_TONE_HZ * 2.0 ** (index * TONE_STEP_SEMITONES / 12.0)
-        audio_store.write(
-            library_root, SamplePCM(sample=sample, pcm=harmonic_tone(TONE_FRAME_COUNT, frequency=frequency))
-        )
+        pcm = harmonic_tone(TONE_FRAME_COUNT, frequency=frequency) if tone.audible else np.zeros((TONE_FRAME_COUNT, 1))
+        audio_store.write(library_root, SamplePCM(sample=sample, pcm=pcm))
         module = modules.get(tone.module_index) or _module(connection, index=tone.module_index, now=now)
         modules[tone.module_index] = module
         occurrence = SampleOccurrence(module_hash=module.hash, instrument_index=index, sample_slot=0)

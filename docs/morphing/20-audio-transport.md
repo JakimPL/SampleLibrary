@@ -100,8 +100,9 @@ suggestions on show in the top quarter of their label's scores, two pairs within
 (bass drum, snare, hi-hat, bass, lead, pad, piano, chord), six pairs across kinds, one tonal and
 one percussive sample heard at two rates a fifth to an octave apart, a short hit against a long
 sustain, two pairs of loops, and an eight-bit low-rate sample against a sixteen-bit high-rate one.
-The two ends of a pair come from different modules and equivalence classes and lie at least 6 dB
-apart as heard.
+Every sample drawn peaks at −60 dBFS or above, which leaves out the empty slots modules store as
+frames of zeros; the two ends of a pair come from different modules and equivalence classes and lie
+at least 6 dB apart as heard.
 
 `samplelibrary morph compare --pairs pairs.json --output DIR [--routes …] [--blind]` renders every
 pair through every route at nine weights and writes, per pair, both originals and a folder per
