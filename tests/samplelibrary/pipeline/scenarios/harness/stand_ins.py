@@ -28,6 +28,7 @@ PROGRAM: Final[str] = "samplelibrary"
 # happened to give an experiment, which a catalog rebuilt from nothing numbers again.
 UNNAMING_WORDS: Final[frozenset[str]] = frozenset({"--workers", "--device", "--teacher-experiment"})
 BEST_VALIDATION_LOSS: Final[float] = 0.5
+PLANE_DIMENSIONS: Final[int] = 2
 
 Gate = Callable[[], None]
 
@@ -81,6 +82,16 @@ class WordedTeacher:
         )
 
 
+def lay_out_on_a_plane(standardized: NDArray[np.float64], *, n_neighbors: int) -> NDArray[np.float64]:
+    """A sample's first two standardized features as its place on the cloud, standing in for a fitted layout.
+
+    The same vectors give the same places in any process and a changed vector moves its point, which
+    is all a scenario reads of a layout; the slice is ready at once in each of the dozens of processes
+    a scenario starts, where a fitted layout compiles its kernels anew in every one.
+    """
+    return standardized[:, :PLANE_DIMENSIONS]
+
+
 def run_stand_in(command: Sequence[str], stand_in: StandIn) -> None:
     """Run a command whose model a scenario cannot load or train as the real command does, with the model stood in for.
 
@@ -115,9 +126,11 @@ def run_stand_in(command: Sequence[str], stand_in: StandIn) -> None:
 def _cloud_embed(argv: list[str], stand_in: StandIn) -> None:
     import samplecloud.cli
     import samplecloud.features
+    import samplecloud.reduce
 
     extractor = HeardContentExtractor(stand_in.midway)
     samplecloud.cli.extractor_for = lambda recipe, *, library_root, device: extractor  # type: ignore[assignment]
+    samplecloud.reduce.fit_plane = lay_out_on_a_plane
     if stand_in.midway is not None:
         samplecloud.features.EXTRACTION_CHECKPOINT_INTERVAL = MIDWAY_CHECKPOINT_INTERVAL  # type: ignore[misc]
     samplecloud.cli.main(argv, prog=f"{PROGRAM} cloud embed")

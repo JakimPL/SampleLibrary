@@ -11,6 +11,7 @@ import soundfile
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
+from threadpoolctl import threadpool_limits
 
 from samplecore.config import ConfigurationError, load_config
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
@@ -25,6 +26,27 @@ TEST_DATABASE_NAME: Final[str] = "samplelibrary_test"
 DEFAULT_SERVER_URL: Final[str] = f"postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/{TEST_DATABASE_NAME}"
 VANISHED_SAMPLE_FRAMES: Final[int] = 2048
 VANISHED_SAMPLE_RATE: Final[int] = 44100
+SINGLE_THREAD: Final[int] = 1
+SINGLE_THREADED_MATH: Final[dict[str, str]] = {
+    "OPENBLAS_NUM_THREADS": str(SINGLE_THREAD),
+    "OMP_NUM_THREADS": str(SINGLE_THREAD),
+    "MKL_NUM_THREADS": str(SINGLE_THREAD),
+    "NUMBA_NUM_THREADS": str(SINGLE_THREAD),
+}
+
+
+def pytest_configure() -> None:
+    """Hold every test process, and every process a test starts, to one thread per numerical library.
+
+    The suite runs a worker on every core, so one thread each lets every worker compute at full speed
+    on a core of its own; measured on a 24-core machine, a renderer test took 5.6 s alone and 114 s in
+    a suite whose workers each opened a thread pool on every core. The libraries size their pools
+    from these variables when they first load, which covers torch and numba in each worker and every
+    library in the processes a scenario starts, since those inherit the environment. numpy is loaded
+    by the time this hook runs, so its pool is resized in place.
+    """
+    os.environ.update(SINGLE_THREADED_MATH)
+    threadpool_limits(limits=SINGLE_THREAD)
 
 
 @pytest.fixture(scope="session")

@@ -42,13 +42,6 @@ GATE_DEADLINE_SECONDS: Final[float] = 300.0
 POLL_SECONDS: Final[float] = 0.02
 KILLED_STATUS: Final[int] = -signal.SIGKILL
 CLOSING_DEADLINE_SECONDS: Final[float] = 60.0
-# Every process of a run imports the numerical libraries, whose thread pools otherwise spin up on
-# every core for each of the dozens of short processes a scenario starts.
-SINGLE_THREADED_MATH: Final[dict[str, str]] = {
-    "OPENBLAS_NUM_THREADS": "1",
-    "OMP_NUM_THREADS": "1",
-    "MKL_NUM_THREADS": "1",
-}
 
 
 @dataclass(frozen=True)
@@ -204,7 +197,7 @@ class ScenarioRunner:
                 stdout=output,
                 stderr=subprocess.STDOUT,
                 cwd=REPOSITORY_ROOT,
-                env={**os.environ, **SINGLE_THREADED_MATH, "PYTHONPATH": str(REPOSITORY_ROOT)},
+                env={**os.environ, "PYTHONPATH": str(REPOSITORY_ROOT)},
                 start_new_session=True,
             )
         host = Host(process=process, request=request, act=act, before=before, statuses=statuses)
