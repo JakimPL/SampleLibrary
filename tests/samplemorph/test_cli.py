@@ -37,6 +37,7 @@ from samplemorph.model_paths import codec_path, descriptor_path, restorer_path
 from samplemorph.model_store import model_path
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
 from tests.samplemorph.conftest import harmonic_tone
+from tests.samplemorph.listening.conftest import CatalogedTone, seed_labeled_tones
 
 PROGRAM = "samplelibrary morph"
 SAMPLE_FRAME_COUNT = 4096
@@ -632,6 +633,151 @@ def test_a_teacher_whose_vectors_a_descriptor_cannot_answer_in_is_refused(
 
     assert raised.value.code == ExitStatus.REFUSED
     assert "vectors of 3 numbers" in capsys.readouterr().err
+
+
+LISTENED_PIANO_COUNT = 5
+LISTENED_TONES = tuple(
+    CatalogedTone(suggested_label="CHORD", score=0.1, module_index=index, hand_label="PIANO")
+    for index in range(LISTENED_PIANO_COUNT)
+)
+COMPARED_WEIGHTS = ("0", "0.5", "1")
+
+
+def _drawn_pairs(tmp_path: Path) -> Path:
+    pairs = tmp_path / "pairs.json"
+    main(["draw-pairs", "--seed", "3", "--output", str(pairs)], prog=PROGRAM)
+    return pairs
+
+
+def _rows(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def test_drawn_pairs_are_rendered_through_every_route_and_read(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_labeled_tones(connection, tmp_path, LISTENED_TONES)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["fit", "--latent-size", "2", "--model", MODEL_NAME], prog=PROGRAM)
+    pairs = _drawn_pairs(tmp_path)
+    output = tmp_path / "compared"
+
+    main(
+        [
+            "compare",
+            "--pairs",
+            str(pairs),
+            "--output",
+            str(output),
+            "--model",
+            MODEL_NAME,
+            "--vocoder",
+            "pghi",
+            "--weights",
+            *COMPARED_WEIGHTS,
+            "--listening-weights",
+            "0.5",
+        ],
+        prog=PROGRAM,
+    )
+
+    names = [pair["name"] for pair in json.loads(pairs.read_text(encoding="utf-8"))["pairs"]]
+    retuned = [
+        pair["name"] for pair in json.loads(pairs.read_text(encoding="utf-8"))["pairs"] if pair["kind"] == "retuned"
+    ]
+    routes = ("latent", "transport", "blend")
+    for name in names:
+        assert (output / name / "original_first.wav").exists()
+        for route in routes:
+            written = sorted(file.name for file in (output / name / route).glob("*.wav"))
+            assert written == ["morph_000.wav", "morph_050.wav", "morph_100.wav", "path.wav"]
+    readings = _rows(output / "readings.csv")
+    assert len(readings) == len(names) * len(routes) * len(COMPARED_WEIGHTS)
+    assert retuned
+    assert all(
+        row["transposition_distance_db"] != "" for row in readings if row["pair"] in retuned and row["weight"] == "0.5"
+    )
+    assert len(_rows(output / "paths.csv")) == len(_rows(output / "verdicts.csv")) == len(names) * len(routes)
+    assert set(json.loads((output / "manifest.json").read_text(encoding="utf-8"))["routes"]) == set(routes)
+
+
+def test_a_blind_comparison_names_the_routes_by_letter_and_keeps_the_key(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_labeled_tones(connection, tmp_path, LISTENED_TONES)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    pairs = _drawn_pairs(tmp_path)
+    output = tmp_path / "blind"
+
+    main(
+        [
+            "compare",
+            "--pairs",
+            str(pairs),
+            "--output",
+            str(output),
+            "--routes",
+            "transport",
+            "blend",
+            "--weights",
+            *COMPARED_WEIGHTS,
+            "--listening-weights",
+            "0.5",
+            "--blind",
+        ],
+        prog=PROGRAM,
+    )
+
+    key = json.loads((output / "manifest.json").read_text(encoding="utf-8"))["routes"]
+    assert sorted(key) == ["A", "B"]
+    assert sorted(route["kind"] for route in key.values()) == ["blend", "transport"]
+    assert {row["route"] for row in _rows(output / "verdicts.csv")} == {"A", "B"}
+
+
+def test_drawing_from_a_catalog_showing_no_scoring_says_so(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    with pytest.raises(SystemExit) as raised:
+        main(["draw-pairs", "--output", str(tmp_path / "pairs.json")], prog=PROGRAM)
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert "Drew nothing: the catalog shows no label scoring" in capsys.readouterr().err
+
+
+def test_comparing_pairs_off_a_rising_path_ends_before_any_sample_is_read(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    seed_labeled_tones(connection, tmp_path, LISTENED_TONES)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    pairs = _drawn_pairs(tmp_path)
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            ["compare", "--pairs", str(pairs), "--output", str(tmp_path / "out"), "--weights", "0", "0.5"],
+            prog=PROGRAM,
+        )
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert "Compared nothing: path weights rise from 0 to 1" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
 
 
 def test_parsing_a_morph_command_loads_no_network_library() -> None:

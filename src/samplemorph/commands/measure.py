@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import logging
 import sys
 from collections import defaultdict
@@ -21,6 +20,7 @@ from samplecore.exit_status import ExitStatus
 from samplecore.models.sample import Sample
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.sample_audio import SampleAudio
+from samplecore.tables import TableValue, write_table
 from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.codecs import SampleCodec
 from samplemorph.codecs.identity import IdentityCodec
@@ -53,8 +53,6 @@ OVERALL_GROUP: Final[str] = "all"
 SUMMARY_QUARTILES: Final[tuple[float, float]] = (25.0, 75.0)
 
 _logger = logging.getLogger(__name__)
-
-TableValue = str | int | float | bool
 
 
 @dataclass(frozen=True)
@@ -153,7 +151,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     )
     audio = SampleAudio.from_catalog(connection, config.library_root)
     readings = tuple(_measure(connection, audio, sample, route=route) for sample in readable_samples(probes, audio))
-    _write_table(route.output_directory / READINGS_FILE_NAME, readings)
+    write_table(route.output_directory / READINGS_FILE_NAME, [reading.row() for reading in readings])
     _report(readings)
     _logger.info("Wrote %d probes through %s into %s.", len(readings), route.model, route.output_directory)
 
@@ -197,14 +195,6 @@ def _measure(connection: Connection, audio: SampleAudio, sample: Sample, *, rout
         model=route.model,
         readings=read_reconstruction(matched, original, source_rate_hz=rate_hz),
     )
-
-
-def _write_table(path: Path, readings: tuple[ProbeReading, ...]) -> None:
-    rows = [reading.row() for reading in readings]
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def _report(readings: tuple[ProbeReading, ...]) -> None:

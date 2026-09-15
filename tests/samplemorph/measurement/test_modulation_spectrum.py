@@ -8,7 +8,12 @@ from scipy.signal import hilbert
 
 from samplecore.auditory.modulation import ModulationAxis
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
-from samplemorph.measurement.modulation_spectrum import ModulationSpectrumDistance, modulation_spectrum_distance
+from samplemorph.measurement.modulation_spectrum import (
+    ModulationLobeDepths,
+    ModulationSpectrumDistance,
+    modulation_lobe_depths,
+    modulation_spectrum_distance,
+)
 
 LOW_HEARD_RATE_HZ = 8363
 TONE_SECONDS = 1.0
@@ -47,6 +52,14 @@ def _modulated(modulation_hz: float, *, sample_rate_hz: int) -> np.ndarray:
     return _carrier(sample_rate_hz) * (
         1.0 + MODULATION_DEPTH * np.sin(2.0 * np.pi * modulation_hz * _times(sample_rate_hz))
     )
+
+
+def _depth(depths: ModulationLobeDepths, axis: ModulationAxis) -> float:
+    match axis:
+        case ModulationAxis.FLUCTUATION:
+            return depths.fluctuation
+        case ModulationAxis.ROUGHNESS:
+            return depths.roughness
 
 
 def _excess(reading: ModulationSpectrumDistance, axis: ModulationAxis) -> float:
@@ -119,3 +132,25 @@ def test_a_clip_shorter_than_a_lobe_window_is_read_whole() -> None:
 
     assert np.isfinite([reading.fluctuation_excess, reading.roughness_excess, reading.distance]).all()
     assert reading.distance > 0.0
+
+
+@pytest.mark.parametrize("case", LOBE_CASES)
+def test_a_sound_on_its_own_reads_its_modulation_on_the_lobe_that_hears_it(case: LobeCase) -> None:
+    modulated = modulation_lobe_depths(
+        _modulated(case.modulation_hz, sample_rate_hz=case.sample_rate_hz), source_rate_hz=case.sample_rate_hz
+    )
+    steady = modulation_lobe_depths(_carrier(case.sample_rate_hz), source_rate_hz=case.sample_rate_hz)
+
+    assert _depth(modulated, case.dominant) - _depth(steady, case.dominant) > abs(
+        _depth(modulated, case.other) - _depth(steady, case.other)
+    )
+
+
+def test_depths_read_alone_differ_by_what_a_reading_against_the_reference_adds() -> None:
+    modulated = _modulated(6.0, sample_rate_hz=NOMINAL_WAV_RATE)
+    carrier = _carrier(NOMINAL_WAV_RATE)
+
+    against = modulation_spectrum_distance(modulated, carrier)
+    difference = modulation_lobe_depths(modulated).fluctuation - modulation_lobe_depths(carrier).fluctuation
+
+    assert difference == pytest.approx(against.fluctuation_excess, rel=0.25)

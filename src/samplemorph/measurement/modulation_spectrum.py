@@ -5,7 +5,12 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from samplecore.auditory.modulation import ModulationAxis, design_modulation_front_end, modulation_spectra
+from samplecore.auditory.modulation import (
+    ModulationAxis,
+    ModulationSpectrum,
+    design_modulation_front_end,
+    modulation_spectra,
+)
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.measurement.weighting import loudness_weight
 
@@ -53,7 +58,9 @@ def modulation_spectrum_distance(
     distance = 0.0
     for read, reference_read in zip(reconstruction_spectra, reference_spectra, strict=True):
         loudness = loudness_weight(reference_read.level, floor=front_end.compressed_floor)
-        excess[read.lobe.axis] = float((loudness * (read.lobe_depth - reference_read.lobe_depth)).sum())
+        excess[read.lobe.axis] = _weighted_lobe_depth(read, loudness=loudness) - _weighted_lobe_depth(
+            reference_read, loudness=loudness
+        )
         distance += float(
             (loudness[..., None] * reference_read.bin_weight * np.abs(read.depth - reference_read.depth)).sum()
         )
@@ -62,3 +69,35 @@ def modulation_spectrum_distance(
         roughness_excess=excess[ModulationAxis.ROUGHNESS],
         distance=distance,
     )
+
+
+@dataclass(frozen=True)
+class ModulationLobeDepths:
+    """The modulation depth one waveform carries on each lobe, every channel and moment counted by how loud it is."""
+
+    fluctuation: float
+    roughness: float
+
+
+def modulation_lobe_depths(
+    waveform: NDArray[np.float64], *, source_rate_hz: int = NOMINAL_WAV_RATE
+) -> ModulationLobeDepths:
+    """Read how deeply one waveform's envelopes fluctuate and roughen, at the rate it is heard at.
+
+    Beside `modulation_spectrum_distance`, which holds a reconstruction against its reference, this
+    reads a sound on its own, so a point between two sounds can be held against the depths of both.
+    """
+    front_end = design_modulation_front_end(sample_rate_hz=source_rate_hz)
+    depths = {
+        spectrum.lobe.axis: _weighted_lobe_depth(
+            spectrum, loudness=loudness_weight(spectrum.level, floor=front_end.compressed_floor)
+        )
+        for spectrum in modulation_spectra(waveform, front_end=front_end)
+    }
+    return ModulationLobeDepths(
+        fluctuation=depths[ModulationAxis.FLUCTUATION], roughness=depths[ModulationAxis.ROUGHNESS]
+    )
+
+
+def _weighted_lobe_depth(spectrum: ModulationSpectrum, *, loudness: NDArray[np.float64]) -> float:
+    return float((loudness * spectrum.lobe_depth).sum())

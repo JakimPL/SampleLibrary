@@ -9,7 +9,7 @@ from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 from sqlalchemy import Connection
 
 from samplecore.hashing import file_sha256
@@ -393,14 +393,7 @@ def listening_set_manifest(loaded: LoadedRoute, summary: MorphRenderSummary) -> 
     of one name apart.
     """
     manifest = {
-        "model": json.loads(loaded.model.description.model_dump_json()),
-        "vocoder": loaded.choice.vocoder_name,
-        "restorer": loaded.choice.restorer_name if loaded.choice.vocoder_name == RESTORED_VOCODER_NAME else None,
-        "morpher": loaded.choice.morpher_name,
-        "device": loaded.choice.device,
-        "render_revision": RENDER_REVISION,
-        "fingerprint": loaded.fingerprint,
-        "loaded_files": [{"path": str(file.path), "sha256": file.sha256} for file in loaded.files],
+        **latent_route_description(loaded),
         "first_hash": summary.first_hash,
         "second_hash": summary.second_hash,
         "files": [
@@ -409,3 +402,18 @@ def listening_set_manifest(loaded: LoadedRoute, summary: MorphRenderSummary) -> 
         ],
     }
     return json.dumps(manifest, indent=2)
+
+
+def latent_route_description(loaded: LoadedRoute) -> dict[str, JsonValue]:
+    """The whole route a loaded choice takes, as JSON: the model, the vocoder and the restorer it read,
+    the morpher, the device, the rendering revision, and the digest of every file it was loaded from."""
+    return {
+        "model": json.loads(loaded.model.description.model_dump_json()),
+        "vocoder": loaded.choice.vocoder_name,
+        "restorer": loaded.choice.restorer_name if loaded.choice.vocoder_name == RESTORED_VOCODER_NAME else None,
+        "morpher": loaded.choice.morpher_name,
+        "device": loaded.choice.device,
+        "render_revision": RENDER_REVISION,
+        "fingerprint": loaded.fingerprint,
+        "loaded_files": [{"path": str(file.path), "sha256": file.sha256} for file in loaded.files],
+    }

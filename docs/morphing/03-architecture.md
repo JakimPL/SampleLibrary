@@ -111,6 +111,11 @@ and spectral transport are alternatives worth measuring. Isolating this axis mea
 "is the morph bad because the latent is bad, or because the interpolation is naive?" has an
 experiment behind it.
 
+Measured (2026-09-15): a straight line through the linear codec's latent is a decibel crossfade of
+the two ends, down to the route's own noise. Spectral transport is built as `samplemorph.transport`,
+beside the latent route behind `samplemorph.routes`, and `morph compare` renders both and a
+crossfade control side by side for the ear; see [`20-audio-transport.md`](20-audio-transport.md).
+
 ### `SoundImage`
 
 The canonical array plus its conditioners — frequency translation in semitones, log canonical
