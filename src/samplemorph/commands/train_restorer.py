@@ -14,6 +14,12 @@ from samplemorph.commands.analysis_training import (
     train_on_analysis_corpus,
 )
 from samplemorph.model_paths import DEFAULT_RESTORER_NAME
+from samplemorph.training.restorer_settings import (
+    DEFAULT_RESTORER_BATCH_SIZE,
+    DEFAULT_RESTORER_EPOCHS,
+    DEFAULT_RESTORER_LEARNING_RATE,
+    DEFAULT_RESTORER_PRECISION,
+)
 from samplemorph.vocoders.restorer_shape import DEFAULT_CHANNELS, GROUP_COUNT
 
 COMMAND_NAME: Final[str] = "train-restorer"
@@ -36,6 +42,12 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         summary="Teach a restorer the fine structure the grid removes from this pipeline's magnitudes.",
     )
     add_analysis_training_arguments(parser, FLAGS)
+    parser.set_defaults(
+        epochs=DEFAULT_RESTORER_EPOCHS,
+        batch=DEFAULT_RESTORER_BATCH_SIZE,
+        learning_rate=DEFAULT_RESTORER_LEARNING_RATE,
+        precision=DEFAULT_RESTORER_PRECISION,
+    )
 
 
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:

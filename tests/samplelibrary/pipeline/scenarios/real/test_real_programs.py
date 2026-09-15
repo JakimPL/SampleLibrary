@@ -20,7 +20,7 @@ TINY_PIPELINE_TABLE: Final[str] = (
     "\n[pipeline.evaluation]\nprobes = 4\n"
     "\n[pipeline.module-evaluation]\nprobes = 4\n"
     "\n[pipeline.morph-codec]\nlatent_size = 2\nsamples = 8\n"
-    "\n[pipeline.restorer]\nepochs = 1\nbatch = 2\nchannels = 8\ncrop = 16\n"
+    '\n[pipeline.restorer]\nepochs = 1\nbatch = 2\nprecision = "32-true"\nchannels = 8\ncrop = 16\n'
 )
 ADDED_PACK_FILES: Final[int] = 6
 
@@ -29,7 +29,11 @@ pytestmark = pytest.mark.pipeline_real
 
 @pytest.fixture(name="real_runner")
 def fixture_real_runner(
-    tmp_path: Path, _database_url: str, connection: Connection, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    _database_url: str,
+    connection: Connection,
+    scenario_slot: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[ScenarioRunner]:
     """A world whose every step runs its real program, reading the listening model from the local cache alone."""
     monkeypatch.setenv("HF_HUB_OFFLINE", "1")

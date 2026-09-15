@@ -262,6 +262,8 @@ def test_a_restorer_is_trained_on_the_catalog_and_rendered_through(
             str(RESTORER_CHANNELS),
             "--crop",
             str(RESTORER_CROP_FRAMES),
+            "--precision",
+            "32-true",
             "--device",
             "cpu",
             "--restorer",

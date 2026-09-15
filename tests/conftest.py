@@ -10,6 +10,7 @@ import pytest
 import soundfile
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.pool import NullPool
 
 from samplecore.config import ConfigurationError, load_config
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
@@ -55,20 +56,21 @@ def _database_url(_server_url: str, worker_id: str) -> Iterator[str]:
     fixture's habit of emptying every table between tests would otherwise reach into whatever the
     other workers are doing at that moment. One database per worker keeps that cleanup local to the
     worker performing it. ``CREATE DATABASE``/``DROP DATABASE`` cannot run inside a transaction
-    block, hence the ``AUTOCOMMIT`` isolation level.
+    block, hence the ``AUTOCOMMIT`` isolation level. The server connection is open only while it
+    creates and drops the database, so the session leaves the server's connections to the tests.
     """
     server_url = make_url(_server_url)
     database_name = f"{server_url.database}_{worker_id}"
-    admin_engine = create_engine(server_url, isolation_level="AUTOCOMMIT")
+    admin_engine = create_engine(server_url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
     with admin_engine.connect() as admin_connection:
         admin_connection.execute(text(f'DROP DATABASE IF EXISTS "{database_name}" WITH (FORCE)'))
         admin_connection.execute(text(f'CREATE DATABASE "{database_name}"'))
-        try:
-            # str() on a URL renders its password as "***"; the yielded URL has to carry the real one.
-            yield server_url.set(database=database_name).render_as_string(hide_password=False)
-        finally:
+    try:
+        # str() on a URL renders its password as "***"; the yielded URL has to carry the real one.
+        yield server_url.set(database=database_name).render_as_string(hide_password=False)
+    finally:
+        with admin_engine.connect() as admin_connection:
             admin_connection.execute(text(f'DROP DATABASE "{database_name}" WITH (FORCE)'))
-    admin_engine.dispose()
 
 
 @pytest.fixture

@@ -117,7 +117,7 @@ def _empty_the_catalog(connection: Connection) -> None:
 
 
 def test_a_library_acted_on_in_any_order_keeps_every_oracle(
-    tmp_path: Path, _database_url: str, connection: Connection
+    tmp_path: Path, _database_url: str, connection: Connection, scenario_slot: None
 ) -> None:
     run_state_machine_as_test(
         lambda: LibraryStory(tmp_path, _database_url, connection),

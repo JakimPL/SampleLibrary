@@ -37,6 +37,12 @@ from samplemorph.published import (
 )
 from samplemorph.registries import DEFAULT_CANONICALIZER_NAME
 from samplemorph.training.principal_components import DEFAULT_LATENT_SIZE
+from samplemorph.training.restorer_settings import (
+    DEFAULT_RESTORER_BATCH_SIZE,
+    DEFAULT_RESTORER_EPOCHS,
+    DEFAULT_RESTORER_LEARNING_RATE,
+    DEFAULT_RESTORER_PRECISION,
+)
 from samplemorph.training.run_paths import RunFamily, finished_record_path, resume_path, run_directory
 from samplemorph.training.run_settings import DEFAULT_RANDOM_SEED
 from samplemorph.training.settings import DEFAULT_CROP_FRAMES
@@ -72,6 +78,10 @@ class CodecSettings(StepSettings):
 class RestorerSettings(TrainingRunSettings):
     """How the restorer is taught: its axis, its capacity, its crops and its training run."""
 
+    epochs: int = Field(default=DEFAULT_RESTORER_EPOCHS, ge=1)
+    batch: int = Field(default=DEFAULT_RESTORER_BATCH_SIZE, ge=1)
+    learning_rate: float = DEFAULT_RESTORER_LEARNING_RATE
+    precision: str = DEFAULT_RESTORER_PRECISION
     canonicalizer: str = DEFAULT_CANONICALIZER_NAME
     anchor: Anchor = DEFAULT_ANCHOR
     samples: int | None = Field(default=None, ge=1)

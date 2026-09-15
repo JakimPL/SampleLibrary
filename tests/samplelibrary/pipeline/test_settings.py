@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import argparse
+from collections.abc import Callable
 from pathlib import Path
+from typing import Final
 
 import pytest
 
+from samplecloud.evaluation.cli import parse_arguments as parse_evaluation_arguments
+from samplecloud.suggestions.cli import parse_arguments as parse_suggestion_arguments
 from samplecore.config import ConfigurationError
-from samplelibrary.pipeline.settings import StepSettings, read_pipeline_settings
+from samplelibrary.pipeline.settings import OPERATIONAL_STEP_SETTINGS, StepSettings, read_pipeline_settings
+from samplelibrary.pipeline.steps.descriptor import DESCRIPTOR, EVALUATION, GRID_CACHE, MODULE_EVALUATION
+from samplelibrary.pipeline.steps.library import settings_model
+from samplelibrary.pipeline.steps.listening import SUGGESTIONS
+from samplelibrary.pipeline.steps.morph import MORPH_CODEC, RESTORER
+from samplemorph.cli import parse_arguments as parse_morph_arguments
 
 LIBRARY_TABLE = """
 [library]
@@ -13,6 +23,16 @@ module_source_directory = "{root}"
 library_root = "{root}"
 database_url = "postgresql+psycopg://user:pass@localhost:5432/library"
 """
+PROGRAM: Final[str] = "samplelibrary"
+UNASKED_COMMANDS: Final[dict[str, Callable[[], argparse.Namespace]]] = {
+    SUGGESTIONS: lambda: parse_suggestion_arguments(["--experiment-id", "1"], prog=PROGRAM),
+    GRID_CACHE: lambda: parse_morph_arguments(["cache-grids"], prog=PROGRAM),
+    DESCRIPTOR: lambda: parse_morph_arguments(["train-descriptor", "--teacher-experiment", "1"], prog=PROGRAM),
+    EVALUATION: lambda: parse_evaluation_arguments(["--experiment-id", "1"], prog=PROGRAM),
+    MODULE_EVALUATION: lambda: parse_evaluation_arguments(["--experiment-id", "1"], prog=PROGRAM),
+    MORPH_CODEC: lambda: parse_morph_arguments(["fit"], prog=PROGRAM),
+    RESTORER: lambda: parse_morph_arguments(["train-restorer"], prog=PROGRAM),
+}
 
 
 def _config(tmp_path: Path, pipeline_table: str) -> Path:
@@ -97,3 +117,11 @@ def test_a_step_table_holding_a_setting_its_step_does_not_read_is_refused(tmp_pa
 
     with pytest.raises(ConfigurationError, match="epoch"):
         settings.settings_for("descriptor", TrainingSettings)
+
+
+@pytest.mark.parametrize("step", UNASKED_COMMANDS)
+def test_a_step_left_at_its_defaults_asks_what_its_command_does_unasked(step: str) -> None:
+    defaults = settings_model(step)().model_dump(exclude=set(OPERATIONAL_STEP_SETTINGS))
+    unasked = vars(UNASKED_COMMANDS[step]())
+
+    assert {name: unasked[name] for name in defaults} == defaults
