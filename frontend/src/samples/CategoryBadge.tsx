@@ -17,14 +17,18 @@ interface CategoryBadgeProps {
  * its place stands what the listening model heard first, in the dashed style a machine-made
  * statement takes, with a swatch in its category's color; a sample neither has named reads as
  * unlabeled. The label set in this session counts at once, so a badge follows an edit the moment
- * it is made.
+ * it is made. A label longer than the room it is given ends in an ellipsis, whole in its tooltip.
  */
 export function CategoryBadge({ sampleHash, suggestedLabel, handLabel }: CategoryBadgeProps): ReactElement {
     const annotation = useSampleAnnotation(sampleHash, { label: handLabel, rating: null, favorite: false });
     const colorOf = useSuggestionColor();
     const resolved = annotation?.label ?? null;
     if (resolved !== null) {
-        return <span className="badge badge-hand-label">{resolved}</span>;
+        return (
+            <span className="badge badge-hand-label" title={resolved}>
+                <span className="badge-text">{resolved}</span>
+            </span>
+        );
     }
     if (suggestedLabel === null) {
         return <span className="badge badge-unlabeled">{UNLABELED_SAMPLE_LABEL}</span>;
@@ -32,9 +36,9 @@ export function CategoryBadge({ sampleHash, suggestedLabel, handLabel }: Categor
 
     const color = colorOf(suggestedLabel);
     return (
-        <span className="badge badge-category">
+        <span className="badge badge-category" title={suggestedLabel}>
             {color !== null && <span className="badge-swatch" style={{ background: color }} aria-hidden />}
-            {suggestedLabel}
+            <span className="badge-text">{suggestedLabel}</span>
         </span>
     );
 }

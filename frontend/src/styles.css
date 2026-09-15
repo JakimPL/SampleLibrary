@@ -579,6 +579,19 @@ tr.is-focused {
     border: 1px solid var(--border-strong);
 }
 
+/* A free-text label shrinks to the cell holding it, so its end is cut by an ellipsis inside the border. */
+.badge-hand-label,
+.badge-category {
+    max-width: 100%;
+}
+
+.badge-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .badge-category {
     background: transparent;
     color: var(--text-primary);

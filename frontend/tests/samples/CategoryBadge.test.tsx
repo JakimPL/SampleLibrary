@@ -31,8 +31,12 @@ function serveTags(): void {
     ]);
 }
 
+function badgeOf(label: string): Element | null {
+    return screen.getByText(label).closest(".badge");
+}
+
 function swatchOf(label: string): Element | null {
-    return screen.getByText(label).querySelector(".badge-swatch");
+    return badgeOf(label)?.querySelector(".badge-swatch") ?? null;
 }
 
 describe("CategoryBadge", () => {
@@ -41,7 +45,8 @@ describe("CategoryBadge", () => {
 
         render(<CategoryBadge sampleHash={SAMPLE_HASH} suggestedLabel="HI-HAT: CLOSED" handLabel={null} />);
 
-        expect(screen.getByText("HI-HAT: CLOSED")).toHaveClass("badge-category");
+        expect(badgeOf("HI-HAT: CLOSED")).toHaveClass("badge-category");
+        expect(badgeOf("HI-HAT: CLOSED")).toHaveAttribute("title", "HI-HAT: CLOSED");
     });
 
     it("wears its category's color once the tags arrive, and none before", async () => {
@@ -61,7 +66,7 @@ describe("CategoryBadge", () => {
 
         render(<CategoryBadge sampleHash={SAMPLE_HASH} suggestedLabel="SNARE" handLabel="dirty 909" />);
 
-        expect(screen.getByText("dirty 909")).toHaveClass("badge-hand-label");
+        expect(badgeOf("dirty 909")).toHaveClass("badge-hand-label");
         expect(screen.queryByText("SNARE")).not.toBeInTheDocument();
     });
 
@@ -70,7 +75,7 @@ describe("CategoryBadge", () => {
 
         render(<CategoryBadge sampleHash={SAMPLE_HASH} suggestedLabel={null} handLabel={null} />);
 
-        expect(screen.getByText(UNLABELED_SAMPLE_LABEL)).toHaveClass("badge-unlabeled");
+        expect(badgeOf(UNLABELED_SAMPLE_LABEL)).toHaveClass("badge-unlabeled");
     });
 
     it("prefers a label set in this session over the one the server sent", () => {

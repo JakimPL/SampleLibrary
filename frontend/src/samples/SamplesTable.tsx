@@ -31,7 +31,7 @@ const COLUMNS = [
             meta: { flexible: true },
         },
     ),
-    columnHelper.display({ id: "category", header: "Category", size: 96 }),
+    columnHelper.display({ id: "category", header: "Category", size: 144 }),
     columnHelper.display({ id: "verdict", header: "Rating", size: 110 }),
     columnHelper.accessor("size_bytes", { header: "Size", size: 80 }),
     columnHelper.accessor("occurrence_count", { header: "Occurrences", size: 84 }),
