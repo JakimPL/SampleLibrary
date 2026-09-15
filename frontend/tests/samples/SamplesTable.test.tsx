@@ -22,7 +22,6 @@ function buildSample(
         depth: 16,
         channels: 1,
         frames: 4096,
-        category: "uncategorized",
         suggested_label: null,
         hand_label: null,
         rating: null,

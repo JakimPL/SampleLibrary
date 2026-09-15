@@ -149,7 +149,6 @@ def test_list_samples_ranks_by_occurrence_count(client: TestClient, connection: 
     assert [item["hash"] for item in body["items"]] == [frequent.hash, rare.hash]
     assert body["items"][0]["occurrence_count"] == 2
     assert body["items"][0]["display_name"] == "kick"
-    assert body["items"][0]["category"] == "kick"
 
 
 def test_list_samples_falls_back_to_the_dominant_occurrence_rate(client: TestClient, connection: Connection) -> None:
@@ -316,7 +315,6 @@ def test_get_sample_returns_detail_with_occurrences_and_module_context(
     body = response.json()
     assert body["hash"] == sample.hash
     assert body["display_name"] == "lead"
-    assert body["category"] == "lead"
     assert len(body["occurrences"]) == 1
     occurrence = body["occurrences"][0]
     assert occurrence["properties"]["name"] == "lead"
@@ -458,7 +456,7 @@ def test_get_sample_audio_refuses_a_path_that_is_no_hash(client: TestClient) -> 
     assert response.status_code == 422
 
 
-def test_get_sample_preview_reads_the_name_the_category_and_the_stored_thumbnail(
+def test_get_sample_preview_reads_the_name_the_labels_and_the_stored_thumbnail(
     client: TestClient, connection: Connection
 ) -> None:
     sample = _insert_sample(connection, SAMPLE_HASH_A)
@@ -473,7 +471,6 @@ def test_get_sample_preview_reads_the_name_the_category_and_the_stored_thumbnail
     assert response.status_code == 200
     assert response.json() == {
         "display_name": "kick",
-        "category": "kick",
         "suggested_label": None,
         "hand_label": None,
         "thumbnail": [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}],
@@ -497,7 +494,6 @@ def test_get_sample_preview_has_no_thumbnail_before_the_pass_reaches_the_sample(
     body = client.get(f"/samples/{SAMPLE_HASH_A}/preview").json()
 
     assert body["thumbnail"] is None
-    assert body["category"] == "uncategorized"
 
 
 def test_get_sample_preview_404s_for_an_unknown_hash(client: TestClient) -> None:
@@ -629,9 +625,8 @@ def test_get_similar_samples_carry_what_a_glance_shows(client: TestClient, conne
     body = client.get(f"/samples/{target.hash}/similar").json()
 
     assert [
-        (item["display_name"], item["category"], item["suggested_label"], item["hand_label"], item["thumbnail"])
-        for item in body
-    ] == [("kick", "kick", None, None, [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}])]
+        (item["display_name"], item["suggested_label"], item["hand_label"], item["thumbnail"]) for item in body
+    ] == [("kick", None, None, [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}])]
 
 
 def test_get_similar_samples_respects_the_limit(client: TestClient, connection: Connection) -> None:
@@ -741,14 +736,14 @@ def cataloged_kick_file(connection: Connection, tmp_path: Path) -> SampleFile:
     return sample_file
 
 
-def test_a_sample_found_in_a_file_is_detailed_with_its_file_name_folder_category_and_rate(
+def test_a_sample_found_in_a_file_is_detailed_with_its_file_name_and_rate(
     client: TestClient, cataloged_kick_file: SampleFile
 ) -> None:
     response = client.get(f"/samples/{cataloged_kick_file.sample_hash}")
 
     assert response.status_code == 200
     detail = response.json()
-    assert (detail["display_name"], detail["category"], detail["playback_rate_hz"]) == ("deep 01", "kick", 48000)
+    assert (detail["display_name"], detail["playback_rate_hz"]) == ("deep 01", 48000)
     assert detail["occurrences"] == []
     assert detail["files"] == [
         {

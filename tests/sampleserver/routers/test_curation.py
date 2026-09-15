@@ -181,7 +181,6 @@ def test_an_annotated_sample_reports_its_decisions_in_its_own_detail(
     body = client.get(f"/samples/{SAMPLE_HASH_A}").json()
 
     assert (body["hand_label"], body["rating"], body["favorite"]) == ("WARM PAD", 3, True)
-    assert body["category"] == "lead"
 
 
 def test_an_annotated_sample_reports_its_decisions_in_the_listing(client: TestClient, connection: Connection) -> None:

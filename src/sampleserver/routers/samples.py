@@ -9,10 +9,8 @@ from pydantic import BaseModel
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
-from samplecore.categorization import classify_sample_names
 from samplecore.equivalence_classes import classes_by_member_hash, compute_equivalence_classes
 from samplecore.models.base import FROZEN
-from samplecore.models.category import SampleCategory
 from samplecore.models.module import Module
 from samplecore.models.note_event import SamplePlaybackRate
 from samplecore.models.relation import SampleRelation
@@ -121,7 +119,6 @@ class SamplePreview(BaseModel):
     model_config = FROZEN
 
     display_name: str
-    category: SampleCategory
     suggested_label: str | None
     hand_label: str | None
     thumbnail: tuple[WaveformPeak, ...] | None
@@ -292,7 +289,6 @@ def get_sample(
         ),
         size_bytes=sample.stored_bytes,
         display_name=names.display_name,
-        category=classify_sample_names(names),
         suggested_label=suggestions[0].label if suggestions else None,
         hand_label=annotation.label if annotation is not None else None,
         rating=annotation.rating if annotation is not None else None,
@@ -398,7 +394,6 @@ def _previews_by_hash(
         annotation = annotations_by_hash.get(sample_hash)
         previews[sample_hash] = SamplePreview(
             display_name=names.display_name,
-            category=classify_sample_names(names),
             suggested_label=suggested_label_by_hash.get(sample_hash),
             hand_label=annotation.label if annotation is not None else None,
             thumbnail=peaks_from_thumbnail(thumbnails_by_hash.get(sample_hash)),
@@ -495,7 +490,6 @@ def _similar_sample(
 ) -> SimilarSample:
     return SimilarSample(
         display_name=preview.display_name,
-        category=preview.category,
         suggested_label=preview.suggested_label,
         hand_label=preview.hand_label,
         thumbnail=preview.thumbnail,

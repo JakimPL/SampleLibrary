@@ -32,7 +32,6 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         files: [],
         size_bytes: 8192,
         display_name: "smp01",
-        category: "uncategorized",
         suggested_label: null,
         hand_label: null,
         rating: null,

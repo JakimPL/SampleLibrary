@@ -215,7 +215,6 @@ describe("densifyCloudPlugin", () => {
                 {
                     hash: KICK_HASH,
                     display_name: "kick 01",
-                    category: "kick",
                     hand_label: null,
                     suggested_label: "BASS DRUM",
                     playback_rate_hz: 44100,
@@ -223,7 +222,6 @@ describe("densifyCloudPlugin", () => {
                 {
                     hash: PAD_HASH,
                     display_name: "warm_pad",
-                    category: "pad",
                     hand_label: null,
                     suggested_label: null,
                     playback_rate_hz: null,

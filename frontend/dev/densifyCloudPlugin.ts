@@ -95,7 +95,6 @@ async function seedSamplePoints(backendUrl: string): Promise<readonly CloudPoint
         sample_hash: sample.hash,
         x: sample.x,
         y: sample.y,
-        category: sample.category,
         playback_rate_hz: sample.playback_rate_hz,
     }));
 }

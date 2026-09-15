@@ -264,7 +264,8 @@ export interface paths {
          *     The answer is built once per revision of what it reads and served from memory after that: the
          *     coordinates' count and last write, the playback rates on file, the modules cataloged and the
          *     sample files scanned are what a pipeline moves, and four scalar queries say whether any has. A caller that accepts
-         *     gzip receives the body compressed once at the best level rather than per request.
+         *     gzip receives the body compressed once at the best level rather than per request. The scoring on
+         *     show belongs to the revision of `/cloud/suggestions` alone, since the points carry none of it.
          */
         readonly get: operations["get_cloud_api_cloud_get"];
         readonly put?: never;
@@ -993,24 +994,17 @@ export interface components {
             readonly filename?: string | null;
         };
         /**
-         * SampleCategory
-         * @description A coarse instrument-role classification for a sample, guessed from its occurrence names.
-         * @enum {string}
-         */
-        readonly SampleCategory: "kick" | "snare" | "clap" | "hi_hat" | "cymbal" | "percussion" | "bass" | "lead" | "pad" | "pluck" | "vocal" | "fx" | "loop" | "uncategorized";
-        /**
          * SampleCloudPoint
-         * @description One sample's place in the embedding, with what a viewer needs to color and hear the point.
+         * @description One sample's place in the embedding, with the rate a viewer hears the point at.
          *
-         *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from every
-         *     name the sample goes by -- rather than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
-         *     clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
-         *     the catalog knows no rate for.
+         *     ``playback_rate_hz`` travels with the point so clicking one plays it at the speed the library
+         *     really sounds it at; it is ``None`` for a sample the catalog knows no rate for.
          *
          *     This carries the coordinate's own fields rather than inheriting them, since a view of the whole
          *     catalog is a hundred thousand of these at once: when the run that placed them was computed says
-         *     nothing about any one point, and a timestamp per point is several megabytes over the wire. The
-         *     hand labels travel apart, through `/cloud/labels`, for the same reason.
+         *     nothing about any one point, and a timestamp per point is several megabytes over the wire. What
+         *     colors a point travels apart for the same reason: the hand labels through `/cloud/labels`, and
+         *     what the listening model heard through `/cloud/suggestions`.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -1019,7 +1013,6 @@ export interface components {
             readonly x: number;
             /** Y */
             readonly y: number;
-            readonly category: components["schemas"]["SampleCategory"];
             /** Playback Rate Hz */
             readonly playback_rate_hz: number | null;
         };
@@ -1042,7 +1035,6 @@ export interface components {
             readonly frames: number;
             /** Display Name */
             readonly display_name: string;
-            readonly category: components["schemas"]["SampleCategory"];
             /** Suggested Label */
             readonly suggested_label: string | null;
             /** Hand Label */
@@ -1174,7 +1166,6 @@ export interface components {
         readonly SamplePreview: {
             /** Display Name */
             readonly display_name: string;
-            readonly category: components["schemas"]["SampleCategory"];
             /** Suggested Label */
             readonly suggested_label: string | null;
             /** Hand Label */
@@ -1243,7 +1234,6 @@ export interface components {
             readonly frames: number;
             /** Display Name */
             readonly display_name: string;
-            readonly category: components["schemas"]["SampleCategory"];
             /** Suggested Label */
             readonly suggested_label: string | null;
             /** Hand Label */
@@ -1275,7 +1265,6 @@ export interface components {
         readonly SimilarSample: {
             /** Display Name */
             readonly display_name: string;
-            readonly category: components["schemas"]["SampleCategory"];
             /** Suggested Label */
             readonly suggested_label: string | null;
             /** Hand Label */

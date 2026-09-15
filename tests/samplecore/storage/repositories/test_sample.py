@@ -11,7 +11,6 @@ from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.equivalence_classes import EquivalenceClass
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
-from samplecore.models.category import SampleCategory
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
 from samplecore.models.module_instrument import ModuleInstrument
@@ -359,7 +358,7 @@ def test_a_sample_file_names_a_sample_by_its_stem_and_its_folders_nearest_first(
     assert repository.names_and_rates_for_every_sample() == (names_by_hash, rates_by_hash)
 
 
-def test_a_sample_found_only_in_a_file_is_listed_with_its_name_folder_category_and_rate(
+def test_a_sample_found_only_in_a_file_is_listed_with_its_name_and_rate(
     connection: Connection, stored_sample: Sample
 ) -> None:
     _add_sample_file(connection, sample=stored_sample, relative_path="Kicks/VEH1 001.wav", rate=44100)
@@ -368,26 +367,7 @@ def test_a_sample_found_only_in_a_file_is_listed_with_its_name_folder_category_a
         limit=50, offset=0, class_by_hash={}, selection=EVERYTHING, shown_experiment_id=None
     )
 
-    assert (page[0].display_name, page[0].category, page[0].playback_rate_hz) == (
-        "veh1 001",
-        SampleCategory.KICK,
-        44100,
-    )
-
-
-def test_a_sample_is_categorized_by_the_name_of_the_voice_that_plays_it(
-    connection: Connection, stored_sample: Sample, stored_module: Module
-) -> None:
-    """A waveform stored under a bare slot number is described only by the instrument reaching it."""
-    _add_occurrence(connection, sample=stored_sample, module=stored_module, slot=0, name="smp03")
-    _add_instrument(connection, module=stored_module, instrument_index=0, name="warm pad")
-
-    page = PostgresSampleRepository(connection).list_page(
-        limit=50, offset=0, class_by_hash={}, selection=EVERYTHING, shown_experiment_id=None
-    )
-
-    assert page[0].display_name == "smp03"
-    assert page[0].category is SampleCategory.PAD
+    assert (page[0].display_name, page[0].playback_rate_hz) == ("veh1 001", 44100)
 
 
 def _annotate(

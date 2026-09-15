@@ -7,7 +7,6 @@ from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
 from samplecore.models.base import FROZEN
-from samplecore.models.category import SampleCategory
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.scalars import Count, Frames, Rating, SampleHash
 from samplecore.waveform import WaveformPeak
@@ -39,13 +38,11 @@ class DescribedSample(Sample):
     """A sample as a reader meets it: what to call it, what it is taken to be, and how it sounds.
 
     ``display_name`` resolves the names the waveform is stored under -- each module occurrence's name
-    and each sample file's name -- via `samplecore.naming.choose_dominant_name`, and ``category``
-    resolves via `samplecore.categorization.classify_sample_names`, against those names together
-    with the names of the instruments reaching the sample and the folders its files sit in.
+    and each sample file's name -- via `samplecore.naming.choose_dominant_name`.
     ``suggested_label`` is the closest label the scoring on show heard the sample as, and is ``None``
     where no scoring is shown or the scoring reached other samples than this one.
-    ``hand_label`` is the category a person chose; where it is filled in it is what the sample is,
-    and ``category`` beside it stays the keyword table's own guess. ``rating`` and ``favorite``
+    ``hand_label`` is what a person wrote the sample is; where it is filled in it is what the sample
+    is, and ``suggested_label`` beside it stays what the model heard. ``rating`` and ``favorite``
     carry what that person thought of the sample, which is what makes a collection of their own.
     ``size_bytes`` re-exposes ``Sample.stored_bytes`` under its own name: a Pydantic field cannot
     share a name with an inherited plain property without the property silently winning on
@@ -56,7 +53,6 @@ class DescribedSample(Sample):
     """
 
     display_name: str
-    category: SampleCategory
     suggested_label: str | None
     hand_label: str | None
     rating: Rating | None

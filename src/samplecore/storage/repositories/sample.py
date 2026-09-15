@@ -10,7 +10,6 @@ from sqlalchemy.dialects.postgresql import insert
 from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
-from samplecore.categorization import classify_sample_names
 from samplecore.digests import digest_of_rows
 from samplecore.equivalence_classes import EquivalenceClass
 from samplecore.models.annotation import SampleAnnotation
@@ -390,10 +389,8 @@ def _row_to_sample_summary(
     """Reconstruct a SampleSummary from a Core row plus its names and rates, thumbnail, and class.
 
     The display name is drawn from the names the waveform itself is stored under, keeping it the
-    label a tracker or a file shows, while the category reads the instrument and folder names too,
-    since a voice is often described where the waveform it reaches is only numbered. Both stay filled
-    in beside what a person decided and what a listening model heard, so a reader meets every
-    reading of the sample at once.
+    label a tracker or a file shows. It stays filled in beside what a person decided and what a
+    listening model heard, so a reader meets every reading of the sample at once.
     """
     sample_ = _row_to_sample(row)
     return SampleSummary(
@@ -403,7 +400,6 @@ def _row_to_sample_summary(
         frames=sample_.frames,
         occurrence_count=row.occurrence_count,
         display_name=names.display_name,
-        category=classify_sample_names(names),
         suggested_label=suggested_label,
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),

@@ -74,7 +74,6 @@ function buildSampleDetail(overrides: SampleDetailOverrides): unknown {
         channels: 1,
         frames: 4096,
         display_name: "kick",
-        category: "kick",
         size_bytes: 8192,
         duration_seconds: 0.09,
         playback_rate_hz: overrides.playbackRateHz,

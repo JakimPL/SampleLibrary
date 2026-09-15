@@ -10,13 +10,10 @@ from pydantic import BaseModel, TypeAdapter
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
-from samplecore.categorization import classify_sample_names
 from samplecore.labeling.labels import LabelPath, written_paths
 from samplecore.models.base import FROZEN
-from samplecore.models.category import SampleCategory
 from samplecore.models.experiment import VOCABULARY_PARAMETER
 from samplecore.models.scalars import ModuleHash, SampleHash
-from samplecore.naming import NO_SAMPLE_NAMES
 from samplecore.pitch import choose_playback_rate
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
@@ -55,17 +52,16 @@ CloudRevision = tuple[tuple[int, datetime | None], tuple[int, int], int, tuple[i
 
 
 class SampleCloudPoint(BaseModel):
-    """One sample's place in the embedding, with what a viewer needs to color and hear the point.
+    """One sample's place in the embedding, with the rate a viewer hears the point at.
 
-    ``category`` is computed the same way `SampleSummary.category` is -- at read time, from every
-    name the sample goes by -- rather than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
-    clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
-    the catalog knows no rate for.
+    ``playback_rate_hz`` travels with the point so clicking one plays it at the speed the library
+    really sounds it at; it is ``None`` for a sample the catalog knows no rate for.
 
     This carries the coordinate's own fields rather than inheriting them, since a view of the whole
     catalog is a hundred thousand of these at once: when the run that placed them was computed says
-    nothing about any one point, and a timestamp per point is several megabytes over the wire. The
-    hand labels travel apart, through `/cloud/labels`, for the same reason.
+    nothing about any one point, and a timestamp per point is several megabytes over the wire. What
+    colors a point travels apart for the same reason: the hand labels through `/cloud/labels`, and
+    what the listening model heard through `/cloud/suggestions`.
     """
 
     model_config = FROZEN
@@ -73,7 +69,6 @@ class SampleCloudPoint(BaseModel):
     sample_hash: SampleHash
     x: float
     y: float
-    category: SampleCategory
     playback_rate_hz: Rate | None
 
 
@@ -101,7 +96,8 @@ def get_cloud(
     The answer is built once per revision of what it reads and served from memory after that: the
     coordinates' count and last write, the playback rates on file, the modules cataloged and the
     sample files scanned are what a pipeline moves, and four scalar queries say whether any has. A caller that accepts
-    gzip receives the body compressed once at the best level rather than per request.
+    gzip receives the body compressed once at the best level rather than per request. The scoring on
+    show belongs to the revision of `/cloud/suggestions` alone, since the points carry none of it.
     """
     revision: CloudRevision = (
         PostgresCloudCoordinateRepository(connection).revision(),
@@ -115,15 +111,13 @@ def get_cloud(
 def _cloud_points(connection: Connection) -> tuple[SampleCloudPoint, ...]:
     """Every lookup behind a point is read whole rather than per hash: asking Postgres about a hundred thousand named hashes costs it more than reading each table outright."""
     coordinates = PostgresCloudCoordinateRepository(connection).list_all()
-    repository = PostgresSampleRepository(connection)
-    names_by_hash, rates_by_hash = repository.names_and_rates_for_every_sample()
+    rates_by_hash = PostgresSampleRepository(connection).rates_for_every_sample()
     playback_rate_by_hash = PostgresSamplePlaybackRateRepository(connection).list_all()
     return tuple(
         SampleCloudPoint(
             sample_hash=coordinate.sample_hash,
             x=round(coordinate.x, COORDINATE_DECIMALS),
             y=round(coordinate.y, COORDINATE_DECIMALS),
-            category=classify_sample_names(names_by_hash.get(coordinate.sample_hash, NO_SAMPLE_NAMES)),
             playback_rate_hz=choose_playback_rate(
                 note_event_rate=playback_rate_by_hash.get(coordinate.sample_hash),
                 occurrence_rates=rates_by_hash.get(coordinate.sample_hash, ()),

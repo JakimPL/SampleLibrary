@@ -6,7 +6,6 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
-from trackmod.trackers.xm.tuning import Tuning
 
 from samplecloud.suggestions.scoring import show_scoring
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
@@ -17,7 +16,7 @@ from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
-from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
+from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
@@ -34,9 +33,6 @@ from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
-from samplecore.storage.repositories.sample_properties import (
-    PostgresSamplePropertiesRepository,
-)
 
 SAMPLE_HASH = "a" * 64
 MODULE_HASH = "c" * 64
@@ -58,7 +54,6 @@ def test_get_cloud_returns_every_stored_coordinate(client: TestClient, connectio
     assert body[0]["sample_hash"] == SAMPLE_HASH
     assert body[0]["x"] == 1.5
     assert body[0]["y"] == -2.5
-    assert body[0]["category"] == "uncategorized"
     assert "hand_label" not in body[0]
     assert "computed_at" not in body[0]
 
@@ -77,47 +72,6 @@ def test_get_cloud_rounds_each_coordinate_to_what_a_viewer_can_place(
 
     assert body[0]["x"] == 1.2346
     assert body[0]["y"] == -2.9877
-
-
-def test_get_cloud_resolves_each_point_s_category_from_its_occurrence_names(
-    client: TestClient, connection: Connection
-) -> None:
-    PostgresSampleRepository(connection).upsert(
-        Sample(hash=SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
-    )
-    module_repository = PostgresModuleRepository(connection)
-    module = Module(
-        hash=MODULE_HASH,
-        id=module_repository.next_id(),
-        filename="song.xm",
-        tracker=TrackerFormat.XM,
-        title="a song",
-        channel_count=4,
-        pattern_count=1,
-        instrument_count=1,
-        sample_count=1,
-        file_size=1024,
-        ingested_at=datetime.now(UTC),
-    )
-    module_repository.insert(module)
-    PostgresSamplePropertiesRepository(connection).upsert(
-        XMSampleProperties(
-            sample_hash=SAMPLE_HASH,
-            occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=0),
-            name="kick",
-            rate=8363,
-            volume=64,
-            tuning=Tuning(relative_note=0, finetune=0),
-        )
-    )
-    PostgresCloudCoordinateRepository(connection).upsert(
-        SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
-    )
-
-    response = client.get("/cloud")
-
-    assert response.status_code == 200
-    assert response.json()[0]["category"] == "kick"
 
 
 def test_get_cloud_carries_the_rate_a_point_is_heard_at(client: TestClient, connection: Connection) -> None:
@@ -165,7 +119,7 @@ def test_the_cloud_follows_a_scanned_sample_file(client: TestClient, connection:
     PostgresCloudCoordinateRepository(connection).upsert(
         SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
     )
-    assert client.get("/cloud").json()[0]["category"] == "uncategorized"
+    assert client.get("/cloud").json()[0]["playback_rate_hz"] is None
 
     PostgresSampleFileRepository(connection).upsert(
         SampleFile(
@@ -177,7 +131,7 @@ def test_the_cloud_follows_a_scanned_sample_file(client: TestClient, connection:
     )
     point = client.get("/cloud").json()[0]
 
-    assert (point["category"], point["playback_rate_hz"]) == ("snare", 44100)
+    assert point["playback_rate_hz"] == 44100
 
 
 def test_the_cloud_goes_out_gzipped_only_when_the_caller_accepts_it(client: TestClient, connection: Connection) -> None:

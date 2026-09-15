@@ -44,7 +44,6 @@ describe("CloudHoverTooltip", () => {
     it("shows the sample's display name and short hash once the one preview request lands", async () => {
         getSamplePreview.mockResolvedValue({
             display_name: "kick",
-            category: "kick",
             suggested_label: "BASS DRUM",
             hand_label: null,
             thumbnail: [{ minimum: -0.5, maximum: 0.5 }],
@@ -63,7 +62,6 @@ describe("CloudHoverTooltip", () => {
     it("falls back to the unnamed-sample placeholder for an empty display name, with no thumbnail yet", async () => {
         getSamplePreview.mockResolvedValue({
             display_name: "",
-            category: "uncategorized",
             suggested_label: null,
             hand_label: null,
             thumbnail: null,
