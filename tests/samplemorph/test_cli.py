@@ -635,8 +635,10 @@ def test_a_teacher_whose_vectors_a_descriptor_cannot_answer_in_is_refused(
 
 
 def test_parsing_a_morph_command_loads_no_network_library() -> None:
-    """Every morph command's flags, its help included, are read with torch and lightning left unloaded."""
-    probe = "import sys, samplemorph.cli; sys.exit(any(name in sys.modules for name in ('torch', 'lightning')))"
+    """Every morph command's flags, its help included, are read with torch, lightning and numba left unloaded."""
+    probe = (
+        "import sys, samplemorph.cli; " "sys.exit(any(name in sys.modules for name in ('torch', 'lightning', 'numba')))"
+    )
 
     finished = subprocess.run(
         [sys.executable, "-c", probe], env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}, check=False

@@ -62,7 +62,7 @@ def gaussian_log_frequency(geometry: Geometry) -> LogFrequencyGeometry:
 
 
 def integrate_and_synthesize(
-    magnitude: NDArray[np.float64], *, geometry: LogFrequencyGeometry, frame_count: int
+    magnitude: NDArray[np.floating], *, geometry: LogFrequencyGeometry, frame_count: int
 ) -> NDArray[np.float64]:
     """Integrate a phase for a linear Fourier magnitude and return the `frame_count` frames it makes audible.
 
@@ -72,7 +72,9 @@ def integrate_and_synthesize(
     imposed.
     """
     floor = floor_level(peak_level(magnitude), dynamic_range_db=geometry.dynamic_range_db)
-    frames_first = np.ascontiguousarray(np.maximum(magnitude, floor).T)
+    # pghipy accumulates the phase in an array of the magnitude's own type, and a long render's phase
+    # outgrows what single precision resolves on high partials.
+    frames_first = np.ascontiguousarray(np.maximum(magnitude, floor).T, dtype=np.float64)
     phase = _integrator()(
         frames_first,
         win_length=geometry.fft_length,
