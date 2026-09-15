@@ -17,7 +17,7 @@ import { useEntityRowInteractions } from "../useEntityRowInteractions";
 
 const WEIGHT_DECIMAL_PLACES = 2;
 const NO_PAIR_HINT =
-    "No morph pair yet — in the Cloud, drag from one sample to another with the right mouse button, or click one and right-click another. A Shift-click on a sample row joins it to the sample in hand.";
+    "No morph pair yet — drag a sample from the Cloud to another with the right mouse button, or click one and right-click another.";
 const OFFLINE_NOTICE = "Morphing is offline: the inference service is not reachable.";
 
 interface EndpointReading {
