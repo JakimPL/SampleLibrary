@@ -56,7 +56,11 @@ export function SimilarSampleRow({ similar }: SimilarSampleRowProps): ReactEleme
                 </Link>
             </td>
             <td>
-                <CategoryBadge sampleHash={similar.hash} category={similar.category} handLabel={similar.hand_label} />
+                <CategoryBadge
+                    sampleHash={similar.hash}
+                    suggestedLabel={similar.suggested_label}
+                    handLabel={similar.hand_label}
+                />
             </td>
             <td className="mono">{similar.distance.toFixed(DISTANCE_DECIMAL_PLACES)}</td>
         </tr>

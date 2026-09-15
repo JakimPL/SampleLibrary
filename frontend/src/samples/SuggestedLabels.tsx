@@ -8,7 +8,7 @@ import { useAnnotationWriter } from "./useAnnotationWriter";
 
 const SCORE_DECIMAL_PLACES = 2;
 
-export const NO_SUGGESTIONS = "No suggestions yet — a scoring of the listening model writes them.";
+export const NO_SUGGESTIONS = "No categories yet — a scoring of the listening model writes them.";
 
 interface SuggestedLabelsProps {
     readonly sample: SampleDetail;
@@ -17,7 +17,7 @@ interface SuggestedLabelsProps {
 }
 
 /**
- * What the listening model hears this sample as, each suggestion a click away from the hand label.
+ * The categories the listening model hears this sample as, closest first, each a click away from the hand label.
  *
  * A click appends the tag to the wording the sample carries, through the one write path every
  * annotation gesture takes, so the badge, the row and the cloud follow at once; the write reaches
@@ -35,7 +35,7 @@ export function SuggestedLabels({ sample, scope }: SuggestedLabelsProps): ReactE
 
     return (
         <div className="suggested-labels">
-            <div className="suggested-labels-row" role="group" aria-label="Suggested labels">
+            <div className="suggested-labels-row" role="group" aria-label="Categories">
                 {sample.suggestions.map((suggestion) => {
                     const taken = holdsTag(label, suggestion.label);
                     return (

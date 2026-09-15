@@ -640,6 +640,26 @@ tr.is-focused {
     border: 1px solid var(--border-strong);
 }
 
+.badge-category {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px dashed var(--border-strong);
+}
+
+/* A dot in the category's own color, the legend's swatch at badge size. */
+.badge-swatch {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+}
+
+.badge-unlabeled {
+    background: transparent;
+    color: var(--text-faint);
+    border: 1px dashed var(--border);
+}
+
 .suggested-labels {
     display: flex;
     flex-direction: column;

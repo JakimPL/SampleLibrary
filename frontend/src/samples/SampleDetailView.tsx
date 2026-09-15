@@ -5,7 +5,6 @@ import { DetailHeader } from "../shared/DetailHeader";
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { AnnotationRows } from "./AnnotationRows";
-import { CategoryBadge } from "./CategoryBadge";
 import { SampleFileRow } from "./SampleFileRow";
 import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { SampleRelationRow } from "./SampleRelationRow";
@@ -183,10 +182,6 @@ export function SampleDetailView({
         <section className="detail-scroll">
             <DetailHeader name={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} hash={sample.hash} />
             <dl className="kv">
-                <dt>Category</dt>
-                <dd>
-                    <CategoryBadge sampleHash={sample.hash} category={sample.category} handLabel={sample.hand_label} />
-                </dd>
                 <AnnotationRows key={sample.hash} sample={sample} />
                 <dt>Size</dt>
                 <dd className="mono">{formatBytes(sample.size_bytes)}</dd>

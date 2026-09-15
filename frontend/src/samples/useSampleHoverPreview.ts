@@ -3,11 +3,10 @@ import { useCallback } from "react";
 import { getSamplePreview, type WaveformPeak } from "../api/samples";
 import type { FetchState } from "../shared/fetchState";
 import { useFetch } from "../shared/useFetch";
-import type { SampleCategory } from "./category";
 
 export interface SampleHoverPreview {
     readonly displayName: string;
-    readonly category: SampleCategory;
+    readonly suggestedLabel: string | null;
     readonly handLabel: string | null;
     readonly peaks: readonly WaveformPeak[];
 }
@@ -18,7 +17,7 @@ export function sampleHoverCacheKey(sampleHash: string): string {
 }
 
 /**
- * A sample's display name, category, and stored waveform thumbnail, fetched as one preview for
+ * A sample's display name, what it is taken to be, and stored waveform thumbnail, fetched as one preview for
  * the Cloud panel's hover tooltip -- one request as light as a glance, against the detail a
  * Sample Detail panel needs. A sample the thumbnail pass has not reached shows no bars.
  */
@@ -27,7 +26,7 @@ export function useSampleHoverPreview(sampleHash: string): FetchState<SampleHove
         const preview = await getSamplePreview(sampleHash);
         return {
             displayName: preview.display_name,
-            category: preview.category,
+            suggestedLabel: preview.suggested_label,
             handLabel: preview.hand_label,
             peaks: preview.thumbnail ?? [],
         };

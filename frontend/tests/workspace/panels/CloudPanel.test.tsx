@@ -249,6 +249,7 @@ describe("CloudPanel", () => {
         getSamplePreview.mockResolvedValue({
             display_name: "kick",
             category: "kick",
+            suggested_label: null,
             hand_label: null,
             thumbnail: [],
         });
@@ -291,6 +292,7 @@ describe("CloudPanel", () => {
         getSamplePreview.mockResolvedValue({
             display_name: "snare",
             category: "snare",
+            suggested_label: null,
             hand_label: null,
             thumbnail: [],
         });

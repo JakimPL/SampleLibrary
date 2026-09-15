@@ -1,9 +1,17 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import type * as CloudApi from "../../src/api/cloud";
 import type { SimilarSample } from "../../src/api/samples";
 import { SimilarSampleRow } from "../../src/samples/SimilarSampleRow";
+
+const { getSuggestionTags } = vi.hoisted(() => ({ getSuggestionTags: vi.fn().mockResolvedValue([]) }));
+
+vi.mock("../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../src/api/cloud");
+    return { ...actual, getSuggestionTags };
+});
 
 function buildSimilar(overrides: Partial<SimilarSample> = {}): SimilarSample {
     return {
@@ -12,7 +20,7 @@ function buildSimilar(overrides: Partial<SimilarSample> = {}): SimilarSample {
         playback_rate_hz: null,
         display_name: "kick_808",
         category: "kick",
-        suggested_label: null,
+        suggested_label: "BASS DRUM",
         hand_label: null,
         thumbnail: null,
         ...overrides,
@@ -44,7 +52,7 @@ describe("SimilarSampleRow", () => {
         renderRow();
 
         expect(screen.getByRole("link", { name: /kick_808/ })).toHaveTextContent("def456");
-        expect(screen.getByText("Kick")).toBeInTheDocument();
+        expect(screen.getByText("BASS DRUM")).toBeInTheDocument();
         expect(screen.getByText("0.125")).toBeInTheDocument();
     });
 

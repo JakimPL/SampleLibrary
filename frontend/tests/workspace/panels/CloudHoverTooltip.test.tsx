@@ -1,14 +1,21 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type * as CloudApi from "../../../src/api/cloud";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as SamplesApi from "../../../src/api/samples";
 import { CloudHoverTooltip } from "../../../src/workspace/panels/CloudHoverTooltip";
 
-const { getSamplePreview, getModule } = vi.hoisted(() => ({
+const { getSamplePreview, getModule, getSuggestionTags } = vi.hoisted(() => ({
     getSamplePreview: vi.fn(),
     getModule: vi.fn(),
+    getSuggestionTags: vi.fn().mockResolvedValue([]),
 }));
+
+vi.mock("../../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
+    return { ...actual, getSuggestionTags };
+});
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
@@ -38,6 +45,7 @@ describe("CloudHoverTooltip", () => {
         getSamplePreview.mockResolvedValue({
             display_name: "kick",
             category: "kick",
+            suggested_label: "BASS DRUM",
             hand_label: null,
             thumbnail: [{ minimum: -0.5, maximum: 0.5 }],
         });
@@ -48,7 +56,7 @@ describe("CloudHoverTooltip", () => {
             expect(screen.getByText("kick")).toBeInTheDocument();
         });
         expect(screen.getByText(SAMPLE_HASH.slice(0, 8))).toBeInTheDocument();
-        expect(screen.getByText("Kick")).toBeInTheDocument();
+        expect(screen.getByText("BASS DRUM")).toBeInTheDocument();
         expect(getSamplePreview).toHaveBeenCalledWith(SAMPLE_HASH);
     });
 
@@ -56,6 +64,7 @@ describe("CloudHoverTooltip", () => {
         getSamplePreview.mockResolvedValue({
             display_name: "",
             category: "uncategorized",
+            suggested_label: null,
             hand_label: null,
             thumbnail: null,
         });

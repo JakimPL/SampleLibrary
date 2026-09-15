@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPath, holdsTag, withTag } from "../../src/samples/labelText";
+import { formatPath, holdsTag, topLevelOf, withTag } from "../../src/samples/labelText";
 
 describe("formatPath", () => {
     it("writes a path the way a person does, one space after each colon", () => {
         expect(formatPath(["HI-HAT", "CLOSED"])).toBe("HI-HAT: CLOSED");
+    });
+});
+
+describe("topLevelOf", () => {
+    it("names the broad category of a label's first tag, as the server keeps it", () => {
+        expect(topLevelOf("HI-HAT: CLOSED")).toBe("HI-HAT");
+        expect(topLevelOf("snare :rim, lo-fi")).toBe("SNARE");
+        expect(topLevelOf("BASS DRUM")).toBe("BASS DRUM");
+    });
+
+    it("names nothing for a label with nothing written", () => {
+        expect(topLevelOf("")).toBe("");
     });
 });
 

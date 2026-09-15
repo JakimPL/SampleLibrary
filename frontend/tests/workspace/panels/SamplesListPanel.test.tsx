@@ -2,15 +2,24 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import type * as CloudApi from "../../../src/api/cloud";
 import type * as SamplesApi from "../../../src/api/samples";
 import { SamplesListPanel } from "../../../src/workspace/panels/SamplesListPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { listSamples } = vi.hoisted(() => ({ listSamples: vi.fn() }));
+const { listSamples, getSuggestionTags } = vi.hoisted(() => ({
+    listSamples: vi.fn(),
+    getSuggestionTags: vi.fn().mockResolvedValue([]),
+}));
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
     return { ...actual, listSamples };
+});
+
+vi.mock("../../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
+    return { ...actual, getSuggestionTags };
 });
 
 function renderPanel(): ReturnType<typeof render> {
@@ -32,6 +41,8 @@ const SAMPLE_SUMMARY = {
     occurrence_count: 3,
     display_name: "kick",
     category: "kick",
+    suggested_label: null,
+    hand_label: null,
     size_bytes: 8192,
     thumbnail: null,
     playback_rate_hz: null,

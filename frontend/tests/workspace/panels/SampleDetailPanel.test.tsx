@@ -3,19 +3,26 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../../../src/api/client";
+import type * as CloudApi from "../../../src/api/cloud";
 import type * as SamplesApi from "../../../src/api/samples";
 import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => ({
+const { getSample, getSampleRelations, getSimilarSamples, getSuggestionTags } = vi.hoisted(() => ({
     getSample: vi.fn(),
     getSampleRelations: vi.fn(),
     getSimilarSamples: vi.fn(),
+    getSuggestionTags: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
     return { ...actual, getSample, getSampleRelations, getSimilarSamples };
+});
+
+vi.mock("../../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
+    return { ...actual, getSuggestionTags };
 });
 
 function renderPanel(): ReturnType<typeof render> {
@@ -37,6 +44,8 @@ const SAMPLE_DETAIL = {
     frames: 4096,
     display_name: "kick",
     category: "kick",
+    suggested_label: "BASS DRUM",
+    hand_label: null,
     size_bytes: 8192,
     duration_seconds: 0.09,
     playback_rate_hz: 8363,
@@ -77,6 +86,11 @@ describe("SampleDetailPanel", () => {
             expect(screen.getByRole("heading", { name: "kick" })).toBeInTheDocument();
         });
         expect(screen.getByText("abc")).toBeInTheDocument();
+        expect([...document.querySelectorAll(".kv dt")].map((term) => term.textContent).slice(0, 2)).toEqual([
+            "Label",
+            "Categories",
+        ]);
+        expect(screen.queryByText("Category")).not.toBeInTheDocument();
         expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/module-1");
         expect(screen.getByRole("button", { name: "Occurrences (1)" })).toHaveAttribute("aria-pressed", "true");
         expect(screen.getByRole("button", { name: "Similar (0)" })).toBeInTheDocument();
@@ -118,6 +132,7 @@ describe("SampleDetailPanel", () => {
                 playback_rate_hz: null,
                 display_name: "snare_909",
                 category: "snare",
+                suggested_label: "SNARE",
                 hand_label: null,
                 thumbnail: null,
             },
@@ -129,6 +144,7 @@ describe("SampleDetailPanel", () => {
 
         expect(screen.getByText("dddddddd")).toBeInTheDocument();
         expect(screen.getByText("snare_909")).toBeInTheDocument();
+        expect(screen.getByText("SNARE")).toBeInTheDocument();
         expect(screen.getByText("1.500")).toBeInTheDocument();
         expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
     });

@@ -3,8 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import type * as CloudApi from "../../src/api/cloud";
 import { type SampleSelection, type SampleSummary, WHOLE_CATALOG } from "../../src/api/samples";
 import { SamplesTable } from "../../src/samples/SamplesTable";
+
+const { getSuggestionTags } = vi.hoisted(() => ({ getSuggestionTags: vi.fn().mockResolvedValue([]) }));
+
+vi.mock("../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../src/api/cloud");
+    return { ...actual, getSuggestionTags };
+});
 
 function buildSample(
     overrides: Pick<SampleSummary, "hash" | "display_name" | "occurrence_count"> &

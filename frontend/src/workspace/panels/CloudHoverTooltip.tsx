@@ -61,7 +61,11 @@ function SampleHoverTooltip({ hash, x, y }: EntityTooltipProps): ReactElement | 
             </div>
             <div className="cloud-hover-meta">
                 <span className="entity-hash mono">{shortHash(hash)}</span>
-                <CategoryBadge sampleHash={hash} category={state.data.category} handLabel={state.data.handLabel} />
+                <CategoryBadge
+                    sampleHash={hash}
+                    suggestedLabel={state.data.suggestedLabel}
+                    handLabel={state.data.handLabel}
+                />
             </div>
             <MiniWaveform peaks={state.data.peaks} />
         </div>
