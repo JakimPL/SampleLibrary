@@ -8,6 +8,7 @@ import {
     defaultPaintedTags,
     labelColoring,
     type PointColoring,
+    SUBSTRATE_ONLY_COLORING,
     type TopLevelTag,
     topLevelTags,
 } from "../../cloud/labelColoring";
@@ -30,10 +31,13 @@ import { entityRoute } from "../useEntityRowInteractions";
 import { CloudHoverTooltip } from "./CloudHoverTooltip";
 
 type CloudTab = "samples" | "modules";
-type ColoringMode = "category" | "label" | "suggestion";
+type ColoringMode = "category" | "label";
 
-const CATEGORY_COLORING: PointColoring = { kind: "category" };
 const NO_TAGS: readonly TopLevelTag[] = [];
+const EMPTY_CAPTIONS: Readonly<Record<ColoringMode, string>> = {
+    category: "No sample carries a category yet. A scoring of the listening model writes them.",
+    label: "No sample carries a label yet. Labels written in a sample's detail panel appear here.",
+};
 
 interface HoveredPoint {
     readonly entity: EntityRef;
@@ -48,7 +52,6 @@ function samplePoints(coordinates: readonly CloudPoint[]): readonly CloudEntityP
         ref: { kind: "sample", hash: coordinate.sample_hash },
         x: coordinate.x,
         y: coordinate.y,
-        category: coordinate.category,
         ...(coordinate.playback_rate_hz !== null && { playbackRateHz: coordinate.playback_rate_hz }),
     }));
 }
@@ -101,14 +104,14 @@ function suggestionsAsLabels(suggestions: readonly CloudSuggestion[]): readonly 
 }
 
 /**
- * How the sample points are colored. Under the label mode the tags a person has painted are their
- * own choice once they touch the legend, and the most used ones until then -- so a vocabulary that
- * grows during a labeling session keeps showing whatever was chosen, and a fresh session shows
- * the tags with the most to show. The suggestion mode paints the same way from what the listening
- * model heard, its own legend drawn from the scoring's vocabulary; a chosen set belongs to one mode,
- * so switching starts the other from its own most-used tags. A mode's sources are fetched the first
- * time it is chosen and kept for the session, so the category mode, which needs none of them,
- * costs nothing beyond the points.
+ * How the sample points are colored. The category mode paints each sample by the tag the listening
+ * model heard first, its legend drawn from the scoring's vocabulary, so a point wears the color its
+ * badge does. The label mode paints the same way from the tags a person wrote. In either, the
+ * painted tags are a person's own choice once they touch the legend, and the most used ones until
+ * then -- so a vocabulary that grows during a labeling session keeps showing whatever was chosen,
+ * and a fresh session shows the tags with the most to show; a chosen set belongs to one mode, so
+ * switching starts the other from its own most-used tags. A mode's sources are fetched the first
+ * time it is chosen and kept for the session, and until they land every point waits on the ground.
  */
 function useSampleColoring(mode: ColoringMode): {
     readonly coloring: PointColoring;
@@ -118,14 +121,14 @@ function useSampleColoring(mode: ColoringMode): {
 } {
     const labelsState = useCloudLabels(mode === "label");
     const tagsState = useLabelTags(mode === "label");
-    const suggestionsState = useCloudSuggestions(mode === "suggestion");
-    const suggestionTagsState = useSuggestionTags(mode === "suggestion");
+    const suggestionsState = useCloudSuggestions(mode === "category");
+    const suggestionTagsState = useSuggestionTags(mode === "category");
     const [chosen, setChosen] = useState<readonly string[] | null>(null);
     useEffect(() => {
         setChosen(null);
     }, [mode]);
     const tags = useMemo(() => {
-        const source = mode === "suggestion" ? suggestionTagsState : tagsState;
+        const source = mode === "category" ? suggestionTagsState : tagsState;
         return source.status === "success" ? topLevelTags(source.data) : NO_TAGS;
     }, [mode, tagsState, suggestionTagsState]);
     const painted = useMemo(() => chosen ?? defaultPaintedTags(tags), [chosen, tags]);
@@ -133,10 +136,10 @@ function useSampleColoring(mode: ColoringMode): {
         if (mode === "label" && labelsState.status === "success") {
             return labelColoring(labelsState.data, tags, painted);
         }
-        if (mode === "suggestion" && suggestionsState.status === "success") {
+        if (mode === "category" && suggestionsState.status === "success") {
             return labelColoring(suggestionsAsLabels(suggestionsState.data), tags, painted);
         }
-        return CATEGORY_COLORING;
+        return SUBSTRATE_ONLY_COLORING;
     }, [mode, labelsState, suggestionsState, tags, painted]);
 
     function togglePainted(name: string): void {
@@ -267,21 +270,12 @@ export function CloudPanel(): ReactElement {
                         >
                             Labels
                         </button>
-                        <button
-                            type="button"
-                            aria-pressed={mode === "suggestion"}
-                            onClick={() => {
-                                setMode("suggestion");
-                            }}
-                        >
-                            Suggestions
-                        </button>
                     </>
                 )}
             </div>
             {tab === "modules" && <p className="cloud-caption">{MODULE_TAB_CAPTION}</p>}
-            {tab === "samples" && mode !== "category" && (
-                <TagLegend tags={tags} painted={painted} onToggle={togglePainted} />
+            {tab === "samples" && (
+                <TagLegend tags={tags} painted={painted} onToggle={togglePainted} emptyCaption={EMPTY_CAPTIONS[mode]} />
             )}
             <div className="panel-body cloud-body">
                 {state.status === "loading" && <Loading />}

@@ -153,7 +153,7 @@ function shuffled<Item>(items: readonly Item[], random: Random): Item[] {
  * whose size follows its weight and whose reach is a fraction of the cloud's span, both spread
  * log-normally so a few dense cores stand among many sparse blobs the way a real library's
  * clusters do, with one clone in a hundred thrown to the margins as an outlier. The clones arrive
- * shuffled, so every category interleaves with the others in draw order, and the same seed gives the
+ * shuffled, so every group interleaves with the others in draw order, and the same seed gives the
  * same cloud on every call.
  */
 export function densifyPoints<Point extends PlanarPoint>(

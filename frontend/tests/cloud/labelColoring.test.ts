@@ -65,11 +65,8 @@ describe("labelColoring", () => {
     it("carries each painted tag's lasting rank in slot order and ignores a tag nobody used", () => {
         const coloring = labelColoring(LABELS, topLevelTags(TAGS), ["SNARE", "KICK", "HI-HAT"]);
 
-        expect(coloring.kind).toBe("label");
-        if (coloring.kind === "label") {
-            expect(coloring.ranks).toEqual([3, 0]);
-            expect(coloring.slotByHash.get("a".repeat(64))).toBe(2);
-            expect(coloring.slotByHash.get("c".repeat(64))).toBe(1);
-        }
+        expect(coloring.ranks).toEqual([3, 0]);
+        expect(coloring.slotByHash.get("a".repeat(64))).toBe(2);
+        expect(coloring.slotByHash.get("c".repeat(64))).toBe(1);
     });
 });

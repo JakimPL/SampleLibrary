@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as CloudApi from "../../../src/api/cloud";
+import type * as CurationApi from "../../../src/api/curation";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as MorphApi from "../../../src/api/morph";
 import type * as SamplesApi from "../../../src/api/samples";
@@ -18,6 +19,8 @@ const {
     getModuleCloud,
     getCloudSuggestions,
     getSuggestionTags,
+    getCloudLabels,
+    getLabelTags,
     getSamplePreview,
     getModule,
     getMorphStatus,
@@ -66,6 +69,8 @@ const {
         getModuleCloud: vi.fn(),
         getCloudSuggestions: vi.fn().mockResolvedValue([]),
         getSuggestionTags: vi.fn().mockResolvedValue([]),
+        getCloudLabels: vi.fn().mockResolvedValue([]),
+        getLabelTags: vi.fn().mockResolvedValue([]),
         getSamplePreview: vi.fn(),
         getModule: vi.fn(),
         getMorphStatus: vi.fn().mockResolvedValue({ available: true, service: null }),
@@ -79,7 +84,12 @@ vi.mock("regl-scatterplot", () => ({
 
 vi.mock("../../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
-    return { ...actual, getCloud, getModuleCloud, getCloudSuggestions, getSuggestionTags };
+    return { ...actual, getCloud, getModuleCloud, getCloudSuggestions, getSuggestionTags, getCloudLabels };
+});
+
+vi.mock("../../../src/api/curation", async () => {
+    const actual = await vi.importActual<typeof CurationApi>("../../../src/api/curation");
+    return { ...actual, getLabelTags };
 });
 
 vi.mock("../../../src/api/samples", async () => {
@@ -264,19 +274,16 @@ describe("CloudPanel", () => {
         expect(screen.getByText(sampleHash.slice(0, 8))).toBeInTheDocument();
     });
 
-    it("colors by the listening model's suggestions, with a legend of the tags it suggests first", async () => {
+    it("colors by category from the start, each sample by its first pick under a legend of the tags picked first", async () => {
         const sampleHash = "3".repeat(64);
         getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, category: "uncategorized" }]);
         getModuleCloud.mockResolvedValue([]);
         getCloudSuggestions.mockResolvedValue([{ sample_hash: sampleHash, path: ["BASS DRUM"], score: 0.8 }]);
         getSuggestionTags.mockResolvedValue([{ path: ["BASS DRUM"], sample_count: 1, rank: 0 }]);
         renderPanel();
-        await waitFor(() => {
-            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
-        });
 
-        fireEvent.click(screen.getByRole("button", { name: "Suggestions" }));
-
+        expect(screen.getByRole("button", { name: "Category" })).toHaveAttribute("aria-pressed", "true");
+        expect(screen.queryByRole("button", { name: "Suggestions" })).not.toBeInTheDocument();
         expect(await screen.findByRole("button", { name: /BASS DRUM/ })).toHaveAttribute("aria-pressed", "true");
         await waitFor(() => {
             expect(latestInstance().draw).toHaveBeenCalledWith([[expect.any(Number), expect.any(Number), 1]], {
@@ -406,7 +413,7 @@ describe("CloudPanel", () => {
 
         expect(play).not.toHaveBeenCalled();
     });
-    it("asks for the suggestions and their tags only once the Suggestions mode is chosen", async () => {
+    it("asks for the hand labels and their tags only once the Labels mode is chosen", async () => {
         const sampleHash = "8".repeat(64);
         getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, category: "uncategorized" }]);
         getModuleCloud.mockResolvedValue([]);
@@ -415,14 +422,15 @@ describe("CloudPanel", () => {
             expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
 
-        expect(getCloudSuggestions).not.toHaveBeenCalled();
-        expect(getSuggestionTags).not.toHaveBeenCalled();
+        expect(getCloudSuggestions).toHaveBeenCalledTimes(1);
+        expect(getCloudLabels).not.toHaveBeenCalled();
+        expect(getLabelTags).not.toHaveBeenCalled();
 
-        fireEvent.click(screen.getByRole("button", { name: "Suggestions" }));
+        fireEvent.click(screen.getByRole("button", { name: "Labels" }));
 
         await waitFor(() => {
-            expect(getCloudSuggestions).toHaveBeenCalledTimes(1);
+            expect(getCloudLabels).toHaveBeenCalledTimes(1);
         });
-        expect(getSuggestionTags).toHaveBeenCalledTimes(1);
+        expect(getLabelTags).toHaveBeenCalledTimes(1);
     });
 });

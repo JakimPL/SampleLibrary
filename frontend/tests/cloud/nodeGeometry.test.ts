@@ -1,33 +1,35 @@
 import { describe, expect, it } from "vitest";
 
 import type { CloudEntityPoint } from "../../src/cloud/geometry";
+import { SUBSTRATE_SLOT } from "../../src/cloud/labelColoring";
 import { nodeGeometryOf, nodePaletteOf } from "../../src/cloud/nodeGeometry";
 import { slotPoints } from "../../src/cloud/pointPalette";
-import { categoryIndex } from "../../src/samples/category";
 
-function sample(hashCharacter: string, x: number, y: number, category: CloudEntityPoint["category"]): CloudEntityPoint {
-    return { ref: { kind: "sample", hash: hashCharacter.repeat(64) }, x, y, ...(category && { category }) };
+const KICK_SLOT = 1;
+const PAD_SLOT = 2;
+
+function sample(hashCharacter: string, x: number, y: number): CloudEntityPoint {
+    return { ref: { kind: "sample", hash: hashCharacter.repeat(64) }, x, y };
 }
 
 describe("nodeGeometryOf", () => {
     it("lays the substrate's nodes out first, each with its position and slot", () => {
-        const points = [
-            sample("1", 0.1, 0.2, "kick"),
-            sample("2", 0.3, 0.4, "uncategorized"),
-            sample("3", 0.5, 0.6, "pad"),
-        ];
+        const points = [sample("1", 0.1, 0.2), sample("2", 0.3, 0.4), sample("3", 0.5, 0.6)];
+        const coloring = {
+            slotByHash: new Map([
+                ["1".repeat(64), KICK_SLOT],
+                ["3".repeat(64), PAD_SLOT],
+            ]),
+            ranks: [0, 1],
+        };
 
-        const geometry = nodeGeometryOf(points, slotPoints(points, { kind: "category" }));
+        const geometry = nodeGeometryOf(points, slotPoints(points, coloring));
 
         expect(geometry.count).toBe(3);
         expect(Array.from(geometry.positions)).toEqual(
             [0.3, 0.4, 0.1, 0.2, 0.5, 0.6].map((value) => Math.fround(value)),
         );
-        expect(Array.from(geometry.slots)).toEqual([
-            categoryIndex("uncategorized"),
-            categoryIndex("kick"),
-            categoryIndex("pad"),
-        ]);
+        expect(Array.from(geometry.slots)).toEqual([SUBSTRATE_SLOT, KICK_SLOT, PAD_SLOT]);
     });
 
     it("keeps a flat batch in its own order, every node in slot zero", () => {

@@ -3,6 +3,7 @@ import type { ServerResponse } from "node:http";
 import type { Connect, Plugin, ViteDevServer } from "vite";
 
 import type { components } from "../src/api/schema";
+import { topLevelOf } from "../src/samples/labelText";
 import { seedLayout } from "./cloudSeed";
 import { densifyPoints, parseDensifyTarget, type PlanarPoint } from "./densifyCloud";
 
@@ -33,9 +34,8 @@ const GET_METHOD = "GET";
 const URL_BASE = "http://localhost";
 const JSON_CONTENT_TYPE = "application/json";
 const DENSIFY_SEED = 20260914;
-const UNCATEGORIZED_CATEGORY = "uncategorized";
-const UNCATEGORIZED_CLUSTER_WEIGHT = 8;
 const UNIT_WEIGHT = 1;
+const NAME_WORD_SEPARATOR = /[\s_-]+/;
 // Kept equal to MAX_PAGE_LIMIT in src/sampleserver/pagination.py.
 const SEED_LISTING_LIMIT = 500;
 const SEED_LISTING_QUERY = `?limit=${String(SEED_LISTING_LIMIT)}&offset=0`;
@@ -48,15 +48,10 @@ interface DensifiedRoute<Point extends PlanarPoint> {
 }
 
 /**
- * Uncategorized samples make up most of a real library, so an uncategorized point grows a cluster
- * eight times the size of a categorized one and the recessive substrate dominates the way it does
- * there.
+ * Every point grows a cluster of one size: a scoring names nearly every sample of a real library, so
+ * no kind of point outnumbers the rest.
  */
-function sampleWeight(point: CloudPoint): number {
-    return point.category === UNCATEGORIZED_CATEGORY ? UNCATEGORIZED_CLUSTER_WEIGHT : UNIT_WEIGHT;
-}
-
-function moduleWeight(): number {
+function unitWeight(): number {
     return UNIT_WEIGHT;
 }
 
@@ -75,12 +70,26 @@ async function readJson<Body>(path: string, backendUrl: string): Promise<Body> {
     return (await response.json()) as Body;
 }
 
-/** The sandbox's samples as cloud points, grouped into clusters by the category each already carries. */
+/**
+ * The broad category a seeded sample clusters under: what its badge names it by, a hand label before
+ * the listening model's first pick, and the first word of its name for a sandbox no scoring has
+ * reached, so kicks and snares still gather apart.
+ */
+function seedGroupOf(sample: SampleSummary): string {
+    const named = sample.hand_label ?? sample.suggested_label;
+    if (named !== null) {
+        return topLevelOf(named);
+    }
+    const [firstWord = ""] = sample.display_name.trim().toUpperCase().split(NAME_WORD_SEPARATOR);
+    return firstWord;
+}
+
+/** The sandbox's samples as cloud points, grouped into clusters by what each is named as. */
 async function seedSamplePoints(backendUrl: string): Promise<readonly CloudPoint[]> {
     const page = await readJson<Page<SampleSummary>>(SAMPLE_LISTING_PATH + SEED_LISTING_QUERY, backendUrl);
     const placed = seedLayout(page.items, {
         keyOf: (sample) => sample.hash,
-        groupOf: (sample) => sample.category,
+        groupOf: seedGroupOf,
     });
     return placed.map((sample) => ({
         sample_hash: sample.hash,
@@ -161,7 +170,7 @@ export function densifyCloudPlugin(options: DensifyCloudPluginOptions): Plugin {
                 if (pathname === SAMPLE_CLOUD_PATH && sampleTarget !== null) {
                     const route: DensifiedRoute<CloudPoint> = {
                         targetCount: sampleTarget,
-                        weightOf: sampleWeight,
+                        weightOf: unitWeight,
                         seed: () => seedSamplePoints(options.backendUrl),
                     };
                     void answerDensified(pathname, route, options.backendUrl, response).catch(next);
@@ -170,7 +179,7 @@ export function densifyCloudPlugin(options: DensifyCloudPluginOptions): Plugin {
                 if (pathname === MODULE_CLOUD_PATH && moduleTarget !== null) {
                     const route: DensifiedRoute<ModuleCloudPoint> = {
                         targetCount: moduleTarget,
-                        weightOf: moduleWeight,
+                        weightOf: unitWeight,
                         seed: () => seedModulePoints(options.backendUrl),
                     };
                     void answerDensified(pathname, route, options.backendUrl, response).catch(next);

@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 
-import { CATEGORY_ORDER, categoryColorProperty } from "../samples/category";
 import { type LabelPaletteParameters, readLabelPaletteParameters } from "../theme/labelPalette";
 import { readThemeColor } from "../theme/readThemeColor";
 import { readThemeKeyword } from "../theme/readThemeKeyword";
@@ -24,11 +23,11 @@ export type GridAxes = (typeof GRID_AXES)[number];
 /** How the theme draws the cloud's points themselves. */
 export interface PointStyle {
     readonly shape: PointShape;
-    /** How large a point is where it names something: a category, or a painted tag. */
+    /** How large a point is where it names something: a painted tag. */
     readonly sizePx: number;
     /** How large a point is where it names nothing, so the ground the others sit on reads as grain. */
     readonly substrateSizePx: number;
-    /** How opaque a point is where it names something: a category, or a painted tag. */
+    /** How opaque a point is where it names something: a painted tag. */
     readonly opacity: number;
     /** How opaque a point is where it names nothing, so the ground the others sit on shows its density. */
     readonly substrateOpacity: number;
@@ -41,14 +40,12 @@ export interface PointStyle {
 
 export interface CloudColors {
     readonly background: string;
-    /** The one color of a batch that carries no categories: the module cloud. */
+    /** The one color of the module cloud, whose points carry no tags. */
     readonly point: string;
     readonly selected: string;
     readonly hover: string;
     /** The recessive tone of the points that name nothing. */
     readonly uncategorized: string;
-    /** One color per category in `CATEGORY_ORDER`, the uncategorized one in the recessive tone. */
-    readonly categories: readonly string[];
     readonly labels: LabelPaletteParameters;
 }
 
@@ -138,7 +135,6 @@ const GRID_CENTER_COLOR: Token<string> = { property: "--cloud-grid-center", fall
 const GLOW_OPACITY: Token<number> = { property: "--cloud-glow-opacity", fallback: 0 };
 const MINIMUM_GRID_SPACING_PX = 4;
 
-const UNCATEGORIZED_CATEGORY = "uncategorized";
 const MINIMUM_OPACITY = 0.01;
 const MINIMUM_SELECTED_EXTRA_SIZE_PX = 1;
 
@@ -177,18 +173,12 @@ function readPointStyle(): PointStyle {
 }
 
 function readCloudColors(): CloudColors {
-    const uncategorized = readColor(UNCATEGORIZED_COLOR);
     return {
         background: readColor(BACKGROUND_COLOR),
         point: readColor(POINT_COLOR),
         selected: readColor(SELECTED_COLOR),
         hover: readColor(HOVER_COLOR),
-        uncategorized,
-        categories: CATEGORY_ORDER.map((category) =>
-            category === UNCATEGORIZED_CATEGORY
-                ? uncategorized
-                : readThemeColor(categoryColorProperty(category), POINT_COLOR.fallback),
-        ),
+        uncategorized: readColor(UNCATEGORIZED_COLOR),
         labels: readLabelPaletteParameters(),
     };
 }

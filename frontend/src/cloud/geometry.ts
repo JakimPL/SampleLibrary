@@ -1,12 +1,9 @@
-import type { SampleCategory } from "../samples/category";
 import type { EntityRef } from "../workspace/selectionStore";
 
 export interface CloudEntityPoint {
     readonly ref: EntityRef;
     readonly x: number;
     readonly y: number;
-    /** Present on every sample point, "uncategorized" at worst, and absent on a module point. */
-    readonly category?: SampleCategory;
     /** The rate a clicked sample point plays at; absent on a module point and on a sample of unknown rate. */
     readonly playbackRateHz?: number;
 }
@@ -60,7 +57,6 @@ export function normalizePoints(points: readonly CloudEntityPoint[]): readonly C
         x: NORMALIZED_MIN + ((point.x - horizontal.minimum) / rangeX) * NORMALIZED_SPAN,
         y: NORMALIZED_MIN + ((point.y - vertical.minimum) / rangeY) * NORMALIZED_SPAN,
         // exactOptionalPropertyTypes requires an absent optional field to be omitted.
-        ...(point.category !== undefined && { category: point.category }),
         ...(point.playbackRateHz !== undefined && { playbackRateHz: point.playbackRateHz }),
     }));
 }

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { readCloudRenderSettings } from "../../src/cloud/cloudRenderSettings";
-import { categoryIndex } from "../../src/samples/category";
 
 const PROPERTIES = [
     "--cloud-point-shape",
@@ -13,7 +12,6 @@ const PROPERTIES = [
     "--cloud-point-outline-width",
     "--cloud-point-scale-mode",
     "--cloud-point-uncategorized",
-    "--category-kick",
     "--cloud-marker-size",
     "--cloud-marker-line-width",
     "--cloud-marker-casing-width",
@@ -79,13 +77,11 @@ describe("readCloudRenderSettings", () => {
         expect(point.selectedExtraSizePx).toBeGreaterThanOrEqual(1);
     });
 
-    it("paints each category in its own color and the uncategorized one in the substrate's tone", () => {
-        declare({ "--category-kick": "#abcdef", "--cloud-point-uncategorized": "#123456" });
+    it("paints the points that name nothing in the substrate's tone", () => {
+        declare({ "--cloud-point-uncategorized": "#123456" });
 
         const { colors } = readCloudRenderSettings();
 
-        expect(colors.categories[categoryIndex("kick")]).toBe("#abcdef");
-        expect(colors.categories[categoryIndex("uncategorized")]).toBe("#123456");
         expect(colors.uncategorized).toBe("#123456");
     });
 

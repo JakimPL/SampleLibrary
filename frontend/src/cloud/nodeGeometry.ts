@@ -17,7 +17,7 @@ const ALPHA_CHANNEL = 3;
 const TRANSPARENT = [0, 0, 0, 0] as const;
 
 /**
- * The nodes of `points` in drawing order: under a categorized batch the substrate's points first,
+ * The nodes of `points` in drawing order: under a sample batch the substrate's points first,
  * as the scatterplot draws them, so the named points' markers sit on top; a batch of one flat
  * color keeps its own order in slot zero.
  */

@@ -212,8 +212,22 @@ describe("densifyCloudPlugin", () => {
     it("lays the catalog's own samples out when the embedding has yet to run", async () => {
         const listing = {
             items: [
-                { hash: KICK_HASH, category: "kick", playback_rate_hz: 44100 },
-                { hash: PAD_HASH, category: "pad", playback_rate_hz: null },
+                {
+                    hash: KICK_HASH,
+                    display_name: "kick 01",
+                    category: "kick",
+                    hand_label: null,
+                    suggested_label: "BASS DRUM",
+                    playback_rate_hz: 44100,
+                },
+                {
+                    hash: PAD_HASH,
+                    display_name: "warm_pad",
+                    category: "pad",
+                    hand_label: null,
+                    suggested_label: null,
+                    playback_rate_hz: null,
+                },
             ],
         };
         const fetchMock = vi.fn().mockImplementation((url: URL) => {

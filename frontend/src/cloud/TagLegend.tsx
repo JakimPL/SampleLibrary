@@ -9,9 +9,10 @@ interface TagLegendProps {
     readonly tags: readonly TopLevelTag[];
     readonly painted: readonly string[];
     readonly onToggle: (name: string) => void;
+    /** What the strip says while no sample carries a tag of this legend's kind. */
+    readonly emptyCaption: string;
 }
 
-const NOTHING_LABELED = "No sample carries a label yet. Labels written in a sample's detail panel appear here.";
 const COLLAPSE_LABEL = "Painted only";
 
 /**
@@ -23,7 +24,7 @@ const COLLAPSE_LABEL = "Painted only";
  * every theme change, the same way the cloud re-reads its own, so a swatch and the points it
  * names stay one color.
  */
-export function TagLegend({ tags, painted, onToggle }: TagLegendProps): ReactElement {
+export function TagLegend({ tags, painted, onToggle, emptyCaption }: TagLegendProps): ReactElement {
     const [expanded, setExpanded] = useState(false);
     const themeSignal = useThemeSignal();
     const colorByName = useMemo(() => {
@@ -33,7 +34,7 @@ export function TagLegend({ tags, painted, onToggle }: TagLegendProps): ReactEle
     }, [tags, themeSignal.preference, themeSignal.systemVersion]);
 
     if (tags.length === 0) {
-        return <p className="cloud-caption">{NOTHING_LABELED}</p>;
+        return <p className="cloud-caption">{emptyCaption}</p>;
     }
 
     const paintedTags = tags.filter((tag) => painted.includes(tag.name));

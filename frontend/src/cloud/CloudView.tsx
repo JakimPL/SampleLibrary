@@ -49,7 +49,7 @@ function perSlotColor(color: string, slotCount: number): ScatterplotColor {
 
 /**
  * How the scatterplot draws its points under the current theme and coloring: the properties it is
- * created with and that `set` re-applies. A categorized batch paints each slot in its own color,
+ * created with and that `set` re-applies. A sample batch paints each slot in its own color,
  * size and opacity, the substrate's slot finer and fainter than the rest; the module cloud paints in
  * one flat color. Square points snap to the device's pixel grid, which is what keeps them crisp.
  */
@@ -357,10 +357,9 @@ function selectHighlighted(
  *
  * How the points look comes from the theme through `useCloudRenderSettings`: size, shape, opacity
  * and colors are handed to the library at creation and re-applied through its own `set` whenever
- * the theme changes. Points that carry a `category` (every sample-cloud point does; a module-cloud
- * point carries none) draw with regl-scatterplot's own categorical coloring, one color and one
- * opacity per palette slot, the substrate's slot -- the uncategorized samples, or those no painted
- * tag reaches -- fainter than the rest and drawn beneath it, so the classified structure stands on
+ * the theme changes. Sample points draw with regl-scatterplot's own categorical coloring, one color
+ * and one opacity per palette slot, the substrate's slot -- the samples no painted tag reaches --
+ * fainter than the rest and drawn beneath it, so the named structure stands on
  * a ground whose density still shows. The active and hover colors come as one per slot, which is
  * what paints a selected or hovered point in the theme's own selection and hover colors. The
  * library compiles a point's shape into its shaders at creation, so a theme that changes the shape
