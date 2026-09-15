@@ -1,9 +1,9 @@
 import type { ReactElement } from "react";
 
 import type { SampleDetail, SampleRelation, SimilarSample } from "../api/samples";
+import { DetailHeader } from "../shared/DetailHeader";
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
-import { OptionalLabel } from "../shared/OptionalLabel";
 import { AnnotationRows } from "./AnnotationRows";
 import { CategoryBadge } from "./CategoryBadge";
 import { SampleFileRow } from "./SampleFileRow";
@@ -181,10 +181,7 @@ export function SampleDetailView({
 
     return (
         <section className="detail-scroll">
-            <h2>
-                <OptionalLabel value={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} />
-            </h2>
-            <p className="hash mono cell-muted">{sample.hash}</p>
+            <DetailHeader name={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} hash={sample.hash} />
             <dl className="kv">
                 <dt>Category</dt>
                 <dd>

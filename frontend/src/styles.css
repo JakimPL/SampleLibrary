@@ -1381,6 +1381,30 @@ table.data td .annotation-editor-input {
     padding: 10px 12px;
 }
 
+/* The listing's name cell, scaled up: one column, so any length of name leaves the rows below it in place. */
+.detail-header {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    line-height: 1.3;
+    margin: 0 0 10px;
+}
+
+.detail-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.detail-hash {
+    margin: 0;
+    font-size: 10.5px;
+    color: var(--text-faint);
+    overflow-wrap: anywhere;
+}
+
 .kv {
     display: grid;
     grid-template-columns: auto 1fr;

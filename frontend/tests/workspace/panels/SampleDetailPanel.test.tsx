@@ -76,6 +76,7 @@ describe("SampleDetailPanel", () => {
         await waitFor(() => {
             expect(screen.getByRole("heading", { name: "kick" })).toBeInTheDocument();
         });
+        expect(screen.getByText("abc")).toBeInTheDocument();
         expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/module-1");
         expect(screen.getByRole("button", { name: "Occurrences (1)" })).toHaveAttribute("aria-pressed", "true");
         expect(screen.getByRole("button", { name: "Similar (0)" })).toBeInTheDocument();

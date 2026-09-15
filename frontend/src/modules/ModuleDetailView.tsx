@@ -1,9 +1,9 @@
 import type { ReactElement } from "react";
 
 import type { ModuleDetail } from "../api/modules";
+import { DetailHeader } from "../shared/DetailHeader";
 import { formatBytes } from "../shared/format";
 import { UNTITLED_MODULE_LABEL } from "../shared/labels";
-import { OptionalLabel } from "../shared/OptionalLabel";
 import { ModuleSampleRow } from "./ModuleSampleRow";
 
 interface ModuleDetailViewProps {
@@ -13,9 +13,7 @@ interface ModuleDetailViewProps {
 export function ModuleDetailView({ module }: ModuleDetailViewProps): ReactElement {
     return (
         <section className="detail-scroll">
-            <h2>
-                <OptionalLabel value={module.title} placeholder={UNTITLED_MODULE_LABEL} />
-            </h2>
+            <DetailHeader name={module.title} placeholder={UNTITLED_MODULE_LABEL} hash={module.hash} />
             <dl className="kv">
                 <dt>Filename</dt>
                 <dd>{module.filename}</dd>

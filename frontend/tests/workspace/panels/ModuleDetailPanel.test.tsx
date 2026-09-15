@@ -68,6 +68,7 @@ describe("ModuleDetailPanel", () => {
         await waitFor(() => {
             expect(screen.getByRole("heading", { name: "A Song" })).toBeInTheDocument();
         });
+        expect(screen.getByText("abc")).toBeInTheDocument();
         expect(screen.getByRole("link", { name: "lead" })).toHaveAttribute("href", "/samples/sample-1");
     });
 
