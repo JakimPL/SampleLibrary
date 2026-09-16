@@ -9,7 +9,7 @@ from samplemorph.partials.tracks import CENTS_PER_OCTAVE, PartialTracks
 
 
 @dataclass(frozen=True)
-class PartialVoices:
+class PartialPlaces:
     """Where each partial of a sound stands, how much of the sound it carries, and when it is heard.
 
     `cents` is the amplitude-weighted pitch a partial holds over its life and `share` the energy it
@@ -45,14 +45,14 @@ class PartialVoices:
         return frequency
 
 
-def partial_voices(tracks: PartialTracks) -> PartialVoices:
+def partial_places(tracks: PartialTracks) -> PartialPlaces:
     """Each partial as one pitch, one share of the sound and one life, which is what a pairing reads it by."""
     energy = tracks.amplitude.astype(np.float64) ** 2
     weight = energy.sum(axis=1)
     total = float(weight.sum())
     cents = CENTS_PER_OCTAVE * np.log2(tracks.frequency_hz.astype(np.float64))
     onset, offset = _lives(tracks)
-    return PartialVoices(
+    return PartialPlaces(
         cents=np.where(weight > 0.0, (energy * cents).sum(axis=1) / np.where(weight > 0.0, weight, 1.0), cents[:, 0]),
         share=weight / total if total > 0.0 else np.zeros_like(weight),
         onset=onset,

@@ -7,9 +7,9 @@ import pytest
 from numpy.typing import NDArray
 
 from samplemorph.partials.correspondence.shifts import agreed_shifts, no_shifts
+from samplemorph.partials.places import PartialPlaces
 from samplemorph.partials.profile import Correspondence
 from samplemorph.partials.tracks import CENTS_PER_OCTAVE
-from samplemorph.partials.voices import PartialVoices
 
 SPREAD_CENTS: Final[float] = 20.0
 LARGEST_COUNT: Final[int] = 4
@@ -17,9 +17,9 @@ CENTS_TOLERANCE: Final[float] = 5.0
 FIFTH_CENTS: Final[float] = 701.955
 
 
-def _voices(frequencies_hz: tuple[float, ...]) -> PartialVoices:
+def _voices(frequencies_hz: tuple[float, ...]) -> PartialPlaces:
     count = len(frequencies_hz)
-    return PartialVoices(
+    return PartialPlaces(
         cents=CENTS_PER_OCTAVE * np.log2(np.array(frequencies_hz, dtype=np.float64)),
         share=np.full(count, 1.0 / count if count else 0.0),
         onset=np.zeros(count),

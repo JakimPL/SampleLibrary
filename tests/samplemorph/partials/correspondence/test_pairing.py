@@ -8,10 +8,10 @@ from numpy.typing import NDArray
 
 from samplemorph.partials.channels import FREE_PARTIAL, Channels
 from samplemorph.partials.correspondence.pairing import ChannelPairing, pair_channels
+from samplemorph.partials.places import partial_places
 from samplemorph.partials.presets import FADES_IN_PLACE, HOLDS_WHAT_IS_SHARED, SLIDES_IN_ORDER, TRAVELS
 from samplemorph.partials.profile import Correspondence
 from samplemorph.partials.tracks import PartialTracks
-from samplemorph.partials.voices import partial_voices
 from tests.samplemorph.partials.conftest import HOP_LENGTH, RATE_HZ
 
 FRAME_COUNT: Final[int] = 32
@@ -66,19 +66,19 @@ def _matched(first: tuple[float, ...], second: tuple[float, ...], **named: Corre
 
 
 def test_a_partial_stands_at_the_pitch_it_holds_and_the_share_it_carries() -> None:
-    voices = partial_voices(_tracks((220.0, 440.0), amplitudes=(1.0, 0.5)))
+    places = partial_places(_tracks((220.0, 440.0), amplitudes=(1.0, 0.5)))
 
-    assert voices.cents[1] - voices.cents[0] == pytest.approx(1200.0, abs=CENTS_TOLERANCE)
-    assert voices.share.sum() == pytest.approx(1.0)
-    assert voices.share[0] == pytest.approx(0.8)
+    assert places.cents[1] - places.cents[0] == pytest.approx(1200.0, abs=CENTS_TOLERANCE)
+    assert places.share.sum() == pytest.approx(1.0)
+    assert places.share[0] == pytest.approx(0.8)
 
 
 def test_a_partial_is_placed_on_the_stretch_the_whole_sound_sounds_through() -> None:
-    voices = partial_voices(_tracks((220.0, 440.0), lives=((0.0, 1.0), (0.5, 1.0))))
+    places = partial_places(_tracks((220.0, 440.0), lives=((0.0, 1.0), (0.5, 1.0))))
 
-    assert voices.onset[0] == pytest.approx(0.0)
-    assert voices.lifetime[0] == pytest.approx(1.0)
-    assert voices.onset[1] == pytest.approx(0.5, abs=0.05)
+    assert places.onset[0] == pytest.approx(0.0)
+    assert places.lifetime[0] == pytest.approx(1.0)
+    assert places.onset[1] == pytest.approx(0.5, abs=0.05)
 
 
 def test_two_harmonic_series_a_fifth_apart_meet_harmonic_by_harmonic() -> None:

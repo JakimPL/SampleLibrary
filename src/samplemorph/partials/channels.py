@@ -7,9 +7,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplemorph.partials.notes import Note, estimate_notes
+from samplemorph.partials.places import partial_places
 from samplemorph.partials.settings import NoteSettings
 from samplemorph.partials.tracks import PartialTracks
-from samplemorph.partials.voices import partial_voices
 
 FREE_PARTIAL: Final[int] = -1
 QUIET_LOUDNESS: Final[float] = 1e-12
@@ -104,10 +104,14 @@ def _sounding(note: Note) -> NDArray[np.intp]:
 def _over_harmonics(
     note: Note, *, sounding: NDArray[np.intp], amplitude: NDArray[np.float32], share: NDArray[np.float64]
 ) -> NDArray[np.float64]:
-    """Each harmonic's amplitude over time, silence where no partial sounds it. Shape: ``(harmonics, frames)``."""
+    """Each harmonic's amplitude over time, silence where no partial sounds it.
+
+    Two tracks standing on one harmonic are one partial followed twice, so their amplitudes add into
+    the one channel that harmonic gets. Shape: the result is ``(harmonics, frames)``.
+    """
     over = np.zeros((sounding.shape[0], amplitude.shape[1]))
     where = np.searchsorted(sounding, note.harmonics)
-    over[where] = amplitude[note.partials] * share[:, None]
+    np.add.at(over, where, amplitude[note.partials] * share[:, None])
     return over
 
 
@@ -126,7 +130,7 @@ def _shares(notes: tuple[Note, ...], *, tracks: PartialTracks) -> list[NDArray[n
     from the envelope its unshared harmonics draw, so the louder note over that stretch of the
     spectrum takes the larger part of it.
     """
-    loudness = partial_voices(tracks).loudness
+    loudness = partial_places(tracks).loudness
     claims = np.zeros(tracks.track_count)
     for note in notes:
         claims[note.partials] += 1.0

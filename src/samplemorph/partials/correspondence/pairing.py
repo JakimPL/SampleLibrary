@@ -10,8 +10,8 @@ from samplemorph.partials.channels import Channels
 from samplemorph.partials.correspondence.assignment import assign_with_fades
 from samplemorph.partials.correspondence.cost import travel_penalty
 from samplemorph.partials.correspondence.shifts import AgreedShifts, agreed_shifts, no_shifts
+from samplemorph.partials.places import PartialPlaces, partial_places
 from samplemorph.partials.profile import Correspondence
-from samplemorph.partials.voices import PartialVoices, partial_voices
 
 SETTLING_ROUNDS: Final[int] = 2
 
@@ -48,7 +48,7 @@ def pair_channels(first: Channels, second: Channels, *, correspondence: Correspo
     is read once for a pair of sounds and holds at every weight and every frame between them, which
     is what lets a partial glide along one path from end to end.
     """
-    here, there = partial_voices(first.tracks), partial_voices(second.tracks)
+    here, there = partial_places(first.tracks), partial_places(second.tracks)
     matched = _assigned(here, there, shifts=no_shifts(here.count), correspondence=correspondence)
     for _ in range(SETTLING_ROUNDS):
         shifts = agreed_shifts(
@@ -69,7 +69,7 @@ def pair_channels(first: Channels, second: Channels, *, correspondence: Correspo
 
 
 def _assigned(
-    first: PartialVoices, second: PartialVoices, *, shifts: AgreedShifts, correspondence: Correspondence
+    first: PartialPlaces, second: PartialPlaces, *, shifts: AgreedShifts, correspondence: Correspondence
 ) -> NDArray[np.intp]:
     """The pairing that costs the two sounds least, every channel free to travel or to fade at its own price."""
     return assign_with_fades(

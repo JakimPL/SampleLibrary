@@ -159,6 +159,11 @@ Two resolutions are fixed in the code rather than offered as dials: the votes ar
 | `slide` | `fade_price` 1000, no moves read | nothing fades; partials slide in frequency order |
 | `crossfade` | `fade_price` 0 | fading is free, so nothing meets: the control |
 
+**`slide` and `crossfade` are controls rather than candidates.** Neither reads the moves a sound
+makes, so neither keeps a note together: `slide` pairs strictly by frequency order, which sends a
+note's harmonics off at intervals of their own, and `crossfade` holds both sounds at once by
+construction. They are rendered beside the others to show what the moves are worth, not to be chosen.
+
 Two of these are worth a note. **`slide`** reduces to the old ordered pairing exactly: with only a
 distance term raised to an even power, the cheapest assignment over points on a line is always the
 one that keeps their order, so monotone sliding falls out rather than being coded. And **`crossfade`**
@@ -200,6 +205,10 @@ a threshold.
 - **Crossings between series stay hard.** The line term fixes them when the analysis grouped the
   channels into notes. Where it did not, two partials at the same frequency are genuinely
   indistinguishable by anything the correspondence can see.
+- **A line is only as good as the grouping under it.** Every guarantee here is about channels of one
+  line travelling together, so a sound the analysis splits into two lines will travel as two. That is
+  why a note claims its whole series rather than the first twenty harmonics of it
+  ([`21-partials.md`](21-partials.md)).
 - **Quiet upper harmonics wander.** They carry so little weight that many arrangements cost nearly
   the same, and a few of them land on the wrong series. They are inaudible on their own, but enough
   of them can pull an estimated note a few cents sharp.

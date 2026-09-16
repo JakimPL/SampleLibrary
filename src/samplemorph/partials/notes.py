@@ -6,9 +6,9 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
+from samplemorph.partials.places import PartialPlaces, partial_places
 from samplemorph.partials.settings import NoteSettings
 from samplemorph.partials.tracks import CENTS_PER_OCTAVE, PartialTracks
-from samplemorph.partials.voices import PartialVoices, partial_voices
 
 STRETCH_GRID_STEPS: Final[int] = 8
 REFINING_GRID_STEPS: Final[int] = 64
@@ -18,6 +18,7 @@ CONSECUTIVE_SHARE: Final[float] = 0.85
 SALIENCE_OFFSET_HZ: Final[float] = 52.0
 SALIENCE_SCALE_HZ: Final[float] = 320.0
 SPACING_SHARE: Final[float] = 1.0 / 3.0
+LARGEST_SERIES_HARMONIC: Final[int] = 512
 
 
 def stretch_of(harmonics: NDArray[np.intp], *, inharmonicity: float) -> NDArray[np.float64]:
@@ -66,18 +67,19 @@ def estimate_notes(tracks: PartialTracks, *, settings: NoteSettings) -> tuple[No
     again on what is left. Each note's fundamental is then followed over time through every harmonic
     sounding it, so measurement jitter cancels while a vibrato the whole note shares stays.
     """
-    voices = partial_voices(tracks)
-    if voices.count == 0:
+    places = partial_places(tracks)
+    if places.count == 0:
         return ()
 
     notes: list[Note] = []
-    taken = np.zeros(voices.count, dtype=bool)
+    taken = np.zeros(places.count, dtype=bool)
     while len(notes) < settings.largest_note_count:
-        found = _best_reading(voices, taken=taken, settings=settings)
+        found = _best_reading(places, taken=taken, settings=settings)
         if found is None or found.fresh < settings.note_share_floor:
             break
-        notes.append(_followed(found, tracks=tracks))
-        taken[found.partials] = True
+        whole = _whole_series(found, places, settings=settings)
+        notes.append(_followed(whole, tracks=tracks))
+        taken[whole.partials] = True
     return tuple(notes)
 
 
@@ -107,7 +109,7 @@ class _Reading:
 class _Search:
     """What one pass of the search reads against: a sound's partials, those already read, and the settings it follows."""
 
-    voices: PartialVoices
+    places: PartialPlaces
     taken: NDArray[np.bool_]
     harmonics: NDArray[np.intp]
     settings: NoteSettings
@@ -115,7 +117,7 @@ class _Search:
     @property
     def loudness(self) -> NDArray[np.float64]:
         """What every partial is worth to a note, zero for those a note already sounds. Shape: ``(partials,)``."""
-        worth: NDArray[np.float64] = np.where(self.taken, 0.0, 1.0) * self.voices.loudness
+        worth: NDArray[np.float64] = np.where(self.taken, 0.0, 1.0) * self.places.loudness
         return worth
 
 
@@ -131,13 +133,13 @@ class _Sieve:
     score: NDArray[np.float64]
 
 
-def _best_reading(voices: PartialVoices, *, taken: NDArray[np.bool_], settings: NoteSettings) -> _Reading | None:
+def _best_reading(places: PartialPlaces, *, taken: NDArray[np.bool_], settings: NoteSettings) -> _Reading | None:
     """The best note the partials hold beyond those already read, refined on the partials it sounds."""
     if bool(taken.all()):
         return None
 
     search = _Search(
-        voices=voices,
+        places=places,
         taken=taken,
         harmonics=np.arange(1, settings.harmonic_count + 1, dtype=np.intp),
         settings=settings,
@@ -153,7 +155,7 @@ def _best_reading(voices: PartialVoices, *, taken: NDArray[np.bool_], settings: 
     reading = _read_one(found[0], search, inharmonicity=found[1])
     if reading is None:
         return None
-    return _refined(_deepened(reading, search), voices, settings=settings)
+    return _refined(_deepened(reading, search), places, settings=settings)
 
 
 def _loudest(candidates: NDArray[np.float64], search: _Search) -> tuple[float, float] | None:
@@ -171,7 +173,7 @@ def _loudest(candidates: NDArray[np.float64], search: _Search) -> tuple[float, f
 
 def _candidates(search: _Search) -> NDArray[np.float64]:
     """Every fundamental the partials left over propose, each of them taken as every harmonic in turn."""
-    proposed = (search.voices.cents[~search.taken][:, None] - CENTS_PER_OCTAVE * np.log2(search.harmonics)).ravel()
+    proposed = (search.places.cents[~search.taken][:, None] - CENTS_PER_OCTAVE * np.log2(search.harmonics)).ravel()
     lowest = CENTS_PER_OCTAVE * np.log2(search.settings.lowest_note_hz)
     within = proposed[proposed >= lowest]
     return np.unique(np.round(within / CANDIDATE_CENTS_STEP) * CANDIDATE_CENTS_STEP)
@@ -194,10 +196,10 @@ def _sift(candidates: NDArray[np.float64], search: _Search, *, inharmonicity: fl
     harmonics = search.harmonics
     stretch = CENTS_PER_OCTAVE * np.log2(harmonics * stretch_of(harmonics, inharmonicity=inharmonicity))
     targets = candidates[:, None] + stretch
-    order = np.argsort(search.voices.cents)
-    found, distance = _nearest(targets, cents=search.voices.cents[order])
+    order = np.argsort(search.places.cents)
+    found, distance = _nearest(targets, cents=search.places.cents[order])
     matched = distance <= _tolerances(harmonics, settings=search.settings)
-    salience = _salience(candidates, frequency_hz=search.voices.frequency_hz[order], loudness=search.loudness[order])
+    salience = _salience(candidates, frequency_hz=search.places.frequency_hz[order], loudness=search.loudness[order])
     worth = np.take_along_axis(salience, found, axis=1) * matched
     return _Sieve(
         partials=order[found],
@@ -230,8 +232,8 @@ def _read_one(candidate: float, search: _Search, *, inharmonicity: float) -> _Re
         inharmonicity=inharmonicity,
         harmonics=search.harmonics[matched],
         partials=partials,
-        share=float(search.voices.share[partials].sum()),
-        fresh=float(search.voices.share[partials][~search.taken[partials]].sum()),
+        share=float(search.places.share[partials].sum()),
+        fresh=float(search.places.share[partials][~search.taken[partials]].sum()),
     )
 
 
@@ -287,11 +289,11 @@ def _nearest(
     return found.astype(np.intp), np.abs(cents[found] - targets)
 
 
-def _refined(reading: _Reading, voices: PartialVoices, *, settings: NoteSettings) -> _Reading:
+def _refined(reading: _Reading, places: PartialPlaces, *, settings: NoteSettings) -> _Reading:
     """The same note with its fundamental and its stretch read off the partials it sounds."""
     harmonics = reading.harmonics.astype(np.float64)
-    cents = voices.cents[reading.partials]
-    weights = voices.share[reading.partials]
+    cents = places.cents[reading.partials]
+    weights = places.share[reading.partials]
     best, smallest = reading, np.inf
     for inharmonicity in np.linspace(0.0, settings.largest_inharmonicity, REFINING_GRID_STEPS + 1):
         stretch = CENTS_PER_OCTAVE * np.log2(harmonics * stretch_of(reading.harmonics, inharmonicity=inharmonicity))
@@ -308,6 +310,40 @@ def _refined(reading: _Reading, voices: PartialVoices, *, settings: NoteSettings
                 fresh=reading.fresh,
             )
     return best
+
+
+def _whole_series(reading: _Reading, places: PartialPlaces, *, settings: NoteSettings) -> _Reading:
+    """The same note holding every partial that stands on its series, as high as the sound's partials reach.
+
+    A note is proposed over its first `harmonic_count` harmonics, which is enough to find it and to
+    fit its stretch. Its series carries on above that, and one harmonic may be sounded by two tracks
+    at once where a partial broke and was followed again. Taking all of them keeps one measured
+    partial on one note, which is what stops the partials above the proposal from reading as a second
+    note a whole multiple higher and travelling a path of their own.
+    """
+    reach = _reach(reading.cents, places=places)
+    stretch = CENTS_PER_OCTAVE * np.log2(reach * stretch_of(reach, inharmonicity=reading.inharmonicity))
+    apart = np.abs(places.cents[:, None] - (reading.cents + stretch))
+    partials, over = np.nonzero(apart <= _tolerances(reach, settings=settings))
+    if partials.shape[0] == 0:
+        return reading
+
+    standing = partials.astype(np.intp)
+    return _Reading(
+        cents=reading.cents,
+        inharmonicity=reading.inharmonicity,
+        harmonics=reach[over],
+        partials=standing,
+        share=float(places.share[standing].sum()),
+        fresh=reading.fresh,
+    )
+
+
+def _reach(cents: float, *, places: PartialPlaces) -> NDArray[np.intp]:
+    """Every harmonic of a note that could stand at or under the highest partial the sound holds."""
+    above = float(places.cents.max()) - cents
+    highest = int(2.0 ** (max(above, 0.0) / CENTS_PER_OCTAVE)) + 1
+    return np.arange(1, min(highest, LARGEST_SERIES_HARMONIC) + 1, dtype=np.intp)
 
 
 def _followed(reading: _Reading, *, tracks: PartialTracks) -> Note:

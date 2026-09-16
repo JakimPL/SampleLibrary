@@ -7,8 +7,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.ndimage import gaussian_filter1d
 
+from samplemorph.partials.places import PartialPlaces
 from samplemorph.partials.profile import Correspondence
-from samplemorph.partials.voices import PartialVoices
 
 SHIFT_REACH_CENTS: Final[float] = 4800.0
 SHIFT_STEP_CENTS: Final[float] = 5.0
@@ -42,8 +42,8 @@ def no_shifts(channel_count: int) -> AgreedShifts:
 
 
 def agreed_shifts(
-    first: PartialVoices,
-    second: PartialVoices,
+    first: PartialPlaces,
+    second: PartialPlaces,
     *,
     matched: NDArray[np.intp],
     lines: NDArray[np.intp],

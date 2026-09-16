@@ -4,12 +4,12 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplemorph.partials.correspondence.shifts import AgreedShifts
+from samplemorph.partials.places import PartialPlaces
 from samplemorph.partials.profile import Correspondence
-from samplemorph.partials.voices import PartialVoices
 
 
 def travel_penalty(
-    first: PartialVoices, second: PartialVoices, *, shifts: AgreedShifts, correspondence: Correspondence
+    first: PartialPlaces, second: PartialPlaces, *, shifts: AgreedShifts, correspondence: Correspondence
 ) -> NDArray[np.float64]:
     """What it would cost every pair of partials to travel together, counted in fades.
 
@@ -46,7 +46,7 @@ def _drift(apart: NDArray[np.float64], *, shifts: AgreedShifts) -> NDArray[np.fl
     return drift
 
 
-def _loudness_apart(first: PartialVoices, second: PartialVoices) -> NDArray[np.float64]:
+def _loudness_apart(first: PartialPlaces, second: PartialPlaces) -> NDArray[np.float64]:
     """How differently two partials stand in loudness, 0 where they stand alike and 1 where one of them is silent."""
     here, there = first.loudness[:, None], second.loudness
     total = here + there
@@ -54,7 +54,7 @@ def _loudness_apart(first: PartialVoices, second: PartialVoices) -> NDArray[np.f
     return apart
 
 
-def _overlap(first: PartialVoices, second: PartialVoices) -> NDArray[np.float64]:
+def _overlap(first: PartialPlaces, second: PartialPlaces) -> NDArray[np.float64]:
     """The share of the shorter of two lives that the two partials are heard through together."""
     start = np.maximum(first.onset[:, None], second.onset)
     end = np.minimum(first.offset[:, None], second.offset)

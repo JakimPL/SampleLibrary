@@ -50,9 +50,13 @@ analysis (128 samples), so every frame of one stands beside a frame of the other
   is what keeps a major triad from reading as the note two octaves under it. A proposal sounds
   through at least 3 harmonics and through 70 % of those between its lowest and its highest; where
   the note under it sounds the partials in between as one unbroken series, that deeper note stands
-  instead, which is how a tone whose fundamental is quiet keeps its own pitch. The note found takes
-  its partials, a partial it shares with a note already read counted in both, and the search runs
-  again on what is left. A stiff string's stretch is fitted per note, and a piano-like tone reads
+  instead, which is how a tone whose fundamental is quiet keeps its own pitch. The note found then
+  takes every partial standing on its series, as high as the sound's partials reach and including a
+  harmonic sounded by two tracks at once — the proposal is made over 20 harmonics, which is enough to
+  find a note, while the series itself carries on. Taking all of it is what keeps the partials above
+  the twentieth from reading as a second note a whole multiple higher: two such notes travel by
+  different intervals, and one measured partial then arrives at the midpoint as two. A partial two
+  notes share is counted in both, and the search runs again on what is left. A stiff string's stretch is fitted per note, and a piano-like tone reads
   its own inharmonicity within 1e-4.
 - **Channels.** Every harmonic between the lowest and the highest a note sounds becomes a line of
   its own, standing at `k · f0(t) · stretch(k)` and silent where no partial sounds it. A note's
