@@ -17,13 +17,15 @@ class RouteKind(StrEnum):
     `LATENT` runs through a stored codec's latent space; `TRANSPORT` carries every feature of one
     analysis to the other's; `BLEND` crossfades the two analyses in decibels, the control the
     transport is judged against; `PARTIALS` sounds the partials of both ends as oscillators on the
-    path a profile draws, and transports what is left of them.
+    path a profile draws, and transports what is left of them; `ENVELOPE` moves the spectral
+    envelope between the two analyses and keeps one sound's excitation whole under it.
     """
 
     LATENT = "latent"
     TRANSPORT = "transport"
     BLEND = "blend"
     PARTIALS = "partials"
+    ENVELOPE = "envelope"
 
 
 def pair_through(route: ComparableRoute, first: HeardMono, second: HeardMono) -> PreparedPair:

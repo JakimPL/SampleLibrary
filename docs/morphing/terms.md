@@ -28,6 +28,16 @@ than at `k · f0`. A piano's `B` is around 1e-4; an ideal string's is 0.
 click of an attack, and clusters too dense to resolve into separate partials. A sound is modeled
 here as partials *plus* a residual, and the two are rendered by different machinery.
 
+**Envelope** (spectral envelope). The smooth shape of a spectrum's loudness over frequency, with
+the individual harmonics smoothed away: the resonances of a body, the brightness of a tone, the
+balance between registers. Here it is drawn by the first few dozen cosine coefficients of the
+loudness ([`23-envelope.md`](23-envelope.md)). The word is also used for an amplitude *over time*;
+the morph documents say "loudness shape" for that.
+
+**Excitation.** What sounds under the envelope: the spectrum divided by it, which keeps the fine
+structure of harmonics, the noise between them and the silence where there is nothing. Pitch lives
+here. A spectrum is its envelope times its excitation, exactly.
+
 ## Words for what the analysis produces
 
 These are the code's own objects, in the order they are built.
@@ -94,8 +104,12 @@ whom, how a matched pair travels in pitch, when an unmatched channel fades, and 
 moves. A **preset** is a named profile. See [`21-partials.md`](21-partials.md).
 
 **Route.** One complete way from two sounds to a point between them — `latent`, `transport`,
-`blend`, `partials`. Routes are interchangeable behind one interface so a listening comparison can
-render them side by side.
+`blend`, `partials`, `envelope`. Routes are interchangeable behind one interface so a listening
+comparison can render them side by side and the inference process can serve any one of them.
+
+**Switch weight** (`EnvelopeSettings.switch_weight`). On the envelope route, the weight from which
+the second sound's excitation sounds under the moving envelope. At 1 the first sound's excitation
+sounds along the whole path, at 0 the second's.
 
 **Degeneration.** The property that the partials route, given two sounds with no tracked partials,
 renders bit for bit what the transport route renders. It is what lets the route be adopted for tonal

@@ -7,6 +7,8 @@ import pytest
 
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.codecs.identity import IdentityCodec
+from samplemorph.envelope.morph import EnvelopePath
+from samplemorph.envelope.presets import KEEPS_FIRST
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.morphers.linear import LinearMorpher
 from samplemorph.partials.morph import PartialMorph
@@ -54,7 +56,9 @@ def test_frames_heard_at_half_the_frames_rate_last_twice_as_many_frames() -> Non
     assert heard.rate_hz == NOMINAL_WAV_RATE
 
 
-@pytest.mark.parametrize("path", (transport, blend))
+@pytest.mark.parametrize(
+    "path", (transport, blend, EnvelopePath(envelope_settings=KEEPS_FIRST)), ids=("transport", "blend", "envelope")
+)
 def test_an_analysis_route_renders_each_end_at_its_own_length_and_the_middle_between(
     path: SpectralPath, ends: tuple[HeardMono, HeardMono]
 ) -> None:

@@ -1,0 +1,132 @@
+# The envelope morph: one excitation under a moving envelope
+
+A morph between two pitched sounds keeps failing in the same place: its middle plays *two* pitch
+contents at once. A crossfade holds both chords and dissolves between them. A route that moves
+partials sends some of a note's harmonics travelling and leaves others standing, so the midpoint
+sounds two unaligned tones that neither end contains. Every attempt to decide which partials
+belong together, by harmonic series or by common fate, moved the problem rather than removing it;
+[`21-partials.md`](21-partials.md) and [`22-correspondence.md`](22-correspondence.md) record those
+attempts.
+
+This document describes the route that answers the failure by splitting a sound differently, and
+what it does and does not give.
+
+## The idea
+
+A spectrum can be read as two things multiplied together:
+
+- the **envelope**: the smooth shape of loudness over frequency, the resonances of a body, the
+  brightness of a tone, the balance between registers;
+- the **excitation**: what sounds under that shape, the fine structure of harmonics, the noise
+  between them, and the silence where there is nothing.
+
+Pitch lives in the excitation. Timbre, to a large part, lives in the envelope. So the route moves
+only the envelope, from the first sound's to the second's, and keeps the excitation of *one* sound
+whole under it. A chord under a half-way envelope is still that chord, played by something between
+the two instruments, and the midpoint never holds two pitch contents.
+
+## How it works
+
+For a weight between 0 and 1:
+
+1. **Alignment.** Both sounds are aligned in time by the transport's time map
+   ([`20-audio-transport.md`](20-audio-transport.md)), so the attack of one meets the attack of
+   the other and each body is read through its own mass over time.
+2. **Reading.** Both analyses are read along that map, frame by frame, as magnitudes.
+3. **Splitting.** Each read magnitude is split into an envelope and an excitation. The envelope is
+   the loudness over frequency, in decibels, drawn by its first `coefficient_count` cosine
+   coefficients alone (a cepstral smoothing), read down to `floor_db` under the sound's loudest
+   bin. The excitation is the magnitude divided by that envelope.
+4. **The envelope path.** The output envelope lies at the weight between the two, bin by bin in
+   decibels.
+5. **The excitation choice.** Under that envelope sounds the first sound's excitation at every
+   weight below `switch_weight`, and the second sound's from it on.
+6. **Synthesis.** The product of the two is a magnitude, which phase gradient heap integration
+   makes audible, as for every route over the analyses.
+
+At weights 0 and 1 the route returns each sound's own analysis.
+
+## Parameters
+
+`EnvelopeSettings` (`samplemorph/envelope/settings.py`) holds three numbers.
+
+| Parameter | Default | What it does |
+|---|---|---|
+| `coefficient_count` | 40 | How many cosines draw the envelope. Fewer make it smoother, so more of a sound's fine structure counts as excitation; more let it follow individual harmonics, so less of the timbre travels. At 40 over the 2,049 bins of a 4,096-point analysis, the envelope keeps ripples slower than about 50 bins per cycle. |
+| `floor_db` | 80 | How deep under the sound's loudest bin the loudness is read. A silent frame's envelope lies flat at this floor. |
+| `switch_weight` | 1.0 | The weight from which the second sound's excitation sounds. At 1 the first sound's excitation sounds along the whole path; at 0 the second's; at 0.5 the excitation changes hands at the midpoint. |
+
+Three presets name the switch weight (`samplemorph/envelope/presets.py`):
+
+| Preset | `switch_weight` | The middle sounds |
+|---|---|---|
+| `first` (default) | 1.0 | the first sound's pitch content under an envelope moving toward the second's |
+| `second` | 0.0 | the second sound's pitch content under an envelope moving away from the first's |
+| `halfway` | 0.5 | the first's until the midpoint, the second's from it on |
+
+The inference process renders this route by default: `samplelibrary morph serve` serves the
+`first` preset, and `--excitation second` or `--excitation halfway` serve the others. The listening
+comparison renders it beside the other routes with `morph compare --routes envelope --excitations
+first second`, one folder per preset.
+
+Because the envelope is drawn over the analysis bins, and a bin is a fixed fraction of the rate a
+pair is heard at, the envelope's resolution in hertz follows that rate: a pair heard at 8 kHz gets an
+envelope about five times finer in hertz than one heard at 44.1 kHz.
+
+## What the measurements showed
+
+Four listening pairs were rendered at weights 0.25, 0.5 and 0.75 under each preset, beside a
+decibel crossfade, and the notes at each midpoint were read with the same estimator the partials
+route uses.
+
+| Pair | The ends | `first` | `second` | crossfade |
+|---|---|---|---|---|
+| a lead against a lead a fifth apart | 524 Hz / 353 Hz | 524 Hz | 354 Hz | two notes, 1054 and 499 Hz |
+| a chord against a chord | three notes / three notes | the first chord's three notes, within 1 Hz | three notes, all the second chord's | three notes from both |
+| a piano chord against a piano note | four notes / one note | four notes | one note | two |
+| a tone against itself an octave up | 293 Hz / 587 Hz | 293 Hz | 586 Hz | two |
+
+Every render holds exactly one sound's pitch content; the crossfade holds both. Nothing was
+estimated to get there: no partials tracked, no fundamentals found, no series to complete.
+
+Whether the timbre travels was read from a 12-coefficient envelope of each render, coarse enough to
+ignore where the harmonics stand, as the fraction of the way from the first sound's envelope to the
+second's:
+
+| Pair | Preset | w = 0.25 | w = 0.5 | w = 0.75 |
+|---|---|---|---|---|
+| piano chord against piano note | `first` | 0.27 | 0.46 | 0.62 |
+| piano chord against piano note | `second` | 0.63 | 0.77 | 0.89 |
+| lead against lead | `first` | 0.20 | 0.37 | 0.40 |
+
+The timbre moves with the weight on every pair, and it moves less than the weight says, offset
+toward whichever sound's excitation is kept. This is a property of sound rather than of the
+implementation: where a sound's harmonics stand is itself part of its coarse spectral shape, so
+holding one excitation bounds how far the timbre can travel. Pitch and timbre are far more separable
+than a partial-wise morph assumed, and not fully so.
+
+## What the route does and does not give
+
+- **The middle is one instrument, not two.** That was the whole difficulty, and it holds by
+  construction.
+- **The path is asymmetric.** Under the `first` preset, morphing A toward B and B toward A give
+  different sounds: each keeps its own first sound's pitch content. A slider in the application
+  therefore plays A's notes with a timbre moving toward B's, and B itself only at the very end.
+- **Pitch changes hands, it does not glide.** A path holding one excitation never changes pitch,
+  so the second sound's pitch content arrives at one point of the path, the switch weight. For a
+  chord this is the only honest reading: consonance is discrete, and every continuous path between
+  two chords passes through roughness that neither end has. For a single note, transposing the
+  excitation continuously would be well defined, and the route does not do it yet.
+- **Rhythm is the kept excitation's.** Silence in the kept sound's frames stays silent whatever the
+  other sound does there; the other sound contributes its shape, not its events.
+- **Percussion is a filter sweep.** With no pitch content to keep, the route plays the first sound
+  through an envelope moving toward the second's. Whether that is a morph or an equalizer is a
+  matter for the ear, and it has been heard on tonal material only so far.
+
+## Where this stands
+
+The route is the one the application serves. What it leaves open is the excitation itself: a way
+to move it between two sounds that keeps a chord one chord at every point, which is the question the
+partials route could not answer either. The next direction is a learned representation whose
+straight lines move features, conditioned so that its coordinates do not collapse to a spectrum;
+the timbre-transfer literature is the place to read for how such spaces are trained.

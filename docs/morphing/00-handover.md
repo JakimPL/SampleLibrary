@@ -44,6 +44,7 @@ timbre can morph at constant pitch. The argument behind every part of that is in
 | [`20-audio-transport.md`](20-audio-transport.md) | Why the latent morph is a crossfade, the transport morph that moves features, and the comparison that decides between them. |
 | [`21-partials.md`](21-partials.md) | Why the transport warbles on chords, the notes-over-residual model that holds them steady, and the profile that says what the middle is. |
 | [`22-correspondence.md`](22-correspondence.md) | How a partial finds its partner: one priced assignment over every channel, the moves two sounds agree on, and the presets as dials on it. |
+| [`23-envelope.md`](23-envelope.md) | Why every route that moves partials plays two pitch contents in the middle, and the route that moves the spectral envelope under one sound's excitation instead, which the application serves. |
 | [`terms.md`](terms.md) | The vocabulary the morph documents use precisely: partial, track, note, channel, line, place, move, and the words they avoid. |
 
 ## The first three things to do
