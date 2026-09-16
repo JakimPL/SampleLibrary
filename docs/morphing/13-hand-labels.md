@@ -1,7 +1,7 @@
 # The hand labels, and how a descriptor is scored against them
 
 The first hand labels arrived on 2026-09-09: 197 samples, labeled in the web interface with a
-vocabulary the user built as they went. This document records what that vocabulary looks like, the
+vocabulary the labeler built as they went. This document records what that vocabulary looks like, the
 policy that reads it, the metric that scores a descriptor against it, and where the two existing
 descriptors and a pretrained model stand on it. Nothing here writes to the `curation` schema.
 
@@ -22,8 +22,8 @@ The tags mix **facets**. Most name a source -- `SYNTH` 39, `STRINGS` 26, `HI-HAT
 treatment (`LO-FI` 33, `CHIPTUNE` 9, `REVERB` 7, `REVERSE` 6). A sample is `SNARE, LO-FI` or
 `SYNTH: PULSE, CHIPTUNE`: several things at once, at whichever depth the listener cared to state.
 
-Two labels had a comma typed for a colon (`BASS, ELECTRIC`, `BASS, SYNTH`); the user corrected
-both. `samplelibrary annotations vocabulary` is what surfaced them.
+Two labels had a comma typed for a colon (`BASS, ELECTRIC`, `BASS, SYNTH`), and both were
+corrected. `samplelibrary annotations vocabulary` is what surfaced them.
 
 Against the keyword classifier, the labels agree where a keyword fires -- `cymbal` → `CYMBAL` 18
 of 21, `hi_hat` → `HI-HAT` 17 of 26, `kick` → `BASS DRUM` 14 of 21 -- and disagree often enough to
@@ -96,8 +96,7 @@ over the labeled set in a scratchpad, with the prototype of this metric:
 | `librosa` | 0.499 | 0.389 | 0.695 |
 | **CLAP, frozen** | **0.621** | **0.534** | **0.782** |
 
-A model never shown a tracker sample beats both descriptors by a wide margin on what the user
-labeled, and it is nearly rate-invariant within a whole tone (97% rank-1 at ±2 semitones against
+A model never shown a tracker sample beats both descriptors by a wide margin on the hand labels, and it is nearly rate-invariant within a whole tone (97% rank-1 at ±2 semitones against
 a 3,000-sample gallery) while collapsing at the octave the corpus retunes by at the median
 (18-40% at ±12). Zero-shot text prompts over the 32 top-level tags land a right tag first 52% of
 the time. That is the case for the next two stages: the model as a *teacher* for a descriptor that
@@ -201,7 +200,7 @@ Drums and bass are named; strings at the nominal rate become synth leads, and a 
 or an effect. Over the whole catalog the first pick is `FX` for 23.7% of the samples and
 `SYNTH: LEAD` for 11.5%, and `STRINGS` for 0.1%: at the nominal rate the model hears the library
 as a bright synthetic place, which is what reading a sample two octaves too high sounds like. Part
-of the per-tag misses is wording on both sides: the user's `CONGA`, `SHAKER` and `TAMBOURINE`
+of the per-tag misses is wording on both sides: the hand labels' `CONGA`, `SHAKER` and `TAMBOURINE`
 against the vocabulary's `PERCUSSION: CONGA` and `PERCUSSION: SHAKER` count as misses here and
 are the same thing.
 

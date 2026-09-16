@@ -14,14 +14,14 @@ twelve probes at their heard rates, six rungs each) with no new synthesis:
   (fluctuation, 1–20 Hz peaking at 4 Hz; roughness, 20–150 Hz peaking at 70 Hz) and an **unsigned**
   per-bin distance.
 - **`sound_type_reading`** — tonal, percussive or noise from three continuous readings, so every
-  table below can be split the way the user asked: by what kind of sound it is.
+  table below can be split by what kind of sound it is.
 
 Everything is against `1_original` at the heard rate; the same tables against `2_clean_oracle`
 (phase isolated) differ by less than the reading's own spread and are in `metrics.csv`.
 
 ## The energy leaves at phase estimation, and mostly from percussive material
 
-The user heard reconstructions come back quieter. Every earlier metric normalized that away
+Listening reported that reconstructions come back quieter. Every earlier metric normalized that away
 ([`17`](17-scoring-and-evaluation.md#loudness-the-axis-the-panel-was-missing)); this is the first
 number that sees it, and it locates it.
 
@@ -38,7 +38,7 @@ untouched STFT already costs a decibel — and Griffin-Lim on the production gri
 four at the lower quartile. So the drop is a synthesis effect, as the analysis predicted: an
 estimated phase produces a peakier waveform, and at matched peak a peakier waveform is a quieter one.
 
-Split by sound type, the loss concentrates exactly where the user's Stage 2 verdict put it:
+Split by sound type, the loss concentrates exactly where the Stage 2 listening verdict put it:
 
 | Rung | percussive (n=3) | tonal (n=6) | other (n=3) |
 |---|---|---|---|
@@ -48,8 +48,8 @@ Split by sound type, the loss concentrates exactly where the user's Stage 2 verd
 | 6 production GL | **−4.51** | −2.15 | −2.13 |
 
 A struck sound loses three to five LU under every phase estimate; a held one loses under one with
-PGHI and two with Griffin-Lim. This is the "loses transients and energy" the user described, and
-now it is a number with a sign.
+PGHI and two with Griffin-Lim. This is the loss of transients and energy that listening reported,
+and now it is a number with a sign.
 
 ## The gargle reads as redistributed modulation, on the fluctuation axis
 
@@ -94,7 +94,7 @@ sinusoidal modulation at a lobe's peak reads its own depth.
 
 ## The sound-type reading, on the ladder and against the keyword categories
 
-On the twelve ladder originals the reading agrees with the user's tags on nine of nine explicit
+On the twelve ladder originals the reading agrees with the hand tags on nine of nine explicit
 ones — three percussive (0.61, 0.51, 0.71 against the 0.5 bar), six tonal (every one reads 0.00
 percussiveness) — and reads one of the three "other" probes as noise and the other two, whose
 harmonicity is 0.99, as tonal. Two lessons came from getting there:
@@ -118,7 +118,7 @@ sanity-checked here, with its three readings kept beside the verdict so a disagr
 ## What this decides, and what waits for the ear
 
 - **The loudness reading is adopted.** It sees an effect every other number normalized away, its
-  sign is right, and its per-type split matches what the user heard. It goes into every future
+  sign is right, and its per-type split matches what listening reported. It goes into every future
   vocoder table beside the shape readings.
 - **The unsigned modulation distance is adopted as the ordering instrument**, and the signed lobe
   depths as the explanation of *which way* a rung erred. Whether their ordering matches the ear's
@@ -126,7 +126,7 @@ sanity-checked here, with its three readings kept beside the verdict so a disagr
 - **The old flutter screen is retained** for continuity; its frame-rate envelope at the typical
   8363 Hz heard rate has a Nyquist near 16 Hz, so it is a fluctuation-lobe screen by arithmetic.
 
-The study itself needs listening: the user rates the reconstructions of each probe for gargle
+The study itself needs listening: a listener rates the reconstructions of each probe for gargle
 severity and for "quieter", and every reading is rank-correlated against those labels, overall and
 per sound type. The ear judged the candidate set rather than the ladder; that verdict and the
 correlation table are the section "The ear's verdict on the candidate set" below.
@@ -278,9 +278,9 @@ training command of its own only if the ear agrees with the numbers.
 
 ## The ear's verdict on the candidate set (2026-09-11)
 
-The user listened to the `loudness-matched/` folder and judged it the fair stage; the peak-matched
-folder was set aside as unbalanced, and one probe (`tonal_f39948450418`) as too close to call. The
-words are kept verbatim in `listening/candidates-2026-09-11/verdicts.md`. For the study, `labels.csv`
+On listening, the `loudness-matched/` folder was judged the fair stage; the peak-matched folder was
+set aside as unbalanced, and one probe (`tonal_f39948450418`) as too close to call. The verdicts are
+kept verbatim in `listening/candidates-2026-09-11/verdicts.md`. For the study, `labels.csv`
 codes every file of the eleven judged probes 0–3 — 0 in the indistinguishable group or praised, 1 a
 subtle remark that still passes, 2 a named artifact or a lost feature, 3 a plain failure — plus
 "louder" or "quieter" where the ear said so. The coding is ours, from the prose, and two readings of
@@ -361,8 +361,8 @@ the share the reading orders the same way — and Spearman ρ against severity, 
 
 ### What landed on the verdict (2026-09-11)
 
-The user adopted the path: "the most promising solution, from all we've got so far", with the
-note that this restorer is free to learn the library it serves rather than sounds in general. Four
+The path was adopted as the most promising of everything tried, on the understanding that this
+restorer is free to learn the library it serves rather than sounds in general. Four
 commits (`6bee2fe`, `5d84477`, `bad9143`, and the write-up):
 
 - **The production geometry is the Gaussian analysis at 288 bands per octave**, hop a sixteenth of
@@ -397,7 +397,7 @@ commits (`6bee2fe`, `5d84477`, `bad9143`, and the write-up):
 
 Open, and heavy: the restorer retrained on the whole catalog (the stored one saw 20,000 samples), the
 grid caches rebuilt on the new geometry (twice the height), and the descriptor and codec chain after
-them. Registered for later, at the user's request: a light alignment between the morph
+them. Registered for later: a light alignment between the morph
 representation and the hand labels, in either direction, once morphing itself is solved; and a
 guard that a morph is more than a convex blend of its endpoints -- a reading that compares the
 midpoint's grid with the mean of the two endpoint grids, so a codec that had learned to crossfade

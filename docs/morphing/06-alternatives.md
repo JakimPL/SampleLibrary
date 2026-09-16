@@ -1,7 +1,7 @@
 # Considered, rejected, deferred
 
 This document exists so the same ground is not walked twice. Several of the entries below were
-reached by measurement or by the user's direct judgment, and the reasons matter more than the
+reached by measurement and several by listening, and the reasons matter more than the
 verdicts — a rejection whose reason stops applying should be revisited, and an entry marked deferred
 is waiting for something specific.
 
@@ -24,7 +24,7 @@ scheme it becomes the reference a learned latent has to beat.
 than one declared rate, spread by an octave at the median and up to six octaves. Choosing the modal
 rate is wrong by an octave for those, and arbitrary for a sample used at twelve rates.
 
-Already rejected once by the user when it was proposed as the fix for the rate-mislabeling finding.
+Already rejected once, when it was proposed as the fix for the rate-mislabeling finding.
 
 ### Detecting the pitch and normalizing to it
 
@@ -32,13 +32,13 @@ Already rejected once by the user when it was proposed as the fix for the rate-m
 fourteen categories are percussive, the corpus is full of drums, noise and single-cycle fragments,
 and a method that works on tonal material while producing nonsense elsewhere is worse than none.
 
-Also already rejected by the user. What replaced both framings is in
+Also already rejected. What replaced both framings is in
 [`02-representation.md`](02-representation.md): the stored waveform is the reference frame and every
 nuisance transform is relative to it.
 
 ### Morphing by inverting the 2D projection
 
-**Reason: the user placed morphing outside the projection, and the inverse is very lossy.** Mapping
+**Reason: morphing belongs outside the projection, and the inverse is very lossy.** Mapping
 two dimensions back to a latent of any useful size throws away almost everything, so the sound would
 be governed mostly by the inverse's own guesswork rather than by the gesture.
 
@@ -49,11 +49,10 @@ fitted model, so using the inverse at all would mean persisting one.
 
 ### A direct phase-vocoder blend of two signals
 
-**Reason: tried on this project and rejected.** A notebook doing exactly this was built in an
-earlier session and deleted at the user's request, including from git history — its commits no
-longer exist, so there is nothing to resurrect. The objection was not to the implementation but to
-the concept: blending two waveforms dissolves one into the other, which is not a sound *between*
-them.
+**Reason: tried on this project and rejected.** A notebook doing exactly this was built early on
+and deleted, including from git history — its commits no longer exist, so there is nothing to
+resurrect. The objection was not to the implementation but to the concept: blending two waveforms
+dissolves one into the other, which is not a sound *between* them.
 
 **This is the most likely way to accidentally rebuild a rejected result.** A naive spectral
 crossfade inside the new package produces the same thing wearing a better name. The morph
@@ -87,7 +86,7 @@ can identify one.
 
 ### Diffusion as a starting point
 
-**Reason: too slow to iterate on for the insight-gathering the user asked to do first.** A diffusion
+**Reason: too slow to iterate on for the insight-gathering that comes first.** A diffusion
 vocoder or generator would likely produce the best audio here, and it costs days per experiment and
 seconds per sample at inference. The instruction was to start with what can be implemented and
 tested quickly. It is a Stage 4 or later option.
@@ -109,7 +108,7 @@ to record a codec's configuration.
 
 ### Copying the catalog to the GPU machine
 
-**Reason: the user chose to rebuild.** Transferring `objects/` (3.9 GB) plus a `pg_dump` (3.2 GB,
+**Reason: rebuilding was chosen instead.** Transferring `objects/` (3.9 GB) plus a `pg_dump` (3.2 GB,
 of which 2.8 GB is note events) was the alternative. Rebuilding from the module collection already
 present costs a couple of hours and gives the sharded parallel extraction its first test on a second
 machine, which the project wants anyway.
@@ -149,7 +148,7 @@ experiment for whoever has the harness running.
 
 ### Multiscale envelope localization for transients
 
-The user's own idea for the invariant descriptor, never tested.
+A candidate for the invariant descriptor, never tested.
 
 ### The unexplained cymbal, pad and vocal deficit
 
@@ -174,7 +173,7 @@ reader improvement. Re-ingesting those 8 would close it.
 ### Postgres role hardening for the curation write path
 
 The write path is narrow by construction rather than by permission. Real enforcement needs a second
-role. Deferred by the user.
+role. Deferred.
 
 ### Aligning the grid on a pitch anchor
 
@@ -187,7 +186,7 @@ and the pitch along a morph returns as its own question once the reconstruction 
 
 ### Morphing between more than two points
 
-The user's instruction is explicit: two points and a weight first, and extend only if that succeeds.
+The scope is explicit: two points and a weight first, and extend only if that succeeds.
 
 ### Loop-aware morphing
 
@@ -215,5 +214,5 @@ it. Fine at the 25,000 rows currently stored; at 127,492 it needs an index.
 - **Stream a morph, or cache it content-addressed?** Streaming is simpler and costs a synthesis per
   request. Caching gives the result an identity the existing player already understands, at the cost
   of the first server-side write into the audio store.
-- **MLflow, or a lighter run log?** The user raised MLflow. The requirement is only that runs stay
+- **MLflow, or a lighter run log?** MLflow is the candidate. The requirement is only that runs stay
   out of the repository.

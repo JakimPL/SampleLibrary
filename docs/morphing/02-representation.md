@@ -163,7 +163,7 @@ independently — timbre morphed at constant pitch, or pitch glided at constant 
 separation is most of what makes the result musical rather than a wash.
 
 Morphing does not live in the 2D projection. Two dimensions cannot carry a latent of any useful
-size, and inverting the projection would put a very lossy step between the user's gesture and the
+size, and inverting the projection would put a very lossy step between the gesture and the
 sound. The cloud stays a way to *find* samples; the morph runs between two chosen ones. More than
 two points is a later question, once two points work.
 

@@ -7,12 +7,12 @@ rather than at the beginning.
 ## What is wanted
 
 SampleLibrary has a sample cloud. It works, and it serves none of the three things it is wanted for.
-The goals, as the user stated them:
+The goals it is meant to serve:
 
 1. Embeddings that **reasonably reflect perceptual differences** between samples.
 2. Embeddings that **classify samples** — labels are yet to be created.
 3. Embeddings that **allow generating a sample from an intermediate cloud point**, morphing between
-   two others. "Hard, but this is our ultimate goal."
+   two others. This one is understood to be hard, and it is the point of the whole effort.
 
 The third is the one that reshapes everything, because it needs a representation with a decoder,
 and the existing one has none and can never have one.
@@ -103,11 +103,11 @@ The rule holds in full for everything else: code, docstrings, and `docs/architec
 
 ## Out of scope
 
-- **The user's hand annotations.** Labels, ratings and favorites live in the protected `curation`
+- **Hand annotations.** Labels, ratings and favorites live in the protected `curation`
   schema, outside every purge path, and no pipeline may write to or clear them. There are zero of
   them today; when they arrive they become the primary evaluation set.
 - **Replacing the existing backends.** `invariant` and `librosa` stay. They become the reference a
   learned latent has to beat, which is a more useful job than the one they have now.
 - **The 2D cloud as a morph control surface.** The cloud finds samples; the morph runs between two
-  chosen ones. This was decided directly by the user.
+  chosen ones, and that separation is deliberate.
 - **More than two morph points**, until two points work.

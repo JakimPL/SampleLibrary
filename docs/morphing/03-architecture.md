@@ -1,8 +1,8 @@
 # The `samplemorph` package
 
 A specification, not a description — none of this exists yet. It follows from
-[`02-representation.md`](02-representation.md), and it is shaped by one requirement the user stated
-directly: every approach must be pluggable, so that one can be swapped for another and measured
+[`02-representation.md`](02-representation.md), and it is shaped by one standing requirement:
+every approach must be pluggable, so that one can be swapped for another and measured
 without disturbing anything around it.
 
 ## Where it sits
@@ -146,8 +146,8 @@ Two things do need somewhere to live:
 
 - **Checkpoints.** One new `LibraryConfig` field, pointing outside the repository — beside
   `library_root`, which is where large machine-specific artifacts already go.
-- **Runs, metrics and curves.** Outside the repository entirely. MLflow is the candidate the user
-  raised, as an optional extra with its tracking store in a gitignored directory. Keep the division
+- **Runs, metrics and curves.** Outside the repository entirely. MLflow is the candidate, as an
+  optional extra with its tracking store in a gitignored directory. Keep the division
   clean: a Postgres `Experiment` row is the *published* identity of a model whose vectors the
   application reads; MLflow records the *training process*. Neither duplicates the other.
 

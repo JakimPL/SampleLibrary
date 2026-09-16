@@ -87,28 +87,28 @@ case.
 of exactly one octave at the median, seventeen semitones at p90, and six octaves at the extreme. So
 it is real and bounded — worth designing around, and not worth over-engineering for.
 
-The user rejected both "pick a rate" and "detect pitch and normalize to it" as framings, the latter
+Both "pick a rate" and "detect pitch and normalize to it" were rejected as framings, the latter
 because it fails on percussion, a vital six of fourteen categories. What followed was a validated,
 percussion-inclusive, uniform fix with no branching, reaching 28 of 30 across all real categories,
-with gain settled via the level and carrier split from the user's own OptiSample project. That work
+with gain settled via the level and carrier split taken from the OptiSample project. That work
 is what `InvariantFeatureExtractor` is.
 
 ## Open descriptor items, none acted on
 
 - **The `+absolute` variant** measured +2.1 points on transposition retrieval and +1.2 on category
   agreement, against −3.8 on bass. A judgment call, not adopted.
-- **Multiscale envelope localization for transients** — the user's own idea, untested.
+- **Multiscale envelope localization for transients** — a candidate, untested.
 - **A full-catalog re-embed** (127k samples, roughly an hour) was unblocked and never scheduled.
   This is now Stage 1 work in [`04-roadmap.md`](04-roadmap.md).
 
 ## The removed morphing spike
 
-A phase-vocoder two-sample blend notebook was built in an earlier session and deleted at the user's
-request, including from git history; its commits no longer exist, so there is nothing to find in
+A phase-vocoder two-sample blend notebook was built early on and then deleted,
+including from git history; its commits no longer exist, so there is nothing to find in
 `git log` and nothing to resurrect.
 
 The objection was to the approach rather than the implementation: it was a direct two-sample signal
-blend, and what the user wants is the ability to reconstruct a sound from a representation. The
+blend, and what is wanted is the ability to reconstruct a sound from a representation. The
 embedding-invariance research that grew out of that spike is unaffected and is recorded above.
 
 ## Note extraction, as completed

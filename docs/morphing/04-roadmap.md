@@ -1,6 +1,6 @@
 # Roadmap
 
-Cheapest first, on the user's own instruction: start with solutions that can be implemented and
+Cheapest first, by deliberate choice: start with solutions that can be implemented and
 tested quickly to gather data and insight, then substitute more advanced ones once there is
 something to judge them against.
 
@@ -76,8 +76,8 @@ should stay far below that 22.70 dB ceiling. On retrieval, PCA latents should be
 `invariant` and `librosa` even though they are unlikely to win; the number sets the price of
 decodability.
 
-**Gate:** the user has listened, and has an opinion about whether Griffin-Lim is good enough. That
-opinion decides whether Stage 4 exists.
+**Gate:** the result has been listened to, and there is an opinion about whether Griffin-Lim is good
+enough. That opinion decides whether Stage 4 exists.
 
 ---
 
@@ -132,14 +132,14 @@ adopted one.
 
 ## Stage 6 — The morph in the application
 
-**Delivers:** the feature the user actually asked for, reachable from the UI.
+**Delivers:** the morph itself, reachable from the UI.
 
 A server route that synthesizes on request, and a weight control beside the existing spectral
 distance readout — the two-sample gesture already exists, and
 [`03-architecture.md`](03-architecture.md) names the two call sites that need generalizing. Decide
 then whether to stream or to cache content-addressed.
 
-**Gate:** the user can pick two samples, drag a weight, and hear the result.
+**Gate:** two samples can be picked, a weight dragged, and the result heard.
 
 Reached on 2026-09-12: `samplemorph.service` renders on request and the API relays, the pair is
 joined on the cloud by click and Shift-click, and the weight is a marker on the line between the

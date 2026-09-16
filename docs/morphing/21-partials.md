@@ -1,10 +1,13 @@
 # Partials: a morph whose middle is a chord you choose
 
-The user, after listening to the transport set: "The transport approach has a potential. But it
-fails miserably when we morph tonal samples with chords. We get an enormous 'vibrato' that makes
-midpath samples unusable. In the case of percussion samples it's ok and it's interesting (which is
-more important)." This document records what the vibrato was, the sinusoidal model built in answer,
-and the profile that says what the middle of two sounds is.
+The spectral transport of [`20-audio-transport.md`](20-audio-transport.md) moves features, and on
+percussion it does so convincingly. On tonal material it fails: the midpoint between two chords
+carries a heavy vibrato that makes it unusable, while the same route on a snare or a hi-hat is fine.
+
+This document explains where that vibrato comes from, describes the sinusoidal-plus-residual model
+built to remove it — a sound read as notes and their harmonics over the noise they stand in — and
+sets out the profile that names what the middle of two sounds should be, since once partials travel
+along paths, the paths become a choice rather than a consequence.
 
 ## Why the transport warbles on tonal sounds
 

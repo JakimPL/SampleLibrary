@@ -1,10 +1,15 @@
 # Audio transport: morphs that move features
 
-The user, after working with the morph in the application: "in many cases it feels like a regular
-convex blend of two samples", and then "the entire premise of a morpher falls with the current
-approach … the path has to move features." This document records the measurement that confirmed
-the claim, the morph built in answer, and the comparison that decides whether it replaces the
-latent route.
+A morph should turn one sound into another. The route in production at the time reached the middle
+of two sounds by interpolating their latent codes, and listening to it gave the impression of the
+two samples playing at once rather than of one becoming the other — no pitch travelled, no formant
+moved, both ends simply faded past each other.
+
+This document establishes that the impression was correct and unavoidable: every step of that route
+is affine, so its midpoint *is* a crossfade, by construction rather than by accident. It then
+describes the spectral transport built in answer, which reaches the middle by carrying energy from
+where one sound holds it to where the other does, and the listening comparison that decides between
+them.
 
 ## Why the grid path is a crossfade
 
@@ -150,7 +155,7 @@ the clean-analysis ceiling. The tables screen; the ear decides.
 
 ## What follows
 
-The user's aim is a self-supervised, decodable embedding whose straight lines move features. With
+The longer aim is a self-supervised, decodable embedding whose straight lines move features. With
 transport as teacher and yardstick, the next plan trains an encoder and a decoder on reconstruction,
 on transposition equivariance from the same sample heard at two rates, and on interpolants distilled
 toward transport midpoints, optionally judged by a realism critic; linear optimal transport,

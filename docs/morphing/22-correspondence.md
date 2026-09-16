@@ -125,8 +125,8 @@ their total price comes to less than `fade_price` — which gives the one number
 
 ### Why loudness sits at rest
 
-`level_weight` defaults to 0, and it is worth saying why, since the original sketch asked for it.
-Matching partials by loudness actively harms a morph: a partial that is loud in one sound and quiet
+`level_weight` defaults to 0, which is worth explaining, because matching partners by loudness is
+a natural thing to want. It actively harms a morph: a partial that is loud in one sound and quiet
 in the other is *exactly* what a morph should carry, and charging for that difference makes quiet
 upper harmonics marry the wrong series. Measured on the worked example, a loudness weight of 0.05
 was already enough to send C's fifth harmonic to the F series. The dial remains for experiments.

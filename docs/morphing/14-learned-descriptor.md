@@ -102,7 +102,7 @@ What it settles:
 The descriptor is `models/descriptors/descriptor.pt` under the library root, the run is recorded
 under the `descriptor` experiment of the tracking store, and experiment 6 holds its vectors.
 Promoting it to the cloud is `samplelibrary cloud embed --backend learned --model descriptor
---experiment-id 6 --limit 0`, left to the user.
+--experiment-id 6 --limit 0`, and is left unrun.
 
 ## What stays open
 

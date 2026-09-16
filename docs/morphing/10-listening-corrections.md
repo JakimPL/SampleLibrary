@@ -1,8 +1,8 @@
 # What listening found, and what it corrects
 
-The first listening set was rendered on 2026-09-08 and judged the same evening: *"gargling and of
-poor quality… the artifacts are in every reconstruction, so the problem is rather fundamental. Not
-good enough, far from it, but interesting."*
+The first listening set was rendered on 2026-09-08 and judged the same evening. The verdict was
+that every reconstruction gargled, that the artifact was present in all of them and therefore
+fundamental rather than incidental, and that the result was interesting but far from good enough.
 
 That verdict was right, and it contradicted the numbers in
 [`09-measurements.md`](09-measurements.md). This document records why the numbers missed it, the two
@@ -178,9 +178,9 @@ reaching its ceiling here is the expected result rather than a defect in it.
 
 ## The resolution that clears the bar
 
-A fourth round judged `fft2048_bpo144` acceptable: *"in percussion you can get away with these
-artifacts, but the general clarity may be a problem in the long run… it passes our initial bar."*
-That verdict was given on the frequency-axis round trip carried by the source's own phase, so the
+A fourth round judged `fft2048_bpo144` acceptable: percussion carries its artifacts, the general
+clarity may become a problem later, and it clears the initial bar. That verdict was given on the
+frequency-axis round trip carried by the source's own phase, so the
 pipeline was measured again at that density to see what survives the rest of it.
 
 | Rung | oboe | bass | snare | pad |

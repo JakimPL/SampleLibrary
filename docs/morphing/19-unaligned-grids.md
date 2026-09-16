@@ -2,8 +2,8 @@
 
 The listening review of the chain rebuilt on the fundamental anchor
 ([`16-pitch-anchor.md`](16-pitch-anchor.md), the set under `listening/codec-2026-09-12/`) ended in
-a verdict on the codec rather than on the anchor: given the choice the user would take the linear
-codec and be unhappy with both. The conditioned codec "throws a lot of information away", which
+a verdict on the codec rather than on the anchor: given the choice, the linear codec wins and
+neither is satisfying. The conditioned codec "throws a lot of information away", which
 makes it poor with chords and percussive samples, "as if it was tried really hard to treat all
 samples like tonal", and it adds a vocoder-like effect that takes the clarity away. Percussive
 samples are as important as tonal ones. The decision that followed: put the reconstruction's
@@ -152,16 +152,16 @@ conditioned codecs keep the middle full, the map codec most of all, and stand a 
 endpoints' own distance away from the crossfade at their closest. That is the case for a learned
 decoder, made on material where the linear codec's midpoint is the shadow of both sounds. What
 each codec costs the endpoints is what the fidelity table says, and whether a full middle at
-that cost is a sound worth having is the user's verdict, in `verdicts.csv` beside the files.
+that cost is a sound worth having is for listening to say, in `verdicts.csv` beside the files.
 
 ## What follows
 
-- The user's verdict on the standard pairs, and on the reconstructions in the fidelity set.
+- A listening verdict on the standard pairs, and on the reconstructions in the fidelity set.
 - The decoder's shape is where the fidelity readings point, and the linear codec is the one
   reconstruction that never adds what the grid lacks. A learned decoder that starts from the
   linear reconstruction and corrects it, the way the restorer corrects the band inverse, keeps
   the linear codec's fidelity as its floor and puts the learning where the crossfade thins out.
   Before that, the linear codec's own ceiling is a five-minute fit away: `samplelibrary morph fit
   --latent-size 1024` says how much of the gap to the vocoder is the 256 components.
-- Promotion of experiment 9 to the cloud is the user's call; the cloud shows experiment 7 until
+- Promotion of experiment 9 to the cloud is unmade; the cloud shows experiment 7 until
   then, and the two are level on every measured row.

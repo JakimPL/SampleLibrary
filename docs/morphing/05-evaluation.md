@@ -92,8 +92,8 @@ sustained sample, which is the hardest case and the most interesting one.
 
 ## Where results live
 
-**Not in the repository.** The user was explicit: experiments are not registered there, and the
-repository stays clean while the work stays experimental. MLflow is the candidate for run tracking,
+**Not in the repository.** Experiments are not registered there, so the repository stays clean
+while the work stays experimental. MLflow is the candidate for run tracking,
 with its store outside the repository.
 
 The harness itself *is* repository code — library functions under `src/samplemorph/`, with tests,
