@@ -8,6 +8,8 @@ from numpy.typing import NDArray
 from samplemorph.measurement.comparison import held_out_distance_db, held_out_spectrum
 from samplemorph.measurement.loudness import integrated_loudness, match_loudness
 from samplemorph.measurement.modulation_spectrum import ModulationLobeDepths, modulation_lobe_depths
+from samplemorph.measurement.morph_path.harmonicity import harmonicity
+from samplemorph.measurement.morph_path.heard_partials import heard_partials
 from samplemorph.measurement.morph_path.loudness_path import LoudnessPath
 from samplemorph.measurement.morph_path.partial_wobble import partial_wobble_cents
 from samplemorph.measurement.morph_path.spectra import (
@@ -20,6 +22,7 @@ from samplemorph.measurement.morph_path.spectra import (
     resolved_spectrum,
 )
 from samplemorph.measurement.readings import ReconstructionReadings, read_reconstruction
+from samplemorph.partials.settings import NoteSettings
 
 
 @dataclass(frozen=True)
@@ -61,8 +64,9 @@ class PointScreen:
     modulation depths over the values interpolated between the ends', the readings that tracked
     a heard phase artifact on percussive and tonal material. `wobble_cents` is how far its partials
     move in pitch every 3 ms (`partial_wobble_cents`), and `wobble_excess_cents` that over the value
-    interpolated between the ends, which a vibrato the ends lack reads above zero; a point or an end
-    holding no partial reads not a number on both.
+    interpolated between the ends, which a vibrato the ends lack reads above zero. `harmonicity` is
+    the share of its partial energy standing on notes, which says whether what it holds still sounds
+    like notes. A point or an end holding no partial reads not a number on all three.
     """
 
     peak_count_ratio: float
@@ -72,6 +76,7 @@ class PointScreen:
     roughness_excess: float
     wobble_cents: float
     wobble_excess_cents: float
+    harmonicity: float
 
 
 @dataclass(frozen=True)
@@ -108,6 +113,7 @@ class _PointFeatures:
     crest_db: float
     depths: ModulationLobeDepths
     wobble_cents: float
+    harmonicity: float
 
 
 def read_path(path: HeardPath) -> PathReadings:
@@ -163,13 +169,15 @@ def transposition_distances_db(points: tuple[PathPoint, ...], references: tuple[
 
 def _features(waveform: NDArray[np.float64], *, rate_hz: int) -> _PointFeatures:
     resolved = resolved_spectrum(waveform)
+    partials = heard_partials(waveform, rate_hz=float(rate_hz))
     return _PointFeatures(
         spectrum=fraction_spectrum(waveform),
         peak_count=mean_peak_count(resolved),
         entropy=mean_spectral_entropy(resolved),
         crest_db=crest_factor_db(waveform),
         depths=modulation_lobe_depths(waveform, source_rate_hz=rate_hz),
-        wobble_cents=partial_wobble_cents(waveform, rate_hz=rate_hz),
+        wobble_cents=partial_wobble_cents(partials),
+        harmonicity=harmonicity(partials, settings=NoteSettings()),
     )
 
 
@@ -186,6 +194,7 @@ def _screen(point: _PointFeatures, *, first: _PointFeatures, second: _PointFeatu
         roughness_excess=point.depths.roughness - between(first.depths.roughness, second.depths.roughness),
         wobble_cents=point.wobble_cents,
         wobble_excess_cents=point.wobble_cents - between(first.wobble_cents, second.wobble_cents),
+        harmonicity=point.harmonicity,
     )
 
 

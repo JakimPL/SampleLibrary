@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 
 from samplemorph.canonicalizers.common import PreparedMono
 from samplemorph.geometry import LogFrequencyGeometry, gaussian_taper
+from samplemorph.partials.channels import Channels, channelize
 from samplemorph.partials.peaks import SILENT_MAGNITUDE, analysis_length, gaussian_transform, pick_peaks
 from samplemorph.partials.residual import residual_energy
 from samplemorph.partials.settings import PartialSettings
@@ -17,16 +18,16 @@ from samplemorph.transport.settings import TransportSettings
 
 @dataclass(frozen=True)
 class SinusoidalModel:
-    """One sound read as partials sounding over a residual, beside the whole sound they came from.
+    """One sound read as the lines it sounds along over a residual, beside the whole sound they came from.
 
-    `partials` are the tracked partials, each an oscillator's worth of frequency and amplitude over
-    time; `residual` is what the spectrum holds beyond them, the noise, the attacks and the clusters
-    too close to resolve; `whole` is the sound's own analysis, which is what two sounds are aligned
-    in time by. A sound with no partial to track keeps its whole analysis as its residual, which
-    leaves it to travel exactly as a transport carries it.
+    `channels` are the notes' harmonics and the partials standing free of them, each an oscillator's
+    worth of frequency and amplitude over time; `residual` is what the spectrum holds beyond them, the
+    noise, the attacks and the clusters too close to resolve; `whole` is the sound's own analysis,
+    which is what two sounds are aligned in time by. A sound with no partial to track keeps its whole
+    analysis as its residual, which leaves it to travel exactly as a transport carries it.
     """
 
-    partials: PartialTracks
+    channels: Channels
     whole: TransportAnalysis
     residual: TransportAnalysis
     rate_hz: float
@@ -34,8 +35,8 @@ class SinusoidalModel:
     @property
     def nbytes(self) -> int:
         return int(
-            self.partials.frequency_hz.nbytes
-            + self.partials.amplitude.nbytes
+            self.channels.tracks.frequency_hz.nbytes
+            + self.channels.tracks.amplitude.nbytes
             + self.whole.nbytes
             + self.residual.nbytes
         )
@@ -53,15 +54,18 @@ def analyze_model(
 
     The partials are followed on a window long enough to tell neighboring partials apart, and each
     one's amplitude is held to the quieter of that reading and the shorter analysis the residual
-    lives on, so a partial rises no sooner than the sound itself does. Both analyses step by the
-    geometry's hop, which puts every partial's frame beside the spectrum's own.
+    lives on, so a partial rises no sooner than the sound itself does. What their lobes explain of
+    the spectrum comes off the residual, read where each partial was measured, and the partials are
+    then read as notes, which puts every harmonic of a note on its own fundamental. Both analyses
+    step by the geometry's hop, which puts every partial's frame beside the spectrum's own.
     """
     whole = analyze(mono, rate_hz=rate_hz, geometry=geometry, settings=transport_settings)
     partials = _sounded_partials(
         mono, energy=whole.energy, rate_hz=rate_hz, geometry=geometry, settings=partial_settings
     )
+    channels = channelize(partials, settings=partial_settings.notes)
     return SinusoidalModel(
-        partials=partials,
+        channels=channels,
         whole=whole,
         residual=analysis_from_energy(
             residual_energy(whole.energy, tracks=partials, fft_length=geometry.fft_length, settings=partial_settings),

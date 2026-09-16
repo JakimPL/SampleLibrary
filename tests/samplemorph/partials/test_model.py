@@ -30,7 +30,7 @@ def test_a_model_holds_one_analysis_of_its_sound_beside_the_partials_it_sounds()
     model = model_of(harmonics(FUNDAMENTAL_HZ, harmonic_count=HARMONIC_COUNT))
 
     frames = 1 + model.whole.sample_count // HOP_LENGTH
-    assert model.partials.frame_count == frames
+    assert model.channels.tracks.frame_count == frames
     assert model.whole.frame_count == frames
     assert model.residual.frame_count == frames
     assert model.residual.onset_sample == model.whole.onset_sample
@@ -47,8 +47,8 @@ def test_a_partial_rises_no_sooner_than_the_sound_it_belongs_to() -> None:
     model = model_of(struck)
     followed = tracks_of(struck)
 
-    steady = float(np.median(model.partials.amplitude[0, onset_frame + 2 * reach :]))
-    held = _risen_frame(model.partials.amplitude[0], steady=steady)
+    steady = float(np.median(model.channels.tracks.amplitude[0, onset_frame + 2 * reach :]))
+    held = _risen_frame(model.channels.tracks.amplitude[0], steady=steady)
     assert held > _risen_frame(followed.amplitude[0], steady=steady)
     assert onset_frame - held <= LARGEST_PRE_ONSET_FRAMES
 
@@ -61,7 +61,7 @@ def _risen_frame(amplitude: np.ndarray, *, steady: float) -> int:
 def test_a_sound_of_noise_alone_is_its_own_residual() -> None:
     model = model_of(noise_hit(seed=9))
 
-    assert model.partials.track_count == 0
+    assert model.channels.tracks.track_count == 0
     assert model.residual.energy is model.whole.energy
 
 
@@ -75,8 +75,8 @@ def test_two_partials_too_close_for_the_shorter_analysis_keep_their_own_amplitud
 
     model = model_of(pair)
 
-    middle = slice(model.partials.frame_count // 4, 3 * model.partials.frame_count // 4)
-    assert model.partials.track_count == 2
+    middle = slice(model.channels.tracks.frame_count // 4, 3 * model.channels.tracks.frame_count // 4)
+    assert model.channels.tracks.track_count == 2
     assert np.allclose(
-        np.median(model.partials.amplitude[:, middle], axis=1), CLOSE_AMPLITUDE, rtol=AMPLITUDE_TOLERANCE
+        np.median(model.channels.tracks.amplitude[:, middle], axis=1), CLOSE_AMPLITUDE, rtol=AMPLITUDE_TOLERANCE
     )

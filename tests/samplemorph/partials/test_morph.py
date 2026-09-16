@@ -14,6 +14,7 @@ from samplemorph.partials.model import SinusoidalModel
 from samplemorph.partials.morph import PartialMorph
 from samplemorph.partials.presets import PROFILE_PRESETS
 from samplemorph.partials.profile import MorphProfile
+from samplemorph.partials.tracks import CENTS_PER_OCTAVE
 from samplemorph.transport.morph import transport
 from samplemorph.transport.settings import TransportSettings
 from samplemorph.vocoders.pghi import integrate_and_synthesize
@@ -34,9 +35,12 @@ SYMMETRY_CEILING_DB: Final[float] = 0.5
 IDENTITY_CEILING_DB: Final[float] = 1.0
 WOBBLE_CEILING_CENTS: Final[float] = 3.0
 ROUGHNESS_EXCESS_CEILING: Final[float] = 0.02
+HARMONICITY_FLOOR: Final[float] = 0.9
+CENTS_TOLERANCE: Final[float] = 5.0
 LONG_SECONDS: Final[float] = 3.0
 LONGEST_RENDER_SECONDS: Final[float] = 4.0
 SLIDE: Final[MorphProfile] = PROFILE_PRESETS["slide"]
+GLIDE: Final[MorphProfile] = PROFILE_PRESETS["glide"]
 C4, E4, G4, F4, A4 = 261.63, 329.63, 392.0, 349.23, 440.0
 
 
@@ -82,14 +86,19 @@ def _audible_distance_db(rendered: NDArray[np.float64], reference: NDArray[np.fl
 
 
 def _harmonic_levels_db(waveform: NDArray[np.float64], fundamental_hz: float) -> NDArray[np.float64]:
-    """Each harmonic's amplitude in decibels, read over the render's middle half."""
+    """Each harmonic's amplitude in decibels, read over the render's middle half.
+
+    The energy of the whole lobe stands for the amplitude, so a partial sitting between two bins
+    reads as loud as one sitting on a bin.
+    """
     middle = waveform[waveform.shape[0] // 4 : 3 * waveform.shape[0] // 4]
     taper = np.hanning(middle.shape[0])
-    spectrum = np.abs(np.fft.rfft(middle * taper)) * 2.0 / taper.sum()
+    energy = np.abs(np.fft.rfft(middle * taper)) ** 2
     frequencies = np.fft.rfftfreq(middle.shape[0], 1.0 / RATE_HZ)
+    scale = middle.shape[0] * float((taper**2).sum())
     levels: NDArray[np.float64] = 20.0 * np.log10(
         [
-            spectrum[np.abs(frequencies - harmonic * fundamental_hz) <= PEAK_REACH_HZ].max()
+            2.0 * np.sqrt(energy[np.abs(frequencies - harmonic * fundamental_hz) <= PEAK_REACH_HZ].sum() / scale)
             for harmonic in range(1, HARMONIC_COUNT + 1)
         ]
     )
@@ -172,9 +181,12 @@ def test_a_crossfade_holds_both_tones_where_they_stand(tones: tuple[SinusoidalMo
 def test_the_midpoint_of_two_chords_holds_as_steady_as_the_chords_themselves(
     chords: tuple[SinusoidalModel, SinusoidalModel],
 ) -> None:
-    """The pairing is read once for the pair, so a partial glides along one path instead of being re-aimed every frame."""
+    """The pairing is read once for the pair, so a partial glides along one path from end to end."""
     first, second = chords
-    points = tuple(PathPoint(weight=weight, waveform=_morph(first, second, weight)) for weight in (0.0, MIDPOINT, 1.0))
+    points = tuple(
+        PathPoint(weight=weight, waveform=_morph(first, second, weight, profile=GLIDE))
+        for weight in (0.0, MIDPOINT, 1.0)
+    )
 
     readings = read_path(
         HeardPath(points=points, first=_chord((C4, E4, G4)), second=_chord((C4, F4, A4)), rate_hz=RATE_HZ)
@@ -183,6 +195,22 @@ def test_the_midpoint_of_two_chords_holds_as_steady_as_the_chords_themselves(
     middle = readings.points[1].screen
     assert middle.wobble_cents <= WOBBLE_CEILING_CENTS
     assert middle.roughness_excess <= ROUGHNESS_EXCESS_CEILING
+    assert middle.harmonicity >= HARMONICITY_FLOOR
+
+
+def test_the_notes_of_two_chords_meet_note_to_note_and_glide_between_them(
+    chords: tuple[SinusoidalModel, SinusoidalModel],
+) -> None:
+    """C to C, E to F and G to A: every point is the chord standing that far along each voice's own path."""
+    first, second = chords
+
+    for weight in (0.25, MIDPOINT, 0.75):
+        notes = model_of(_morph(first, second, weight, profile=GLIDE)).channels.notes
+        read = sorted(float(np.median(note.frequency_hz)) for note in notes)
+        between = sorted(here ** (1.0 - weight) * there**weight for here, there in ((C4, C4), (E4, F4), (G4, A4)))
+        assert len(read) == len(between)
+        for found, expected in zip(read, between, strict=True):
+            assert abs(CENTS_PER_OCTAVE * np.log2(found / expected)) <= CENTS_TOLERANCE
 
 
 def test_a_path_read_backward_is_the_same_path(tones: tuple[SinusoidalModel, SinusoidalModel]) -> None:
@@ -217,7 +245,7 @@ def test_a_weight_outside_the_path_is_refused(weight: float, tones: tuple[Sinuso
 def test_two_sounds_heard_at_different_rates_are_refused(tones: tuple[SinusoidalModel, SinusoidalModel]) -> None:
     first, second = tones
     elsewhere = SinusoidalModel(
-        partials=second.partials, whole=second.whole, residual=second.residual, rate_hz=2.0 * RATE_HZ
+        channels=second.channels, whole=second.whole, residual=second.residual, rate_hz=2.0 * RATE_HZ
     )
 
     with pytest.raises(ValueError, match="one frame"):

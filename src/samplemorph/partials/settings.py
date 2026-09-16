@@ -20,6 +20,37 @@ DEFAULT_MINIMUM_TRACK_SECONDS: Final[float] = 0.1
 DEFAULT_RESIDUAL_MARGIN_DB: Final[float] = 3.0
 DEFAULT_FLOOR_REACH_BINS: Final[int] = 8
 DEFAULT_FLOOR_SMOOTHING_BINS: Final[int] = 5
+DEFAULT_HARMONIC_COUNT: Final[int] = 20
+DEFAULT_LOWEST_NOTE_HZ: Final[float] = 32.7
+DEFAULT_HARMONIC_CENTS: Final[float] = 50.0
+DEFAULT_NOTE_SHARE_FLOOR: Final[float] = 0.02
+DEFAULT_LARGEST_NOTE_COUNT: Final[int] = 8
+DEFAULT_LARGEST_INHARMONICITY: Final[float] = 1e-3
+DEFAULT_SMALLEST_NOTE_HARMONICS: Final[int] = 3
+DEFAULT_NOTE_DENSITY: Final[float] = 0.7
+
+
+class NoteSettings(BaseModel):
+    """Every constant the notes of a sound are read by, so a rendered file can name the settings it took.
+
+    A note is sought over its first `harmonic_count` harmonics, down to `lowest_note_hz`, and a
+    partial belongs to a harmonic when it stands within `harmonic_cents` of it, stretched by the
+    inharmonicity fitted for that note, up to `largest_inharmonicity`. A note sounds through at least
+    `smallest_note_harmonics` of its harmonics and through `note_density` of those between the lowest
+    and the highest it holds, and a sound holds at most `largest_note_count` notes, each carrying at
+    least `note_share_floor` of what its partials carry.
+    """
+
+    model_config = FROZEN
+
+    harmonic_count: int = Field(default=DEFAULT_HARMONIC_COUNT, ge=1)
+    lowest_note_hz: float = Field(default=DEFAULT_LOWEST_NOTE_HZ, gt=0.0)
+    harmonic_cents: float = Field(default=DEFAULT_HARMONIC_CENTS, gt=0.0)
+    note_share_floor: float = Field(default=DEFAULT_NOTE_SHARE_FLOOR, gt=0.0, le=1.0)
+    largest_note_count: int = Field(default=DEFAULT_LARGEST_NOTE_COUNT, ge=1)
+    largest_inharmonicity: float = Field(default=DEFAULT_LARGEST_INHARMONICITY, ge=0.0)
+    smallest_note_harmonics: int = Field(default=DEFAULT_SMALLEST_NOTE_HARMONICS, ge=1)
+    note_density: float = Field(default=DEFAULT_NOTE_DENSITY, gt=0.0, le=1.0)
 
 
 class PartialSettings(BaseModel):
@@ -35,7 +66,7 @@ class PartialSettings(BaseModel):
     at least `minimum_track_seconds`, which a noise peak holds for about one window and a partial for
     far longer. Residual: what a partial's lobe explains leaves the spectrum with `residual_margin_db`
     of headroom, down to a floor read as the least energy within `floor_reach_bins`, smoothed over
-    `floor_smoothing_bins`.
+    `floor_smoothing_bins`. Notes: `notes` names how the partials are read as notes.
     """
 
     model_config = FROZEN
@@ -54,3 +85,4 @@ class PartialSettings(BaseModel):
     residual_margin_db: float = Field(default=DEFAULT_RESIDUAL_MARGIN_DB, ge=0.0)
     floor_reach_bins: int = Field(default=DEFAULT_FLOOR_REACH_BINS, ge=1)
     floor_smoothing_bins: int = Field(default=DEFAULT_FLOOR_SMOOTHING_BINS, ge=1)
+    notes: NoteSettings = NoteSettings()

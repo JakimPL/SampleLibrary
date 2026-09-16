@@ -8,7 +8,8 @@ import numpy as np
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.geometry import log_frequency_geometry
-from samplemorph.measurement.morph_path.partial_wobble import WOBBLE_HOP_SECONDS, partial_wobble_cents
+from samplemorph.measurement.morph_path.heard_partials import HEARD_HOP_SECONDS, heard_partials
+from samplemorph.measurement.morph_path.partial_wobble import partial_wobble_cents
 from samplemorph.routes.analysis import AnalysisRoute
 from samplemorph.routes.kinds import pair_through
 from samplemorph.routes.route import HeardMono
@@ -26,6 +27,10 @@ WOBBLE_RATIO_FLOOR: Final[float] = 3.0
 C4, E4, G4, F4, A4 = 261.63, 329.63, 392.0, 349.23, 440.0
 
 
+def _wobble(waveform: np.ndarray) -> float:
+    return partial_wobble_cents(heard_partials(waveform, rate_hz=RATE_HZ))
+
+
 def _chord(notes: tuple[float, ...]) -> np.ndarray:
     seconds = times(CHORD_SECONDS)
     total = np.sum([np.sin(2.0 * np.pi * k * note * seconds) / k for note in notes for k in range(1, 11)], axis=0)
@@ -35,7 +40,7 @@ def _chord(notes: tuple[float, ...]) -> np.ndarray:
 def test_a_steady_tone_barely_moves() -> None:
     tone = np.sum([np.sin(2.0 * np.pi * 220.0 * k * times()) / k for k in range(1, 9)], axis=0)
 
-    assert partial_wobble_cents(tone, rate_hz=RATE_HZ) <= STEADY_CEILING_CENTS
+    assert _wobble(tone) <= STEADY_CEILING_CENTS
 
 
 def test_a_vibrato_reads_the_mean_step_its_swing_takes() -> None:
@@ -43,15 +48,15 @@ def test_a_vibrato_reads_the_mean_step_its_swing_takes() -> None:
     tone = vibrato_tone(
         fundamental_hz=220.0, depth_cents=VIBRATO_DEPTH_CENTS, rate_hz=VIBRATO_RATE_HZ, harmonic_count=8
     )
-    expected = 4.0 * VIBRATO_RATE_HZ * VIBRATO_DEPTH_CENTS * WOBBLE_HOP_SECONDS
+    expected = 4.0 * VIBRATO_RATE_HZ * VIBRATO_DEPTH_CENTS * HEARD_HOP_SECONDS
 
-    reading = partial_wobble_cents(tone, rate_hz=RATE_HZ)
+    reading = _wobble(tone)
 
     assert WINDOW_SHALLOWING * expected <= reading <= expected * 1.05
 
 
 def test_noise_holds_no_partial_to_read() -> None:
-    assert math.isnan(partial_wobble_cents(np.random.default_rng(2).normal(size=times().shape[0]), rate_hz=RATE_HZ))
+    assert math.isnan(_wobble(np.random.default_rng(2).normal(size=times().shape[0])))
 
 
 def test_the_transport_midpoint_of_two_chords_wobbles_far_more_than_either_chord() -> None:
@@ -62,8 +67,6 @@ def test_the_transport_midpoint_of_two_chords_wobbles_far_more_than_either_chord
         HeardMono(mono=prepare_mono(_chord((C4, F4, A4))), rate_hz=RATE_HZ),
     )
 
-    first, middle, second = (
-        partial_wobble_cents(prepared.render(weight=weight), rate_hz=RATE_HZ) for weight in (0.0, 0.5, 1.0)
-    )
+    first, middle, second = (_wobble(prepared.render(weight=weight)) for weight in (0.0, 0.5, 1.0))
 
     assert middle >= WOBBLE_RATIO_FLOOR * max(first, second)

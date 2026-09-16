@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplemorph.geometry import LogFrequencyGeometry
-from samplemorph.partials.correspondence.pairing import pair_partials
+from samplemorph.partials.correspondence.pairing import pair_channels
 from samplemorph.partials.model import SinusoidalModel
 from samplemorph.partials.profile import MorphProfile
 from samplemorph.partials.synthesis import oscillate
@@ -51,9 +51,9 @@ class PartialMorph:
                 f"two sounds meet in one frame, and these are heard at {first.rate_hz} and {second.rate_hz} Hz"
             )
         if weight == FIRST_END_WEIGHT:
-            return self._sounded(first.partials, residual=heard_as_analyzed(first.residual))
+            return self._sounded(first.channels.tracks, residual=heard_as_analyzed(first.residual))
         if weight == SECOND_END_WEIGHT:
-            return self._sounded(second.partials, residual=heard_as_analyzed(second.residual))
+            return self._sounded(second.channels.tracks, residual=heard_as_analyzed(second.residual))
 
         time_map = build_time_map(
             first.whole, second.whole, weight=weight, hop_length=self.geometry.hop_length, settings=self.settings
@@ -78,12 +78,18 @@ class PartialMorph:
         self, first: SinusoidalModel, second: SinusoidalModel, *, time_map: TimeMap, weight: float
     ) -> PartialTracks:
         """Every partial of the point between two sounds: the matched pairs on their way, and the rest on their own."""
-        pairing = pair_partials(first.partials, second.partials, correspondence=self.profile.correspondence)
+        pairing = pair_channels(first.channels, second.channels, correspondence=self.profile.correspondence)
         read_first = _read_along(
-            first.partials, positions=time_map.first_positions, rates=time_map.first_rates, settings=self.settings
+            first.channels.tracks,
+            positions=time_map.first_positions,
+            rates=time_map.first_rates,
+            settings=self.settings,
         )
         read_second = _read_along(
-            second.partials, positions=time_map.second_positions, rates=time_map.second_rates, settings=self.settings
+            second.channels.tracks,
+            positions=time_map.second_positions,
+            rates=time_map.second_rates,
+            settings=self.settings,
         )
         exponent = self.settings.level_exponent
         log_frequency = np.concatenate(
@@ -113,7 +119,7 @@ class PartialMorph:
             amplitude=np.sqrt(energy * np.where(total > 0.0, heard / np.where(total > 0.0, total, 1.0), 0.0)).astype(
                 np.float32
             ),
-            hop_length=first.partials.hop_length,
+            hop_length=first.channels.tracks.hop_length,
             rate_hz=first.rate_hz,
         )
 

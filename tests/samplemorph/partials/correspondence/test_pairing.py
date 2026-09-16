@@ -6,10 +6,12 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from samplemorph.partials.correspondence.pairing import pair_partials
-from samplemorph.partials.correspondence.partials import ordered_pairs, partial_voices
+from samplemorph.partials.channels import FREE_PARTIAL, Channels
+from samplemorph.partials.correspondence.pairing import pair_channels
+from samplemorph.partials.correspondence.partials import ordered_pairs
 from samplemorph.partials.profile import NoCorrespondence, OrderedPartials
 from samplemorph.partials.tracks import PartialTracks
+from samplemorph.partials.voices import partial_voices
 from tests.samplemorph.partials.conftest import HOP_LENGTH, RATE_HZ
 
 FRAME_COUNT: Final[int] = 32
@@ -25,6 +27,17 @@ def _tracks(frequencies_hz: tuple[float, ...], *, amplitudes: tuple[float, ...] 
         amplitude=np.repeat(levels[:, None], FRAME_COUNT, axis=1),
         hop_length=HOP_LENGTH,
         rate_hz=RATE_HZ,
+    )
+
+
+def _free_channels(frequencies_hz: tuple[float, ...]) -> Channels:
+    """Partials standing free of any note, which is what an ordered or a crossfading profile reads."""
+    tracks = _tracks(frequencies_hz)
+    return Channels(
+        tracks=tracks,
+        note=np.full(tracks.track_count, FREE_PARTIAL, dtype=np.intp),
+        harmonic=np.zeros(tracks.track_count, dtype=np.intp),
+        notes=(),
     )
 
 
@@ -65,10 +78,10 @@ def test_a_sound_with_no_partial_pairs_with_nothing() -> None:
 
 
 def test_an_ordered_correspondence_leaves_the_unmatched_partials_on_their_own() -> None:
-    first = _tracks((300.0, 900.0))
-    second = _tracks((310.0, 620.0, 880.0, 1760.0))
+    first = _free_channels((300.0, 900.0))
+    second = _free_channels((310.0, 620.0, 880.0, 1760.0))
 
-    pairing = pair_partials(first, second, correspondence=OrderedPartials())
+    pairing = pair_channels(first, second, correspondence=OrderedPartials())
 
     assert pairing.pair_count == 2
     assert np.array_equal(pairing.first_alone, np.array([]))
@@ -76,10 +89,10 @@ def test_an_ordered_correspondence_leaves_the_unmatched_partials_on_their_own() 
 
 
 def test_no_correspondence_leaves_every_partial_on_its_own() -> None:
-    first = _tracks((300.0, 900.0))
-    second = _tracks((400.0, 800.0, 1600.0))
+    first = _free_channels((300.0, 900.0))
+    second = _free_channels((400.0, 800.0, 1600.0))
 
-    pairing = pair_partials(first, second, correspondence=NoCorrespondence())
+    pairing = pair_channels(first, second, correspondence=NoCorrespondence())
 
     assert pairing.pair_count == 0
     assert np.array_equal(pairing.first_alone, np.array([0, 1]))

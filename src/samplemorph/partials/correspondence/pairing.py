@@ -5,17 +5,25 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from samplemorph.partials.correspondence.partials import ordered_pairs, partial_voices
-from samplemorph.partials.profile import Correspondence, NoCorrespondence, OrderedPartials
-from samplemorph.partials.tracks import PartialTracks
+from samplemorph.partials.channels import Channels
+from samplemorph.partials.correspondence.notes import harmonic_pairs, note_pairs
+from samplemorph.partials.correspondence.partials import nearest_pairs, ordered_pairs
+from samplemorph.partials.profile import (
+    Correspondence,
+    NearestPartials,
+    NoCorrespondence,
+    NotesCorrespondence,
+    OrderedPartials,
+)
+from samplemorph.partials.voices import partial_voices
 
 
 @dataclass(frozen=True)
 class ChannelPairing:
-    """Who meets whom between two sounds: the partials that travel together, and those that travel alone.
+    """Who meets whom between two sounds: the channels that travel together, and those that travel alone.
 
-    Shapes: `matched` is ``(pairs, 2)``, a partial of each sound per row, and both `first_alone` and
-    `second_alone` hold the partials of one sound that meet nothing in the other.
+    Shapes: `matched` is ``(pairs, 2)``, a channel of each sound per row, and both `first_alone` and
+    `second_alone` hold the channels of one sound meeting nothing in the other.
     """
 
     matched: NDArray[np.intp]
@@ -27,24 +35,52 @@ class ChannelPairing:
         return int(self.matched.shape[0])
 
 
-def pair_partials(first: PartialTracks, second: PartialTracks, *, correspondence: Correspondence) -> ChannelPairing:
-    """Pair two sounds' partials the way a profile's correspondence says to.
+def pair_channels(first: Channels, second: Channels, *, correspondence: Correspondence) -> ChannelPairing:
+    """Pair two sounds' channels the way a profile's correspondence says to.
 
     The pairing is read once for a pair of sounds and holds at every weight and every frame between
     them, which is what lets a partial glide along one path from end to end.
     """
     match correspondence:
+        case NotesCorrespondence():
+            met = harmonic_pairs(
+                first,
+                second,
+                notes=note_pairs(
+                    first, second, cap_semitones=correspondence.cap_semitones, exponent=correspondence.exponent
+                ),
+            )
+            free = nearest_pairs(
+                partial_voices(first.tracks),
+                partial_voices(second.tracks),
+                cap_cents=correspondence.cap_cents,
+                taken=(met[:, 0], met[:, 1]),
+            )
+            return _pairing(np.concatenate((met, free)), first=first, second=second)
+        case NearestPartials():
+            return _pairing(
+                nearest_pairs(
+                    partial_voices(first.tracks),
+                    partial_voices(second.tracks),
+                    cap_cents=correspondence.cap_cents,
+                    taken=(np.zeros(0, dtype=np.intp), np.zeros(0, dtype=np.intp)),
+                ),
+                first=first,
+                second=second,
+            )
         case OrderedPartials():
-            return _pairing(ordered_pairs(partial_voices(first), partial_voices(second)), first=first, second=second)
+            return _pairing(
+                ordered_pairs(partial_voices(first.tracks), partial_voices(second.tracks)), first=first, second=second
+            )
         case NoCorrespondence():
             return _pairing(np.zeros((0, 2), dtype=np.intp), first=first, second=second)
 
 
-def _pairing(matched: NDArray[np.intp], *, first: PartialTracks, second: PartialTracks) -> ChannelPairing:
+def _pairing(matched: NDArray[np.intp], *, first: Channels, second: Channels) -> ChannelPairing:
     return ChannelPairing(
         matched=matched,
-        first_alone=_left_out(matched[:, 0], count=first.track_count),
-        second_alone=_left_out(matched[:, 1], count=second.track_count),
+        first_alone=_left_out(matched[:, 0], count=first.channel_count),
+        second_alone=_left_out(matched[:, 1], count=second.channel_count),
     )
 
 

@@ -1,39 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import numpy as np
 from numpy.typing import NDArray
 
-from samplemorph.partials.tracks import CENTS_PER_OCTAVE, PartialTracks
-
-
-@dataclass(frozen=True)
-class PartialVoices:
-    """Where each partial of a sound sits and how much of the sound it carries.
-
-    `cents` is the amplitude-weighted pitch a partial holds over its life, and `share` its energy
-    over the sound's. Shapes: both arrays are ``(partials,)``.
-    """
-
-    cents: NDArray[np.float64]
-    share: NDArray[np.float64]
-
-    @property
-    def count(self) -> int:
-        return int(self.cents.shape[0])
-
-
-def partial_voices(tracks: PartialTracks) -> PartialVoices:
-    """Each partial as one pitch and one share of the sound, which is what a pairing reads it by."""
-    energy = tracks.amplitude.astype(np.float64) ** 2
-    weight = energy.sum(axis=1)
-    total = float(weight.sum())
-    cents = CENTS_PER_OCTAVE * np.log2(tracks.frequency_hz.astype(np.float64))
-    return PartialVoices(
-        cents=np.where(weight > 0.0, (energy * cents).sum(axis=1) / np.where(weight > 0.0, weight, 1.0), cents[:, 0]),
-        share=weight / total if total > 0.0 else np.zeros_like(weight),
-    )
+from samplemorph.partials.voices import PartialVoices
 
 
 def ordered_pairs(first: PartialVoices, second: PartialVoices) -> NDArray[np.intp]:
@@ -74,3 +44,30 @@ def _shortest_monotone_pairs(cost: NDArray[np.float64]) -> NDArray[np.intp]:
         pairs[row - 1] = (row - 1, column - 1)
         column -= 1
     return pairs
+
+
+def nearest_pairs(
+    first: PartialVoices, second: PartialVoices, *, cap_cents: float, taken: tuple[NDArray[np.intp], NDArray[np.intp]]
+) -> NDArray[np.intp]:
+    """Which partial meets which by pitch alone: each pair the nearest to the other, within `cap_cents`.
+
+    A partial the two sounds hold in common holds still through the morph, and one the other sound
+    has nothing near fades where it stands. Partials already met through their notes stay as they
+    are. Shape: the result is ``(pairs, 2)``.
+    """
+    free = (_left_over(first.count, taken=taken[0]), _left_over(second.count, taken=taken[1]))
+    if free[0].size == 0 or free[1].size == 0:
+        return np.zeros((0, 2), dtype=np.intp)
+
+    apart = np.abs(first.cents[free[0]][:, None] - second.cents[free[1]])
+    nearest_second = apart.argmin(axis=1)
+    nearest_first = apart.argmin(axis=0)
+    rows = np.arange(free[0].shape[0])
+    mutual = (nearest_first[nearest_second] == rows) & (apart[rows, nearest_second] <= cap_cents)
+    return np.stack((free[0][rows[mutual]], free[1][nearest_second[mutual]]), axis=1).astype(np.intp)
+
+
+def _left_over(count: int, *, taken: NDArray[np.intp]) -> NDArray[np.intp]:
+    met = np.zeros(count, dtype=bool)
+    met[taken] = True
+    return np.flatnonzero(~met).astype(np.intp)

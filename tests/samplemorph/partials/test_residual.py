@@ -47,7 +47,7 @@ def test_a_tone_over_noise_leaves_the_noise_where_it_stands_and_takes_the_partia
 def test_a_sound_holding_no_partial_keeps_every_bin_of_its_energy() -> None:
     model = model_of(noise_hit(seed=4))
 
-    assert model.partials.track_count == 0
+    assert model.channels.tracks.track_count == 0
     assert model.residual.energy is model.whole.energy
 
 
@@ -55,5 +55,5 @@ def test_a_tone_leaves_almost_nothing_behind() -> None:
     model = model_of(harmonics(FUNDAMENTAL_HZ, harmonic_count=HARMONIC_COUNT))
 
     left = float(model.residual.energy.sum()) / float(model.whole.energy.sum())
-    assert model.partials.track_count == HARMONIC_COUNT
+    assert model.channels.tracks.track_count == HARMONIC_COUNT
     assert left <= 0.01
