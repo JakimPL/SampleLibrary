@@ -8,9 +8,11 @@ from numpy.typing import NDArray
 
 from samplemorph.partials.channels import FREE_PARTIAL, Channels
 from samplemorph.partials.correspondence.pairing import ChannelPairing, pair_channels
+from samplemorph.partials.fate import fate_groups
 from samplemorph.partials.places import partial_places
 from samplemorph.partials.presets import FADES_IN_PLACE, HOLDS_WHAT_IS_SHARED, SLIDES_IN_ORDER, TRAVELS
 from samplemorph.partials.profile import Correspondence
+from samplemorph.partials.settings import FateSettings
 from samplemorph.partials.tracks import PartialTracks
 from tests.samplemorph.partials.conftest import HOP_LENGTH, RATE_HZ
 
@@ -51,6 +53,7 @@ def _sound(
         tracks=tracks,
         note=np.full(tracks.track_count, FREE_PARTIAL, dtype=np.intp),
         harmonic=np.zeros(tracks.track_count, dtype=np.intp),
+        fate=fate_groups(tracks, settings=FateSettings()),
         notes=(),
     )
 

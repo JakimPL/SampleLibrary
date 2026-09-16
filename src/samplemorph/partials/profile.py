@@ -18,6 +18,21 @@ DEFAULT_LARGEST_SHIFT_COUNT: Final[int] = 4
 DEFAULT_SHIFT_SPREAD_CENTS: Final[float] = 20.0
 
 
+@unique
+class CorrespondenceUnit(StrEnum):
+    """What travels between two sounds.
+
+    `PARTIALS` lets every channel find its own partner and its own path, which follows a sound
+    closely wherever its partials were read cleanly. `GROUPS` sends whole objects — a note's
+    harmonics, or a set of partials rising and falling together — along one move each, so a tone
+    arrives as one tone however its partials were read, and the morph has as many free choices as the
+    sounds have objects rather than as many as they have partials.
+    """
+
+    PARTIALS = "partials"
+    GROUPS = "groups"
+
+
 class Correspondence(BaseModel):
     """Which partial of one sound meets which of the other, priced so that every partial has both choices.
 
@@ -34,11 +49,13 @@ class Correspondence(BaseModel):
     The moves two sounds agree on are read as the heaviest `largest_shift_count` peaks of the weight
     their partials put on each interval, spread over `shift_spread_cents`. Reading them is what pairs
     a harmonic series as a series and a chord voice by voice, on one rule that asks the sound nothing
-    about its notes.
+    about its notes. `unit` says what the pairing is made of: single partials, or whole objects
+    travelling by one move each, for which `travel_cents` and `fade_price` are read the same way.
     """
 
     model_config = FROZEN
 
+    unit: CorrespondenceUnit = CorrespondenceUnit.PARTIALS
     travel_cents: float = Field(default=DEFAULT_TRAVEL_CENTS, gt=0.0)
     drift_cents: float = Field(default=DEFAULT_DRIFT_CENTS, gt=0.0)
     level_weight: float = Field(default=DEFAULT_LEVEL_WEIGHT, ge=0.0)

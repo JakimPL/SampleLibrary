@@ -147,6 +147,40 @@ was already enough to send C's fifth harmonic to the F series. The dial remains 
 Two resolutions are fixed in the code rather than offered as dials: the votes are counted over
 ±4800 cents in 5-cent steps, and a move must stand at a tenth of the tallest to count as one.
 
+## Two units: single partials, or whole objects
+
+Everything above prices one partial's journey against another's. That gives the correspondence as
+many free choices as the sounds have partials — about 130 for a tonal sample — when the sound holds
+perhaps three things. Over-parameterized in that way, the cheapest arrangement is often incoherent:
+some of a note's harmonics travel while others stay, and the midpoint sounds two pitches where each
+end sounded one.
+
+`unit` says what the pairing is made of. `groups` replaces the flat assignment with a hierarchy:
+
+1. Each sound is cut into **objects** — a note with its harmonics, or free partials sharing a fate.
+2. One assignment runs over the objects themselves, priced in the same fades.
+3. A matched pair of objects takes **one move**, chosen as the move explaining the most of the two,
+   with the shorter move taken where two explain within a twentieth of each other.
+4. Channels pair inside the object at that move, and a channel finding no partner travels by the
+   move anyway and fades as it goes, so a note arrives whole.
+
+The free choices are then the number of objects, not the number of partials. Two details earn their
+place: the move is read back off the channels it pairs rather than off the vote that proposed it,
+which puts it where they stand; and which move to take is settled by explanation alone, with
+distance pricing the meeting afterwards. Priced together, an octave's distance outweighed a quarter
+of the sound's energy going unexplained, and a sound failed to travel onto its own octave.
+
+Measured at the midpoint, on pairs with one unambiguous answer:
+
+| Pair | ends | `glide` | `rigid` |
+|---|---|---|---|
+| the same tone, retuned an octave | 293 and 587 Hz | 293 **and** 587 Hz | **415 Hz** |
+| two leads | 522 and 471 Hz | 862 Hz | **495 Hz** |
+| two leads | 524 and 353 Hz | 431 Hz | 431 Hz |
+
+415 Hz is the midpoint of 293 and 587; 495 Hz is the midpoint of 522 and 471. On the first pair the
+partial-wise correspondence holds both ends at once — a crossfade, on the easiest material there is.
+
 ## The presets are dials, not algorithms
 
 | Preset | How it is set | What you hear |
@@ -155,6 +189,7 @@ Two resolutions are fixed in the code rather than offered as dials: the votes ar
 | `stepped` | `glide` plus a stepped pitch path | the same journeys, taken in semitones |
 | `eased` | `glide` plus an eased pitch curve | in tune longer near both ends |
 | `switch` | `glide` plus a switching pitch path | the first chord until halfway |
+| `rigid` | `glide` with whole objects as the unit | a note travels as one note |
 | `pivot` | `travel_cents` 50, no moves read | shared partials hold, everything else fades |
 | `slide` | `fade_price` 1000, no moves read | nothing fades; partials slide in frequency order |
 | `crossfade` | `fade_price` 0 | fading is free, so nothing meets: the control |

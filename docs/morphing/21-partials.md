@@ -100,6 +100,7 @@ of its own: `start`, `end` and `linear` or `eased`. Both ends stay exact.
 | `stepped` | C4, F4, G♯4: every point is a chord a keyboard holds |
 | `eased` | The glide with pitch moving over 0.25–0.75, in tune longer near both ends |
 | `switch` | The first chord until the middle, the second after it |
+| `rigid` | The glide with whole objects travelling, one move each |
 | `pivot` | C4 holds at its own level; E, G, F and A stand at their own pitches, 3 dB down |
 | `slide` | Partials slide in frequency order |
 | `crossfade` | Both chords at once, each 3 dB down |

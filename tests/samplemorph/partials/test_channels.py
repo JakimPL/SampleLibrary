@@ -5,11 +5,11 @@ from typing import Final
 import numpy as np
 
 from samplemorph.partials.channels import FREE_PARTIAL, channelize
-from samplemorph.partials.settings import NoteSettings
+from samplemorph.partials.settings import PartialSettings
 from samplemorph.partials.tracks import CENTS_PER_OCTAVE
 from tests.samplemorph.partials.conftest import harmonics, times, tracks_of
 
-SETTINGS: Final[NoteSettings] = NoteSettings()
+SETTINGS: Final[PartialSettings] = PartialSettings()
 HARMONIC_COUNT: Final[int] = 8
 CENTS_TOLERANCE: Final[float] = 5.0
 AMPLITUDE_TOLERANCE_DB: Final[float] = 1.0

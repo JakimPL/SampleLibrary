@@ -9,9 +9,10 @@ from numpy.typing import NDArray
 from samplemorph.partials.channels import Channels
 from samplemorph.partials.correspondence.assignment import assign_with_fades
 from samplemorph.partials.correspondence.cost import travel_penalty
+from samplemorph.partials.correspondence.groups import pair_groups
 from samplemorph.partials.correspondence.shifts import AgreedShifts, agreed_shifts, no_shifts
 from samplemorph.partials.places import PartialPlaces, partial_places
-from samplemorph.partials.profile import Correspondence
+from samplemorph.partials.profile import Correspondence, CorrespondenceUnit
 
 SETTLING_ROUNDS: Final[int] = 2
 
@@ -20,13 +21,17 @@ SETTLING_ROUNDS: Final[int] = 2
 class ChannelPairing:
     """Who meets whom between two sounds: the channels that travel together, and those that travel alone.
 
-    Shapes: `matched` is ``(pairs, 2)``, a channel of each sound per row, and both `first_alone` and
-    `second_alone` hold the channels of one sound meeting nothing in the other.
+    Shapes: `matched` is ``(pairs, 2)``, a channel of each sound per row, both `first_alone` and
+    `second_alone` hold the channels of one sound meeting nothing in the other, and `first_moves` and
+    `second_moves` hold the move in cents a channel's object travels by, NaN where it travels alone
+    and holds its own pitch.
     """
 
     matched: NDArray[np.intp]
     first_alone: NDArray[np.intp]
     second_alone: NDArray[np.intp]
+    first_moves: NDArray[np.float64]
+    second_moves: NDArray[np.float64]
 
     @property
     def pair_count(self) -> int:
@@ -49,6 +54,10 @@ def pair_channels(first: Channels, second: Channels, *, correspondence: Correspo
     is what lets a partial glide along one path from end to end.
     """
     here, there = partial_places(first.tracks), partial_places(second.tracks)
+    if correspondence.unit is CorrespondenceUnit.GROUPS:
+        grouped = pair_groups(first, second, places=(here, there), correspondence=correspondence)
+        return _pairing(grouped.matched, first=first, second=second, moves=(grouped.first_moves, grouped.second_moves))
+
     matched = _assigned(here, there, shifts=no_shifts(here.count), correspondence=correspondence)
     for _ in range(SETTLING_ROUNDS):
         shifts = agreed_shifts(
@@ -61,10 +70,27 @@ def pair_channels(first: Channels, second: Channels, *, correspondence: Correspo
         if shifts.count == 0:
             break
         matched = _assigned(here, there, shifts=shifts, correspondence=correspondence)
+    return _pairing(
+        matched,
+        first=first,
+        second=second,
+        moves=(np.full(first.channel_count, np.nan), np.full(second.channel_count, np.nan)),
+    )
+
+
+def _pairing(
+    matched: NDArray[np.intp],
+    *,
+    first: Channels,
+    second: Channels,
+    moves: tuple[NDArray[np.float64], NDArray[np.float64]],
+) -> ChannelPairing:
     return ChannelPairing(
         matched=matched,
         first_alone=_left_out(matched[:, 0], count=first.channel_count),
         second_alone=_left_out(matched[:, 1], count=second.channel_count),
+        first_moves=moves[0],
+        second_moves=moves[1],
     )
 
 

@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from samplemorph.geometry import LogFrequencyGeometry
 from samplemorph.partials.correspondence.pairing import pair_channels
 from samplemorph.partials.model import SinusoidalModel
-from samplemorph.partials.paths import fade_progress, pitch_between
+from samplemorph.partials.paths import PitchPath, fade_progress, pitch_between
 from samplemorph.partials.profile import MorphProfile
 from samplemorph.partials.synthesis import oscillate
 from samplemorph.partials.tracks import CENTS_PER_OCTAVE, PartialTracks
@@ -90,8 +90,9 @@ class PartialMorph:
         """Every partial of the point between two sounds: the matched pairs on their way, and the rest on their own.
 
         A pair of partials carries the level path between the two it meets, and one meeting nothing
-        fades by its energy, so the partials of a frame sum to what the level path asks of it and a
-        partial standing still through a morph keeps the level it stood at.
+        fades by its energy while travelling with the object it belongs to, so the partials of a
+        frame sum to what the level path asks of it and a note arrives whole even where a harmonic of
+        it found no partner.
         """
         pairing = pair_channels(first.channels, second.channels, correspondence=self.profile.correspondence)
         read_first = _read_along(
@@ -120,8 +121,20 @@ class PartialMorph:
                     weight=pitch,
                     path=self.profile.pitch,
                 ),
-                read_first.cents[pairing.first_alone],
-                read_second.cents[pairing.second_alone],
+                _travelled(
+                    read_first.cents[pairing.first_alone],
+                    moves=pairing.first_moves[pairing.first_alone],
+                    weight=pitch,
+                    path=self.profile.pitch,
+                    arriving=False,
+                ),
+                _travelled(
+                    read_second.cents[pairing.second_alone],
+                    moves=pairing.second_moves[pairing.second_alone],
+                    weight=pitch,
+                    path=self.profile.pitch,
+                    arriving=True,
+                ),
             )
         )
         energy = np.concatenate(
@@ -146,6 +159,21 @@ class PartialMorph:
             hop_length=first.channels.tracks.hop_length,
             rate_hz=first.rate_hz,
         )
+
+
+def _travelled(
+    cents: NDArray[np.float64], *, moves: NDArray[np.float64], weight: float, path: PitchPath, arriving: bool
+) -> NDArray[np.float64]:
+    """Where a partial meeting nothing stands on its way, carried by the move the object it belongs to makes.
+
+    A partial whose object travels goes with it and fades as it goes, so a note arrives whole even
+    where no partner was found for every harmonic of it, and one belonging to nothing holds the pitch
+    it stands at. Shapes: `cents` is ``(partials, frames)`` and `moves` is ``(partials,)``.
+    """
+    carried = np.nan_to_num(moves)[:, None]
+    return pitch_between(
+        cents + carried if arriving else cents, cents if arriving else cents - carried, weight=weight, path=path
+    )
 
 
 @dataclass(frozen=True)

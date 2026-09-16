@@ -63,7 +63,7 @@ def analyze_model(
     partials = _sounded_partials(
         mono, energy=whole.energy, rate_hz=rate_hz, geometry=geometry, settings=partial_settings
     )
-    channels = channelize(partials, settings=partial_settings.notes)
+    channels = channelize(partials, settings=partial_settings)
     return SinusoidalModel(
         channels=channels,
         whole=whole,

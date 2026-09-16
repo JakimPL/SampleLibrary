@@ -66,7 +66,7 @@ def agreed_shifts(
     edges = np.arange(-SHIFT_REACH_CENTS, SHIFT_REACH_CENTS + SHIFT_STEP_CENTS, SHIFT_STEP_CENTS)
     voted, _ = np.histogram(moved, bins=edges, weights=weight)
     density = gaussian_filter1d(voted, sigma=correspondence.shift_spread_cents / SHIFT_STEP_CENTS, mode="constant")
-    peak_cents, peak_weight = _peaks(
+    peak_cents, peak_weight = tallest_moves(
         density, centers=0.5 * (edges[:-1] + edges[1:]), largest_count=correspondence.largest_shift_count
     )
     return AgreedShifts(
@@ -76,10 +76,14 @@ def agreed_shifts(
     )
 
 
-def _peaks(
+def tallest_moves(
     density: NDArray[np.float64], *, centers: NDArray[np.float64], largest_count: int
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """The heaviest moves a density stands on, each one standing taller than the moves on either side of it."""
+    """The heaviest moves a density stands on, each one standing taller than the moves on either side of it.
+
+    Taking peaks rather than the tallest bins is what keeps the moves apart: the bins around one peak
+    are all nearly as tall as it is, so a set of them names one move over and over.
+    """
     tallest = float(density.max())
     if tallest <= 0.0:
         return np.zeros(0), np.zeros(0)

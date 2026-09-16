@@ -28,6 +28,8 @@ DEFAULT_LARGEST_NOTE_COUNT: Final[int] = 8
 DEFAULT_LARGEST_INHARMONICITY: Final[float] = 1e-3
 DEFAULT_SMALLEST_NOTE_HARMONICS: Final[int] = 3
 DEFAULT_NOTE_DENSITY: Final[float] = 0.7
+DEFAULT_SILENT_SHAPE_DB: Final[float] = 60.0
+DEFAULT_TOGETHER: Final[float] = 0.5
 
 
 class NoteSettings(BaseModel):
@@ -53,6 +55,21 @@ class NoteSettings(BaseModel):
     note_density: float = Field(default=DEFAULT_NOTE_DENSITY, gt=0.0, le=1.0)
 
 
+class FateSettings(BaseModel):
+    """How a sound's channels are read as the objects it holds, by the shape each of them rises and falls in.
+
+    A channel's shape is its loudness over every frame of the sound, down to `silent_shape_db` under
+    its own peak, so when it starts and stops is part of the shape. Two channels stand in one object
+    where their shapes agree to at least `together`, and an object is every channel reachable from
+    another through that agreement.
+    """
+
+    model_config = FROZEN
+
+    silent_shape_db: float = Field(default=DEFAULT_SILENT_SHAPE_DB, gt=0.0)
+    together: float = Field(default=DEFAULT_TOGETHER, gt=0.0, lt=1.0)
+
+
 class PartialSettings(BaseModel):
     """Every constant a partial analysis reads, so a rendered file can name the settings it took.
 
@@ -66,7 +83,8 @@ class PartialSettings(BaseModel):
     at least `minimum_track_seconds`, which a noise peak holds for about one window and a partial for
     far longer. Residual: what a partial's lobe explains leaves the spectrum with `residual_margin_db`
     of headroom, down to a floor read as the least energy within `floor_reach_bins`, smoothed over
-    `floor_smoothing_bins`. Notes: `notes` names how the partials are read as notes.
+    `floor_smoothing_bins`. Notes: `notes` names how the partials are read as notes, and `fate` how
+    the channels they make are read as the objects a sound holds.
     """
 
     model_config = FROZEN
@@ -86,3 +104,4 @@ class PartialSettings(BaseModel):
     floor_reach_bins: int = Field(default=DEFAULT_FLOOR_REACH_BINS, ge=1)
     floor_smoothing_bins: int = Field(default=DEFAULT_FLOOR_SMOOTHING_BINS, ge=1)
     notes: NoteSettings = NoteSettings()
+    fate: FateSettings = FateSettings()

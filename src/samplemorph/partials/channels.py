@@ -6,9 +6,10 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
+from samplemorph.partials.fate import fate_groups
 from samplemorph.partials.notes import Note, estimate_notes
 from samplemorph.partials.places import partial_places
-from samplemorph.partials.settings import NoteSettings
+from samplemorph.partials.settings import PartialSettings
 from samplemorph.partials.tracks import PartialTracks
 
 FREE_PARTIAL: Final[int] = -1
@@ -28,6 +29,7 @@ class Channels:
     tracks: PartialTracks
     note: NDArray[np.intp]
     harmonic: NDArray[np.intp]
+    fate: NDArray[np.intp]
     notes: tuple[Note, ...]
 
     @property
@@ -43,6 +45,18 @@ class Channels:
         return len(self.notes)
 
     @property
+    def units(self) -> NDArray[np.intp]:
+        """The object each channel travels as: a whole note, or the partials standing free that share a fate.
+
+        A note holds its harmonics together, which is what harmonicity is good for, and the partials
+        no note sounds are held together by the shape they rise and fall in, which is what groups the
+        partials of a bell or a drum that no series explains. Shape: the result is ``(channels,)``.
+        """
+        together = np.where(self.note >= 0, self.note, self.note_count + self.fate)
+        _, drawn = np.unique(together, return_inverse=True)
+        return drawn.astype(np.intp)
+
+    @property
     def lines(self) -> NDArray[np.intp]:
         """Which line each channel travels on: the note it is a harmonic of, or one of its own where it stands free.
 
@@ -54,7 +68,7 @@ class Channels:
         return own
 
 
-def channelize(tracks: PartialTracks, *, settings: NoteSettings) -> Channels:
+def channelize(tracks: PartialTracks, *, settings: PartialSettings) -> Channels:
     """Read a sound's partials as the lines it sounds along.
 
     Every harmonic between the lowest and the highest a note sounds becomes a channel of that note,
@@ -62,12 +76,15 @@ def channelize(tracks: PartialTracks, *, settings: NoteSettings) -> Channels:
     notes that meet travel harmonic by harmonic over the whole of their range. A partial two notes
     share is split between them by what each note's other harmonics predict it to be, so the two
     halves sum to the partial as measured, and every partial no note sounds stays a line of its own.
+    Each channel is then given the object it rises and falls with, which is what lets a whole set of
+    them travel as one.
     """
-    notes = estimate_notes(tracks, settings=settings)
+    notes = estimate_notes(tracks, settings=settings.notes)
     if not notes:
         return Channels(
             tracks=tracks,
             note=np.full(tracks.track_count, FREE_PARTIAL, dtype=np.intp),
+            fate=fate_groups(tracks, settings=settings.fate),
             harmonic=np.zeros(tracks.track_count, dtype=np.intp),
             notes=(),
         )
@@ -80,18 +97,20 @@ def channelize(tracks: PartialTracks, *, settings: NoteSettings) -> Channels:
         for index, note in enumerate(notes)
     ]
     free = _free_partials(notes, count=tracks.track_count)
+    channels = PartialTracks(
+        frequency_hz=np.concatenate([*frequency, tracks.frequency_hz[free]]).astype(np.float32),
+        amplitude=np.concatenate([*amplitude, tracks.amplitude[free]]).astype(np.float32),
+        hop_length=tracks.hop_length,
+        rate_hz=tracks.rate_hz,
+    )
     return Channels(
-        tracks=PartialTracks(
-            frequency_hz=np.concatenate([*frequency, tracks.frequency_hz[free]]).astype(np.float32),
-            amplitude=np.concatenate([*amplitude, tracks.amplitude[free]]).astype(np.float32),
-            hop_length=tracks.hop_length,
-            rate_hz=tracks.rate_hz,
-        ),
+        tracks=channels,
         note=np.concatenate(
             [np.full(sounding[index].shape[0], index, dtype=np.intp) for index in range(len(notes))]
             + [np.full(free.shape[0], FREE_PARTIAL, dtype=np.intp)]
         ),
         harmonic=np.concatenate([*sounding, np.zeros(free.shape[0], dtype=np.intp)]).astype(np.intp),
+        fate=fate_groups(channels, settings=settings.fate),
         notes=notes,
     )
 

@@ -59,6 +59,16 @@ individual track cancels. That is what removed the transport's warble.
 its own if it stands free. Lines are what let the correspondence say "these channels are the same
 thing and must travel together".
 
+**Fate** (`Channels.fate`, `partials/fate.py`). Which set of channels a channel rises and falls
+with, read from the shape its loudness draws over the whole sound. Two partials of one struck string
+swell and decay together; two sounds struck apart do not. This is the grouping cue from auditory
+scene analysis, and it asks nothing about whole multiples, so it holds for a bell as well as a
+string.
+
+**Object**, or **unit** (`Channels.units`). What travels as one thing in a morph: a whole note, or
+the partials standing free of every note that share a fate. Harmonicity binds a series and separates
+two notes struck together; fate binds what no series explains. Each does the job the other cannot.
+
 **Place** (`PartialPlaces`, `partials/places.py`). A channel reduced to the three numbers a pairing
 reads it by — the pitch it holds, the share of the sound's energy it carries, and the stretch of time
 it is heard over. It is a summary of a channel, not a separate object.
