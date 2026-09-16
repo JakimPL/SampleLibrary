@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import shutil
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from samplecore.models.morph import HeardMorphPoint
 from samplemorph.canonicalizers.log_frequency import linear_axis_inverse
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.model_store import DEFAULT_MODEL_NAME, load_model, model_path, save_model
+from samplemorph.routes.route import PreparedPair
 from samplemorph.service import renderer as renderer_module
 from samplemorph.service.renderer import RenderBoundsError, load_renderer
 from samplemorph.service.settings import MAXIMUM_RENDER_FRAMES, RenderLimits, ServiceSettings
@@ -19,6 +22,22 @@ from tests.samplemorph.service.conftest import StoredLibrary
 
 FIRST_RATE_HZ = 8_363
 SECOND_RATE_HZ = 16_726
+
+
+@dataclass(frozen=True)
+class _CountingPair:
+    """A prepared pair that counts every render asked of it."""
+
+    prepared: PreparedPair
+    calls: list[int]
+
+    @property
+    def nbytes(self) -> int:
+        return self.prepared.nbytes
+
+    def render(self, *, weight: float) -> NDArray[np.float64]:
+        self.calls.append(1)
+        return self.prepared.render(weight=weight)
 
 
 def test_the_fingerprint_follows_the_models_the_route_renders_through(
@@ -119,14 +138,14 @@ def test_identical_points_asked_for_at_once_render_once(settings: ServiceSetting
         second_rate_hz=FIRST_RATE_HZ,
     )
     calls: list[int] = []
-    rendering = renderer_module.render_morph
+    pairing = renderer_module.pair_through
 
     def counted(*arguments: Any, **options: Any) -> Any:
-        calls.append(1)
-        return rendering(*arguments, **options)
+        prepared = pairing(*arguments, **options)
+        return _CountingPair(prepared=prepared, calls=calls)
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(renderer_module, "render_morph", counted)
+        patch.setattr(renderer_module, "pair_through", counted)
         with ThreadPoolExecutor(max_workers=4) as pool:
             rendered = list(pool.map(renderer.render, [point] * 4))
 

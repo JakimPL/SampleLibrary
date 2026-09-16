@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
@@ -15,7 +14,7 @@ from samplecore.cli_support import ending_in_one_line
 from samplecore.config import LibraryConfig
 from samplecore.exit_status import ExitStatus
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
-from samplemorph.geometry import log_frequency_geometry
+from samplemorph.envelope.presets import DEFAULT_ENVELOPE_PRESET_NAME, ENVELOPE_PRESETS
 from samplemorph.listening.comparing import (
     DEFAULT_LISTENING_WEIGHTS,
     DEFAULT_PATH_WEIGHTS,
@@ -26,24 +25,23 @@ from samplemorph.listening.comparing import (
 )
 from samplemorph.listening.heard_pairs import PairSampleMissing, SilentPairEnd, read_heard_pair
 from samplemorph.listening.pairs import PairSet, read_pair_set
-from samplemorph.partials.morph import PartialMorph
 from samplemorph.partials.presets import DEFAULT_PROFILE_NAME, PROFILE_PRESETS
-from samplemorph.partials.profile import MorphProfile
-from samplemorph.partials.settings import PartialSettings
-from samplemorph.pipeline import latent_route_description, load_route
+from samplemorph.pipeline import load_route
 from samplemorph.route_arguments import (
     add_model_argument,
     add_morpher_argument,
     add_vocoder_arguments,
     route_choice_from,
 )
-from samplemorph.routes.analysis import AnalysisRoute, SpectralPath
 from samplemorph.routes.kinds import RouteKind
-from samplemorph.routes.latent import LatentRoute
-from samplemorph.routes.partials import PartialRoute
-from samplemorph.transport.blend import blend
-from samplemorph.transport.morph import transport
-from samplemorph.transport.settings import TransportSettings
+from samplemorph.routes.named import (
+    NamedRoute,
+    blend_route,
+    envelope_route,
+    latent_route,
+    partials_route,
+    transport_route,
+)
 
 COMMAND_NAME: Final[str] = "compare"
 COMPARISON_DEVICE: Final[str] = "cpu"
@@ -86,6 +84,14 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Which middle every partials route takes, one route per profile.",
     )
     parser.add_argument(
+        "--excitations",
+        type=str,
+        nargs="+",
+        choices=tuple(ENVELOPE_PRESETS),
+        default=(DEFAULT_ENVELOPE_PRESET_NAME,),
+        help="Whose excitation every envelope route keeps, one route per excitation.",
+    )
+    parser.add_argument(
         "--blind", action="store_true", help="Name every route's folder by a letter, the key kept in the manifest."
     )
     add_model_argument(parser)
@@ -99,8 +105,8 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     The pairs, the weights and every sample are read before any model loads, so an unreadable file,
     a weight off the path or a sample gone from the catalog ends the process at once. The latent
     route loads the stored model the latent flags name; the transport, the blend and the partials
-    read the samples' own analyses alone. The partials kind stands for one route per profile named,
-    each under a folder of its own.
+    read the samples' own analyses alone. The partials kind stands for one route per profile named
+    and the envelope kind for one per excitation named, each under a folder of its own.
 
     Raises:
         SystemExit: the pairs file cannot be read, the weights do not describe a path, or a pair names
@@ -115,13 +121,16 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     except (PairSampleMissing, SilentPairEnd, SampleUnavailableError) as error:
         _logger.error("Compared nothing: %s.", error)
         sys.exit(ExitStatus.REFUSED)
-    choices = _route_choices(tuple(dict.fromkeys(arguments.routes)), profiles=tuple(dict.fromkeys(arguments.profiles)))
-    names = tuple(choice.name for choice in choices)
-    folders = blind_folders(names, random_seed=pair_set.seed) if arguments.blind else names
-    routes = tuple(
-        _compared_route(choice, folder=folder, config=config, arguments=arguments)
-        for choice, folder in zip(choices, folders, strict=True)
+    named = _named_routes(
+        tuple(dict.fromkeys(arguments.routes)),
+        profiles=tuple(dict.fromkeys(arguments.profiles)),
+        excitations=tuple(dict.fromkeys(arguments.excitations)),
+        config=config,
+        arguments=arguments,
     )
+    names = tuple(route.name for route in named)
+    folders = blind_folders(names, random_seed=pair_set.seed) if arguments.blind else names
+    routes = tuple(ComparedRoute(named=route, folder=folder) for route, folder in zip(named, folders, strict=True))
     summary = compare_routes(
         heard, pair_set=pair_set, routes=routes, weights=weights, output_directory=Path(arguments.output)
     )
@@ -142,95 +151,26 @@ def _read_pairs(path: Path) -> PairSet:
         raise ValueError(f"{path} holds no pair set to read ({error})") from error
 
 
-@dataclass(frozen=True)
-class _ProfiledRoute:
-    """A partials route following one profile, which its name carries."""
-
-    profile_name: str
-
-    @property
-    def kind(self) -> RouteKind:
-        return RouteKind.PARTIALS
-
-    @property
-    def name(self) -> str:
-        return f"{RouteKind.PARTIALS.value}-{self.profile_name}"
-
-
-@dataclass(frozen=True)
-class _PlainRoute:
-    """A route its kind names on its own."""
-
-    kind: RouteKind
-
-    @property
-    def name(self) -> str:
-        return self.kind.value
-
-
-_RouteChoice = _ProfiledRoute | _PlainRoute
-
-
-def _route_choices(kinds: tuple[RouteKind, ...], *, profiles: tuple[str, ...]) -> tuple[_RouteChoice, ...]:
-    """Every route a run renders, the partials kind standing for one route per profile named."""
-    choices: list[_RouteChoice] = []
+def _named_routes(
+    kinds: tuple[RouteKind, ...],
+    *,
+    profiles: tuple[str, ...],
+    excitations: tuple[str, ...],
+    config: LibraryConfig,
+    arguments: argparse.Namespace,
+) -> tuple[NamedRoute, ...]:
+    """Every route a run renders: one per kind, the partials kind per profile and the envelope kind per excitation."""
+    routes: list[NamedRoute] = []
     for kind in kinds:
-        if kind is RouteKind.PARTIALS:
-            choices.extend(_ProfiledRoute(profile_name=name) for name in profiles)
-        else:
-            choices.append(_PlainRoute(kind=kind))
-    return tuple(choices)
-
-
-def _compared_route(
-    choice: _RouteChoice, *, folder: str, config: LibraryConfig, arguments: argparse.Namespace
-) -> ComparedRoute:
-    match choice:
-        case _ProfiledRoute():
-            return _partials_route(choice, folder=folder, profile=PROFILE_PRESETS[choice.profile_name])
-        case _PlainRoute(kind=RouteKind.LATENT):
-            loaded = load_route(config.library_root, route_choice_from(arguments))
-            return ComparedRoute(
-                kind=choice.kind,
-                name=choice.name,
-                folder=folder,
-                route=LatentRoute(loaded.route),
-                description=latent_route_description(loaded),
-            )
-        case _PlainRoute(kind=RouteKind.BLEND):
-            return _analysis_route(choice, folder=folder, path=blend)
-        case _PlainRoute():
-            return _analysis_route(choice, folder=folder, path=transport)
-
-
-def _analysis_route(choice: _RouteChoice, *, folder: str, path: SpectralPath) -> ComparedRoute:
-    geometry = log_frequency_geometry()
-    settings = TransportSettings()
-    return ComparedRoute(
-        kind=choice.kind,
-        name=choice.name,
-        folder=folder,
-        route=AnalysisRoute(path=path, geometry=geometry, settings=settings),
-        description={"geometry": geometry.model_dump(mode="json"), "settings": settings.model_dump(mode="json")},
-    )
-
-
-def _partials_route(choice: _RouteChoice, *, folder: str, profile: MorphProfile) -> ComparedRoute:
-    geometry = log_frequency_geometry()
-    settings = TransportSettings()
-    partial_settings = PartialSettings()
-    return ComparedRoute(
-        kind=choice.kind,
-        name=choice.name,
-        folder=folder,
-        route=PartialRoute(
-            morph=PartialMorph(profile=profile, geometry=geometry, settings=settings),
-            partial_settings=partial_settings,
-        ),
-        description={
-            "geometry": geometry.model_dump(mode="json"),
-            "settings": settings.model_dump(mode="json"),
-            "partial_settings": partial_settings.model_dump(mode="json"),
-            "profile": profile.model_dump(mode="json"),
-        },
-    )
+        match kind:
+            case RouteKind.LATENT:
+                routes.append(latent_route(load_route(config.library_root, route_choice_from(arguments))))
+            case RouteKind.TRANSPORT:
+                routes.append(transport_route())
+            case RouteKind.BLEND:
+                routes.append(blend_route())
+            case RouteKind.PARTIALS:
+                routes.extend(partials_route(name) for name in profiles)
+            case RouteKind.ENVELOPE:
+                routes.extend(envelope_route(name) for name in excitations)
+    return tuple(routes)

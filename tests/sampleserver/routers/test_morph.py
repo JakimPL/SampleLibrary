@@ -29,15 +29,12 @@ RENDERED = b"RIFF...rendered..."
 ETAG = '"0123456789abcdef"'
 CACHE_CONTROL = "private, max-age=3600"
 STATUS = {
-    "model": "principal_components",
-    "codec": "principal_components",
-    "canonicalizer": "log_frequency",
-    "latent_size": 256,
-    "vocoder": "restored",
-    "restorer": "restorer",
+    "route": "envelope",
+    "name": "envelope-first",
     "device": "cpu",
     "fingerprint": "f" * 64,
     "weight_steps": 16,
+    "description": {"envelope_settings": {"switch_weight": 1.0}},
 }
 
 Handler = Callable[[httpx.Request], httpx.Response]

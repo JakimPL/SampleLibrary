@@ -52,7 +52,7 @@ def get_morph_audio(
 
 @router.get("/status")
 def get_morph_status(renderer: MorphRenderer = Depends(get_renderer)) -> MorphServiceStatus:
-    """What this process serves: the model, the route, the device, and the fingerprint renders are named by."""
+    """What this process serves: the route, by kind and name, the device, and the fingerprint renders are named by."""
     return renderer.status()
 
 

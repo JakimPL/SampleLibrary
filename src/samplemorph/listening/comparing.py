@@ -26,7 +26,8 @@ from samplemorph.measurement.morph_path.readings import (
 )
 from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
 from samplemorph.rendering import RENDER_REVISION, RenderedFile, RenderKind, write_rendering
-from samplemorph.routes.kinds import ComparableRoute, RouteKind, pair_through
+from samplemorph.routes.kinds import pair_through
+from samplemorph.routes.named import NamedRoute
 from samplemorph.routes.route import PreparedPair
 
 PATH_WEIGHT_COUNT: Final[int] = 9
@@ -51,17 +52,10 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ComparedRoute:
-    """One route a comparison renders: the name it goes by, the folder its files go under, and the JSON that names it.
+    """One route a comparison renders, and the folder its files go under: the route's own name, or a letter dealt blind."""
 
-    Several routes can share a kind, a partials route per profile among them, and the name is what
-    tells them apart in the manifest and in the tables.
-    """
-
-    kind: RouteKind
-    name: str
+    named: NamedRoute
     folder: str
-    route: ComparableRoute
-    description: dict[str, JsonValue]
 
 
 @dataclass(frozen=True)
@@ -161,14 +155,16 @@ def _run_route(
     canonicalizer: Canonicalizer,
 ) -> _RenderedRun:
     started = time.perf_counter()
-    prepared = pair_through(compared.route, heard.first, heard.second)
+    prepared = pair_through(compared.named.route, heard.first, heard.second)
     prepare_seconds = time.perf_counter() - started
     points, render_seconds = _render_points(prepared, weights=weights.path)
     path = HeardPath(points=points, first=heard.first.mono, second=heard.second.mono, rate_hz=heard.rate_hz)
     references = tuple(
         PathPoint(
             weight=reference.weight,
-            waveform=pair_through(compared.route, reference.heard, reference.heard).render(weight=FIRST_END_WEIGHT),
+            waveform=pair_through(compared.named.route, reference.heard, reference.heard).render(
+                weight=FIRST_END_WEIGHT
+            ),
         )
         for reference in heard.references
     )
@@ -246,7 +242,12 @@ def _manifest(
     return {
         "render_revision": RENDER_REVISION,
         "routes": {
-            compared.folder: {"kind": compared.kind.value, "name": compared.name, **compared.description}
+            compared.folder: {
+                "kind": compared.named.kind.value,
+                "name": compared.named.name,
+                "device": compared.named.device,
+                **compared.named.description,
+            }
             for compared in routes
         },
         "path_weights": list(weights.path),

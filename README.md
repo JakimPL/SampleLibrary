@@ -226,21 +226,30 @@ label.
 
 ## Morphing two samples
 
-The app can play a sound between any two samples, through a morph renderer running beside the API.
-The renderer reads models fitted to your library, so it needs one first:
+The app can play a sound between any two samples, through a morph renderer running beside the API:
 
 ```sh
-uv run samplelibrary morph fit                        # a linear codec, a few minutes on the processor
-uv run samplelibrary morph serve --vocoder pghi       # the renderer, in a terminal of its own
+uv run samplelibrary morph serve                      # the renderer, in a terminal of its own
+```
+
+The renderer morphs through the samples' own spectral analyses, moving the spectral envelope from
+one sample's to the other's under the first sample's harmonics and noise, and needs nothing fitted.
+`--excitation second` keeps the second sample's instead, and `--excitation halfway` hands over at
+the middle. `--route latent` renders through a codec fitted to your library instead, which needs
+one first:
+
+```sh
+uv run samplelibrary morph fit                                    # a linear codec, a few minutes on the processor
+uv run samplelibrary morph serve --route latent --vocoder pghi    # the renderer through it
 ```
 
 The fit reads 4,000 samples between 4,000 and 200,000 frames long, in about three gigabytes of
 memory, and keeps 256 components, so a library holding fewer such samples fits with a smaller
 `--latent-size`; the command names the largest that fits.
 
-`just serve-inference` starts the renderer with the restored vocoder, which sounds closer to the
-original and needs a restorer trained on a GPU first: `uv run samplelibrary morph train-restorer`
-takes about an hour an epoch over a large library.
+`just serve-inference` starts the renderer on the envelope route. The latent route with the restored
+vocoder sounds closer to the original and needs a restorer trained on a GPU first:
+`uv run samplelibrary morph train-restorer` takes about an hour an epoch over a large library.
 
 With the renderer running, in the cloud, press the right mouse button on one sample and release it
 on another: a line follows your cursor while the button is down, and the release joins the two with

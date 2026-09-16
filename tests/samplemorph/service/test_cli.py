@@ -86,7 +86,7 @@ def test_serving_a_model_the_library_lacks_ends_with_one_message_before_binding(
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, inference_url=None)))
 
     with pytest.raises(SystemExit) as raised:
-        main([MorphCommand.SERVE, "--vocoder", "pghi"], prog=PROGRAM)
+        main([MorphCommand.SERVE, "--route", "latent", "--vocoder", "pghi"], prog=PROGRAM)
 
     assert raised.value.code == ExitStatus.REFUSED
     reported = capsys.readouterr().err

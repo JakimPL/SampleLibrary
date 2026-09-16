@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, JsonValue
 from trackmod.schema.scalars import Rate
 
 from samplecore.models.base import FROZEN
@@ -52,20 +52,19 @@ def morph_weights() -> tuple[float, ...]:
 
 
 class MorphServiceStatus(BaseModel):
-    """What an inference process serves: the model, the route it renders through, and the device it runs on.
+    """What an inference process serves: the route it renders through, the device it runs on, and the fingerprint its renders are named by.
 
-    The fingerprint names the exact model files loaded, so a render's cache identity changes with
-    the model and with nothing else.
+    `route` is the route's kind and `name` tells the routes of one kind apart; `description` says
+    everything the route reads, its settings or the stored model and the files it was loaded from,
+    the way a listening set's manifest does. The fingerprint follows the description, so a render's
+    cache identity changes with what renders it and with nothing else.
     """
 
     model_config = FROZEN
 
-    model: str
-    codec: str
-    canonicalizer: str
-    latent_size: int
-    vocoder: str
-    restorer: str | None
+    route: str
+    name: str
     device: str
     fingerprint: str
     weight_steps: int
+    description: dict[str, JsonValue]

@@ -9,7 +9,15 @@ from numpy.typing import NDArray
 from samplecore.waveform import heard_at_rate
 from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
 
-End = TypeVar("End")
+
+class Prepared(Protocol):
+    """What a route reads one end into, which says how many bytes it holds so a cache of ends is bounded by them."""
+
+    @property
+    def nbytes(self) -> int: ...
+
+
+End = TypeVar("End", bound=Prepared)
 
 
 @dataclass(frozen=True)
@@ -34,7 +42,10 @@ class Route(Protocol[End]):
 
 
 class PreparedPair(Protocol):
-    """Two ends prepared by one route, ready to render any weight between them."""
+    """Two ends prepared by one route, ready to render any weight between them, and the bytes the two hold."""
+
+    @property
+    def nbytes(self) -> int: ...
 
     def render(self, *, weight: float) -> NDArray[np.float64]: ...
 
@@ -46,6 +57,10 @@ class RoutePair(Generic[End]):
     route: Route[End]
     first: End
     second: End
+
+    @property
+    def nbytes(self) -> int:
+        return self.first.nbytes + self.second.nbytes
 
     def render(self, *, weight: float) -> NDArray[np.float64]:
         return self.route.render(self.first, self.second, weight=weight)

@@ -118,7 +118,10 @@ crossfade control side by side for the ear; see [`20-audio-transport.md`](20-aud
 On tonal sounds the transport's per-frame pairing warbles, so `samplemorph.partials` reads each
 sound as notes over a residual and a `MorphProfile` says what the middle of two of them is; see
 [`21-partials.md`](21-partials.md), and the pairing it rests on in
-[`22-correspondence.md`](22-correspondence.md).
+[`22-correspondence.md`](22-correspondence.md). Every route that moves partials still puts two
+pitch contents in the middle, so `samplemorph.envelope` moves the spectral envelope between the two
+analyses and keeps one sound's excitation whole under it, and the inference process serves that
+route by default; see [`23-envelope.md`](23-envelope.md).
 
 ### `SoundImage`
 

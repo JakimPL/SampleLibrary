@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -9,9 +11,11 @@ import soundfile
 from fastapi.testclient import TestClient
 
 from samplecore.models.morph import MORPH_WEIGHT_STEPS, HeardMorphPoint
-from samplemorph.model_store import DEFAULT_MODEL_NAME
+from samplemorph.envelope.presets import DEFAULT_ENVELOPE_PRESET_NAME, KEEPS_FIRST
+from samplemorph.model_store import MODELS_DIRECTORY_NAME, PRINCIPAL_COMPONENT_CODEC_NAME
 from samplemorph.registries import PGHI_VOCODER_NAME
 from samplemorph.rendering import FULL_SCALE_CEILING
+from samplemorph.routes.kinds import RouteKind
 from samplemorph.service.app import create_app
 from samplemorph.service.renderer import MorphRenderer, load_renderer
 from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
@@ -42,12 +46,29 @@ def _params(library: StoredLibrary, weight: float) -> dict[str, str | float | in
 def test_the_status_names_what_the_process_serves(client: TestClient) -> None:
     status = client.get(STATUS_PATH).json()
 
-    assert status["model"] == DEFAULT_MODEL_NAME
-    assert status["vocoder"] == PGHI_VOCODER_NAME
-    assert status["restorer"] is None
+    assert status["route"] == status["name"] == RouteKind.LATENT.value
+    assert status["description"]["model"]["codec"] == PRINCIPAL_COMPONENT_CODEC_NAME
+    assert status["description"]["vocoder"] == PGHI_VOCODER_NAME
+    assert status["description"]["restorer"] is None
     assert status["device"] == DEFAULT_INFERENCE_DEVICE
     assert status["weight_steps"] == MORPH_WEIGHT_STEPS
     assert len(status["fingerprint"]) == DIGEST_LENGTH
+
+
+def test_the_envelope_route_renders_end_to_end_reading_no_stored_model(
+    envelope_settings: ServiceSettings, library: StoredLibrary, tmp_path: Path
+) -> None:
+    root = tmp_path / "library"
+    shutil.copytree(library.root, root, ignore=shutil.ignore_patterns(MODELS_DIRECTORY_NAME))
+    with TestClient(create_app(load_renderer(replace(envelope_settings, library_root=root)))) as client:
+        status = client.get(STATUS_PATH).json()
+        response = client.get(AUDIO_PATH, params=_params(library, 0.5))
+
+    assert status["route"] == RouteKind.ENVELOPE.value
+    assert status["name"] == f"{RouteKind.ENVELOPE.value}-{DEFAULT_ENVELOPE_PRESET_NAME}"
+    assert status["description"]["envelope_settings"] == KEEPS_FIRST.model_dump(mode="json")
+    assert response.status_code == 200
+    assert soundfile.read(io.BytesIO(response.content))[1] == SECOND_RATE_HZ
 
 
 def test_a_point_renders_as_a_wav_at_the_rate_the_pair_is_heard_at_with_its_caching_headers(
@@ -104,11 +125,11 @@ def test_a_render_the_caller_holds_is_answered_without_rendering_again(
     assert _renderer(client).render_count == rendered
 
 
-def test_a_pair_is_encoded_once_however_many_weights_are_asked_for(client: TestClient, library: StoredLibrary) -> None:
+def test_a_pair_is_prepared_once_however_many_weights_are_asked_for(client: TestClient, library: StoredLibrary) -> None:
     for step in range(0, MORPH_WEIGHT_STEPS + 1, MORPH_WEIGHT_STEPS // 4):
         assert client.get(AUDIO_PATH, params=_params(library, step / MORPH_WEIGHT_STEPS)).status_code == 200
 
-    assert _renderer(client).latent_count == 2
+    assert _renderer(client).pair_count == 1
     assert _renderer(client).render_count == 5
 
 
@@ -117,7 +138,7 @@ def test_the_restored_route_renders_end_to_end(restored_settings: ServiceSetting
         status = client.get(STATUS_PATH).json()
         response = client.get(AUDIO_PATH, params=_params(library, 0.5))
 
-    assert status["restorer"] is not None
+    assert status["description"]["restorer"] is not None
     assert response.status_code == 200
     assert soundfile.read(io.BytesIO(response.content))[1] == SECOND_RATE_HZ
 

@@ -115,3 +115,7 @@ class SampleLatent:
     @property
     def latent_size(self) -> int:
         return int(self.values.shape[0])
+
+    @property
+    def nbytes(self) -> int:
+        return int(self.values.nbytes)

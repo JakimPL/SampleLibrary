@@ -34,7 +34,7 @@ RELAYED_REFUSALS: Final[frozenset[int]] = frozenset({HTTPStatus.NOT_FOUND, HTTPS
 
 
 class MorphAvailability(BaseModel):
-    """Whether morphs can be rendered right now, and by which model when they can."""
+    """Whether morphs can be rendered right now, and through which route when they can."""
 
     model_config = FROZEN
 

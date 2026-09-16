@@ -9,13 +9,17 @@ from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import port_number
 from samplecore.config import LibraryConfig
 from samplecore.exit_status import ExitStatus
+from samplemorph.envelope.presets import DEFAULT_ENVELOPE_PRESET_NAME, ENVELOPE_PRESETS
+from samplemorph.partials.presets import DEFAULT_PROFILE_NAME, PROFILE_PRESETS
 from samplemorph.route_arguments import (
     add_model_argument,
     add_morpher_argument,
     add_vocoder_arguments,
     route_choice_from,
 )
-from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
+from samplemorph.routes.kinds import RouteKind
+from samplemorph.routes.named import RouteSelection
+from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, DEFAULT_ROUTE, ServiceSettings
 
 COMMAND_NAME: Final[str] = "serve"
 
@@ -27,6 +31,27 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument("--host", type=str, default=None, help="The address to bind, in place of the configured one.")
     parser.add_argument(
         "--port", type=port_number, default=None, help="The port to bind, in place of the configured one."
+    )
+    parser.add_argument(
+        "--route",
+        type=RouteKind,
+        choices=tuple(RouteKind),
+        default=DEFAULT_ROUTE,
+        help="Which route renders every morph; the latent route alone reads a stored model.",
+    )
+    parser.add_argument(
+        "--excitation",
+        type=str,
+        choices=tuple(ENVELOPE_PRESETS),
+        default=DEFAULT_ENVELOPE_PRESET_NAME,
+        help="Whose excitation the envelope route keeps under the moving envelope.",
+    )
+    parser.add_argument(
+        "--profile",
+        type=str,
+        choices=tuple(PROFILE_PRESETS),
+        default=DEFAULT_PROFILE_NAME,
+        help="Which middle the partials route takes.",
     )
     add_model_argument(parser)
     add_vocoder_arguments(parser, device_default=DEFAULT_INFERENCE_DEVICE)
@@ -51,7 +76,12 @@ def run(config: LibraryConfig, arguments: argparse.Namespace) -> None:
     settings = ServiceSettings(
         library_root=config.library_root,
         sample_directories=config.sample_directories,
-        choice=route_choice_from(arguments),
+        selection=RouteSelection(
+            kind=arguments.route,
+            latent=route_choice_from(arguments),
+            profile_name=arguments.profile,
+            excitation_name=arguments.excitation,
+        ),
     )
     try:
         renderer = load_renderer(settings)

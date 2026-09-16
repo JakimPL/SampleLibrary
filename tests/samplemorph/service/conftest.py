@@ -19,6 +19,7 @@ from samplecore.models.sample_pcm import SamplePCM
 from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage import audio_store
 from samplemorph.canonicalizers.common import prepare_mono
+from samplemorph.envelope.presets import DEFAULT_ENVELOPE_PRESET_NAME
 from samplemorph.geometry import Geometry, log_frequency_geometry
 from samplemorph.images import SoundImage
 from samplemorph.model_paths import DEFAULT_RESTORER_NAME, restorer_path
@@ -30,6 +31,7 @@ from samplemorph.model_store import (
     model_path,
     save_model,
 )
+from samplemorph.partials.presets import DEFAULT_PROFILE_NAME
 from samplemorph.pipeline import RouteChoice
 from samplemorph.registries import (
     CANONICALIZER_REGISTRY,
@@ -38,6 +40,8 @@ from samplemorph.registries import (
     PGHI_VOCODER_NAME,
     RESTORED_VOCODER_NAME,
 )
+from samplemorph.routes.kinds import RouteKind
+from samplemorph.routes.named import RouteSelection
 from samplemorph.service.app import create_app
 from samplemorph.service.renderer import load_renderer
 from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
@@ -138,28 +142,40 @@ def library(tmp_path_factory: pytest.TempPathFactory) -> StoredLibrary:
     )
 
 
-def _settings(library: StoredLibrary, vocoder_name: str) -> ServiceSettings:
+def _settings(library: StoredLibrary, *, kind: RouteKind, vocoder_name: str) -> ServiceSettings:
     return ServiceSettings(
         library_root=library.root,
         sample_directories=(library.sample_directory,),
-        choice=RouteChoice(
-            model_name=DEFAULT_MODEL_NAME,
-            vocoder_name=vocoder_name,
-            restorer_name=DEFAULT_RESTORER_NAME,
-            morpher_name=DEFAULT_MORPHER_NAME,
-            device=DEFAULT_INFERENCE_DEVICE,
+        selection=RouteSelection(
+            kind=kind,
+            latent=RouteChoice(
+                model_name=DEFAULT_MODEL_NAME,
+                vocoder_name=vocoder_name,
+                restorer_name=DEFAULT_RESTORER_NAME,
+                morpher_name=DEFAULT_MORPHER_NAME,
+                device=DEFAULT_INFERENCE_DEVICE,
+            ),
+            profile_name=DEFAULT_PROFILE_NAME,
+            excitation_name=DEFAULT_ENVELOPE_PRESET_NAME,
         ),
     )
 
 
 @pytest.fixture
 def settings(library: StoredLibrary) -> ServiceSettings:
-    return _settings(library, PGHI_VOCODER_NAME)
+    """The latent route through the stored codec, the phase integrated straight from the decoded grid."""
+    return _settings(library, kind=RouteKind.LATENT, vocoder_name=PGHI_VOCODER_NAME)
 
 
 @pytest.fixture
 def restored_settings(library: StoredLibrary) -> ServiceSettings:
-    return _settings(library, RESTORED_VOCODER_NAME)
+    return _settings(library, kind=RouteKind.LATENT, vocoder_name=RESTORED_VOCODER_NAME)
+
+
+@pytest.fixture
+def envelope_settings(library: StoredLibrary) -> ServiceSettings:
+    """The envelope route, which reads the samples' own analyses and no stored model."""
+    return _settings(library, kind=RouteKind.ENVELOPE, vocoder_name=PGHI_VOCODER_NAME)
 
 
 @pytest.fixture

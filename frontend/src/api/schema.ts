@@ -680,6 +680,7 @@ export interface components {
             readonly filename?: string | null;
             readonly vibrato?: components["schemas"]["Vibrato"] | null;
         };
+        readonly JsonValue: unknown;
         /**
          * LibraryStats
          * @description A snapshot of the catalog's overall size and composition.
@@ -878,7 +879,7 @@ export interface components {
         };
         /**
          * MorphAvailability
-         * @description Whether morphs can be rendered right now, and by which model when they can.
+         * @description Whether morphs can be rendered right now, and through which route when they can.
          */
         readonly MorphAvailability: {
             /** Available */
@@ -887,30 +888,28 @@ export interface components {
         };
         /**
          * MorphServiceStatus
-         * @description What an inference process serves: the model, the route it renders through, and the device it runs on.
+         * @description What an inference process serves: the route it renders through, the device it runs on, and the fingerprint its renders are named by.
          *
-         *     The fingerprint names the exact model files loaded, so a render's cache identity changes with
-         *     the model and with nothing else.
+         *     `route` is the route's kind and `name` tells the routes of one kind apart; `description` says
+         *     everything the route reads, its settings or the stored model and the files it was loaded from,
+         *     the way a listening set's manifest does. The fingerprint follows the description, so a render's
+         *     cache identity changes with what renders it and with nothing else.
          */
         readonly MorphServiceStatus: {
-            /** Model */
-            readonly model: string;
-            /** Codec */
-            readonly codec: string;
-            /** Canonicalizer */
-            readonly canonicalizer: string;
-            /** Latent Size */
-            readonly latent_size: number;
-            /** Vocoder */
-            readonly vocoder: string;
-            /** Restorer */
-            readonly restorer: string | null;
+            /** Route */
+            readonly route: string;
+            /** Name */
+            readonly name: string;
             /** Device */
             readonly device: string;
             /** Fingerprint */
             readonly fingerprint: string;
             /** Weight Steps */
             readonly weight_steps: number;
+            /** Description */
+            readonly description: {
+                readonly [key: string]: components["schemas"]["JsonValue"];
+            };
         };
         /** Page[Module] */
         readonly Page_Module_: {
