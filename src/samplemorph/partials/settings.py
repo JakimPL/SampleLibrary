@@ -16,7 +16,10 @@ DEFAULT_LOCAL_REACH_BINS: Final[int] = 16
 DEFAULT_CONTINUATION_CENTS_PER_SECOND: Final[float] = 12000.0
 DEFAULT_CONTINUATION_FLOOR_HZ: Final[float] = 3.0
 DEFAULT_GAP_FRAMES: Final[int] = 2
-DEFAULT_MINIMUM_TRACK_SECONDS: Final[float] = 0.04
+DEFAULT_MINIMUM_TRACK_SECONDS: Final[float] = 0.1
+DEFAULT_RESIDUAL_MARGIN_DB: Final[float] = 3.0
+DEFAULT_FLOOR_REACH_BINS: Final[int] = 8
+DEFAULT_FLOOR_SMOOTHING_BINS: Final[int] = 5
 
 
 class PartialSettings(BaseModel):
@@ -29,7 +32,10 @@ class PartialSettings(BaseModel):
     stationary sinusoid's lies between `lowest_curvature_ratio` and `highest_curvature_ratio`. Tracks: a
     track continues to a peak within `continuation_cents_per_second` of heard time, or within
     `continuation_floor_hz`, whichever is wider, bridges up to `gap_frames` missing frames, and lasts
-    at least `minimum_track_seconds`.
+    at least `minimum_track_seconds`, which a noise peak holds for about one window and a partial for
+    far longer. Residual: what a partial's lobe explains leaves the spectrum with `residual_margin_db`
+    of headroom, down to a floor read as the least energy within `floor_reach_bins`, smoothed over
+    `floor_smoothing_bins`.
     """
 
     model_config = FROZEN
@@ -45,3 +51,6 @@ class PartialSettings(BaseModel):
     continuation_floor_hz: float = Field(default=DEFAULT_CONTINUATION_FLOOR_HZ, ge=0.0)
     gap_frames: int = Field(default=DEFAULT_GAP_FRAMES, ge=0)
     minimum_track_seconds: float = Field(default=DEFAULT_MINIMUM_TRACK_SECONDS, ge=0.0)
+    residual_margin_db: float = Field(default=DEFAULT_RESIDUAL_MARGIN_DB, ge=0.0)
+    floor_reach_bins: int = Field(default=DEFAULT_FLOOR_REACH_BINS, ge=1)
+    floor_smoothing_bins: int = Field(default=DEFAULT_FLOOR_SMOOTHING_BINS, ge=1)

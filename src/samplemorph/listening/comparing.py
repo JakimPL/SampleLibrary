@@ -51,9 +51,14 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ComparedRoute:
-    """One route a comparison renders, the folder its files go under, and the JSON that names it in the manifest."""
+    """One route a comparison renders: the name it goes by, the folder its files go under, and the JSON that names it.
+
+    Several routes can share a kind, a partials route per profile among them, and the name is what
+    tells them apart in the manifest and in the tables.
+    """
 
     kind: RouteKind
+    name: str
     folder: str
     route: ComparableRoute
     description: dict[str, JsonValue]
@@ -93,14 +98,9 @@ class ComparisonSummary:
     output_directory: Path
 
 
-def named_folders(kinds: tuple[RouteKind, ...]) -> tuple[str, ...]:
-    """Every route's files under a folder named after the route."""
-    return tuple(kind.value for kind in kinds)
-
-
-def blind_folders(kinds: tuple[RouteKind, ...], *, random_seed: int) -> tuple[str, ...]:
+def blind_folders(names: tuple[str, ...], *, random_seed: int) -> tuple[str, ...]:
     """Every route's files under a letter, dealt in seeded order, so a listener hears the routes by letter alone."""
-    order = np.random.default_rng(random_seed).permutation(len(kinds))
+    order = np.random.default_rng(random_seed).permutation(len(names))
     return tuple(string.ascii_uppercase[int(position)] for position in order)
 
 
@@ -245,7 +245,10 @@ def _manifest(
 ) -> dict[str, JsonValue]:
     return {
         "render_revision": RENDER_REVISION,
-        "routes": {compared.folder: {"kind": compared.kind.value, **compared.description} for compared in routes},
+        "routes": {
+            compared.folder: {"kind": compared.kind.value, "name": compared.name, **compared.description}
+            for compared in routes
+        },
         "path_weights": list(weights.path),
         "listening_weights": list(weights.listening),
         "pair_set": {

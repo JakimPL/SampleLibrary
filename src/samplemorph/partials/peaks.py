@@ -77,7 +77,7 @@ def pick_peaks(
     safe_curvature = np.where(is_maximum, curvature, -1.0)
     offset = -slope / (2.0 * safe_curvature)
     vertex = center - slope**2 / (4.0 * safe_curvature)
-    curvature_ratio = -safe_curvature * (2.0 * _lobe_spread_bins(window_length) ** 2)
+    curvature_ratio = -safe_curvature * (2.0 * lobe_spread_bins(window_length) ** 2)
     prominent = vertex - _local_median(log_magnitude, reach=settings.local_reach_bins)[1:-1] >= (
         settings.local_prominence_db / DECIBELS_PER_NEPER
     )
@@ -103,7 +103,7 @@ def pick_peaks(
     )
 
 
-def _lobe_spread_bins(window_length: int) -> float:
+def lobe_spread_bins(window_length: int) -> float:
     """The standard deviation, in bins, of a sinusoid's magnitude lobe under the Gaussian taper, the same at any length."""
     return window_length / (2.0 * np.pi * gaussian_spread(window_length))
 

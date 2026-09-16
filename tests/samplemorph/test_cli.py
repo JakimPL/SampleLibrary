@@ -690,7 +690,7 @@ def test_drawn_pairs_are_rendered_through_every_route_and_read(
     retuned = [
         pair["name"] for pair in json.loads(pairs.read_text(encoding="utf-8"))["pairs"] if pair["kind"] == "retuned"
     ]
-    routes = ("latent", "transport", "blend")
+    routes = ("latent", "transport", "blend", "partials-slide")
     for name in names:
         assert (output / name / "original_first.wav").exists()
         for route in routes:

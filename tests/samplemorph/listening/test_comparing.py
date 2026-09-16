@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import string
 from dataclasses import dataclass
 
 import pytest
 
-from samplemorph.listening.comparing import ComparisonWeights, blind_folders, named_folders
+from samplemorph.listening.comparing import ComparisonWeights, blind_folders
 from samplemorph.routes.kinds import RouteKind
 
 
@@ -36,10 +37,10 @@ def test_both_ends_and_every_listening_weight_are_written() -> None:
 
 
 def test_blind_folders_deal_every_route_a_letter_of_its_own_by_seed() -> None:
-    kinds = tuple(RouteKind)
+    names = (*(kind.value for kind in RouteKind), "partials-crossfade")
 
-    folders = blind_folders(kinds, random_seed=11)
+    folders = blind_folders(names, random_seed=11)
 
-    assert sorted(folders) == ["A", "B", "C"]
-    assert folders == blind_folders(kinds, random_seed=11)
-    assert set(folders).isdisjoint(named_folders(kinds))
+    assert sorted(folders) == sorted(string.ascii_uppercase[: len(names)])
+    assert folders == blind_folders(names, random_seed=11)
+    assert set(folders).isdisjoint(names)

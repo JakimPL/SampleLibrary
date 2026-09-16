@@ -214,3 +214,20 @@ forbidden_modules = ["samplemorph.training", "samplemorph.commands", "sampleextr
 name = "the morph shell and the morph service are two skins over one pipeline"
 type = "independence"
 modules = ["samplemorph.commands", "samplemorph.service"]
+
+[[tool.importlinter.contracts]]
+name = "the partials model stands on the transport, and the transport stands on its own"
+type = "forbidden"
+source_modules = ["samplemorph.transport"]
+forbidden_modules = ["samplemorph.partials"]
+
+[[tool.importlinter.contracts]]
+name = "the partials model is read by the routes, the shell and the measurements, and reads none of them"
+type = "forbidden"
+source_modules = ["samplemorph.partials"]
+forbidden_modules = [
+    "samplemorph.routes",
+    "samplemorph.listening",
+    "samplemorph.measurement",
+    "samplemorph.commands",
+]

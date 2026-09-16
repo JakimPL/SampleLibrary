@@ -51,13 +51,30 @@ def analyze(
     The onset is read at the heard rate, since a strike is a matter of milliseconds as heard.
     """
     energy = (np.abs(analysis_transform(mono, geometry=geometry)) ** 2).astype(np.float32)
+    return analysis_from_energy(
+        energy,
+        onset_sample=main_onset(mono, sample_rate_hz=int(round(rate_hz))),
+        sample_count=int(mono.shape[0]),
+        settings=settings,
+    )
+
+
+def analysis_from_energy(
+    energy: NDArray[np.float32], *, onset_sample: int, sample_count: int, settings: TransportSettings
+) -> TransportAnalysis:
+    """What a transport reads from a spectral energy already measured, the onset and length it belongs to given.
+
+    A sound analyzed once travels as several energies, its whole and the part of it left over from
+    what other routes carry, and each of them reads as an analysis of the same sound in time.
+    Shape: `energy` is ``(bins, frames)``.
+    """
     return TransportAnalysis(
         energy=energy,
         outline=_outline(energy, settings=settings),
         frame_energy=energy.sum(axis=0),
         silent_shape=_mean_shape(energy),
-        onset_sample=main_onset(mono, sample_rate_hz=int(round(rate_hz))),
-        sample_count=int(mono.shape[0]),
+        onset_sample=onset_sample,
+        sample_count=sample_count,
     )
 
 

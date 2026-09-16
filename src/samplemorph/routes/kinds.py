@@ -4,9 +4,10 @@ from enum import StrEnum, unique
 
 from samplemorph.routes.analysis import AnalysisRoute
 from samplemorph.routes.latent import LatentRoute
+from samplemorph.routes.partials import PartialRoute
 from samplemorph.routes.route import HeardMono, PreparedPair, prepare_pair
 
-ComparableRoute = LatentRoute | AnalysisRoute
+ComparableRoute = LatentRoute | AnalysisRoute | PartialRoute
 
 
 @unique
@@ -15,12 +16,14 @@ class RouteKind(StrEnum):
 
     `LATENT` runs through a stored codec's latent space; `TRANSPORT` carries every feature of one
     analysis to the other's; `BLEND` crossfades the two analyses in decibels, the control the
-    transport is judged against.
+    transport is judged against; `PARTIALS` sounds the partials of both ends as oscillators on the
+    path a profile draws, and transports what is left of them.
     """
 
     LATENT = "latent"
     TRANSPORT = "transport"
     BLEND = "blend"
+    PARTIALS = "partials"
 
 
 def pair_through(route: ComparableRoute, first: HeardMono, second: HeardMono) -> PreparedPair:
@@ -29,4 +32,6 @@ def pair_through(route: ComparableRoute, first: HeardMono, second: HeardMono) ->
         case LatentRoute():
             return prepare_pair(route, first, second)
         case AnalysisRoute():
+            return prepare_pair(route, first, second)
+        case PartialRoute():
             return prepare_pair(route, first, second)

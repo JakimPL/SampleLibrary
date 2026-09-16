@@ -9,11 +9,15 @@ from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.codecs.identity import IdentityCodec
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.morphers.linear import LinearMorpher
+from samplemorph.partials.morph import PartialMorph
+from samplemorph.partials.presets import PROFILE_PRESETS
+from samplemorph.partials.settings import PartialSettings
 from samplemorph.pipeline import MorphRoute
 from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
 from samplemorph.routes.analysis import AnalysisRoute, SpectralPath
 from samplemorph.routes.kinds import pair_through
 from samplemorph.routes.latent import LatentRoute
+from samplemorph.routes.partials import PartialRoute
 from samplemorph.routes.route import HeardMono, hear_in_frame
 from samplemorph.transport.blend import blend
 from samplemorph.transport.morph import transport
@@ -55,6 +59,22 @@ def test_an_analysis_route_renders_each_end_at_its_own_length_and_the_middle_bet
     path: SpectralPath, ends: tuple[HeardMono, HeardMono]
 ) -> None:
     route = AnalysisRoute(path=path, geometry=log_frequency_geometry(), settings=TransportSettings())
+    prepared = pair_through(route, *ends)
+
+    lengths = [prepared.render(weight=weight).shape[0] for weight in (0.0, MIDPOINT, 1.0)]
+
+    assert lengths == [SHORT_FRAME_COUNT, int(np.sqrt(SHORT_FRAME_COUNT * LONG_FRAME_COUNT)), LONG_FRAME_COUNT]
+
+
+def test_the_partials_route_renders_each_end_at_its_own_length_and_the_middle_between(
+    ends: tuple[HeardMono, HeardMono],
+) -> None:
+    route = PartialRoute(
+        morph=PartialMorph(
+            profile=PROFILE_PRESETS["slide"], geometry=log_frequency_geometry(), settings=TransportSettings()
+        ),
+        partial_settings=PartialSettings(),
+    )
     prepared = pair_through(route, *ends)
 
     lengths = [prepared.render(weight=weight).shape[0] for weight in (0.0, MIDPOINT, 1.0)]

@@ -10,8 +10,9 @@ from numpy.typing import NDArray
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.transport.analysis import TransportAnalysis
 from samplemorph.transport.blend import blend
-from samplemorph.transport.morph import TransportedSpectrogram, transport
+from samplemorph.transport.morph import TransportedSpectrogram, transport, transport_along
 from samplemorph.transport.settings import TransportSettings
+from samplemorph.transport.time_map import build_time_map
 from samplemorph.vocoders.pghi import integrate_and_synthesize
 from tests.samplemorph.transport.conftest import (
     BIN_SPACING_HZ,
@@ -89,6 +90,19 @@ def test_the_ends_are_each_sound_s_own_analysis(low_tone: TransportAnalysis, hig
     assert np.array_equal(first_end.magnitude, np.sqrt(low_tone.energy))
     assert first_end.sample_count == low_tone.sample_count
     assert np.array_equal(second_end.magnitude, np.sqrt(high_tone.energy))
+
+
+def test_a_transport_is_what_it_carries_along_the_map_it_builds(
+    low_tone: TransportAnalysis, high_tone: TransportAnalysis
+) -> None:
+    """A morph aligning two sounds by more than their spectra builds the map itself and sends the rest along it."""
+    time_map = build_time_map(low_tone, high_tone, weight=MIDPOINT, hop_length=HOP, settings=TransportSettings())
+
+    along = transport_along(low_tone, high_tone, time_map=time_map, weight=MIDPOINT, settings=TransportSettings())
+
+    whole = _transport(low_tone, high_tone, MIDPOINT)
+    assert np.array_equal(along.magnitude, whole.magnitude)
+    assert along.sample_count == whole.sample_count
 
 
 def test_a_point_just_past_an_end_sounds_like_that_end(

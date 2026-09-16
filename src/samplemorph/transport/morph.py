@@ -14,7 +14,7 @@ from samplemorph.transport.placement import place_groups
 from samplemorph.transport.plan import monotone_plan
 from samplemorph.transport.segmentation import LOWEST_MOVED_BIN, SpectralGroups, segment_spectrum
 from samplemorph.transport.settings import TransportSettings
-from samplemorph.transport.time_map import build_time_map
+from samplemorph.transport.time_map import TimeMap, build_time_map
 
 FIRST_END_WEIGHT: Final[float] = 0.0
 SECOND_END_WEIGHT: Final[float] = 1.0
@@ -64,7 +64,28 @@ def transport(
     if weight == SECOND_END_WEIGHT:
         return heard_as_analyzed(second)
 
-    time_map = build_time_map(first, second, weight=weight, hop_length=geometry.hop_length, settings=settings)
+    return transport_along(
+        first,
+        second,
+        time_map=build_time_map(first, second, weight=weight, hop_length=geometry.hop_length, settings=settings),
+        weight=weight,
+        settings=settings,
+    )
+
+
+def transport_along(
+    first: TransportAnalysis,
+    second: TransportAnalysis,
+    *,
+    time_map: TimeMap,
+    weight: float,
+    settings: TransportSettings,
+) -> TransportedSpectrogram:
+    """The magnitude `weight` of the way between two analyses read along a time map already built.
+
+    A morph that aligns two sounds by more than their spectra, and carries part of them by some other
+    means, builds the map once on whatever it aligns and sends the rest of both sounds along it here.
+    """
     first_energy, first_outline = _read_along(
         first, positions=time_map.first_positions, rates=time_map.first_rates, settings=settings
     )
