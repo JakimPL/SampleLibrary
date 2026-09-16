@@ -70,14 +70,11 @@ it, the profile's paths applied, a phase-continuous oscillator bank, the two res
 `MorphProfile` is frozen data with one weight going in. It makes four separable choices.
 
 **Correspondence — who meets whom.** Read once per pair of sounds, never per frame and never per
-weight, which is what removes the wobble.
-
-| Policy | Rule |
-|---|---|
-| `notes` | Notes meet note to note by the assignment that costs the least over the chord, a move costing what the two notes carry times how far they travel squared, a fade costing what a note carries times the cap squared; harmonic `k` meets harmonic `k`, and free partials meet by pitch within a cap. |
-| `nearest` | Partials meet by pitch alone, within a quarter tone: what the two sounds share holds, the rest fades where it stands. |
-| `ordered` | Partials meet in frequency order, one to one: the transport's intent without the splits. |
-| `none` | Nothing meets: the sinusoidal crossfade, kept as the control. |
+weight, which is what removes the wobble. Every channel of one sound may travel to any one channel
+of the other or fade where it stands, each at a price, and the pairing taken is the cheapest over
+both sounds: `travel_cents` says how far a partial will go before fading comes cheaper,
+`drift_cents` how far it may travel against the moves the rest of the sound makes, and `fade_price`
+what standing still is worth. [`22-correspondence.md`](22-correspondence.md) walks through it.
 
 **Pitch path.** `glide` moves evenly in pitch; `stepped` moves in whole semitones, a partial that
 has travelled half a step standing at the next one; `switch` arrives at the halfway mark.

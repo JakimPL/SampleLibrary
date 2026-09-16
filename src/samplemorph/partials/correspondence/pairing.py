@@ -1,21 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
 
 from samplemorph.partials.channels import Channels
-from samplemorph.partials.correspondence.notes import harmonic_pairs, note_pairs
-from samplemorph.partials.correspondence.partials import nearest_pairs, ordered_pairs
-from samplemorph.partials.profile import (
-    Correspondence,
-    NearestPartials,
-    NoCorrespondence,
-    NotesCorrespondence,
-    OrderedPartials,
-)
-from samplemorph.partials.voices import partial_voices
+from samplemorph.partials.correspondence.assignment import assign_with_fades
+from samplemorph.partials.correspondence.cost import travel_penalty
+from samplemorph.partials.correspondence.shifts import AgreedShifts, agreed_shifts, no_shifts
+from samplemorph.partials.profile import Correspondence
+from samplemorph.partials.voices import PartialVoices, partial_voices
+
+SETTLING_ROUNDS: Final[int] = 2
 
 
 @dataclass(frozen=True)
@@ -36,51 +34,50 @@ class ChannelPairing:
 
 
 def pair_channels(first: Channels, second: Channels, *, correspondence: Correspondence) -> ChannelPairing:
-    """Pair two sounds' channels the way a profile's correspondence says to.
+    """Pair two sounds' channels, every channel free to travel to any other or to fade where it stands.
 
-    The pairing is read once for a pair of sounds and holds at every weight and every frame between
-    them, which is what lets a partial glide along one path from end to end.
+    One assignment settles the whole pair of sounds at once: each channel carries what it is worth of
+    its own sound, meeting costs that weight times the price the correspondence puts on the travel,
+    and fading costs it the fade price. The least total price over both sounds is the pairing taken,
+    so a channel travels an octave where the rest of the sound travels an octave beside it, and fades
+    where no partner comes to less than the fade price.
+
+    The first reading pairs by pitch, loudness and time alone. The moves it makes are then read back
+    as the intervals the two sounds agree on, and the pairing is read again knowing them, which is
+    what settles a chord onto one voice leading and a harmonic series onto one interval. The pairing
+    is read once for a pair of sounds and holds at every weight and every frame between them, which
+    is what lets a partial glide along one path from end to end.
     """
-    match correspondence:
-        case NotesCorrespondence():
-            met = harmonic_pairs(
-                first,
-                second,
-                notes=note_pairs(
-                    first, second, cap_semitones=correspondence.cap_semitones, exponent=correspondence.exponent
-                ),
-            )
-            free = nearest_pairs(
-                partial_voices(first.tracks),
-                partial_voices(second.tracks),
-                cap_cents=correspondence.cap_cents,
-                taken=(met[:, 0], met[:, 1]),
-            )
-            return _pairing(np.concatenate((met, free)), first=first, second=second)
-        case NearestPartials():
-            return _pairing(
-                nearest_pairs(
-                    partial_voices(first.tracks),
-                    partial_voices(second.tracks),
-                    cap_cents=correspondence.cap_cents,
-                    taken=(np.zeros(0, dtype=np.intp), np.zeros(0, dtype=np.intp)),
-                ),
-                first=first,
-                second=second,
-            )
-        case OrderedPartials():
-            return _pairing(
-                ordered_pairs(partial_voices(first.tracks), partial_voices(second.tracks)), first=first, second=second
-            )
-        case NoCorrespondence():
-            return _pairing(np.zeros((0, 2), dtype=np.intp), first=first, second=second)
-
-
-def _pairing(matched: NDArray[np.intp], *, first: Channels, second: Channels) -> ChannelPairing:
+    here, there = partial_voices(first.tracks), partial_voices(second.tracks)
+    matched = _assigned(here, there, shifts=no_shifts(here.count), correspondence=correspondence)
+    for _ in range(SETTLING_ROUNDS):
+        shifts = agreed_shifts(
+            here,
+            there,
+            matched=matched,
+            lines=first.lines,
+            correspondence=correspondence,
+        )
+        if shifts.count == 0:
+            break
+        matched = _assigned(here, there, shifts=shifts, correspondence=correspondence)
     return ChannelPairing(
         matched=matched,
         first_alone=_left_out(matched[:, 0], count=first.channel_count),
         second_alone=_left_out(matched[:, 1], count=second.channel_count),
+    )
+
+
+def _assigned(
+    first: PartialVoices, second: PartialVoices, *, shifts: AgreedShifts, correspondence: Correspondence
+) -> NDArray[np.intp]:
+    """The pairing that costs the two sounds least, every channel free to travel or to fade at its own price."""
+    return assign_with_fades(
+        0.5
+        * (first.share[:, None] + second.share)
+        * travel_penalty(first, second, shifts=shifts, correspondence=correspondence),
+        first_fades=0.5 * first.share * correspondence.fade_price,
+        second_fades=0.5 * second.share * correspondence.fade_price,
     )
 
 

@@ -7,7 +7,7 @@ import pytest
 
 from samplemorph.partials.paths import FadeLaw, PitchPath, fade_progress
 from samplemorph.partials.presets import DEFAULT_PROFILE_NAME, PROFILE_PRESETS
-from samplemorph.partials.profile import AspectCurve, AspectCurves, CurveShape, MorphProfile, NotesCorrespondence
+from samplemorph.partials.profile import AspectCurve, AspectCurves, Correspondence, CurveShape, MorphProfile
 
 TOLERANCE: Final[float] = 1e-9
 
@@ -53,7 +53,7 @@ def test_a_curve_starting_past_its_end_is_refused() -> None:
 
 def test_a_profile_round_trips_through_the_json_a_render_names_it_by() -> None:
     profile = MorphProfile(
-        correspondence=NotesCorrespondence(cap_semitones=7.0),
+        correspondence=Correspondence(travel_cents=700.0),
         pitch=PitchPath.STEPPED,
         fade=FadeLaw.EARLY,
         curves=AspectCurves(pitch=AspectCurve(start=0.25, end=0.75, shape=CurveShape.EASED)),
@@ -62,6 +62,13 @@ def test_a_profile_round_trips_through_the_json_a_render_names_it_by() -> None:
     written = profile.model_dump(mode="json")
 
     assert MorphProfile.model_validate(written) == profile
+
+
+def test_a_correspondence_names_how_far_a_partial_will_travel_before_fading_comes_cheaper() -> None:
+    """The reach falls out of the price of a fade against the price of the distance, which is one currency."""
+    correspondence = Correspondence(travel_cents=2400.0, exponent=2.0, fade_price=0.25)
+
+    assert correspondence.travel_reach_cents == pytest.approx(1200.0)
 
 
 def test_every_preset_names_a_middle_of_its_own() -> None:

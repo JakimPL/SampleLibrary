@@ -36,6 +36,7 @@ from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.listening.pairs import CatalogPair, PairEnd, PairSet, write_pair_set
 from samplemorph.model_paths import codec_path, descriptor_path, restorer_path
 from samplemorph.model_store import model_path
+from samplemorph.partials.presets import PROFILE_PRESETS
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
 from tests.samplemorph.conftest import harmonic_tone
 from tests.samplemorph.listening.conftest import CatalogedTone, seed_labeled_tones
@@ -708,8 +709,8 @@ def test_drawn_pairs_are_rendered_through_every_route_and_read(
     assert len(_rows(output / "paths.csv")) == len(_rows(output / "verdicts.csv")) == len(names) * len(routes)
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))["routes"]
     assert set(manifest) == set(routes)
-    assert manifest["partials-glide"]["profile"]["correspondence"]["kind"] == "notes"
-    assert manifest["partials-crossfade"]["profile"]["correspondence"]["kind"] == "none"
+    for profile in ("glide", "crossfade"):
+        assert manifest[f"partials-{profile}"]["profile"] == PROFILE_PRESETS[profile].model_dump(mode="json")
 
 
 def test_a_blind_comparison_names_the_routes_by_letter_and_keeps_the_key(

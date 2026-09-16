@@ -1,79 +1,57 @@
 from __future__ import annotations
 
 from enum import StrEnum, unique
-from typing import Annotated, Final, Literal
+from typing import Final
 
 from pydantic import BaseModel, Field, model_validator
 
 from samplecore.models.base import FROZEN
 from samplemorph.partials.paths import FadeLaw, PitchPath, TimbrePath
 
-DEFAULT_CAP_SEMITONES: Final[float] = 12.0
+DEFAULT_TRAVEL_CENTS: Final[float] = 2400.0
+DEFAULT_DRIFT_CENTS: Final[float] = 300.0
+DEFAULT_LEVEL_WEIGHT: Final[float] = 0.0
+DEFAULT_LIFETIME_WEIGHT: Final[float] = 0.1
 DEFAULT_MOVEMENT_EXPONENT: Final[float] = 2.0
-DEFAULT_CAP_CENTS: Final[float] = 100.0
-DEFAULT_COMMON_CENTS: Final[float] = 50.0
+DEFAULT_FADE_PRICE: Final[float] = 1.0
+DEFAULT_LARGEST_SHIFT_COUNT: Final[int] = 4
+DEFAULT_SHIFT_SPREAD_CENTS: Final[float] = 20.0
 
 
-class NotesCorrespondence(BaseModel):
-    """Notes meet note to note, harmonic to harmonic, and a note with no partner fades.
+class Correspondence(BaseModel):
+    """Which partial of one sound meets which of the other, priced so that every partial has both choices.
 
-    Which note meets which is the pairing that costs the least over the whole chord, a move costing
-    what the two notes carry times how far they travel raised to `exponent`, and a note fading
-    costing what it carries times `cap_semitones` raised to the same power. Above the first power
-    several short moves cost less than one long one, so a chord's voices move in order and the
-    movement spreads across them. Partials standing free of every note meet by pitch, each pair the
-    nearest to the other within `cap_cents`.
+    A partial may travel to one partial of the other sound or fade where it stands, and the pairing
+    taken is the one whose price over both sounds is least. Travelling costs four things, each
+    reaching 1 where it alone is worth a whole fade: the distance covered against `travel_cents`, the
+    distance by which that move stands apart from the moves the two sounds agree on against
+    `drift_cents`, a difference in loudness against `level_weight`, and time heard apart against
+    `lifetime_weight`. The first two are raised to `exponent`, above the first power so that several
+    short moves come cheaper than one long one and a chord's movement spreads over its voices. A
+    partial fades at `fade_price`, so a high price sends partials travelling far and a low one holds
+    still what the two sounds already share.
+
+    The moves two sounds agree on are read as the heaviest `largest_shift_count` peaks of the weight
+    their partials put on each interval, spread over `shift_spread_cents`. Reading them is what pairs
+    a harmonic series as a series and a chord voice by voice, on one rule that asks the sound nothing
+    about its notes.
     """
 
     model_config = FROZEN
 
-    kind: Literal["notes"] = "notes"
-    cap_semitones: float = Field(default=DEFAULT_CAP_SEMITONES, gt=0.0)
+    travel_cents: float = Field(default=DEFAULT_TRAVEL_CENTS, gt=0.0)
+    drift_cents: float = Field(default=DEFAULT_DRIFT_CENTS, gt=0.0)
+    level_weight: float = Field(default=DEFAULT_LEVEL_WEIGHT, ge=0.0)
+    lifetime_weight: float = Field(default=DEFAULT_LIFETIME_WEIGHT, ge=0.0)
     exponent: float = Field(default=DEFAULT_MOVEMENT_EXPONENT, gt=0.0)
-    cap_cents: float = Field(default=DEFAULT_CAP_CENTS, gt=0.0)
+    fade_price: float = Field(default=DEFAULT_FADE_PRICE, ge=0.0)
+    largest_shift_count: int = Field(default=DEFAULT_LARGEST_SHIFT_COUNT, ge=0)
+    shift_spread_cents: float = Field(default=DEFAULT_SHIFT_SPREAD_CENTS, gt=0.0)
 
-
-class NearestPartials(BaseModel):
-    """Partials meet by pitch alone, each pair the nearest to the other within `cap_cents`.
-
-    A quarter tone apart is near enough to be the same partial heard twice, so what the two sounds
-    hold in common holds still while everything else fades where it stands: the middle a listener
-    hears as one sound turning into another through what they share.
-    """
-
-    model_config = FROZEN
-
-    kind: Literal["nearest"] = "nearest"
-    cap_cents: float = Field(default=DEFAULT_COMMON_CENTS, gt=0.0)
-
-
-class OrderedPartials(BaseModel):
-    """Partials meet in frequency order, one to one, and whichever are left over fade.
-
-    Each partial of one sound slides to a partial of the other, the pairs keeping their order in
-    frequency, so every partial arrives whole and the set arrives spread as it started.
-    """
-
-    model_config = FROZEN
-
-    kind: Literal["ordered"] = "ordered"
-
-
-class NoCorrespondence(BaseModel):
-    """Every partial keeps its own frequency, one sound's fading out as the other's fade in.
-
-    It is the crossfade a morph is judged against, drawn by the same oscillators as every other
-    profile, so what a comparison shows is what moving the partials adds.
-    """
-
-    model_config = FROZEN
-
-    kind: Literal["none"] = "none"
-
-
-Correspondence = Annotated[
-    NotesCorrespondence | NearestPartials | OrderedPartials | NoCorrespondence, Field(discriminator="kind")
-]
+    @property
+    def travel_reach_cents(self) -> float:
+        """How far a partial agreeing with the moves the two sounds make will travel before fading comes cheaper."""
+        return float(self.travel_cents * self.fade_price ** (1.0 / self.exponent))
 
 
 @unique

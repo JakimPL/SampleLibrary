@@ -42,6 +42,17 @@ class Channels:
     def note_count(self) -> int:
         return len(self.notes)
 
+    @property
+    def lines(self) -> NDArray[np.intp]:
+        """Which line each channel travels on: the note it is a harmonic of, or one of its own where it stands free.
+
+        Shape: the result is ``(channels,)``.
+        """
+        own: NDArray[np.intp] = np.where(
+            self.note >= 0, self.note, self.note_count + np.arange(self.channel_count)
+        ).astype(np.intp)
+        return own
+
 
 def channelize(tracks: PartialTracks, *, settings: NoteSettings) -> Channels:
     """Read a sound's partials as the lines it sounds along.
