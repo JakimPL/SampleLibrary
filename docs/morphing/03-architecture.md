@@ -115,6 +115,9 @@ Measured (2026-09-15): a straight line through the linear codec's latent is a de
 the two ends, down to the route's own noise. Spectral transport is built as `samplemorph.transport`,
 beside the latent route behind `samplemorph.routes`, and `morph compare` renders both and a
 crossfade control side by side for the ear; see [`20-audio-transport.md`](20-audio-transport.md).
+On tonal sounds the transport's per-frame pairing warbles, so `samplemorph.partials` reads each
+sound as notes over a residual and a `MorphProfile` says what the middle of two of them is; see
+[`21-partials.md`](21-partials.md).
 
 ### `SoundImage`
 

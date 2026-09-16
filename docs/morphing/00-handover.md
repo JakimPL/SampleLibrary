@@ -42,6 +42,7 @@ timbre can morph at constant pitch. The argument behind every part of that is in
 | [`07-environment.md`](07-environment.md) | Standing the machine up and rebuilding the library. **Start here.** |
 | [`08-prior-research.md`](08-prior-research.md) | Earlier findings, near-verbatim. Reference only. |
 | [`20-audio-transport.md`](20-audio-transport.md) | Why the latent morph is a crossfade, the transport morph that moves features, and the comparison that decides between them. |
+| [`21-partials.md`](21-partials.md) | Why the transport warbles on chords, the notes-over-residual model that holds them steady, and the profile that says what the middle is. |
 
 ## The first three things to do
 

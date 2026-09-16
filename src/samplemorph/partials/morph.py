@@ -8,9 +8,10 @@ from numpy.typing import NDArray
 from samplemorph.geometry import LogFrequencyGeometry
 from samplemorph.partials.correspondence.pairing import pair_channels
 from samplemorph.partials.model import SinusoidalModel
+from samplemorph.partials.paths import fade_progress, pitch_between
 from samplemorph.partials.profile import MorphProfile
 from samplemorph.partials.synthesis import oscillate
-from samplemorph.partials.tracks import PartialTracks
+from samplemorph.partials.tracks import CENTS_PER_OCTAVE, PartialTracks
 from samplemorph.transport.frame_reading import read_frames
 from samplemorph.transport.morph import (
     FIRST_END_WEIGHT,
@@ -55,13 +56,22 @@ class PartialMorph:
         if weight == SECOND_END_WEIGHT:
             return self._sounded(second.channels.tracks, residual=heard_as_analyzed(second.residual))
 
+        curves = self.profile.curves
         time_map = build_time_map(
-            first.whole, second.whole, weight=weight, hop_length=self.geometry.hop_length, settings=self.settings
+            first.whole,
+            second.whole,
+            weight=curves.time.at(weight),
+            hop_length=self.geometry.hop_length,
+            settings=self.settings,
         )
         return self._sounded(
             self._partials_between(first, second, time_map=time_map, weight=weight),
             residual=transport_along(
-                first.residual, second.residual, time_map=time_map, weight=weight, settings=self.settings
+                first.residual,
+                second.residual,
+                time_map=time_map,
+                weight=curves.residual.at(weight),
+                settings=self.settings,
             ),
         )
 
@@ -77,7 +87,12 @@ class PartialMorph:
     def _partials_between(
         self, first: SinusoidalModel, second: SinusoidalModel, *, time_map: TimeMap, weight: float
     ) -> PartialTracks:
-        """Every partial of the point between two sounds: the matched pairs on their way, and the rest on their own."""
+        """Every partial of the point between two sounds: the matched pairs on their way, and the rest on their own.
+
+        A pair of partials carries the level path between the two it meets, and one meeting nothing
+        fades by its energy, so the partials of a frame sum to what the level path asks of it and a
+        partial standing still through a morph keeps the level it stood at.
+        """
         pairing = pair_channels(first.channels, second.channels, correspondence=self.profile.correspondence)
         read_first = _read_along(
             first.channels.tracks,
@@ -92,12 +107,21 @@ class PartialMorph:
             settings=self.settings,
         )
         exponent = self.settings.level_exponent
-        log_frequency = np.concatenate(
+        curves = self.profile.curves
+        pitch = curves.pitch.at(weight)
+        timbre = curves.timbre.at(weight)
+        level = curves.level.at(weight)
+        faded = fade_progress(weight=level, law=self.profile.fade)
+        cents = np.concatenate(
             (
-                (1.0 - weight) * read_first.log_frequency[pairing.matched[:, 0]]
-                + weight * read_second.log_frequency[pairing.matched[:, 1]],
-                read_first.log_frequency[pairing.first_alone],
-                read_second.log_frequency[pairing.second_alone],
+                pitch_between(
+                    read_first.cents[pairing.matched[:, 0]],
+                    read_second.cents[pairing.matched[:, 1]],
+                    weight=pitch,
+                    path=self.profile.pitch,
+                ),
+                read_first.cents[pairing.first_alone],
+                read_second.cents[pairing.second_alone],
             )
         )
         energy = np.concatenate(
@@ -105,17 +129,17 @@ class PartialMorph:
                 _level_path(
                     read_first.energy[pairing.matched[:, 0]],
                     read_second.energy[pairing.matched[:, 1]],
-                    weight=weight,
+                    weight=timbre,
                     exponent=exponent,
                 ),
-                _level_path(read_first.energy[pairing.first_alone], 0.0, weight=weight, exponent=exponent),
-                _level_path(0.0, read_second.energy[pairing.second_alone], weight=weight, exponent=exponent),
+                (1.0 - faded) * read_first.energy[pairing.first_alone],
+                faded * read_second.energy[pairing.second_alone],
             )
         )
-        heard = _level_path(read_first.frame_energy, read_second.frame_energy, weight=weight, exponent=exponent)
+        heard = _level_path(read_first.frame_energy, read_second.frame_energy, weight=level, exponent=exponent)
         total = energy.sum(axis=0)
         return PartialTracks(
-            frequency_hz=(2.0**log_frequency).astype(np.float32),
+            frequency_hz=(2.0 ** (cents / CENTS_PER_OCTAVE)).astype(np.float32),
             amplitude=np.sqrt(energy * np.where(total > 0.0, heard / np.where(total > 0.0, total, 1.0), 0.0)).astype(
                 np.float32
             ),
@@ -126,12 +150,12 @@ class PartialMorph:
 
 @dataclass(frozen=True)
 class _ReadPartials:
-    """Partials read along a time map: where each stands in log frequency, and the energy it carries there.
+    """Partials read along a time map: the pitch each stands at in cents, and the energy it carries there.
 
     Shapes: both arrays are ``(partials, output frames)``.
     """
 
-    log_frequency: NDArray[np.float64]
+    cents: NDArray[np.float64]
     energy: NDArray[np.float64]
 
     @property
@@ -150,15 +174,15 @@ def _read_along(
     """Every partial read where a time map points, its pitch held where the reading reaches past the sound's own frames."""
     half_width = settings.maximum_reading_half_width
     if tracks.track_count == 0:
-        return _ReadPartials(log_frequency=np.zeros((0, positions.shape[0])), energy=np.zeros((0, positions.shape[0])))
+        return _ReadPartials(cents=np.zeros((0, positions.shape[0])), energy=np.zeros((0, positions.shape[0])))
 
     def read(frames: NDArray[np.float32]) -> NDArray[np.float64]:
         return read_frames(frames, positions=positions, rates=rates, maximum_half_width=half_width).astype(np.float64)
 
     reached = read(np.ones((1, tracks.frame_count), dtype=np.float32))
+    heard = read((CENTS_PER_OCTAVE * np.log2(tracks.frequency_hz)).astype(np.float32))
     return _ReadPartials(
-        log_frequency=read(np.log2(tracks.frequency_hz)) / np.maximum(reached, float(np.finfo(np.float32).tiny)),
-        energy=read(tracks.amplitude**2),
+        cents=heard / np.maximum(reached, float(np.finfo(np.float32).tiny)), energy=read(tracks.amplitude**2)
     )
 
 

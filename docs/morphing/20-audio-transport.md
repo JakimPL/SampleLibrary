@@ -86,8 +86,9 @@ on the CPU; the phase integration is the larger cost.
 
 **The known limit.** Balanced transport pairs partials by cumulative energy, so two tones of
 different brightness split pieces off the series: 9 % of the midpoint's energy lands on the pitch
-series in the synthetic probe. It is likely heard as an inharmonic haze. The remedy, unmatched
-groups following the neighboring scale field, waits for the ear.
+series in the synthetic probe. It is likely heard as an inharmonic haze. The ear heard it on chords
+as an enormous vibrato, and the answer is [`21-partials.md`](21-partials.md): partials tracked and
+paired once per pair of sounds, with the transport carrying what is left of them.
 
 ## The comparison
 

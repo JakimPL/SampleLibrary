@@ -46,10 +46,11 @@ class Channels:
 def channelize(tracks: PartialTracks, *, settings: NoteSettings) -> Channels:
     """Read a sound's partials as the lines it sounds along.
 
-    Every harmonic a note sounds becomes a channel of that note, standing where the note's own
-    fundamental puts it, and a partial two notes share is split between them by what each note's
-    other harmonics predict it to be, so the two halves sum to the partial as measured. Every partial
-    no note sounds stays a line of its own.
+    Every harmonic between the lowest and the highest a note sounds becomes a channel of that note,
+    standing where the note's own fundamental puts it and silent where no partial sounds it, so two
+    notes that meet travel harmonic by harmonic over the whole of their range. A partial two notes
+    share is split between them by what each note's other harmonics predict it to be, so the two
+    halves sum to the partial as measured, and every partial no note sounds stays a line of its own.
     """
     notes = estimate_notes(tracks, settings=settings)
     if not notes:
@@ -61,8 +62,12 @@ def channelize(tracks: PartialTracks, *, settings: NoteSettings) -> Channels:
         )
 
     shares = _shares(notes, tracks=tracks)
-    frequency = [note.harmonic_frequency_hz(note.harmonics) for note in notes]
-    amplitude = [tracks.amplitude[note.partials] * shares[index][:, None] for index, note in enumerate(notes)]
+    sounding = [_sounding(note) for note in notes]
+    frequency = [note.harmonic_frequency_hz(sounding[index]) for index, note in enumerate(notes)]
+    amplitude = [
+        _over_harmonics(note, sounding=sounding[index], amplitude=tracks.amplitude, share=shares[index])
+        for index, note in enumerate(notes)
+    ]
     free = _free_partials(notes, count=tracks.track_count)
     return Channels(
         tracks=PartialTracks(
@@ -72,14 +77,27 @@ def channelize(tracks: PartialTracks, *, settings: NoteSettings) -> Channels:
             rate_hz=tracks.rate_hz,
         ),
         note=np.concatenate(
-            [np.full(note.harmonic_count, index, dtype=np.intp) for index, note in enumerate(notes)]
+            [np.full(sounding[index].shape[0], index, dtype=np.intp) for index in range(len(notes))]
             + [np.full(free.shape[0], FREE_PARTIAL, dtype=np.intp)]
         ),
-        harmonic=np.concatenate([note.harmonics for note in notes] + [np.zeros(free.shape[0], dtype=np.intp)]).astype(
-            np.intp
-        ),
+        harmonic=np.concatenate([*sounding, np.zeros(free.shape[0], dtype=np.intp)]).astype(np.intp),
         notes=notes,
     )
+
+
+def _sounding(note: Note) -> NDArray[np.intp]:
+    """Every harmonic between the lowest and the highest a note sounds, the silent ones among them."""
+    return np.arange(int(note.harmonics.min()), int(note.harmonics.max()) + 1, dtype=np.intp)
+
+
+def _over_harmonics(
+    note: Note, *, sounding: NDArray[np.intp], amplitude: NDArray[np.float32], share: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Each harmonic's amplitude over time, silence where no partial sounds it. Shape: ``(harmonics, frames)``."""
+    over = np.zeros((sounding.shape[0], amplitude.shape[1]))
+    where = np.searchsorted(sounding, note.harmonics)
+    over[where] = amplitude[note.partials] * share[:, None]
+    return over
 
 
 def _free_partials(notes: tuple[Note, ...], *, count: int) -> NDArray[np.intp]:

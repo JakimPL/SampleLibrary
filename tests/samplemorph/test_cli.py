@@ -682,6 +682,9 @@ def test_drawn_pairs_are_rendered_through_every_route_and_read(
             *COMPARED_WEIGHTS,
             "--listening-weights",
             "0.5",
+            "--profiles",
+            "glide",
+            "crossfade",
         ],
         prog=PROGRAM,
     )
@@ -690,7 +693,7 @@ def test_drawn_pairs_are_rendered_through_every_route_and_read(
     retuned = [
         pair["name"] for pair in json.loads(pairs.read_text(encoding="utf-8"))["pairs"] if pair["kind"] == "retuned"
     ]
-    routes = ("latent", "transport", "blend", "partials-glide")
+    routes = ("latent", "transport", "blend", "partials-glide", "partials-crossfade")
     for name in names:
         assert (output / name / "original_first.wav").exists()
         for route in routes:
@@ -703,7 +706,10 @@ def test_drawn_pairs_are_rendered_through_every_route_and_read(
         row["transposition_distance_db"] != "" for row in readings if row["pair"] in retuned and row["weight"] == "0.5"
     )
     assert len(_rows(output / "paths.csv")) == len(_rows(output / "verdicts.csv")) == len(names) * len(routes)
-    assert set(json.loads((output / "manifest.json").read_text(encoding="utf-8"))["routes"]) == set(routes)
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))["routes"]
+    assert set(manifest) == set(routes)
+    assert manifest["partials-glide"]["profile"]["correspondence"]["kind"] == "notes"
+    assert manifest["partials-crossfade"]["profile"]["correspondence"]["kind"] == "none"
 
 
 def test_a_blind_comparison_names_the_routes_by_letter_and_keeps_the_key(
