@@ -69,6 +69,9 @@ under its `[library]` table:
 The `[inference]` table holds one key, `url`: the address the morph renderer listens on and the API
 reaches it at, `http://127.0.0.1:8010` by default. It names a port of its own.
 
+`morph.yaml`, beside `config.toml`, is committed and names the morph the renderer plays; see
+[Morphing two samples](#morphing-two-samples).
+
 The optional `[pipeline]` table holds the settings `just rebuild` builds the library with:
 
 - `memory_cap`: the memory ceiling every step runs under, such as `"16G"`; `"none"` by default.
@@ -232,23 +235,24 @@ The app can play a sound between any two samples, through a morph renderer runni
 uv run samplelibrary morph serve                      # the renderer, in a terminal of its own
 ```
 
-The renderer morphs through the samples' own spectral analyses, moving the spectral envelope from
-one sample's to the other's under the first sample's harmonics and noise, and needs nothing fitted.
-`--excitation second` keeps the second sample's instead, and `--excitation halfway` hands over at
-the middle. `--route latent` renders through a codec fitted to your library instead, which needs
-one first:
+`morph.yaml` at the repository root says what the renderer plays; edit it and start the renderer
+again. As committed, it morphs through the samples' own spectral analyses, moving the spectral
+envelope from one sample's to the other's over the first sample's harmonics and noise, and needs
+nothing fitted. `excitation: second` keeps the second sample's harmonics instead, and
+`excitation: both` crossfades the two. `route: latent` renders through a codec fitted to your
+library, which needs one first:
 
 ```sh
-uv run samplelibrary morph fit                                    # a linear codec, a few minutes on the processor
-uv run samplelibrary morph serve --route latent --vocoder pghi    # the renderer through it
+uv run samplelibrary morph fit      # a linear codec, a few minutes on the processor
+uv run samplelibrary morph serve    # the renderer through it, with `route: latent` and `vocoder_name: pghi` in morph.yaml
 ```
 
 The fit reads 4,000 samples between 4,000 and 200,000 frames long, in about three gigabytes of
 memory, and keeps 256 components, so a library holding fewer such samples fits with a smaller
 `--latent-size`; the command names the largest that fits.
 
-`just serve-inference` starts the renderer on the envelope route. The latent route with the restored
-vocoder sounds closer to the original and needs a restorer trained on a GPU first:
+`just serve-inference` starts the renderer on whatever `morph.yaml` names, and `--selection` points
+it at another file. The latent route with the restored vocoder sounds closer to the original and needs a restorer trained on a GPU first:
 `uv run samplelibrary morph train-restorer` takes about an hour an epoch over a large library.
 
 With the renderer running, in the cloud, press the right mouse button on one sample and release it
@@ -257,8 +261,9 @@ a dashed line whose marker is how far from the first sample toward the second yo
 right-click on a sample joins it to the one you last clicked instead, and so does a Shift-click on a
 sample in any list. Drag the marker, or move the slider in the Morph panel, and the morph plays when
 you let go; beneath the play button the panel shows how far apart the two samples sound. The two ends play as
-the model reconstructs them, with each original one click away beside its name, and a double-click
-on either name opens it in the Sample Detail. Without the renderer running, the panel says so and
+the route renders them, so with the first sample's harmonics kept the far end is the second sample's
+spectral shape over the first sample's notes; each original is one click away beside its name, and a
+double-click on either name opens it in the Sample Detail. Without the renderer running, the panel says so and
 offers to check again.
 
 ## Development

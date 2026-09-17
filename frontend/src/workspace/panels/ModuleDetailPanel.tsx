@@ -27,7 +27,7 @@ export function ModuleDetailPanel(): ReactElement {
     const focusedModuleHash = useSelectionStore((state) => state.focusedModuleHash);
 
     if (focusedModuleHash === null) {
-        return <p className="no-selection">No module selected yet — double-click a module to see it here.</p>;
+        return <p className="no-selection">Double-click a module to see it here.</p>;
     }
 
     return <FocusedModuleDetail moduleHash={focusedModuleHash} />;

@@ -107,9 +107,10 @@ moves. A **preset** is a named profile. See [`21-partials.md`](21-partials.md).
 `blend`, `partials`, `envelope`. Routes are interchangeable behind one interface so a listening
 comparison can render them side by side and the inference process can serve any one of them.
 
-**Switch weight** (`EnvelopeSettings.switch_weight`). On the envelope route, the weight from which
-the second sound's excitation sounds under the moving envelope. At 1 the first sound's excitation
-sounds along the whole path, at 0 the second's.
+**Excitation choice** (`EnvelopeSettings.excitation`). On the envelope route, whose excitation
+sounds under the moving envelope: `first` keeps the first sound's along the whole path, `second`
+the second's, and `both` crossfades the two with the weight. With one excitation kept, the far end
+of the path is that sound's pitch content under the other sound's envelope.
 
 **Degeneration.** The property that the partials route, given two sounds with no tracked partials,
 renders bit for bit what the transport route renders. It is what lets the route be adopted for tonal

@@ -32,6 +32,7 @@ morph = [
     "fastapi>=0.120",
     "uvicorn>=0.35",
     "mlflow>=3.6",
+    "pyyaml>=6.0",
 ]
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]
@@ -67,6 +68,7 @@ dev = [
     "pre-commit==4.6.0",
     "marimo>=0.23",
     "hypothesis==6.168.0",
+    "types-pyyaml==6.0.12.20260906",
 ]
 
 [build-system]

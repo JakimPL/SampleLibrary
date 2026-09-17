@@ -37,7 +37,7 @@ export function SampleDetailPanel(): ReactElement {
     const [tab, setTab] = useState<DetailTab>(DEFAULT_DETAIL_TAB);
 
     if (focusedSampleHash === null) {
-        return <p className="no-selection">No sample selected yet — double-click a sample to see it here.</p>;
+        return <p className="no-selection">Double-click a sample to see its details.</p>;
     }
 
     return <FocusedSampleDetail sampleHash={focusedSampleHash} tab={tab} onTabChange={setTab} />;

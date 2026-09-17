@@ -1,13 +1,12 @@
 import { create } from "zustand";
 
-const WEIGHT_STEPS = 16;
+const WEIGHT_STEPS = 100;
 export const WEIGHT_STEP = 1 / WEIGHT_STEPS;
 export const DEFAULT_WEIGHT = 0.5;
 
 /**
- * The weight held to the unit interval and to the grid of sixteenths the renderer serves: a step of
- * a power of two is exact in binary, so a snapped weight writes as one short decimal in a URL and
- * names exactly one cached render.
+ * The weight held to the unit interval and to the grid of hundredths the renderer serves, so a
+ * snapped weight writes as one two-place decimal in a URL and names exactly one cached render.
  */
 export function snapWeight(weight: number): number {
     const clamped = Math.min(1, Math.max(0, weight));

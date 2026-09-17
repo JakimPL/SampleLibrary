@@ -39,35 +39,39 @@ For a weight between 0 and 1:
    bin. The excitation is the magnitude divided by that envelope.
 4. **The envelope path.** The output envelope lies at the weight between the two, bin by bin in
    decibels.
-5. **The excitation choice.** Under that envelope sounds the first sound's excitation at every
-   weight below `switch_weight`, and the second sound's from it on.
+5. **The excitation choice.** Under that envelope sounds the excitation the settings name: the
+   first sound's whole, the second's whole, or the two crossfaded linearly with the weight.
 6. **Synthesis.** The product of the two is a magnitude, which phase gradient heap integration
    makes audible, as for every route over the analyses.
 
-At weights 0 and 1 the route returns each sound's own analysis.
+The ends render through the same steps as every point between them. Under a kept excitation the
+kept sound's own end reconstructs its analysis, since an envelope times its own excitation is the
+spectrum it came from, and the far end is that sound's pitch content under the other sound's
+envelope. Under the crossfade both ends reconstruct their sounds. Nothing is substituted at an
+end, so a slider says at 1.0 exactly what the path arrives at.
 
 ## Parameters
 
-`EnvelopeSettings` (`samplemorph/envelope/settings.py`) holds three numbers.
+`EnvelopeSettings` (`samplemorph/envelope/settings.py`) holds three settings.
 
 | Parameter | Default | What it does |
 |---|---|---|
 | `coefficient_count` | 40 | How many cosines draw the envelope. Fewer make it smoother, so more of a sound's fine structure counts as excitation; more let it follow individual harmonics, so less of the timbre travels. At 40 over the 2,049 bins of a 4,096-point analysis, the envelope keeps ripples slower than about 50 bins per cycle. |
 | `floor_db` | 80 | How deep under the sound's loudest bin the loudness is read. A silent frame's envelope lies flat at this floor. |
-| `switch_weight` | 1.0 | The weight from which the second sound's excitation sounds. At 1 the first sound's excitation sounds along the whole path; at 0 the second's; at 0.5 the excitation changes hands at the midpoint. |
+| `excitation` | `first` | Whose excitation sounds under the moving envelope: `first` keeps the first sound's along the whole path, `second` the second's, and `both` crossfades the two with the weight. |
 
-Three presets name the switch weight (`samplemorph/envelope/presets.py`):
+The three choices give three different paths:
 
-| Preset | `switch_weight` | The middle sounds |
+| `excitation` | The middle sounds | The far end sounds |
 |---|---|---|
-| `first` (default) | 1.0 | the first sound's pitch content under an envelope moving toward the second's |
-| `second` | 0.0 | the second sound's pitch content under an envelope moving away from the first's |
-| `halfway` | 0.5 | the first's until the midpoint, the second's from it on |
+| `first` | the first sound's pitch content under an envelope halfway toward the second's | the first sound's pitch content under the second sound's envelope |
+| `second` | the second sound's pitch content under an envelope halfway from the first's | the second sound's pitch content under the first sound's envelope |
+| `both` | both pitch contents, each at half its level, under the halfway envelope | each sound's own spectrum at its own end |
 
-The inference process renders this route by default: `samplelibrary morph serve` serves the
-`first` preset, and `--excitation second` or `--excitation halfway` serve the others. The listening
-comparison renders it beside the other routes with `morph compare --routes envelope --excitations
-first second`, one folder per preset.
+The inference process reads the route and these settings from `morph.yaml` at the repository
+root, and the committed file names the envelope route with `excitation: first`. The listening
+comparison renders the route beside the others with `morph compare --routes envelope --excitations
+first second both`, one folder per choice.
 
 Because the envelope is drawn over the analysis bins, and a bin is a fixed fraction of the rate a
 pair is heard at, the envelope's resolution in hertz follows that rate: a pair heard at 8 kHz gets an
@@ -75,8 +79,8 @@ envelope about five times finer in hertz than one heard at 44.1 kHz.
 
 ## What the measurements showed
 
-Four listening pairs were rendered at weights 0.25, 0.5 and 0.75 under each preset, beside a
-decibel crossfade, and the notes at each midpoint were read with the same estimator the partials
+Four listening pairs were rendered at weights 0.25, 0.5 and 0.75 under `first` and `second`, beside
+a decibel crossfade, and the notes at each midpoint were read with the same estimator the partials
 route uses.
 
 | Pair | The ends | `first` | `second` | crossfade |
@@ -93,7 +97,7 @@ Whether the timbre travels was read from a 12-coefficient envelope of each rende
 ignore where the harmonics stand, as the fraction of the way from the first sound's envelope to the
 second's:
 
-| Pair | Preset | w = 0.25 | w = 0.5 | w = 0.75 |
+| Pair | `excitation` | w = 0.25 | w = 0.5 | w = 0.75 |
 |---|---|---|---|---|
 | piano chord against piano note | `first` | 0.27 | 0.46 | 0.62 |
 | piano chord against piano note | `second` | 0.63 | 0.77 | 0.89 |
@@ -109,14 +113,16 @@ than a partial-wise morph assumed, and not fully so.
 
 - **The middle is one instrument, not two.** That was the whole difficulty, and it holds by
   construction.
-- **The path is asymmetric.** Under the `first` preset, morphing A toward B and B toward A give
-  different sounds: each keeps its own first sound's pitch content. A slider in the application
-  therefore plays A's notes with a timbre moving toward B's, and B itself only at the very end.
-- **Pitch changes hands, it does not glide.** A path holding one excitation never changes pitch,
-  so the second sound's pitch content arrives at one point of the path, the switch weight. For a
-  chord this is the only honest reading: consonance is discrete, and every continuous path between
-  two chords passes through roughness that neither end has. For a single note, transposing the
-  excitation continuously would be well defined, and the route does not do it yet.
+- **The path is asymmetric.** Under `first`, morphing A toward B and B toward A give different
+  sounds: each keeps its own first sound's pitch content. A slider in the application therefore
+  plays A's notes with a timbre moving toward B's, and arrives at A's notes under B's envelope; B's
+  own notes are never heard on that path. The ends render by the same rule as every point between
+  them, so the slider says what the path does instead of substituting the samples at its ends.
+- **Pitch never glides.** A path holding one excitation keeps its pitch content from end to end,
+  and `both` crossfades two pitch contents, which is the middle every crossfade has. For a chord the
+  kept excitation is the only honest reading: consonance is discrete, and every continuous path
+  between two chords passes through roughness that neither end has. For a single note, transposing
+  the excitation continuously would be well defined, and the route does not do it yet.
 - **Rhythm is the kept excitation's.** Silence in the kept sound's frames stays silent whatever the
   other sound does there; the other sound contributes its shape, not its events.
 - **Percussion is a filter sweep.** With no pitch content to keep, the route plays the first sound

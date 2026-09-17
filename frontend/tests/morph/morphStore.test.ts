@@ -7,8 +7,9 @@ const B = "b".repeat(64);
 const C = "c".repeat(64);
 
 describe("snapWeight", () => {
-    it("holds a weight to the unit interval and to the grid of sixteenths", () => {
-        expect(snapWeight(0.3)).toBe(0.3125);
+    it("holds a weight to the unit interval and to the grid of hundredths", () => {
+        expect(snapWeight(0.304)).toBe(0.3);
+        expect(snapWeight(0.305)).toBe(0.31);
         expect(snapWeight(-0.4)).toBe(0);
         expect(snapWeight(1.7)).toBe(1);
         expect(snapWeight(WEIGHT_STEP * 5)).toBe(WEIGHT_STEP * 5);
@@ -48,9 +49,9 @@ describe("morphStore", () => {
     });
 
     it("snaps every weight it is handed", () => {
-        useMorphStore.getState().setWeight(0.3);
+        useMorphStore.getState().setWeight(0.304);
 
-        expect(useMorphStore.getState().weight).toBe(0.3125);
+        expect(useMorphStore.getState().weight).toBe(0.3);
     });
 
     it("clears the pair and returns the weight to its default", () => {

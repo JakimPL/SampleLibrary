@@ -63,8 +63,8 @@ describe("MorphLink", () => {
         const { marker } = renderLink({ onWeightChange, onWeightCommit, onDragChange });
 
         fireEvent.pointerDown(marker, { pointerId: 1, clientX: 60, clientY: 20 });
-        fireEvent.pointerMove(marker, { pointerId: 1, clientX: 87, clientY: 45 });
-        fireEvent.pointerUp(marker, { pointerId: 1, clientX: 87, clientY: 45 });
+        fireEvent.pointerMove(marker, { pointerId: 1, clientX: 85, clientY: 45 });
+        fireEvent.pointerUp(marker, { pointerId: 1, clientX: 85, clientY: 45 });
 
         expect(onWeightChange).toHaveBeenCalledWith(0.75);
         expect(onWeightCommit).toHaveBeenCalledTimes(1);
@@ -91,7 +91,7 @@ describe("MorphLink", () => {
         fireEvent.keyDown(marker, { key: "End" });
         fireEvent.keyDown(marker, { key: "Tab" });
 
-        expect(onWeightChange.mock.calls).toEqual([[0.5625], [0], [1]]);
+        expect(onWeightChange.mock.calls).toEqual([[0.51], [0], [1]]);
         expect(onWeightCommit).toHaveBeenCalledTimes(1);
     });
 
