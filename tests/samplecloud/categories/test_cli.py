@@ -6,16 +6,16 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME
-from samplecloud.suggestions import cli
-from samplecloud.suggestions.cli import main
+from samplecloud.categories import cli
+from samplecloud.categories.cli import main
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.exit_status import ExitStatus
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from tests.samplecloud.backends.test_teacher_backend import RecordingTeacher
-from tests.samplecloud.suggestions.test_scoring import KICK_HASH, VOCABULARY, seed_listening_experiment
+from tests.samplecloud.categories.test_scoring import KICK_HASH, VOCABULARY, seed_listening_experiment
 
-PROGRAM = "samplelibrary cloud suggest"
+PROGRAM = "samplelibrary cloud categorize"
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
@@ -46,9 +46,9 @@ def test_the_command_scores_a_listening_experiment_and_reports_the_agreement(
     repository = PostgresSampleLabelSuggestionRepository(connection)
     shown = repository.shown_experiment_id()
     assert shown is not None
-    assert [suggestion.label for suggestion in repository.get_many(shown, [KICK_HASH])[KICK_HASH]] == ["BASS DRUM"]
+    assert [category.label for category in repository.get_many(shown, [KICK_HASH])[KICK_HASH]] == ["BASS DRUM"]
     output = capsys.readouterr().out
-    assert "suggested labels for 2 samples" in output
+    assert "categorized 2 samples" in output
     assert "Against 2 hand labels" in output
 
 
@@ -111,14 +111,14 @@ def test_a_key_files_the_scoring_and_a_later_run_shows_it_again_without_the_mode
     listing = tmp_path / "labels.txt"
     listing.write_text("\n".join(VOCABULARY), encoding="utf-8")
     source = str(seed_listening_experiment(connection))
-    main(["--experiment-id", source, "--vocabulary", str(listing), "--key", "suggestions-a"], prog=PROGRAM)
-    filed = PostgresExperimentRepository(connection).get_by_key("suggestions-a")
+    main(["--experiment-id", source, "--vocabulary", str(listing), "--key", "categories-a"], prog=PROGRAM)
+    filed = PostgresExperimentRepository(connection).get_by_key("categories-a")
     main(["--experiment-id", source, "--vocabulary", str(listing), "--top", "1"], prog=PROGRAM)
     repository = PostgresSampleLabelSuggestionRepository(connection)
     assert filed is not None
     assert repository.shown_experiment_id() != filed.id
 
-    main(["--experiment-id", source, "--vocabulary", str(listing), "--key", "suggestions-a"], prog=PROGRAM)
+    main(["--experiment-id", source, "--vocabulary", str(listing), "--key", "categories-a"], prog=PROGRAM)
 
     assert repository.shown_experiment_id() == filed.id
     assert len(loads) == 2
@@ -136,11 +136,11 @@ def test_a_key_filed_by_another_scoring_recipe_is_refused(
     listing = tmp_path / "labels.txt"
     listing.write_text("\n".join(VOCABULARY), encoding="utf-8")
     source = str(seed_listening_experiment(connection))
-    main(["--experiment-id", source, "--vocabulary", str(listing), "--key", "suggestions-a"], prog=PROGRAM)
+    main(["--experiment-id", source, "--vocabulary", str(listing), "--key", "categories-a"], prog=PROGRAM)
 
     with pytest.raises(SystemExit) as raised:
         main(
-            ["--experiment-id", source, "--vocabulary", str(listing), "--top", "1", "--key", "suggestions-a"],
+            ["--experiment-id", source, "--vocabulary", str(listing), "--top", "1", "--key", "categories-a"],
             prog=PROGRAM,
         )
 

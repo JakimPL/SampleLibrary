@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
-from samplecloud.suggestions.scoring import show_scoring
+from samplecloud.categories.scoring import show_scoring
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate

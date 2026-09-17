@@ -85,7 +85,7 @@ class RefusedRecipeCase:
 @pytest.mark.parametrize(
     "case",
     [
-        RefusedRecipeCase(backend_name="zero_shot", params={}, reason="label suggestions"),
+        RefusedRecipeCase(backend_name="zero_shot", params={}, reason="a scoring of categories"),
         RefusedRecipeCase(backend_name="retired", params={"reading": "nominal"}, reason="unknown here"),
         RefusedRecipeCase(backend_name="learned", params={"reading": "nominal"}, reason="does not name"),
         RefusedRecipeCase(backend_name="librosa", params={}, reason="records no reading"),

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Connection
 
-from samplecloud.suggestions.vocabulary import (
+from samplecloud.categories.vocabulary import (
     HAND_LABELS_CHOICE,
     INSTRUMENT_VOCABULARY,
     INSTRUMENTS_CHOICE,

@@ -64,6 +64,6 @@ def test_the_real_programs_take_in_a_sample_file_added_after_the_first_run(real_
 
     real_runner.run(
         Run(),
-        BUILT.moving("samples", "files", "passes", "experiments", "suggestions", "cloud", "artifacts"),
+        BUILT.moving("samples", "files", "passes", "experiments", "categories", "cloud", "artifacts"),
         story="the run after a sample file arrived",
     )

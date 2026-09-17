@@ -12,18 +12,18 @@ from samplecloud.backends.teacher_backend import (
     TEACHER_REVISION,
     load_teacher,
 )
-from samplecloud.experiments import ExperimentRefused, experiment_named
-from samplecloud.suggestions.scoring import (
-    DEFAULT_SUGGESTION_COUNT,
-    MAXIMUM_SUGGESTION_COUNT,
+from samplecloud.categories.scoring import (
+    DEFAULT_CATEGORY_COUNT,
+    MAXIMUM_CATEGORY_COUNT,
     ScoringConflict,
     ScoringRecipe,
     ScoringSummary,
     filed_scoring,
-    score_suggestions,
+    score_categories,
     show_scoring,
 )
-from samplecloud.suggestions.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, prompt_for, vocabulary_from
+from samplecloud.categories.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, prompt_for, vocabulary_from
+from samplecloud.experiments import ExperimentRefused, experiment_named
 from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import (
     bootstrap_cli,
@@ -42,7 +42,7 @@ _logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str], *, prog: str) -> None:
-    """Suggest labels for every sample of a listening-model experiment, and report how they read.
+    """Give every sample of a listening-model experiment its categories, and report how they read.
 
     A key files the scoring under a name of its own, so a run naming a key an earlier run filed shows
     that scoring again and scores nothing.
@@ -50,14 +50,14 @@ def main(argv: list[str], *, prog: str) -> None:
     arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
-        with ending_in_one_line("Suggested nothing", (ExperimentRefused, VocabularyRefused, ScoringConflict)):
+        with ending_in_one_line("Scored nothing", (ExperimentRefused, VocabularyRefused, ScoringConflict)):
             source = _listening_experiment(connection, arguments.experiment_id)
             recipe = ScoringRecipe(
                 source_experiment_id=source.id,
                 checkpoint=TEACHER_CHECKPOINT,
                 checkpoint_revision=TEACHER_REVISION,
                 vocabulary=vocabulary_from(arguments.vocabulary, connection),
-                suggestion_count=arguments.top,
+                category_count=arguments.top,
                 label=arguments.label,
                 key=arguments.key,
             )
@@ -69,7 +69,7 @@ def main(argv: list[str], *, prog: str) -> None:
             )
             return
         prompts = load_teacher(device=arguments.device).embed_text([prompt_for(label) for label in recipe.vocabulary])
-        summary = score_suggestions(connection, recipe=recipe, prompts=prompts)
+        summary = score_categories(connection, recipe=recipe, prompts=prompts)
     _report(summary)
 
 
@@ -83,7 +83,7 @@ def _listening_experiment(connection: Connection, experiment_id: int) -> Experim
     if experiment.backend_name != TEACHER_BACKEND_NAME:
         raise ExperimentRefused(
             f"experiment {experiment_id} was extracted by the {experiment.backend_name} backend; "
-            f"suggestions read the {TEACHER_BACKEND_NAME} backend's vectors"
+            f"a scoring reads the {TEACHER_BACKEND_NAME} backend's vectors"
         )
     if not PostgresSampleFeatureVectorRepository(connection).vectors_in_hash_order(experiment_id, count=1, offset=0):
         raise ExperimentRefused(f"experiment {experiment_id} holds no vectors to score")
@@ -91,13 +91,13 @@ def _listening_experiment(connection: Connection, experiment_id: int) -> Experim
 
 
 def _report(summary: ScoringSummary) -> None:
-    _logger.info("Experiment %d: suggested labels for %d samples.", summary.experiment_id, summary.sample_count)
-    for label, count in sorted(summary.first_picks.items(), key=lambda item: (-item[1], item[0])):
+    _logger.info("Experiment %d: categorized %d samples.", summary.experiment_id, summary.sample_count)
+    for label, count in sorted(summary.top_category_counts.items(), key=lambda item: (-item[1], item[0])):
         _logger.info("  %-24s %6d  %5.1f%%", label, count, 100.0 * count / summary.sample_count)
     agreement = summary.agreement
     if agreement.labeled:
         _logger.info(
-            "Against %d hand labels the first suggestion agrees exactly on %d (%.1f%%) "
+            "Against %d hand labels the top category agrees exactly on %d (%.1f%%) "
             "and at the top level on %d (%.1f%%).",
             agreement.labeled,
             agreement.exact,
@@ -108,7 +108,7 @@ def _report(summary: ScoringSummary) -> None:
 
 
 def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = command_parser(prog=prog, description="Suggest labels for every sample of a listening-model experiment.")
+    parser = command_parser(prog=prog, description="Give every sample of a listening-model experiment its categories.")
     parser.add_argument(
         "--experiment-id",
         type=positive_integer,
@@ -123,8 +123,8 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     )
     parser.add_argument(
         "--top",
-        type=integer_between(1, MAXIMUM_SUGGESTION_COUNT),
-        default=DEFAULT_SUGGESTION_COUNT,
+        type=integer_between(1, MAXIMUM_CATEGORY_COUNT),
+        default=DEFAULT_CATEGORY_COUNT,
         help="How many labels each sample keeps, closest first.",
     )
     parser.add_argument(

@@ -8,11 +8,11 @@ from sqlalchemy import Connection, func, select
 from trackmod.core.samples.depth import BitDepth
 
 from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME, TEACHER_EMBEDDING_SIZE
-from samplecloud.suggestions.scoring import (
-    MAXIMUM_SUGGESTION_COUNT,
+from samplecloud.categories.scoring import (
+    MAXIMUM_CATEGORY_COUNT,
     HandLabelAgreement,
     ScoringRecipe,
-    score_suggestions,
+    score_categories,
 )
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
@@ -67,14 +67,14 @@ def prompts() -> np.ndarray:
 def test_each_sample_keeps_its_closest_labels_first_under_a_new_experiment(connection: Connection) -> None:
     source = seed_listening_experiment(connection)
 
-    summary = score_suggestions(
+    summary = score_categories(
         connection,
         recipe=ScoringRecipe(
             source_experiment_id=source,
             checkpoint="stub",
             checkpoint_revision="stub-revision",
             vocabulary=VOCABULARY,
-            suggestion_count=2,
+            category_count=2,
             label=None,
             key=None,
         ),
@@ -82,11 +82,11 @@ def test_each_sample_keeps_its_closest_labels_first_under_a_new_experiment(conne
     )
 
     repository = PostgresSampleLabelSuggestionRepository(connection)
-    suggestions = repository.get_many(summary.experiment_id, [KICK_HASH, HAT_HASH])
-    assert [suggestion.label for suggestion in suggestions[KICK_HASH]][0] == "BASS DRUM"
-    assert [suggestion.label for suggestion in suggestions[HAT_HASH]][0] == "HI-HAT: CLOSED"
-    assert all(len(held) == 2 for held in suggestions.values())
-    assert suggestions[KICK_HASH][0].score == pytest.approx(1.0)
+    categories = repository.get_many(summary.experiment_id, [KICK_HASH, HAT_HASH])
+    assert [category.label for category in categories[KICK_HASH]][0] == "BASS DRUM"
+    assert [category.label for category in categories[HAT_HASH]][0] == "HI-HAT: CLOSED"
+    assert all(len(held) == 2 for held in categories.values())
+    assert categories[KICK_HASH][0].score == pytest.approx(1.0)
     assert repository.shown_experiment_id() == summary.experiment_id
     experiment = PostgresExperimentRepository(connection).get(summary.experiment_id)
     assert experiment is not None
@@ -99,14 +99,14 @@ def test_the_summary_counts_the_first_picks_and_their_agreement_with_the_hand_la
     """The kick's first pick is the top level its label specifies; the hat's first pick contradicts its label."""
     source = seed_listening_experiment(connection)
 
-    summary = score_suggestions(
+    summary = score_categories(
         connection,
         recipe=ScoringRecipe(
             source_experiment_id=source,
             checkpoint="stub",
             checkpoint_revision="stub-revision",
             vocabulary=VOCABULARY,
-            suggestion_count=1,
+            category_count=1,
             label=None,
             key=None,
         ),
@@ -114,7 +114,7 @@ def test_the_summary_counts_the_first_picks_and_their_agreement_with_the_hand_la
     )
 
     assert summary.sample_count == 2
-    assert summary.first_picks == {"BASS DRUM": 1, "HI-HAT: CLOSED": 1}
+    assert summary.top_category_counts == {"BASS DRUM": 1, "HI-HAT: CLOSED": 1}
     assert summary.agreement == HandLabelAgreement(labeled=2, exact=1, top_level=1)
 
 
@@ -124,14 +124,14 @@ def test_an_experiment_without_vectors_says_so(connection: Connection) -> None:
     )
 
     with pytest.raises(ValueError, match="holds no vectors"):
-        score_suggestions(
+        score_categories(
             connection,
             recipe=ScoringRecipe(
                 source_experiment_id=empty,
                 checkpoint="stub",
                 checkpoint_revision="stub-revision",
                 vocabulary=VOCABULARY,
-                suggestion_count=1,
+                category_count=1,
                 label=None,
                 key=None,
             ),
@@ -168,14 +168,14 @@ def test_a_scoring_interrupted_while_writing_leaves_no_experiment_behind(
     monkeypatch.setattr(PostgresSampleLabelSuggestionRepository, "insert_many", failing_insert)
 
     with pytest.raises(OSError, match="simulated failure"):
-        score_suggestions(
+        score_categories(
             connection,
             recipe=ScoringRecipe(
                 source_experiment_id=source,
                 checkpoint="stub",
                 checkpoint_revision="stub-revision",
                 vocabulary=VOCABULARY,
-                suggestion_count=1,
+                category_count=1,
                 label=None,
                 key=None,
             ),
@@ -187,18 +187,18 @@ def test_a_scoring_interrupted_while_writing_leaves_no_experiment_behind(
 
 
 @pytest.mark.parametrize(
-    ("suggestion_count", "vocabulary"),
-    [(0, VOCABULARY), (MAXIMUM_SUGGESTION_COUNT + 1, VOCABULARY), (1, ())],
-    ids=("no suggestion", "past the bound", "no label to rank"),
+    ("category_count", "vocabulary"),
+    [(0, VOCABULARY), (MAXIMUM_CATEGORY_COUNT + 1, VOCABULARY), (1, ())],
+    ids=("no category", "past the bound", "no label to rank"),
 )
-def test_a_recipe_outside_its_bounds_is_refused(suggestion_count: int, vocabulary: tuple[str, ...]) -> None:
+def test_a_recipe_outside_its_bounds_is_refused(category_count: int, vocabulary: tuple[str, ...]) -> None:
     with pytest.raises(ValueError, match="at least one label|between"):
         ScoringRecipe(
             source_experiment_id=1,
             checkpoint="stub",
             checkpoint_revision="stub-revision",
             vocabulary=vocabulary,
-            suggestion_count=suggestion_count,
+            category_count=category_count,
             label=None,
             key=None,
         )

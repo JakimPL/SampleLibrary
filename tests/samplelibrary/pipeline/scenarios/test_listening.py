@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from samplecloud.suggestions.scoring import DEFAULT_SUGGESTION_COUNT
+from samplecloud.categories.scoring import DEFAULT_CATEGORY_COUNT
 from samplecore.exit_status import ExitStatus
 from samplelibrary.pipeline.results import AttemptOutcome, StepVerdict
 from samplelibrary.pipeline.steps.kinds import NOT_SHOWN, SAMPLES_TO_DESCRIBE
@@ -15,14 +15,14 @@ from tests.samplelibrary.pipeline.scenarios.harness.world import DEFAULT_PIPELIN
 
 ORPHAN_DEADLINE_SECONDS = 60.0
 
-LISTENING = ("teacher", "hearing-teacher", "suggestions")
-LISTENING_TARGETS = ("catalog", "teacher", "suggestions")
+LISTENING = ("teacher", "hearing-teacher", "categories")
+LISTENING_TARGETS = ("catalog", "teacher", "categories")
 EVERY_STEP = (*CATALOG_STEPS, *LISTENING)
 BUILT = Expect.completed(EVERY_STEP, StepVerdict.RAN).with_steps(labels=StepVerdict.SATISFIED)
 SETTLED = BUILT.with_steps(
-    teacher=StepVerdict.SATISFIED, hearing_teacher=StepVerdict.SATISFIED, suggestions=StepVerdict.SATISFIED
+    teacher=StepVerdict.SATISFIED, hearing_teacher=StepVerdict.SATISFIED, categories=StepVerdict.SATISFIED
 )
-FIRST_BUILD = BUILT.moving("modules", "samples", "relations", "files", "passes", "experiments", "suggestions")
+FIRST_BUILD = BUILT.moving("modules", "samples", "relations", "files", "passes", "experiments", "categories")
 
 
 def test_a_first_run_hears_every_readable_sample_twice_and_ranks_labels_for_them(
@@ -51,8 +51,8 @@ def test_a_sample_file_added_grows_both_readings_under_their_keys_and_ranks_agai
         BUILT.because(
             teacher=frozenset({SAMPLES_TO_DESCRIBE}),
             hearing_teacher=frozenset({SAMPLES_TO_DESCRIBE}),
-            suggestions=frozenset({HEARD_VECTORS}),
-        ).moving("samples", "files", "passes", "experiments", "suggestions"),
+            categories=frozenset({HEARD_VECTORS}),
+        ).moving("samples", "files", "passes", "experiments", "categories"),
         story="the run after a sample file arrived",
     )
     assert world.experiment_by_key(TEACHER_KEY) == (teacher[0], teacher[1] + 1)
@@ -64,14 +64,14 @@ def test_a_reading_that_ended_a_success_without_its_experiment_stops_the_run(
     runner.run(
         Run(targets=LISTENING_TARGETS, faults=FaultPlan(steps={"teacher": StepFault(effect=ScriptedEffect.NO_OUTPUT)})),
         BUILT.stopped_at(
-            "teacher", AttemptOutcome.NO_OUTPUT, ExitStatus.FAILED, after=("hearing-teacher", "suggestions")
+            "teacher", AttemptOutcome.NO_OUTPUT, ExitStatus.FAILED, after=("hearing-teacher", "categories")
         ).moving("modules", "samples", "relations", "files", "passes"),
         story="a run whose teacher files nothing",
     )
 
     runner.run(
         Run(targets=LISTENING_TARGETS),
-        BUILT.moving("experiments", "suggestions"),
+        BUILT.moving("experiments", "categories"),
         story="the relaunch",
     )
 
@@ -87,7 +87,7 @@ def test_an_interrupted_reading_keeps_what_it_committed_and_the_relaunch_reads_t
     runner.finish(
         host,
         BUILT.stopped_at(
-            "hearing-teacher", AttemptOutcome.INTERRUPTED, ExitStatus.INTERRUPTED, after=("suggestions",)
+            "hearing-teacher", AttemptOutcome.INTERRUPTED, ExitStatus.INTERRUPTED, after=("categories",)
         ).moving("modules", "samples", "relations", "files", "passes", "experiments"),
         story="the run interrupted partway through hearing",
     )
@@ -96,7 +96,7 @@ def test_an_interrupted_reading_keeps_what_it_committed_and_the_relaunch_reads_t
 
     runner.run(
         Run(targets=LISTENING_TARGETS),
-        BUILT.with_steps(teacher=StepVerdict.SATISFIED).moving("experiments", "suggestions"),
+        BUILT.with_steps(teacher=StepVerdict.SATISFIED).moving("experiments", "categories"),
         story="the relaunch",
     )
     resumed = world.experiment_by_key(HEARING_TEACHER_KEY)
@@ -123,31 +123,29 @@ def test_a_reading_whose_run_died_after_it_committed_stands_satisfied(runner: Sc
 
     runner.run(
         Run(targets=LISTENING_TARGETS),
-        BUILT.with_steps(teacher=StepVerdict.SATISFIED).moving("experiments", "suggestions"),
+        BUILT.with_steps(teacher=StepVerdict.SATISFIED).moving("experiments", "categories"),
         story="the relaunch",
     )
 
 
-def test_suggestion_parameters_name_their_scoring_and_an_earlier_one_is_shown_again(
+def test_category_parameters_name_their_scoring_and_an_earlier_one_is_shown_again(
     runner: ScenarioRunner, world: World
 ) -> None:
     runner.run(Run(targets=LISTENING_TARGETS), FIRST_BUILD, story="the first run")
 
-    world.set_pipeline_table(f"{DEFAULT_PIPELINE_TABLE}\n[pipeline.suggestions]\ntop = 5\n")
+    world.set_pipeline_table(f"{DEFAULT_PIPELINE_TABLE}\n[pipeline.categories]\ntop = 5\n")
     runner.run(
         Run(targets=LISTENING_TARGETS),
-        SETTLED.with_steps(suggestions=StepVerdict.RAN)
-        .because(suggestions=frozenset({PARAMETERS}))
-        .moving("experiments", "suggestions"),
+        SETTLED.with_steps(categories=StepVerdict.RAN)
+        .because(categories=frozenset({PARAMETERS}))
+        .moving("experiments", "categories"),
         story="the run keeping five labels a sample",
     )
 
-    world.set_pipeline_table(f"{DEFAULT_PIPELINE_TABLE}\n[pipeline.suggestions]\ntop = {DEFAULT_SUGGESTION_COUNT}\n")
+    world.set_pipeline_table(f"{DEFAULT_PIPELINE_TABLE}\n[pipeline.categories]\ntop = {DEFAULT_CATEGORY_COUNT}\n")
     runner.run(
         Run(targets=LISTENING_TARGETS),
-        SETTLED.with_steps(suggestions=StepVerdict.RAN)
-        .because(suggestions=frozenset({NOT_SHOWN}))
-        .moving("suggestions"),
+        SETTLED.with_steps(categories=StepVerdict.RAN).because(categories=frozenset({NOT_SHOWN})).moving("categories"),
         story="the run writing the default out, which shows the first scoring again",
     )
 
@@ -155,14 +153,14 @@ def test_suggestion_parameters_name_their_scoring_and_an_earlier_one_is_shown_ag
     runner.run(Run(targets=LISTENING_TARGETS), SETTLED, story="the run leaving the default unsaid")
 
 
-def test_a_vocabulary_that_cannot_be_read_refuses_the_suggestions(runner: ScenarioRunner, world: World) -> None:
+def test_a_vocabulary_that_cannot_be_read_refuses_the_categories(runner: ScenarioRunner, world: World) -> None:
     runner.run(Run(targets=LISTENING_TARGETS), FIRST_BUILD, story="the first run")
     world.set_pipeline_table(
-        f'{DEFAULT_PIPELINE_TABLE}\n[pipeline.suggestions]\nvocabulary = "{(world.root / "missing.txt").as_posix()}"\n'
+        f'{DEFAULT_PIPELINE_TABLE}\n[pipeline.categories]\nvocabulary = "{(world.root / "missing.txt").as_posix()}"\n'
     )
 
     runner.run(
         Run(targets=LISTENING_TARGETS),
-        SETTLED.refused_at("suggestions", "missing.txt", after=()),
+        SETTLED.refused_at("categories", "missing.txt", after=()),
         story="a run ranking against a missing vocabulary file",
     )

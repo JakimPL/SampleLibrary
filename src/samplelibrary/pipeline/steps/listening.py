@@ -6,10 +6,10 @@ from typing import Final
 from pydantic import Field
 
 from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME, TEACHER_REVISION
+from samplecloud.categories.scoring import DEFAULT_CATEGORY_COUNT, MAXIMUM_CATEGORY_COUNT
+from samplecloud.categories.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, vocabulary_from
 from samplecloud.features import readable_pending_count
 from samplecloud.hearing import hearing_for
-from samplecloud.suggestions.scoring import DEFAULT_SUGGESTION_COUNT, MAXIMUM_SUGGESTION_COUNT
-from samplecloud.suggestions.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, vocabulary_from
 from samplecore.digests import digest_of_rows
 from samplecore.models.experiment import ExperimentKey, Reading
 from samplecore.storage.repositories.label_suggestion import PostgresSuggestionPromotionRepository
@@ -28,29 +28,29 @@ from samplelibrary.pipeline.steps.shared import PARAMETERS, READABLE_SAMPLES, fi
 
 TEACHER: Final[str] = "teacher"
 HEARING_TEACHER: Final[str] = "hearing-teacher"
-SUGGESTIONS: Final[str] = "suggestions"
+CATEGORIES: Final[str] = "categories"
 REVISION_CHARACTERS: Final[int] = 12
 TEACHER_KEY: Final[ExperimentKey] = f"teacher-nominal-{TEACHER_REVISION[:REVISION_CHARACTERS]}"
 HEARING_TEACHER_KEY: Final[ExperimentKey] = f"teacher-heard-{TEACHER_REVISION[:REVISION_CHARACTERS]}"
-SUGGESTIONS_KEY_PREFIX: Final[str] = "suggestions"
+CATEGORIES_KEY_PREFIX: Final[str] = "categories"
 LISTENING_MODEL: Final[str] = "listening model"
 PLAYBACK_RATES: Final[str] = "playback rates"
 HEARD_VECTORS: Final[str] = "heard vectors"
 VOCABULARY: Final[str] = "vocabulary"
 
 
-class SuggestionSettings(StepSettings):
-    """What the suggestions step takes: how many labels each sample keeps, and which vocabulary they come from."""
+class CategorySettings(StepSettings):
+    """What the categories step takes: how many labels each sample keeps, and which vocabulary they come from."""
 
-    top: int = Field(default=DEFAULT_SUGGESTION_COUNT, ge=1, le=MAXIMUM_SUGGESTION_COUNT)
+    top: int = Field(default=DEFAULT_CATEGORY_COUNT, ge=1, le=MAXIMUM_CATEGORY_COUNT)
     vocabulary: str = INSTRUMENTS_CHOICE
 
 
 def listening_steps() -> tuple[Step, ...]:
-    """The listening model's two readings of every sample the library can read, and the labels it suggests.
+    """The listening model's two readings of every sample the library can read, and the categories it assigns.
 
     Both readings keep one key each for the life of the listening model's commit, and take in the
-    samples the catalog gains; the suggestions are named by the heard vectors and the vocabulary
+    samples the catalog gains; the categories are named by the heard vectors and the vocabulary
     they rank, so a scoring over the same of both stands.
     """
     return (
@@ -71,12 +71,12 @@ def listening_steps() -> tuple[Step, ...]:
             inputs=_hearing_inputs,
         ),
         DerivedExperimentStep(
-            name=SUGGESTIONS,
+            name=CATEGORIES,
             requires=(HEARING_TEACHER,),
-            inputs=_suggestion_inputs,
-            key=lambda context, digest: f"{SUGGESTIONS_KEY_PREFIX}-{digest}",
-            command=_suggest_command,
-            shown=_suggestions_shown,
+            inputs=_category_inputs,
+            key=lambda context, digest: f"{CATEGORIES_KEY_PREFIX}-{digest}",
+            command=_categorize_command,
+            shown=_categories_shown,
         ),
     )
 
@@ -109,17 +109,17 @@ def _hearing_inputs(context: PipelineContext) -> Inputs:
     }
 
 
-def _suggestion_settings(context: PipelineContext) -> SuggestionSettings:
-    return context.settings.settings_for(SUGGESTIONS, SuggestionSettings)
+def _category_settings(context: PipelineContext) -> CategorySettings:
+    return context.settings.settings_for(CATEGORIES, CategorySettings)
 
 
-def _suggestion_inputs(context: PipelineContext) -> Inputs:
+def _category_inputs(context: PipelineContext) -> Inputs:
     """The heard vectors a scoring ranks, the labels it ranks them against, and how many it keeps.
 
     Raises:
         StepRefused: the vocabulary names a file that cannot be read, or one holding no label.
     """
-    settings = _suggestion_settings(context)
+    settings = _category_settings(context)
     try:
         vocabulary = vocabulary_from(settings.vocabulary, context.connection)
     except VocabularyRefused as error:
@@ -131,12 +131,12 @@ def _suggestion_inputs(context: PipelineContext) -> Inputs:
     }
 
 
-def _suggest_command(context: PipelineContext, key: ExperimentKey) -> tuple[str, ...]:
+def _categorize_command(context: PipelineContext, key: ExperimentKey) -> tuple[str, ...]:
     """The scoring of the heard vectors, filed under this key."""
-    settings = _suggestion_settings(context)
+    settings = _category_settings(context)
     return (
         "cloud",
-        "suggest",
+        "categorize",
         "--experiment-id",
         str(filed_experiment(context, HEARING_TEACHER_KEY)),
         "--vocabulary",
@@ -148,6 +148,6 @@ def _suggest_command(context: PipelineContext, key: ExperimentKey) -> tuple[str,
     )
 
 
-def _suggestions_shown(context: PipelineContext, experiment_id: int) -> bool:
+def _categories_shown(context: PipelineContext, experiment_id: int) -> bool:
     shown = PostgresSuggestionPromotionRepository(context.connection).current()
     return shown is not None and shown.experiment_id == experiment_id

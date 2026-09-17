@@ -79,10 +79,10 @@ ROUTE_CASES = (
         "samplelibrary cloud evaluate",
     ),
     RouteCase(
-        ["cloud", "suggest", "--experiment-id", "10"],
-        "samplecloud.suggestions.cli.main",
+        ["cloud", "categorize", "--experiment-id", "10"],
+        "samplecloud.categories.cli.main",
         ["--experiment-id", "10"],
-        "samplelibrary cloud suggest",
+        "samplelibrary cloud categorize",
     ),
     RouteCase(
         ["pipeline", "run", "catalog"],

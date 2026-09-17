@@ -81,12 +81,12 @@ def recipe_of(experiment: Experiment) -> EmbeddingRecipe:
     """The recipe an experiment's own row records, which is the one a resumed extraction follows.
 
     Raises:
-        ExperimentRefused: the experiment holds label suggestions rather than vectors, names a backend this
+        ExperimentRefused: the experiment holds categories rather than vectors, names a backend this
             build lacks, is a learned experiment naming no model, records no reading, or was heard
             through another commit of the listening model than the one this build pins.
     """
     if experiment.backend_name == ZERO_SHOT_BACKEND_NAME:
-        raise ExperimentRefused(f"experiment {experiment.id} is a scoring of label suggestions, which holds no vectors")
+        raise ExperimentRefused(f"experiment {experiment.id} is a scoring of categories, which holds no vectors")
     if experiment.backend_name not in (*BACKEND_REGISTRY, LEARNED_BACKEND_NAME):
         raise ExperimentRefused(
             f"experiment {experiment.id} was made by the {experiment.backend_name} backend, unknown here"

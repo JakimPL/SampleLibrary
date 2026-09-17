@@ -22,7 +22,7 @@ EVERY_STEP = (
     "relink",
     "teacher",
     "hearing-teacher",
-    "suggestions",
+    "categories",
     "grid-cache",
     "descriptor",
     "embedding",
@@ -44,7 +44,7 @@ SETTLED = Expect.completed(EVERY_STEP, StepVerdict.SATISFIED).with_steps(
 BUILT = Expect.completed(EVERY_STEP, StepVerdict.RAN).with_steps(
     labels=StepVerdict.SATISFIED, completion=StepVerdict.SATISFIED
 )
-EVERYTHING = ("modules", "samples", "relations", "files", "passes", "experiments", "suggestions", "cloud", "artifacts")
+EVERYTHING = ("modules", "samples", "relations", "files", "passes", "experiments", "categories", "cloud", "artifacts")
 FROM_THE_DESCRIPTOR = ("descriptor", "embedding", "evaluation", "module-evaluation", "cloud")
 ORPHAN_DEADLINE_SECONDS = 60.0
 
@@ -82,7 +82,7 @@ def test_a_sample_file_added_rebuilds_exactly_what_the_new_sample_reaches(runner
         BUILT.because(
             teacher=frozenset({SAMPLES_TO_DESCRIBE}),
             hearing_teacher=frozenset({SAMPLES_TO_DESCRIBE}),
-            suggestions=frozenset({"heard vectors"}),
+            categories=frozenset({"heard vectors"}),
             grid_cache=frozenset({"readable samples"}),
             descriptor=frozenset({"grid cache", "teacher vectors"}),
             embedding=frozenset({"descriptor", "grid cache"}),
@@ -92,7 +92,7 @@ def test_a_sample_file_added_rebuilds_exactly_what_the_new_sample_reaches(runner
             morph_codec=frozenset({"readable samples"}),
             restorer=frozenset({"readable samples"}),
             morph_models=frozenset({"codec", "restorer"}),
-        ).moving("samples", "files", "passes", "experiments", "suggestions", "cloud", "artifacts"),
+        ).moving("samples", "files", "passes", "experiments", "categories", "cloud", "artifacts"),
         story="the run after a sample file arrived",
     )
 
@@ -112,7 +112,7 @@ def test_a_descriptor_training_interrupted_partway_continues_from_its_last_epoch
         host,
         BUILT.stopped_at(
             "descriptor", AttemptOutcome.INTERRUPTED, ExitStatus.INTERRUPTED, after=_after("descriptor")
-        ).moving("modules", "samples", "relations", "files", "passes", "experiments", "suggestions", "artifacts"),
+        ).moving("modules", "samples", "relations", "files", "passes", "experiments", "categories", "artifacts"),
         story="the run interrupted during the descriptor's training",
     )
 
@@ -139,7 +139,7 @@ def test_a_finished_training_whose_run_died_before_sealing_it_is_sealed_without_
             outcome=None,
             exit_status=KILLED,
             steps={step: BUILT.steps[step] for step in EVERY_STEP[: EVERY_STEP.index("descriptor") + 1]},
-        ).moving("modules", "samples", "relations", "files", "passes", "experiments", "suggestions", "artifacts"),
+        ).moving("modules", "samples", "relations", "files", "passes", "experiments", "categories", "artifacts"),
         story="the run killed as the descriptor finished training",
     )
     host.release("descriptor", GateMoment.AFTER_OUTPUT)
@@ -207,7 +207,7 @@ def test_a_descriptor_that_ended_a_success_without_finishing_stops_the_run(runne
     runner.run(
         Run(faults=FaultPlan(steps={"descriptor": StepFault(effect=ScriptedEffect.NO_OUTPUT)})),
         BUILT.stopped_at("descriptor", AttemptOutcome.NO_OUTPUT, ExitStatus.FAILED, after=_after("descriptor")).moving(
-            "modules", "samples", "relations", "files", "passes", "experiments", "suggestions", "artifacts"
+            "modules", "samples", "relations", "files", "passes", "experiments", "categories", "artifacts"
         ),
         story="a run whose descriptor training leaves no finished model",
     )

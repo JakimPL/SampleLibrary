@@ -99,8 +99,8 @@ def _cloud_evaluate(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
-def _cloud_suggest(argv: list[str], *, prog: str) -> None:
-    from samplecloud.suggestions.cli import main
+def _cloud_categorize(argv: list[str], *, prog: str) -> None:
+    from samplecloud.categories.cli import main
 
     main(argv, prog=prog)
 
@@ -176,9 +176,9 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
                 run=_cloud_evaluate,
             ),
             Command(
-                name="suggest",
-                summary="Suggest labels for every sample of a listening-model experiment.",
-                run=_cloud_suggest,
+                name="categorize",
+                summary="Give every sample of a listening-model experiment its categories.",
+                run=_cloud_categorize,
             ),
         ),
     ),

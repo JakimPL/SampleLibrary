@@ -15,7 +15,7 @@ COMMENT_PREFIX: Final[str] = "#"
 HAND_LABEL_DEPTH: Final[int] = 2
 
 # The instruments a tracker sample most often is, in the hand-label grammar so an accepted
-# suggestion is already a label: drums first, then what is pitched or textured.
+# category is already a label: drums first, then what is pitched or textured.
 INSTRUMENT_VOCABULARY: Final[tuple[str, ...]] = (
     "BASS DRUM",
     "SNARE",

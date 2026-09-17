@@ -61,7 +61,7 @@ PARTS: Final[tuple[str, ...]] = (
     "labels",
     "passes",
     "experiments",
-    "suggestions",
+    "categories",
     "cloud",
     "artifacts",
 )
@@ -341,7 +341,7 @@ class World:
                 )
             ),
             "experiments": self._experiments_digest(),
-            "suggestions": self._shown_digest(suggestion_promotion.c.experiment_id),
+            "categories": self._shown_digest(suggestion_promotion.c.experiment_id),
             "cloud": digest_of_rows(
                 [
                     (self._shown_digest(cloud_promotion.c.experiment_id),),

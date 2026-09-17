@@ -103,8 +103,8 @@ def run_stand_in(command: Sequence[str], stand_in: StandIn) -> None:
     match tuple(words[:2]):
         case ("cloud", "embed"):
             _cloud_embed(words[2:], stand_in)
-        case ("cloud", "suggest"):
-            _suggest(words[2:])
+        case ("cloud", "categorize"):
+            _categorize(words[2:])
         case ("cloud", "evaluate"):
             _evaluate(words[2:], stand_in)
         case ("morph", "cache-grids"):
@@ -136,11 +136,11 @@ def _cloud_embed(argv: list[str], stand_in: StandIn) -> None:
     samplecloud.cli.main(argv, prog=f"{PROGRAM} cloud embed")
 
 
-def _suggest(argv: list[str]) -> None:
-    import samplecloud.suggestions.cli
+def _categorize(argv: list[str]) -> None:
+    import samplecloud.categories.cli
 
-    samplecloud.suggestions.cli.load_teacher = lambda *, device: WordedTeacher()  # type: ignore[assignment]
-    samplecloud.suggestions.cli.main(argv, prog=f"{PROGRAM} cloud suggest")
+    samplecloud.categories.cli.load_teacher = lambda *, device: WordedTeacher()  # type: ignore[assignment]
+    samplecloud.categories.cli.main(argv, prog=f"{PROGRAM} cloud categorize")
 
 
 @contextmanager

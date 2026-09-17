@@ -9,7 +9,7 @@ import numpy as np
 from numpy.typing import NDArray
 from sqlalchemy import Connection
 
-from samplecloud.suggestions.vocabulary import PROMPT_TEMPLATE
+from samplecloud.categories.vocabulary import PROMPT_TEMPLATE
 from samplecore.labeling.labels import SampleLabel, written_paths
 from samplecore.models.experiment import (
     CHECKPOINT_REVISION_PARAMETER,
@@ -28,14 +28,14 @@ from samplecore.storage.repositories.label_suggestion import (
 )
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
-DEFAULT_SUGGESTION_COUNT: Final[int] = 3
-MINIMUM_SUGGESTION_COUNT: Final[int] = 1
-MAXIMUM_SUGGESTION_COUNT: Final[int] = 256
+DEFAULT_CATEGORY_COUNT: Final[int] = 3
+MINIMUM_CATEGORY_COUNT: Final[int] = 1
+MAXIMUM_CATEGORY_COUNT: Final[int] = 256
 INSERT_CHUNK_SAMPLES: Final[int] = 2_000
 SOURCE_EXPERIMENT_PARAMETER: Final[str] = "source_experiment_id"
 CHECKPOINT_PARAMETER: Final[str] = "checkpoint"
 TEMPLATE_PARAMETER: Final[str] = "template"
-SUGGESTION_COUNT_PARAMETER: Final[str] = "top"
+CATEGORY_COUNT_PARAMETER: Final[str] = "top"
 
 
 class ScoringConflict(ValueError):
@@ -50,15 +50,15 @@ class ScoringRecipe:
     checkpoint: str
     checkpoint_revision: str
     vocabulary: tuple[str, ...]
-    suggestion_count: int
+    category_count: int
     label: str | None
     key: ExperimentKey | None
 
     def __post_init__(self) -> None:
-        if not MINIMUM_SUGGESTION_COUNT <= self.suggestion_count <= MAXIMUM_SUGGESTION_COUNT:
+        if not MINIMUM_CATEGORY_COUNT <= self.category_count <= MAXIMUM_CATEGORY_COUNT:
             raise ValueError(
-                f"a sample keeps between {MINIMUM_SUGGESTION_COUNT} and {MAXIMUM_SUGGESTION_COUNT} suggestions, "
-                f"got {self.suggestion_count}"
+                f"a sample keeps between {MINIMUM_CATEGORY_COUNT} and {MAXIMUM_CATEGORY_COUNT} categories, "
+                f"got {self.category_count}"
             )
         if not self.vocabulary:
             raise ValueError("a scoring ranks at least one label")
@@ -70,15 +70,15 @@ class ScoringRecipe:
             CHECKPOINT_REVISION_PARAMETER: self.checkpoint_revision,
             TEMPLATE_PARAMETER: PROMPT_TEMPLATE,
             VOCABULARY_PARAMETER: list(self.vocabulary),
-            SUGGESTION_COUNT_PARAMETER: self.suggestion_count,
+            CATEGORY_COUNT_PARAMETER: self.category_count,
         }
 
 
 @dataclass(frozen=True)
 class HandLabelAgreement:
-    """How the first suggestion agrees with what a person wrote, over the samples a person labeled.
+    """How the top category agrees with what a person wrote, over the samples a person labeled.
 
-    An exact agreement is a suggestion the person asserted as written, its top level included; a
+    An exact agreement is a category the person asserted as written, its top level included; a
     top-level agreement is one whose top level the person asserted, whatever they specified under it.
     """
 
@@ -93,16 +93,16 @@ class ScoringSummary:
 
     experiment_id: int
     sample_count: int
-    first_picks: dict[str, int]
+    top_category_counts: dict[str, int]
     agreement: HandLabelAgreement
 
 
-def score_suggestions(connection: Connection, *, recipe: ScoringRecipe, prompts: NDArray[np.float32]) -> ScoringSummary:
+def score_categories(connection: Connection, *, recipe: ScoringRecipe, prompts: NDArray[np.float32]) -> ScoringSummary:
     """Rank the vocabulary for every vector of the source experiment and store the closest labels.
 
     Both the stored audio vectors and the prompt vectors are unit length, so one matrix product
-    reads every cosine at once; the top `suggestion_count` labels of each sample are written
-    under a new experiment. The experiment, every suggestion and the record that the application
+    reads every cosine at once; the top `category_count` labels of each sample are written
+    under a new experiment. The experiment, every category and the record that the application
     shows this scoring land in one transaction, so a reader sees a scoring whole or sees none of it.
 
     Raises:
@@ -115,7 +115,7 @@ def score_suggestions(connection: Connection, *, recipe: ScoringRecipe, prompts:
     # (samples, embedding size) against (labels, embedding size): one cosine per sample and label
     matrix = np.stack([np.asarray(vector.vector, dtype=np.float32) for vector in vectors])
     scores = matrix @ prompts.T
-    kept = min(recipe.suggestion_count, len(recipe.vocabulary))
+    kept = min(recipe.category_count, len(recipe.vocabulary))
     order = np.argsort(-scores, axis=1)[:, :kept]
     computed_at = datetime.now(UTC)
     with start_batch(connection):
@@ -142,12 +142,12 @@ def score_suggestions(connection: Connection, *, recipe: ScoringRecipe, prompts:
                 ]
             )
 
-    first_pick_by_hash = {vector.sample_hash: recipe.vocabulary[order[row, 0]] for row, vector in enumerate(vectors)}
+    top_category_by_hash = {vector.sample_hash: recipe.vocabulary[order[row, 0]] for row, vector in enumerate(vectors)}
     return ScoringSummary(
         experiment_id=experiment_id,
         sample_count=len(vectors),
-        first_picks=dict(Counter(first_pick_by_hash.values())),
-        agreement=hand_label_agreement(connection, first_pick_by_hash),
+        top_category_counts=dict(Counter(top_category_by_hash.values())),
+        agreement=hand_label_agreement(connection, top_category_by_hash),
     )
 
 
@@ -177,16 +177,16 @@ def show_scoring(connection: Connection, experiment_id: int) -> None:
         )
 
 
-def hand_label_agreement(connection: Connection, first_pick_by_hash: dict[str, str]) -> HandLabelAgreement:
-    """Read the first picks against the hand labels of the samples that carry one."""
-    annotations = PostgresSampleAnnotationRepository(connection).annotations_by_hash(list(first_pick_by_hash))
+def hand_label_agreement(connection: Connection, top_category_by_hash: dict[str, str]) -> HandLabelAgreement:
+    """Read the top categories against the hand labels of the samples that carry one."""
+    annotations = PostgresSampleAnnotationRepository(connection).annotations_by_hash(list(top_category_by_hash))
     labeled = exact = top_level = 0
     for sample_hash, annotation in annotations.items():
         if annotation.label is None:
             continue
         labeled += 1
         closure = SampleLabel.parse(annotation.label).closure
-        path, *_ = written_paths(first_pick_by_hash[sample_hash])
+        path, *_ = written_paths(top_category_by_hash[sample_hash])
         exact += path in closure
         top_level += path[:1] in closure
     return HandLabelAgreement(labeled=labeled, exact=exact, top_level=top_level)

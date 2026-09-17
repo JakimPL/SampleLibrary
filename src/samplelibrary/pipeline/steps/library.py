@@ -27,7 +27,7 @@ from samplelibrary.pipeline.steps.descriptor import (
     GridCacheSettings,
     descriptor_steps,
 )
-from samplelibrary.pipeline.steps.listening import SUGGESTIONS, SuggestionSettings, listening_steps
+from samplelibrary.pipeline.steps.listening import CATEGORIES, CategorySettings, listening_steps
 from samplelibrary.pipeline.steps.morph import (
     MORPH_CODEC,
     MORPH_MODELS,
@@ -49,10 +49,10 @@ CATALOG_STEPS: Final[tuple[str, ...]] = (
     EQUIVALENCE,
     RELINK,
 )
-CLOUD_STEPS: Final[tuple[str, ...]] = (SUGGESTIONS, EVALUATION, MODULE_EVALUATION, CLOUD, MODULE_PLACEHOLDERS)
+CLOUD_STEPS: Final[tuple[str, ...]] = (CATEGORIES, EVALUATION, MODULE_EVALUATION, CLOUD, MODULE_PLACEHOLDERS)
 MORPH_STEPS: Final[tuple[str, ...]] = (MORPH_MODELS,)
 STEP_SETTINGS: Final[Mapping[str, type[StepSettings]]] = {
-    SUGGESTIONS: SuggestionSettings,
+    CATEGORIES: CategorySettings,
     GRID_CACHE: GridCacheSettings,
     DESCRIPTOR: DescriptorSettings,
     EVALUATION: EvaluationStepSettings,

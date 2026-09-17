@@ -14,7 +14,7 @@ from samplelibrary.pipeline.steps.descriptor import (
     GRID_CACHE,
     MODULE_EVALUATION,
 )
-from samplelibrary.pipeline.steps.listening import HEARING_TEACHER, SUGGESTIONS, TEACHER
+from samplelibrary.pipeline.steps.listening import CATEGORIES, HEARING_TEACHER, TEACHER
 from samplelibrary.pipeline.steps.morph import MORPH_CODEC, RESTORER
 from tests.samplelibrary.pipeline.scenarios.harness.plans import FaultPlan
 from tests.samplelibrary.pipeline.scenarios.harness.scripted_child import SCRIPTED_CHILD_MODULE
@@ -23,7 +23,7 @@ STOOD_IN_STEPS: Final[frozenset[str]] = frozenset(
     {
         TEACHER,
         HEARING_TEACHER,
-        SUGGESTIONS,
+        CATEGORIES,
         GRID_CACHE,
         DESCRIPTOR,
         EMBEDDING,

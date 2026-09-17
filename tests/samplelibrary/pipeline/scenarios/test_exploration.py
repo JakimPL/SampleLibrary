@@ -16,7 +16,7 @@ from tests.samplelibrary.pipeline.scenarios.harness.plans import FaultPlan, Gate
 from tests.samplelibrary.pipeline.scenarios.harness.runner import Run, ScenarioRunner, wait_until_released
 from tests.samplelibrary.pipeline.scenarios.harness.world import World, WorldSetup
 
-TARGETS: Final[tuple[str, ...]] = ("catalog", "teacher", "suggestions")
+TARGETS: Final[tuple[str, ...]] = ("catalog", "teacher", "categories")
 LABELS: Final[tuple[str, ...]] = ("SNARE", "BASS DRUM", "PAD: WARM")
 MAXIMUM_ADDED_FILES: Final[int] = 2
 MAXIMUM_ADDED_MODULES: Final[int] = 2
