@@ -26,10 +26,10 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 
-SAMPLES_PER_CATEGORY = 8
+SAMPLES_PER_KIND = 8
 FEATURE_DIMENSIONS = 6
-SEEDED_CATEGORIES = ("kick", "snare", "bass", "lead")
-# What a person would write for each seeded category, alternating a specification so the hierarchy is exercised.
+SEEDED_KINDS = ("kick", "snare", "bass", "lead")
+# What a person would write for each seeded kind, alternating a specification so the hierarchy is exercised.
 HAND_LABELS = {
     "kick": ("KICK: SOFT", "KICK: HARD"),
     "snare": ("SNARE",),
@@ -45,13 +45,13 @@ class SeededCatalog:
 
     experiment_id: int
     sample_hashes: tuple[str, ...]
-    categories: tuple[str, ...]
+    kinds: tuple[str, ...]
 
 
 def seed_catalog(connection: Connection, *, separable: bool) -> SeededCatalog:
-    """Put a few samples per seeded category in the catalog, each played at a known set of pitches.
+    """Put a few samples per seeded kind in the catalog, each played at a known set of pitches.
 
-    `separable` decides whether a sample's feature vector says which category it belongs to. A
+    `separable` decides whether a sample's feature vector says which kind it belongs to. A
     separable body lets a test assert that a working metric finds the structure; a body of noise
     lets a test assert that the same metric reports its absence rather than inventing it.
     """
@@ -67,11 +67,11 @@ def seed_catalog(connection: Connection, *, separable: bool) -> SeededCatalog:
 
     generator = np.random.default_rng(0)
     hashes: list[str] = []
-    categories: list[str] = []
+    kinds: list[str] = []
     vectors: list[SampleFeatureVector] = []
     index = 0
-    for category_index, category in enumerate(SEEDED_CATEGORIES):
-        for member in range(SAMPLES_PER_CATEGORY):
+    for kind_index, kind in enumerate(SEEDED_KINDS):
+        for member in range(SAMPLES_PER_KIND):
             index += 1
             sample_hash = format(index, "064x")
             sample_repository.upsert(
@@ -95,16 +95,16 @@ def seed_catalog(connection: Connection, *, separable: bool) -> SeededCatalog:
                 XMSampleProperties(
                     sample_hash=sample_hash,
                     occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=0),
-                    name=f"{category} {member}",
+                    name=f"{kind} {member}",
                     rate=SAMPLE_RATE_HZ,
                     volume=64,
                     tuning=Tuning(relative_note=0, finetune=0),
                 )
             )
-            note_repository.insert_many(_note_events(module.id, pitch_count=category_index + 1, strike_count=12))
+            note_repository.insert_many(_note_events(module.id, pitch_count=kind_index + 1, strike_count=12))
             center = np.zeros(FEATURE_DIMENSIONS)
             if separable:
-                center[category_index] = 10.0
+                center[kind_index] = 10.0
             vectors.append(
                 SampleFeatureVector(
                     experiment_id=experiment_id,
@@ -114,11 +114,11 @@ def seed_catalog(connection: Connection, *, separable: bool) -> SeededCatalog:
                 )
             )
             hashes.append(sample_hash)
-            categories.append(category)
+            kinds.append(kind)
 
     PostgresSampleFeatureVectorRepository(connection).insert_many(vectors)
     connection.commit()
-    return SeededCatalog(experiment_id=experiment_id, sample_hashes=tuple(hashes), categories=tuple(categories))
+    return SeededCatalog(experiment_id=experiment_id, sample_hashes=tuple(hashes), kinds=tuple(kinds))
 
 
 def _note_events(module_id: int, *, pitch_count: int, strike_count: int) -> list[NoteEvent]:
@@ -139,12 +139,12 @@ def _note_events(module_id: int, *, pitch_count: int, strike_count: int) -> list
 
 
 def label_catalog(connection: Connection, catalog: SeededCatalog, *, every: int = 1) -> tuple[str, ...]:
-    """Give every `every`-th seeded sample the hand label its category would earn; returns the labeled hashes."""
+    """Give every `every`-th seeded sample the hand label its kind would earn; returns the labeled hashes."""
     annotations = []
-    for index, (sample_hash, category) in enumerate(zip(catalog.sample_hashes, catalog.categories, strict=True)):
+    for index, (sample_hash, kind) in enumerate(zip(catalog.sample_hashes, catalog.kinds, strict=True)):
         if index % every:
             continue
-        wordings = HAND_LABELS[category]
+        wordings = HAND_LABELS[kind]
         annotations.append(
             SampleAnnotation(
                 sample_hash=sample_hash,
@@ -156,7 +156,7 @@ def label_catalog(connection: Connection, catalog: SeededCatalog, *, every: int 
                         module_hash=format(index + 5001, "064x"), instrument_index=0, sample_slot=0
                     ),
                     module_filename=f"song{index + 1}.xm",
-                    sample_name=f"{category} {index}",
+                    sample_name=f"{kind} {index}",
                 ),
                 source=AnnotationSource.SAMPLE,
                 annotated_at=datetime.now(UTC),

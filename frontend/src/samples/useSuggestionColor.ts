@@ -7,11 +7,11 @@ import { useThemeSignal } from "../theme/useThemeSignal";
 import { topLevelOf } from "./labelText";
 
 /**
- * The color a suggested label wears: its broad category's, from the rank the scoring on show gives
- * that category, so a badge naming a sample and the point the cloud paints for it share one color.
+ * The color a suggested label wears: its top level's, from the rank the scoring on show gives
+ * that top level, so a badge naming a sample and the point the cloud paints for it share one color.
  *
  * The tags arrive through the request cache the cloud's own legend reads, so every badge on screen
- * shares one request; until it lands, and for a category the scoring's vocabulary leaves unranked,
+ * shares one request; until it lands, and for a top level the scoring's vocabulary leaves unranked,
  * a label has no color. Colors are read back from the theme on every theme change, the way the
  * legend's swatches are.
  */

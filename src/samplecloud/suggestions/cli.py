@@ -97,12 +97,13 @@ def _report(summary: ScoringSummary) -> None:
     agreement = summary.agreement
     if agreement.labeled:
         _logger.info(
-            "Against %d hand labels the first suggestion agrees exactly on %d (%.1f%%) and by category on %d (%.1f%%).",
+            "Against %d hand labels the first suggestion agrees exactly on %d (%.1f%%) "
+            "and at the top level on %d (%.1f%%).",
             agreement.labeled,
             agreement.exact,
             100.0 * agreement.exact / agreement.labeled,
-            agreement.category,
-            100.0 * agreement.category / agreement.labeled,
+            agreement.top_level,
+            100.0 * agreement.top_level / agreement.labeled,
         )
 
 

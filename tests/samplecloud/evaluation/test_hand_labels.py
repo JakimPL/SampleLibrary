@@ -53,7 +53,7 @@ def test_each_tag_with_enough_support_is_scored_on_its_own(
     assert scored["SNARE"].average_precision > 0.9
 
 
-def test_reading_labels_to_one_level_folds_a_specification_into_its_category(
+def test_reading_labels_to_one_level_folds_a_specification_into_its_top_level(
     connection: Connection, separable_catalog: SeededCatalog
 ) -> None:
     label_catalog(connection, separable_catalog)

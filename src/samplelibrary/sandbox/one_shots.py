@@ -17,7 +17,7 @@ ONE_SHOT_FRAMES: Final[int] = SAMPLE_RATE // 2
 SUSTAINED_FRAMES: Final[int] = SAMPLE_RATE
 
 
-class Category(NamedTuple):
+class SoundKind(NamedTuple):
     """One kind of one-shot: its folder, the label a person gives it, and how its sound is made."""
 
     folder: str
@@ -48,38 +48,38 @@ def _noise(frames: int) -> Callable[[int], NDArray[np.float64]]:
     return sound
 
 
-CATEGORIES: Final[tuple[Category, ...]] = (
-    Category("Kicks", "BASS DRUM", _struck(40.0, 80.0)),
-    Category("Snares", "SNARE", _noise(ONE_SHOT_FRAMES)),
-    Category("Hats", "HI-HAT: CLOSED", _noise(ONE_SHOT_FRAMES)),
-    Category("Toms", "TOM", _struck(90.0, 220.0)),
-    Category("Bass", "BASS", _sustained(40.0, 110.0)),
-    Category("Leads", "LEAD", _sustained(220.0, 880.0)),
-    Category("Plucks", "PLUCK", _struck(300.0, 1200.0)),
-    Category("Pads", "PAD", _sustained(110.0, 440.0)),
-    Category("Bells", "BELL", _struck(800.0, 2400.0)),
-    Category("FX", "FX", _noise(SUSTAINED_FRAMES)),
+SOUND_KINDS: Final[tuple[SoundKind, ...]] = (
+    SoundKind("Kicks", "BASS DRUM", _struck(40.0, 80.0)),
+    SoundKind("Snares", "SNARE", _noise(ONE_SHOT_FRAMES)),
+    SoundKind("Hats", "HI-HAT: CLOSED", _noise(ONE_SHOT_FRAMES)),
+    SoundKind("Toms", "TOM", _struck(90.0, 220.0)),
+    SoundKind("Bass", "BASS", _sustained(40.0, 110.0)),
+    SoundKind("Leads", "LEAD", _sustained(220.0, 880.0)),
+    SoundKind("Plucks", "PLUCK", _struck(300.0, 1200.0)),
+    SoundKind("Pads", "PAD", _sustained(110.0, 440.0)),
+    SoundKind("Bells", "BELL", _struck(800.0, 2400.0)),
+    SoundKind("FX", "FX", _noise(SUSTAINED_FRAMES)),
 )
 
 
 def one_shots(count: int = ONE_SHOT_COUNT) -> dict[str, PackFile]:
-    """A folder of synthetic one-shots, ``count`` in all, taking every category in turn.
+    """A folder of synthetic one-shots, ``count`` in all, taking every kind in turn.
 
     Each one-shot is seeded on its own, so no two relate to each other and the catalog they fill
     holds enough samples to train, fit and score every model the pipeline builds.
     """
     shots: dict[str, PackFile] = {}
     for index in range(count):
-        category = CATEGORIES[index % len(CATEGORIES)]
-        waveform = category.sound(ONE_SHOT_SEED_OFFSET + index)
-        relative_path = f"{ONE_SHOTS_DIRECTORY_NAME}/{category.folder}/{category.folder} {index:03d}.wav"
+        kind = SOUND_KINDS[index % len(SOUND_KINDS)]
+        waveform = kind.sound(ONE_SHOT_SEED_OFFSET + index)
+        relative_path = f"{ONE_SHOTS_DIRECTORY_NAME}/{kind.folder}/{kind.folder} {index:03d}.wav"
         shots[relative_path] = PackFile(waveform.reshape(-1, 1), SAMPLE_RATE, "PCM_16")
     return shots
 
 
 def labeled_one_shots() -> dict[str, str]:
-    """The first one-shot of every category, with the label a person gives it."""
+    """The first one-shot of every kind, with the label a person gives it."""
     return {
-        f"{ONE_SHOTS_DIRECTORY_NAME}/{category.folder}/{category.folder} {index:03d}.wav": category.label
-        for index, category in enumerate(CATEGORIES)
+        f"{ONE_SHOTS_DIRECTORY_NAME}/{kind.folder}/{kind.folder} {index:03d}.wav": kind.label
+        for index, kind in enumerate(SOUND_KINDS)
     }

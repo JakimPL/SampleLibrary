@@ -15,7 +15,7 @@ interface CategoryBadgeProps {
  *
  * A hand label wins, being what a person actually decided, and wears a solid style of its own. In
  * its place stands what the listening model heard first, in the dashed style a machine-made
- * statement takes, with a swatch in its category's color; a sample neither has named reads as
+ * statement takes, with a swatch in its top level's color; a sample neither has named reads as
  * unlabeled. The label set in this session counts at once, so a badge follows an edit the moment
  * it is made. A label longer than the room it is given ends in an ellipsis, whole in its tooltip.
  */

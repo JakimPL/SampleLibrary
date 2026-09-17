@@ -21,7 +21,7 @@ from samplelibrary.pipeline.settings import read_pipeline_settings
 from samplelibrary.pipeline.steps.library import settings_model
 from samplelibrary.sandbox.build import build_sandbox
 from samplelibrary.sandbox.modules import sandbox_modules
-from samplelibrary.sandbox.one_shots import CATEGORIES, ONE_SHOT_COUNT, ONE_SHOTS_DIRECTORY_NAME
+from samplelibrary.sandbox.one_shots import ONE_SHOT_COUNT, ONE_SHOTS_DIRECTORY_NAME, SOUND_KINDS
 
 SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
 LIBRARY_ON_ANOTHER_PORT = "postgresql+psycopg://someone:secret@localhost:5433/my_library"
@@ -120,7 +120,7 @@ def test_the_sandbox_labels_name_one_shots_its_pack_holds_and_its_pipeline_table
         SampleAnnotation.model_validate_json(line) for line in settings.labels.read_text(encoding="utf-8").splitlines()
     ]
 
-    assert len(annotations) == len(CATEGORIES)
+    assert len(annotations) == len(SOUND_KINDS)
     for annotation in annotations:
         assert isinstance(annotation.anchor, SampleFileAnchor)
         location = annotation.anchor.location

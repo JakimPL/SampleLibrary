@@ -126,7 +126,7 @@ def _write_one_shots(sample_pack_directory: Path) -> None:
 
 
 def _write_labels(path: Path, sample_pack_directory: Path) -> None:
-    """Write a label for one one-shot of every category, as an export of a labeled library would hold them."""
+    """Write a label for one one-shot of every kind, as an export of a labeled library would hold them."""
     annotations = [
         SampleAnnotation(
             sample_hash=decode_sample_file(sample_pack_directory / relative_path).sample_pcm.sample.hash,

@@ -224,9 +224,9 @@ def get_cloud_suggestion_tags(
 ) -> Response:
     """Every tag the scoring on show suggests first for some sample, with how many and a lasting rank.
 
-    A specification counts toward its category the way a written label's does, so the legend can
-    paint by category while the suggestions name what is under it. The rank is the tag's place in
-    the vocabulary the scoring ranked, recorded with the scoring, a category taking the place of
+    A specification counts toward its top level the way a written label's does, so the legend can
+    paint by top level while the suggestions name what is under it. The rank is the tag's place in
+    the vocabulary the scoring ranked, recorded with the scoring, a top level taking the place of
     its first entry, so a tag keeps its color across the scorings that share a vocabulary; a tag
     the vocabulary leaves unnamed ranks after the vocabulary, by name.
 
@@ -243,7 +243,7 @@ def get_cloud_suggestion_tags(
 
 
 def _tags(connection: Connection, experiment_id: int | None) -> tuple[TagSummary, ...]:
-    """The tags one scoring suggests first, each counting toward its category, in vocabulary order."""
+    """The tags one scoring suggests first, each counting toward its top level, in vocabulary order."""
     if experiment_id is None:
         return ()
 
@@ -296,5 +296,5 @@ def _vocabulary_ranks(connection: Connection, experiment_id: int, picked: Counte
 
 
 def _prefixes(path: LabelPath) -> tuple[LabelPath, ...]:
-    """A tag and every category above it, the way a written label asserts them all."""
+    """A tag and every tag above it, the way a written label asserts them all."""
     return tuple(path[:depth] for depth in range(1, len(path) + 1))

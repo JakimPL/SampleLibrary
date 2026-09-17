@@ -280,7 +280,7 @@ def test_get_cloud_suggestions_reads_the_scoring_on_show_alone(client: TestClien
 def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_first_picks(
     client: TestClient, connection: Connection
 ) -> None:
-    """The closed hat is picked first twice, counting toward the hat category; a tag outside the vocabulary ranks last."""
+    """The closed hat is picked first twice, counting toward the hat tag; a tag outside the vocabulary ranks last."""
     _store_samples(connection, SAMPLE_HASH, "b" * 64, "d" * 64, "e" * 64)
     seed_scoring(
         connection,

@@ -24,7 +24,7 @@ export interface PointColoring {
 /** The coloring while a mode's tags are on their way: every sample point on the ground, awaiting its color. */
 export const SUBSTRATE_ONLY_COLORING: PointColoring = { slotByHash: new Map(), ranks: [] };
 
-/** The broad categories alone, most used first, ties by name. */
+/** The top levels alone, most used first, ties by name. */
 export function topLevelTags(tags: readonly TagSummary[]): readonly TopLevelTag[] {
     return tags
         .flatMap((tag): TopLevelTag[] => {

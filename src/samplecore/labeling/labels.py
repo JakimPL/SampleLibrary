@@ -48,7 +48,7 @@ def canonical_label(text: str) -> str:
 
 
 def first_use_ranks(labels_in_time_order: Iterable[str]) -> dict[LabelPath, int]:
-    """Every tag's rank by the moment a person first used it, the categories above a tag included.
+    """Every tag's rank by the moment a person first used it, the tags above it included.
 
     A rank is what a reader hangs something lasting on, such as a color: a tag used for the first
     time takes the rank after the last. Two tags first used in one label rank in the order they were
@@ -66,9 +66,9 @@ class SampleLabel(BaseModel):
     """What a label says about a sample: the set of tag paths it names.
 
     A person writes ``HI-HAT: CLOSED, LO-FI`` -- tags separated by commas, each one a path whose
-    colons step from a broad category down to a specification that only means something under it.
+    colons step from a broad top level down to a specification that only means something under it.
     The whole path is a tag's identity, so ``ELECTRIC`` under ``BASS`` and ``ELECTRIC`` under
-    ``GUITAR`` are two different tags, and a path asserts every category above it: a closed hi-hat
+    ``GUITAR`` are two different tags, and a path asserts every tag above it: a closed hi-hat
     is also a hi-hat. Tags are attributes a sample carries side by side, which is what lets one
     sample be both a snare and lo-fi.
     """
@@ -84,12 +84,12 @@ class SampleLabel(BaseModel):
 
     @property
     def closure(self) -> frozenset[LabelPath]:
-        """Every tag the label asserts, including each category above a specification."""
+        """Every tag the label asserts, including each tag above a specification."""
         return frozenset(path[:depth] for path in self.paths for depth in range(1, len(path) + 1))
 
     @property
     def top_level(self) -> frozenset[str]:
-        """The broad categories alone, which is the level-zero reading of the label."""
+        """The top levels alone, which is the level-zero reading of the label."""
         return frozenset(path[0] for path in self.paths)
 
     def truncated(self, *, depth: int) -> SampleLabel:

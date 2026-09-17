@@ -71,7 +71,7 @@ async function readJson<Body>(path: string, backendUrl: string): Promise<Body> {
 }
 
 /**
- * The broad category a seeded sample clusters under: what its badge names it by, a hand label before
+ * The top level a seeded sample clusters under: what its badge names it by, a hand label before
  * the listening model's first pick, and the first word of its name for a sandbox no scoring has
  * reached, so kicks and snares still gather apart.
  */

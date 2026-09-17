@@ -18,7 +18,7 @@ function normalizedTag(tag: string): string {
         .join(WRITTEN_LEVEL_SEPARATOR);
 }
 
-/** The broad category a label names first: its first tag's top level, in the form the server keeps it. */
+/** The top level a label names first: its first tag's head, in the form the server keeps it. */
 export function topLevelOf(label: string): string {
     const [firstTag = ""] = label.split(TAG_SEPARATOR);
     const [topLevel = ""] = normalizedTag(firstTag).split(WRITTEN_LEVEL_SEPARATOR);

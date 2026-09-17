@@ -82,7 +82,7 @@ def test_a_file_that_is_no_list_of_labels_is_refused(case: RefusedFileCase, tmp_
         read_vocabulary_file(listing)
 
 
-def test_the_hand_label_vocabulary_holds_the_categories_and_their_specifications(connection: Connection) -> None:
+def test_the_hand_label_vocabulary_holds_the_top_levels_and_their_specifications(connection: Connection) -> None:
     PostgresSampleAnnotationRepository(connection).upsert_many(
         (
             _annotation("a" * 64, "HI-HAT: CLOSED, LO-FI"),

@@ -28,7 +28,7 @@ class LabelVocabulary:
     """The tags a person has used so far, as a tree with a count at every node.
 
     A count includes the samples labeled with any specification below the tag, so ``HI-HAT`` counts
-    its closed and open hi-hats too and a reader sees how much support a category has at each level.
+    its closed and open hi-hats too and a reader sees how much support a tag has at each level.
     The two findings below surface where the wording drifted, for the person to settle in the
     interface: this class reads the labels and changes nothing.
     """
@@ -48,7 +48,7 @@ class LabelVocabulary:
 
     @property
     def top_level(self) -> tuple[TagUsage, ...]:
-        """The broad categories, most used first."""
+        """The top levels, most used first."""
         return tuple(usage for usage in self.usages if usage.depth == 1)
 
     def children(self, path: LabelPath) -> tuple[TagUsage, ...]:
@@ -57,7 +57,7 @@ class LabelVocabulary:
 
     @property
     def names_used_at_two_depths(self) -> tuple[str, ...]:
-        """Names that stand as a category of their own and also as a specification under another.
+        """Names that stand as a top level of their own and also as a specification under another.
 
         ``ELECTRIC`` on its own beside ``BASS: ELECTRIC`` is usually a comma typed for a colon;
         ``SYNTH`` beside ``BASS: SYNTH`` may be meant both ways. Either way the person deciding wants

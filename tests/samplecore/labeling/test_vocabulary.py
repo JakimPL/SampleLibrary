@@ -24,7 +24,7 @@ def _vocabulary() -> LabelVocabulary:
     return LabelVocabulary.from_labels(SampleLabel.parse(text) for text in LABELS)
 
 
-def test_a_category_counts_every_sample_labeled_with_a_specification_of_it() -> None:
+def test_a_top_level_counts_every_sample_labeled_with_a_specification_of_it() -> None:
     vocabulary = _vocabulary()
 
     assert vocabulary.top_level[0] == TagUsage(path=("HI-HAT",), sample_count=3)
@@ -46,7 +46,7 @@ def test_the_most_used_tag_comes_first_and_ties_read_alphabetically() -> None:
     ]
 
 
-def test_a_name_standing_alone_and_under_another_category_is_surfaced() -> None:
+def test_a_name_standing_alone_and_under_another_top_level_is_surfaced() -> None:
     assert _vocabulary().names_used_at_two_depths == ("ELECTRIC",)
 
 
@@ -79,7 +79,7 @@ def _annotation(label: str | None, *, days_ago: int, sample_hash: str) -> Sample
 
 
 def test_the_vocabulary_is_read_from_every_labeled_annotation(connection: Connection) -> None:
-    """A rating without a label names no tag, and a specification counts toward its category."""
+    """A rating without a label names no tag, and a specification counts toward its top level."""
     PostgresSampleAnnotationRepository(connection).upsert_many(
         (
             _annotation("HI-HAT: CLOSED", days_ago=1, sample_hash="a" * 64),

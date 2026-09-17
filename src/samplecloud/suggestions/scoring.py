@@ -78,13 +78,13 @@ class ScoringRecipe:
 class HandLabelAgreement:
     """How the first suggestion agrees with what a person wrote, over the samples a person labeled.
 
-    An exact agreement is a suggestion the person asserted as written, its category included; a
-    category agreement is one whose category the person asserted, whatever they specified under it.
+    An exact agreement is a suggestion the person asserted as written, its top level included; a
+    top-level agreement is one whose top level the person asserted, whatever they specified under it.
     """
 
     labeled: int
     exact: int
-    category: int
+    top_level: int
 
 
 @dataclass(frozen=True)
@@ -180,7 +180,7 @@ def show_scoring(connection: Connection, experiment_id: int) -> None:
 def hand_label_agreement(connection: Connection, first_pick_by_hash: dict[str, str]) -> HandLabelAgreement:
     """Read the first picks against the hand labels of the samples that carry one."""
     annotations = PostgresSampleAnnotationRepository(connection).annotations_by_hash(list(first_pick_by_hash))
-    labeled = exact = category = 0
+    labeled = exact = top_level = 0
     for sample_hash, annotation in annotations.items():
         if annotation.label is None:
             continue
@@ -188,5 +188,5 @@ def hand_label_agreement(connection: Connection, first_pick_by_hash: dict[str, s
         closure = SampleLabel.parse(annotation.label).closure
         path, *_ = written_paths(first_pick_by_hash[sample_hash])
         exact += path in closure
-        category += path[:1] in closure
-    return HandLabelAgreement(labeled=labeled, exact=exact, category=category)
+        top_level += path[:1] in closure
+    return HandLabelAgreement(labeled=labeled, exact=exact, top_level=top_level)

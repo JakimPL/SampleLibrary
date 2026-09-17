@@ -9,13 +9,13 @@ INDENT: Final[str] = "    "
 
 
 def vocabulary_lines(vocabulary: LabelVocabulary) -> tuple[str, ...]:
-    """The vocabulary as an indented tree, most-used categories first, with what a person may want to settle."""
+    """The vocabulary as an indented tree, most-used top levels first, with what a person may want to settle."""
     lines: list[str] = []
     for usage in vocabulary.top_level:
         lines.extend(_subtree_lines(vocabulary, usage, depth=0))
     if vocabulary.names_used_at_two_depths:
         names = ", ".join(vocabulary.names_used_at_two_depths)
-        lines.append(f"Used both as a category and as a specification under another: {names}.")
+        lines.append(f"Used both as a top level and as a specification under another: {names}.")
     if vocabulary.singletons:
         paths = ", ".join(format_path(path) for path in vocabulary.singletons)
         lines.append(f"Carried by one sample each: {paths}.")

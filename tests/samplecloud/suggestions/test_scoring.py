@@ -96,7 +96,7 @@ def test_each_sample_keeps_its_closest_labels_first_under_a_new_experiment(conne
 
 
 def test_the_summary_counts_the_first_picks_and_their_agreement_with_the_hand_labels(connection: Connection) -> None:
-    """The kick's first pick is the category its label specifies; the hat's first pick contradicts its label."""
+    """The kick's first pick is the top level its label specifies; the hat's first pick contradicts its label."""
     source = seed_listening_experiment(connection)
 
     summary = score_suggestions(
@@ -115,7 +115,7 @@ def test_the_summary_counts_the_first_picks_and_their_agreement_with_the_hand_la
 
     assert summary.sample_count == 2
     assert summary.first_picks == {"BASS DRUM": 1, "HI-HAT: CLOSED": 1}
-    assert summary.agreement == HandLabelAgreement(labeled=2, exact=1, category=1)
+    assert summary.agreement == HandLabelAgreement(labeled=2, exact=1, top_level=1)
 
 
 def test_an_experiment_without_vectors_says_so(connection: Connection) -> None:

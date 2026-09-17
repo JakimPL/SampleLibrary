@@ -19,7 +19,7 @@ from samplecore.storage.repositories.experiment import PostgresExperimentReposit
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from tests.samplecloud.evaluation.conftest import SEEDED_CATEGORIES, SeededCatalog, label_catalog, seed_catalog
+from tests.samplecloud.evaluation.conftest import SEEDED_KINDS, SeededCatalog, label_catalog, seed_catalog
 
 
 def test_a_corpus_carries_one_row_per_feature_vector(connection: Connection, separable_catalog: SeededCatalog) -> None:
@@ -34,7 +34,7 @@ def test_a_corpus_reads_how_often_and_how_widely_each_sample_is_played(
 ) -> None:
     corpus = load_corpus(connection, experiment_id=separable_catalog.experiment_id, scope=EvaluationScope.CATALOG)
 
-    group_by_hash = dict(zip(separable_catalog.sample_hashes, separable_catalog.categories, strict=True))
+    group_by_hash = dict(zip(separable_catalog.sample_hashes, separable_catalog.kinds, strict=True))
     statistics = {
         group_by_hash[sample_hash]: entry
         for sample_hash, entry in zip(corpus.sample_hashes, corpus.note_statistics, strict=True)
@@ -42,7 +42,7 @@ def test_a_corpus_reads_how_often_and_how_widely_each_sample_is_played(
     }
     assert corpus.note_reached.all()
     assert statistics["kick"].distinct_pitch_count == 1
-    assert statistics["lead"].distinct_pitch_count == len(SEEDED_CATEGORIES)
+    assert statistics["lead"].distinct_pitch_count == len(SEEDED_KINDS)
     assert statistics["kick"].strike_count == 12
 
 
