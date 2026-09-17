@@ -1,6 +1,7 @@
 import type { ChangeEvent, ReactElement } from "react";
 
 import { sampleAudioUrl } from "../api/samples";
+import { DownloadLink } from "../shared/DownloadLink";
 import { formatDuration } from "../shared/format";
 import { useWaveformPlayer } from "./useWaveformPlayer";
 import { NO_TRACES, WaveformView } from "./WaveformView";
@@ -12,6 +13,8 @@ export interface RateOption {
 
 interface WaveformPlayerProps {
     readonly sampleHash: string;
+    /** The name a saved copy of this sample takes, ending in its own extension. */
+    readonly fileName: string;
     readonly rateHz: number;
     readonly rateOptions: readonly RateOption[];
     readonly onRateChange: (rateHz: number) => void;
@@ -22,7 +25,13 @@ function describeRateOption(option: RateOption): string {
     return `${String(option.rateHz)} Hz · played ${String(option.eventCount)} ${timeWord}`;
 }
 
-export function WaveformPlayer({ sampleHash, rateHz, rateOptions, onRateChange }: WaveformPlayerProps): ReactElement {
+export function WaveformPlayer({
+    sampleHash,
+    fileName,
+    rateHz,
+    rateOptions,
+    onRateChange,
+}: WaveformPlayerProps): ReactElement {
     const player = useWaveformPlayer(sampleAudioUrl(sampleHash), rateHz);
 
     function handleTogglePlay(): void {
@@ -73,6 +82,7 @@ export function WaveformPlayer({ sampleHash, rateHz, rateOptions, onRateChange }
                         </select>
                     </label>
                 )}
+                <DownloadLink href={sampleAudioUrl(sampleHash)} fileName={fileName} label="Save this sample" />
             </div>
         </div>
     );

@@ -1318,6 +1318,28 @@ table.data td .annotation-editor-input {
     background: var(--accent-strong);
 }
 
+.transport .download-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin-left: auto;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface-0);
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.transport .download-link:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
 .transport .time {
     font-family: var(--font-mono);
     font-size: 11px;

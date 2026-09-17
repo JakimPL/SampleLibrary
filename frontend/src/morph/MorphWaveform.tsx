@@ -12,7 +12,8 @@ import {
     type WaveformTrace,
     WaveformView,
 } from "../samples/WaveformView";
-import { formatDuration } from "../shared/format";
+import { DownloadLink } from "../shared/DownloadLink";
+import { formatDuration, shortHash } from "../shared/format";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import { readMorphColors } from "./morphColors";
 import { morphPreview } from "./morphPreview";
@@ -23,6 +24,7 @@ const TRACE_BUCKET_COUNT = 2048;
 const AT_THE_FIRST_END = 0;
 const WHOLE_FRAME = 1;
 const NOTHING_DRAWN_HINT = "Let the slider go to hear a point on the path and see it drawn.";
+const WAV_EXTENSION = ".wav";
 const OFFLINE_HINT = "The path is drawn once an inference process answers for it.";
 
 interface MorphWaveformProps {
@@ -134,9 +136,21 @@ export function MorphWaveform({
                 <span className="time">
                     {formatDuration(sounding ? progress.currentTimeSeconds : 0)} / {formatDuration(render.seconds ?? 0)}
                 </span>
+                {renderUrl !== null && renderedWeight !== null && render.refusal === null && (
+                    <DownloadLink
+                        href={renderUrl}
+                        fileName={renderFileName(first, second, renderedWeight)}
+                        label="Save this render"
+                    />
+                )}
             </div>
         </div>
     );
+}
+
+/** What a saved render is named: the pair it runs between and the point along it. */
+function renderFileName(first: string, second: string, weight: number): string {
+    return `morph-${shortHash(first)}-${shortHash(second)}-${String(weight)}${WAV_EXTENSION}`;
 }
 
 /** What stands where the render would: why it was refused, or what is waited on before there is one. */

@@ -51,6 +51,7 @@ function latestInstance(): (typeof instances)[number] {
 }
 
 interface PlayerOverrides {
+    readonly fileName?: string;
     readonly rateHz?: number;
     readonly rateOptions?: readonly RateOption[];
     readonly onRateChange?: (rateHz: number) => void;
@@ -60,6 +61,7 @@ function renderPlayer(overrides: PlayerOverrides = {}): RenderResult {
     return render(
         <WaveformPlayer
             sampleHash="abc"
+            fileName={overrides.fileName ?? "crash cymbal.wav"}
             rateHz={overrides.rateHz ?? 8363}
             rateOptions={overrides.rateOptions ?? [{ rateHz: 8363, eventCount: 1 }]}
             onRateChange={overrides.onRateChange ?? vi.fn()}
@@ -154,6 +156,14 @@ describe("WaveformPlayer", () => {
 
         expect(createMock).toHaveBeenLastCalledWith(expect.objectContaining({ url: "/api/samples/abc/audio" }));
         expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(16726 / NOMINAL_WAV_RATE_HZ, false);
+    });
+
+    it("offers the sample as a file, named as the library calls it", () => {
+        renderPlayer({ fileName: "crash cymbal.wav" });
+
+        const save = screen.getByRole("link", { name: "Save this sample" });
+        expect(save).toHaveAttribute("href", "/api/samples/abc/audio");
+        expect(save).toHaveAttribute("download", "crash cymbal.wav");
     });
 
     it("marks the waveform as sounding only while it is playing", () => {

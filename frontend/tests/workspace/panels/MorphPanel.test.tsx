@@ -222,6 +222,9 @@ describe("MorphPanel", () => {
         }
 
         expect(screen.getByRole("button", { name: "Play the morph" })).toHaveProperty("disabled", !drawn);
+        expect(screen.queryByRole("link", { name: "Save this render" })).toStrictEqual(
+            drawn ? expect.anything() : null,
+        );
         if (hint === null) {
             expect(screen.queryByText(/Let the slider go|inference process answers/)).not.toBeInTheDocument();
         } else {
