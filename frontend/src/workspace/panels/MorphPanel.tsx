@@ -19,8 +19,7 @@ import { useEntityRowInteractions } from "../useEntityRowInteractions";
 const WEIGHT_DECIMAL_PLACES = 2;
 const PERCENT_OF_A_SHARE = 100;
 const THUMB_CENTER_SHARE = 0.5;
-/** What the panel asks for while no pair is joined. */
-export const NO_PAIR_HINT =
+const NO_PAIR_HINT =
     "Drag a sample from the Cloud to another with the right mouse button, or click one and right-click another.";
 const OFFLINE_NOTICE = "Morphing is offline.";
 

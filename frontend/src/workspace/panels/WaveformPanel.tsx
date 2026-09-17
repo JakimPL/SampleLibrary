@@ -9,8 +9,7 @@ import { fileNameStem, shortHash } from "../../shared/format";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
 
-/** What the panel asks for while no sample is focused. */
-export const NO_SAMPLE_HINT = "Double-click a sample to hear it here.";
+const NO_SAMPLE_HINT = "Double-click a sample to hear it here.";
 
 type PlaybackRate = components["schemas"]["SamplePlaybackRate"];
 

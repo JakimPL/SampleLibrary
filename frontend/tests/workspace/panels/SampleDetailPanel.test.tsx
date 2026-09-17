@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../../src/api/client";
 import type * as CloudApi from "../../../src/api/cloud";
 import type * as SamplesApi from "../../../src/api/samples";
-import { NO_SAMPLE_HINT, SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPanel";
+import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
 const { getSample, getSampleRelations, getSimilarSamples, getCategoryTags } = vi.hoisted(() => ({
@@ -67,10 +67,11 @@ const SAMPLE_DETAIL = {
 };
 
 describe("SampleDetailPanel", () => {
-    it("shows a placeholder when no sample is focused", () => {
-        renderPanel();
+    it("asks the catalog for nothing and stands in its empty state while no sample is focused", () => {
+        const { container } = renderPanel();
 
-        expect(screen.getByText(NO_SAMPLE_HINT)).toBeInTheDocument();
+        expect(getSample).not.toHaveBeenCalled();
+        expect(container.querySelector(".no-selection")).toBeInTheDocument();
     });
 
     it("shows the focused sample's detail once loaded", async () => {

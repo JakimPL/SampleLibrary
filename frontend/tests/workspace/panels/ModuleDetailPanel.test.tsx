@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as ModulesApi from "../../../src/api/modules";
-import { ModuleDetailPanel, NO_MODULE_HINT } from "../../../src/workspace/panels/ModuleDetailPanel";
+import { ModuleDetailPanel } from "../../../src/workspace/panels/ModuleDetailPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
 const { getModule } = vi.hoisted(() => ({ getModule: vi.fn() }));
@@ -53,10 +53,11 @@ const MODULE_DETAIL = {
 };
 
 describe("ModuleDetailPanel", () => {
-    it("shows a placeholder when no module is focused", () => {
-        renderPanel();
+    it("asks the catalog for nothing and stands in its empty state while no module is focused", () => {
+        const { container } = renderPanel();
 
-        expect(screen.getByText(NO_MODULE_HINT)).toBeInTheDocument();
+        expect(getModule).not.toHaveBeenCalled();
+        expect(container.querySelector(".no-selection")).toBeInTheDocument();
     });
 
     it("shows the focused module's detail once loaded", async () => {

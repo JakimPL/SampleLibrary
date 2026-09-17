@@ -6,8 +6,7 @@ import { ErrorNotice } from "../../shared/ErrorNotice";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
 
-/** What the panel asks for while no module is focused. */
-export const NO_MODULE_HINT = "Double-click a module to see it here.";
+const NO_MODULE_HINT = "Double-click a module to see it here.";
 
 interface FocusedModuleDetailProps {
     readonly moduleHash: string;
