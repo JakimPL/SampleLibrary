@@ -1,13 +1,13 @@
 import { useCallback, useMemo } from "react";
 
 import { topLevelTags } from "../cloud/labelColoring";
-import { useSuggestionTags } from "../cloud/useSuggestionTags";
+import { useCategoryTags } from "../cloud/useCategoryTags";
 import { labelColor, readLabelPaletteParameters } from "../theme/labelPalette";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import { topLevelOf } from "./labelText";
 
 /**
- * The color a suggested label wears: its top level's, from the rank the scoring on show gives
+ * The color a category wears: its top level's, from the rank the scoring on show gives
  * that top level, so a badge naming a sample and the point the cloud paints for it share one color.
  *
  * The tags arrive through the request cache the cloud's own legend reads, so every badge on screen
@@ -15,8 +15,8 @@ import { topLevelOf } from "./labelText";
  * a label has no color. Colors are read back from the theme on every theme change, the way the
  * legend's swatches are.
  */
-export function useSuggestionColor(): (label: string) => string | null {
-    const state = useSuggestionTags(true);
+export function useCategoryColor(): (label: string) => string | null {
+    const state = useCategoryTags(true);
     const themeSignal = useThemeSignal();
     const colorByName = useMemo(() => {
         if (state.status !== "success") {

@@ -2,11 +2,11 @@ import type { ReactElement } from "react";
 
 import { UNLABELED_SAMPLE_LABEL } from "../shared/labels";
 import { useSampleAnnotation } from "./annotationStore";
-import { useSuggestionColor } from "./useSuggestionColor";
+import { useCategoryColor } from "./useCategoryColor";
 
 interface CategoryBadgeProps {
     readonly sampleHash: string;
-    readonly suggestedLabel: string | null;
+    readonly category: string | null;
     readonly handLabel: string | null;
 }
 
@@ -19,9 +19,9 @@ interface CategoryBadgeProps {
  * unlabeled. The label set in this session counts at once, so a badge follows an edit the moment
  * it is made. A label longer than the room it is given ends in an ellipsis, whole in its tooltip.
  */
-export function CategoryBadge({ sampleHash, suggestedLabel, handLabel }: CategoryBadgeProps): ReactElement {
+export function CategoryBadge({ sampleHash, category, handLabel }: CategoryBadgeProps): ReactElement {
     const annotation = useSampleAnnotation(sampleHash, { label: handLabel, rating: null, favorite: false });
-    const colorOf = useSuggestionColor();
+    const colorOf = useCategoryColor();
     const resolved = annotation?.label ?? null;
     if (resolved !== null) {
         return (
@@ -30,15 +30,15 @@ export function CategoryBadge({ sampleHash, suggestedLabel, handLabel }: Categor
             </span>
         );
     }
-    if (suggestedLabel === null) {
+    if (category === null) {
         return <span className="badge badge-unlabeled">{UNLABELED_SAMPLE_LABEL}</span>;
     }
 
-    const color = colorOf(suggestedLabel);
+    const color = colorOf(category);
     return (
-        <span className="badge badge-category" title={suggestedLabel}>
+        <span className="badge badge-category" title={category}>
             {color !== null && <span className="badge-swatch" style={{ background: color }} aria-hidden />}
-            <span className="badge-text">{suggestedLabel}</span>
+            <span className="badge-text">{category}</span>
         </span>
     );
 }

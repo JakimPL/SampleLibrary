@@ -11,11 +11,11 @@ import { labelColor, readLabelPaletteParameters } from "../../src/theme/labelPal
 const SAMPLE_HASH = "a".repeat(64);
 const HI_HAT_RANK = 2;
 
-const { getSuggestionTags } = vi.hoisted(() => ({ getSuggestionTags: vi.fn() }));
+const { getCategoryTags } = vi.hoisted(() => ({ getCategoryTags: vi.fn() }));
 
 vi.mock("../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../src/api/cloud");
-    return { ...actual, getSuggestionTags };
+    return { ...actual, getCategoryTags };
 });
 
 function confirm(sampleHash: string, annotation: AnnotationDecisions | null): void {
@@ -25,7 +25,7 @@ function confirm(sampleHash: string, annotation: AnnotationDecisions | null): vo
 }
 
 function serveTags(): void {
-    getSuggestionTags.mockResolvedValue([
+    getCategoryTags.mockResolvedValue([
         { path: ["HI-HAT"], sample_count: 4, rank: HI_HAT_RANK },
         { path: ["HI-HAT", "CLOSED"], sample_count: 3, rank: HI_HAT_RANK },
     ]);
@@ -43,7 +43,7 @@ describe("CategoryBadge", () => {
     it("names what the listening model heard when nobody has labeled the sample", () => {
         serveTags();
 
-        render(<CategoryBadge sampleHash={SAMPLE_HASH} suggestedLabel="HI-HAT: CLOSED" handLabel={null} />);
+        render(<CategoryBadge sampleHash={SAMPLE_HASH} category="HI-HAT: CLOSED" handLabel={null} />);
 
         expect(badgeOf("HI-HAT: CLOSED")).toHaveClass("badge-category");
         expect(badgeOf("HI-HAT: CLOSED")).toHaveAttribute("title", "HI-HAT: CLOSED");
@@ -52,7 +52,7 @@ describe("CategoryBadge", () => {
     it("wears its category's color once the tags arrive, and none before", async () => {
         serveTags();
 
-        render(<CategoryBadge sampleHash={SAMPLE_HASH} suggestedLabel="HI-HAT: CLOSED" handLabel={null} />);
+        render(<CategoryBadge sampleHash={SAMPLE_HASH} category="HI-HAT: CLOSED" handLabel={null} />);
 
         expect(swatchOf("HI-HAT: CLOSED")).toBeNull();
         const expected = labelColor(HI_HAT_RANK, readLabelPaletteParameters());
@@ -64,7 +64,7 @@ describe("CategoryBadge", () => {
     it("shows what a person decided in place of what was heard", () => {
         serveTags();
 
-        render(<CategoryBadge sampleHash={SAMPLE_HASH} suggestedLabel="SNARE" handLabel="dirty 909" />);
+        render(<CategoryBadge sampleHash={SAMPLE_HASH} category="SNARE" handLabel="dirty 909" />);
 
         expect(badgeOf("dirty 909")).toHaveClass("badge-hand-label");
         expect(screen.queryByText("SNARE")).not.toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("CategoryBadge", () => {
     it("reads as unlabeled when neither a person nor the model named the sample", () => {
         serveTags();
 
-        render(<CategoryBadge sampleHash={SAMPLE_HASH} suggestedLabel={null} handLabel={null} />);
+        render(<CategoryBadge sampleHash={SAMPLE_HASH} category={null} handLabel={null} />);
 
         expect(badgeOf(UNLABELED_SAMPLE_LABEL)).toHaveClass("badge-unlabeled");
     });
@@ -82,7 +82,7 @@ describe("CategoryBadge", () => {
         serveTags();
         confirm(SAMPLE_HASH, { label: "rimshot", rating: null, favorite: false });
 
-        render(<CategoryBadge sampleHash={SAMPLE_HASH} suggestedLabel="SNARE" handLabel="dirty 909" />);
+        render(<CategoryBadge sampleHash={SAMPLE_HASH} category="SNARE" handLabel="dirty 909" />);
 
         expect(screen.getByText("rimshot")).toBeInTheDocument();
     });
@@ -91,7 +91,7 @@ describe("CategoryBadge", () => {
         serveTags();
         confirm(SAMPLE_HASH, null);
 
-        render(<CategoryBadge sampleHash={SAMPLE_HASH} suggestedLabel="SNARE" handLabel="dirty 909" />);
+        render(<CategoryBadge sampleHash={SAMPLE_HASH} category="SNARE" handLabel="dirty 909" />);
 
         expect(screen.getByText("SNARE")).toBeInTheDocument();
     });

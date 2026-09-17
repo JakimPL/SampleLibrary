@@ -1,7 +1,7 @@
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { CloudLabel, CloudPoint, CloudSuggestion, ModuleCloudPoint } from "../../api/cloud";
+import type { CloudCategory, CloudLabel, CloudPoint, ModuleCloudPoint } from "../../api/cloud";
 import { type CloudLink, CloudView } from "../../cloud/CloudView";
 import type { CloudEntityPoint } from "../../cloud/geometry";
 import {
@@ -13,11 +13,11 @@ import {
     topLevelTags,
 } from "../../cloud/labelColoring";
 import { TagLegend } from "../../cloud/TagLegend";
+import { useCategoryTags } from "../../cloud/useCategoryTags";
 import { useCloud } from "../../cloud/useCloud";
+import { useCloudCategories } from "../../cloud/useCloudCategories";
 import { useCloudLabels } from "../../cloud/useCloudLabels";
-import { useCloudSuggestions } from "../../cloud/useCloudSuggestions";
 import { useModuleCloud } from "../../cloud/useModuleCloud";
-import { useSuggestionTags } from "../../cloud/useSuggestionTags";
 import { morphPreview } from "../../morph/morphPreview";
 import { useMorphStore } from "../../morph/morphStore";
 import { useMorphStatus } from "../../morph/useMorphStatus";
@@ -98,9 +98,9 @@ function useActiveCloudPoints(tab: CloudTab): FetchState<readonly CloudEntityPoi
     return tab === "samples" ? samplePointsState : modulePointsState;
 }
 
-/** A sample's first suggestion in the shape the label coloring paints by: one path, the way a written label's first tag is. */
-function suggestionsAsLabels(suggestions: readonly CloudSuggestion[]): readonly CloudLabel[] {
-    return suggestions.map((suggestion) => ({ sample_hash: suggestion.sample_hash, paths: [suggestion.path] }));
+/** A sample's top category in the shape the label coloring paints by: one path, the way a written label's first tag is. */
+function categoriesAsLabels(categories: readonly CloudCategory[]): readonly CloudLabel[] {
+    return categories.map((category) => ({ sample_hash: category.sample_hash, paths: [category.path] }));
 }
 
 /**
@@ -121,26 +121,26 @@ function useSampleColoring(mode: ColoringMode): {
 } {
     const labelsState = useCloudLabels(mode === "label");
     const tagsState = useLabelTags(mode === "label");
-    const suggestionsState = useCloudSuggestions(mode === "category");
-    const suggestionTagsState = useSuggestionTags(mode === "category");
+    const categoriesState = useCloudCategories(mode === "category");
+    const categoryTagsState = useCategoryTags(mode === "category");
     const [chosen, setChosen] = useState<readonly string[] | null>(null);
     useEffect(() => {
         setChosen(null);
     }, [mode]);
     const tags = useMemo(() => {
-        const source = mode === "category" ? suggestionTagsState : tagsState;
+        const source = mode === "category" ? categoryTagsState : tagsState;
         return source.status === "success" ? topLevelTags(source.data) : NO_TAGS;
-    }, [mode, tagsState, suggestionTagsState]);
+    }, [mode, tagsState, categoryTagsState]);
     const painted = useMemo(() => chosen ?? defaultPaintedTags(tags), [chosen, tags]);
     const coloring = useMemo((): PointColoring => {
         if (mode === "label" && labelsState.status === "success") {
             return labelColoring(labelsState.data, tags, painted);
         }
-        if (mode === "category" && suggestionsState.status === "success") {
-            return labelColoring(suggestionsAsLabels(suggestionsState.data), tags, painted);
+        if (mode === "category" && categoriesState.status === "success") {
+            return labelColoring(categoriesAsLabels(categoriesState.data), tags, painted);
         }
         return SUBSTRATE_ONLY_COLORING;
-    }, [mode, labelsState, suggestionsState, tags, painted]);
+    }, [mode, labelsState, categoriesState, tags, painted]);
 
     function togglePainted(name: string): void {
         setChosen(painted.includes(name) ? painted.filter((candidate) => candidate !== name) : [...painted, name]);

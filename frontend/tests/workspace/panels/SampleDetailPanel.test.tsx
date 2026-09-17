@@ -8,11 +8,11 @@ import type * as SamplesApi from "../../../src/api/samples";
 import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { getSample, getSampleRelations, getSimilarSamples, getSuggestionTags } = vi.hoisted(() => ({
+const { getSample, getSampleRelations, getSimilarSamples, getCategoryTags } = vi.hoisted(() => ({
     getSample: vi.fn(),
     getSampleRelations: vi.fn(),
     getSimilarSamples: vi.fn(),
-    getSuggestionTags: vi.fn().mockResolvedValue([]),
+    getCategoryTags: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../../../src/api/samples", async () => {
@@ -22,7 +22,7 @@ vi.mock("../../../src/api/samples", async () => {
 
 vi.mock("../../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
-    return { ...actual, getSuggestionTags };
+    return { ...actual, getCategoryTags };
 });
 
 function renderPanel(): ReturnType<typeof render> {

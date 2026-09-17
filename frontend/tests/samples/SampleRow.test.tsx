@@ -9,10 +9,10 @@ import type { SampleSummary } from "../../src/api/samples";
 import { SampleRow } from "../../src/samples/SampleRow";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 
-const { changeSampleAnnotation, getLabelVocabulary, getSuggestionTags } = vi.hoisted(() => ({
+const { changeSampleAnnotation, getLabelVocabulary, getCategoryTags } = vi.hoisted(() => ({
     changeSampleAnnotation: vi.fn(),
     getLabelVocabulary: vi.fn(),
-    getSuggestionTags: vi.fn(),
+    getCategoryTags: vi.fn(),
 }));
 
 vi.mock("../../src/api/curation", async () => {
@@ -22,7 +22,7 @@ vi.mock("../../src/api/curation", async () => {
 
 vi.mock("../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../src/api/cloud");
-    return { ...actual, getSuggestionTags };
+    return { ...actual, getCategoryTags };
 });
 
 const NOTHING = { label: null, rating: null, favorite: false };
@@ -59,7 +59,7 @@ interface RowOverrides {
 
 function renderRow(overrides: RowOverrides = {}): ReturnType<typeof render> {
     getLabelVocabulary.mockResolvedValue([]);
-    getSuggestionTags.mockResolvedValue([]);
+    getCategoryTags.mockResolvedValue([]);
     return render(
         <MemoryRouter initialEntries={["/"]}>
             <Routes>

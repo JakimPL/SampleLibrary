@@ -2,7 +2,7 @@ import { type ReactElement, useState } from "react";
 
 import type { SampleDetail } from "../api/samples";
 import { AnnotationEditor, defaultScopeFor } from "./AnnotationEditor";
-import { SuggestedLabels } from "./SuggestedLabels";
+import { CategoryChoices } from "./CategoryChoices";
 
 interface AnnotationRowsProps {
     readonly sample: SampleDetail;
@@ -26,7 +26,7 @@ export function AnnotationRows({ sample }: AnnotationRowsProps): ReactElement {
             </dd>
             <dt>Categories</dt>
             <dd>
-                <SuggestedLabels sample={sample} scope={scope} />
+                <CategoryChoices sample={sample} scope={scope} />
             </dd>
         </>
     );

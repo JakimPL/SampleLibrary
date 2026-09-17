@@ -145,7 +145,7 @@ function describeTargets(sampleTarget: number | null, moduleTarget: number | nul
  * grown to the counts `VITE_CLOUD_DENSIFY` and `VITE_CLOUD_DENSIFY_MODULES` name, so the sandbox's
  * few dozen samples show the density of a real library. A catalog whose embedding has yet to run is
  * laid out from its own listing first, which keeps every point on a real hash and so keeps hovering,
- * playing and morphing reaching the catalog. Every other route, the cloud's labels and suggestions
+ * playing and morphing reaching the catalog. Every other route, the cloud's labels and categories
  * included, passes on to the `/api` proxy. Vite runs plugin middlewares ahead of its proxy, which is
  * what lets this one see the request first.
  */

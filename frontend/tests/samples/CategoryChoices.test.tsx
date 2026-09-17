@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type * as CurationApi from "../../src/api/curation";
 import type { SampleDetail } from "../../src/api/samples";
-import { NO_SUGGESTIONS, SuggestedLabels } from "../../src/samples/SuggestedLabels";
+import { CategoryChoices, NO_CATEGORIES } from "../../src/samples/CategoryChoices";
 
 const { changeSampleAnnotation } = vi.hoisted(() => ({
     changeSampleAnnotation: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock("../../src/api/curation", async () => {
 
 const SAMPLE_HASH = "a".repeat(64);
 const NOTHING = { label: null, rating: null, favorite: false };
-const SUGGESTED = [
+const CATEGORIES = [
     { label: "BASS DRUM", score: 0.81 },
     { label: "SNARE", score: 0.4 },
 ];
@@ -40,7 +40,7 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         duration_seconds: 0.1,
         playback_rates: [],
         equivalence_member_count: 1,
-        suggestions: SUGGESTED,
+        suggestions: CATEGORIES,
         ...overrides,
     };
 }
@@ -52,17 +52,17 @@ function resolvesTo(label: string): void {
     });
 }
 
-describe("SuggestedLabels", () => {
-    it("shows each suggestion with its score, closest first", () => {
-        render(<SuggestedLabels sample={buildSample()} scope="sample" />);
+describe("CategoryChoices", () => {
+    it("shows each category with its score, closest first", () => {
+        render(<CategoryChoices sample={buildSample()} scope="sample" />);
 
         const buttons = screen.getAllByRole("button");
         expect(buttons.map((button) => button.textContent)).toEqual(["BASS DRUM0.81", "SNARE0.40"]);
     });
 
-    it("writes a clicked suggestion as the label of a sample that had none", async () => {
+    it("writes a clicked category as the label of a sample that had none", async () => {
         resolvesTo("BASS DRUM");
-        render(<SuggestedLabels sample={buildSample()} scope="sample" />);
+        render(<CategoryChoices sample={buildSample()} scope="sample" />);
 
         await userEvent.click(screen.getByRole("button", { name: /BASS DRUM/ }));
 
@@ -71,9 +71,9 @@ describe("SuggestedLabels", () => {
         });
     });
 
-    it("appends a clicked suggestion after the wording the sample already carries, and changes the label alone", async () => {
+    it("appends a clicked category after the wording the sample already carries, and changes the label alone", async () => {
         resolvesTo("LO-FI, BASS DRUM");
-        render(<SuggestedLabels sample={buildSample({ hand_label: "LO-FI", rating: 4 })} scope="sample" />);
+        render(<CategoryChoices sample={buildSample({ hand_label: "LO-FI", rating: 4 })} scope="sample" />);
 
         await userEvent.click(screen.getByRole("button", { name: /BASS DRUM/ }));
 
@@ -82,8 +82,8 @@ describe("SuggestedLabels", () => {
         });
     });
 
-    it("shows a suggestion the label already holds as taken, and writes nothing for it", () => {
-        render(<SuggestedLabels sample={buildSample({ hand_label: "snare" })} scope="sample" />);
+    it("shows a category the label already holds as taken, and writes nothing for it", () => {
+        render(<CategoryChoices sample={buildSample({ hand_label: "snare" })} scope="sample" />);
 
         const taken = screen.getByRole("button", { name: /SNARE/ });
         expect(taken).toHaveAttribute("aria-pressed", "true");
@@ -93,7 +93,7 @@ describe("SuggestedLabels", () => {
 
     it("reaches as far as the scope it is given", async () => {
         resolvesTo("SNARE");
-        render(<SuggestedLabels sample={buildSample({ equivalence_member_count: 3 })} scope="equivalence_class" />);
+        render(<CategoryChoices sample={buildSample({ equivalence_member_count: 3 })} scope="equivalence_class" />);
 
         await userEvent.click(screen.getByRole("button", { name: /SNARE/ }));
 
@@ -103,8 +103,8 @@ describe("SuggestedLabels", () => {
     });
 
     it("says so when no scoring has reached the sample", () => {
-        render(<SuggestedLabels sample={buildSample({ suggestions: [] })} scope="sample" />);
+        render(<CategoryChoices sample={buildSample({ suggestions: [] })} scope="sample" />);
 
-        expect(screen.getByText(NO_SUGGESTIONS)).toBeInTheDocument();
+        expect(screen.getByText(NO_CATEGORIES)).toBeInTheDocument();
     });
 });

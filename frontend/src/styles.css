@@ -612,41 +612,41 @@ tr.is-focused {
     border: 1px dashed var(--border);
 }
 
-.suggested-labels {
+.category-choices {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.suggested-labels-row {
+.category-choices-row {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
 }
 
-.badge-suggestion {
+.badge-category-choice {
     background: transparent;
     color: var(--text-primary);
     border: 1px dashed var(--border-strong);
     cursor: pointer;
 }
 
-.badge-suggestion:hover:not(:disabled) {
+.badge-category-choice:hover:not(:disabled) {
     background: var(--surface-2);
 }
 
-.badge-suggestion[aria-pressed="true"] {
+.badge-category-choice[aria-pressed="true"] {
     background: var(--surface-2);
     border-style: solid;
     cursor: default;
 }
 
-.badge-suggestion:disabled:not([aria-pressed="true"]) {
+.badge-category-choice:disabled:not([aria-pressed="true"]) {
     cursor: default;
     opacity: 0.55;
 }
 
-.suggestion-score {
+.category-score {
     color: var(--text-muted);
     font-weight: 400;
 }

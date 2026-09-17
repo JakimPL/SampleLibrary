@@ -238,7 +238,7 @@ describe("AnnotationRows", () => {
         });
     });
 
-    it("sends a clicked suggestion to this sample alone once the group box is unticked", async () => {
+    it("sends a clicked category to this sample alone once the group box is unticked", async () => {
         getLabelVocabulary.mockResolvedValue([]);
         resolvesTo({ ...NOTHING, label: "SNARE" }, [SAMPLE_HASH]);
         renderRows(buildSample({ equivalence_member_count: 3, suggestions: [{ label: "SNARE", score: 0.5 }] }));

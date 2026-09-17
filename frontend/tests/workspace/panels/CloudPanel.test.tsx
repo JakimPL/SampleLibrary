@@ -17,8 +17,8 @@ const {
     createScatterplotMock,
     getCloud,
     getModuleCloud,
-    getCloudSuggestions,
-    getSuggestionTags,
+    getCloudCategories,
+    getCategoryTags,
     getCloudLabels,
     getLabelTags,
     getSamplePreview,
@@ -67,8 +67,8 @@ const {
         createScatterplotMock,
         getCloud: vi.fn(),
         getModuleCloud: vi.fn(),
-        getCloudSuggestions: vi.fn().mockResolvedValue([]),
-        getSuggestionTags: vi.fn().mockResolvedValue([]),
+        getCloudCategories: vi.fn().mockResolvedValue([]),
+        getCategoryTags: vi.fn().mockResolvedValue([]),
         getCloudLabels: vi.fn().mockResolvedValue([]),
         getLabelTags: vi.fn().mockResolvedValue([]),
         getSamplePreview: vi.fn(),
@@ -84,7 +84,7 @@ vi.mock("regl-scatterplot", () => ({
 
 vi.mock("../../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
-    return { ...actual, getCloud, getModuleCloud, getCloudSuggestions, getSuggestionTags, getCloudLabels };
+    return { ...actual, getCloud, getModuleCloud, getCloudCategories, getCategoryTags, getCloudLabels };
 });
 
 vi.mock("../../../src/api/curation", async () => {
@@ -277,12 +277,11 @@ describe("CloudPanel", () => {
         const sampleHash = "3".repeat(64);
         getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0 }]);
         getModuleCloud.mockResolvedValue([]);
-        getCloudSuggestions.mockResolvedValue([{ sample_hash: sampleHash, path: ["BASS DRUM"], score: 0.8 }]);
-        getSuggestionTags.mockResolvedValue([{ path: ["BASS DRUM"], sample_count: 1, rank: 0 }]);
+        getCloudCategories.mockResolvedValue([{ sample_hash: sampleHash, path: ["BASS DRUM"], score: 0.8 }]);
+        getCategoryTags.mockResolvedValue([{ path: ["BASS DRUM"], sample_count: 1, rank: 0 }]);
         renderPanel();
 
         expect(screen.getByRole("button", { name: "Category" })).toHaveAttribute("aria-pressed", "true");
-        expect(screen.queryByRole("button", { name: "Suggestions" })).not.toBeInTheDocument();
         expect(await screen.findByRole("button", { name: /BASS DRUM/ })).toHaveAttribute("aria-pressed", "true");
         await waitFor(() => {
             expect(latestInstance().draw).toHaveBeenCalledWith([[expect.any(Number), expect.any(Number), 1]], {
@@ -420,7 +419,7 @@ describe("CloudPanel", () => {
             expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
 
-        expect(getCloudSuggestions).toHaveBeenCalledTimes(1);
+        expect(getCloudCategories).toHaveBeenCalledTimes(1);
         expect(getCloudLabels).not.toHaveBeenCalled();
         expect(getLabelTags).not.toHaveBeenCalled();
 

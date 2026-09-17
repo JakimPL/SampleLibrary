@@ -6,15 +6,15 @@ import type * as ModulesApi from "../../../src/api/modules";
 import type * as SamplesApi from "../../../src/api/samples";
 import { CloudHoverTooltip } from "../../../src/workspace/panels/CloudHoverTooltip";
 
-const { getSamplePreview, getModule, getSuggestionTags } = vi.hoisted(() => ({
+const { getSamplePreview, getModule, getCategoryTags } = vi.hoisted(() => ({
     getSamplePreview: vi.fn(),
     getModule: vi.fn(),
-    getSuggestionTags: vi.fn().mockResolvedValue([]),
+    getCategoryTags: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
-    return { ...actual, getSuggestionTags };
+    return { ...actual, getCategoryTags };
 });
 
 vi.mock("../../../src/api/samples", async () => {

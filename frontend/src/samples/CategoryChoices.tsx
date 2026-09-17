@@ -8,9 +8,9 @@ import { useAnnotationWriter } from "./useAnnotationWriter";
 
 const SCORE_DECIMAL_PLACES = 2;
 
-export const NO_SUGGESTIONS = "No categories yet — a scoring of the listening model writes them.";
+export const NO_CATEGORIES = "No categories yet — a scoring of the listening model writes them.";
 
-interface SuggestedLabelsProps {
+interface CategoryChoicesProps {
     readonly sample: SampleDetail;
     /** How far a click reaches, the same reach the annotation editor's own gestures have. */
     readonly scope: AnnotationScope;
@@ -24,33 +24,33 @@ interface SuggestedLabelsProps {
  * as far as the editor's near-duplicates checkbox says and changes the label alone. A tag the label
  * already holds shows as taken.
  */
-export function SuggestedLabels({ sample, scope }: SuggestedLabelsProps): ReactElement {
+export function CategoryChoices({ sample, scope }: CategoryChoicesProps): ReactElement {
     const current = useSampleAnnotation(sample.hash, decisionsOf(sample));
     const { change, message } = useAnnotationWriter(sample.hash, scope);
     const label = current?.label ?? null;
 
     if (sample.suggestions.length === 0) {
-        return <p className="placeholder-box">{NO_SUGGESTIONS}</p>;
+        return <p className="placeholder-box">{NO_CATEGORIES}</p>;
     }
 
     return (
-        <div className="suggested-labels">
-            <div className="suggested-labels-row" role="group" aria-label="Categories">
-                {sample.suggestions.map((suggestion) => {
-                    const taken = holdsTag(label, suggestion.label);
+        <div className="category-choices">
+            <div className="category-choices-row" role="group" aria-label="Categories">
+                {sample.suggestions.map((category) => {
+                    const taken = holdsTag(label, category.label);
                     return (
                         <button
-                            key={suggestion.label}
+                            key={category.label}
                             type="button"
-                            className="badge badge-suggestion"
+                            className="badge badge-category-choice"
                             aria-pressed={taken}
                             disabled={taken}
                             onClick={() => {
-                                change({ label: withTag(label, suggestion.label) });
+                                change({ label: withTag(label, category.label) });
                             }}
                         >
-                            {suggestion.label}
-                            <span className="suggestion-score">{suggestion.score.toFixed(SCORE_DECIMAL_PLACES)}</span>
+                            {category.label}
+                            <span className="category-score">{category.score.toFixed(SCORE_DECIMAL_PLACES)}</span>
                         </button>
                     );
                 })}

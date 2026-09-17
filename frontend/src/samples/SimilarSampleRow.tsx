@@ -58,7 +58,7 @@ export function SimilarSampleRow({ similar }: SimilarSampleRowProps): ReactEleme
             <td>
                 <CategoryBadge
                     sampleHash={similar.hash}
-                    suggestedLabel={similar.suggested_label}
+                    category={similar.suggested_label}
                     handLabel={similar.hand_label}
                 />
             </td>

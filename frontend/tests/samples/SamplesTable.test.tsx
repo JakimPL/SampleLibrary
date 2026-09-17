@@ -7,11 +7,11 @@ import type * as CloudApi from "../../src/api/cloud";
 import { type SampleSelection, type SampleSummary, WHOLE_CATALOG } from "../../src/api/samples";
 import { SamplesTable } from "../../src/samples/SamplesTable";
 
-const { getSuggestionTags } = vi.hoisted(() => ({ getSuggestionTags: vi.fn().mockResolvedValue([]) }));
+const { getCategoryTags } = vi.hoisted(() => ({ getCategoryTags: vi.fn().mockResolvedValue([]) }));
 
 vi.mock("../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../src/api/cloud");
-    return { ...actual, getSuggestionTags };
+    return { ...actual, getCategoryTags };
 });
 
 function buildSample(

@@ -6,7 +6,7 @@ import { useFetch } from "../shared/useFetch";
 
 export interface SampleHoverPreview {
     readonly displayName: string;
-    readonly suggestedLabel: string | null;
+    readonly category: string | null;
     readonly handLabel: string | null;
     readonly peaks: readonly WaveformPeak[];
 }
@@ -26,7 +26,7 @@ export function useSampleHoverPreview(sampleHash: string): FetchState<SampleHove
         const preview = await getSamplePreview(sampleHash);
         return {
             displayName: preview.display_name,
-            suggestedLabel: preview.suggested_label,
+            category: preview.suggested_label,
             handLabel: preview.hand_label,
             peaks: preview.thumbnail ?? [],
         };
