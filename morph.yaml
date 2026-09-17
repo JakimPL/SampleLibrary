@@ -8,8 +8,11 @@ route: envelope
 # an excitation under it: `first` keeps the first sample's harmonics and noise along the whole path,
 # `second` keeps the second's, and `both` crossfades the two with the weight. The envelope is drawn
 # by its first `coefficient_count` cosines, read down to `floor_db` under the sample's loudest bin.
+# The timeline says whose course through time the path is heard on: `morphed` runs between the two
+# lengths, and `first` or `second` holds one sample's course, so every point lasts as long as it.
 envelope:
   excitation: first
+  timeline: morphed
   coefficient_count: 40
   floor_db: 80.0
 

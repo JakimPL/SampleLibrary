@@ -23,15 +23,17 @@ from samplemorph.transport.time_map import build_time_map
 class EnvelopePath:
     """The spectral path that moves the envelope between two sounds and sounds an excitation under it.
 
-    Both sounds are aligned in time by the transport's own map and read along it, and each read
-    frame is split into the smooth envelope it stands in and the excitation under it. The path's
-    envelope lies at `weight` between the two in decibels, bin by bin, so resonances, brightness and
-    the balance of registers move from one sound's to the other's. Under it sounds the excitation the
-    settings name: one sound's whole, so its harmonics travel as one series at one pitch and a chord
-    stays the chord it was, or the two crossfaded with the weight. The ends render through the same
-    reading as every point between them, so each end is where the path arrives: under a kept
-    excitation, that sound's own spectrum at its end of the path, and its pitch content under the
-    other sound's envelope at the far end.
+    Both sounds are aligned in time by the transport's own map and read along it, on the course the
+    settings' timeline names, and each read frame is split into the smooth envelope it stands in and
+    the excitation under it. The path's envelope lies at `weight` between the two in decibels, bin by
+    bin, so resonances, brightness and the balance of registers move from one sound's to the other's.
+    Under it sounds the excitation the settings name: one sound's whole, so its harmonics travel as
+    one series at one pitch and a chord stays the chord it was, or the two crossfaded with the
+    weight. The ends render through the same reading as every point between them, so each end is
+    where the path arrives: under a kept excitation, that sound's own spectrum at its end of the
+    path, and its pitch content under the other sound's envelope at the far end. On a held course
+    every point lasts as long as the sound whose course it is, and that sound is read exactly as it
+    was analyzed.
     """
 
     envelope_settings: EnvelopeSettings
@@ -53,7 +55,13 @@ class EnvelopePath:
         if not FIRST_END_WEIGHT <= weight <= SECOND_END_WEIGHT:
             raise ValueError(f"an envelope morph runs between weights 0 and 1, got {weight}")
 
-        time_map = build_time_map(first, second, weight=weight, hop_length=geometry.hop_length, settings=settings)
+        time_map = build_time_map(
+            first,
+            second,
+            weight=self.envelope_settings.timeline.weight_at(weight),
+            hop_length=geometry.hop_length,
+            settings=settings,
+        )
         first_split = self._split_along(
             first, positions=time_map.first_positions, rates=time_map.first_rates, settings=settings
         )

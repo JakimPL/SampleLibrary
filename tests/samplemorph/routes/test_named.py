@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from samplemorph.envelope.settings import EnvelopeSettings, Excitation
+from samplemorph.envelope.settings import EnvelopeSettings, Excitation, Timeline
 from samplemorph.pipeline import RouteChoice
 from samplemorph.routes.kinds import RouteKind
 from samplemorph.routes.named import blend_route, envelope_route, partials_route, select_route, transport_route
@@ -16,6 +16,8 @@ LATENT_NAMES = RouteChoice(
 KEEPS_FIRST = EnvelopeSettings(excitation=Excitation.FIRST)
 SOUNDS_BOTH = EnvelopeSettings(excitation=Excitation.BOTH)
 SMOOTHER = EnvelopeSettings(excitation=Excitation.FIRST, coefficient_count=12)
+HELD_TO_FIRST = EnvelopeSettings(excitation=Excitation.FIRST, timeline=Timeline.FIRST)
+HELD_TO_SECOND = EnvelopeSettings(excitation=Excitation.FIRST, timeline=Timeline.SECOND)
 
 
 def _selection(kind: RouteKind) -> RouteSelection:
@@ -50,6 +52,8 @@ def test_a_fingerprint_stays_put_for_one_route_and_tells_the_others_apart() -> N
             envelope_route(KEEPS_FIRST),
             envelope_route(SOUNDS_BOTH),
             envelope_route(SMOOTHER),
+            envelope_route(HELD_TO_FIRST),
+            envelope_route(HELD_TO_SECOND),
             partials_route("glide"),
             partials_route("crossfade"),
             transport_route(),
@@ -68,3 +72,16 @@ def test_a_route_s_description_names_the_settings_it_reads() -> None:
 
     assert named.name == "envelope-both"
     assert named.description["envelope_settings"] == settings.model_dump(mode="json")
+
+
+@pytest.mark.parametrize(
+    ("settings", "name"),
+    [
+        (KEEPS_FIRST, "envelope-first"),
+        (HELD_TO_FIRST, "envelope-first-on-first"),
+        (HELD_TO_SECOND, "envelope-first-on-second"),
+    ],
+    ids=("a morphed course", "the first sound's course", "the second sound's course"),
+)
+def test_an_envelope_route_holding_a_course_is_named_apart(settings: EnvelopeSettings, name: str) -> None:
+    assert envelope_route(settings).name == name

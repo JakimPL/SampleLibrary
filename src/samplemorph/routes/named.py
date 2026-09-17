@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import JsonValue
 
 from samplemorph.envelope.morph import EnvelopePath
-from samplemorph.envelope.settings import EnvelopeSettings
+from samplemorph.envelope.settings import EnvelopeSettings, Timeline
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.partials.morph import PartialMorph
 from samplemorph.partials.presets import PROFILE_PRESETS
@@ -95,13 +95,23 @@ def blend_route() -> NamedRoute:
 
 
 def envelope_route(envelope_settings: EnvelopeSettings) -> NamedRoute:
-    """The envelope morph under the settings given, on the analyses' default geometry and settings, named by whose excitation it sounds."""
+    """The envelope morph under the settings given, on the analyses' default geometry and settings, named by what it sounds."""
     return _analysis_route(
         RouteKind.ENVELOPE,
-        name=f"{RouteKind.ENVELOPE.value}-{envelope_settings.excitation.value}",
+        name=_envelope_name(envelope_settings),
         path=EnvelopePath(envelope_settings=envelope_settings),
         described={"envelope_settings": envelope_settings.model_dump(mode="json")},
     )
+
+
+def _envelope_name(envelope_settings: EnvelopeSettings) -> str:
+    """What an envelope route is known by: whose excitation it sounds, and whose course it holds when it holds one."""
+    sounded = f"{RouteKind.ENVELOPE.value}-{envelope_settings.excitation.value}"
+    match envelope_settings.timeline:
+        case Timeline.MORPHED:
+            return sounded
+        case Timeline.FIRST | Timeline.SECOND:
+            return f"{sounded}-on-{envelope_settings.timeline.value}"
 
 
 def partials_route(profile_name: str) -> NamedRoute:

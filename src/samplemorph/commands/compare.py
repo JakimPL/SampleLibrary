@@ -16,8 +16,10 @@ from samplecore.exit_status import ExitStatus
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 from samplemorph.envelope.settings import (
     DEFAULT_EXCITATION,
+    DEFAULT_TIMELINE,
     EnvelopeSettings,
     Excitation,
+    Timeline,
 )
 from samplemorph.listening.comparing import (
     DEFAULT_LISTENING_WEIGHTS,
@@ -100,6 +102,14 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Whose excitation every envelope route sounds under the moving envelope, one route per choice.",
     )
     parser.add_argument(
+        "--timelines",
+        type=Timeline,
+        nargs="+",
+        choices=tuple(Timeline),
+        default=(DEFAULT_TIMELINE,),
+        help="Whose course through time every envelope route is heard on, one route per choice.",
+    )
+    parser.add_argument(
         "--blind", action="store_true", help="Name every route's folder by a letter, the key kept in the manifest."
     )
     add_model_argument(parser)
@@ -114,7 +124,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     a weight off the path or a sample gone from the catalog ends the process at once. The latent
     route loads the stored model the latent flags name; the transport, the blend and the partials
     read the samples' own analyses alone. The partials kind stands for one route per profile named
-    and the envelope kind for one per excitation named, each under a folder of its own.
+    and the envelope kind for one per excitation and course named, each under a folder of its own.
 
     Raises:
         SystemExit: the pairs file cannot be read, the weights do not describe a path, or a pair names
@@ -133,6 +143,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         tuple(dict.fromkeys(arguments.routes)),
         profiles=tuple(dict.fromkeys(arguments.profiles)),
         excitations=tuple(dict.fromkeys(arguments.excitations)),
+        timelines=tuple(dict.fromkeys(arguments.timelines)),
         config=config,
         arguments=arguments,
     )
@@ -164,10 +175,11 @@ def _named_routes(
     *,
     profiles: tuple[str, ...],
     excitations: tuple[Excitation, ...],
+    timelines: tuple[Timeline, ...],
     config: LibraryConfig,
     arguments: argparse.Namespace,
 ) -> tuple[NamedRoute, ...]:
-    """Every route a run renders: one per kind, the partials kind per profile and the envelope kind per excitation."""
+    """Every route a run renders: one per kind, the partials kind per profile and the envelope kind per excitation and course."""
     routes: list[NamedRoute] = []
     for kind in kinds:
         match kind:
@@ -180,5 +192,9 @@ def _named_routes(
             case RouteKind.PARTIALS:
                 routes.extend(partials_route(name) for name in profiles)
             case RouteKind.ENVELOPE:
-                routes.extend(envelope_route(EnvelopeSettings(excitation=excitation)) for excitation in excitations)
+                routes.extend(
+                    envelope_route(EnvelopeSettings(excitation=excitation, timeline=timeline))
+                    for timeline in timelines
+                    for excitation in excitations
+                )
     return tuple(routes)

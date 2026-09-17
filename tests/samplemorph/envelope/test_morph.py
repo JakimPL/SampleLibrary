@@ -8,7 +8,7 @@ import pytest
 from numpy.typing import NDArray
 
 from samplemorph.envelope.morph import EnvelopePath
-from samplemorph.envelope.settings import EnvelopeSettings, Excitation
+from samplemorph.envelope.settings import EnvelopeSettings, Excitation, Timeline
 from samplemorph.transport.analysis import TransportAnalysis
 from samplemorph.transport.settings import TransportSettings
 from tests.samplemorph.transport.conftest import (
@@ -35,6 +35,9 @@ RECONSTRUCTION_FLOOR_SHARE: Final[float] = 1e-4
 KEEPS_FIRST: Final[EnvelopeSettings] = EnvelopeSettings(excitation=Excitation.FIRST)
 KEEPS_SECOND: Final[EnvelopeSettings] = EnvelopeSettings(excitation=Excitation.SECOND)
 SOUNDS_BOTH: Final[EnvelopeSettings] = EnvelopeSettings(excitation=Excitation.BOTH)
+LONG_CLIP_FRAMES: Final[int] = CLIP_FRAMES * 2
+PATH_WEIGHTS: Final[tuple[float, ...]] = (0.0, 0.25, 0.5, 0.75, 1.0)
+MIDPOINT_INDEX: Final[int] = 2
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,18 @@ def low_tone() -> TransportAnalysis:
 @pytest.fixture(scope="module")
 def high_tone() -> TransportAnalysis:
     return analysis_of(tone(HIGH_HZ))
+
+
+@pytest.fixture(scope="module")
+def long_tone() -> TransportAnalysis:
+    return analysis_of(tone(HIGH_HZ, frame_count=LONG_CLIP_FRAMES))
+
+
+def _sample_count(
+    first: TransportAnalysis, second: TransportAnalysis, *, weight: float, settings: EnvelopeSettings
+) -> int:
+    path = EnvelopePath(envelope_settings=settings)
+    return path(first, second, weight=weight, geometry=GEOMETRY, settings=TransportSettings()).sample_count
 
 
 def _magnitude(
@@ -195,3 +210,32 @@ def test_a_weight_outside_the_path_is_refused(low_tone: TransportAnalysis, high_
         EnvelopePath(envelope_settings=KEEPS_FIRST)(
             low_tone, high_tone, weight=1.5, geometry=GEOMETRY, settings=TransportSettings()
         )
+
+
+@pytest.mark.parametrize(
+    "timeline",
+    (Timeline.FIRST, Timeline.SECOND),
+    ids=("the first sound's course", "the second sound's course"),
+)
+def test_a_held_course_lasts_as_long_as_the_sound_whose_course_it_is(
+    low_tone: TransportAnalysis, long_tone: TransportAnalysis, timeline: Timeline
+) -> None:
+    held = low_tone if timeline is Timeline.FIRST else long_tone
+    settings = EnvelopeSettings(timeline=timeline)
+
+    lengths = {_sample_count(low_tone, long_tone, weight=weight, settings=settings) for weight in PATH_WEIGHTS}
+
+    assert lengths == {held.sample_count}
+
+
+def test_a_morphed_course_runs_from_one_length_to_the_other(
+    low_tone: TransportAnalysis, long_tone: TransportAnalysis
+) -> None:
+    settings = EnvelopeSettings(timeline=Timeline.MORPHED)
+
+    lengths = [_sample_count(low_tone, long_tone, weight=weight, settings=settings) for weight in PATH_WEIGHTS]
+
+    assert lengths[0] == low_tone.sample_count
+    assert lengths[-1] == long_tone.sample_count
+    assert lengths == sorted(lengths)
+    assert low_tone.sample_count < lengths[MIDPOINT_INDEX] < long_tone.sample_count
