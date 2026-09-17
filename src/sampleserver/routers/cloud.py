@@ -20,7 +20,6 @@ from samplecore.storage.repositories.cloud import (
     PostgresModuleCloudCoordinateRepository,
 )
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.playback_rate import (
     PostgresSamplePlaybackRateRepository,
@@ -29,6 +28,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from sampleserver.dependencies import (
     get_cloud_cache,
@@ -186,20 +186,20 @@ def get_cloud_suggestions(
     change once written, so the id of the scoring on show is the whole revision, and a viewer joins
     them to the points by hash. An empty answer says no scoring is shown.
     """
-    repository = PostgresSampleLabelSuggestionRepository(connection)
+    repository = PostgresSampleCategoryRepository(connection)
     shown = repository.shown_experiment_id()
     return _cached_json(request, cache, shown, lambda: CLOUD_SUGGESTIONS.dump_json(_first_picks(repository, shown)))
 
 
 def _first_picks(
-    repository: PostgresSampleLabelSuggestionRepository, experiment_id: int | None
+    repository: PostgresSampleCategoryRepository, experiment_id: int | None
 ) -> tuple[CloudSuggestion, ...]:
     if experiment_id is None:
         return ()
 
     return tuple(
         CloudSuggestion(sample_hash=pick.sample_hash, path=_path_of(pick.label), score=pick.score)
-        for pick in repository.first_picks_for_experiment(experiment_id)
+        for pick in repository.top_categories(experiment_id)
     )
 
 
@@ -247,9 +247,9 @@ def _tags(connection: Connection, experiment_id: int | None) -> tuple[TagSummary
     if experiment_id is None:
         return ()
 
-    repository = PostgresSampleLabelSuggestionRepository(connection)
+    repository = PostgresSampleCategoryRepository(connection)
     first_picks: Counter[LabelPath] = Counter()
-    for label, sample_count in repository.first_pick_counts(experiment_id).items():
+    for label, sample_count in repository.top_category_counts(experiment_id).items():
         for prefix in _prefixes(_path_of(label)):
             first_picks[prefix] += sample_count
     ranks = _vocabulary_ranks(connection, experiment_id, first_picks)

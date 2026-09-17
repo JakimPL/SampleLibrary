@@ -17,12 +17,12 @@ from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, Sam
 from samplecore.models.pass_completion import PassKind
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.database import (
+    category_promotion,
     claim_named_lock,
     cloud_promotion,
     connect,
     experiment,
     named_lock_key,
-    suggestion_promotion,
 )
 from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
@@ -341,7 +341,7 @@ class World:
                 )
             ),
             "experiments": self._experiments_digest(),
-            "categories": self._shown_digest(suggestion_promotion.c.experiment_id),
+            "categories": self._shown_digest(category_promotion.c.experiment_id),
             "cloud": digest_of_rows(
                 [
                     (self._shown_digest(cloud_promotion.c.experiment_id),),

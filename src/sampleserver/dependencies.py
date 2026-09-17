@@ -10,7 +10,7 @@ from sqlalchemy import Connection
 
 from samplecore.spectral_distance import SpectralVectors
 from samplecore.storage.database import checkout_read_only
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.spectral_cache import SpectralVectorCache
 
@@ -83,7 +83,7 @@ def get_shown_experiment_id(connection: Connection = Depends(get_connection)) ->
     FastAPI resolves a dependency once per request and hands every route the same value, so a page
     of a hundred rows and the tags beside it cost one read of the promotion row.
     """
-    return PostgresSampleLabelSuggestionRepository(connection).shown_experiment_id()
+    return PostgresSampleCategoryRepository(connection).shown_experiment_id()
 
 
 def get_cloud_cache(request: Request) -> RevisionedJsonCache:

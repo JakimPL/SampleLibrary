@@ -12,9 +12,9 @@ from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, Sam
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
-from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
+from samplecore.models.sample_category import SampleCategory
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.tracker import TrackerFormat
@@ -23,7 +23,6 @@ from samplecore.storage.repositories.cloud import (
     PostgresModuleCloudCoordinateRepository,
 )
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.playback_rate import (
     PostgresSamplePlaybackRateRepository,
@@ -32,6 +31,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 
 SAMPLE_HASH = "a" * 64
@@ -224,13 +224,13 @@ VOCABULARY = ("SNARE", "BASS DRUM", "HI-HAT: CLOSED")
 
 
 def seed_scoring(connection: Connection, picks: dict[str, tuple[tuple[str, float], ...]]) -> int:
-    """A scoring over the catalog: each sample's suggested labels with scores, closest first, under one experiment."""
+    """A scoring over the catalog: each sample's categories with scores, closest first, under one experiment."""
     experiment_id = PostgresExperimentRepository(connection).create(
         backend_name=ZERO_SHOT_BACKEND_NAME, label=None, params={VOCABULARY_PARAMETER: list(VOCABULARY)}, key=None
     )
-    PostgresSampleLabelSuggestionRepository(connection).insert_many(
+    PostgresSampleCategoryRepository(connection).insert_many(
         [
-            SampleLabelSuggestion(
+            SampleCategory(
                 experiment_id=experiment_id,
                 sample_hash=sample_hash,
                 rank=rank,
@@ -238,8 +238,8 @@ def seed_scoring(connection: Connection, picks: dict[str, tuple[tuple[str, float
                 score=score,
                 computed_at=datetime.now(UTC),
             )
-            for sample_hash, suggestions in picks.items()
-            for rank, (label, score) in enumerate(suggestions)
+            for sample_hash, categories in picks.items()
+            for rank, (label, score) in enumerate(categories)
         ]
     )
     show_scoring(connection, experiment_id)

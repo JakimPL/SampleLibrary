@@ -23,15 +23,15 @@ HAND_LABELED_PIANO_COUNT: Final[int] = 6
 LOW_PAD_COUNT: Final[int] = 6
 TONES: Final[tuple[CatalogedTone, ...]] = (
     *(
-        CatalogedTone(suggested_label=CHORD, score=0.1, module_index=index, hand_label=PIANO, audible=True)
+        CatalogedTone(category=CHORD, score=0.1, module_index=index, hand_label=PIANO, audible=True)
         for index in range(HAND_LABELED_PIANO_COUNT)
     ),
-    CatalogedTone(suggested_label=PIANO, score=0.9, module_index=10, hand_label=SNARE, audible=True),
-    CatalogedTone(suggested_label=CHORD, score=0.1, module_index=12, hand_label=PIANO, audible=False),
-    CatalogedTone(suggested_label=PAD, score=0.9, module_index=11, hand_label=None, audible=True),
-    CatalogedTone(suggested_label=PAD, score=0.8, module_index=11, hand_label=None, audible=True),
+    CatalogedTone(category=PIANO, score=0.9, module_index=10, hand_label=SNARE, audible=True),
+    CatalogedTone(category=CHORD, score=0.1, module_index=12, hand_label=PIANO, audible=False),
+    CatalogedTone(category=PAD, score=0.9, module_index=11, hand_label=None, audible=True),
+    CatalogedTone(category=PAD, score=0.8, module_index=11, hand_label=None, audible=True),
     *(
-        CatalogedTone(suggested_label=PAD, score=0.2, module_index=20 + index, hand_label=None, audible=True)
+        CatalogedTone(category=PAD, score=0.2, module_index=20 + index, hand_label=None, audible=True)
         for index in range(LOW_PAD_COUNT)
     ),
 )
@@ -113,7 +113,7 @@ def test_pairs_of_each_kind_and_across_kinds_are_drawn(drawn: tuple[PairSet, tup
     assert "cross-piano-pad" in names
 
 
-def test_a_suggestion_scored_below_its_labels_top_quarter_is_left_out(drawn: tuple[PairSet, tuple[str, ...]]) -> None:
+def test_a_category_scored_below_its_labels_top_quarter_is_left_out(drawn: tuple[PairSet, tuple[str, ...]]) -> None:
     pair_set, hashes = drawn
     top_pads = {hashes[index] for index in TOP_PAD_INDICES}
 

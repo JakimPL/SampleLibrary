@@ -34,7 +34,7 @@ EXPECTED_TABLES = frozenset(
         "xm_sample_properties",
         "it_sample_properties",
         "sample_relation",
-        "sample_label_suggestion",
+        "sample_category",
     }
 )
 

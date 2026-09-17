@@ -26,9 +26,9 @@ from samplecore.storage.database import (
     sample_file,
     sample_properties,
 )
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
 
 _SelectT = TypeVar("_SelectT", bound=Select[Any])
@@ -146,7 +146,7 @@ class PostgresSampleRepository:
         here rather than filtered afterwards: a favorite is rare and scattered, so a page walked
         over the whole catalog would hold almost none of them.
 
-        ``shown_experiment_id`` names the scoring whose first picks fill each row's suggested label,
+        ``shown_experiment_id`` names the scoring whose top categories fill each row's category,
         resolved once by the caller; with no scoring on show every row carries none.
         """
         # func.count()/func.coalesce() are SQLAlchemy's dynamically-generated SQL functions, invisible
@@ -178,12 +178,10 @@ class PostgresSampleRepository:
         playback_rate_by_hash = PostgresSamplePlaybackRateRepository(self._connection).get_many(hashes)
         thumbnails_by_hash = PostgresSampleThumbnailRepository(self._connection).get_many(hashes)
         annotation_by_hash = PostgresSampleAnnotationRepository(self._connection).annotations_by_hash(hashes)
-        suggested_label_by_hash = (
+        top_category_by_hash = (
             {}
             if shown_experiment_id is None
-            else PostgresSampleLabelSuggestionRepository(self._connection).first_pick_labels(
-                shown_experiment_id, hashes
-            )
+            else PostgresSampleCategoryRepository(self._connection).top_category_labels(shown_experiment_id, hashes)
         )
         return tuple(
             _row_to_sample_summary(
@@ -194,7 +192,7 @@ class PostgresSampleRepository:
                 thumbnail=thumbnails_by_hash.get(row.hash),
                 equivalence_class=class_by_hash.get(row.hash),
                 annotation=annotation_by_hash.get(row.hash),
-                suggested_label=suggested_label_by_hash.get(row.hash),
+                suggested_label=top_category_by_hash.get(row.hash),
             )
             for row in rows
         )

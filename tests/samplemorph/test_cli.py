@@ -640,7 +640,7 @@ def test_a_teacher_whose_vectors_a_descriptor_cannot_answer_in_is_refused(
 
 LISTENED_PIANO_COUNT = 5
 LISTENED_TONES = tuple(
-    CatalogedTone(suggested_label="CHORD", score=0.1, module_index=index, hand_label="PIANO", audible=True)
+    CatalogedTone(category="CHORD", score=0.1, module_index=index, hand_label="PIANO", audible=True)
     for index in range(LISTENED_PIANO_COUNT)
 )
 COMPARED_WEIGHTS = ("0", "0.5", "1")
@@ -762,8 +762,8 @@ def test_comparing_a_pair_with_a_silent_end_ends_before_any_route_loads(
         connection,
         tmp_path,
         (
-            CatalogedTone(suggested_label="PIANO", score=0.5, module_index=0, hand_label=None, audible=True),
-            CatalogedTone(suggested_label="PIANO", score=0.5, module_index=1, hand_label=None, audible=False),
+            CatalogedTone(category="PIANO", score=0.5, module_index=0, hand_label=None, audible=True),
+            CatalogedTone(category="PIANO", score=0.5, module_index=1, hand_label=None, audible=False),
         ),
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))

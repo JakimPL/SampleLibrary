@@ -9,14 +9,14 @@ import numpy as np
 from sqlalchemy import Connection
 
 from samplecore.equivalence_classes import classes_by_member_hash, compute_equivalence_classes
-from samplecore.models.label_suggestion import SampleFirstPick
 from samplecore.models.sample import Sample
+from samplecore.models.sample_category import SampleTopCategory
 from samplecore.storage.database import chunks
 from samplecore.storage.playback_rates import resolved_playback_rates
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.listening.kinds import SoundKind
@@ -57,7 +57,7 @@ class Candidate:
 
 
 class NoScoringShown(ValueError):
-    """Raised when a draw reads suggested labels and the catalog shows no scoring to read them from."""
+    """Raised when a draw reads categories and the catalog shows no scoring to read them from."""
 
 
 class CatalogCandidates:
@@ -72,16 +72,16 @@ class CatalogCandidates:
     """
 
     def __init__(self, connection: Connection, audio: SampleAudio, *, random_seed: int) -> None:
-        suggestions = PostgresSampleLabelSuggestionRepository(connection)
-        experiment_id = suggestions.shown_experiment_id()
+        categories = PostgresSampleCategoryRepository(connection)
+        experiment_id = categories.shown_experiment_id()
         if experiment_id is None:
-            raise NoScoringShown("the catalog shows no label scoring, so there are no suggested labels to draw by")
+            raise NoScoringShown("the catalog shows no label scoring, so there are no categories to draw by")
 
         self.experiment_id = experiment_id
         self._connection = connection
         self._audio = audio
         self._random_seed = random_seed
-        self._top_picks = _top_picks(suggestions.first_picks_for_experiment(experiment_id))
+        self._top_categories = _top_categories(categories.top_categories(experiment_id))
         self._hand_labels = PostgresSampleAnnotationRepository(connection).cataloged_labels()
         self._classes = classes_by_member_hash(
             compute_equivalence_classes(PostgresSampleRelationRepository(connection).list_all())
@@ -109,10 +109,10 @@ class CatalogCandidates:
     def _labels_of(self, kind: SoundKind) -> dict[str, str]:
         """Every sample of the kind, by hash, with the label it was found under."""
         labels = {sample_hash: label for sample_hash, label in self._hand_labels.items() if kind.is_named_by(label)}
-        picked_labels = {label for label in {pick.label for pick in self._top_picks} if kind.is_named_by(label)}
-        for pick in self._top_picks:
-            if pick.sample_hash not in self._hand_labels and pick.label in picked_labels:
-                labels[pick.sample_hash] = pick.label
+        scored_labels = {label for label in {item.label for item in self._top_categories} if kind.is_named_by(label)}
+        for item in self._top_categories:
+            if item.sample_hash not in self._hand_labels and item.label in scored_labels:
+                labels[item.sample_hash] = item.label
         return labels
 
     def _resolve(self, hashes: tuple[str, ...], *, labels: dict[str, str]) -> list[Candidate]:
@@ -144,13 +144,13 @@ class CatalogCandidates:
         return candidates
 
 
-def _top_picks(picks: tuple[SampleFirstPick, ...]) -> tuple[SampleFirstPick, ...]:
-    """Each label's first picks whose score lies in the top `TOP_SCORE_SHARE` of that label's scores."""
-    by_label: dict[str, list[SampleFirstPick]] = defaultdict(list)
-    for pick in picks:
-        by_label[pick.label].append(pick)
-    top: list[SampleFirstPick] = []
-    for label_picks in by_label.values():
-        ranked = sorted(label_picks, key=lambda pick: (-pick.score, pick.sample_hash))
+def _top_categories(categories: tuple[SampleTopCategory, ...]) -> tuple[SampleTopCategory, ...]:
+    """Each label's categories whose score lies in the top `TOP_SCORE_SHARE` of that label's scores."""
+    by_label: dict[str, list[SampleTopCategory]] = defaultdict(list)
+    for category in categories:
+        by_label[category.label].append(category)
+    top: list[SampleTopCategory] = []
+    for label_categories in by_label.values():
+        ranked = sorted(label_categories, key=lambda category: (-category.score, category.sample_hash))
         top.extend(ranked[: max(int(np.ceil(len(ranked) * TOP_SCORE_SHARE)), 1)])
     return tuple(top)

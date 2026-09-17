@@ -9,8 +9,8 @@ from sqlalchemy import Connection, select
 from samplecore.hashing import compute_module_hash
 from samplecore.models.cloud import CloudPromotion, ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
-from samplecore.models.label_suggestion import SampleLabelSuggestion, SuggestionPromotion
 from samplecore.models.pass_completion import PassCompletion, PassKind
+from samplecore.models.sample_category import CategoryPromotion, SampleCategory
 from samplecore.models.sample_file import FileFingerprint
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
@@ -23,12 +23,12 @@ from samplecore.storage.repositories.cloud import (
 )
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
-from samplecore.storage.repositories.label_suggestion import (
-    PostgresSampleLabelSuggestionRepository,
-    PostgresSuggestionPromotionRepository,
-)
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.pass_completion import PostgresPassCompletionRepository
+from samplecore.storage.repositories.sample_category import (
+    PostgresCategoryPromotionRepository,
+    PostgresSampleCategoryRepository,
+)
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 from samplecore.storage.sample_audio import SampleAudio
@@ -117,9 +117,9 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
     )
     PostgresCloudPromotionRepository(connection).record(CloudPromotion(experiment_id=experiment_id, promoted_at=now))
     _catalog_the_sample_pack(connection, tmp_path / SAMPLE_PACK_DIRECTORY_NAME)
-    PostgresSampleLabelSuggestionRepository(connection).insert_many(
+    PostgresSampleCategoryRepository(connection).insert_many(
         [
-            SampleLabelSuggestion(
+            SampleCategory(
                 experiment_id=experiment_id,
                 sample_hash=first_sample_hash,
                 rank=0,
@@ -129,8 +129,8 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
             )
         ]
     )
-    PostgresSuggestionPromotionRepository(connection).record(
-        SuggestionPromotion(experiment_id=experiment_id, promoted_at=now)
+    PostgresCategoryPromotionRepository(connection).record(
+        CategoryPromotion(experiment_id=experiment_id, promoted_at=now)
     )
     PostgresPassCompletionRepository(connection).record(
         PassCompletion(kind=PassKind.MODULES, digest="0" * 64, completed_at=now)

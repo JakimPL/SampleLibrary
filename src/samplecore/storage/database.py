@@ -340,8 +340,8 @@ sample_feature_vector = Table(
     PrimaryKeyConstraint("experiment_id", "sample_hash"),
 )
 
-sample_label_suggestion = Table(
-    "sample_label_suggestion",
+sample_category = Table(
+    "sample_category",
     metadata,
     Column("experiment_id", Integer, ForeignKey("experiment.id"), nullable=False),
     Column("sample_hash", String(64), ForeignKey("sample.hash"), nullable=False),
@@ -350,8 +350,8 @@ sample_label_suggestion = Table(
     Column("score", Double, nullable=False),
     Column("computed_at", DateTime(timezone=True), nullable=False),
     PrimaryKeyConstraint("experiment_id", "sample_hash", "rank"),
-    CheckConstraint(non_negative("rank"), name="sample_label_suggestion_rank_check"),
-    CheckConstraint(column("label") != "", name="sample_label_suggestion_label_check"),
+    CheckConstraint(non_negative("rank"), name="sample_category_rank_check"),
+    CheckConstraint(column("label") != "", name="sample_category_label_check"),
 )
 
 # One row per pass over the whole library that finished completely, naming the digest of what it had
@@ -367,13 +367,13 @@ pass_completion = Table(
 
 # The scoring the application shows, one row like the cloud's own promotion, written in the
 # transaction that writes a scoring or by a later request to show an earlier one again.
-suggestion_promotion = Table(
-    "suggestion_promotion",
+category_promotion = Table(
+    "category_promotion",
     metadata,
     Column("slot", Integer, primary_key=True),
     Column("experiment_id", Integer, ForeignKey("experiment.id"), nullable=False),
     Column("promoted_at", DateTime(timezone=True), nullable=False),
-    CheckConstraint(column("slot") == PROMOTION_SLOT, name="suggestion_promotion_slot_check"),
+    CheckConstraint(column("slot") == PROMOTION_SLOT, name="category_promotion_slot_check"),
 )
 
 module_instrument = Table(

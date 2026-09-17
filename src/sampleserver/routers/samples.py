@@ -33,12 +33,12 @@ from samplecore.pitch import (
 from samplecore.spectral_distance import SpectralVectors, euclidean_distance, nearest_neighbors
 from samplecore.storage import audio_store
 from samplecore.storage.playback_rates import resolved_playback_rates
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
@@ -306,7 +306,7 @@ def _suggestions(
     """The shown scoring's suggestions for one sample, closest first; none for a sample it did not reach."""
     if shown_experiment_id is None:
         return ()
-    repository = PostgresSampleLabelSuggestionRepository(connection)
+    repository = PostgresSampleCategoryRepository(connection)
     return tuple(
         SuggestedLabel(label=suggestion.label, score=suggestion.score)
         for suggestion in repository.get_many(shown_experiment_id, [sample_hash]).get(sample_hash, ())
@@ -385,7 +385,7 @@ def _previews_by_hash(
     suggested_label_by_hash = (
         {}
         if shown_experiment_id is None
-        else PostgresSampleLabelSuggestionRepository(connection).first_pick_labels(shown_experiment_id, sample_hashes)
+        else PostgresSampleCategoryRepository(connection).top_category_labels(shown_experiment_id, sample_hashes)
     )
     previews: dict[str, SamplePreview] = {}
     for sample_hash in sample_hashes:

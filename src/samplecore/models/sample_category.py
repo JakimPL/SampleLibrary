@@ -9,15 +9,15 @@ from samplecore.models.base import FROZEN
 from samplecore.models.scalars import Index, SampleHash
 
 
-class SampleLabelSuggestion(BaseModel):
-    """One tag a listening model proposes for a sample, as of one scoring's run.
+class SampleCategory(BaseModel):
+    """One tag a listening model gives a sample, as of one scoring's run.
 
-    A suggestion stands apart from a hand label: it is what a pretrained model
+    A category stands apart from a hand label: it is what a pretrained model
     hears the sample as, scored against a vocabulary of prompts, and it is kept in the hand-label
     grammar so a person accepts it into their own label as it is. `rank` orders one sample's
-    suggestions from the closest match, and `score` is the cosine the model read between the sound
-    and the prompt. Every suggestion belongs to the experiment that scored it, so two vocabularies
-    scored over one catalog stay apart and the one `SuggestionPromotion` names is the one a viewer sees.
+    categories from the closest match, and `score` is the cosine the model read between the sound
+    and the prompt. Every category belongs to the experiment that scored it, so two vocabularies
+    scored over one catalog stay apart and the one `CategoryPromotion` names is the one a viewer sees.
     """
 
     model_config = FROZEN
@@ -30,7 +30,7 @@ class SampleLabelSuggestion(BaseModel):
     computed_at: datetime
 
 
-class SuggestionPromotion(BaseModel):
+class CategoryPromotion(BaseModel):
     """Which scoring the application shows, and since when.
 
     A scoring shows itself in the transaction that writes it, and showing an earlier one again moves
@@ -43,8 +43,8 @@ class SuggestionPromotion(BaseModel):
     promoted_at: datetime
 
 
-class SampleFirstPick(BaseModel):
-    """One sample's closest suggestion in a scoring: the three columns a view of the whole catalog paints by."""
+class SampleTopCategory(BaseModel):
+    """One sample's top category in a scoring: the three columns a view of the whole catalog paints by."""
 
     model_config = FROZEN
 

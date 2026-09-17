@@ -12,7 +12,7 @@ from samplecloud.features import readable_pending_count
 from samplecloud.hearing import hearing_for
 from samplecore.digests import digest_of_rows
 from samplecore.models.experiment import ExperimentKey, Reading
-from samplecore.storage.repositories.label_suggestion import PostgresSuggestionPromotionRepository
+from samplecore.storage.repositories.sample_category import PostgresCategoryPromotionRepository
 from samplecore.storage.sample_audio import readable_membership_digest
 from samplelibrary.pipeline.context import PipelineContext
 from samplelibrary.pipeline.settings import StepSettings
@@ -149,5 +149,5 @@ def _categorize_command(context: PipelineContext, key: ExperimentKey) -> tuple[s
 
 
 def _categories_shown(context: PipelineContext, experiment_id: int) -> bool:
-    shown = PostgresSuggestionPromotionRepository(context.connection).current()
+    shown = PostgresCategoryPromotionRepository(context.connection).current()
     return shown is not None and shown.experiment_id == experiment_id

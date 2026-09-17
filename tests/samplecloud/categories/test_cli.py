@@ -11,7 +11,7 @@ from samplecloud.categories.cli import main
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.exit_status import ExitStatus
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from tests.samplecloud.backends.test_teacher_backend import RecordingTeacher
 from tests.samplecloud.categories.test_scoring import KICK_HASH, VOCABULARY, seed_listening_experiment
 
@@ -43,7 +43,7 @@ def test_the_command_scores_a_listening_experiment_and_reports_the_agreement(
 
     main(["--experiment-id", str(source), "--vocabulary", str(listing), "--top", "1"], prog=PROGRAM)
 
-    repository = PostgresSampleLabelSuggestionRepository(connection)
+    repository = PostgresSampleCategoryRepository(connection)
     shown = repository.shown_experiment_id()
     assert shown is not None
     assert [category.label for category in repository.get_many(shown, [KICK_HASH])[KICK_HASH]] == ["BASS DRUM"]
@@ -114,7 +114,7 @@ def test_a_key_files_the_scoring_and_a_later_run_shows_it_again_without_the_mode
     main(["--experiment-id", source, "--vocabulary", str(listing), "--key", "categories-a"], prog=PROGRAM)
     filed = PostgresExperimentRepository(connection).get_by_key("categories-a")
     main(["--experiment-id", source, "--vocabulary", str(listing), "--top", "1"], prog=PROGRAM)
-    repository = PostgresSampleLabelSuggestionRepository(connection)
+    repository = PostgresSampleCategoryRepository(connection)
     assert filed is not None
     assert repository.shown_experiment_id() != filed.id
 

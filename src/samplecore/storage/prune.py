@@ -22,10 +22,10 @@ from samplecore.storage.database import (
     note_event,
     s3m_sample_properties,
     sample,
+    sample_category,
     sample_cloud_coordinates,
     sample_feature_vector,
     sample_file,
-    sample_label_suggestion,
     sample_playback_rate,
     sample_properties,
     sample_relation,
@@ -51,7 +51,7 @@ SAMPLE_ROW_TABLES: Final[tuple[Table, ...]] = (
     sample_spectral_feature,
     sample_thumbnail,
     sample_feature_vector,
-    sample_label_suggestion,
+    sample_category,
     sample_playback_rate,
 )
 # Every table whose rows keep a sample in the catalog: a sample none of them names is an orphan.
@@ -84,7 +84,7 @@ def prune_modules(connection: Connection, library_root: Path, *, module_hashes: 
 
     A module leaves together with its occurrences, instruments, notes and cloud placement, in one
     transaction; a sample leaves when no occurrence of it is left in any module and no sample file
-    holds it, together with its relations, coordinates, vectors, thumbnail, suggestions and playback
+    holds it, together with its relations, coordinates, vectors, thumbnail, categories and playback
     rate. Hand annotations stay where they are, in a schema of their own, for `annotations relink` to
     reattach or a person to decide about. Once the transaction commits, the content store lets go of
     every object the catalog no longer names, along with the partial files an interrupted write left,

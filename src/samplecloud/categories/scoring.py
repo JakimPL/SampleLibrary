@@ -18,15 +18,15 @@ from samplecore.models.experiment import (
     Experiment,
     ExperimentKey,
 )
-from samplecore.models.label_suggestion import SampleLabelSuggestion, SuggestionPromotion
+from samplecore.models.sample_category import CategoryPromotion, SampleCategory
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
-from samplecore.storage.repositories.label_suggestion import (
-    PostgresSampleLabelSuggestionRepository,
-    PostgresSuggestionPromotionRepository,
-)
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_category import (
+    PostgresCategoryPromotionRepository,
+    PostgresSampleCategoryRepository,
+)
 
 DEFAULT_CATEGORY_COUNT: Final[int] = 3
 MINIMUM_CATEGORY_COUNT: Final[int] = 1
@@ -122,14 +122,14 @@ def score_categories(connection: Connection, *, recipe: ScoringRecipe, prompts: 
         experiment_id = PostgresExperimentRepository(connection).insert_new(
             backend_name=ZERO_SHOT_BACKEND_NAME, label=recipe.label, params=recipe.parameters(), key=recipe.key
         )
-        PostgresSuggestionPromotionRepository(connection).record(
-            SuggestionPromotion(experiment_id=experiment_id, promoted_at=computed_at)
+        PostgresCategoryPromotionRepository(connection).record(
+            CategoryPromotion(experiment_id=experiment_id, promoted_at=computed_at)
         )
-        repository = PostgresSampleLabelSuggestionRepository(connection)
+        repository = PostgresSampleCategoryRepository(connection)
         for chunk_start in range(0, len(vectors), INSERT_CHUNK_SAMPLES):
             repository.insert_many(
                 [
-                    SampleLabelSuggestion(
+                    SampleCategory(
                         experiment_id=experiment_id,
                         sample_hash=vectors[row].sample_hash,
                         rank=rank,
@@ -172,8 +172,8 @@ def filed_scoring(connection: Connection, recipe: ScoringRecipe) -> Experiment |
 def show_scoring(connection: Connection, experiment_id: int) -> None:
     """Make a scoring written earlier the one the application shows."""
     with start_batch(connection):
-        PostgresSuggestionPromotionRepository(connection).record(
-            SuggestionPromotion(experiment_id=experiment_id, promoted_at=datetime.now(UTC))
+        PostgresCategoryPromotionRepository(connection).record(
+            CategoryPromotion(experiment_id=experiment_id, promoted_at=datetime.now(UTC))
         )
 
 

@@ -13,21 +13,21 @@ from trackmod.trackers.xm.tuning import Tuning
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import Experiment
-from samplecore.models.label_suggestion import SampleLabelSuggestion, SuggestionPromotion
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
+from samplecore.models.sample_category import CategoryPromotion, SampleCategory
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
-from samplecore.storage.repositories.label_suggestion import (
-    PostgresSampleLabelSuggestionRepository,
-    PostgresSuggestionPromotionRepository,
-)
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_category import (
+    PostgresCategoryPromotionRepository,
+    PostgresSampleCategoryRepository,
+)
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from tests.samplemorph.conftest import harmonic_tone
 
@@ -39,13 +39,13 @@ TONE_STEP_SEMITONES: Final[float] = 3.0
 
 @dataclass(frozen=True)
 class CatalogedTone:
-    """One tone a test catalog holds: the label the scoring on show suggests first at its score, and the module holding it.
+    """One tone a test catalog holds: the category the scoring on show gives it at its score, and the module holding it.
 
     `hand_label` is what a person wrote the tone is, where they wrote anything, and an inaudible
     tone is stored as frames of zeros, the way a module keeps an empty slot.
     """
 
-    suggested_label: str
+    category: str
     score: float
     module_index: int
     hand_label: str | None
@@ -83,13 +83,13 @@ def seed_labeled_tones(connection: Connection, library_root: Path, tones: tuple[
                 tuning=Tuning(relative_note=0, finetune=0),
             )
         )
-        PostgresSampleLabelSuggestionRepository(connection).insert_many(
+        PostgresSampleCategoryRepository(connection).insert_many(
             [
-                SampleLabelSuggestion(
+                SampleCategory(
                     experiment_id=experiment_id,
                     sample_hash=sample.hash,
                     rank=0,
-                    label=tone.suggested_label,
+                    label=tone.category,
                     score=tone.score,
                     computed_at=now,
                 )
@@ -120,8 +120,8 @@ def _shown_scoring(connection: Connection, *, now: datetime) -> int:
     experiments = PostgresExperimentRepository(connection)
     experiment_id = experiments.next_id()
     experiments.insert(Experiment(id=experiment_id, backend_name="clap", params={}, created_at=now, label=None))
-    PostgresSuggestionPromotionRepository(connection).record(
-        SuggestionPromotion(experiment_id=experiment_id, promoted_at=now)
+    PostgresCategoryPromotionRepository(connection).record(
+        CategoryPromotion(experiment_id=experiment_id, promoted_at=now)
     )
     return experiment_id
 

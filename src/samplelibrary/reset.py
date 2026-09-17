@@ -16,7 +16,7 @@ from samplecore.storage.reset import ResetRefused, reset_library
 
 EMPTIED: Final[str] = (
     "every cataloged module, sample, note event, relation, playback rate, cloud coordinate and promotion, "
-    "experiment, feature vector and label suggestion, and every stored audio object"
+    "experiment, feature vector and category, and every stored audio object"
 )
 KEPT: Final[str] = "hand annotations, fitted models, grid caches, training runs and the MLflow record"
 REFILLING_PASSES: Final[str] = "`samplelibrary pipeline run`, which builds every step again and relinks the annotations"

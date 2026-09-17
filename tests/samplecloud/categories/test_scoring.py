@@ -22,9 +22,9 @@ from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.database import experiment
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 
 VOCABULARY = ("BASS DRUM", "SNARE", "HI-HAT: CLOSED")
 KICK_HASH = "a" * 64
@@ -81,7 +81,7 @@ def test_each_sample_keeps_its_closest_labels_first_under_a_new_experiment(conne
         prompts=prompts(),
     )
 
-    repository = PostgresSampleLabelSuggestionRepository(connection)
+    repository = PostgresSampleCategoryRepository(connection)
     categories = repository.get_many(summary.experiment_id, [KICK_HASH, HAT_HASH])
     assert [category.label for category in categories[KICK_HASH]][0] == "BASS DRUM"
     assert [category.label for category in categories[HAT_HASH]][0] == "HI-HAT: CLOSED"
@@ -162,10 +162,10 @@ def test_a_scoring_interrupted_while_writing_leaves_no_experiment_behind(
     source = seed_listening_experiment(connection)
     experiment_count_before = connection.execute(select(func.count()).select_from(experiment)).scalar_one()
 
-    def failing_insert(self: PostgresSampleLabelSuggestionRepository, suggestions: object) -> None:
+    def failing_insert(self: PostgresSampleCategoryRepository, categories: object) -> None:
         raise OSError("simulated failure")
 
-    monkeypatch.setattr(PostgresSampleLabelSuggestionRepository, "insert_many", failing_insert)
+    monkeypatch.setattr(PostgresSampleCategoryRepository, "insert_many", failing_insert)
 
     with pytest.raises(OSError, match="simulated failure"):
         score_categories(
@@ -183,7 +183,7 @@ def test_a_scoring_interrupted_while_writing_leaves_no_experiment_behind(
         )
 
     assert connection.execute(select(func.count()).select_from(experiment)).scalar_one() == experiment_count_before
-    assert PostgresSampleLabelSuggestionRepository(connection).shown_experiment_id() is None
+    assert PostgresSampleCategoryRepository(connection).shown_experiment_id() is None
 
 
 @pytest.mark.parametrize(
