@@ -1,0 +1,27 @@
+# What `samplelibrary morph serve` renders between two samples. The process reads this file when it
+# starts, so a change takes effect on its next start.
+
+# The route every morph takes: envelope, transport, blend, partials or latent.
+route: envelope
+
+# The envelope route moves the spectral envelope from the first sample's to the second's and sounds
+# an excitation under it: `first` keeps the first sample's harmonics and noise along the whole path,
+# `second` keeps the second's, and `both` crossfades the two with the weight. The envelope is drawn
+# by its first `coefficient_count` cosines, read down to `floor_db` under the sample's loudest bin.
+envelope:
+  excitation: first
+  coefficient_count: 40
+  floor_db: 80.0
+
+# The partials route follows one profile: glide, stepped, eased, switch, pivot, slide, crossfade or rigid.
+partials:
+  profile: glide
+
+# The latent route renders through a stored model, which `samplelibrary morph fit` writes, and a
+# vocoder: `restored` reads the named restorer, `pghi` needs nothing trained.
+latent:
+  model_name: principal_components
+  vocoder_name: restored
+  restorer_name: restorer
+  morpher_name: linear
+  device: cpu

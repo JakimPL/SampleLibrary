@@ -14,7 +14,11 @@ from samplecore.cli_support import ending_in_one_line
 from samplecore.config import LibraryConfig
 from samplecore.exit_status import ExitStatus
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
-from samplemorph.envelope.presets import DEFAULT_ENVELOPE_PRESET_NAME, ENVELOPE_PRESETS
+from samplemorph.envelope.settings import (
+    DEFAULT_EXCITATION,
+    EnvelopeSettings,
+    Excitation,
+)
 from samplemorph.listening.comparing import (
     DEFAULT_LISTENING_WEIGHTS,
     DEFAULT_PATH_WEIGHTS,
@@ -23,7 +27,11 @@ from samplemorph.listening.comparing import (
     blind_folders,
     compare_routes,
 )
-from samplemorph.listening.heard_pairs import PairSampleMissing, SilentPairEnd, read_heard_pair
+from samplemorph.listening.heard_pairs import (
+    PairSampleMissing,
+    SilentPairEnd,
+    read_heard_pair,
+)
 from samplemorph.listening.pairs import PairSet, read_pair_set
 from samplemorph.partials.presets import DEFAULT_PROFILE_NAME, PROFILE_PRESETS
 from samplemorph.pipeline import load_route
@@ -85,11 +93,11 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     parser.add_argument(
         "--excitations",
-        type=str,
+        type=Excitation,
         nargs="+",
-        choices=tuple(ENVELOPE_PRESETS),
-        default=(DEFAULT_ENVELOPE_PRESET_NAME,),
-        help="Whose excitation every envelope route keeps, one route per excitation.",
+        choices=tuple(Excitation),
+        default=(DEFAULT_EXCITATION,),
+        help="Whose excitation every envelope route sounds under the moving envelope, one route per choice.",
     )
     parser.add_argument(
         "--blind", action="store_true", help="Name every route's folder by a letter, the key kept in the manifest."
@@ -155,7 +163,7 @@ def _named_routes(
     kinds: tuple[RouteKind, ...],
     *,
     profiles: tuple[str, ...],
-    excitations: tuple[str, ...],
+    excitations: tuple[Excitation, ...],
     config: LibraryConfig,
     arguments: argparse.Namespace,
 ) -> tuple[NamedRoute, ...]:
@@ -172,5 +180,5 @@ def _named_routes(
             case RouteKind.PARTIALS:
                 routes.extend(partials_route(name) for name in profiles)
             case RouteKind.ENVELOPE:
-                routes.extend(envelope_route(name) for name in excitations)
+                routes.extend(envelope_route(EnvelopeSettings(excitation=excitation)) for excitation in excitations)
     return tuple(routes)

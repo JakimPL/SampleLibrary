@@ -19,7 +19,6 @@ from samplecore.models.sample_pcm import SamplePCM
 from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage import audio_store
 from samplemorph.canonicalizers.common import prepare_mono
-from samplemorph.envelope.presets import DEFAULT_ENVELOPE_PRESET_NAME
 from samplemorph.geometry import Geometry, log_frequency_geometry
 from samplemorph.images import SoundImage
 from samplemorph.model_paths import DEFAULT_RESTORER_NAME, restorer_path
@@ -31,7 +30,6 @@ from samplemorph.model_store import (
     model_path,
     save_model,
 )
-from samplemorph.partials.presets import DEFAULT_PROFILE_NAME
 from samplemorph.pipeline import RouteChoice
 from samplemorph.registries import (
     CANONICALIZER_REGISTRY,
@@ -41,11 +39,14 @@ from samplemorph.registries import (
     RESTORED_VOCODER_NAME,
 )
 from samplemorph.routes.kinds import RouteKind
-from samplemorph.routes.named import RouteSelection
+from samplemorph.routes.selection import PROCESSOR, RouteSelection
 from samplemorph.service.app import create_app
 from samplemorph.service.renderer import load_renderer
-from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
-from samplemorph.training.principal_components import PrincipalComponentTrainer, stack_grids
+from samplemorph.service.settings import ServiceSettings
+from samplemorph.training.principal_components import (
+    PrincipalComponentTrainer,
+    stack_grids,
+)
 from samplemorph.vocoders.restored import RestorerDescription, save_restorer
 from samplemorph.vocoders.restorer_model import Restorer
 from samplemorph.vocoders.restorer_shape import RestorerShape
@@ -147,16 +148,14 @@ def _settings(library: StoredLibrary, *, kind: RouteKind, vocoder_name: str) -> 
         library_root=library.root,
         sample_directories=(library.sample_directory,),
         selection=RouteSelection(
-            kind=kind,
+            route=kind,
             latent=RouteChoice(
                 model_name=DEFAULT_MODEL_NAME,
                 vocoder_name=vocoder_name,
                 restorer_name=DEFAULT_RESTORER_NAME,
                 morpher_name=DEFAULT_MORPHER_NAME,
-                device=DEFAULT_INFERENCE_DEVICE,
+                device=PROCESSOR,
             ),
-            profile_name=DEFAULT_PROFILE_NAME,
-            excitation_name=DEFAULT_ENVELOPE_PRESET_NAME,
         ),
     )
 

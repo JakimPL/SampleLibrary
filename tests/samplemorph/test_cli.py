@@ -32,7 +32,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplemorph.cli import main
 from samplemorph.descriptors.descriptor_shape import DESCRIPTOR_SIZE
-from samplemorph.envelope.presets import ENVELOPE_PRESETS
+from samplemorph.envelope.settings import EnvelopeSettings, Excitation
 from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.listening.pairs import CatalogPair, PairEnd, PairSet, write_pair_set
 from samplemorph.model_paths import codec_path, descriptor_path, restorer_path
@@ -712,7 +712,9 @@ def test_drawn_pairs_are_rendered_through_every_route_and_read(
     assert set(manifest) == set(routes)
     for profile in ("glide", "crossfade"):
         assert manifest[f"partials-{profile}"]["profile"] == PROFILE_PRESETS[profile].model_dump(mode="json")
-    assert manifest["envelope-first"]["envelope_settings"] == ENVELOPE_PRESETS["first"].model_dump(mode="json")
+    assert manifest["envelope-first"]["envelope_settings"] == EnvelopeSettings(excitation=Excitation.FIRST).model_dump(
+        mode="json"
+    )
 
 
 def test_a_blind_comparison_names_the_routes_by_letter_and_keeps_the_key(

@@ -3,7 +3,12 @@ from __future__ import annotations
 import pydantic
 import pytest
 
-from samplecore.models.morph import MORPH_WEIGHT_STEPS, HeardMorphPoint, MorphPoint, morph_weights
+from samplecore.models.morph import (
+    MORPH_WEIGHT_STEPS,
+    HeardMorphPoint,
+    MorphPoint,
+    morph_weights,
+)
 
 FIRST = "a" * 64
 SECOND = "b" * 64
@@ -18,7 +23,7 @@ def test_every_weight_on_the_grid_makes_a_point(weight: float) -> None:
     assert point.step == round(weight * MORPH_WEIGHT_STEPS)
 
 
-@pytest.mark.parametrize("weight", (0.3, 1.5, -0.0625))
+@pytest.mark.parametrize("weight", (0.305, 1.5, -0.01))
 def test_a_weight_off_the_grid_or_outside_the_unit_interval_is_refused(weight: float) -> None:
     with pytest.raises(pydantic.ValidationError):
         MorphPoint(first=FIRST, second=SECOND, weight=weight)

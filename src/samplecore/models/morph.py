@@ -9,14 +9,14 @@ from trackmod.schema.scalars import Rate
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import SampleHash
 
-MORPH_WEIGHT_STEPS: Final[int] = 16
+MORPH_WEIGHT_STEPS: Final[int] = 100
 
 
 class MorphPoint(BaseModel):
     """One point between two samples: which two, and how far from the first toward the second.
 
-    The weight lies on a grid of sixteenths, so every point a slider can ask for is exact in
-    binary, writes as one short decimal in a URL, and names exactly one cached render.
+    The weight lies on a grid of hundredths, so every point a slider can ask for writes as one
+    two-place decimal in a URL and names exactly one cached render.
     """
 
     model_config = FROZEN

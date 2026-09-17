@@ -33,8 +33,8 @@ STATUS = {
     "name": "envelope-first",
     "device": "cpu",
     "fingerprint": "f" * 64,
-    "weight_steps": 16,
-    "description": {"envelope_settings": {"switch_weight": 1.0}},
+    "weight_steps": 100,
+    "description": {"envelope_settings": {"excitation": "first"}},
 }
 
 Handler = Callable[[httpx.Request], httpx.Response]
@@ -178,7 +178,7 @@ def test_the_process_s_own_refusals_are_relayed_with_their_detail(client: TestCl
     assert response.json()["detail"].startswith("no object is stored")
 
 
-@pytest.mark.parametrize("weight", (0.3, 2.0))
+@pytest.mark.parametrize("weight", (0.305, 2.0))
 def test_a_weight_off_the_grid_is_refused_before_the_process_is_dialed(client: TestClient, weight: float) -> None:
     upstream = _serve(client, _rendered)
 

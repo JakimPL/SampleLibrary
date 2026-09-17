@@ -4,11 +4,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
-from samplemorph.routes.kinds import RouteKind
-from samplemorph.routes.named import RouteSelection
+from samplemorph.routes.selection import RouteSelection
 
-DEFAULT_INFERENCE_DEVICE: Final[str] = "cpu"
-DEFAULT_ROUTE: Final[RouteKind] = RouteKind.ENVELOPE
+DEFAULT_SELECTION_PATH: Final[Path] = Path(__file__).resolve().parents[3] / "morph.yaml"
 MEBIBYTE: Final[int] = 2**20
 RENDER_CACHE_BYTES: Final[int] = 128 * MEBIBYTE
 PAIR_CACHE_BYTES: Final[int] = 256 * MEBIBYTE
@@ -39,7 +37,7 @@ class RenderLimits:
 @dataclass(frozen=True)
 class ServiceSettings:
     """What one inference process serves: the library it reads objects from, the sample directories it
-    reads files from, the route it renders through, and its limits.
+    reads files from, the route it renders through as its selection file names it, and its limits.
 
     A request names the file a sample found in a sample directory is read from, and the process reads
     only files inside the directories named here, which are the ones its configuration lists.

@@ -4,27 +4,25 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
 
 from pydantic import JsonValue
 
 from samplemorph.envelope.morph import EnvelopePath
-from samplemorph.envelope.presets import ENVELOPE_PRESETS
+from samplemorph.envelope.settings import EnvelopeSettings
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.partials.morph import PartialMorph
 from samplemorph.partials.presets import PROFILE_PRESETS
 from samplemorph.partials.settings import PartialSettings
-from samplemorph.pipeline import LoadedRoute, RouteChoice, latent_route_description, load_route
+from samplemorph.pipeline import LoadedRoute, latent_route_description, load_route
 from samplemorph.rendering import RENDER_REVISION
 from samplemorph.routes.analysis import AnalysisRoute, SpectralPath
 from samplemorph.routes.kinds import ComparableRoute, RouteKind
 from samplemorph.routes.latent import LatentRoute
 from samplemorph.routes.partials import PartialRoute
+from samplemorph.routes.selection import PROCESSOR, RouteSelection
 from samplemorph.transport.blend import blend
 from samplemorph.transport.morph import transport
 from samplemorph.transport.settings import TransportSettings
-
-PROCESSOR: Final[str] = "cpu"
 
 
 @dataclass(frozen=True)
@@ -55,21 +53,6 @@ class NamedRoute:
         return hashlib.sha256(named.encode()).hexdigest()
 
 
-@dataclass(frozen=True)
-class RouteSelection:
-    """Which route one process renders through, with the names each kind reads.
-
-    The latent route reads the stored model and the rest of `latent`, the partials route the profile
-    named, and the envelope route the excitation named; the transport and the blend read their
-    default settings alone.
-    """
-
-    kind: RouteKind
-    latent: RouteChoice
-    profile_name: str
-    excitation_name: str
-
-
 def select_route(library_root: Path, selection: RouteSelection) -> NamedRoute:
     """The one route a selection names, the latent route loaded from the library.
 
@@ -77,7 +60,7 @@ def select_route(library_root: Path, selection: RouteSelection) -> NamedRoute:
         FileNotFoundError: the latent route's model, or the restorer its vocoder reads, is stored under no such name.
         ModelFileChanged: a model file was written while the latent route was loaded from it.
     """
-    match selection.kind:
+    match selection.route:
         case RouteKind.LATENT:
             return latent_route(load_route(library_root, selection.latent))
         case RouteKind.TRANSPORT:
@@ -85,9 +68,9 @@ def select_route(library_root: Path, selection: RouteSelection) -> NamedRoute:
         case RouteKind.BLEND:
             return blend_route()
         case RouteKind.PARTIALS:
-            return partials_route(selection.profile_name)
+            return partials_route(selection.partials.profile)
         case RouteKind.ENVELOPE:
-            return envelope_route(selection.excitation_name)
+            return envelope_route(selection.envelope)
 
 
 def latent_route(loaded: LoadedRoute) -> NamedRoute:
@@ -111,12 +94,11 @@ def blend_route() -> NamedRoute:
     return _analysis_route(RouteKind.BLEND, name=RouteKind.BLEND.value, path=blend, described={})
 
 
-def envelope_route(excitation_name: str) -> NamedRoute:
-    """The envelope morph keeping the excitation a preset names, on the analyses' default geometry and settings."""
-    envelope_settings = ENVELOPE_PRESETS[excitation_name]
+def envelope_route(envelope_settings: EnvelopeSettings) -> NamedRoute:
+    """The envelope morph under the settings given, on the analyses' default geometry and settings, named by whose excitation it sounds."""
     return _analysis_route(
         RouteKind.ENVELOPE,
-        name=f"{RouteKind.ENVELOPE.value}-{excitation_name}",
+        name=f"{RouteKind.ENVELOPE.value}-{envelope_settings.excitation.value}",
         path=EnvelopePath(envelope_settings=envelope_settings),
         described={"envelope_settings": envelope_settings.model_dump(mode="json")},
     )

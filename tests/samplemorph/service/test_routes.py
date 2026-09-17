@@ -11,14 +11,14 @@ import soundfile
 from fastapi.testclient import TestClient
 
 from samplecore.models.morph import MORPH_WEIGHT_STEPS, HeardMorphPoint
-from samplemorph.envelope.presets import DEFAULT_ENVELOPE_PRESET_NAME, KEEPS_FIRST
 from samplemorph.model_store import MODELS_DIRECTORY_NAME, PRINCIPAL_COMPONENT_CODEC_NAME
 from samplemorph.registries import PGHI_VOCODER_NAME
 from samplemorph.rendering import FULL_SCALE_CEILING
 from samplemorph.routes.kinds import RouteKind
+from samplemorph.routes.selection import PROCESSOR
 from samplemorph.service.app import create_app
 from samplemorph.service.renderer import MorphRenderer, load_renderer
-from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
+from samplemorph.service.settings import ServiceSettings
 from tests.samplemorph.service.conftest import StoredLibrary
 
 AUDIO_PATH = "/morph/audio"
@@ -50,7 +50,7 @@ def test_the_status_names_what_the_process_serves(client: TestClient) -> None:
     assert status["description"]["model"]["codec"] == PRINCIPAL_COMPONENT_CODEC_NAME
     assert status["description"]["vocoder"] == PGHI_VOCODER_NAME
     assert status["description"]["restorer"] is None
-    assert status["device"] == DEFAULT_INFERENCE_DEVICE
+    assert status["device"] == PROCESSOR
     assert status["weight_steps"] == MORPH_WEIGHT_STEPS
     assert len(status["fingerprint"]) == DIGEST_LENGTH
 
@@ -65,8 +65,9 @@ def test_the_envelope_route_renders_end_to_end_reading_no_stored_model(
         response = client.get(AUDIO_PATH, params=_params(library, 0.5))
 
     assert status["route"] == RouteKind.ENVELOPE.value
-    assert status["name"] == f"{RouteKind.ENVELOPE.value}-{DEFAULT_ENVELOPE_PRESET_NAME}"
-    assert status["description"]["envelope_settings"] == KEEPS_FIRST.model_dump(mode="json")
+    served = envelope_settings.selection.envelope
+    assert status["name"] == f"{RouteKind.ENVELOPE.value}-{served.excitation.value}"
+    assert status["description"]["envelope_settings"] == served.model_dump(mode="json")
     assert response.status_code == 200
     assert soundfile.read(io.BytesIO(response.content))[1] == SECOND_RATE_HZ
 
@@ -96,7 +97,7 @@ def test_the_endpoints_sound_for_their_own_heard_length(client: TestClient, libr
 
 
 def test_a_weight_off_the_grid_is_refused(client: TestClient, library: StoredLibrary) -> None:
-    assert client.get(AUDIO_PATH, params=_params(library, 0.3)).status_code == 422
+    assert client.get(AUDIO_PATH, params=_params(library, 0.305)).status_code == 422
 
 
 def test_a_point_asked_for_without_its_rates_is_refused(client: TestClient, library: StoredLibrary) -> None:

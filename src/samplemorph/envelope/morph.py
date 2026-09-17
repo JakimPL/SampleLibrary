@@ -5,28 +5,33 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from samplemorph.envelope.settings import EnvelopeSettings
+from samplemorph.envelope.settings import EnvelopeSettings, Excitation
 from samplemorph.envelope.split import SplitSpectrum, split_spectrum
 from samplemorph.geometry import LogFrequencyGeometry
 from samplemorph.transport.analysis import TransportAnalysis
 from samplemorph.transport.frame_reading import read_frames
-from samplemorph.transport.morph import FIRST_END_WEIGHT, SECOND_END_WEIGHT, TransportedSpectrogram, heard_as_analyzed
+from samplemorph.transport.morph import (
+    FIRST_END_WEIGHT,
+    SECOND_END_WEIGHT,
+    TransportedSpectrogram,
+)
 from samplemorph.transport.settings import TransportSettings
 from samplemorph.transport.time_map import build_time_map
 
 
 @dataclass(frozen=True)
 class EnvelopePath:
-    """The spectral path that moves the envelope between two sounds and keeps one sound's excitation whole under it.
+    """The spectral path that moves the envelope between two sounds and sounds an excitation under it.
 
     Both sounds are aligned in time by the transport's own map and read along it, and each read
     frame is split into the smooth envelope it stands in and the excitation under it. The path's
     envelope lies at `weight` between the two in decibels, bin by bin, so resonances, brightness and
-    the balance of registers move from one sound's to the other's. Under it sounds one sound's
-    excitation whole: the first's at every weight below the settings' switch weight, the second's
-    from it on. A sound's harmonics therefore travel as one series at one pitch, a chord stays the
-    chord it was, and the pitch content changes hands at a single point of the path. The ends are
-    each sound's own analysis.
+    the balance of registers move from one sound's to the other's. Under it sounds the excitation the
+    settings name: one sound's whole, so its harmonics travel as one series at one pitch and a chord
+    stays the chord it was, or the two crossfaded with the weight. The ends render through the same
+    reading as every point between them, so each end is where the path arrives: under a kept
+    excitation, that sound's own spectrum at its end of the path, and its pitch content under the
+    other sound's envelope at the far end.
     """
 
     envelope_settings: EnvelopeSettings
@@ -40,17 +45,13 @@ class EnvelopePath:
         geometry: LogFrequencyGeometry,
         settings: TransportSettings,
     ) -> TransportedSpectrogram:
-        """The magnitude `weight` of the way from one sound to another, one excitation under the envelope between them.
+        """The magnitude `weight` of the way from one sound to another, the chosen excitation under the envelope between them.
 
         Raises:
             ValueError: the weight lies outside ``[0, 1]``.
         """
         if not FIRST_END_WEIGHT <= weight <= SECOND_END_WEIGHT:
             raise ValueError(f"an envelope morph runs between weights 0 and 1, got {weight}")
-        if weight == FIRST_END_WEIGHT:
-            return heard_as_analyzed(first)
-        if weight == SECOND_END_WEIGHT:
-            return heard_as_analyzed(second)
 
         time_map = build_time_map(first, second, weight=weight, hop_length=geometry.hop_length, settings=settings)
         first_split = self._split_along(
@@ -59,9 +60,7 @@ class EnvelopePath:
         second_split = self._split_along(
             second, positions=time_map.second_positions, rates=time_map.second_rates, settings=settings
         )
-        excitation = (
-            second_split.excitation if weight >= self.envelope_settings.switch_weight else first_split.excitation
-        )
+        excitation = self._excitation_under(first_split, second_split, weight=weight)
         magnitude = _between(first_split.envelope, second_split.envelope, weight=weight) * excitation
         return TransportedSpectrogram(magnitude=magnitude.astype(np.float32), sample_count=time_map.sample_count)
 
@@ -78,6 +77,17 @@ class EnvelopePath:
             analysis.energy, positions=positions, rates=rates, maximum_half_width=settings.maximum_reading_half_width
         )
         return split_spectrum(np.sqrt(np.maximum(energy, 0.0)).astype(np.float32), settings=self.envelope_settings)
+
+    def _excitation_under(self, first: SplitSpectrum, second: SplitSpectrum, *, weight: float) -> NDArray[np.float32]:
+        """The excitation the settings name at this weight: one sound's whole, or the two crossfaded."""
+        match self.envelope_settings.excitation:
+            case Excitation.FIRST:
+                return first.excitation
+            case Excitation.SECOND:
+                return second.excitation
+            case Excitation.BOTH:
+                crossfaded: NDArray[np.float32] = (1.0 - weight) * first.excitation + weight * second.excitation
+                return crossfaded.astype(np.float32)
 
 
 def _between(first: NDArray[np.float32], second: NDArray[np.float32], *, weight: float) -> NDArray[np.float32]:
