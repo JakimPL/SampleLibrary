@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type * as SamplesApi from "../../../src/api/samples";
 import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPanel";
-import { WaveformPanel } from "../../../src/workspace/panels/WaveformPanel";
+import { NO_SAMPLE_HINT, WaveformPanel } from "../../../src/workspace/panels/WaveformPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
 const { instances, createMock, getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => {
@@ -88,7 +88,7 @@ describe("WaveformPanel", () => {
     it("shows a placeholder when no sample is focused", () => {
         render(<WaveformPanel />);
 
-        expect(screen.getByText(/No sample selected yet/)).toBeInTheDocument();
+        expect(screen.getByText(NO_SAMPLE_HINT)).toBeInTheDocument();
     });
 
     it("plays the selected sample at the rate the library really sounds it at", async () => {

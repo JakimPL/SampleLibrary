@@ -8,6 +8,9 @@ import { ErrorNotice } from "../../shared/ErrorNotice";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
 
+/** What the panel asks for while no sample is focused. */
+export const NO_SAMPLE_HINT = "Double-click a sample to hear it here.";
+
 type PlaybackRate = components["schemas"]["SamplePlaybackRate"];
 
 interface FocusedWaveformProps {
@@ -58,7 +61,7 @@ export function WaveformPanel(): ReactElement {
     const focusedSampleHash = useSelectionStore((state) => state.focusedSampleHash);
 
     if (focusedSampleHash === null) {
-        return <p className="no-selection">Double-click a sample to hear it here.</p>;
+        return <p className="no-selection">{NO_SAMPLE_HINT}</p>;
     }
 
     return <FocusedWaveform sampleHash={focusedSampleHash} />;

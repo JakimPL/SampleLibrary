@@ -7,7 +7,7 @@ import type * as SamplesApi from "../../../src/api/samples";
 import { DEFAULT_WEIGHT, useMorphStore } from "../../../src/morph/morphStore";
 import type * as AudioPreview from "../../../src/samples/useAudioPreview";
 import { UNNAMED_SAMPLE_LABEL } from "../../../src/shared/labels";
-import { MorphPanel } from "../../../src/workspace/panels/MorphPanel";
+import { MorphPanel, NO_PAIR_HINT } from "../../../src/workspace/panels/MorphPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
 const FIRST = "a".repeat(64);
@@ -155,7 +155,7 @@ describe("MorphPanel", () => {
         serveSamples();
         renderPanel();
 
-        expect(screen.getByText(/No morph pair yet/)).toBeInTheDocument();
+        expect(screen.getByText(NO_PAIR_HINT)).toBeInTheDocument();
 
         act(() => {
             useMorphStore.getState().join(FIRST, SECOND);
@@ -281,7 +281,7 @@ describe("MorphPanel", () => {
 
         fireEvent.click(screen.getByRole("button", { name: "Clear the pair" }));
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
-        expect(screen.getByText(/No morph pair yet/)).toBeInTheDocument();
+        expect(screen.getByText(NO_PAIR_HINT)).toBeInTheDocument();
     });
 
     it("says so while no inference process answers, and looks again on request", async () => {

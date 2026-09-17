@@ -7,6 +7,9 @@ import { ErrorNotice } from "../../shared/ErrorNotice";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
 
+/** What the panel asks for while no sample is focused. */
+export const NO_SAMPLE_HINT = "Double-click a sample to see its details.";
+
 const DEFAULT_DETAIL_TAB: DetailTab = "occurrences";
 
 interface FocusedSampleDetailProps {
@@ -37,7 +40,7 @@ export function SampleDetailPanel(): ReactElement {
     const [tab, setTab] = useState<DetailTab>(DEFAULT_DETAIL_TAB);
 
     if (focusedSampleHash === null) {
-        return <p className="no-selection">Double-click a sample to see its details.</p>;
+        return <p className="no-selection">{NO_SAMPLE_HINT}</p>;
     }
 
     return <FocusedSampleDetail sampleHash={focusedSampleHash} tab={tab} onTabChange={setTab} />;

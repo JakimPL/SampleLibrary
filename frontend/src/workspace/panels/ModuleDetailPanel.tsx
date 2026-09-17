@@ -6,6 +6,9 @@ import { ErrorNotice } from "../../shared/ErrorNotice";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
 
+/** What the panel asks for while no module is focused. */
+export const NO_MODULE_HINT = "Double-click a module to see it here.";
+
 interface FocusedModuleDetailProps {
     readonly moduleHash: string;
 }
@@ -27,7 +30,7 @@ export function ModuleDetailPanel(): ReactElement {
     const focusedModuleHash = useSelectionStore((state) => state.focusedModuleHash);
 
     if (focusedModuleHash === null) {
-        return <p className="no-selection">Double-click a module to see it here.</p>;
+        return <p className="no-selection">{NO_MODULE_HINT}</p>;
     }
 
     return <FocusedModuleDetail moduleHash={focusedModuleHash} />;

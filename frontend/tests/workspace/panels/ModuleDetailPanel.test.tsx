@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as ModulesApi from "../../../src/api/modules";
-import { ModuleDetailPanel } from "../../../src/workspace/panels/ModuleDetailPanel";
+import { ModuleDetailPanel, NO_MODULE_HINT } from "../../../src/workspace/panels/ModuleDetailPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
 const { getModule } = vi.hoisted(() => ({ getModule: vi.fn() }));
@@ -56,7 +56,7 @@ describe("ModuleDetailPanel", () => {
     it("shows a placeholder when no module is focused", () => {
         renderPanel();
 
-        expect(screen.getByText(/No module selected yet/)).toBeInTheDocument();
+        expect(screen.getByText(NO_MODULE_HINT)).toBeInTheDocument();
     });
 
     it("shows the focused module's detail once loaded", async () => {
