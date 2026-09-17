@@ -81,8 +81,8 @@ def create_app(
     application.state.inference_url = inference_url
     application.state.spectral_vectors = SpectralVectorCache()
     application.state.cloud_cache = RevisionedJsonCache()
-    application.state.suggestions_cache = RevisionedJsonCache()
-    application.state.suggestion_tags_cache = RevisionedJsonCache()
+    application.state.categories_cache = RevisionedJsonCache()
+    application.state.category_tags_cache = RevisionedJsonCache()
     for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.router, morph.router):
         application.include_router(api_router, prefix=API_PREFIX)
     if frontend_directory is not None:

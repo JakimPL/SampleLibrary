@@ -192,7 +192,7 @@ class PostgresSampleRepository:
                 thumbnail=thumbnails_by_hash.get(row.hash),
                 equivalence_class=class_by_hash.get(row.hash),
                 annotation=annotation_by_hash.get(row.hash),
-                suggested_label=top_category_by_hash.get(row.hash),
+                category=top_category_by_hash.get(row.hash),
             )
             for row in rows
         )
@@ -333,7 +333,7 @@ def _row_to_sample_summary(
     thumbnail: SampleThumbnail | None,
     equivalence_class: EquivalenceClass | None,
     annotation: SampleAnnotation | None,
-    suggested_label: str | None,
+    category: str | None,
 ) -> SampleSummary:
     """Reconstruct a SampleSummary from a Core row plus its display name and rates, thumbnail, and class.
 
@@ -349,7 +349,7 @@ def _row_to_sample_summary(
         frames=sample_.frames,
         occurrence_count=row.occurrence_count,
         display_name=display_name,
-        suggested_label=suggested_label,
+        category=category,
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),
         playback_rate_hz=choose_playback_rate(note_event_rate=recorded_playback_rate, occurrence_rates=rates),

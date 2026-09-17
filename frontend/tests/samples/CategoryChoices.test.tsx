@@ -32,7 +32,7 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         files: [],
         size_bytes: 8192,
         display_name: "smp01",
-        suggested_label: null,
+        category: null,
         hand_label: null,
         rating: null,
         favorite: false,
@@ -40,7 +40,7 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         duration_seconds: 0.1,
         playback_rates: [],
         equivalence_member_count: 1,
-        suggestions: CATEGORIES,
+        categories: CATEGORIES,
         ...overrides,
     };
 }
@@ -103,7 +103,7 @@ describe("CategoryChoices", () => {
     });
 
     it("says so when no scoring has reached the sample", () => {
-        render(<CategoryChoices sample={buildSample({ suggestions: [] })} scope="sample" />);
+        render(<CategoryChoices sample={buildSample({ categories: [] })} scope="sample" />);
 
         expect(screen.getByText(NO_CATEGORIES)).toBeInTheDocument();
     });

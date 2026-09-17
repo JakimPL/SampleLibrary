@@ -253,31 +253,31 @@ def _store_samples(connection: Connection, *hashes: str) -> None:
         )
 
 
-def test_get_cloud_suggestions_carries_each_sample_s_closest_pick(client: TestClient, connection: Connection) -> None:
+def test_get_cloud_categories_carry_each_sample_s_top_category(client: TestClient, connection: Connection) -> None:
     _store_samples(connection, SAMPLE_HASH)
     seed_scoring(connection, {SAMPLE_HASH: (("HI-HAT: CLOSED", 0.7), ("SNARE", 0.4))})
 
-    response = client.get("/cloud/suggestions")
+    response = client.get("/cloud/categories")
 
     assert response.status_code == 200
     assert response.json() == [{"sample_hash": SAMPLE_HASH, "path": ["HI-HAT", "CLOSED"], "score": 0.7}]
 
 
-def test_get_cloud_suggestions_reads_the_scoring_on_show_alone(client: TestClient, connection: Connection) -> None:
+def test_get_cloud_categories_read_the_scoring_on_show_alone(client: TestClient, connection: Connection) -> None:
     """Showing a scoring reaches the next answer, an earlier one shown again included: the shown scoring is the revision."""
     _store_samples(connection, SAMPLE_HASH)
     earlier = seed_scoring(connection, {SAMPLE_HASH: (("SNARE", 0.5),)})
-    assert [entry["path"] for entry in client.get("/cloud/suggestions").json()] == [["SNARE"]]
+    assert [entry["path"] for entry in client.get("/cloud/categories").json()] == [["SNARE"]]
 
     seed_scoring(connection, {SAMPLE_HASH: (("BASS DRUM", 0.6),)})
-    assert [entry["path"] for entry in client.get("/cloud/suggestions").json()] == [["BASS DRUM"]]
+    assert [entry["path"] for entry in client.get("/cloud/categories").json()] == [["BASS DRUM"]]
     show_scoring(connection, earlier)
-    body = client.get("/cloud/suggestions").json()
+    body = client.get("/cloud/categories").json()
 
     assert [entry["path"] for entry in body] == [["SNARE"]]
 
 
-def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_first_picks(
+def test_get_cloud_category_tags_rank_by_the_scoring_s_vocabulary_and_count_top_categories(
     client: TestClient, connection: Connection
 ) -> None:
     """The closed hat is picked first twice, counting toward the hat tag; a tag outside the vocabulary ranks last."""
@@ -292,7 +292,7 @@ def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_fi
         },
     )
 
-    response = client.get("/cloud/suggestion-tags")
+    response = client.get("/cloud/category-tags")
 
     assert response.status_code == 200
     assert response.json() == [
@@ -303,9 +303,9 @@ def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_fi
     ]
 
 
-def test_cloud_suggestions_on_a_catalog_without_a_scoring_return_nothing(client: TestClient) -> None:
-    assert client.get("/cloud/suggestions").json() == []
-    assert client.get("/cloud/suggestion-tags").json() == []
+def test_cloud_categories_on_a_catalog_without_a_scoring_return_nothing(client: TestClient) -> None:
+    assert client.get("/cloud/categories").json() == []
+    assert client.get("/cloud/category-tags").json() == []
 
 
 def _annotation(sample_hash: str, *, label: str | None, rating: int | None) -> SampleAnnotation:

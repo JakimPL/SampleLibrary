@@ -35,7 +35,7 @@ function buildSample(overrides: Partial<SampleSummary> = {}): SampleSummary {
     return {
         hash: "abc123",
         display_name: "kick",
-        suggested_label: null,
+        category: null,
         hand_label: null,
         rating: null,
         favorite: false,
@@ -114,7 +114,7 @@ describe("SampleRow", () => {
 
     it("takes a hand label back when the field is emptied, leaving what the model heard showing", async () => {
         resolvesTo(null);
-        renderRow({ sample: buildSample({ suggested_label: "SYNTH: PAD", hand_label: "warm pad" }) });
+        renderRow({ sample: buildSample({ category: "SYNTH: PAD", hand_label: "warm pad" }) });
 
         await userEvent.click(screen.getByRole("button", { name: "Edit category" }));
         await userEvent.clear(screen.getByLabelText("Hand label"));

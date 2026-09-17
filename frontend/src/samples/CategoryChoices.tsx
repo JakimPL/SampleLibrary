@@ -29,14 +29,14 @@ export function CategoryChoices({ sample, scope }: CategoryChoicesProps): ReactE
     const { change, message } = useAnnotationWriter(sample.hash, scope);
     const label = current?.label ?? null;
 
-    if (sample.suggestions.length === 0) {
+    if (sample.categories.length === 0) {
         return <p className="placeholder-box">{NO_CATEGORIES}</p>;
     }
 
     return (
         <div className="category-choices">
             <div className="category-choices-row" role="group" aria-label="Categories">
-                {sample.suggestions.map((category) => {
+                {sample.categories.map((category) => {
                     const taken = holdsTag(label, category.label);
                     return (
                         <button

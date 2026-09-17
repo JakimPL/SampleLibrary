@@ -46,7 +46,7 @@ describe("getCloudCategories", () => {
 
         await getCloudCategories();
 
-        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/suggestions");
+        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/categories");
     });
 });
 
@@ -57,6 +57,6 @@ describe("getCategoryTags", () => {
 
         await getCategoryTags();
 
-        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/suggestion-tags");
+        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/category-tags");
     });
 });

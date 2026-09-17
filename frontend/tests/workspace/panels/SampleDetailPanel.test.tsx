@@ -43,12 +43,12 @@ const SAMPLE_DETAIL = {
     channels: 1,
     frames: 4096,
     display_name: "kick",
-    suggested_label: "BASS DRUM",
+    category: "BASS DRUM",
     hand_label: null,
     size_bytes: 8192,
     duration_seconds: 0.09,
     playback_rate_hz: 8363,
-    suggestions: [],
+    categories: [],
     occurrences: [
         {
             properties: {
@@ -130,7 +130,7 @@ describe("SampleDetailPanel", () => {
                 distance: 1.5,
                 playback_rate_hz: null,
                 display_name: "snare_909",
-                suggested_label: "SNARE",
+                category: "SNARE",
                 hand_label: null,
                 thumbnail: null,
             },

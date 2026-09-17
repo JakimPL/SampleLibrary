@@ -26,7 +26,7 @@ export function useSampleHoverPreview(sampleHash: string): FetchState<SampleHove
         const preview = await getSamplePreview(sampleHash);
         return {
             displayName: preview.display_name,
-            category: preview.suggested_label,
+            category: preview.category,
             handLabel: preview.hand_label,
             peaks: preview.thumbnail ?? [],
         };

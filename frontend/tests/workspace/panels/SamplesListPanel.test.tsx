@@ -40,7 +40,7 @@ const SAMPLE_SUMMARY = {
     frames: 4096,
     occurrence_count: 3,
     display_name: "kick",
-    suggested_label: null,
+    category: null,
     hand_label: null,
     size_bytes: 8192,
     thumbnail: null,

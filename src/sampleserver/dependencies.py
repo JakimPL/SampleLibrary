@@ -92,13 +92,13 @@ def get_cloud_cache(request: Request) -> RevisionedJsonCache:
     return cache
 
 
-def get_suggestions_cache(request: Request) -> RevisionedJsonCache:
-    """The finished answer to the cloud's suggestions, kept per application across requests."""
-    cache: RevisionedJsonCache = request.app.state.suggestions_cache
+def get_categories_cache(request: Request) -> RevisionedJsonCache:
+    """The finished answer to the cloud's categories, kept per application across requests."""
+    cache: RevisionedJsonCache = request.app.state.categories_cache
     return cache
 
 
-def get_suggestion_tags_cache(request: Request) -> RevisionedJsonCache:
-    """The finished answer to the suggested tags, kept per application across requests."""
-    cache: RevisionedJsonCache = request.app.state.suggestion_tags_cache
+def get_category_tags_cache(request: Request) -> RevisionedJsonCache:
+    """The finished answer to the category tags, kept per application across requests."""
+    cache: RevisionedJsonCache = request.app.state.category_tags_cache
     return cache

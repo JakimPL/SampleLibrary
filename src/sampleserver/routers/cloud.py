@@ -31,11 +31,11 @@ from samplecore.storage.repositories.sample_annotation import (
 from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from sampleserver.dependencies import (
+    get_categories_cache,
+    get_category_tags_cache,
     get_cloud_cache,
     get_connection,
     get_shown_experiment_id,
-    get_suggestion_tags_cache,
-    get_suggestions_cache,
 )
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers.curation import TagSummary
@@ -61,7 +61,7 @@ class SampleCloudPoint(BaseModel):
     catalog is a hundred thousand of these at once: when the run that placed them was computed says
     nothing about any one point, and a timestamp per point is several megabytes over the wire. What
     colors a point travels apart for the same reason: the hand labels through `/cloud/labels`, and
-    what the listening model heard through `/cloud/suggestions`.
+    what the listening model heard through `/cloud/categories`.
     """
 
     model_config = FROZEN
@@ -97,7 +97,7 @@ def get_cloud(
     coordinates' count and last write, the playback rates on file, the modules cataloged and the
     sample files scanned are what a pipeline moves, and four scalar queries say whether any has. A caller that accepts
     gzip receives the body compressed once at the best level rather than per request. The scoring on
-    show belongs to the revision of `/cloud/suggestions` alone, since the points carry none of it.
+    show belongs to the revision of `/cloud/categories` alone, since the points carry none of it.
     """
     revision: CloudRevision = (
         PostgresCloudCoordinateRepository(connection).revision(),
@@ -156,11 +156,11 @@ def get_cloud_labels(connection: Connection = Depends(get_connection)) -> tuple[
     )
 
 
-class CloudSuggestion(BaseModel):
-    """What a listening model hears one sample as first: its closest suggested tag path, and how sure it was.
+class CloudCategory(BaseModel):
+    """What a listening model hears one sample as first: its top category as a tag path, and how sure it was.
 
-    The first pick is the one a viewer paints the point with, the way the first written tag of a
-    hand label is, and the one the legend counts; a sample's detail lists the picks behind it.
+    The top category is the one a viewer paints the point with, the way the first written tag of a
+    hand label is, and the one the legend counts; a sample's detail lists the ones behind it.
     """
 
     model_config = FROZEN
@@ -170,36 +170,36 @@ class CloudSuggestion(BaseModel):
     score: float
 
 
-CLOUD_SUGGESTIONS: Final = TypeAdapter(tuple[CloudSuggestion, ...])
-CLOUD_SUGGESTION_TAGS: Final = TypeAdapter(tuple[TagSummary, ...])
+CLOUD_CATEGORIES: Final = TypeAdapter(tuple[CloudCategory, ...])
+CLOUD_CATEGORY_TAGS: Final = TypeAdapter(tuple[TagSummary, ...])
 
 
-@router.get("/suggestions", response_model=tuple[CloudSuggestion, ...])
-def get_cloud_suggestions(
+@router.get("/categories", response_model=tuple[CloudCategory, ...])
+def get_cloud_categories(
     request: Request,
     connection: Connection = Depends(get_connection),
-    cache: RevisionedJsonCache = Depends(get_suggestions_cache),
+    cache: RevisionedJsonCache = Depends(get_categories_cache),
 ) -> Response:
-    """Every sample's first suggested tag from the scoring on show, for coloring the cloud by what a model hears.
+    """Every sample's top category from the scoring on show, for coloring the cloud by what a model hears.
 
-    These travel apart from the points the way the hand labels do: a scoring's suggestions never
+    These travel apart from the points the way the hand labels do: a scoring's categories never
     change once written, so the id of the scoring on show is the whole revision, and a viewer joins
     them to the points by hash. An empty answer says no scoring is shown.
     """
     repository = PostgresSampleCategoryRepository(connection)
     shown = repository.shown_experiment_id()
-    return _cached_json(request, cache, shown, lambda: CLOUD_SUGGESTIONS.dump_json(_first_picks(repository, shown)))
+    return _cached_json(request, cache, shown, lambda: CLOUD_CATEGORIES.dump_json(_top_categories(repository, shown)))
 
 
-def _first_picks(
+def _top_categories(
     repository: PostgresSampleCategoryRepository, experiment_id: int | None
-) -> tuple[CloudSuggestion, ...]:
+) -> tuple[CloudCategory, ...]:
     if experiment_id is None:
         return ()
 
     return tuple(
-        CloudSuggestion(sample_hash=pick.sample_hash, path=_path_of(pick.label), score=pick.score)
-        for pick in repository.top_categories(experiment_id)
+        CloudCategory(sample_hash=category.sample_hash, path=_path_of(category.label), score=category.score)
+        for category in repository.top_categories(experiment_id)
     )
 
 
@@ -215,47 +215,47 @@ def _cached_json(
     return Response(content=body, media_type=JSON_MEDIA_TYPE, headers=headers)
 
 
-@router.get("/suggestion-tags", response_model=tuple[TagSummary, ...])
-def get_cloud_suggestion_tags(
+@router.get("/category-tags", response_model=tuple[TagSummary, ...])
+def get_cloud_category_tags(
     request: Request,
     connection: Connection = Depends(get_connection),
-    cache: RevisionedJsonCache = Depends(get_suggestion_tags_cache),
+    cache: RevisionedJsonCache = Depends(get_category_tags_cache),
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
 ) -> Response:
-    """Every tag the scoring on show suggests first for some sample, with how many and a lasting rank.
+    """Every tag the scoring on show gives as a top category, with how many and a lasting rank.
 
     A specification counts toward its top level the way a written label's does, so the legend can
-    paint by top level while the suggestions name what is under it. The rank is the tag's place in
+    paint by top level while the categories name what is under it. The rank is the tag's place in
     the vocabulary the scoring ranked, recorded with the scoring, a top level taking the place of
     its first entry, so a tag keeps its color across the scorings that share a vocabulary; a tag
     the vocabulary leaves unnamed ranks after the vocabulary, by name.
 
-    The counts come from a group-by over every first pick in the catalog, and every badge naming a
-    sample reads these ranks, so the answer is held like the suggestions beside it: a scoring's
-    picks never change once written, which makes the id of the scoring on show the whole revision.
+    The counts come from a group-by over every top category in the catalog, and every badge naming a
+    sample reads these ranks, so the answer is held like the categories beside it: a scoring's
+    categories never change once written, which makes the id of the scoring on show the whole revision.
     """
     return _cached_json(
         request,
         cache,
         shown_experiment_id,
-        lambda: CLOUD_SUGGESTION_TAGS.dump_json(_tags(connection, shown_experiment_id)),
+        lambda: CLOUD_CATEGORY_TAGS.dump_json(_tags(connection, shown_experiment_id)),
     )
 
 
 def _tags(connection: Connection, experiment_id: int | None) -> tuple[TagSummary, ...]:
-    """The tags one scoring suggests first, each counting toward its top level, in vocabulary order."""
+    """The tags one scoring gives as top categories, each counting toward its top level, in vocabulary order."""
     if experiment_id is None:
         return ()
 
     repository = PostgresSampleCategoryRepository(connection)
-    first_picks: Counter[LabelPath] = Counter()
+    top_categories: Counter[LabelPath] = Counter()
     for label, sample_count in repository.top_category_counts(experiment_id).items():
         for prefix in _prefixes(_path_of(label)):
-            first_picks[prefix] += sample_count
-    ranks = _vocabulary_ranks(connection, experiment_id, first_picks)
+            top_categories[prefix] += sample_count
+    ranks = _vocabulary_ranks(connection, experiment_id, top_categories)
     return tuple(
         TagSummary(path=path, sample_count=count, rank=ranks[path])
-        for path, count in sorted(first_picks.items(), key=lambda item: ranks[item[0]])
+        for path, count in sorted(top_categories.items(), key=lambda item: ranks[item[0]])
     )
 
 
@@ -277,7 +277,7 @@ def get_module_cloud(connection: Connection = Depends(get_connection)) -> tuple[
 
 
 def _path_of(label: str) -> LabelPath:
-    """A suggested label as one tag path, the way a written label's first tag is read."""
+    """A category as one tag path, the way a written label's first tag is read."""
     path, *_ = written_paths(label)
     return path
 

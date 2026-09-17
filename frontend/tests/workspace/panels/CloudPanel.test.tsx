@@ -258,7 +258,7 @@ describe("CloudPanel", () => {
         getModuleCloud.mockResolvedValue([]);
         getSamplePreview.mockResolvedValue({
             display_name: "kick",
-            suggested_label: null,
+            category: null,
             hand_label: null,
             thumbnail: [],
         });
@@ -296,7 +296,7 @@ describe("CloudPanel", () => {
         getModuleCloud.mockResolvedValue([]);
         getSamplePreview.mockResolvedValue({
             display_name: "snare",
-            suggested_label: null,
+            category: null,
             hand_label: null,
             thumbnail: [],
         });

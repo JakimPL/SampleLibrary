@@ -22,7 +22,7 @@ function buildSample(
         depth: 16,
         channels: 1,
         frames: 4096,
-        suggested_label: null,
+        category: null,
         hand_label: null,
         rating: null,
         favorite: false,

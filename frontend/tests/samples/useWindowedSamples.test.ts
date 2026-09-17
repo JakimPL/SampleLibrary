@@ -20,7 +20,7 @@ function buildSample(id: number): SampleSummary {
         frames: 4096,
         occurrence_count: 1,
         display_name: `sample-${String(id)}`,
-        suggested_label: null,
+        category: null,
         hand_label: null,
         rating: null,
         favorite: false,

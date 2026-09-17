@@ -76,7 +76,7 @@ async function readJson<Body>(path: string, backendUrl: string): Promise<Body> {
  * reached, so kicks and snares still gather apart.
  */
 function seedGroupOf(sample: SampleSummary): string {
-    const named = sample.hand_label ?? sample.suggested_label;
+    const named = sample.hand_label ?? sample.category;
     if (named !== null) {
         return topLevelOf(named);
     }

@@ -39,10 +39,10 @@ class DescribedSample(Sample):
 
     ``display_name`` resolves the names the waveform is stored under -- each module occurrence's name
     and each sample file's name -- via `samplecore.naming.choose_dominant_name`.
-    ``suggested_label`` is the closest label the scoring on show heard the sample as, and is ``None``
+    ``category`` is the closest label the scoring on show heard the sample as, and is ``None``
     where no scoring is shown or the scoring reached other samples than this one.
     ``hand_label`` is what a person wrote the sample is; where it is filled in it is what the sample
-    is, and ``suggested_label`` beside it stays what the model heard. ``rating`` and ``favorite``
+    is, and ``category`` beside it stays what the model heard. ``rating`` and ``favorite``
     carry what that person thought of the sample, which is what makes a collection of their own.
     ``size_bytes`` re-exposes ``Sample.stored_bytes`` under its own name: a Pydantic field cannot
     share a name with an inherited plain property without the property silently winning on
@@ -53,7 +53,7 @@ class DescribedSample(Sample):
     """
 
     display_name: str
-    suggested_label: str | None
+    category: str | None
     hand_label: str | None
     rating: Rating | None
     favorite: bool

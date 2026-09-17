@@ -111,7 +111,7 @@ class SampleDistance(BaseModel):
 class SamplePreview(BaseModel):
     """What a glance at a sample shows: its name, what it is taken to be, and the stored thumbnail of its waveform.
 
-    ``suggested_label`` is the closest label the scoring on show heard the sample as, beside the
+    ``category`` is the closest label the scoring on show heard the sample as, beside the
     ``hand_label`` a person wrote. ``thumbnail`` is ``None`` for a sample the thumbnail pass has not
     reached, since a preview with nothing to draw is still a preview with a name.
     """
@@ -119,7 +119,7 @@ class SamplePreview(BaseModel):
     model_config = FROZEN
 
     display_name: str
-    suggested_label: str | None
+    category: str | None
     hand_label: str | None
     thumbnail: tuple[WaveformPeak, ...] | None
 
@@ -136,8 +136,8 @@ class SimilarSample(SamplePreview):
     playback_rate_hz: Rate | None
 
 
-class SuggestedLabel(BaseModel):
-    """One tag a listening model suggests for a sample, in the hand-label grammar, and how sure it was."""
+class ScoredCategory(BaseModel):
+    """One tag a listening model gives a sample, in the hand-label grammar, and how sure it was."""
 
     model_config = FROZEN
 
@@ -150,8 +150,8 @@ class SampleDetail(DescribedSample):
 
     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
-    ``suggestions`` are what the scoring on show of the listening model hears the sample as, closest
-    first, for a person to accept into the hand label or pass over; ``suggested_label`` is the first
+    ``categories`` are what the scoring on show of the listening model hears the sample as, closest
+    first, for a person to accept into the hand label or pass over; ``category`` is the first
     of them.
     """
 
@@ -160,7 +160,7 @@ class SampleDetail(DescribedSample):
     duration_seconds: float
     playback_rates: tuple[SamplePlaybackRate, ...]
     equivalence_member_count: Count
-    suggestions: tuple[SuggestedLabel, ...]
+    categories: tuple[ScoredCategory, ...]
 
 
 def get_selection(
@@ -275,7 +275,7 @@ def get_sample(
     )
     tally = tally_playback_rates(PostgresNoteEventRepository(connection).note_usage_for_sample(sample_hash))
     display_names, _ = PostgresSampleRepository(connection).display_names_and_rates_by_hash([sample_hash])
-    suggestions = _suggestions(connection, sample_hash, shown_experiment_id=shown_experiment_id)
+    categories = _categories(connection, sample_hash, shown_experiment_id=shown_experiment_id)
     return SampleDetail(
         hash=sample.hash,
         depth=sample.depth,
@@ -288,7 +288,7 @@ def get_sample(
         ),
         size_bytes=sample.stored_bytes,
         display_name=display_names.get(sample_hash, NO_DISPLAY_NAME),
-        suggested_label=suggestions[0].label if suggestions else None,
+        category=categories[0].label if categories else None,
         hand_label=annotation.label if annotation is not None else None,
         rating=annotation.rating if annotation is not None else None,
         favorite=annotation.favorite if annotation is not None else False,
@@ -296,20 +296,20 @@ def get_sample(
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
         playback_rates=playback_rates_of(tally),
         equivalence_member_count=len(equivalence_class_members(connection, sample_hash)),
-        suggestions=suggestions,
+        categories=categories,
     )
 
 
-def _suggestions(
+def _categories(
     connection: Connection, sample_hash: str, *, shown_experiment_id: int | None
-) -> tuple[SuggestedLabel, ...]:
-    """The shown scoring's suggestions for one sample, closest first; none for a sample it did not reach."""
+) -> tuple[ScoredCategory, ...]:
+    """The shown scoring's categories for one sample, closest first; none for a sample it did not reach."""
     if shown_experiment_id is None:
         return ()
     repository = PostgresSampleCategoryRepository(connection)
     return tuple(
-        SuggestedLabel(label=suggestion.label, score=suggestion.score)
-        for suggestion in repository.get_many(shown_experiment_id, [sample_hash]).get(sample_hash, ())
+        ScoredCategory(label=category.label, score=category.score)
+        for category in repository.get_many(shown_experiment_id, [sample_hash]).get(sample_hash, ())
     )
 
 
@@ -382,7 +382,7 @@ def _previews_by_hash(
     display_names, _ = PostgresSampleRepository(connection).display_names_and_rates_by_hash(sample_hashes)
     annotations_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(sample_hashes)
     thumbnails_by_hash = PostgresSampleThumbnailRepository(connection).get_many(sample_hashes)
-    suggested_label_by_hash = (
+    top_category_by_hash = (
         {}
         if shown_experiment_id is None
         else PostgresSampleCategoryRepository(connection).top_category_labels(shown_experiment_id, sample_hashes)
@@ -392,7 +392,7 @@ def _previews_by_hash(
         annotation = annotations_by_hash.get(sample_hash)
         previews[sample_hash] = SamplePreview(
             display_name=display_names.get(sample_hash, NO_DISPLAY_NAME),
-            suggested_label=suggested_label_by_hash.get(sample_hash),
+            category=top_category_by_hash.get(sample_hash),
             hand_label=annotation.label if annotation is not None else None,
             thumbnail=peaks_from_thumbnail(thumbnails_by_hash.get(sample_hash)),
         )
@@ -488,7 +488,7 @@ def _similar_sample(
 ) -> SimilarSample:
     return SimilarSample(
         display_name=preview.display_name,
-        suggested_label=preview.suggested_label,
+        category=preview.category,
         hand_label=preview.hand_label,
         thumbnail=preview.thumbnail,
         hash=sample_hash,

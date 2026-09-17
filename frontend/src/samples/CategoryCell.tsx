@@ -43,7 +43,7 @@ export function CategoryCell({ sample, label, onCommit }: CategoryCellProps): Re
                 setIsEditing(true);
             }}
         >
-            <CategoryBadge sampleHash={sample.hash} category={sample.suggested_label} handLabel={sample.hand_label} />
+            <CategoryBadge sampleHash={sample.hash} category={sample.category} handLabel={sample.hand_label} />
         </button>
     );
 }

@@ -19,7 +19,7 @@ function buildSimilar(overrides: Partial<SimilarSample> = {}): SimilarSample {
         distance: 0.125,
         playback_rate_hz: null,
         display_name: "kick_808",
-        suggested_label: "BASS DRUM",
+        category: "BASS DRUM",
         hand_label: null,
         thumbnail: null,
         ...overrides,

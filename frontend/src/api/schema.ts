@@ -265,7 +265,7 @@ export interface paths {
          *     coordinates' count and last write, the playback rates on file, the modules cataloged and the
          *     sample files scanned are what a pipeline moves, and four scalar queries say whether any has. A caller that accepts
          *     gzip receives the body compressed once at the best level rather than per request. The scoring on
-         *     show belongs to the revision of `/cloud/suggestions` alone, since the points carry none of it.
+         *     show belongs to the revision of `/cloud/categories` alone, since the points carry none of it.
          */
         readonly get: operations["get_cloud_api_cloud_get"];
         readonly put?: never;
@@ -302,7 +302,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/api/cloud/suggestions": {
+    readonly "/api/cloud/categories": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -310,14 +310,14 @@ export interface paths {
             readonly cookie?: never;
         };
         /**
-         * Get Cloud Suggestions
-         * @description Every sample's first suggested tag from the scoring on show, for coloring the cloud by what a model hears.
+         * Get Cloud Categories
+         * @description Every sample's top category from the scoring on show, for coloring the cloud by what a model hears.
          *
-         *     These travel apart from the points the way the hand labels do: a scoring's suggestions never
+         *     These travel apart from the points the way the hand labels do: a scoring's categories never
          *     change once written, so the id of the scoring on show is the whole revision, and a viewer joins
          *     them to the points by hash. An empty answer says no scoring is shown.
          */
-        readonly get: operations["get_cloud_suggestions_api_cloud_suggestions_get"];
+        readonly get: operations["get_cloud_categories_api_cloud_categories_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -326,7 +326,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/api/cloud/suggestion-tags": {
+    readonly "/api/cloud/category-tags": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -334,20 +334,20 @@ export interface paths {
             readonly cookie?: never;
         };
         /**
-         * Get Cloud Suggestion Tags
-         * @description Every tag the scoring on show suggests first for some sample, with how many and a lasting rank.
+         * Get Cloud Category Tags
+         * @description Every tag the scoring on show gives as a top category, with how many and a lasting rank.
          *
-         *     A specification counts toward its category the way a written label's does, so the legend can
-         *     paint by category while the suggestions name what is under it. The rank is the tag's place in
-         *     the vocabulary the scoring ranked, recorded with the scoring, a category taking the place of
+         *     A specification counts toward its top level the way a written label's does, so the legend can
+         *     paint by top level while the categories name what is under it. The rank is the tag's place in
+         *     the vocabulary the scoring ranked, recorded with the scoring, a top level taking the place of
          *     its first entry, so a tag keeps its color across the scorings that share a vocabulary; a tag
          *     the vocabulary leaves unnamed ranks after the vocabulary, by name.
          *
-         *     The counts come from a group-by over every first pick in the catalog, and every badge naming a
-         *     sample reads these ranks, so the answer is held like the suggestions beside it: a scoring's
-         *     picks never change once written, which makes the id of the scoring on show the whole revision.
+         *     The counts come from a group-by over every top category in the catalog, and every badge naming a
+         *     sample reads these ranks, so the answer is held like the categories beside it: a scoring's
+         *     categories never change once written, which makes the id of the scoring on show the whole revision.
          */
-        readonly get: operations["get_cloud_suggestion_tags_api_cloud_suggestion_tags_get"];
+        readonly get: operations["get_cloud_category_tags_api_cloud_category_tags_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -548,8 +548,8 @@ export interface components {
          * @description The three things a person can decide about a sample.
          *
          *     The label says what the sample is, as free text: it records what a listener actually decided, in
-         *     their own words ahead of any vocabulary being settled, and wins over what the listening model
-         *     suggests wherever it exists. It is kept in upper case, which is the case it is
+         *     their own words ahead of any vocabulary being settled, and wins over the category the listening
+         *     model gives it wherever it exists. It is kept in upper case, which is the case it is
          *     shown in, so the vocabulary a person builds by habit collects one entry per wording. The rating and the favorite mark say what the
          *     listener thought of it, which is what turns browsing the library into a collection of a person's
          *     own.
@@ -607,6 +607,21 @@ export interface components {
          */
         readonly ChannelLayout: 1 | 2;
         /**
+         * CloudCategory
+         * @description What a listening model hears one sample as first: its top category as a tag path, and how sure it was.
+         *
+         *     The top category is the one a viewer paints the point with, the way the first written tag of a
+         *     hand label is, and the one the legend counts; a sample's detail lists the ones behind it.
+         */
+        readonly CloudCategory: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            /** Path */
+            readonly path: readonly string[];
+            /** Score */
+            readonly score: number;
+        };
+        /**
          * CloudLabel
          * @description What a person decided one sample is, as the tag paths they wrote, in the order they wrote them.
          *
@@ -618,21 +633,6 @@ export interface components {
             readonly sample_hash: string;
             /** Paths */
             readonly paths: readonly (readonly string[])[];
-        };
-        /**
-         * CloudSuggestion
-         * @description What a listening model hears one sample as first: its closest suggested tag path, and how sure it was.
-         *
-         *     The first pick is the one a viewer paints the point with, the way the first written tag of a
-         *     hand label is, and the one the legend counts; a sample's detail lists the picks behind it.
-         */
-        readonly CloudSuggestion: {
-            /** Sample Hash */
-            readonly sample_hash: string;
-            /** Path */
-            readonly path: readonly string[];
-            /** Score */
-            readonly score: number;
         };
         /**
          * ErrorDetail
@@ -1003,7 +1003,7 @@ export interface components {
          *     catalog is a hundred thousand of these at once: when the run that placed them was computed says
          *     nothing about any one point, and a timestamp per point is several megabytes over the wire. What
          *     colors a point travels apart for the same reason: the hand labels through `/cloud/labels`, and
-         *     what the listening model heard through `/cloud/suggestions`.
+         *     what the listening model heard through `/cloud/categories`.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -1021,8 +1021,8 @@ export interface components {
          *
          *     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
          *     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
-         *     ``suggestions`` are what the scoring on show of the listening model hears the sample as, closest
-         *     first, for a person to accept into the hand label or pass over; ``suggested_label`` is the first
+         *     ``categories`` are what the scoring on show of the listening model hears the sample as, closest
+         *     first, for a person to accept into the hand label or pass over; ``category`` is the first
          *     of them.
          */
         readonly SampleDetail: {
@@ -1034,8 +1034,8 @@ export interface components {
             readonly frames: number;
             /** Display Name */
             readonly display_name: string;
-            /** Suggested Label */
-            readonly suggested_label: string | null;
+            /** Category */
+            readonly category: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Rating */
@@ -1056,8 +1056,8 @@ export interface components {
             readonly playback_rates: readonly components["schemas"]["SamplePlaybackRate"][];
             /** Equivalence Member Count */
             readonly equivalence_member_count: number;
-            /** Suggestions */
-            readonly suggestions: readonly components["schemas"]["SuggestedLabel"][];
+            /** Categories */
+            readonly categories: readonly components["schemas"]["ScoredCategory"][];
         };
         /**
          * SampleDistance
@@ -1158,15 +1158,15 @@ export interface components {
          * SamplePreview
          * @description What a glance at a sample shows: its name, what it is taken to be, and the stored thumbnail of its waveform.
          *
-         *     ``suggested_label`` is the closest label the scoring on show heard the sample as, beside the
+         *     ``category`` is the closest label the scoring on show heard the sample as, beside the
          *     ``hand_label`` a person wrote. ``thumbnail`` is ``None`` for a sample the thumbnail pass has not
          *     reached, since a preview with nothing to draw is still a preview with a name.
          */
         readonly SamplePreview: {
             /** Display Name */
             readonly display_name: string;
-            /** Suggested Label */
-            readonly suggested_label: string | null;
+            /** Category */
+            readonly category: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Thumbnail */
@@ -1233,8 +1233,8 @@ export interface components {
             readonly frames: number;
             /** Display Name */
             readonly display_name: string;
-            /** Suggested Label */
-            readonly suggested_label: string | null;
+            /** Category */
+            readonly category: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Rating */
@@ -1255,6 +1255,16 @@ export interface components {
             readonly equivalence_member_count: number;
         };
         /**
+         * ScoredCategory
+         * @description One tag a listening model gives a sample, in the hand-label grammar, and how sure it was.
+         */
+        readonly ScoredCategory: {
+            /** Label */
+            readonly label: string;
+            /** Score */
+            readonly score: number;
+        };
+        /**
          * SimilarSample
          * @description One neighbor in a sample's spectral-distance nearest-neighbor listing: a glance at it, how far it sits, and the rate to hear it at.
          *
@@ -1264,8 +1274,8 @@ export interface components {
         readonly SimilarSample: {
             /** Display Name */
             readonly display_name: string;
-            /** Suggested Label */
-            readonly suggested_label: string | null;
+            /** Category */
+            readonly category: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Thumbnail */
@@ -1276,16 +1286,6 @@ export interface components {
             readonly distance: number;
             /** Playback Rate Hz */
             readonly playback_rate_hz: number | null;
-        };
-        /**
-         * SuggestedLabel
-         * @description One tag a listening model suggests for a sample, in the hand-label grammar, and how sure it was.
-         */
-        readonly SuggestedLabel: {
-            /** Label */
-            readonly label: string;
-            /** Score */
-            readonly score: number;
         };
         /**
          * TagSummary
@@ -1832,7 +1832,7 @@ export interface operations {
             };
         };
     };
-    readonly get_cloud_suggestions_api_cloud_suggestions_get: {
+    readonly get_cloud_categories_api_cloud_categories_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1847,12 +1847,12 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": readonly components["schemas"]["CloudSuggestion"][];
+                    readonly "application/json": readonly components["schemas"]["CloudCategory"][];
                 };
             };
         };
     };
-    readonly get_cloud_suggestion_tags_api_cloud_suggestion_tags_get: {
+    readonly get_cloud_category_tags_api_cloud_category_tags_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;

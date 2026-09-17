@@ -117,14 +117,14 @@ def test_list_samples_returns_a_page(client: TestClient, connection: Connection)
     assert {item["hash"] for item in body["items"]} == {first.hash, second.hash}
 
 
-def test_list_samples_carry_the_shown_scoring_s_first_pick(client: TestClient, connection: Connection) -> None:
+def test_list_samples_carry_the_shown_scoring_s_top_category(client: TestClient, connection: Connection) -> None:
     scored = _insert_sample(connection, SAMPLE_HASH_A)
     _insert_sample(connection, SAMPLE_HASH_B)
     seed_scoring(connection, {scored.hash: (("BASS DRUM", 0.9), ("TOM", 0.1))})
 
     body = client.get("/samples").json()
 
-    by_hash = {item["hash"]: item["suggested_label"] for item in body["items"]}
+    by_hash = {item["hash"]: item["category"] for item in body["items"]}
     assert by_hash == {scored.hash: "BASS DRUM", SAMPLE_HASH_B: None}
 
 
@@ -133,7 +133,7 @@ def test_list_samples_name_no_label_while_no_scoring_is_shown(client: TestClient
 
     body = client.get("/samples").json()
 
-    assert body["items"][0]["suggested_label"] is None
+    assert body["items"][0]["category"] is None
 
 
 def test_list_samples_ranks_by_occurrence_count(client: TestClient, connection: Connection) -> None:
@@ -326,7 +326,7 @@ def test_get_sample_returns_detail_with_occurrences_and_module_context(
     }
 
 
-def test_get_sample_carries_the_shown_scoring_s_suggestions_closest_first(
+def test_get_sample_carries_the_shown_scoring_s_categories_closest_first(
     client: TestClient, connection: Connection
 ) -> None:
     sample = _insert_sample(connection, SAMPLE_HASH_A)
@@ -336,10 +336,10 @@ def test_get_sample_carries_the_shown_scoring_s_suggestions_closest_first(
     body = client.get(f"/samples/{sample.hash}").json()
     other = client.get(f"/samples/{SAMPLE_HASH_B}").json()
 
-    assert body["suggestions"] == [{"label": "BASS DRUM", "score": 0.8}, {"label": "SNARE", "score": 0.3}]
-    assert body["suggested_label"] == "BASS DRUM"
-    assert other["suggestions"] == []
-    assert other["suggested_label"] is None
+    assert body["categories"] == [{"label": "BASS DRUM", "score": 0.8}, {"label": "SNARE", "score": 0.3}]
+    assert body["category"] == "BASS DRUM"
+    assert other["categories"] == []
+    assert other["category"] is None
 
 
 def test_get_sample_falls_back_to_the_dominant_occurrence_rate(client: TestClient, connection: Connection) -> None:
@@ -471,19 +471,21 @@ def test_get_sample_preview_reads_the_name_the_labels_and_the_stored_thumbnail(
     assert response.status_code == 200
     assert response.json() == {
         "display_name": "kick",
-        "suggested_label": None,
+        "category": None,
         "hand_label": None,
         "thumbnail": [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}],
     }
 
 
-def test_get_sample_preview_carries_the_shown_scoring_s_first_pick(client: TestClient, connection: Connection) -> None:
+def test_get_sample_preview_carries_the_shown_scoring_s_top_category(
+    client: TestClient, connection: Connection
+) -> None:
     sample = _insert_sample(connection, SAMPLE_HASH_A)
     seed_scoring(connection, {sample.hash: (("HI-HAT: CLOSED", 0.7), ("SNARE", 0.2))})
 
     body = client.get(f"/samples/{sample.hash}/preview").json()
 
-    assert body["suggested_label"] == "HI-HAT: CLOSED"
+    assert body["category"] == "HI-HAT: CLOSED"
 
 
 def test_get_sample_preview_has_no_thumbnail_before_the_pass_reaches_the_sample(
@@ -624,9 +626,9 @@ def test_get_similar_samples_carry_what_a_glance_shows(client: TestClient, conne
 
     body = client.get(f"/samples/{target.hash}/similar").json()
 
-    assert [
-        (item["display_name"], item["suggested_label"], item["hand_label"], item["thumbnail"]) for item in body
-    ] == [("kick", None, None, [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}])]
+    assert [(item["display_name"], item["category"], item["hand_label"], item["thumbnail"]) for item in body] == [
+        ("kick", None, None, [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}])
+    ]
 
 
 def test_get_similar_samples_respects_the_limit(client: TestClient, connection: Connection) -> None:
