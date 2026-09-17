@@ -4,7 +4,7 @@ import WaveSurfer from "wavesurfer.js";
 
 import { readThemeColor } from "../theme/readThemeColor";
 import { useThemeSignal } from "../theme/useThemeSignal";
-import { playbackRateFor } from "./nominalRate";
+import { soundedRate } from "./nominalRate";
 
 const MIN_PIXELS_PER_SECOND = 100;
 const CURSOR_WIDTH_PX = 2;
@@ -18,6 +18,14 @@ const PROGRESS_COLOR_PROPERTY = "--wave-progress";
 const PROGRESS_COLOR_FALLBACK = "#a8690f";
 const CURSOR_COLOR_PROPERTY = "--wave-cursor";
 const CURSOR_COLOR_FALLBACK = "#a8690f";
+
+/** How a waveform is drawn and sounded: the rate it plays at, the seconds its width stands for, whether a pointer seeks it, and the color it wears. */
+export interface WaveformOptions {
+    readonly rateHz: number | null;
+    readonly axisSeconds: number | null;
+    readonly interactive: boolean;
+    readonly waveColor: string | null;
+}
 
 export interface WaveformPlayer {
     readonly containerRef: RefObject<HTMLDivElement | null>;
@@ -38,9 +46,9 @@ interface WaveformColors {
     readonly cursorColor: string;
 }
 
-function readWaveformColors(): WaveformColors {
+function readWaveformColors(waveColor: string | null): WaveformColors {
     return {
-        waveColor: readThemeColor(WAVE_COLOR_PROPERTY, WAVE_COLOR_FALLBACK),
+        waveColor: waveColor ?? readThemeColor(WAVE_COLOR_PROPERTY, WAVE_COLOR_FALLBACK),
         progressColor: readThemeColor(PROGRESS_COLOR_PROPERTY, PROGRESS_COLOR_FALLBACK),
         cursorColor: readThemeColor(CURSOR_COLOR_PROPERTY, CURSOR_COLOR_FALLBACK),
     };
@@ -51,23 +59,62 @@ function waveformHeightFor(containerWidthPx: number, containerHeightPx: number):
     return Math.max(MIN_WAVEFORM_HEIGHT_PX, Math.min(containerHeightPx, maxHeightForAspectRatio));
 }
 
+interface AxisDrawing {
+    readonly minPxPerSec: number;
+    readonly fillParent: boolean;
+    readonly autoScroll: boolean;
+    readonly autoCenter: boolean;
+    readonly hideScrollbar: boolean;
+}
+
 /**
- * Wraps one wavesurfer.js instance scoped to a single sample's audio -- the only file in this
- * codebase touching wavesurfer's own API. Decoding the real audio via Web Audio, rather than
- * rendering our own coarse preview peaks, gives the panel a properly detailed, scrollable contour.
- * `setRateHz` takes the occurrence's real tracker rate and never preserves pitch when applying
- * it: a tracker occurrence's rate is its pitch, not an independent tempo control. Waveform colors
- * are read from the theme's CSS custom properties at creation, and re-applied through wavesurfer's
- * own `setOptions` whenever `useThemeSignal` reports the resolved theme could have changed, since
- * a canvas-backed visual cannot pick up a `var()` change on its own the way a styled element does.
- * The rendered height is likewise recomputed and re-applied on every container resize: wavesurfer's
- * own resize handling only reacts to a change in *width* unless `height` is literally the string
- * `"auto"`, which would fill the container's full height with no aspect-ratio cap.
+ * How wide a second is drawn.
+ *
+ * With no axis named, a second takes a fixed number of pixels and the contour scrolls under a
+ * cursor it keeps centered, which is what reads a long sample closely. An axis of so many seconds
+ * fits exactly that span to the container instead, so audio shorter than the axis takes its own
+ * share of the width and whatever is drawn beside it stands second for second against it.
  */
-export function useWaveformPlayer(audioUrl: string, initialRateHz: number): WaveformPlayer {
+function axisDrawing(axisSeconds: number | null, containerWidthPx: number): AxisDrawing {
+    if (axisSeconds === null) {
+        return {
+            minPxPerSec: MIN_PIXELS_PER_SECOND,
+            fillParent: true,
+            autoScroll: true,
+            autoCenter: true,
+            hideScrollbar: false,
+        };
+    }
+    return {
+        minPxPerSec: containerWidthPx / axisSeconds,
+        fillParent: false,
+        autoScroll: false,
+        autoCenter: false,
+        hideScrollbar: true,
+    };
+}
+
+/**
+ * Wraps one wavesurfer.js instance scoped to a single audio source -- the only file in this
+ * codebase touching wavesurfer's own API. Decoding the real audio via Web Audio, rather than
+ * rendering our own coarse preview peaks, gives the panel a properly detailed contour.
+ * `setRateHz` takes the occurrence's real tracker rate and never preserves pitch when applying
+ * it: a tracker occurrence's rate is its pitch, not an independent tempo control, and a source
+ * stating its own rate is sounded as it stands. Waveform colors are read from the theme's CSS
+ * custom properties at creation, with a caller's own color standing in for the theme's fill where
+ * one is given, and re-applied through wavesurfer's own `setOptions` whenever `useThemeSignal`
+ * reports the resolved theme could have changed, since a canvas-backed visual cannot pick up a
+ * `var()` change on its own the way a styled element does. The rendered height and, for a fixed
+ * axis, the pixels each second takes are likewise recomputed and re-applied on every container
+ * resize: wavesurfer's own resize handling only reacts to a change in *width* unless `height` is
+ * literally the string `"auto"`, which would fill the container's full height with no
+ * aspect-ratio cap.
+ */
+export function useWaveformPlayer(audioUrl: string, options: WaveformOptions): WaveformPlayer {
+    const { rateHz, axisSeconds, interactive, waveColor } = options;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const waveSurferRef = useRef<WaveSurfer | null>(null);
-    const playbackRateRef = useRef(playbackRateFor(initialRateHz));
+    const playbackRateRef = useRef(soundedRate(rateHz));
     const [isReady, setIsReady] = useState(false);
     const [hasFailed, setHasFailed] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -87,22 +134,22 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         setCurrentTimeSeconds(0);
         setDurationSeconds(0);
 
-        playbackRateRef.current = playbackRateFor(initialRateHz);
+        playbackRateRef.current = soundedRate(rateHz);
         const initialSize = container.getBoundingClientRect();
         const waveSurfer = WaveSurfer.create({
             container,
             url: audioUrl,
             height: waveformHeightFor(initialSize.width, initialSize.height),
             cursorWidth: CURSOR_WIDTH_PX,
-            minPxPerSec: MIN_PIXELS_PER_SECOND,
             normalize: true,
-            autoScroll: true,
-            autoCenter: true,
-            ...readWaveformColors(),
+            interact: interactive,
+            ...axisDrawing(axisSeconds, initialSize.width),
+            ...readWaveformColors(waveColor),
         });
         waveSurferRef.current = waveSurfer;
 
         let lastAppliedHeightPx = waveformHeightFor(initialSize.width, initialSize.height);
+        let lastAppliedPixelsPerSecond = axisDrawing(axisSeconds, initialSize.width).minPxPerSec;
         const resizeObserver = new ResizeObserver((entries) => {
             const entry = entries[0];
             if (entry === undefined) {
@@ -110,9 +157,11 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             }
 
             const nextHeightPx = waveformHeightFor(entry.contentRect.width, entry.contentRect.height);
-            if (nextHeightPx !== lastAppliedHeightPx) {
+            const nextPixelsPerSecond = axisDrawing(axisSeconds, entry.contentRect.width).minPxPerSec;
+            if (nextHeightPx !== lastAppliedHeightPx || nextPixelsPerSecond !== lastAppliedPixelsPerSecond) {
                 lastAppliedHeightPx = nextHeightPx;
-                waveSurfer.setOptions({ height: nextHeightPx });
+                lastAppliedPixelsPerSecond = nextPixelsPerSecond;
+                waveSurfer.setOptions({ height: nextHeightPx, minPxPerSec: nextPixelsPerSecond });
             }
         });
         resizeObserver.observe(container);
@@ -146,13 +195,13 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             waveSurfer.destroy();
             waveSurferRef.current = null;
         };
-        // initialRateHz seeds a new instance alone; setRateHz carries every later rate.
+        // rateHz and waveColor seed a new instance alone; setRateHz and the theme effect carry every later one.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [audioUrl]);
+    }, [audioUrl, axisSeconds, interactive]);
 
     useEffect(() => {
-        waveSurferRef.current?.setOptions(readWaveformColors());
-    }, [themeSignal.preference, themeSignal.systemVersion]);
+        waveSurferRef.current?.setOptions(readWaveformColors(waveColor));
+    }, [waveColor, themeSignal.preference, themeSignal.systemVersion]);
 
     return {
         containerRef,
@@ -171,7 +220,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             waveSurferRef.current?.setTime(seconds);
         },
         setRateHz: (occurrenceRateHz: number) => {
-            playbackRateRef.current = playbackRateFor(occurrenceRateHz);
+            playbackRateRef.current = soundedRate(occurrenceRateHz);
             waveSurferRef.current?.setPlaybackRate(playbackRateRef.current, false);
         },
     };

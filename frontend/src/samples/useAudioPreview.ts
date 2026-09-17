@@ -1,7 +1,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 import { sampleAudioUrl } from "../api/samples";
-import { playbackRateFor } from "./nominalRate";
+import { soundedRate } from "./nominalRate";
 
 /** One thing the shared preview element can play: where its audio is, the key it is reported under, and the rate to run it at, or `null` to run it at the rate the file states. */
 export interface PreviewSource {
@@ -21,12 +21,23 @@ interface PreviewState {
     readonly failure: PreviewFailure | null;
 }
 
+/** How far the sound now playing has got: which preview it is, where it stands, and how long it runs. */
+export interface PreviewProgress {
+    readonly key: string | null;
+    readonly currentTimeSeconds: number;
+    readonly durationSeconds: number;
+}
+
+const AT_THE_START: PreviewProgress = { key: null, currentTimeSeconds: 0, durationSeconds: 0 };
+
 const UNPLAYABLE_MESSAGE = "the audio could not be played";
 
 let audioElement: HTMLAudioElement | null = null;
 let state: PreviewState = { playingKey: null, failure: null };
+let progress: PreviewProgress = AT_THE_START;
 let playSequence = 0;
 const listeners = new Set<() => void>();
+const progressListeners = new Set<() => void>();
 
 function publish(next: PreviewState): void {
     state = next;
@@ -35,23 +46,35 @@ function publish(next: PreviewState): void {
     }
 }
 
-function sharedElement(): HTMLAudioElement {
-    if (audioElement === null) {
-        audioElement = new Audio();
-        audioElement.addEventListener("ended", () => {
-            publish({ ...state, playingKey: null });
-        });
+function publishProgress(next: PreviewProgress): void {
+    progress = next;
+    for (const listener of progressListeners) {
+        listener();
     }
-    return audioElement;
 }
 
-/** How fast to run the stored file so a preview sounds at the rate its caller named.
- *
- * A caller with no rate to hand passes ``null`` and hears the file as stored, which is the honest
- * reading of a sample whose rate the catalog does not know.
- */
-export function previewPlaybackRate(playbackRateHz: number | null): number {
-    return playbackRateHz === null ? 1 : playbackRateFor(playbackRateHz);
+/** Where the element stands, with a length it states only once it knows one. */
+function progressOf(element: HTMLAudioElement): PreviewProgress {
+    return {
+        key: state.playingKey,
+        currentTimeSeconds: element.currentTime,
+        durationSeconds: Number.isFinite(element.duration) ? element.duration : 0,
+    };
+}
+
+function sharedElement(): HTMLAudioElement {
+    if (audioElement === null) {
+        const element = new Audio();
+        element.addEventListener("ended", () => {
+            publish({ ...state, playingKey: null });
+            publishProgress(AT_THE_START);
+        });
+        element.addEventListener("timeupdate", () => {
+            publishProgress(progressOf(element));
+        });
+        audioElement = element;
+    }
+    return audioElement;
 }
 
 /** A stored sample as a preview source, keyed by its own hash. */
@@ -70,11 +93,12 @@ function play(source: PreviewSource): void {
     element.src = source.url;
     // Loading a source resets the rate to its default, so both carry the sample's rate after the source
     // is set; a tracker's rate is its pitch, so the pitch follows the rate.
-    const playbackRate = previewPlaybackRate(source.playbackRateHz);
+    const playbackRate = soundedRate(source.playbackRateHz);
     element.preservesPitch = false;
     element.defaultPlaybackRate = playbackRate;
     element.playbackRate = playbackRate;
     publish({ playingKey: source.key, failure: null });
+    publishProgress({ ...AT_THE_START, key: source.key });
     element.play().catch((error: unknown) => {
         // A play the next one replaced rejects as it is cut off, which says nothing about the sound now playing.
         if (sequence !== playSequence || isSuperseded(error)) {
@@ -97,6 +121,29 @@ function subscribe(listener: () => void): () => void {
 
 function getSnapshot(): PreviewState {
     return state;
+}
+
+function subscribeProgress(listener: () => void): () => void {
+    progressListeners.add(listener);
+    return () => {
+        progressListeners.delete(listener);
+    };
+}
+
+function getProgressSnapshot(): PreviewProgress {
+    return progress;
+}
+
+/**
+ * How far the preview now sounding has got, as the shared element reports it, so a view drawing
+ * that sound can follow it.
+ *
+ * It is subscribed to apart from `useAudioPreview`, which publishes only as a preview starts, ends
+ * or fails: a listing's play buttons then hold still while a sound runs, and the few views that
+ * draw a playhead are the only ones that re-render with it.
+ */
+export function usePreviewProgress(): PreviewProgress {
+    return useSyncExternalStore(subscribeProgress, getProgressSnapshot);
 }
 
 export interface AudioPreview {

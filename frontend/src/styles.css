@@ -24,6 +24,8 @@
     --shadow: 0 8px 24px rgb(20 23 28 / 14%);
     --range-thumb-size: 14px;
     --wave-fill: #b9bec9;
+    --wave-first: #2f6f9f;
+    --wave-second: #c0622a;
     --wave-bg: var(--surface-1);
     --wave-cursor: var(--accent);
     --wave-progress: var(--accent);
@@ -108,6 +110,8 @@
         --badge-tint-strength: 16%;
         --shadow: 0 12px 32px rgb(0 0 0 / 45%);
         --wave-fill: #4a5364;
+        --wave-first: #4f8fc4;
+        --wave-second: #d98246;
         --cloud-point-uncategorized: #6e6d64;
         --cloud-hover-color: #fff;
         --cloud-point-opacity: 0.85;
@@ -147,6 +151,8 @@
     --badge-tint-strength: 16%;
     --shadow: 0 12px 32px rgb(0 0 0 / 45%);
     --wave-fill: #4a5364;
+    --wave-first: #4f8fc4;
+    --wave-second: #d98246;
     --cloud-point-uncategorized: #6e6d64;
     --cloud-hover-color: #fff;
     --cloud-point-opacity: 0.85;
@@ -184,6 +190,8 @@
     --badge-tint-strength: 16%;
     --shadow: 0 2px 6px rgb(0 0 0 / 25%);
     --wave-fill: #f00;
+    --wave-first: #00a8a8;
+    --wave-second: #f00;
     --wave-bg: #000;
     --wave-cursor: #c0c0c0;
     --wave-progress: var(--wave-fill);
@@ -1213,10 +1221,28 @@ table.data td .annotation-editor-input {
     background: var(--wave-bg);
 }
 
-/* wavesurfer's host div is a flex item here, which shrinks to its content; the full width keeps the
+/* wavesurfer's host is a flex item here, which shrinks to its content; the full width keeps the
    waveform wide. */
-.wave-canvas-wrap > div {
+.wave-host {
     width: 100%;
+}
+
+.wave-traces {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.wave-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--wave-cursor);
+    pointer-events: none;
 }
 
 .wave-canvas-wrap canvas {

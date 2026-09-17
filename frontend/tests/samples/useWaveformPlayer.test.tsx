@@ -56,8 +56,55 @@ function latestInstance(): (typeof instances)[number] {
     return instance;
 }
 
-function Harness({ audioUrl, rateHz }: { audioUrl: string; rateHz: number }): ReactElement {
-    const player: WaveformPlayer = useWaveformPlayer(audioUrl, rateHz);
+/** How the axis a waveform is drawn on states itself in wavesurfer's own options. */
+interface AxisCase {
+    readonly name: string;
+    readonly axisSeconds: number | null;
+    readonly pixelsPerSecond: number | null;
+    readonly fillParent: boolean;
+    readonly autoScroll: boolean;
+}
+
+// The container reads 600 CSS pixels wide under jsdom, which tests/setup.ts states for every element.
+const CONTAINER_WIDTH_PX = 600;
+
+const AXIS_CASES: readonly AxisCase[] = [
+    {
+        name: "scrolls a contour of a fixed detail under a centered cursor when no axis is named",
+        axisSeconds: null,
+        pixelsPerSecond: null,
+        fillParent: true,
+        autoScroll: true,
+    },
+    {
+        name: "fits the seconds an axis names to the width of its container",
+        axisSeconds: 2,
+        pixelsPerSecond: CONTAINER_WIDTH_PX / 2,
+        fillParent: false,
+        autoScroll: false,
+    },
+    {
+        name: "leaves audio half the length of its axis half the width to stand in",
+        axisSeconds: 4,
+        pixelsPerSecond: CONTAINER_WIDTH_PX / 4,
+        fillParent: false,
+        autoScroll: false,
+    },
+];
+
+interface HarnessProps {
+    readonly audioUrl: string;
+    readonly rateHz: number | null;
+    readonly axisSeconds?: number | null;
+}
+
+function Harness({ audioUrl, rateHz, axisSeconds = null }: HarnessProps): ReactElement {
+    const player: WaveformPlayer = useWaveformPlayer(audioUrl, {
+        rateHz,
+        axisSeconds,
+        interactive: true,
+        waveColor: null,
+    });
     return (
         <div>
             <div data-testid="container" ref={player.containerRef} />
@@ -148,6 +195,31 @@ describe("useWaveformPlayer", () => {
         expect(options.waveColor).toBeTruthy();
         expect(options.progressColor).toBeTruthy();
         expect(options.cursorColor).toBeTruthy();
+    });
+
+    it.each(AXIS_CASES)("$name", ({ axisSeconds, pixelsPerSecond, fillParent, autoScroll }: AxisCase) => {
+        render(<Harness audioUrl="/samples/abc/audio" rateHz={8363} axisSeconds={axisSeconds} />);
+
+        const options = createMock.mock.calls[0]?.[0] as {
+            minPxPerSec: number;
+            fillParent: boolean;
+            autoScroll: boolean;
+        };
+        expect(options.fillParent).toBe(fillParent);
+        expect(options.autoScroll).toBe(autoScroll);
+        if (pixelsPerSecond !== null) {
+            expect(options.minPxPerSec).toBe(pixelsPerSecond);
+        }
+    });
+
+    it("sounds a source that states its own rate as it stands", () => {
+        render(<Harness audioUrl="/api/morph/audio" rateHz={null} />);
+
+        act(() => {
+            latestInstance().emit("ready", 1.5);
+        });
+
+        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(1, false);
     });
 
     it("re-applies colors through setOptions when the theme preference changes", () => {

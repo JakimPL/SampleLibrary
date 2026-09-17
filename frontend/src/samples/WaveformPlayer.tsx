@@ -1,9 +1,9 @@
 import type { ChangeEvent, ReactElement } from "react";
 
 import { sampleAudioUrl } from "../api/samples";
-import { classNames } from "../shared/classNames";
 import { formatDuration } from "../shared/format";
 import { useWaveformPlayer } from "./useWaveformPlayer";
+import { NO_TRACES, WaveformView } from "./WaveformView";
 
 export interface RateOption {
     readonly rateHz: number;
@@ -23,7 +23,12 @@ function describeRateOption(option: RateOption): string {
 }
 
 export function WaveformPlayer({ sampleHash, rateHz, rateOptions, onRateChange }: WaveformPlayerProps): ReactElement {
-    const player = useWaveformPlayer(sampleAudioUrl(sampleHash), rateHz);
+    const player = useWaveformPlayer(sampleAudioUrl(sampleHash), {
+        rateHz,
+        axisSeconds: null,
+        interactive: true,
+        waveColor: null,
+    });
 
     function handleTogglePlay(): void {
         if (player.isPlaying) {
@@ -41,9 +46,11 @@ export function WaveformPlayer({ sampleHash, rateHz, rateOptions, onRateChange }
 
     return (
         <div className="wave-panel">
-            <div
-                className={classNames("wave-canvas-wrap", player.isPlaying && "is-playing")}
-                ref={player.containerRef}
+            <WaveformView
+                containerRef={player.containerRef}
+                isPlaying={player.isPlaying}
+                traces={NO_TRACES}
+                playheadFraction={null}
             />
             <div className="transport">
                 <button type="button" className="play-btn" onClick={handleTogglePlay} disabled={!player.isReady}>
