@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplemorph.envelope.settings import EnvelopeSettings
-from samplemorph.envelope.split import spectral_envelope, split_spectrum
+from samplemorph.envelope.split import envelope_cepstrum, envelope_from_cepstrum, spectral_envelope, split_spectrum
 from tests.samplemorph.transport.conftest import BIN_SPACING_HZ, CLIP_FRAMES, analysis_of, sines, tone
 
 SETTINGS: Final[EnvelopeSettings] = EnvelopeSettings()
@@ -17,6 +17,8 @@ ENVELOPE_STEP_CEILING_DB: Final[float] = 3.0
 EXCITATION_CONTRAST_FLOOR_DB: Final[float] = 20.0
 FLAT_WITHIN_DB: Final[float] = 0.01
 FLOOR_TOLERANCE_DB: Final[float] = 0.01
+SECOND_TONE_HZ: Final[float] = 700.0
+LOG_RATIO_TOLERANCE: Final[float] = 1e-5
 
 
 def _magnitude(mono: NDArray[np.float64]) -> NDArray[np.float32]:
@@ -67,3 +69,37 @@ def test_a_silent_frame_s_envelope_lies_flat_at_the_floor() -> None:
 
     assert np.ptp(silent) < FLAT_WITHIN_DB
     assert abs(silent.max() - (_decibels(magnitude.max(keepdims=True))[0] - SETTINGS.floor_db)) < FLOOR_TOLERANCE_DB
+
+
+def test_an_envelope_is_the_expansion_of_its_own_cepstrum() -> None:
+    magnitude = _magnitude(tone(TONE_HZ))
+
+    coefficients = envelope_cepstrum(magnitude, settings=SETTINGS)
+
+    np.testing.assert_array_equal(
+        envelope_from_cepstrum(coefficients, bin_count=magnitude.shape[0]),
+        spectral_envelope(magnitude, settings=SETTINGS),
+    )
+
+
+def test_a_cepstrum_holds_the_coefficients_the_settings_ask_for() -> None:
+    magnitude = _magnitude(tone(TONE_HZ))
+
+    coefficients = envelope_cepstrum(magnitude, settings=SETTINGS)
+
+    assert coefficients.shape == (SETTINGS.coefficient_count, magnitude.shape[1])
+
+
+def test_the_difference_of_two_cepstra_expands_to_the_ratio_between_their_envelopes() -> None:
+    first = _magnitude(tone(TONE_HZ))
+    second = _magnitude(tone(SECOND_TONE_HZ))
+    difference = envelope_cepstrum(second, settings=SETTINGS) - envelope_cepstrum(first, settings=SETTINGS)
+
+    ratio = envelope_from_cepstrum(difference, bin_count=first.shape[0])
+
+    np.testing.assert_allclose(
+        np.log(ratio.astype(np.float64)),
+        np.log(spectral_envelope(second, settings=SETTINGS).astype(np.float64))
+        - np.log(spectral_envelope(first, settings=SETTINGS).astype(np.float64)),
+        atol=LOG_RATIO_TOLERANCE,
+    )
