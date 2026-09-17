@@ -18,14 +18,12 @@ interface MorphState {
     readonly first: string | null;
     readonly second: string | null;
     readonly weight: number;
-    readonly playOnRelease: boolean;
 }
 
 interface MorphActions {
     readonly join: (anchor: string | null, hash: string) => void;
     readonly swap: () => void;
     readonly setWeight: (weight: number) => void;
-    readonly setPlayOnRelease: (playOnRelease: boolean) => void;
     readonly clear: () => void;
 }
 
@@ -33,7 +31,6 @@ export const INITIAL_MORPH_STATE: MorphState = {
     first: null,
     second: null,
     weight: DEFAULT_WEIGHT,
-    playOnRelease: true,
 };
 
 /**
@@ -66,9 +63,6 @@ export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
     },
     setWeight: (weight) => {
         set({ weight: snapWeight(weight) });
-    },
-    setPlayOnRelease: (playOnRelease) => {
-        set({ playOnRelease });
     },
     clear: () => {
         set({ first: null, second: null, weight: DEFAULT_WEIGHT });

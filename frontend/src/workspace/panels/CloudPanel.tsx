@@ -163,7 +163,6 @@ export function CloudPanel(): ReactElement {
     const morphFirst = useMorphStore((morph) => morph.first);
     const morphSecond = useMorphStore((morph) => morph.second);
     const weight = useMorphStore((morph) => morph.weight);
-    const playOnRelease = useMorphStore((morph) => morph.playOnRelease);
     const join = useMorphStore((morph) => morph.join);
     const setWeight = useMorphStore((morph) => morph.setWeight);
     const { play } = useAudioPreview();
@@ -216,7 +215,7 @@ export function CloudPanel(): ReactElement {
     }
 
     function handleWeightCommit(): void {
-        if (playOnRelease && link !== null && morphStatus.available) {
+        if (link !== null && morphStatus.available) {
             play(morphPreview(link.first, link.second, link.weight));
         }
     }

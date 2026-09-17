@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type * as MorphApi from "../../../src/api/morph";
 import type * as SamplesApi from "../../../src/api/samples";
-import { useMorphStore } from "../../../src/morph/morphStore";
+import { DEFAULT_WEIGHT, useMorphStore } from "../../../src/morph/morphStore";
 import type * as AudioPreview from "../../../src/samples/useAudioPreview";
 import { UNNAMED_SAMPLE_LABEL } from "../../../src/shared/labels";
 import { MorphPanel } from "../../../src/workspace/panels/MorphPanel";
@@ -14,6 +14,8 @@ const FIRST = "a".repeat(64);
 const SECOND = "b".repeat(64);
 const FIRST_RATE_HZ = 8363;
 const SECOND_RATE_HZ = 16726;
+const MOVED_WEIGHT = 0.25;
+const MOVED_RENDER_URL = `/api/morph/audio?first=${FIRST}&second=${SECOND}&weight=${String(MOVED_WEIGHT)}`;
 
 const { getSample, getSampleRelations, getSimilarSamples, getSampleDistance, getMorphStatus, play } = vi.hoisted(
     () => ({
@@ -64,6 +66,20 @@ function renderPanel(): ReturnType<typeof render> {
     );
 }
 
+/** One letting go of the slider: what the process answers, whether the weight moved under the pointer, and whether the render sounds. */
+interface ReleaseCase {
+    readonly name: string;
+    readonly available: boolean;
+    readonly moved: boolean;
+    readonly plays: boolean;
+}
+
+const RELEASE_CASES: readonly ReleaseCase[] = [
+    { name: "plays the render at the weight it was left at", available: true, moved: true, plays: true },
+    { name: "plays nothing when the weight was let go where it stood", available: true, moved: false, plays: false },
+    { name: "plays nothing while no inference process answers", available: false, moved: true, plays: false },
+];
+
 function serveSamples(): void {
     getSample.mockImplementation((hash: string) =>
         Promise.resolve(
@@ -112,25 +128,33 @@ describe("MorphPanel", () => {
         expect(screen.getByText("0.50")).toBeInTheDocument();
     });
 
-    it("moves the shared weight from the slider and plays the morph on release, as its file states", async () => {
-        getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
+    it.each(RELEASE_CASES)("$name", async ({ available, moved, plays }: ReleaseCase) => {
+        getMorphStatus.mockResolvedValue(
+            available ? { available: true, service: SERVICE } : { available: false, service: null },
+        );
         serveSamples();
         useMorphStore.getState().join(FIRST, SECOND);
         renderPanel();
         await screen.findByText("kick_808");
-        await waitFor(() => {
-            expect(screen.getByRole("button", { name: "▶ Play morph" })).toBeEnabled();
-        });
+        if (!available) {
+            await screen.findByRole("status");
+        }
 
-        fireEvent.change(screen.getByRole("slider", { name: "Morph weight" }), { target: { value: "0.25" } });
-        fireEvent.pointerUp(screen.getByRole("slider", { name: "Morph weight" }));
+        const slider = screen.getByRole("slider", { name: "Morph weight" });
+        if (moved) {
+            fireEvent.change(slider, { target: { value: String(MOVED_WEIGHT) } });
+        }
+        fireEvent.pointerUp(slider);
 
-        expect(useMorphStore.getState().weight).toBe(0.25);
-        expect(play).toHaveBeenCalledWith({
-            key: `/api/morph/audio?first=${FIRST}&second=${SECOND}&weight=0.25`,
-            url: `/api/morph/audio?first=${FIRST}&second=${SECOND}&weight=0.25`,
-            playbackRateHz: null,
-        });
+        expect(useMorphStore.getState().weight).toBe(moved ? MOVED_WEIGHT : DEFAULT_WEIGHT);
+        expect(play).toHaveBeenCalledTimes(plays ? 1 : 0);
+        if (plays) {
+            expect(play).toHaveBeenCalledWith({
+                key: MOVED_RENDER_URL,
+                url: MOVED_RENDER_URL,
+                playbackRateHz: null,
+            });
+        }
     });
 
     it("highlights an end on a click of its hash, staying on the panel", async () => {
@@ -169,7 +193,7 @@ describe("MorphPanel", () => {
         fireEvent.click(screen.getByRole("button", { name: "Swap the two ends" }));
         expect(useMorphStore.getState()).toMatchObject({ first: SECOND, second: FIRST, weight: 0.75 });
 
-        fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+        fireEvent.click(screen.getByRole("button", { name: "Clear the pair" }));
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
         expect(screen.getByText(/No morph pair yet/)).toBeInTheDocument();
     });
@@ -181,13 +205,12 @@ describe("MorphPanel", () => {
         renderPanel();
 
         expect(await screen.findByRole("status")).toHaveTextContent("Morphing is offline");
-        expect(screen.getByRole("button", { name: "▶ Play morph" })).toBeDisabled();
 
         getMorphStatus.mockResolvedValue({ available: true, service: SERVICE });
         fireEvent.click(screen.getByRole("button", { name: "Check again" }));
 
         await waitFor(() => {
-            expect(screen.getByRole("button", { name: "▶ Play morph" })).toBeEnabled();
+            expect(screen.queryByRole("status")).not.toBeInTheDocument();
         });
         expect(getMorphStatus).toHaveBeenCalledTimes(2);
     });
@@ -198,9 +221,6 @@ describe("MorphPanel", () => {
         useMorphStore.getState().join(FIRST, SECOND);
         renderPanel();
         await screen.findByText("kick_808");
-        await waitFor(() => {
-            expect(screen.getByRole("button", { name: "▶ Play morph" })).toBeEnabled();
-        });
 
         fireEvent.keyUp(screen.getByRole("slider", { name: "Morph weight" }), { key: "Tab" });
 
