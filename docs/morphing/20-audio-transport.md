@@ -102,7 +102,7 @@ end once and renders any weight. `LatentRoute` wraps the stored codec's route un
 `AnalysisRoute` renders either spectral path through the phase integration.
 
 `samplelibrary morph draw-pairs --seed S --output pairs.json` draws, from the hand labels and the
-suggestions on show in the top quarter of their label's scores, two pairs within each of eight kinds
+categories on show in the top quarter of their label's scores, two pairs within each of eight kinds
 (bass drum, snare, hi-hat, bass, lead, pad, piano, chord), six pairs across kinds, one tonal and
 one percussive sample heard at two rates a fifth to an octave apart, a short hit against a long
 sustain, two pairs of loops, and an eight-bit low-rate sample against a sixteen-bit high-rate one.

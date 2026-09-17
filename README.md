@@ -91,7 +91,7 @@ just frontend-dev    # start the frontend in a second terminal, then open http:/
 
 `just rebuild` builds the whole library in one command: it reads your modules and sample folders
 into the catalog, finds near-duplicates, draws thumbnails, hears every sample with the listening
-model and suggests labels, teaches the descriptor, lays out the cloud, and fits the models the
+model and gives it a category, teaches the descriptor, lays out the cloud, and fits the models the
 morph renderer uses. Run it again whenever you add modules or samples: every step checks what it
 was built from, and only the steps whose inputs changed run again, so a library that stands still
 is done in moments. `just rebuild catalog`, `just rebuild cloud` and `just rebuild morph` build one
@@ -200,7 +200,7 @@ installs cleanly and then fails the moment it is first asked to compute.
 
 ## Labeling and rating samples
 
-Click a sample's category in the list and type what it is; words you have used before are suggested
+Click a sample's category in the list and type what it is; words you have used before are offered
 as you type, and Enter records it. Labels are kept in one spelling — capitals, one space after each
 colon and comma, each tag once — so one wording stays one label however you typed it. Emptying the field brings back what the listening model heard. Five stars
 and a heart sit in the same row, saved as you click, and a sample's own page offers all three as
@@ -214,10 +214,10 @@ apart from everything the pipelines generate, and `just reset` leaves them alone
 own — and `annotations import` reads one back. `annotations relink` reattaches them if a sample's
 hash ever changes.
 
-The listening model can suggest labels for every sample.
+The listening model can give every sample a category.
 `uv run samplelibrary cloud embed --backend clap --extract-only --heard-rate` describes the catalog
 with it, hearing each sample at the rate it is played at (about an hour), and
-`uv run samplelibrary cloud suggest --experiment-id <that experiment's id>` ranks a vocabulary of
+`uv run samplelibrary cloud categorize --experiment-id <that experiment's id>` ranks a vocabulary of
 instruments against every sample in minutes; `--vocabulary hand-labels` ranks the wordings you have
 used instead, and a file with one label per line works too. A sample's category is then what the
 model heard first, wherever you have not written a label of your own, and the cloud colors by it. A

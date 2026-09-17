@@ -153,9 +153,9 @@ variant, with the invariance kept. Self-supervision alone stays near the untrain
 labels. The recipe for the descriptor stage follows from those four rows, and the weight of the
 retuning term is the one to sweep.
 
-## Zero-shot suggestions over the catalog (2026-09-12)
+## Zero-shot categories over the catalog (2026-09-12)
 
-The 52% of the scratchpad probe above became a pass. `samplelibrary cloud suggest` reads a `clap`
+The 52% of the scratchpad probe above became a pass. `samplelibrary cloud categorize` reads a `clap`
 experiment's vectors, which are unit length, against the text tower's reading of a vocabulary of
 prompts (`This is the sound of {label}.`, the label's levels read from the most specific outward,
 `HI-HAT: CLOSED` as `closed hi-hat`), keeps each sample's closest three under an experiment of the
@@ -171,7 +171,7 @@ octaves below its file's rate reads as a pluck at the nominal rate.
 
 ### At the nominal rate
 
-`samplelibrary cloud suggest --experiment-id 4` wrote experiment 8 over the 127,588 samples in
+`samplelibrary cloud categorize --experiment-id 4` wrote experiment 8 over the 127,588 samples in
 minutes. Against the 216 hand labels the first pick agrees exactly on 62 (28.7%) and by category on
 112 (51.9%), the share the scratchpad probe had promised. Per hand tag, the category agreement of
 the first pick, tags with at least five labeled samples:
@@ -208,7 +208,7 @@ are the same thing.
 
 `samplelibrary cloud embed --backend clap --extract-only --heard-rate` described the catalog again
 with every sample resampled to the rate it is played at (experiment 10, 55 minutes), and
-`samplelibrary cloud suggest --experiment-id 10` scored it as experiment 11. Against the same 216
+`samplelibrary cloud categorize --experiment-id 10` scored it as experiment 11. Against the same 216
 hand labels the first pick agrees exactly on 87 (40.3%) and by category on 141 (65.3%): thirteen
 points more than the nominal reading on both counts. The same table, with the nominal reading beside
 it:
@@ -240,7 +240,7 @@ tracker library is made up. What stays wrong is `STRINGS`, at 0.2% of the catalo
 of the labeled ones: what a tracker calls strings is a synthesized ensemble, which the model hears
 as a synth lead, a synth pad or a brass section, and the prompt "strings" asks it for an
 orchestra. A wording closer to that material, `STRINGS: SYNTH` read as "synth strings", is the
-first thing to try, and `samplelibrary cloud suggest --experiment-id 10 --vocabulary <file>` scores
+first thing to try, and `samplelibrary cloud categorize --experiment-id 10 --vocabulary <file>` scores
 any wording in minutes. `PLUCK` is the other open case: five of ten are named a synth bass, which
 for a low pluck is a reading rather than a mistake.
 
