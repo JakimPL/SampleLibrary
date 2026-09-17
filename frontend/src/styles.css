@@ -1765,10 +1765,29 @@ table.data td .annotation-editor-input {
     background: transparent;
 }
 
-.not-found {
+.not-found,
+.route-error {
     display: grid;
     place-content: center;
     gap: 0.5rem;
     min-height: 100vh;
     text-align: center;
+}
+
+.error-boundary {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+    padding: 12px;
+}
+
+.error-boundary-retry {
+    border: 1px solid var(--border);
+    background: var(--surface-0);
+    border-radius: 5px;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 11.5px;
+    cursor: pointer;
+    color: var(--text-muted);
 }

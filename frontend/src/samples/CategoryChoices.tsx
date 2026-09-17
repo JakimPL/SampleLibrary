@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import type { AnnotationScope } from "../api/curation";
 import type { SampleDetail } from "../api/samples";
 import { decisionsOf, useSampleAnnotation } from "./annotationStore";
-import { holdsTag, withTag } from "./labelText";
+import { assertsTag, withTag } from "./labelText";
 import { useAnnotationWriter } from "./useAnnotationWriter";
 
 const SCORE_DECIMAL_PLACES = 2;
@@ -19,10 +19,11 @@ interface CategoryChoicesProps {
 /**
  * The categories the listening model hears this sample as, closest first, each a click away from the hand label.
  *
- * A click appends the tag to the wording the sample carries, through the one write path every
- * annotation gesture takes, so the badge, the row and the cloud follow at once; the write reaches
- * as far as the editor's near-duplicates checkbox says and changes the label alone. A tag the label
- * already holds shows as taken.
+ * A click writes the category into the wording the sample carries, through the one write path
+ * every annotation gesture takes, so the badge, the row and the cloud follow at once; the write
+ * reaches as far as the editor's near-duplicates checkbox says and changes the label alone. A
+ * category the label already asserts shows as taken, a broad one included once a specification
+ * under it is written; a category more detailed than one the label names takes its place there.
  */
 export function CategoryChoices({ sample, scope }: CategoryChoicesProps): ReactElement {
     const current = useSampleAnnotation(sample.hash, decisionsOf(sample));
@@ -37,7 +38,7 @@ export function CategoryChoices({ sample, scope }: CategoryChoicesProps): ReactE
         <div className="category-choices">
             <div className="category-choices-row" role="group" aria-label="Categories">
                 {sample.categories.map((category) => {
-                    const taken = holdsTag(label, category.label);
+                    const taken = assertsTag(label, category.label);
                     return (
                         <button
                             key={category.label}

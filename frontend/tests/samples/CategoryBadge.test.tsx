@@ -78,6 +78,22 @@ describe("CategoryBadge", () => {
         expect(badgeOf(UNLABELED_SAMPLE_LABEL)).toHaveClass("badge-unlabeled");
     });
 
+    it("reads as unlabeled when the answer carries no category at all", () => {
+        serveTags();
+
+        render(<CategoryBadge sampleHash={SAMPLE_HASH} category={undefined} handLabel={null} />);
+
+        expect(badgeOf(UNLABELED_SAMPLE_LABEL)).toHaveClass("badge-unlabeled");
+    });
+
+    it("shows a hand label even when the answer carries no category", () => {
+        serveTags();
+
+        render(<CategoryBadge sampleHash={SAMPLE_HASH} category={undefined} handLabel="dirty 909" />);
+
+        expect(badgeOf("dirty 909")).toHaveClass("badge-hand-label");
+    });
+
     it("prefers a label set in this session over the one the server sent", () => {
         serveTags();
         confirm(SAMPLE_HASH, { label: "rimshot", rating: null, favorite: false });

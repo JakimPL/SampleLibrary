@@ -1,13 +1,31 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as ModulesApi from "../../src/api/modules";
 import type * as SamplesApi from "../../src/api/samples";
 import { KNOWN_PANELS_STORAGE_KEY, LAYOUT_STORAGE_KEY } from "../../src/workspace/dockviewPersistence";
 import { PANEL_REGISTRY } from "../../src/workspace/panelRegistry";
+import type * as ModulesListPanelModule from "../../src/workspace/panels/ModulesListPanel";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 import { WorkspaceShell } from "../../src/workspace/WorkspaceShell";
+
+const MODULES_FAILURE = "the modules panel read a page that was not there";
+
+const { failing } = vi.hoisted(() => ({ failing: { now: false } }));
+
+vi.mock("../../src/workspace/panels/ModulesListPanel", async () => {
+    const actual = await vi.importActual<typeof ModulesListPanelModule>("../../src/workspace/panels/ModulesListPanel");
+    return {
+        ...actual,
+        ModulesListPanel: () => {
+            if (failing.now) {
+                throw new Error(MODULES_FAILURE);
+            }
+            return <p>modules</p>;
+        },
+    };
+});
 
 const { getModule } = vi.hoisted(() => ({ getModule: vi.fn() }));
 const { getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => ({
@@ -65,6 +83,23 @@ function activeTabTitles(): string[] {
 }
 
 describe("WorkspaceShell", () => {
+    beforeEach(() => {
+        failing.now = false;
+    });
+
+    it("keeps a panel that throws to itself, leaving every other panel mounted", async () => {
+        // React reports a caught error to the console itself, which the suite reads as noise.
+        vi.spyOn(console, "error").mockImplementation(() => undefined);
+        failing.now = true;
+
+        renderShellAt("/");
+
+        expect(await screen.findByText(MODULES_FAILURE)).toHaveAttribute("role", "alert");
+        expect(panelTabTitles()).toContain("Cloud");
+        expect(panelTabTitles()).toContain("Modules");
+        vi.restoreAllMocks();
+    });
+
     it("mounts every default panel", () => {
         renderShellAt("/");
 

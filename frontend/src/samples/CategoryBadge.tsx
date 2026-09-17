@@ -6,7 +6,7 @@ import { useCategoryColor } from "./useCategoryColor";
 
 interface CategoryBadgeProps {
     readonly sampleHash: string;
-    readonly category: string | null;
+    readonly category: string | null | undefined;
     readonly handLabel: string | null;
 }
 
@@ -16,8 +16,10 @@ interface CategoryBadgeProps {
  * A hand label wins, being what a person actually decided, and wears a solid style of its own. In
  * its place stands what the listening model heard first, in the dashed style a machine-made
  * statement takes, with a swatch in its top level's color; a sample neither has named reads as
- * unlabeled. The label set in this session counts at once, so a badge follows an edit the moment
- * it is made. A label longer than the room it is given ends in an ellipsis, whole in its tooltip.
+ * unlabeled, an answer carrying no category field included, so a server built before the field
+ * existed leaves the badge saying what it knows. The label set in this session counts at once, so a
+ * badge follows an edit the moment it is made. A label longer than the room it is given ends in an
+ * ellipsis, whole in its tooltip.
  */
 export function CategoryBadge({ sampleHash, category, handLabel }: CategoryBadgeProps): ReactElement {
     const annotation = useSampleAnnotation(sampleHash, { label: handLabel, rating: null, favorite: false });
@@ -30,7 +32,7 @@ export function CategoryBadge({ sampleHash, category, handLabel }: CategoryBadge
             </span>
         );
     }
-    if (category === null) {
+    if (category === null || category === undefined) {
         return <span className="badge badge-unlabeled">{UNLABELED_SAMPLE_LABEL}</span>;
     }
 

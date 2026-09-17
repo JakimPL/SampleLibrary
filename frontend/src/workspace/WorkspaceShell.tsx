@@ -5,6 +5,7 @@ import type { FunctionComponent, ReactElement } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 
+import { withBoundary } from "../shared/ErrorBoundary";
 import { ThemeMenu } from "../theme/ThemeMenu";
 import { AddPanelMenu } from "./AddPanelMenu";
 import { resetLayout, restoreOrBuildLayout } from "./dockviewPersistence";
@@ -17,11 +18,12 @@ import { useSelectionStore } from "./selectionStore";
  * `api`/`containerApi`/`params` dockview injects -- no panel in this shell needs them, since every
  * panel reads what it needs from `selectionStore` and its own feature-folder data hook instead.
  */
+/** Every panel the workspace knows, each under a boundary of its own so one failure costs one panel. */
 function buildDockviewComponents(): Record<string, FunctionComponent<IDockviewPanelProps>> {
     return Object.fromEntries(
         Object.values(PANEL_REGISTRY).map((definition) => {
             const PanelComponent = definition.component;
-            const DockviewPanelAdapter: FunctionComponent<IDockviewPanelProps> = () => <PanelComponent />;
+            const DockviewPanelAdapter: FunctionComponent<IDockviewPanelProps> = () => withBoundary(<PanelComponent />);
             return [definition.id, DockviewPanelAdapter];
         }),
     );

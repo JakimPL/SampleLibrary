@@ -91,6 +91,49 @@ describe("CategoryChoices", () => {
         expect(changeSampleAnnotation).not.toHaveBeenCalled();
     });
 
+    it("shows a top level as taken once the label specifies something under it", () => {
+        render(<CategoryChoices sample={buildSample({ hand_label: "BASS DRUM: ACOUSTIC" })} scope="sample" />);
+
+        const taken = screen.getByRole("button", { name: /BASS DRUM/ });
+        expect(taken).toHaveAttribute("aria-pressed", "true");
+        expect(taken).toBeDisabled();
+        expect(changeSampleAnnotation).not.toHaveBeenCalled();
+    });
+
+    it("writes a category in place of the top level it refines", async () => {
+        resolvesTo("SNARE: RIM");
+        render(
+            <CategoryChoices
+                sample={buildSample({ hand_label: "SNARE", categories: [{ label: "SNARE: RIM", score: 0.7 }] })}
+                scope="sample"
+            />,
+        );
+
+        await userEvent.click(screen.getByRole("button", { name: /SNARE: RIM/ }));
+
+        await waitFor(() => {
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", { label: "SNARE: RIM" });
+        });
+    });
+
+    it("writes a category diverging below a shared top level beside the one already written", async () => {
+        resolvesTo("SNARE: RIM, SNARE: BRUSH");
+        render(
+            <CategoryChoices
+                sample={buildSample({ hand_label: "SNARE: RIM", categories: [{ label: "SNARE: BRUSH", score: 0.6 }] })}
+                scope="sample"
+            />,
+        );
+
+        await userEvent.click(screen.getByRole("button", { name: /SNARE: BRUSH/ }));
+
+        await waitFor(() => {
+            expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "sample", {
+                label: "SNARE: RIM, SNARE: BRUSH",
+            });
+        });
+    });
+
     it("reaches as far as the scope it is given", async () => {
         resolvesTo("SNARE");
         render(<CategoryChoices sample={buildSample({ equivalence_member_count: 3 })} scope="equivalence_class" />);
