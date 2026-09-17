@@ -1211,29 +1211,59 @@ table.data td .annotation-editor-input {
     font-size: 12px;
 }
 
+/* The frame the contours, the notice and the playhead are positioned against; the host inside it
+   carries the box the waveform is measured and scrolled in. */
 .wave-canvas-wrap {
     flex: 1 1 auto;
     position: relative;
     min-height: 60px;
-    overflow: auto hidden;
     display: flex;
-    align-items: center;
     background: var(--wave-bg);
 }
 
-/* wavesurfer's host is a flex item here, which shrinks to its content; the full width keeps the
-   waveform wide. */
+/* The host is stretched rather than centered, since the waveform's own height is read from this
+   box: a flex item left to its content would measure zero and hold the waveform to its floor. */
 .wave-host {
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-width: 0;
+    overflow: auto hidden;
+    display: flex;
+    align-items: center;
+}
+
+/* wavesurfer's own wrapper is a flex item here, which shrinks to its content; the full width keeps
+   the waveform wide. */
+.wave-host > div {
     width: 100%;
 }
 
+/* Each contour carries the strength it is drawn at in its own color, so the render stands out from
+   the ends it runs between. */
 .wave-traces {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
-    opacity: 0.45;
     pointer-events: none;
+}
+
+.wave-notice {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0 12px;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--text-faint);
+    pointer-events: none;
+}
+
+.wave-notice-failed {
+    color: var(--critical);
 }
 
 .wave-playhead {

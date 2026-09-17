@@ -2,21 +2,28 @@ import type { ReactElement } from "react";
 import { useMemo } from "react";
 
 import { morphAudioUrl } from "../api/morph";
-import type { SamplePreview, WaveformPeak } from "../api/samples";
+import { sampleAudioUrl } from "../api/samples";
+import { type AudioReading, useAudioPeaks } from "../samples/audioPeaks";
 import { useAudioPreview, usePreviewProgress } from "../samples/useAudioPreview";
-import { useSamplePreview } from "../samples/useSamplePreview";
-import { useWaveformPlayer } from "../samples/useWaveformPlayer";
-import { NO_TRACES, type WaveformTrace, WaveformView } from "../samples/WaveformView";
-import type { FetchState } from "../shared/fetchState";
+import {
+    type ContourStyle,
+    NO_TRACES,
+    type WaveformNotice,
+    type WaveformTrace,
+    WaveformView,
+} from "../samples/WaveformView";
 import { formatDuration } from "../shared/format";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import { readMorphColors } from "./morphColors";
 import { morphPreview } from "./morphPreview";
 import type { EndpointReading } from "./useEndpoint";
 
+// Enough buckets that a contour has one per pixel at any width a panel is given.
+const TRACE_BUCKET_COUNT = 2048;
 const AT_THE_FIRST_END = 0;
 const WHOLE_FRAME = 1;
 const NOTHING_DRAWN_HINT = "Let the slider go to hear a point on the path and see it drawn.";
+const OFFLINE_HINT = "The path is drawn once an inference process answers for it.";
 
 interface MorphWaveformProps {
     readonly first: string;
@@ -28,20 +35,17 @@ interface MorphWaveformProps {
     readonly available: boolean;
 }
 
-function peaksOf(state: FetchState<SamplePreview>): readonly WaveformPeak[] | null {
-    return state.status === "success" ? state.data.thumbnail : null;
-}
-
 function traceOf(
-    peaks: readonly WaveformPeak[] | null,
+    reading: AudioReading,
     seconds: number | null,
     axisSeconds: number,
     color: string,
+    style: ContourStyle,
 ): WaveformTrace | null {
-    if (peaks === null || peaks.length === 0 || seconds === null) {
+    if (reading.peaks === null || seconds === null) {
         return null;
     }
-    return { peaks, share: seconds / axisSeconds, color };
+    return { peaks: reading.peaks, share: Math.min(WHOLE_FRAME, seconds / axisSeconds), color, style };
 }
 
 /**
@@ -50,14 +54,14 @@ function traceOf(
  * The frame spans the longer end, which holds still as the weight moves: a render lasts the
  * geometric path between the two ends' own lengths, so it always falls between them, and each end
  * keeps the length it is heard at in the pair's frame. Every contour therefore stands where it
- * really falls in time, an end's trace drawn from the thumbnail the catalog already holds and the
- * render decoded as the detailed contour over them.
+ * really falls in time, all three decoded in the browser at the same detail, so a render reads
+ * against its ends as one drawing rather than against a coarser sketch of them.
  *
  * The render sounds through the one preview element every sample plays through, which is what the
  * cloud's own marker plays as well, so a weight let go in either place is heard once. The waveform
- * follows that sound rather than making it -- the playhead is drawn from where the element stands,
- * and wavesurfer keeps its own cursor to itself -- and the play button sounds the point already
- * drawn again.
+ * follows that sound rather than making it, and the play button sounds the point already drawn
+ * again. Where a point is refused or cannot be read, the frame says so in the server's own words,
+ * in the place the contour would have stood.
  */
 export function MorphWaveform({
     first,
@@ -67,8 +71,6 @@ export function MorphWaveform({
     renderedWeight,
     available,
 }: MorphWaveformProps): ReactElement {
-    const firstPreview = useSamplePreview(first);
-    const secondPreview = useSamplePreview(second);
     const { play, failure } = useAudioPreview();
     const progress = usePreviewProgress();
     const themeSignal = useThemeSignal();
@@ -81,26 +83,28 @@ export function MorphWaveform({
         // eslint-disable-next-line react-hooks/exhaustive-deps -- the theme signal is what changes the colors read
         [renderedWeight, themeSignal.preference, themeSignal.systemVersion],
     );
-    const player = useWaveformPlayer(renderUrl, {
-        rateHz: null,
-        axisSeconds,
-        interactive: false,
-        waveColor: colors.between,
-    });
+
+    const firstAudio = useAudioPeaks(sampleAudioUrl(first), TRACE_BUCKET_COUNT);
+    const secondAudio = useAudioPeaks(sampleAudioUrl(second), TRACE_BUCKET_COUNT);
+    const render = useAudioPeaks(renderUrl, TRACE_BUCKET_COUNT);
 
     const traces = useMemo((): readonly WaveformTrace[] => {
         if (axisSeconds === null) {
             return NO_TRACES;
         }
         return [
-            traceOf(peaksOf(firstPreview), firstReading.heardSeconds, axisSeconds, colors.first),
-            traceOf(peaksOf(secondPreview), secondReading.heardSeconds, axisSeconds, colors.second),
+            traceOf(firstAudio, firstReading.heardSeconds, axisSeconds, colors.first, "outlined"),
+            traceOf(secondAudio, secondReading.heardSeconds, axisSeconds, colors.second, "outlined"),
+            traceOf(render, render.seconds, axisSeconds, colors.between, "filled"),
         ].filter((trace): trace is WaveformTrace => trace !== null);
-    }, [firstPreview, secondPreview, firstReading.heardSeconds, secondReading.heardSeconds, axisSeconds, colors]);
+    }, [firstAudio, secondAudio, render, firstReading.heardSeconds, secondReading.heardSeconds, axisSeconds, colors]);
 
     const sounding = renderUrl !== null && progress.key === renderUrl;
     const playheadFraction =
         sounding && axisSeconds !== null ? Math.min(WHOLE_FRAME, progress.currentTimeSeconds / axisSeconds) : null;
+    const playFailure = failure?.key === renderUrl ? failure.message : null;
+    const notice = noticeOf(render.refusal ?? playFailure, renderedWeight, available);
+    const canPlay = renderedWeight !== null && available && render.refusal === null;
 
     function replay(): void {
         if (renderedWeight !== null) {
@@ -111,10 +115,11 @@ export function MorphWaveform({
     return (
         <div className="wave-panel morph-wave">
             <WaveformView
-                containerRef={player.containerRef}
-                isPlaying={player.isPlaying}
+                containerRef={null}
+                isPlaying={sounding}
                 traces={traces}
                 playheadFraction={playheadFraction}
+                notice={notice}
             />
             <div className="transport">
                 <button
@@ -122,24 +127,25 @@ export function MorphWaveform({
                     className="play-btn"
                     aria-label="Play the morph"
                     onClick={replay}
-                    disabled={renderedWeight === null || !available}
+                    disabled={!canPlay}
                 >
                     ▶
                 </button>
-                {renderUrl === null ? (
-                    <span className="cell-muted">{NOTHING_DRAWN_HINT}</span>
-                ) : (
-                    <span className="time">
-                        {formatDuration(sounding ? progress.currentTimeSeconds : 0)} /{" "}
-                        {formatDuration(player.durationSeconds)}
-                    </span>
-                )}
+                <span className="time">
+                    {formatDuration(sounding ? progress.currentTimeSeconds : 0)} / {formatDuration(render.seconds ?? 0)}
+                </span>
             </div>
-            {failure?.key === renderUrl && (
-                <p className="panel-status error-notice" role="alert">
-                    {`The morph could not be played: ${failure.message}.`}
-                </p>
-            )}
         </div>
     );
+}
+
+/** What stands where the render would: why it was refused, or what is waited on before there is one. */
+function noticeOf(failed: string | null, renderedWeight: number | null, available: boolean): WaveformNotice | null {
+    if (failed !== null) {
+        return { text: failed, failed: true };
+    }
+    if (renderedWeight !== null) {
+        return null;
+    }
+    return { text: available ? NOTHING_DRAWN_HINT : OFFLINE_HINT, failed: false };
 }

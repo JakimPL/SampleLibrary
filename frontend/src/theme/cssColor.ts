@@ -73,6 +73,10 @@ function between(first: number, second: number, weight: number): number {
     return first * (1 - weight) + second * weight;
 }
 
+function rgbText(red: number, green: number, blue: number, alpha: number): string {
+    return `rgb(${String(red)} ${String(green)} ${String(blue)} / ${String(alpha)})`;
+}
+
 function mixedChannel(first: number, second: number, weight: number): number {
     return Math.round(CHANNEL_MAXIMUM * asChannel(between(asLight(first), asLight(second), weight)));
 }
@@ -90,9 +94,21 @@ function mixedChannel(first: number, second: number, weight: number): number {
 export function mixColors(first: Rgba, second: Rgba, weight: number): string {
     const [firstRed, firstGreen, firstBlue, firstAlpha] = first;
     const [secondRed, secondGreen, secondBlue, secondAlpha] = second;
-    const red = mixedChannel(firstRed, secondRed, weight);
-    const green = mixedChannel(firstGreen, secondGreen, weight);
-    const blue = mixedChannel(firstBlue, secondBlue, weight);
-    const alpha = between(firstAlpha, secondAlpha, weight);
-    return `rgb(${String(red)} ${String(green)} ${String(blue)} / ${String(alpha)})`;
+    return rgbText(
+        mixedChannel(firstRed, secondRed, weight),
+        mixedChannel(firstGreen, secondGreen, weight),
+        mixedChannel(firstBlue, secondBlue, weight),
+        between(firstAlpha, secondAlpha, weight),
+    );
+}
+
+/** The color written at an alpha of its own, which is how a contour stands beside another without taking a color of its own. */
+export function colorWithAlpha(color: Rgba, alpha: number): string {
+    const [red, green, blue] = color;
+    return rgbText(
+        Math.round(CHANNEL_MAXIMUM * red),
+        Math.round(CHANNEL_MAXIMUM * green),
+        Math.round(CHANNEL_MAXIMUM * blue),
+        alpha,
+    );
 }

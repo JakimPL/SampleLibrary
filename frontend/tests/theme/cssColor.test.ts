@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mixColors, parseCssColor, type Rgba } from "../../src/theme/cssColor";
+import { colorWithAlpha, mixColors, parseCssColor, type Rgba } from "../../src/theme/cssColor";
 
 describe("parseCssColor", () => {
     it.each([
@@ -56,5 +56,15 @@ describe("mixColors", () => {
 
     it("carries the alpha of both ends along the path", () => {
         expect(mixColors([0, 0, 0, 0], [0, 0, 0, 1], 0.25)).toBe("rgb(0 0 0 / 0.25)");
+    });
+});
+
+describe("colorWithAlpha", () => {
+    it("keeps the color and stands it at the alpha asked for", () => {
+        expect(colorWithAlpha([1, 0.5, 0, 1], 0.3)).toBe("rgb(255 128 0 / 0.3)");
+    });
+
+    it("leaves a color standing at full strength where that is what is asked for", () => {
+        expect(colorWithAlpha(WHITE, 1)).toBe("rgb(255 255 255 / 1)");
     });
 });

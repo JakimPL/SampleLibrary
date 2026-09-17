@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
 import { useWaveformPlayer, type WaveformPlayer } from "../../src/samples/useWaveformPlayer";
@@ -56,55 +56,8 @@ function latestInstance(): (typeof instances)[number] {
     return instance;
 }
 
-/** How the axis a waveform is drawn on states itself in wavesurfer's own options. */
-interface AxisCase {
-    readonly name: string;
-    readonly axisSeconds: number | null;
-    readonly pixelsPerSecond: number | null;
-    readonly fillParent: boolean;
-    readonly autoScroll: boolean;
-}
-
-// The container reads 600 CSS pixels wide under jsdom, which tests/setup.ts states for every element.
-const CONTAINER_WIDTH_PX = 600;
-
-const AXIS_CASES: readonly AxisCase[] = [
-    {
-        name: "scrolls a contour of a fixed detail under a centered cursor when no axis is named",
-        axisSeconds: null,
-        pixelsPerSecond: null,
-        fillParent: true,
-        autoScroll: true,
-    },
-    {
-        name: "fits the seconds an axis names to the width of its container",
-        axisSeconds: 2,
-        pixelsPerSecond: CONTAINER_WIDTH_PX / 2,
-        fillParent: false,
-        autoScroll: false,
-    },
-    {
-        name: "leaves audio half the length of its axis half the width to stand in",
-        axisSeconds: 4,
-        pixelsPerSecond: CONTAINER_WIDTH_PX / 4,
-        fillParent: false,
-        autoScroll: false,
-    },
-];
-
-interface HarnessProps {
-    readonly audioUrl: string;
-    readonly rateHz: number | null;
-    readonly axisSeconds?: number | null;
-}
-
-function Harness({ audioUrl, rateHz, axisSeconds = null }: HarnessProps): ReactElement {
-    const player: WaveformPlayer = useWaveformPlayer(audioUrl, {
-        rateHz,
-        axisSeconds,
-        interactive: true,
-        waveColor: null,
-    });
+function Harness({ audioUrl, rateHz }: { readonly audioUrl: string; readonly rateHz: number }): ReactElement {
+    const player: WaveformPlayer = useWaveformPlayer(audioUrl, rateHz);
     return (
         <div>
             <div data-testid="container" ref={player.containerRef} />
@@ -115,7 +68,42 @@ function Harness({ audioUrl, rateHz, axisSeconds = null }: HarnessProps): ReactE
     );
 }
 
+/** One container the waveform is drawn in, and the height the proportions leave it. */
+interface HeightCase {
+    readonly name: string;
+    readonly width: number;
+    readonly height: number;
+    readonly drawn: number;
+}
+
+const HEIGHT_CASES: readonly HeightCase[] = [
+    { name: "takes the height of a container no taller than half its width", width: 600, height: 200, drawn: 200 },
+    { name: "holds to half the width of a container taller than that", width: 600, height: 600, drawn: 300 },
+    { name: "follows a narrower container down to half its width", width: 300, height: 600, drawn: 150 },
+];
+
+// The size tests/setup.ts states for every element, put back so a case measuring its own does not carry it on.
+const STUBBED_RECT = HTMLElement.prototype.getBoundingClientRect();
+
+function measuring(width: number, height: number): void {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+        x: 0,
+        y: 0,
+        width,
+        height,
+        top: 0,
+        right: width,
+        bottom: height,
+        left: 0,
+        toJSON: () => ({}),
+    });
+}
+
 describe("useWaveformPlayer", () => {
+    afterEach(() => {
+        vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(STUBBED_RECT);
+    });
+
     it("creates a wavesurfer instance against its own container once mounted", () => {
         render(<Harness audioUrl="/samples/abc/audio" rateHz={8363} />);
 
@@ -197,29 +185,12 @@ describe("useWaveformPlayer", () => {
         expect(options.cursorColor).toBeTruthy();
     });
 
-    it.each(AXIS_CASES)("$name", ({ axisSeconds, pixelsPerSecond, fillParent, autoScroll }: AxisCase) => {
-        render(<Harness audioUrl="/samples/abc/audio" rateHz={8363} axisSeconds={axisSeconds} />);
+    it.each(HEIGHT_CASES)("$name", ({ width, height, drawn }: HeightCase) => {
+        measuring(width, height);
 
-        const options = createMock.mock.calls[0]?.[0] as {
-            minPxPerSec: number;
-            fillParent: boolean;
-            autoScroll: boolean;
-        };
-        expect(options.fillParent).toBe(fillParent);
-        expect(options.autoScroll).toBe(autoScroll);
-        if (pixelsPerSecond !== null) {
-            expect(options.minPxPerSec).toBe(pixelsPerSecond);
-        }
-    });
+        render(<Harness audioUrl="/samples/abc/audio" rateHz={8363} />);
 
-    it("sounds a source that states its own rate as it stands", () => {
-        render(<Harness audioUrl="/api/morph/audio" rateHz={null} />);
-
-        act(() => {
-            latestInstance().emit("ready", 1.5);
-        });
-
-        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(1, false);
+        expect(createMock.mock.calls[0]?.[0]).toMatchObject({ height: drawn });
     });
 
     it("re-applies colors through setOptions when the theme preference changes", () => {

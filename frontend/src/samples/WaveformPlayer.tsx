@@ -23,12 +23,7 @@ function describeRateOption(option: RateOption): string {
 }
 
 export function WaveformPlayer({ sampleHash, rateHz, rateOptions, onRateChange }: WaveformPlayerProps): ReactElement {
-    const player = useWaveformPlayer(sampleAudioUrl(sampleHash), {
-        rateHz,
-        axisSeconds: null,
-        interactive: true,
-        waveColor: null,
-    });
+    const player = useWaveformPlayer(sampleAudioUrl(sampleHash), rateHz);
 
     function handleTogglePlay(): void {
         if (player.isPlaying) {
@@ -51,6 +46,7 @@ export function WaveformPlayer({ sampleHash, rateHz, rateOptions, onRateChange }
                 isPlaying={player.isPlaying}
                 traces={NO_TRACES}
                 playheadFraction={null}
+                notice={null}
             />
             <div className="transport">
                 <button type="button" className="play-btn" onClick={handleTogglePlay} disabled={!player.isReady}>

@@ -18,25 +18,20 @@ const STORED_SECONDS = 0.5;
 const MOVED_WEIGHT = 0.25;
 const MOVED_RENDER_URL = `/api/morph/audio?first=${FIRST}&second=${SECOND}&weight=${String(MOVED_WEIGHT)}`;
 
-const { getSample, getSampleRelations, getSimilarSamples, getSampleDistance, getSamplePreview, getMorphStatus, play } =
-    vi.hoisted(() => ({
+const { getSample, getSampleRelations, getSimilarSamples, getSampleDistance, getMorphStatus, play } = vi.hoisted(
+    () => ({
         getSample: vi.fn(),
         getSampleRelations: vi.fn().mockResolvedValue([]),
         getSimilarSamples: vi.fn().mockResolvedValue([]),
         getSampleDistance: vi.fn().mockReturnValue(new Promise(() => undefined)),
-        getSamplePreview: vi.fn().mockResolvedValue({
-            display_name: "",
-            category: null,
-            hand_label: null,
-            thumbnail: [{ minimum: -1, maximum: 1 }],
-        }),
         getMorphStatus: vi.fn(),
         play: vi.fn(),
-    }));
+    }),
+);
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations, getSimilarSamples, getSampleDistance, getSamplePreview };
+    return { ...actual, getSample, getSampleRelations, getSimilarSamples, getSampleDistance };
 });
 
 vi.mock("../../../src/api/morph", async () => {
@@ -92,17 +87,31 @@ interface WaveformCase {
     readonly available: boolean;
     readonly released: boolean;
     readonly drawn: boolean;
+    readonly hint: RegExp | null;
 }
 
 const WAVEFORM_CASES: readonly WaveformCase[] = [
     {
-        name: "waits for a weight to be let go before it draws anything",
+        name: "asks for a weight to be let go before it draws anything",
         available: true,
         released: false,
         drawn: false,
+        hint: /Let the slider go/,
     },
-    { name: "draws the render once a weight has been let go", available: true, released: true, drawn: true },
-    { name: "draws nothing while no inference process answers", available: false, released: true, drawn: false },
+    {
+        name: "draws the render once a weight has been let go",
+        available: true,
+        released: true,
+        drawn: true,
+        hint: null,
+    },
+    {
+        name: "says what it waits on while no inference process answers",
+        available: false,
+        released: true,
+        drawn: false,
+        hint: /once an inference process answers/,
+    },
 ];
 
 function serveSamples(): void {
@@ -206,19 +215,17 @@ describe("MorphPanel", () => {
         }
     });
 
-    it.each(WAVEFORM_CASES)("$name", async ({ available, released, drawn }: WaveformCase) => {
+    it.each(WAVEFORM_CASES)("$name", async ({ available, released, drawn, hint }: WaveformCase) => {
         await showPair(available);
         if (released) {
             letTheSliderGo(MOVED_WEIGHT);
         }
 
-        const playMorph = screen.getByRole("button", { name: "Play the morph" });
-        if (drawn) {
-            expect(playMorph).toBeEnabled();
-            expect(screen.queryByText(/Let the slider go/)).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Play the morph" })).toHaveProperty("disabled", !drawn);
+        if (hint === null) {
+            expect(screen.queryByText(/Let the slider go|inference process answers/)).not.toBeInTheDocument();
         } else {
-            expect(playMorph).toBeDisabled();
-            expect(screen.getByText(/Let the slider go/)).toBeInTheDocument();
+            expect(screen.getByText(hint)).toBeInTheDocument();
         }
     });
 

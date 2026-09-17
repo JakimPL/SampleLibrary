@@ -14,9 +14,9 @@ export function samplePreviewCacheKey(sampleHash: string): string {
  * catalog stores for it -- one request as light as a glance, against the detail a Sample Detail
  * panel needs.
  *
- * Every view that wants a sample's contour without its audio reads it here, so the cloud's hover
- * tooltip and the morph's traces share one request per sample. A sample the thumbnail pass has not
- * reached carries no thumbnail, and a view drawing one shows no bars.
+ * Every view that wants a glance at a sample rather than its whole detail reads it here, sharing
+ * one request per sample. A sample the thumbnail pass has not reached carries no thumbnail, and a
+ * view drawing one shows no bars.
  */
 export function useSamplePreview(sampleHash: string): FetchState<SamplePreview> {
     const loader = useCallback(() => getSamplePreview(sampleHash), [sampleHash]);
