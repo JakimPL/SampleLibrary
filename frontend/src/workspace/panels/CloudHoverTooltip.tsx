@@ -5,7 +5,7 @@ import type { WaveformPeak } from "../../api/samples";
 import { useModule } from "../../modules/useModule";
 import { CategoryBadge } from "../../samples/CategoryBadge";
 import { readMiniWaveformColor } from "../../samples/miniWaveformColor";
-import { useSampleHoverPreview } from "../../samples/useSampleHoverPreview";
+import { useSamplePreview } from "../../samples/useSamplePreview";
 import { layoutWaveformBars } from "../../samples/waveformLayout";
 import { shortHash } from "../../shared/format";
 import { UNNAMED_SAMPLE_LABEL, UNTITLED_MODULE_LABEL } from "../../shared/labels";
@@ -48,8 +48,10 @@ function MiniWaveform({ peaks }: { readonly peaks: readonly WaveformPeak[] }): R
     return <canvas ref={canvasRef} width={WAVEFORM_WIDTH_PX} height={WAVEFORM_HEIGHT_PX} />;
 }
 
+const NO_PEAKS: readonly WaveformPeak[] = [];
+
 function SampleHoverTooltip({ hash, x, y }: EntityTooltipProps): ReactElement | null {
-    const state = useSampleHoverPreview(hash);
+    const state = useSamplePreview(hash);
     if (state.status !== "success") {
         return null;
     }
@@ -57,13 +59,13 @@ function SampleHoverTooltip({ hash, x, y }: EntityTooltipProps): ReactElement | 
     return (
         <div className="cloud-hover-tooltip" style={{ left: x, top: y }}>
             <div className="cloud-hover-name">
-                <OptionalLabel value={state.data.displayName} placeholder={UNNAMED_SAMPLE_LABEL} />
+                <OptionalLabel value={state.data.display_name} placeholder={UNNAMED_SAMPLE_LABEL} />
             </div>
             <div className="cloud-hover-meta">
                 <span className="entity-hash mono">{shortHash(hash)}</span>
-                <CategoryBadge sampleHash={hash} category={state.data.category} handLabel={state.data.handLabel} />
+                <CategoryBadge sampleHash={hash} category={state.data.category} handLabel={state.data.hand_label} />
             </div>
-            <MiniWaveform peaks={state.data.peaks} />
+            <MiniWaveform peaks={state.data.thumbnail ?? NO_PEAKS} />
         </div>
     );
 }

@@ -1,14 +1,15 @@
 import type { ChangeEvent, ReactElement } from "react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { MorphDistance } from "../../morph/MorphDistance";
 import { morphPreview } from "../../morph/morphPreview";
 import { useMorphStore, WEIGHT_STEP } from "../../morph/morphStore";
+import { MorphWaveform } from "../../morph/MorphWaveform";
+import { type EndpointReading, useEndpoint } from "../../morph/useEndpoint";
 import { type MorphStatus, useMorphStatus } from "../../morph/useMorphStatus";
 import { PlayButton } from "../../samples/PlayButton";
 import { useAudioPreview } from "../../samples/useAudioPreview";
-import { useSampleDetail } from "../../samples/useSampleDetail";
 import { classNames } from "../../shared/classNames";
 import { shortHash } from "../../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../../shared/labels";
@@ -21,19 +22,6 @@ const THUMB_CENTER_SHARE = 0.5;
 const NO_PAIR_HINT =
     "No morph pair yet — drag a sample from the Cloud to another with the right mouse button, or click one and right-click another.";
 const OFFLINE_NOTICE = "Morphing is offline: the inference service is not reachable.";
-
-interface EndpointReading {
-    readonly name: string;
-    readonly rateHz: number | null;
-}
-
-function useEndpoint(sampleHash: string): EndpointReading {
-    const state = useSampleDetail(sampleHash);
-    if (state.status !== "success") {
-        return { name: "", rateHz: null };
-    }
-    return { name: state.data.sample.display_name, rateHz: state.data.sample.playback_rate_hz };
-}
 
 /** Where the readout stands over the track: on the thumb's own center, whose travel the thumb's width shortens at either end. */
 function readoutOffset(weight: number): string {
@@ -108,18 +96,19 @@ function MorphPair({ first, second, status }: MorphPairProps): ReactElement {
     const clear = useMorphStore((state) => state.clear);
     const firstReading = useEndpoint(first);
     const secondReading = useEndpoint(second);
-    const { play, failure } = useAudioPreview();
-    const source = morphPreview(first, second, weight);
+    const { play } = useAudioPreview();
+    const [renderedWeight, setRenderedWeight] = useState<number | null>(null);
     const committedWeightRef = useRef(weight);
 
-    // A pointer or a key let go with the weight where it was, such as a Tab moving focus, plays nothing.
+    // A pointer or a key let go with the weight where it was, such as a Tab moving focus, asks for nothing.
     function commitWeight(): void {
         if (weight === committedWeightRef.current) {
             return;
         }
         committedWeightRef.current = weight;
         if (status.available) {
-            play(source);
+            setRenderedWeight(weight);
+            play(morphPreview(first, second, weight));
         }
     }
 
@@ -160,11 +149,14 @@ function MorphPair({ first, second, status }: MorphPairProps): ReactElement {
                 </div>
                 <span className="mono cell-muted">B</span>
             </div>
-            {failure?.key === source.key && (
-                <p className="panel-status error-notice" role="alert">
-                    {`The morph could not be played: ${failure.message}.`}
-                </p>
-            )}
+            <MorphWaveform
+                first={first}
+                second={second}
+                firstReading={firstReading}
+                secondReading={secondReading}
+                renderedWeight={renderedWeight}
+                available={status.available}
+            />
         </>
     );
 }
@@ -172,8 +164,12 @@ function MorphPair({ first, second, status }: MorphPairProps): ReactElement {
 /**
  * Two samples, a weight between them, and the morph that weight names: the pair comes from the
  * cloud's right-button gesture or from a Shift-click on a sample row, the slider mirrors the marker
- * on the cloud, and letting the slider go sounds the render through the shared preview element.
- * The panel says so when no inference process answers, and offers to look again.
+ * on the cloud, and letting the slider go sounds the render through the shared preview element and
+ * draws it over the traces of both ends. The panel says so when no inference process answers, and
+ * offers to look again.
+ *
+ * Each pair gets a panel of its own, so the render on screen belongs to the two samples under it
+ * and a swap or a fresh join starts from nothing drawn.
  */
 export function MorphPanel(): ReactElement {
     const first = useMorphStore((state) => state.first);
@@ -183,7 +179,7 @@ export function MorphPanel(): ReactElement {
     return (
         <div className="morph-panel">
             {first !== null && second !== null ? (
-                <MorphPair first={first} second={second} status={status} />
+                <MorphPair key={`${first}:${second}`} first={first} second={second} status={status} />
             ) : (
                 <p className="no-selection">{NO_PAIR_HINT}</p>
             )}

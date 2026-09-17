@@ -1564,7 +1564,21 @@ table.data td .annotation-editor-input {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    height: 100%;
     padding: 10px 12px;
+}
+
+/* The waveform takes whatever height the rows above it leave, down to the frame's own minimum. */
+.morph-wave {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+}
+
+.morph-wave .transport {
+    padding: 6px 0 0;
+    border-top: none;
+    background: transparent;
 }
 
 .morph-endpoints {

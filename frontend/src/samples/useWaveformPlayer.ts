@@ -96,7 +96,8 @@ function axisDrawing(axisSeconds: number | null, containerWidthPx: number): Axis
 
 /**
  * Wraps one wavesurfer.js instance scoped to a single audio source -- the only file in this
- * codebase touching wavesurfer's own API. Decoding the real audio via Web Audio, rather than
+ * codebase touching wavesurfer's own API, and holding an instance for as long as there is a source
+ * to draw. Decoding the real audio via Web Audio, rather than
  * rendering our own coarse preview peaks, gives the panel a properly detailed contour.
  * `setRateHz` takes the occurrence's real tracker rate and never preserves pitch when applying
  * it: a tracker occurrence's rate is its pitch, not an independent tempo control, and a source
@@ -110,7 +111,7 @@ function axisDrawing(axisSeconds: number | null, containerWidthPx: number): Axis
  * literally the string `"auto"`, which would fill the container's full height with no
  * aspect-ratio cap.
  */
-export function useWaveformPlayer(audioUrl: string, options: WaveformOptions): WaveformPlayer {
+export function useWaveformPlayer(audioUrl: string | null, options: WaveformOptions): WaveformPlayer {
     const { rateHz, axisSeconds, interactive, waveColor } = options;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const waveSurferRef = useRef<WaveSurfer | null>(null);
@@ -124,7 +125,7 @@ export function useWaveformPlayer(audioUrl: string, options: WaveformOptions): W
 
     useEffect(() => {
         const container = containerRef.current;
-        if (container === null) {
+        if (container === null || audioUrl === null) {
             return undefined;
         }
 

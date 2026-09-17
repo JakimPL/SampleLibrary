@@ -14,23 +14,29 @@ const FIRST = "a".repeat(64);
 const SECOND = "b".repeat(64);
 const FIRST_RATE_HZ = 8363;
 const SECOND_RATE_HZ = 16726;
+const STORED_SECONDS = 0.5;
 const MOVED_WEIGHT = 0.25;
 const MOVED_RENDER_URL = `/api/morph/audio?first=${FIRST}&second=${SECOND}&weight=${String(MOVED_WEIGHT)}`;
 
-const { getSample, getSampleRelations, getSimilarSamples, getSampleDistance, getMorphStatus, play } = vi.hoisted(
-    () => ({
+const { getSample, getSampleRelations, getSimilarSamples, getSampleDistance, getSamplePreview, getMorphStatus, play } =
+    vi.hoisted(() => ({
         getSample: vi.fn(),
         getSampleRelations: vi.fn().mockResolvedValue([]),
         getSimilarSamples: vi.fn().mockResolvedValue([]),
         getSampleDistance: vi.fn().mockReturnValue(new Promise(() => undefined)),
+        getSamplePreview: vi.fn().mockResolvedValue({
+            display_name: "",
+            category: null,
+            hand_label: null,
+            thumbnail: [{ minimum: -1, maximum: 1 }],
+        }),
         getMorphStatus: vi.fn(),
         play: vi.fn(),
-    }),
-);
+    }));
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations, getSimilarSamples, getSampleDistance };
+    return { ...actual, getSample, getSampleRelations, getSimilarSamples, getSampleDistance, getSamplePreview };
 });
 
 vi.mock("../../../src/api/morph", async () => {
@@ -80,14 +86,57 @@ const RELEASE_CASES: readonly ReleaseCase[] = [
     { name: "plays nothing while no inference process answers", available: false, moved: true, plays: false },
 ];
 
+/** What the waveform shows: whether a process answers, whether a weight has been let go, and whether a render stands drawn. */
+interface WaveformCase {
+    readonly name: string;
+    readonly available: boolean;
+    readonly released: boolean;
+    readonly drawn: boolean;
+}
+
+const WAVEFORM_CASES: readonly WaveformCase[] = [
+    {
+        name: "waits for a weight to be let go before it draws anything",
+        available: true,
+        released: false,
+        drawn: false,
+    },
+    { name: "draws the render once a weight has been let go", available: true, released: true, drawn: true },
+    { name: "draws nothing while no inference process answers", available: false, released: true, drawn: false },
+];
+
 function serveSamples(): void {
     getSample.mockImplementation((hash: string) =>
         Promise.resolve(
             hash === FIRST
-                ? { hash, display_name: "kick_808", playback_rate_hz: FIRST_RATE_HZ }
-                : { hash, display_name: "", playback_rate_hz: SECOND_RATE_HZ },
+                ? {
+                      hash,
+                      display_name: "kick_808",
+                      playback_rate_hz: FIRST_RATE_HZ,
+                      duration_seconds: STORED_SECONDS,
+                  }
+                : { hash, display_name: "", playback_rate_hz: SECOND_RATE_HZ, duration_seconds: STORED_SECONDS },
         ),
     );
+}
+
+async function showPair(available: boolean): Promise<void> {
+    getMorphStatus.mockResolvedValue(
+        available ? { available: true, service: SERVICE } : { available: false, service: null },
+    );
+    serveSamples();
+    useMorphStore.getState().join(FIRST, SECOND);
+    renderPanel();
+    await screen.findByText("kick_808");
+    if (!available) {
+        await screen.findByRole("status");
+    }
+}
+
+function letTheSliderGo(weight: number): void {
+    const slider = screen.getByRole("slider", { name: "Morph weight" });
+    fireEvent.change(slider, { target: { value: String(weight) } });
+    fireEvent.pointerUp(slider);
 }
 
 describe("MorphPanel", () => {
@@ -155,6 +204,36 @@ describe("MorphPanel", () => {
                 playbackRateHz: null,
             });
         }
+    });
+
+    it.each(WAVEFORM_CASES)("$name", async ({ available, released, drawn }: WaveformCase) => {
+        await showPair(available);
+        if (released) {
+            letTheSliderGo(MOVED_WEIGHT);
+        }
+
+        const playMorph = screen.getByRole("button", { name: "Play the morph" });
+        if (drawn) {
+            expect(playMorph).toBeEnabled();
+            expect(screen.queryByText(/Let the slider go/)).not.toBeInTheDocument();
+        } else {
+            expect(playMorph).toBeDisabled();
+            expect(screen.getByText(/Let the slider go/)).toBeInTheDocument();
+        }
+    });
+
+    it("sounds the point already drawn again, at the weight it was drawn for", async () => {
+        await showPair(true);
+        letTheSliderGo(MOVED_WEIGHT);
+        play.mockClear();
+
+        fireEvent.click(screen.getByRole("button", { name: "Play the morph" }));
+
+        expect(play).toHaveBeenCalledWith({
+            key: MOVED_RENDER_URL,
+            url: MOVED_RENDER_URL,
+            playbackRateHz: null,
+        });
     });
 
     it("highlights an end on a click of its hash, staying on the panel", async () => {

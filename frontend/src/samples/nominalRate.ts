@@ -18,3 +18,14 @@ export function playbackRateFor(playbackRateHz: number): number {
 export function soundedRate(playbackRateHz: number | null): number {
     return playbackRateHz === null ? AS_THE_FILE_STATES : playbackRateFor(playbackRateHz);
 }
+
+/**
+ * How long a stored file really sounds: the length its frames take at the nominal rate, stretched
+ * or shortened by the speed the library runs it at.
+ *
+ * A sample the catalog reads slower than the file states lasts longer than the file does, which is
+ * the length it takes beside anything else heard with it.
+ */
+export function heardSeconds(storedSeconds: number, playbackRateHz: number | null): number {
+    return storedSeconds / soundedRate(playbackRateHz);
+}
