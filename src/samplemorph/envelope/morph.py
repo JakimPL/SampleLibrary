@@ -8,8 +8,7 @@ from numpy.typing import NDArray
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
 from samplemorph.envelope.split import SplitSpectrum, split_spectrum
 from samplemorph.geometry import LogFrequencyGeometry
-from samplemorph.transport.analysis import TransportAnalysis
-from samplemorph.transport.frame_reading import read_frames
+from samplemorph.transport.analysis import TransportAnalysis, read_magnitude
 from samplemorph.transport.morph import (
     FIRST_END_WEIGHT,
     SECOND_END_WEIGHT,
@@ -81,10 +80,8 @@ class EnvelopePath:
         settings: TransportSettings,
     ) -> SplitSpectrum:
         """A sound read where a time map points, split into its envelope and its excitation."""
-        energy = read_frames(
-            analysis.energy, positions=positions, rates=rates, maximum_half_width=settings.maximum_reading_half_width
-        )
-        return split_spectrum(np.sqrt(np.maximum(energy, 0.0)).astype(np.float32), settings=self.envelope_settings)
+        magnitude = read_magnitude(analysis, positions=positions, rates=rates, settings=settings)
+        return split_spectrum(magnitude, settings=self.envelope_settings)
 
     def _excitation_under(self, first: SplitSpectrum, second: SplitSpectrum, *, weight: float) -> NDArray[np.float32]:
         """The excitation the settings name at this weight: one sound's whole, or the two crossfaded."""

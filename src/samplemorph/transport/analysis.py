@@ -9,6 +9,7 @@ from scipy.ndimage import convolve1d
 from samplecore.auditory.strikes import main_onset
 from samplemorph.canonicalizers.common import PreparedMono, analysis_transform
 from samplemorph.geometry import LogFrequencyGeometry
+from samplemorph.transport.frame_reading import read_frames
 from samplemorph.transport.settings import TransportSettings
 
 
@@ -76,6 +77,24 @@ def analysis_from_energy(
         onset_sample=onset_sample,
         sample_count=sample_count,
     )
+
+
+def read_magnitude(
+    analysis: TransportAnalysis,
+    *,
+    positions: NDArray[np.float64],
+    rates: NDArray[np.float64],
+    settings: TransportSettings,
+) -> NDArray[np.float32]:
+    """A sound's amplitudes where a time map points: its energy read along the map, rooted.
+
+    Shapes: `positions` and `rates` are ``(output frames,)`` and the result ``(bins, output frames)``.
+    """
+    energy = read_frames(
+        analysis.energy, positions=positions, rates=rates, maximum_half_width=settings.maximum_reading_half_width
+    )
+    magnitude: NDArray[np.float32] = np.sqrt(np.maximum(energy, 0.0)).astype(np.float32)
+    return magnitude
 
 
 def _outline(energy: NDArray[np.float32], *, settings: TransportSettings) -> NDArray[np.float32]:
