@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import shutil
 from dataclasses import replace
+from http import HTTPStatus
 from pathlib import Path
 
 import numpy as np
@@ -11,21 +12,31 @@ import soundfile
 from fastapi.testclient import TestClient
 
 from samplecore.models.morph import MORPH_WEIGHT_STEPS, HeardMorphPoint
+from samplecore.storage import audio_store
+from samplemorph.canonicalizers.common import analysis_transform
+from samplemorph.envelope.filtering import filtered_waveform
+from samplemorph.envelope.payload import response_from_payload
+from samplemorph.envelope.response import HeldEnd
+from samplemorph.envelope.settings import EnvelopeSettings, Timeline
+from samplemorph.geometry import log_frequency_geometry
 from samplemorph.model_store import MODELS_DIRECTORY_NAME, PRINCIPAL_COMPONENT_CODEC_NAME
 from samplemorph.registries import PGHI_VOCODER_NAME
 from samplemorph.rendering import FULL_SCALE_CEILING
 from samplemorph.routes.kinds import RouteKind
+from samplemorph.routes.route import hear_in_frame
 from samplemorph.routes.selection import PROCESSOR
 from samplemorph.service.app import create_app
 from samplemorph.service.renderer import MorphRenderer, load_renderer
-from samplemorph.service.settings import ServiceSettings
+from samplemorph.service.settings import RESPONSE_MEDIA_TYPE, ServiceSettings
 from tests.samplemorph.service.conftest import StoredLibrary
 
 AUDIO_PATH = "/morph/audio"
+RESPONSE_PATH = "/morph/response"
 STATUS_PATH = "/morph/status"
 DIGEST_LENGTH = 64
 FIRST_RATE_HZ = 8_363
 SECOND_RATE_HZ = 16_726
+SOUND_TOLERANCE = 1e-6
 
 
 def _renderer(client: TestClient) -> MorphRenderer:
@@ -212,3 +223,93 @@ def test_a_file_holding_another_sample_than_the_one_named_is_refused(
 
     assert response.status_code == 404
     assert "holds another sample" in response.json()["detail"]
+
+
+def _pair_params(library: StoredLibrary) -> dict[str, str | float | int]:
+    return {
+        "first": library.hashes[0],
+        "second": library.hashes[1],
+        "first_rate_hz": FIRST_RATE_HZ,
+        "second_rate_hz": SECOND_RATE_HZ,
+    }
+
+
+def test_a_pair_answers_with_the_filter_between_its_two_samples(
+    envelope_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        answered = client.get(RESPONSE_PATH, params=_pair_params(library))
+
+        assert answered.status_code == HTTPStatus.OK
+        assert answered.headers["content-type"] == RESPONSE_MEDIA_TYPE
+        response = response_from_payload(answered.content)
+        assert response.description.rate_hz == max(FIRST_RATE_HZ, SECOND_RATE_HZ)
+        assert response.first.held is HeldEnd.FIRST
+        assert response.second.held is HeldEnd.SECOND
+
+
+def test_a_pair_asked_for_twice_is_read_once(envelope_settings: ServiceSettings, library: StoredLibrary) -> None:
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        for _ in range(2):
+            client.get(RESPONSE_PATH, params=_pair_params(library))
+
+        assert _renderer(client).response_count == 1
+
+
+def test_a_caller_holding_the_filter_is_answered_without_reading_it_again(
+    envelope_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        first = client.get(RESPONSE_PATH, params=_pair_params(library))
+
+        again = client.get(
+            RESPONSE_PATH, params=_pair_params(library), headers={"If-None-Match": first.headers["etag"]}
+        )
+
+        assert again.status_code == HTTPStatus.NOT_MODIFIED
+        assert again.content == b""
+
+
+def test_a_process_serving_another_route_says_it_holds_no_filter(
+    settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        answered = client.get(RESPONSE_PATH, params=_pair_params(library))
+
+        assert answered.status_code == HTTPStatus.CONFLICT
+        assert "filter" in answered.json()["detail"]
+
+
+def test_a_pair_naming_a_sample_the_store_lacks_is_refused(
+    envelope_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        answered = client.get(RESPONSE_PATH, params={**_pair_params(library), "second": "f" * DIGEST_LENGTH})
+
+        assert answered.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_the_filter_a_pair_answers_with_returns_that_sample_as_the_pair_hears_it(
+    envelope_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    held_to_first = replace(
+        envelope_settings,
+        selection=envelope_settings.selection.model_copy(
+            update={"envelope": EnvelopeSettings(timeline=Timeline.FIRST)}
+        ),
+    )
+    with TestClient(create_app(load_renderer(held_to_first))) as client:
+        response = response_from_payload(client.get(RESPONSE_PATH, params=_pair_params(library)).content)
+
+    heard = hear_in_frame(
+        audio_store.read_object(library.root, library.hashes[0]).pcm,
+        rate_hz=float(FIRST_RATE_HZ),
+        target_rate_hz=response.description.rate_hz,
+    )
+    geometry = log_frequency_geometry()
+
+    filtered = filtered_waveform(
+        analysis_transform(heard.mono, geometry=geometry), response.first, weight=0.0, geometry=geometry
+    )
+
+    np.testing.assert_allclose(filtered, heard.mono, atol=SOUND_TOLERANCE)

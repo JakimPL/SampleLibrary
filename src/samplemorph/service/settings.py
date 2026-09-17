@@ -9,10 +9,12 @@ from samplemorph.routes.selection import RouteSelection
 MEBIBYTE: Final[int] = 2**20
 RENDER_CACHE_BYTES: Final[int] = 128 * MEBIBYTE
 PAIR_CACHE_BYTES: Final[int] = 256 * MEBIBYTE
+RESPONSE_CACHE_BYTES: Final[int] = 64 * MEBIBYTE
 MAXIMUM_RATE_RATIO: Final[float] = 16.0
 MAXIMUM_RENDER_FRAMES: Final[int] = 2**20
 CACHE_CONTROL: Final[str] = "private, no-cache"
 WAV_MEDIA_TYPE: Final[str] = "audio/wav"
+RESPONSE_MEDIA_TYPE: Final[str] = "application/octet-stream"
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,7 @@ class RenderLimits:
     maximum_frames: int = MAXIMUM_RENDER_FRAMES
     render_cache_bytes: int = RENDER_CACHE_BYTES
     pair_cache_bytes: int = PAIR_CACHE_BYTES
+    response_cache_bytes: int = RESPONSE_CACHE_BYTES
 
 
 @dataclass(frozen=True)

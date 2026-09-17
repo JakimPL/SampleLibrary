@@ -5,14 +5,15 @@ from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
-from samplecore.models.morph import HeardMorphPoint, MorphServiceStatus
+from samplecore.models.morph import HeardMorphPoint, MorphPair, MorphServiceStatus
 from samplecore.storage.sample_audio import SampleUnavailableError
 from samplemorph.service.dependencies import get_renderer
-from samplemorph.service.renderer import MorphRenderer, RenderBoundsError
-from samplemorph.service.settings import CACHE_CONTROL, WAV_MEDIA_TYPE
+from samplemorph.service.renderer import MorphRenderer, RenderBoundsError, ResponseUnavailableError
+from samplemorph.service.settings import CACHE_CONTROL, RESPONSE_MEDIA_TYPE, WAV_MEDIA_TYPE
 
 ANY_ENTITY_TAG: Final[str] = "*"
 WEAK_TAG_PREFIX: Final[str] = "W/"
+CONDITIONAL_HEADER: Final[str] = "if-none-match"
 
 router = APIRouter(prefix="/morph", tags=["morph"])
 
@@ -36,7 +37,7 @@ def get_morph_audio(
     """
     etag = renderer.etag(point)
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
-    if _matches(request.headers.get("if-none-match"), etag):
+    if _matches(request.headers.get(CONDITIONAL_HEADER), etag):
         return Response(status_code=HTTPStatus.NOT_MODIFIED, headers=headers)
 
     try:
@@ -48,6 +49,41 @@ def get_morph_audio(
         raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(error)) from error
 
     return Response(content=rendered, media_type=WAV_MEDIA_TYPE, headers=headers)
+
+
+@router.get("/response", response_class=Response)
+def get_morph_response(
+    pair: Annotated[MorphPair, Query()],
+    request: Request,
+    renderer: MorphRenderer = Depends(get_renderer),
+) -> Response:
+    """The filter between two samples, which a caller applies at every weight between them.
+
+    One answer serves a whole path, so a caller holding it moves its own weight without asking
+    again. The response names itself with a validator built from the loaded route and the pair, so a
+    caller that already holds the filter is answered with a bare 304.
+
+    Raises:
+        HTTPException: 404 when the store holds no object for an end, or an end's file is gone, holds
+            another sample or lies outside every sample directory served; 409 when this process
+            serves a route that has no filter form; 422 when the pair reaches past the process's limits.
+    """
+    etag = renderer.pair_etag(pair)
+    headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
+    if _matches(request.headers.get(CONDITIONAL_HEADER), etag):
+        return Response(status_code=HTTPStatus.NOT_MODIFIED, headers=headers)
+
+    try:
+        renderer.check_bounds(pair)
+        written = renderer.response(pair)
+    except (FileNotFoundError, SampleUnavailableError) as error:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from error
+    except ResponseUnavailableError as error:
+        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(error)) from error
+    except RenderBoundsError as error:
+        raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(error)) from error
+
+    return Response(content=written, media_type=RESPONSE_MEDIA_TYPE, headers=headers)
 
 
 @router.get("/status")
