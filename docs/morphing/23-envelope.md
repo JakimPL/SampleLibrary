@@ -52,13 +52,14 @@ end, so a slider says at 1.0 exactly what the path arrives at.
 
 ## Parameters
 
-`EnvelopeSettings` (`samplemorph/envelope/settings.py`) holds three settings.
+`EnvelopeSettings` (`samplemorph/envelope/settings.py`) holds four settings.
 
 | Parameter | Default | What it does |
 |---|---|---|
-| `coefficient_count` | 40 | How many cosines draw the envelope. Fewer make it smoother, so more of a sound's fine structure counts as excitation; more let it follow individual harmonics, so less of the timbre travels. At 40 over the 2,049 bins of a 4,096-point analysis, the envelope keeps ripples slower than about 50 bins per cycle. |
+| `coefficient_count` | 40 | How many cosines draw the envelope. Fewer make it smoother, so more of a sound's fine structure counts as excitation; more let it follow individual harmonics, so less of the timbre travels. At 40 over the 1,025 bins of a 2,048-point analysis, the envelope keeps ripples slower than about 50 bins per cycle. |
 | `floor_db` | 80 | How deep under the sound's loudest bin the loudness is read. A silent frame's envelope lies flat at this floor. |
 | `excitation` | `first` | Whose excitation sounds under the moving envelope: `first` keeps the first sound's along the whole path, `second` the second's, and `both` crossfades the two with the weight. |
+| `timeline` | `morphed` | Whose course through time the path is heard on: `morphed` runs between the two lengths, and `first` or `second` holds one sound's course, so every point lasts exactly as long as that sound. |
 
 The three choices give three different paths:
 
@@ -128,6 +129,52 @@ than a partial-wise morph assumed, and not fully so.
 - **Percussion is a filter sweep.** With no pitch content to keep, the route plays the first sound
   through an envelope moving toward the second's. Whether that is a morph or an equalizer is a
   matter for the ear, and it has been heard on tonal material only so far.
+
+## The held timeline, and the filter the route becomes
+
+The time map the route reads is built at the morph weight, so the path's length runs from one
+sound's to the other's along a geometric curve (`transport/time_map.py`): a one-second sample against
+a two-and-a-half-second one plays for one second at weight 0 and for two and a half at weight 1.
+For listening at a slider that is the honest reading. For an instrument playing a note at a time it
+is unusable, because turning a knob changes how long the note lasts.
+
+`Timeline` holds the map to one end instead. The weight-dependence of the alignment is shallower
+than it looks: the correspondence between the two sounds' frames is weight-free, and the weight only
+sets the output length, places the onset and reparameterizes the traversal. At weight 0 the first
+sound's positions are the identity and its rates are all 1, which the transport's own tests pin, so
+a map built there reads the first sound exactly as it was analyzed and the second compressed onto
+its grid.
+
+That is what turns the route into a filter. With the map held to the first sound and its excitation
+kept, the magnitude at weight `w` is
+
+    magnitude(w) = envelope_first^(1-w) · envelope_second^w · excitation_first
+                 = magnitude_first · (envelope_second / envelope_first)^w
+
+because the kept excitation *is* the first sound's magnitude divided by its own envelope. The first
+sound's own spectrum appears undivided, so its measured phase can be used and the phase gradient
+integration — around 85% of what a render costs — is not needed at all. Held to the second sound the
+form mirrors: `magnitude_second · (envelope_first / envelope_second)^(1-w)`, on the second sound's
+course and at its length.
+
+The ratio is cheap to carry. An envelope is `exp(idct(dct(log magnitude)[:coefficient_count]))`, so
+its logarithm *is* an inverse cosine transform of `coefficient_count` numbers, and the logarithm of
+the ratio between two envelopes is the inverse transform of the difference of their two cepstra.
+The whole path between two sounds is therefore 40 floats per frame — about 55 KB per second of audio
+against 1.4 MB for the same thing bin by bin — and a weight is one number multiplying them before
+they are read back.
+
+`samplemorph.envelope.response` measures both filters of a pair, one per held end, and
+`samplemorph.envelope.filtering` applies either at any weight; `samplemorph.envelope.payload` writes
+them as bytes a reader of any language parses. `samplelibrary morph response` exports that file and
+`GET /morph/response` serves it, which is what lets a caller ask once per pair and then move a
+knob without asking again.
+
+What it does not do: `both` has no filter form, since it crossfades two excitations and the second
+sound arrives with no phase of its own. And a held path is not the morphed path — the far sound's
+envelope is read along the held sound's course, so a short sound against a long one contributes a
+stretched envelope. `morph compare --timelines morphed first` renders the two side by side for the
+ear to settle.
 
 ## Where this stands
 

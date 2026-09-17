@@ -112,6 +112,17 @@ sounds under the moving envelope: `first` keeps the first sound's along the whol
 the second's, and `both` crossfades the two with the weight. With one excitation kept, the far end
 of the path is that sound's pitch content under the other sound's envelope.
 
+**Timeline** (`EnvelopeSettings.timeline`). On the envelope route, whose course through time the
+path is heard on. `morphed` reads both sounds along a course between theirs, so a point lasts
+between the two lengths; `first` and `second` hold one sound's course, so every point lasts exactly
+as long as that sound and reads it as it was analyzed. A held course is what lets a morph keep one
+length from end to end, and what turns the route into a filter on the held sound.
+
+**Morph response** (`samplemorph.envelope.response`). The filter between an ordered pair of sounds,
+as the cepstral coefficients of the ratio between their two envelopes, one set per held end. A
+weight is one number multiplying the coefficients, so a pair is read once and every point between
+the two follows from it without further reading. See [`23-envelope.md`](23-envelope.md).
+
 **Degeneration.** The property that the partials route, given two sounds with no tracked partials,
 renders bit for bit what the transport route renders. It is what lets the route be adopted for tonal
 material without changing what percussion already sounds like.
