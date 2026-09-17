@@ -10,8 +10,8 @@ from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import port_number
 from samplecore.config import LibraryConfig
 from samplecore.exit_status import ExitStatus
-from samplemorph.routes.selection import read_route_selection
-from samplemorph.service.settings import DEFAULT_SELECTION_PATH, ServiceSettings
+from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, read_route_selection
+from samplemorph.service.settings import ServiceSettings
 
 COMMAND_NAME: Final[str] = "serve"
 

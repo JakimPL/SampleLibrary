@@ -6,7 +6,6 @@ from typing import Final
 
 from samplemorph.routes.selection import RouteSelection
 
-DEFAULT_SELECTION_PATH: Final[Path] = Path(__file__).resolve().parents[3] / "morph.yaml"
 MEBIBYTE: Final[int] = 2**20
 RENDER_CACHE_BYTES: Final[int] = 128 * MEBIBYTE
 PAIR_CACHE_BYTES: Final[int] = 256 * MEBIBYTE

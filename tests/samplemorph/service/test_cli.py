@@ -11,10 +11,10 @@ from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, InferenceConfig
 from samplecore.exit_status import ExitStatus
 from samplemorph.cli import MorphCommand, main
 from samplemorph.routes.kinds import RouteKind
-from samplemorph.routes.selection import PROCESSOR, read_route_selection
+from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, PROCESSOR, read_route_selection
 from samplemorph.service import renderer as renderer_module
 from samplemorph.service.renderer import load_renderer
-from samplemorph.service.settings import DEFAULT_SELECTION_PATH, ServiceSettings
+from samplemorph.service.settings import ServiceSettings
 
 PROGRAM = "samplelibrary morph"
 CONFIGURED_HOST = "0.0.0.0"

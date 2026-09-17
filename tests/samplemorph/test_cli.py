@@ -32,6 +32,8 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplemorph.cli import main
 from samplemorph.descriptors.descriptor_shape import DESCRIPTOR_SIZE
+from samplemorph.envelope.payload import response_from_payload
+from samplemorph.envelope.response import HeldEnd
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
 from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.listening.pairs import CatalogPair, PairEnd, PairSet, write_pair_set
@@ -843,3 +845,69 @@ def test_parsing_a_morph_command_loads_no_network_library() -> None:
     )
 
     assert finished.returncode == 0
+
+
+def test_a_response_is_written_as_the_filter_between_two_samples(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hashes = _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    selection = tmp_path / "morph.yaml"
+    selection.write_text("route: envelope\n", encoding="utf-8")
+    output = tmp_path / "response.bin"
+
+    main(
+        [
+            "response",
+            "--first",
+            hashes[0],
+            "--second",
+            hashes[-1],
+            "--selection",
+            str(selection),
+            "--output",
+            str(output),
+        ],
+        prog=PROGRAM,
+    )
+
+    response = response_from_payload(output.read_bytes())
+    assert response.description.coefficient_count == EnvelopeSettings().coefficient_count
+    assert response.first.held is HeldEnd.FIRST
+    assert response.second.held is HeldEnd.SECOND
+    assert response.first.coefficients.shape[1] == response.first.description.frame_count
+
+
+def test_a_response_asked_for_under_another_route_says_so(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    hashes = _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    selection = tmp_path / "morph.yaml"
+    selection.write_text("route: transport\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "response",
+                "--first",
+                hashes[0],
+                "--second",
+                hashes[-1],
+                "--selection",
+                str(selection),
+                "--output",
+                str(tmp_path / "response.bin"),
+            ],
+            prog=PROGRAM,
+        )
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert "Wrote nothing: a response is the envelope route's filter" in capsys.readouterr().err

@@ -15,6 +15,7 @@ from samplemorph.pipeline import RouteChoice
 from samplemorph.registries import DEFAULT_MORPHER_NAME, DEFAULT_VOCODER_NAME
 from samplemorph.routes.kinds import RouteKind
 
+DEFAULT_SELECTION_PATH: Final[Path] = Path(__file__).resolve().parents[3] / "morph.yaml"
 PROCESSOR: Final[str] = "cpu"
 DEFAULT_LATENT_CHOICE: Final[RouteChoice] = RouteChoice(
     model_name=DEFAULT_MODEL_NAME,

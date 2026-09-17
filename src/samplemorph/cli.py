@@ -18,6 +18,7 @@ from samplemorph.commands import (
     measure,
     publish,
     render,
+    response,
     train_codec,
     train_descriptor,
     train_restorer,
@@ -41,6 +42,7 @@ class MorphCommand(StrEnum):
     MEASURE = measure.COMMAND_NAME
     DRAW_PAIRS = draw_pairs.COMMAND_NAME
     COMPARE = compare.COMMAND_NAME
+    RESPONSE = response.COMMAND_NAME
     PUBLISH = publish.COMMAND_NAME
     SERVE = service_cli.COMMAND_NAME
 
@@ -72,6 +74,8 @@ def main(argv: list[str], *, prog: str) -> None:
             _on_catalog(draw_pairs.run, config, arguments)
         case MorphCommand.COMPARE:
             _on_catalog(compare.run, config, arguments)
+        case MorphCommand.RESPONSE:
+            _on_catalog(response.run, config, arguments)
         case MorphCommand.PUBLISH:
             publish.run(config, arguments)
 
@@ -96,6 +100,7 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     measure.add_parser(commands)
     draw_pairs.add_parser(commands)
     compare.add_parser(commands)
+    response.add_parser(commands)
     publish.add_parser(commands)
     service_cli.add_parser(commands)
     return parser.parse_args(argv)
