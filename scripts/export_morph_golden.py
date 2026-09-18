@@ -9,8 +9,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
-from samplemorph.canonicalizers.common import prepare_mono
-from samplemorph.envelope.filtering import response_gain
+from samplemorph.canonicalizers.common import analysis_transform, prepare_mono
+from samplemorph.envelope.filtering import filtered_waveform, response_gain
 from samplemorph.envelope.payload import RESPONSE_FORMAT_VERSION, response_payload
 from samplemorph.envelope.response import HeldEnd, ResponseReading, build_envelope_response
 from samplemorph.envelope.settings import EnvelopeSettings
@@ -18,8 +18,8 @@ from samplemorph.geometry import log_frequency_geometry
 from samplemorph.transport.analysis import analyze
 from samplemorph.transport.settings import TransportSettings
 
-FIRST_SECONDS: Final[float] = 0.3
-SECOND_SECONDS: Final[float] = 0.45
+FIRST_SECONDS: Final[float] = 0.2
+SECOND_SECONDS: Final[float] = 0.3
 FIRST_HZ: Final[float] = 220.0
 SECOND_HZ: Final[float] = 330.0
 LOW_HZ: Final[float] = 55.0
@@ -27,8 +27,10 @@ PARTIAL_COUNT: Final[int] = 9
 DECAY_PER_SECOND: Final[float] = 6.0
 SILENT_SHARE: Final[float] = 0.25
 GOLDEN_WEIGHTS: Final[tuple[float, ...]] = (0.0, 0.5, 1.0)
-SAMPLED_FRAME_COUNT: Final[int] = 5
+SAMPLED_FRAME_COUNT: Final[int] = 3
 LOG_GAIN_TOLERANCE: Final[float] = 1e-5
+WAVEFORM_TOLERANCE: Final[float] = 1e-4
+FILTERED_WEIGHTS: Final[dict[HeldEnd, tuple[float, ...]]] = {HeldEnd.FIRST: (0.5, 1.0), HeldEnd.SECOND: (0.5, 0.0)}
 
 
 def _voice(seconds: float, *, frequency_hz: float, decay: float) -> NDArray[np.float64]:
@@ -58,6 +60,11 @@ def _gain_name(held: HeldEnd, weight: float) -> str:
     return f"log_gain_{held.value}_w{int(round(weight * 100)):03d}.f32"
 
 
+def _filtered_name(held: HeldEnd, weight: float) -> str:
+    """What one fixture of a filtered waveform is called: the end it holds, and the weight it stands at."""
+    return f"filtered_{held.value}_w{int(round(weight * 100)):03d}.f32"
+
+
 def export(output_directory: Path) -> None:
     """Write the fixtures the C++ reader and filter are checked against."""
     output_directory.mkdir(parents=True, exist_ok=True)
@@ -84,8 +91,17 @@ def export(output_directory: Path) -> None:
             gain = response_gain(response, held=held, weight=weight).astype(np.float64)
             _write_floats(output_directory / _gain_name(held, weight), np.log(gain).T[frames, :])
 
+    for held, mono in sounds.items():
+        _write_floats(output_directory / f"source_{held.value}.f32", mono)
+        transform = analysis_transform(mono, geometry=geometry)
+        for weight in FILTERED_WEIGHTS[held]:
+            filtered = filtered_waveform(transform, response.filter_held_to(held), weight=weight, geometry=geometry)
+            _write_floats(output_directory / _filtered_name(held, weight), filtered)
+
     manifest = {
         "format_version": RESPONSE_FORMAT_VERSION,
+        "filtered_weights": {held.value: list(weights) for held, weights in FILTERED_WEIGHTS.items()},
+        "waveform_tolerance": WAVEFORM_TOLERANCE,
         "rate_hz": NOMINAL_WAV_RATE,
         "weights": list(GOLDEN_WEIGHTS),
         "sampled_frames": sampled,
