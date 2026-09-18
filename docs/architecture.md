@@ -498,7 +498,10 @@ are bounded by the bytes they hold.
 
 Beside the audio and the status, a process serving the envelope route answers `GET /morph/response`
 with the filter between two samples, named by a validator over the pair alone since it holds at
-every weight between them. The API relays the audio and the status, which is what a browser plays
+every weight between them, and `POST /morph/response` with the filter between two audio files the
+caller uploads, which is how a sampler holding its own audio asks. Uploads are named by a digest of
+their bytes, carry at most `MAXIMUM_UPLOAD_BYTES` each, and are heard at the higher of the two rates
+their files state. The API relays the audio and the status, which is what a browser plays
 and what it asks before offering to; a caller of the filter renders its own audio from it and dials
 the process directly, so the filter travels between the two of them alone. A process serving another route answers 409,
 naming the route it serves, and the response cache is bounded by its bytes the way the others are.

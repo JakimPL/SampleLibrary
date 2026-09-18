@@ -166,9 +166,10 @@ they are read back.
 
 `samplemorph.envelope.response` measures both filters of a pair, one per held end, and
 `samplemorph.envelope.filtering` applies either at any weight; `samplemorph.envelope.payload` writes
-them as bytes a reader of any language parses. `samplelibrary morph response` exports that file and
-`GET /morph/response` serves it, which is what lets a caller ask once per pair and then move a
-knob without asking again.
+them as bytes a reader of any language parses. `samplelibrary morph response` exports that file,
+`GET /morph/response` serves it for two cataloged samples and `POST /morph/response` for two audio
+files a caller uploads, which is what lets a caller ask once per pair and then move a knob without
+asking again.
 
 What it does not do: `both` has no filter form, since it crossfades two excitations and the second
 sound arrives with no phase of its own. And a held path is not the morphed path — the far sound's

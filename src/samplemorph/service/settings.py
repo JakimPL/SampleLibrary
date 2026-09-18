@@ -10,6 +10,7 @@ MEBIBYTE: Final[int] = 2**20
 RENDER_CACHE_BYTES: Final[int] = 128 * MEBIBYTE
 PAIR_CACHE_BYTES: Final[int] = 256 * MEBIBYTE
 RESPONSE_CACHE_BYTES: Final[int] = 64 * MEBIBYTE
+MAXIMUM_UPLOAD_BYTES: Final[int] = 64 * MEBIBYTE
 MAXIMUM_RATE_RATIO: Final[float] = 16.0
 MAXIMUM_RENDER_FRAMES: Final[int] = 2**20
 CACHE_CONTROL: Final[str] = "private, no-cache"
@@ -34,6 +35,7 @@ class RenderLimits:
     render_cache_bytes: int = RENDER_CACHE_BYTES
     pair_cache_bytes: int = PAIR_CACHE_BYTES
     response_cache_bytes: int = RESPONSE_CACHE_BYTES
+    maximum_upload_bytes: int = MAXIMUM_UPLOAD_BYTES
 
 
 @dataclass(frozen=True)

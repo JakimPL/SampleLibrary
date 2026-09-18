@@ -33,6 +33,7 @@ morph = [
     "uvicorn>=0.35",
     "mlflow>=3.6",
     "pyyaml>=6.0",
+    "python-multipart>=0.0.20",
 ]
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]

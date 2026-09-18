@@ -3,8 +3,9 @@ from __future__ import annotations
 import hashlib
 import math
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Final
+from typing import IO, Final
 
 import numpy as np
 from numpy.typing import NDArray
@@ -27,6 +28,7 @@ from samplemorph.routes.named import NamedRoute, select_route
 from samplemorph.routes.route import HeardMono, PreparedPair, hear_in_frame
 from samplemorph.service.caches import LruCache
 from samplemorph.service.settings import ServiceSettings
+from samplemorph.service.uploads import UploadedSound, decode_upload
 
 ETAG_LENGTH: Final[int] = 32
 WARM_UP_FRAMES: Final[int] = 4096
@@ -34,6 +36,7 @@ WARM_UP_FREQUENCY_HZ: Final[float] = 440.0
 WARM_UP_WEIGHT: Final[float] = 0.5
 
 PairKey = tuple[str, str, float, float]
+ResponseKey = MorphPair | tuple[str, str]
 
 
 class RenderBoundsError(ValueError):
@@ -65,7 +68,9 @@ class MorphRenderer:
         self._renders: LruCache[HeardMorphPoint, bytes] = LruCache(
             capacity=settings.limits.render_cache_bytes, weigh=len
         )
-        self._responses: LruCache[MorphPair, bytes] = LruCache(capacity=settings.limits.response_cache_bytes, weigh=len)
+        self._responses: LruCache[ResponseKey, bytes] = LruCache(
+            capacity=settings.limits.response_cache_bytes, weigh=len
+        )
         self._cache_lock = threading.Lock()
         self._render_lock = threading.Lock()
 
@@ -94,23 +99,36 @@ class MorphRenderer:
             FileNotFoundError: the store holds no object for an end read from the store.
             SampleUnavailableError: an end's file is gone, unreadable, or outside every sample directory served.
         """
-        limits = self._settings.limits
         first_rate, second_rate = float(pair.first_rate_hz), float(pair.second_rate_hz)
-        rate_hz = common_rate(first_rate, second_rate)
-        ratio = rate_hz / min(first_rate, second_rate)
-        if ratio > limits.maximum_rate_ratio:
-            raise RenderBoundsError(
-                f"the two ends are heard {ratio:.1f} times apart in rate, and a morph spans at most "
-                f"{limits.maximum_rate_ratio:g}"
-            )
+        rate_hz = self._pair_rate(first_rate, second_rate)
         ends = ((pair.first, pair.first_file, first_rate), (pair.second, pair.second_file, second_rate))
         for sample_hash, sample_file, heard_rate in ends:
-            frames = math.ceil(self._frame_count(sample_hash, sample_file) * rate_hz / heard_rate)
-            if frames > limits.maximum_frames:
-                raise RenderBoundsError(
-                    f"sample {sample_hash} would render {frames} frames in this pair, past the {limits.maximum_frames} "
-                    "one morph renders"
-                )
+            self._check_frames(
+                f"sample {sample_hash}",
+                frame_count=self._frame_count(sample_hash, sample_file),
+                heard_rate_hz=heard_rate,
+                rate_hz=rate_hz,
+            )
+
+    def check_upload_bounds(self, first: UploadedSound, second: UploadedSound) -> None:
+        """Refuse two uploaded sounds whose filter would be read past the process's limits.
+
+        Raises:
+            RenderBoundsError: the two rates lie further apart than the limits allow, or a sound would
+                be read longer than the frame bound.
+        """
+        rate_hz = self._pair_rate(first.rate_hz, second.rate_hz)
+        for named, sound in (("the first upload", first), ("the second upload", second)):
+            self._check_frames(named, frame_count=sound.frame_count, heard_rate_hz=sound.rate_hz, rate_hz=rate_hz)
+
+    def uploaded_sound(self, stream: IO[bytes]) -> UploadedSound:
+        """The sound an uploaded file holds, read up to the bytes one request may carry.
+
+        Raises:
+            UploadTooLargeError: the upload runs past the byte bound.
+            UploadUnreadableError: the bytes hold no audio this process decodes.
+        """
+        return decode_upload(stream, byte_limit=self._settings.limits.maximum_upload_bytes)
 
     def render(self, point: HeardMorphPoint) -> bytes:
         """The WAV bytes of one point, stating the rate the pair is heard at.
@@ -151,31 +169,34 @@ class MorphRenderer:
             SampleUnavailableError: an end's file is gone, unreadable, holds another sample, or lies
                 outside every sample directory served.
         """
-        path = self._filtering_path()
-        cached = self._cached_response(pair)
-        if cached is not None:
-            return cached
+        rate_hz = common_rate(float(pair.first_rate_hz), float(pair.second_rate_hz))
+        return self._response_under(
+            pair,
+            rate_hz=rate_hz,
+            ends=lambda: (
+                self._heard(pair.first, pair.first_file, rate_hz=float(pair.first_rate_hz), target_rate_hz=rate_hz),
+                self._heard(pair.second, pair.second_file, rate_hz=float(pair.second_rate_hz), target_rate_hz=rate_hz),
+            ),
+        )
 
-        with self._render_lock:
-            cached = self._cached_response(pair)
-            if cached is not None:
-                return cached
+    def uploaded_response(self, first: UploadedSound, second: UploadedSound) -> bytes:
+        """The bytes of the filter between two sounds a caller sent, heard at the higher of their two rates.
 
-            route = self._analysis_route()
-            rate_hz = common_rate(float(pair.first_rate_hz), float(pair.second_rate_hz))
-            first = route.prepare(
-                self._heard(pair.first, pair.first_file, rate_hz=float(pair.first_rate_hz), target_rate_hz=rate_hz)
-            )
-            second = route.prepare(
-                self._heard(pair.second, pair.second_file, rate_hz=float(pair.second_rate_hz), target_rate_hz=rate_hz)
-            )
-            reading = ResponseReading(
-                geometry=route.geometry, settings=route.settings, envelope_settings=path.envelope_settings
-            )
-            written = response_payload(build_envelope_response(first, second, rate_hz=rate_hz, reading=reading))
-            with self._cache_lock:
-                self._responses.put(pair, written)
-            return written
+        The sounds are named by what was sent, so a caller sending the same pair again is answered
+        from memory.
+
+        Raises:
+            ResponseUnavailableError: this process serves a route that has no filter form.
+        """
+        rate_hz = common_rate(first.rate_hz, second.rate_hz)
+        return self._response_under(
+            (first.digest, second.digest),
+            rate_hz=rate_hz,
+            ends=lambda: (
+                hear_in_frame(first.pcm, rate_hz=first.rate_hz, target_rate_hz=rate_hz),
+                hear_in_frame(second.pcm, rate_hz=second.rate_hz, target_rate_hz=rate_hz),
+            ),
+        )
 
     def pair_etag(self, pair: MorphPair) -> str:
         """A validator that names this pair's filter under the served route, for the caches between here and a caller."""
@@ -247,9 +268,71 @@ class MorphRenderer:
                     f"this process serves the {self._named.name} route, and a filter is the envelope route's form"
                 )
 
-    def _cached_response(self, pair: MorphPair) -> bytes | None:
+    def _response_under(
+        self, key: ResponseKey, *, rate_hz: float, ends: Callable[[], tuple[HeardMono, HeardMono]]
+    ) -> bytes:
+        """The response a key names: from memory when it was built before, from its two ends otherwise.
+
+        The ends are read only once the response is known to be missing, and under the render lock,
+        since reading them is the part of the work worth doing once.
+
+        Raises:
+            ResponseUnavailableError: this process serves a route that has no filter form.
+        """
+        path = self._filtering_path()
+        cached = self._cached_response(key)
+        if cached is not None:
+            return cached
+
+        with self._render_lock:
+            cached = self._cached_response(key)
+            if cached is not None:
+                return cached
+
+            route = self._analysis_route()
+            first, second = ends()
+            reading = ResponseReading(
+                geometry=route.geometry, settings=route.settings, envelope_settings=path.envelope_settings
+            )
+            response = build_envelope_response(
+                route.prepare(first), route.prepare(second), rate_hz=rate_hz, reading=reading
+            )
+            written = response_payload(response)
+            with self._cache_lock:
+                self._responses.put(key, written)
+            return written
+
+    def _pair_rate(self, first_rate_hz: float, second_rate_hz: float) -> float:
+        """The rate two sounds are heard at together, once their rates are known to lie within the limits.
+
+        Raises:
+            RenderBoundsError: the two rates lie further apart than the limits allow.
+        """
+        rate_hz = common_rate(first_rate_hz, second_rate_hz)
+        ratio = rate_hz / min(first_rate_hz, second_rate_hz)
+        if ratio > self._settings.limits.maximum_rate_ratio:
+            raise RenderBoundsError(
+                f"the two ends are heard {ratio:.1f} times apart in rate, and a morph spans at most "
+                f"{self._settings.limits.maximum_rate_ratio:g}"
+            )
+        return rate_hz
+
+    def _check_frames(self, named: str, *, frame_count: int, heard_rate_hz: float, rate_hz: float) -> None:
+        """Refuse a sound that would be read past the frame bound once carried to the pair's rate.
+
+        Raises:
+            RenderBoundsError: the sound would be read longer than the frame bound.
+        """
+        maximum = self._settings.limits.maximum_frames
+        frames = math.ceil(frame_count * rate_hz / heard_rate_hz)
+        if frames > maximum:
+            raise RenderBoundsError(
+                f"{named} would render {frames} frames in this pair, past the {maximum} one morph renders"
+            )
+
+    def _cached_response(self, key: ResponseKey) -> bytes | None:
         with self._cache_lock:
-            return self._responses.get(pair)
+            return self._responses.get(key)
 
     def _cached_render(self, point: HeardMorphPoint) -> bytes | None:
         with self._cache_lock:

@@ -3,13 +3,14 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile
 
 from samplecore.models.morph import HeardMorphPoint, MorphPair, MorphServiceStatus
 from samplecore.storage.sample_audio import SampleUnavailableError
 from samplemorph.service.dependencies import get_renderer
 from samplemorph.service.renderer import MorphRenderer, RenderBoundsError, ResponseUnavailableError
 from samplemorph.service.settings import CACHE_CONTROL, RESPONSE_MEDIA_TYPE, WAV_MEDIA_TYPE
+from samplemorph.service.uploads import UploadTooLargeError, UploadUnreadableError
 
 ANY_ENTITY_TAG: Final[str] = "*"
 WEAK_TAG_PREFIX: Final[str] = "W/"
@@ -84,6 +85,35 @@ def get_morph_response(
         raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(error)) from error
 
     return Response(content=written, media_type=RESPONSE_MEDIA_TYPE, headers=headers)
+
+
+@router.post("/response", response_class=Response)
+def post_morph_response(
+    first: UploadFile, second: UploadFile, renderer: MorphRenderer = Depends(get_renderer)
+) -> Response:
+    """The filter between two sounds the caller sends, which it applies at every weight between them.
+
+    A caller holding its own audio, a sampler among them, sends both sounds as audio files and reads
+    the filter back once; the sounds may come from anywhere, since the process reads only what was
+    sent. The pair is heard at the higher of the two rates the files state.
+
+    Raises:
+        HTTPException: 409 when this process serves a route that has no filter form; 413 when an
+            upload runs past the bytes one request may carry; 422 when an upload holds no audio this
+            process decodes, or the pair reaches past the process's limits.
+    """
+    try:
+        sounds = (renderer.uploaded_sound(first.file), renderer.uploaded_sound(second.file))
+        renderer.check_upload_bounds(*sounds)
+        written = renderer.uploaded_response(*sounds)
+    except UploadTooLargeError as error:
+        raise HTTPException(status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE, detail=str(error)) from error
+    except (UploadUnreadableError, RenderBoundsError) as error:
+        raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(error)) from error
+    except ResponseUnavailableError as error:
+        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(error)) from error
+
+    return Response(content=written, media_type=RESPONSE_MEDIA_TYPE)
 
 
 @router.get("/status")

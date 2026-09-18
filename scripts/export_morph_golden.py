@@ -27,6 +27,8 @@ PARTIAL_COUNT: Final[int] = 9
 DECAY_PER_SECOND: Final[float] = 6.0
 SILENT_SHARE: Final[float] = 0.25
 GOLDEN_WEIGHTS: Final[tuple[float, ...]] = (0.0, 0.5, 1.0)
+SAMPLED_FRAME_COUNT: Final[int] = 5
+LOG_GAIN_TOLERANCE: Final[float] = 1e-5
 
 
 def _voice(seconds: float, *, frequency_hz: float, decay: float) -> NDArray[np.float64]:
@@ -44,6 +46,16 @@ def _voice(seconds: float, *, frequency_hz: float, decay: float) -> NDArray[np.f
 def _write_floats(path: Path, values: NDArray[np.floating]) -> None:
     """Write an array as little-endian single-precision floats, in the order C reads them."""
     path.write_bytes(np.ascontiguousarray(values, dtype=np.float32).tobytes())
+
+
+def _sampled_frames(frame_count: int) -> NDArray[np.int64]:
+    """The frames a fixture states, spread from the first to the last so an indexing mistake shows."""
+    return np.unique(np.linspace(0, frame_count - 1, SAMPLED_FRAME_COUNT).round().astype(np.int64))
+
+
+def _gain_name(held: HeldEnd, weight: float) -> str:
+    """What one fixture of expanded gains is called: the end it holds, and the weight it stands at."""
+    return f"log_gain_{held.value}_w{int(round(weight * 100)):03d}.f32"
 
 
 def export(output_directory: Path) -> None:
@@ -64,16 +76,20 @@ def export(output_directory: Path) -> None:
     )
 
     (output_directory / "morph_response.bin").write_bytes(response_payload(response))
+    sampled: dict[str, list[int]] = {}
     for held in HeldEnd:
+        frames = _sampled_frames(response.filter_held_to(held).description.frame_count)
+        sampled[held.value] = [int(frame) for frame in frames]
         for weight in GOLDEN_WEIGHTS:
-            name = f"log_gain_{held.value}_w{int(round(weight * 100)):03d}.f32"  # (frames, bins)
             gain = response_gain(response, held=held, weight=weight).astype(np.float64)
-            _write_floats(output_directory / name, np.log(gain).T)
+            _write_floats(output_directory / _gain_name(held, weight), np.log(gain).T[frames, :])
 
     manifest = {
         "format_version": RESPONSE_FORMAT_VERSION,
         "rate_hz": NOMINAL_WAV_RATE,
         "weights": list(GOLDEN_WEIGHTS),
+        "sampled_frames": sampled,
+        "log_gain_tolerance": LOG_GAIN_TOLERANCE,
         "description": response.description.model_dump(mode="json"),
         "filters": {held.value: response.filter_held_to(held).description.model_dump(mode="json") for held in HeldEnd},
     }

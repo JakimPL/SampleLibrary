@@ -37,6 +37,8 @@ DIGEST_LENGTH = 64
 FIRST_RATE_HZ = 8_363
 SECOND_RATE_HZ = 16_726
 SOUND_TOLERANCE = 1e-6
+UPLOAD_RATE_HZ = 22_050
+UPLOAD_BYTE_BOUND = 1024
 
 
 def _renderer(client: TestClient) -> MorphRenderer:
@@ -313,3 +315,119 @@ def test_the_filter_a_pair_answers_with_returns_that_sample_as_the_pair_hears_it
     )
 
     np.testing.assert_allclose(filtered, heard.mono, atol=SOUND_TOLERANCE)
+
+
+def _wav(pcm: np.ndarray, *, rate_hz: int) -> bytes:
+    written = io.BytesIO()
+    soundfile.write(written, pcm, rate_hz, format="WAV", subtype="FLOAT")
+    return written.getvalue()
+
+
+def _uploads(library: StoredLibrary, *, first_rate_hz: int, second_rate_hz: int) -> dict[str, tuple[str, bytes, str]]:
+    first = audio_store.read_object(library.root, library.hashes[0]).pcm
+    second = audio_store.read_object(library.root, library.hashes[1]).pcm
+    return {
+        "first": ("first.wav", _wav(first, rate_hz=first_rate_hz), "audio/wav"),
+        "second": ("second.wav", _wav(second, rate_hz=second_rate_hz), "audio/wav"),
+    }
+
+
+def test_two_uploaded_sounds_answer_with_the_filter_between_them(
+    envelope_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+        )
+
+    assert answered.status_code == HTTPStatus.OK
+    response = response_from_payload(answered.content)
+    assert response.description.rate_hz == UPLOAD_RATE_HZ
+    assert response.first.description.sample_count == library.frame_counts[0]
+    assert response.second.description.sample_count == library.frame_counts[1]
+
+
+def test_uploads_at_two_rates_are_heard_at_the_higher(
+    envelope_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ * 2)
+        )
+
+    assert response_from_payload(answered.content).description.rate_hz == UPLOAD_RATE_HZ * 2
+
+
+def test_the_same_uploads_sent_twice_are_read_once(envelope_settings: ServiceSettings, library: StoredLibrary) -> None:
+    uploads = _uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        first = client.post(RESPONSE_PATH, files=uploads)
+        again = client.post(RESPONSE_PATH, files=uploads)
+
+        assert _renderer(client).response_count == 1
+    assert again.content == first.content
+
+
+def test_the_filter_from_uploads_returns_the_first_sound_at_its_own_end(
+    envelope_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+        )
+    response = response_from_payload(answered.content)
+    heard = hear_in_frame(
+        audio_store.read_object(library.root, library.hashes[0]).pcm,
+        rate_hz=float(UPLOAD_RATE_HZ),
+        target_rate_hz=float(UPLOAD_RATE_HZ),
+    )
+    geometry = log_frequency_geometry()
+
+    filtered = filtered_waveform(
+        analysis_transform(heard.mono, geometry=geometry), response.first, weight=0.0, geometry=geometry
+    )
+
+    np.testing.assert_allclose(filtered, heard.mono, atol=SOUND_TOLERANCE)
+
+
+def test_an_upload_holding_no_audio_is_refused(envelope_settings: ServiceSettings, library: StoredLibrary) -> None:
+    uploads = _uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+    uploads["second"] = ("second.wav", b"no audio in here", "audio/wav")
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        answered = client.post(RESPONSE_PATH, files=uploads)
+
+    assert answered.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert "no audio" in answered.json()["detail"]
+
+
+def test_an_upload_past_the_byte_bound_is_refused(envelope_settings: ServiceSettings, library: StoredLibrary) -> None:
+    uploads = _uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+    bounded = replace(
+        envelope_settings, limits=replace(envelope_settings.limits, maximum_upload_bytes=UPLOAD_BYTE_BOUND)
+    )
+    with TestClient(create_app(load_renderer(bounded))) as client:
+        answered = client.post(RESPONSE_PATH, files=uploads)
+
+    assert answered.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+
+
+def test_uploads_heard_too_far_apart_in_rate_are_refused(
+    envelope_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(envelope_settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ * 32)
+        )
+
+    assert answered.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_uploads_to_a_process_serving_another_route_are_told_it_holds_no_filter(
+    settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+        )
+
+    assert answered.status_code == HTTPStatus.CONFLICT
