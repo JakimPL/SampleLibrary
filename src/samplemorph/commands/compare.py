@@ -141,9 +141,6 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
         sys.exit(ExitStatus.REFUSED)
     named = _named_routes(
         tuple(dict.fromkeys(arguments.routes)),
-        profiles=tuple(dict.fromkeys(arguments.profiles)),
-        excitations=tuple(dict.fromkeys(arguments.excitations)),
-        timelines=tuple(dict.fromkeys(arguments.timelines)),
         config=config,
         arguments=arguments,
     )
@@ -171,15 +168,12 @@ def _read_pairs(path: Path) -> PairSet:
 
 
 def _named_routes(
-    kinds: tuple[RouteKind, ...],
-    *,
-    profiles: tuple[str, ...],
-    excitations: tuple[Excitation, ...],
-    timelines: tuple[Timeline, ...],
-    config: LibraryConfig,
-    arguments: argparse.Namespace,
+    kinds: tuple[RouteKind, ...], *, config: LibraryConfig, arguments: argparse.Namespace
 ) -> tuple[NamedRoute, ...]:
     """Every route a run renders: one per kind, the partials kind per profile and the envelope kind per excitation and course."""
+    profiles: tuple[str, ...] = tuple(dict.fromkeys(arguments.profiles))
+    excitations: tuple[Excitation, ...] = tuple(dict.fromkeys(arguments.excitations))
+    timelines: tuple[Timeline, ...] = tuple(dict.fromkeys(arguments.timelines))
     routes: list[NamedRoute] = []
     for kind in kinds:
         match kind:

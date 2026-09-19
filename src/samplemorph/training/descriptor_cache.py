@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import multiprocessing
 import shutil
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -10,19 +8,17 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
-from threadpoolctl import threadpool_limits
-from tqdm import tqdm
 
 from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
 from samplecore.storage.atomic import synchronize_directory, synchronize_file
 from samplecore.storage.sample_audio import SampleAudio
-from samplecore.waveform import resample_by_semitones
-from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
+from samplemorph.descriptors.views import retuned_view
 from samplemorph.geometry import Anchor, Geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY, canonicalizer_for_geometry
-from samplemorph.training import WORKER_START_METHOD
+from samplemorph.training.processes import mapped_in_processes
 
 CACHE_DIRECTORY_NAME: Final[str] = "cache"
 GRID_CACHE_DIRECTORY_NAME: Final[str] = "grids"
@@ -217,7 +213,10 @@ def build_grid_cache(
         for sample in samples
     ]
     worker = _Worker(audio=audio, geometry=geometry, band_count=band_count)
-    for position, (job_grids, job_durations) in enumerate(_derived(jobs, worker=worker, worker_count=worker_count)):
+    derived = mapped_in_processes(
+        worker, jobs, worker_count=worker_count, chunk_size=JOB_CHUNK_SIZE, description="Canonicalizing"
+    )
+    for position, (job_grids, job_durations) in enumerate(derived):
         grids[position] = job_grids
         durations[position] = job_durations
     grids.flush()
@@ -281,28 +280,6 @@ def open_grid_cache(directory: Path) -> GridCache:
     return GridCache(directory=directory, description=description, hashes=hashes, grids=grids, durations=durations)
 
 
-def _derived(
-    jobs: list[_Job], *, worker: _Worker, worker_count: int
-) -> Iterator[tuple[NDArray[np.float16], NDArray[np.float32]]]:
-    """Each job's grids in order, from a pool of fresh processes or, with none asked for, in this one."""
-    progress = tqdm(total=len(jobs), desc="Canonicalizing", unit="sample")
-    if worker_count == 0:
-        for job in jobs:
-            yield worker(job)
-            progress.update()
-    else:
-        with multiprocessing.get_context(WORKER_START_METHOD).Pool(worker_count, initializer=_limit_threads) as pool:
-            for result in pool.imap(worker, jobs, chunksize=JOB_CHUNK_SIZE):
-                yield result
-                progress.update()
-    progress.close()
-
-
-def _limit_threads() -> None:
-    """One thread per worker, so a dozen of them share the cores rather than contend for all of them."""
-    threadpool_limits(limits=1)
-
-
 @dataclass(frozen=True)
 class _Worker:
     """Derives one sample's stored grid and its retuned views; built once and sent to every process.
@@ -320,10 +297,7 @@ class _Worker:
         canonicalizer = canonicalizer_for_geometry(self.geometry)
         mono = prepare_mono(self.audio.read(job.sample).pcm)
         stored = canonicalizer.canonicalize(mono)
-        views = [
-            canonicalizer.canonicalize(PreparedMono(resample_by_semitones(mono, semitones=offset)))
-            for offset in job.offsets
-        ]
+        views = [retuned_view(mono, semitones=offset, canonicalizer=canonicalizer) for offset in job.offsets]
         grids = [pool_bands(image.grid, band_count=self.band_count).astype(np.float16) for image in (stored, *views)]
         duration = canonical_duration(stored.conditioners)
         return np.stack(grids), np.full(1 + len(views), duration, dtype=np.float32)

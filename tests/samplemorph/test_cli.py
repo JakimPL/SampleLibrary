@@ -30,7 +30,7 @@ from samplecore.storage.repositories.feature_vector import PostgresSampleFeature
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
-from samplemorph.cli import main
+from samplemorph.cli import CATALOG_COMMANDS, MorphCommand, main
 from samplemorph.descriptors.descriptor_shape import DESCRIPTOR_SIZE
 from samplemorph.envelope.payload import response_from_payload
 from samplemorph.envelope.response import HeldEnd
@@ -414,6 +414,73 @@ def test_a_retuned_view_records_its_samples_own_duration(
     assert cache.durations.shape == (CATALOG_SIZE, 3)
     assert np.array_equal(cache.durations, np.repeat(cache.durations[:, :1], 3, axis=1))
     assert not np.array_equal(cache.grids[:, 0], cache.grids[:, 1])
+
+
+def test_every_command_but_serving_and_publishing_runs_on_the_catalog() -> None:
+    assert set(CATALOG_COMMANDS) == set(MorphCommand) - {MorphCommand.SERVE, MorphCommand.PUBLISH}
+
+
+def test_ladders_are_read_on_the_cache_s_own_axis_through_both_references(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["cache-grids", "--cache", "ladders-under-test", "--views", "1", "--workers", "0"], prog=PROGRAM)
+    output = tmp_path / "ladders"
+
+    main(
+        [
+            "read-ladders",
+            "--cache",
+            "ladders-under-test",
+            "--samples",
+            "4",
+            "--synthetic",
+            "2",
+            "--unrelated",
+            "2",
+            "--intervals",
+            "5",
+            "12",
+            "--steps",
+            "5",
+            "--minimum-seconds",
+            "0.01",
+            "--output",
+            str(output),
+        ],
+        prog=PROGRAM,
+    )
+
+    summary = _rows(output / "summary.csv")
+    assert {row["model"] for row in summary} == {"crossfade", "oracle"}
+    assert all(float(row["verdict_faded"]) == 1.0 for row in summary if row["model"] == "crossfade")
+    assert {row["family"] for row in _rows(output / "ladders.csv")} <= {"retuned", "pitch", "resonance", "contrary"}
+    assert any((output / "pictures").rglob("*.png"))
+
+
+def test_reading_ladders_through_a_path_it_has_none_of_ends_with_one_message(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["cache-grids", "--cache", "ladders-under-test", "--views", "1", "--workers", "0"], prog=PROGRAM)
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            ["read-ladders", "--cache", "ladders-under-test", "--models", "elsewhere", "--output", str(tmp_path)],
+            prog=PROGRAM,
+        )
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert "no path is named elsewhere" in capsys.readouterr().err
 
 
 def test_a_descriptor_goes_from_cache_to_weights_to_an_experiment(

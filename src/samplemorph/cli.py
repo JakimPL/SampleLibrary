@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 from enum import StrEnum, unique
+from typing import Final
 
 from sqlalchemy import Connection
 
@@ -17,6 +18,7 @@ from samplemorph.commands import (
     fit,
     measure,
     publish,
+    read_ladders,
     render,
     response,
     train_codec,
@@ -42,47 +44,41 @@ class MorphCommand(StrEnum):
     MEASURE = measure.COMMAND_NAME
     DRAW_PAIRS = draw_pairs.COMMAND_NAME
     COMPARE = compare.COMMAND_NAME
+    READ_LADDERS = read_ladders.COMMAND_NAME
     RESPONSE = response.COMMAND_NAME
     PUBLISH = publish.COMMAND_NAME
     SERVE = service_cli.COMMAND_NAME
+
+
+CATALOG_COMMANDS: Final[dict[MorphCommand, CatalogCommand]] = {
+    MorphCommand.FIT: fit.run,
+    MorphCommand.CACHE_GRIDS: cache_grids.run,
+    MorphCommand.TRAIN_DESCRIPTOR: train_descriptor.run,
+    MorphCommand.EMBED: embed.run,
+    MorphCommand.TRAIN_CODEC: train_codec.run,
+    MorphCommand.TRAIN_RESTORER: train_restorer.run,
+    MorphCommand.RENDER: render.run,
+    MorphCommand.MEASURE: measure.run,
+    MorphCommand.DRAW_PAIRS: draw_pairs.run,
+    MorphCommand.COMPARE: compare.run,
+    MorphCommand.READ_LADDERS: read_ladders.run,
+    MorphCommand.RESPONSE: response.run,
+}
 
 
 def main(argv: list[str], *, prog: str) -> None:
     """Run one morph command and report the result, with the catalog open for every command that reads it."""
     arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
-    match MorphCommand(arguments.command):
+    command = MorphCommand(arguments.command)
+    match command:
         case MorphCommand.SERVE:
             service_cli.run(config, arguments)
-        case MorphCommand.FIT:
-            _on_catalog(fit.run, config, arguments)
-        case MorphCommand.CACHE_GRIDS:
-            _on_catalog(cache_grids.run, config, arguments)
-        case MorphCommand.TRAIN_DESCRIPTOR:
-            _on_catalog(train_descriptor.run, config, arguments)
-        case MorphCommand.EMBED:
-            _on_catalog(embed.run, config, arguments)
-        case MorphCommand.TRAIN_CODEC:
-            _on_catalog(train_codec.run, config, arguments)
-        case MorphCommand.TRAIN_RESTORER:
-            _on_catalog(train_restorer.run, config, arguments)
-        case MorphCommand.RENDER:
-            _on_catalog(render.run, config, arguments)
-        case MorphCommand.MEASURE:
-            _on_catalog(measure.run, config, arguments)
-        case MorphCommand.DRAW_PAIRS:
-            _on_catalog(draw_pairs.run, config, arguments)
-        case MorphCommand.COMPARE:
-            _on_catalog(compare.run, config, arguments)
-        case MorphCommand.RESPONSE:
-            _on_catalog(response.run, config, arguments)
         case MorphCommand.PUBLISH:
             publish.run(config, arguments)
-
-
-def _on_catalog(run: CatalogCommand, config: LibraryConfig, arguments: argparse.Namespace) -> None:
-    with open_catalog_connection(config.database_url) as connection:
-        run(connection, config, arguments)
+        case _:
+            with open_catalog_connection(config.database_url) as connection:
+                CATALOG_COMMANDS[command](connection, config, arguments)
 
 
 def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
@@ -100,6 +96,7 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     measure.add_parser(commands)
     draw_pairs.add_parser(commands)
     compare.add_parser(commands)
+    read_ladders.add_parser(commands)
     response.add_parser(commands)
     publish.add_parser(commands)
     service_cli.add_parser(commands)
