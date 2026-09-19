@@ -55,3 +55,12 @@ def test_what_is_carried_past_the_last_bin_leaves_the_spectrum() -> None:
     placed = _place(spectrum, scale=2.0)
 
     assert placed.sum() < 1e-6
+
+
+def test_a_flat_spectrum_carried_wholly_past_the_last_bin_leaves_silence_in_energy() -> None:
+    flat = np.ones(BIN_COUNT)
+
+    placed = _place(flat, scale=4.0)
+
+    assert placed.dtype == np.float64
+    assert not placed.any()

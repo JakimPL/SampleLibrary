@@ -54,7 +54,10 @@ def place_groups(
     )
     deposits = values * scales[combination_of_element]
     inside = (targets >= LOWEST_MOVED_BIN) & (targets < bin_count)
-    placed: NDArray[np.float64] = np.bincount(targets[inside], weights=deposits[inside], minlength=bin_count)
+    # bincount counts in integers when no weight is left to sum, as when every grain is carried off the top.
+    placed: NDArray[np.float64] = np.bincount(targets[inside], weights=deposits[inside], minlength=bin_count).astype(
+        np.float64
+    )
     return placed
 
 
