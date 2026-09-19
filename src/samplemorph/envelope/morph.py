@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
+from samplemorph.envelope.glide import HELD_RATIO, PitchedAnalysis, PitchGlide, carried_excitation, glide_between
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
 from samplemorph.envelope.split import SplitSpectrum, split_spectrum
 from samplemorph.geometry import LogFrequencyGeometry
@@ -51,48 +52,96 @@ class EnvelopePath:
         Raises:
             ValueError: the weight lies outside ``[0, 1]``.
         """
+        return self.gliding(
+            PitchedAnalysis(analysis=first, pitch_semitones=None),
+            PitchedAnalysis(analysis=second, pitch_semitones=None),
+            weight=weight,
+            geometry=geometry,
+            settings=settings,
+        )
+
+    def gliding(
+        self,
+        first: PitchedAnalysis,
+        second: PitchedAnalysis,
+        *,
+        weight: float,
+        geometry: LogFrequencyGeometry,
+        settings: TransportSettings,
+    ) -> TransportedSpectrogram:
+        """The magnitude `weight` of the way from one sound to another, the kept excitation gliding when both ends sound a pitch.
+
+        When both ends sound a pitch (`glide_between`), the kept excitation is carried to the pitch
+        `weight` of the way between them, and both ends are split with the envelope the glide's
+        settings allow, so the pitch moves with the excitation while the envelope carries the rest;
+        otherwise the excitation sounds at its own pitch.
+
+        Raises:
+            ValueError: the weight lies outside ``[0, 1]``.
+        """
         if not FIRST_END_WEIGHT <= weight <= SECOND_END_WEIGHT:
             raise ValueError(f"an envelope morph runs between weights 0 and 1, got {weight}")
 
+        glide = glide_between(first, second)
+        envelope_settings = (
+            self.envelope_settings
+            if glide is None
+            else glide.envelope_settings(self.envelope_settings, geometry=geometry)
+        )
         time_map = build_time_map(
-            first,
-            second,
+            first.analysis,
+            second.analysis,
             weight=self.envelope_settings.timeline.weight_at(weight),
             hop_length=geometry.hop_length,
             settings=settings,
         )
-        first_split = self._split_along(
-            first, positions=time_map.first_positions, rates=time_map.first_rates, settings=settings
+        first_split = _split_along(
+            first.analysis,
+            positions=time_map.first_positions,
+            rates=time_map.first_rates,
+            settings=settings,
+            envelope_settings=envelope_settings,
         )
-        second_split = self._split_along(
-            second, positions=time_map.second_positions, rates=time_map.second_rates, settings=settings
+        second_split = _split_along(
+            second.analysis,
+            positions=time_map.second_positions,
+            rates=time_map.second_rates,
+            settings=settings,
+            envelope_settings=envelope_settings,
         )
-        excitation = self._excitation_under(first_split, second_split, weight=weight)
+        excitation = self._excitation_under(first_split, second_split, weight=weight, glide=glide)
         magnitude = _between(first_split.envelope, second_split.envelope, weight=weight) * excitation
         return TransportedSpectrogram(magnitude=magnitude.astype(np.float32), sample_count=time_map.sample_count)
 
-    def _split_along(
-        self,
-        analysis: TransportAnalysis,
-        *,
-        positions: NDArray[np.float64],
-        rates: NDArray[np.float64],
-        settings: TransportSettings,
-    ) -> SplitSpectrum:
-        """A sound read where a time map points, split into its envelope and its excitation."""
-        magnitude = read_magnitude(analysis, positions=positions, rates=rates, settings=settings)
-        return split_spectrum(magnitude, settings=self.envelope_settings)
-
-    def _excitation_under(self, first: SplitSpectrum, second: SplitSpectrum, *, weight: float) -> NDArray[np.float32]:
-        """The excitation the settings name at this weight: one sound's whole, or the two crossfaded."""
+    def _excitation_under(
+        self, first: SplitSpectrum, second: SplitSpectrum, *, weight: float, glide: PitchGlide | None
+    ) -> NDArray[np.float32]:
+        """The excitation the settings name at this weight, carried to the glide's pitch: one sound's whole, or the two crossfaded."""
+        first_ratio = HELD_RATIO if glide is None else glide.first_ratio(weight=weight)
+        second_ratio = HELD_RATIO if glide is None else glide.second_ratio(weight=weight)
         match self.envelope_settings.excitation:
             case Excitation.FIRST:
-                return first.excitation
+                return carried_excitation(first.excitation, ratio=first_ratio)
             case Excitation.SECOND:
-                return second.excitation
+                return carried_excitation(second.excitation, ratio=second_ratio)
             case Excitation.BOTH:
-                crossfaded: NDArray[np.float32] = (1.0 - weight) * first.excitation + weight * second.excitation
+                crossfaded: NDArray[np.float32] = (1.0 - weight) * carried_excitation(
+                    first.excitation, ratio=first_ratio
+                ) + weight * carried_excitation(second.excitation, ratio=second_ratio)
                 return crossfaded.astype(np.float32)
+
+
+def _split_along(
+    analysis: TransportAnalysis,
+    *,
+    positions: NDArray[np.float64],
+    rates: NDArray[np.float64],
+    settings: TransportSettings,
+    envelope_settings: EnvelopeSettings,
+) -> SplitSpectrum:
+    """A sound read where a time map points, split into its envelope and its excitation."""
+    magnitude = read_magnitude(analysis, positions=positions, rates=rates, settings=settings)
+    return split_spectrum(magnitude, settings=envelope_settings)
 
 
 def _between(first: NDArray[np.float32], second: NDArray[np.float32], *, weight: float) -> NDArray[np.float32]:

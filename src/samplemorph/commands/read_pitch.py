@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -16,7 +15,7 @@ from samplecore.config import LibraryConfig
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
-from samplemorph.coordinates.readers import PYIN_READER_NAME, SUBHARMONIC_READER_NAME, pyin_reader, subharmonic_reader
+from samplemorph.coordinates.readers import CLASSICAL_READERS, PYIN_READER_NAME, SUBHARMONIC_READER_NAME
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
 from samplemorph.measurement.pitch.changes import PitchKeepingMorph, default_changes
 from samplemorph.measurement.pitch.reader import PitchReader
@@ -41,10 +40,6 @@ DEFAULT_HELD_OUT_COUNT: Final[int] = 200
 DEFAULT_TONES_PER_FAMILY: Final[int] = 12
 DEFAULT_PAIR_COUNT: Final[int] = 48
 DEFAULT_NOISE_COUNT: Final[int] = 24
-CLASSICAL_READERS: Final[dict[str, Callable[[], PitchReader]]] = {
-    SUBHARMONIC_READER_NAME: subharmonic_reader,
-    PYIN_READER_NAME: pyin_reader,
-}
 CLASSICAL_READER_NAMES: Final[tuple[str, ...]] = tuple(CLASSICAL_READERS)
 REFEREES: Final[tuple[str, str]] = (SUBHARMONIC_READER_NAME, PYIN_READER_NAME)
 MIDDLE_WEIGHT: Final[float] = 0.5

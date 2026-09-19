@@ -7,6 +7,7 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
+from samplemorph.coordinates.readers import PitchReader
 from samplemorph.envelope.morph import EnvelopePath
 from samplemorph.envelope.settings import EnvelopeSettings, Timeline
 from samplemorph.geometry import log_frequency_geometry
@@ -16,6 +17,7 @@ from samplemorph.partials.settings import PartialSettings
 from samplemorph.pipeline import LoadedRoute, latent_route_description, load_route
 from samplemorph.rendering import RENDER_REVISION
 from samplemorph.routes.analysis import AnalysisRoute, SpectralPath
+from samplemorph.routes.gliding import GlidingRoute
 from samplemorph.routes.kinds import ComparableRoute, RouteKind
 from samplemorph.routes.latent import LatentRoute
 from samplemorph.routes.partials import PartialRoute
@@ -101,6 +103,29 @@ def envelope_route(envelope_settings: EnvelopeSettings) -> NamedRoute:
         name=_envelope_name(envelope_settings),
         path=EnvelopePath(envelope_settings=envelope_settings),
         described={"envelope_settings": envelope_settings.model_dump(mode="json")},
+    )
+
+
+def gliding_envelope_route(envelope_settings: EnvelopeSettings, *, reader: PitchReader) -> NamedRoute:
+    """The envelope route under the settings given with its excitation gliding between the pitches `reader` finds, named by both."""
+    geometry = log_frequency_geometry()
+    settings = TransportSettings()
+    return NamedRoute(
+        kind=RouteKind.ENVELOPE,
+        name=f"{_envelope_name(envelope_settings)}-glide-{reader.name}",
+        route=GlidingRoute(
+            path=EnvelopePath(envelope_settings=envelope_settings),
+            reader=reader,
+            geometry=geometry,
+            settings=settings,
+        ),
+        device=PROCESSOR,
+        description={
+            "geometry": geometry.model_dump(mode="json"),
+            "settings": settings.model_dump(mode="json"),
+            "envelope_settings": envelope_settings.model_dump(mode="json"),
+            "pitch_reader": reader.description(),
+        },
     )
 
 

@@ -4,10 +4,18 @@ from pathlib import Path
 
 import pytest
 
+from samplemorph.coordinates.readers import pyin_reader, subharmonic_reader
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation, Timeline
 from samplemorph.pipeline import RouteChoice
 from samplemorph.routes.kinds import RouteKind
-from samplemorph.routes.named import blend_route, envelope_route, partials_route, select_route, transport_route
+from samplemorph.routes.named import (
+    blend_route,
+    envelope_route,
+    gliding_envelope_route,
+    partials_route,
+    select_route,
+    transport_route,
+)
 from samplemorph.routes.selection import PartialsSelection, RouteSelection
 
 LATENT_NAMES = RouteChoice(
@@ -54,6 +62,9 @@ def test_a_fingerprint_stays_put_for_one_route_and_tells_the_others_apart() -> N
             envelope_route(SMOOTHER),
             envelope_route(HELD_TO_FIRST),
             envelope_route(HELD_TO_SECOND),
+            gliding_envelope_route(KEEPS_FIRST, reader=subharmonic_reader()),
+            gliding_envelope_route(KEEPS_FIRST, reader=pyin_reader()),
+            gliding_envelope_route(SOUNDS_BOTH, reader=subharmonic_reader()),
             partials_route("glide"),
             partials_route("crossfade"),
             transport_route(),
@@ -85,3 +96,13 @@ def test_a_route_s_description_names_the_settings_it_reads() -> None:
 )
 def test_an_envelope_route_holding_a_course_is_named_apart(settings: EnvelopeSettings, name: str) -> None:
     assert envelope_route(settings).name == name
+
+
+def test_a_gliding_envelope_route_is_named_by_its_reader_and_describes_it() -> None:
+    reader = subharmonic_reader()
+
+    named = gliding_envelope_route(HELD_TO_FIRST, reader=reader)
+
+    assert named.kind is RouteKind.ENVELOPE
+    assert named.name == "envelope-first-on-first-glide-subharmonic"
+    assert named.description["pitch_reader"] == reader.description()

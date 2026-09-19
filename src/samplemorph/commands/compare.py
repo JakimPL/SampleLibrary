@@ -14,6 +14,7 @@ from samplecore.cli_support import ending_in_one_line
 from samplecore.config import LibraryConfig
 from samplecore.exit_status import ExitStatus
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
+from samplemorph.coordinates.readers import CLASSICAL_READERS
 from samplemorph.envelope.settings import (
     DEFAULT_EXCITATION,
     DEFAULT_TIMELINE,
@@ -48,6 +49,7 @@ from samplemorph.routes.named import (
     NamedRoute,
     blend_route,
     envelope_route,
+    gliding_envelope_route,
     latent_route,
     partials_route,
     transport_route,
@@ -110,6 +112,14 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="Whose course through time every envelope route is heard on, one route per choice.",
     )
     parser.add_argument(
+        "--glides",
+        type=str,
+        nargs="*",
+        choices=tuple(CLASSICAL_READERS),
+        default=(),
+        help="Which pitch readers every envelope route also glides by, one gliding route per reader beside it.",
+    )
+    parser.add_argument(
         "--blind", action="store_true", help="Name every route's folder by a letter, the key kept in the manifest."
     )
     add_model_argument(parser)
@@ -124,7 +134,8 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     a weight off the path or a sample gone from the catalog ends the process at once. The latent
     route loads the stored model the latent flags name; the transport, the blend and the partials
     read the samples' own analyses alone. The partials kind stands for one route per profile named
-    and the envelope kind for one per excitation and course named, each under a folder of its own.
+    and the envelope kind for one per excitation and course named, and again for each of those
+    gliding by every pitch reader named, each under a folder of its own.
 
     Raises:
         SystemExit: the pairs file cannot be read, the weights do not describe a path, or a pair names
@@ -170,10 +181,11 @@ def _read_pairs(path: Path) -> PairSet:
 def _named_routes(
     kinds: tuple[RouteKind, ...], *, config: LibraryConfig, arguments: argparse.Namespace
 ) -> tuple[NamedRoute, ...]:
-    """Every route a run renders: one per kind, the partials kind per profile and the envelope kind per excitation and course."""
+    """Every route a run renders: one per kind, the partials kind per profile, and the envelope kind per excitation and course and again per gliding reader."""
     profiles: tuple[str, ...] = tuple(dict.fromkeys(arguments.profiles))
     excitations: tuple[Excitation, ...] = tuple(dict.fromkeys(arguments.excitations))
     timelines: tuple[Timeline, ...] = tuple(dict.fromkeys(arguments.timelines))
+    glides: tuple[str, ...] = tuple(dict.fromkeys(arguments.glides))
     routes: list[NamedRoute] = []
     for kind in kinds:
         match kind:
@@ -186,9 +198,15 @@ def _named_routes(
             case RouteKind.PARTIALS:
                 routes.extend(partials_route(name) for name in profiles)
             case RouteKind.ENVELOPE:
-                routes.extend(
-                    envelope_route(EnvelopeSettings(excitation=excitation, timeline=timeline))
+                every_settings = tuple(
+                    EnvelopeSettings(excitation=excitation, timeline=timeline)
                     for timeline in timelines
                     for excitation in excitations
+                )
+                routes.extend(envelope_route(envelope_settings) for envelope_settings in every_settings)
+                routes.extend(
+                    gliding_envelope_route(envelope_settings, reader=CLASSICAL_READERS[reader_name]())
+                    for envelope_settings in every_settings
+                    for reader_name in glides
                 )
     return tuple(routes)

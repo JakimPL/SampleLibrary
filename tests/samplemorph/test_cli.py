@@ -919,6 +919,42 @@ def test_drawn_pairs_are_rendered_through_every_route_and_read(
     )
 
 
+def test_an_envelope_route_is_compared_beside_its_glide_by_every_reader_named(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_labeled_tones(connection, tmp_path, LISTENED_TONES)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    pairs = _drawn_pairs(tmp_path)
+    output = tmp_path / "glides"
+
+    main(
+        [
+            "compare",
+            "--pairs",
+            str(pairs),
+            "--output",
+            str(output),
+            "--routes",
+            "envelope",
+            "--glides",
+            "subharmonic",
+            "--weights",
+            *COMPARED_WEIGHTS,
+            "--listening-weights",
+            "0.5",
+        ],
+        prog=PROGRAM,
+    )
+
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))["routes"]
+    assert set(manifest) == {"envelope-first", "envelope-first-glide-subharmonic"}
+    assert manifest["envelope-first-glide-subharmonic"]["pitch_reader"]["reader"] == "subharmonic"
+    assert all(row["note_count"] != "" for row in _rows(output / "readings.csv"))
+
+
 def test_a_blind_comparison_names_the_routes_by_letter_and_keeps_the_key(
     connection: Connection,
     _database_url: str,

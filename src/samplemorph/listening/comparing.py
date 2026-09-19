@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 from pydantic import JsonValue
 
 from samplecore.tables import write_table
-from samplemorph.canonicalizers import Canonicalizer
+from samplemorph.coordinates.readers import PitchReader, pyin_reader
 from samplemorph.listening.heard_pairs import HeardPair, OriginalSound
 from samplemorph.listening.pairs import PairSet, pair_set_digest
 from samplemorph.listening.tables import RenderTimings, RouteOnPair, path_row, point_rows, verdict_rows
@@ -24,7 +24,6 @@ from samplemorph.measurement.morph_path.readings import (
     read_path,
     transposition_distances_db,
 )
-from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
 from samplemorph.rendering import RENDER_REVISION, RenderedFile, RenderKind, write_rendering
 from samplemorph.routes.kinds import pair_through
 from samplemorph.routes.named import NamedRoute
@@ -120,19 +119,17 @@ def compare_routes(
     (output_directory / MANIFEST_FILE_NAME).write_text(
         json.dumps(_manifest(pair_set, routes=routes, weights=weights), indent=2), encoding="utf-8"
     )
-    canonicalizer = CANONICALIZER_REGISTRY[DEFAULT_CANONICALIZER_NAME]()
+    reader = pyin_reader()
     runs: list[RouteOnPair] = []
     for heard in heard_pairs:
         pair = heard.pair
         pair_directory = output_directory / pair.name
         _write_original(pair_directory / FIRST_ORIGINAL_FILE_NAME, heard.first_original, weight=FIRST_END_WEIGHT)
         _write_original(pair_directory / SECOND_ORIGINAL_FILE_NAME, heard.second_original, weight=SECOND_END_WEIGHT)
-        pitched = is_pitched_pair(
-            heard.first.mono, heard.second.mono, rate_hz=heard.rate_hz, canonicalizer=canonicalizer
-        )
+        pitched = is_pitched_pair(heard.first.mono, heard.second.mono, rate_hz=heard.rate_hz, reader=reader)
         for compared in routes:
             started = time.perf_counter()
-            run = _run_route(heard, compared=compared, weights=weights, pitched=pitched, canonicalizer=canonicalizer)
+            run = _run_route(heard, compared=compared, weights=weights, pitched=pitched, reader=reader)
             _write_path(pair_directory / compared.folder, run=run, heard=heard, weights=weights)
             runs.append(run.table)
             _logger.info("%s through %s in %.1f s.", pair.name, compared.folder, time.perf_counter() - started)
@@ -152,7 +149,7 @@ def _run_route(
     compared: ComparedRoute,
     weights: ComparisonWeights,
     pitched: bool,
-    canonicalizer: Canonicalizer,
+    reader: PitchReader,
 ) -> _RenderedRun:
     started = time.perf_counter()
     prepared = pair_through(compared.named.route, heard.first, heard.second)
@@ -176,7 +173,7 @@ def _run_route(
             frame_counts=tuple(int(point.waveform.shape[0]) for point in points),
             timings=RenderTimings(prepare_seconds=prepare_seconds, render_seconds=render_seconds),
             readings=read_path(path),
-            pitch=_pitch_path(points, rate_hz=heard.rate_hz, canonicalizer=canonicalizer) if pitched else None,
+            pitch=_pitch_path(points, rate_hz=heard.rate_hz, reader=reader) if pitched else None,
             transposition_distances_db=transposition_distances_db(points[1:-1], references) if references else (),
         ),
     )
@@ -200,10 +197,10 @@ def _render_points(
     return tuple(points), tuple(seconds)
 
 
-def _pitch_path(points: tuple[PathPoint, ...], *, rate_hz: float, canonicalizer: Canonicalizer) -> PitchPath:
+def _pitch_path(points: tuple[PathPoint, ...], *, rate_hz: float, reader: PitchReader) -> PitchPath:
     return PitchPath(
         weights=tuple(point.weight for point in points),
-        semitones=tuple(heard_pitch(point.waveform, rate_hz=rate_hz, canonicalizer=canonicalizer) for point in points),
+        semitones=tuple(heard_pitch(point.waveform, rate_hz=rate_hz, reader=reader) for point in points),
     )
 
 

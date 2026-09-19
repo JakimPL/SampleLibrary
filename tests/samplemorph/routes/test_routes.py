@@ -7,6 +7,7 @@ import pytest
 
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.codecs.identity import IdentityCodec
+from samplemorph.coordinates.readers import subharmonic_reader
 from samplemorph.envelope.morph import EnvelopePath
 from samplemorph.envelope.settings import EnvelopeSettings
 from samplemorph.geometry import log_frequency_geometry
@@ -17,6 +18,7 @@ from samplemorph.partials.settings import PartialSettings
 from samplemorph.pipeline import MorphRoute
 from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
 from samplemorph.routes.analysis import AnalysisRoute, SpectralPath
+from samplemorph.routes.gliding import GlidingRoute
 from samplemorph.routes.kinds import pair_through
 from samplemorph.routes.latent import LatentRoute
 from samplemorph.routes.partials import PartialRoute
@@ -25,7 +27,7 @@ from samplemorph.transport.blend import blend
 from samplemorph.transport.morph import transport
 from samplemorph.transport.settings import TransportSettings
 from samplemorph.vocoders.pghi import PghiVocoder
-from tests.samplemorph.conftest import harmonic_tone
+from tests.samplemorph.conftest import harmonic_tone, noise_burst
 
 SHORT_FRAME_COUNT: Final[int] = 4096
 LONG_FRAME_COUNT: Final[int] = 16384
@@ -70,6 +72,44 @@ def test_an_analysis_route_renders_each_end_at_its_own_length_and_the_middle_bet
     lengths = [prepared.render(weight=weight).shape[0] for weight in (0.0, MIDPOINT, 1.0)]
 
     assert lengths == [SHORT_FRAME_COUNT, int(np.sqrt(SHORT_FRAME_COUNT * LONG_FRAME_COUNT)), LONG_FRAME_COUNT]
+
+
+def _gliding_route() -> GlidingRoute:
+    return GlidingRoute(
+        path=EnvelopePath(envelope_settings=EnvelopeSettings()),
+        reader=subharmonic_reader(),
+        geometry=log_frequency_geometry(),
+        settings=TransportSettings(),
+    )
+
+
+def test_a_gliding_route_renders_each_end_at_its_own_length_and_the_middle_between(
+    ends: tuple[HeardMono, HeardMono],
+) -> None:
+    prepared = pair_through(_gliding_route(), *ends)
+
+    lengths = [prepared.render(weight=weight).shape[0] for weight in (0.0, MIDPOINT, 1.0)]
+
+    assert lengths == [SHORT_FRAME_COUNT, int(np.sqrt(SHORT_FRAME_COUNT * LONG_FRAME_COUNT)), LONG_FRAME_COUNT]
+
+
+def test_a_gliding_route_with_an_end_of_no_trusted_pitch_renders_as_the_envelope_route(
+    ends: tuple[HeardMono, HeardMono],
+) -> None:
+    burst = hear_in_frame(
+        noise_burst(LONG_FRAME_COUNT, seed=3), rate_hz=NOMINAL_WAV_RATE, target_rate_hz=NOMINAL_WAV_RATE
+    )
+    gliding = _gliding_route()
+    held = AnalysisRoute(path=gliding.path, geometry=gliding.geometry, settings=gliding.settings)
+
+    prepared = gliding.prepare(burst)
+
+    assert prepared.pitch_semitones is None
+    assert gliding.prepare(ends[0]).pitch_semitones is not None
+    assert np.array_equal(
+        pair_through(gliding, ends[0], burst).render(weight=MIDPOINT),
+        pair_through(held, ends[0], burst).render(weight=MIDPOINT),
+    )
 
 
 def test_the_partials_route_renders_each_end_at_its_own_length_and_the_middle_between(

@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from samplemorph.measurement.comparison import held_out_distance_db, held_out_spectrum
 from samplemorph.measurement.loudness import integrated_loudness, match_loudness
 from samplemorph.measurement.modulation_spectrum import ModulationLobeDepths, modulation_lobe_depths
-from samplemorph.measurement.morph_path.harmonicity import harmonicity
+from samplemorph.measurement.morph_path.harmonicity import NoteReading, note_reading
 from samplemorph.measurement.morph_path.heard_partials import heard_partials
 from samplemorph.measurement.morph_path.loudness_path import LoudnessPath
 from samplemorph.measurement.morph_path.partial_wobble import partial_wobble_cents
@@ -66,7 +66,9 @@ class PointScreen:
     move in pitch every 3 ms (`partial_wobble_cents`), and `wobble_excess_cents` that over the value
     interpolated between the ends, which a vibrato the ends lack reads above zero. `harmonicity` is
     the share of its partial energy standing on notes, which says whether what it holds still sounds
-    like notes. A point or an end holding no partial reads not a number on all three.
+    like notes, and `note_count` how many notes it sounds, which a morph between two notes holds at
+    one when it glides and at two when it crossfades (`NoteReading`). A point or an end holding no
+    partial reads not a number on the three partial readings and sounds no note.
     """
 
     peak_count_ratio: float
@@ -77,6 +79,7 @@ class PointScreen:
     wobble_cents: float
     wobble_excess_cents: float
     harmonicity: float
+    note_count: int
 
 
 @dataclass(frozen=True)
@@ -113,7 +116,7 @@ class _PointFeatures:
     crest_db: float
     depths: ModulationLobeDepths
     wobble_cents: float
-    harmonicity: float
+    notes: NoteReading
 
 
 def read_path(path: HeardPath) -> PathReadings:
@@ -177,7 +180,7 @@ def _features(waveform: NDArray[np.float64], *, rate_hz: int) -> _PointFeatures:
         crest_db=crest_factor_db(waveform),
         depths=modulation_lobe_depths(waveform, source_rate_hz=rate_hz),
         wobble_cents=partial_wobble_cents(partials),
-        harmonicity=harmonicity(partials, settings=NoteSettings()),
+        notes=note_reading(partials, settings=NoteSettings()),
     )
 
 
@@ -194,7 +197,8 @@ def _screen(point: _PointFeatures, *, first: _PointFeatures, second: _PointFeatu
         roughness_excess=point.depths.roughness - between(first.depths.roughness, second.depths.roughness),
         wobble_cents=point.wobble_cents,
         wobble_excess_cents=point.wobble_cents - between(first.wobble_cents, second.wobble_cents),
-        harmonicity=point.harmonicity,
+        harmonicity=point.notes.harmonicity,
+        note_count=point.notes.note_count,
     )
 
 

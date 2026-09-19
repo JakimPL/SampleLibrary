@@ -8,10 +8,9 @@ from numpy.typing import NDArray
 
 from samplecore.auditory.sound_type import SoundType, sound_type_reading
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
-from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.geometry import SEMITONES_PER_OCTAVE
-from samplemorph.measurement.plausibility import heard_pitch_semitones
+from samplemorph.measurement.pitch.reader import PitchReader
 
 MINIMUM_PITCH_INTERVAL_SEMITONES: Final[float] = 1.0
 
@@ -34,7 +33,15 @@ class PitchPath:
         return self.semitones[index] - ((1.0 - weight) * self.semitones[0] + weight * self.semitones[-1])
 
     @property
+    def is_read(self) -> bool:
+        """Whether every point sounds a pitch the reader found."""
+        return bool(np.all(np.isfinite(self.semitones)))
+
+    @property
     def largest_deviation_semitones(self) -> float:
+        """The farthest any point lies from the line, not a number when a point sounds no pitch."""
+        if not self.is_read:
+            return float("nan")
         return max(abs(self.deviation_semitones(index)) for index in range(len(self.weights)))
 
     @property
@@ -42,24 +49,29 @@ class PitchPath:
         """The largest step between neighboring points over the whole span the path covers.
 
         A switch reads one and a glide over `n` even steps reads `1/n`. Ends heard at one pitch
-        span nothing, and the share is not a number there.
+        span nothing, and a path with a point that sounds no pitch has no steps to read; the share
+        is not a number on either.
         """
         span = max(self.semitones) - min(self.semitones)
-        return float(np.abs(np.diff(self.semitones)).max()) / span if span > 0.0 else float("nan")
+        if not self.is_read or span <= 0.0:
+            return float("nan")
+        return float(np.abs(np.diff(self.semitones)).max()) / span
 
 
-def heard_pitch(waveform: NDArray[np.float64], *, rate_hz: float, canonicalizer: Canonicalizer) -> float:
-    """Where a waveform played at `rate_hz` builds its harmonic series, in semitones from the reference frequency.
+def heard_pitch(waveform: NDArray[np.float64], *, rate_hz: float, reader: PitchReader) -> float:
+    """Where a waveform played at `rate_hz` sounds, in semitones from the reference frequency, or not a number where `reader` finds no pitch.
 
-    The canonicalizer reads frames at the store's nominal rate, so the rate the waveform is played
-    at moves the reading by the interval between the two.
+    The reader reads frames at the store's nominal rate, so the rate the waveform is played at moves
+    the reading by the interval between the two.
     """
-    image = canonicalizer.canonicalize(prepare_mono(waveform))
-    return heard_pitch_semitones(image) + SEMITONES_PER_OCTAVE * float(np.log2(rate_hz / NOMINAL_WAV_RATE))
+    reading = reader.read(prepare_mono(waveform))
+    if reading is None:
+        return float("nan")
+    return reading.semitones + SEMITONES_PER_OCTAVE * float(np.log2(rate_hz / NOMINAL_WAV_RATE))
 
 
 def is_pitched_pair(
-    first: NDArray[np.float64], second: NDArray[np.float64], *, rate_hz: float, canonicalizer: Canonicalizer
+    first: NDArray[np.float64], second: NDArray[np.float64], *, rate_hz: float, reader: PitchReader
 ) -> bool:
     """Whether two sounds played at `rate_hz` both read tonal and lie at least `MINIMUM_PITCH_INTERVAL_SEMITONES` apart.
 
@@ -73,7 +85,5 @@ def is_pitched_pair(
     )
     if not both_tonal:
         return False
-    interval = heard_pitch(first, rate_hz=rate_hz, canonicalizer=canonicalizer) - heard_pitch(
-        second, rate_hz=rate_hz, canonicalizer=canonicalizer
-    )
+    interval = heard_pitch(first, rate_hz=rate_hz, reader=reader) - heard_pitch(second, rate_hz=rate_hz, reader=reader)
     return abs(interval) >= MINIMUM_PITCH_INTERVAL_SEMITONES

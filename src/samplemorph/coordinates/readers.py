@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Protocol
 
 import librosa
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, JsonValue
 
 from samplecore.models.base import FROZEN
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
@@ -22,6 +23,11 @@ BACKGROUND_REACH_SEMITONES: Final[float] = 12.0
 PYIN_HIGHEST_HZ: Final[float] = 4186.0
 # Two periods of the lowest frame bin fit in half of it at the nominal rate, which pYIN's search needs.
 PYIN_FRAME_LENGTH: Final[int] = 4096
+# Read off 20 held-out samples, each at 16 true retunings: above 0.5 the subharmonic reader followed
+# 97% of them within half a semitone, and every drum-like sample read under 0.4.
+SUBHARMONIC_TRUSTED_RELIABILITY: Final[float] = 0.5
+# Where pYIN's top tercile began on the same reading, every retuning in it followed within half a semitone.
+PYIN_TRUSTED_RELIABILITY: Final[float] = 0.5
 
 
 @dataclass(frozen=True)
@@ -34,6 +40,24 @@ class PitchReading:
 
     semitones: float
     reliability: float
+
+
+class PitchReader(Protocol):
+    """A reader a route asks for a sound's pitch, under a name, with the reliability its readings are trusted from.
+
+    `description` names everything the reader reads with, so a route whose reader changes renders
+    under another fingerprint.
+    """
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def trusted_reliability(self) -> float: ...
+
+    def read(self, mono: PreparedMono) -> PitchReading | None: ...
+
+    def description(self) -> dict[str, JsonValue]: ...
 
 
 class SubharmonicReader(BaseModel):
@@ -51,10 +75,14 @@ class SubharmonicReader(BaseModel):
     model_config = FROZEN
 
     analysis: FrameAnalysis
+    trusted_reliability: float = Field(ge=0.0, le=1.0)
 
     @property
     def name(self) -> str:
         return SUBHARMONIC_READER_NAME
+
+    def description(self) -> dict[str, JsonValue]:
+        return {"reader": self.name, **self.model_dump(mode="json")}
 
     def read(self, mono: PreparedMono) -> PitchReading | None:
         """The sound's pitch, or None for a sound with no frame that sounds."""
@@ -88,10 +116,14 @@ class PyinReader(BaseModel):
     lowest_hz: float = Field(gt=0.0)
     highest_hz: float = Field(gt=0.0)
     frame_length: int = Field(gt=0)
+    trusted_reliability: float = Field(ge=0.0, le=1.0)
 
     @property
     def name(self) -> str:
         return PYIN_READER_NAME
+
+    def description(self) -> dict[str, JsonValue]:
+        return {"reader": self.name, **self.model_dump(mode="json")}
 
     def read(self, mono: PreparedMono) -> PitchReading | None:
         """The sound's pitch, or None for a sound with no voiced frame."""
@@ -112,7 +144,7 @@ class PyinReader(BaseModel):
 
 def subharmonic_reader() -> SubharmonicReader:
     """The subharmonic reader on the frames a pitch head reads."""
-    return SubharmonicReader(analysis=frame_analysis())
+    return SubharmonicReader(analysis=frame_analysis(), trusted_reliability=SUBHARMONIC_TRUSTED_RELIABILITY)
 
 
 def pyin_reader() -> PyinReader:
@@ -122,7 +154,14 @@ def pyin_reader() -> PyinReader:
         lowest_hz=MINIMUM_FREQUENCY_HZ,
         highest_hz=PYIN_HIGHEST_HZ,
         frame_length=PYIN_FRAME_LENGTH,
+        trusted_reliability=PYIN_TRUSTED_RELIABILITY,
     )
+
+
+CLASSICAL_READERS: Final[dict[str, Callable[[], PitchReader]]] = {
+    SUBHARMONIC_READER_NAME: subharmonic_reader,
+    PYIN_READER_NAME: pyin_reader,
+}
 
 
 def parabolic_offset(values: NDArray[np.float64], *, peak: int) -> float:
