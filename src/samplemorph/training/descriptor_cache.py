@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -11,16 +10,15 @@ from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
-from samplecore.storage.atomic import synchronize_directory, synchronize_file
 from samplecore.storage.sample_audio import SampleAudio
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
 from samplemorph.descriptors.views import retuned_view
 from samplemorph.geometry import Anchor, Geometry
 from samplemorph.registries import CANONICALIZER_REGISTRY, canonicalizer_for_geometry
+from samplemorph.training.cache_staging import CACHE_DIRECTORY_NAME, fresh_staging, publish_staged
 from samplemorph.training.processes import mapped_in_processes
 
-CACHE_DIRECTORY_NAME: Final[str] = "cache"
 GRID_CACHE_DIRECTORY_NAME: Final[str] = "grids"
 DEFAULT_GRID_CACHE_NAME: Final[str] = "descriptor"
 # The first reading of every sample is the stored waveform's own; the retuned views follow it.
@@ -35,8 +33,6 @@ DURATIONS_FILE_NAME: Final[str] = "durations.npy"
 HASHES_FILE_NAME: Final[str] = "hashes.txt"
 DESCRIPTION_FILE_NAME: Final[str] = "description.json"
 JOB_CHUNK_SIZE: Final[int] = 8
-STAGING_SUFFIX: Final[str] = ".partial"
-RETIRED_SUFFIX: Final[str] = ".retired"
 
 
 class GridCacheDescription(BaseModel):
@@ -166,12 +162,10 @@ def build_grid_cache(
     trainer measured as the one that shares the machine's cores rather than fighting over them.
     Rows are written as they arrive, so memory stays flat however large the draw.
 
-    The cache is built beside `directory`, flushed to disk, and moved into place once its
-    description is written, so a build stopped partway leaves the previous cache under that name as
-    it was, a machine stopping right after the move keeps the new one whole, and a trainer already
-    reading the previous cache keeps the files it mapped. The rows are sized to `samples`, so
-    a caller passes the samples whose audio can be read now; a sample file going missing while the
-    build runs stops the build the same way.
+    The cache is built beside `directory` and moved into place once its description is written,
+    through `publish_staged`. The rows are sized to `samples`, so a caller passes the samples whose
+    audio can be read now; a sample file going missing while the build runs stops the build the same
+    way.
 
     Raises:
         ValueError: the draw is empty.
@@ -192,9 +186,7 @@ def build_grid_cache(
         view_range_semitones=recipe.view_range_semitones,
         random_seed=recipe.random_seed,
     )
-    staging = _sibling(directory, suffix=STAGING_SUFFIX)
-    shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir(parents=True)
+    staging = fresh_staging(directory)
     grids = np.lib.format.open_memmap(
         staging / GRIDS_FILE_NAME,
         mode="w+",
@@ -224,26 +216,10 @@ def build_grid_cache(
     np.save(staging / DURATIONS_FILE_NAME, durations)
     (staging / HASHES_FILE_NAME).write_text("\n".join(sample.hash for sample in samples), encoding="utf-8")
     (staging / DESCRIPTION_FILE_NAME).write_text(description.model_dump_json(indent=2), encoding="utf-8")
-    for name in (GRIDS_FILE_NAME, DURATIONS_FILE_NAME, HASHES_FILE_NAME, DESCRIPTION_FILE_NAME):
-        synchronize_file(staging / name)
-    synchronize_directory(staging)
-    _swap_into_place(staging, directory)
+    publish_staged(
+        staging, directory, file_names=(GRIDS_FILE_NAME, DURATIONS_FILE_NAME, HASHES_FILE_NAME, DESCRIPTION_FILE_NAME)
+    )
     return open_grid_cache(directory)
-
-
-def _sibling(directory: Path, *, suffix: str) -> Path:
-    return directory.with_name(f".{directory.name}{suffix}")
-
-
-def _swap_into_place(staging: Path, directory: Path) -> None:
-    """Move a finished cache under its name, retiring whichever cache held the name before."""
-    retired = _sibling(directory, suffix=RETIRED_SUFFIX)
-    shutil.rmtree(retired, ignore_errors=True)
-    if directory.exists():
-        directory.replace(retired)
-    staging.replace(directory)
-    synchronize_directory(directory.parent)
-    shutil.rmtree(retired, ignore_errors=True)
 
 
 def open_grid_cache(directory: Path) -> GridCache:

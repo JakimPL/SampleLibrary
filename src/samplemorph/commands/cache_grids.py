@@ -8,10 +8,9 @@ from sqlalchemy import Connection
 
 from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import non_negative_integer, positive_integer
-from samplecore.config import DEFAULT_MINIMUM_SAMPLE_FRAMES, LibraryConfig
-from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.config import LibraryConfig
 from samplecore.storage.sample_audio import SampleAudio
-from samplemorph.commands.draws import add_canonicalizer_argument, readable_samples
+from samplemorph.commands.draws import add_canonicalizer_argument, draw_cached_samples
 from samplemorph.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE
 from samplemorph.registries import CANONICALIZER_REGISTRY
 from samplemorph.training.descriptor_cache import (
@@ -25,10 +24,6 @@ from samplemorph.training.descriptor_cache import (
 from samplemorph.training.run_settings import DEFAULT_RANDOM_SEED, DEFAULT_WORKER_COUNT
 
 COMMAND_NAME: Final[str] = "cache-grids"
-# Every sample the catalog holds clears its own ingest floor, and none is too long to canonicalize,
-# so a draw with these bounds reaches the whole catalog.
-FRAME_FLOOR: Final[int] = DEFAULT_MINIMUM_SAMPLE_FRAMES
-FRAME_CEILING: Final[int] = 2**31 - 1
 
 _logger = logging.getLogger(__name__)
 
@@ -72,21 +67,8 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
     """Build one named grid cache over a draw of the catalog and report where it went."""
-    repository = PostgresSampleRepository(connection)
     audio = SampleAudio.from_catalog(connection, config.library_root)
-    samples = readable_samples(
-        (
-            repository.list_all()
-            if arguments.samples is None
-            else repository.sample_reproducibly(
-                count=arguments.samples,
-                random_seed=arguments.seed,
-                frame_floor=FRAME_FLOOR,
-                frame_ceiling=FRAME_CEILING,
-            )
-        ),
-        audio,
-    )
+    samples = draw_cached_samples(connection, audio, count=arguments.samples, random_seed=arguments.seed)
     recipe = GridCacheRecipe(
         canonicalizer_name=arguments.canonicalizer,
         anchor=arguments.anchor,

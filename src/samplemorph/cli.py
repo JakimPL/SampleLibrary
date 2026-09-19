@@ -11,6 +11,7 @@ from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.config import LibraryConfig
 from samplemorph.commands import (
+    cache_frames,
     cache_grids,
     compare,
     draw_pairs,
@@ -37,6 +38,7 @@ class MorphCommand(StrEnum):
 
     FIT = fit.COMMAND_NAME
     CACHE_GRIDS = cache_grids.COMMAND_NAME
+    CACHE_FRAMES = cache_frames.COMMAND_NAME
     TRAIN_DESCRIPTOR = train_descriptor.COMMAND_NAME
     EMBED = embed.COMMAND_NAME
     TRAIN_CODEC = train_codec.COMMAND_NAME
@@ -55,6 +57,7 @@ class MorphCommand(StrEnum):
 CATALOG_COMMANDS: Final[dict[MorphCommand, CatalogCommand]] = {
     MorphCommand.FIT: fit.run,
     MorphCommand.CACHE_GRIDS: cache_grids.run,
+    MorphCommand.CACHE_FRAMES: cache_frames.run,
     MorphCommand.TRAIN_DESCRIPTOR: train_descriptor.run,
     MorphCommand.EMBED: embed.run,
     MorphCommand.TRAIN_CODEC: train_codec.run,
@@ -91,6 +94,7 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     commands = parser.add_subparsers(dest="command", required=True)
     fit.add_parser(commands)
     cache_grids.add_parser(commands)
+    cache_frames.add_parser(commands)
     train_descriptor.add_parser(commands)
     embed.add_parser(commands)
     train_codec.add_parser(commands)

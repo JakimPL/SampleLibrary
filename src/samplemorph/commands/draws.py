@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import logging
 from collections.abc import Collection
+from typing import Final
 
 from sqlalchemy import Connection
 
+from samplecore.config import DEFAULT_MINIMUM_SAMPLE_FRAMES
 from samplecore.models.sample import Sample
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.sample_audio import SampleAudio
@@ -13,6 +15,11 @@ from samplemorph.canonicalizers import Canonicalizer
 from samplemorph.geometry import DEFAULT_ANCHOR, Anchor
 from samplemorph.measurement.corpus import DEFAULT_PROBE_FRAME_CEILING, DEFAULT_PROBE_FRAME_FLOOR
 from samplemorph.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
+
+# Every sample the catalog holds clears its own ingest floor, and none is too long to read, so a
+# draw with these bounds reaches the whole catalog.
+CATALOG_FRAME_FLOOR: Final[int] = DEFAULT_MINIMUM_SAMPLE_FRAMES
+CATALOG_FRAME_CEILING: Final[int] = 2**31 - 1
 
 _logger = logging.getLogger(__name__)
 
@@ -45,6 +52,26 @@ def draw_probe_samples(connection: Connection, *, count: int, random_seed: int) 
         random_seed=random_seed,
         frame_floor=DEFAULT_PROBE_FRAME_FLOOR,
         frame_ceiling=DEFAULT_PROBE_FRAME_CEILING,
+    )
+
+
+def draw_cached_samples(
+    connection: Connection, audio: SampleAudio, *, count: int | None, random_seed: int
+) -> tuple[Sample, ...]:
+    """The samples a cache holds: every readable sample of the catalog, or a seeded draw of `count` of them."""
+    repository = PostgresSampleRepository(connection)
+    return readable_samples(
+        (
+            repository.list_all()
+            if count is None
+            else repository.sample_reproducibly(
+                count=count,
+                random_seed=random_seed,
+                frame_floor=CATALOG_FRAME_FLOOR,
+                frame_ceiling=CATALOG_FRAME_CEILING,
+            )
+        ),
+        audio,
     )
 
 

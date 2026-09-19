@@ -13,9 +13,9 @@ from samplemorph.measurement.ladders.readings import (
     truth_discrimination_db,
 )
 from samplemorph.measurement.ladders.tables import is_central
-from samplemorph.measurement.ladders.tones import ResonantTone, resonant_tone
 from samplemorph.measurement.ladders.truth import Ladder, LadderRecipe, UnrelatedPair
 from samplemorph.measurement.ladders.walkers import CrossfadeWalker, LatentWalker, TranslationOracle, Walk
+from samplemorph.tones import HarmonicTone, harmonic_tone
 from tests.samplemorph.measurement.ladders.conftest import AXIS, INTERVAL_SEMITONES, WEIGHTS
 
 SHIFT_TOLERANCE_SEMITONES = 0.5
@@ -132,8 +132,8 @@ def test_a_latent_walker_brings_its_critic_s_reading_of_the_true_step_the_crossf
 def test_on_a_pair_the_critic_s_sound_is_its_reading_of_the_two_ends(recipe: LadderRecipe) -> None:
     ends = np.stack(
         [
-            recipe.pooled(recipe.canonicalizer.canonicalize(prepare_mono(resonant_tone(tone, rate_hz=44100.0))))
-            for tone in (ResonantTone(110.0, 900.0), ResonantTone(330.0, 2500.0))
+            recipe.pooled(recipe.canonicalizer.canonicalize(prepare_mono(harmonic_tone(tone, rate_hz=44100.0))))
+            for tone in (HarmonicTone(110.0, 900.0), HarmonicTone(330.0, 2500.0))
         ]
     )
     pair = UnrelatedPair(name="pair", weights=WEIGHTS, ends=ends)
@@ -147,8 +147,8 @@ def test_on_a_pair_the_critic_s_sound_is_its_reading_of_the_two_ends(recipe: Lad
 def test_a_crossfade_between_unrelated_samples_departs_from_nothing(recipe: LadderRecipe) -> None:
     ends = np.stack(
         [
-            recipe.pooled(recipe.canonicalizer.canonicalize(prepare_mono(resonant_tone(tone, rate_hz=44100.0))))
-            for tone in (ResonantTone(110.0, 900.0), ResonantTone(330.0, 2500.0))
+            recipe.pooled(recipe.canonicalizer.canonicalize(prepare_mono(harmonic_tone(tone, rate_hz=44100.0))))
+            for tone in (HarmonicTone(110.0, 900.0), HarmonicTone(330.0, 2500.0))
         ]
     )
     pair = UnrelatedPair(name="pair", weights=WEIGHTS, ends=ends)

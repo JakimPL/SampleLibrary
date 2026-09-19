@@ -7,7 +7,6 @@ import pytest
 
 from samplemorph.canonicalizers.common import PreparedMono
 from samplemorph.descriptors.pooling import pool_bands
-from samplemorph.measurement.ladders.tones import ResonantTone
 from samplemorph.measurement.ladders.truth import (
     Ladder,
     LadderFamily,
@@ -47,15 +46,6 @@ def test_the_weights_run_evenly_from_one_end_to_the_other() -> None:
 def test_a_ladder_with_no_step_between_its_ends_is_refused() -> None:
     with pytest.raises(ValueError, match="at least one step"):
         ladder_weights(2)
-
-
-def test_a_tone_between_two_stands_on_the_geometric_line_between_their_positions() -> None:
-    low = ResonantTone(fundamental_hz=100.0, resonance_hz=1000.0)
-    high = ResonantTone(fundamental_hz=400.0, resonance_hz=4000.0)
-
-    middle = low.between(high, weight=0.5)
-
-    assert middle == ResonantTone(fundamental_hz=pytest.approx(200.0), resonance_hz=pytest.approx(2000.0))
 
 
 @pytest.mark.parametrize(

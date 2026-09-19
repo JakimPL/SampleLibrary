@@ -182,11 +182,11 @@ def _cache_grids(argv: list[str], stand_in: StandIn) -> None:
     from samplecore.storage.database import connect
     from samplecore.storage.sample_audio import readable_sample_hashes
     from samplemorph.commands.cache_grids import COMMAND_NAME
+    from samplemorph.training.cache_staging import STAGING_SUFFIX
     from samplemorph.training.descriptor_cache import (
         DESCRIPTION_FILE_NAME,
         GRIDS_FILE_NAME,
         HASHES_FILE_NAME,
-        STAGING_SUFFIX,
         grid_cache_directory,
     )
 

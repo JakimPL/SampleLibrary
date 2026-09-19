@@ -9,13 +9,14 @@ import torch
 from samplecore.tracking.silent import SilentRun
 from samplemorph.features.store import load_features
 from samplemorph.model_paths import features_path
-from samplemorph.training.features.data import FeatureCorpus, held_out_by_class
+from samplemorph.training.features.data import FeatureCorpus
 from samplemorph.training.features.run import run_feature_training
 from samplemorph.training.features.settings import FeatureTrainingSettings
 from samplemorph.training.refusals import ResumeRefused
 from samplemorph.training.run_paths import RunFamily
 from samplemorph.training.run_settings import RunSettings
 from samplemorph.training.runs import RunPlacement
+from samplemorph.training.splits import held_out_by_class
 from tests.samplemorph.training.conftest import BAND_COUNT, TIME_COLUMNS, write_grid_cache
 
 MODEL_NAME = "tiny"

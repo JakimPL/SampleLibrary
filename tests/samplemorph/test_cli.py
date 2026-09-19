@@ -43,6 +43,7 @@ from samplemorph.model_paths import codec_path, descriptor_path, features_path, 
 from samplemorph.model_store import model_path
 from samplemorph.partials.presets import PROFILE_PRESETS
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
+from samplemorph.training.frame_cache import frame_cache_directory, open_frame_cache
 from tests.samplemorph.conftest import harmonic_tone
 from tests.samplemorph.listening.conftest import CatalogedTone, seed_labeled_tones
 
@@ -416,6 +417,23 @@ def test_a_retuned_view_records_its_samples_own_duration(
     assert cache.durations.shape == (CATALOG_SIZE, 3)
     assert np.array_equal(cache.durations, np.repeat(cache.durations[:, :1], 3, axis=1))
     assert not np.array_equal(cache.grids[:, 0], cache.grids[:, 1])
+
+
+def test_frames_are_cached_for_every_sample_as_stored_and_retuned(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+
+    main(["cache-frames", "--cache", "frames-under-test", "--workers", "0"], prog=PROGRAM)
+
+    cache = open_frame_cache(frame_cache_directory(tmp_path, name="frames-under-test"))
+    assert cache.sample_count == CATALOG_SIZE
+    assert np.all(cache.counts > 0)
+    assert np.all(np.abs(cache.offsets) <= cache.description.retuning_range_semitones)
 
 
 def test_every_command_but_serving_and_publishing_runs_on_the_catalog() -> None:

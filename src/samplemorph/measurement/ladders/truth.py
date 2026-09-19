@@ -14,7 +14,7 @@ from samplemorph.descriptors.views import retuned_view
 from samplemorph.geometry import SEMITONES_PER_OCTAVE
 from samplemorph.images import SoundImage
 from samplemorph.measurement.ladders.axis import PooledAxis
-from samplemorph.measurement.ladders.tones import ResonantTone, resonant_tone
+from samplemorph.tones import HarmonicTone, harmonic_tone
 
 MIDDLE_WEIGHT: Final[float] = 0.5
 LOWEST_FUNDAMENTAL_HZ: Final[float] = 80.0
@@ -88,8 +88,8 @@ class SyntheticEnds:
     family: LadderFamily
     name: str
     interval_semitones: float
-    first: ResonantTone
-    second: ResonantTone
+    first: HarmonicTone
+    second: HarmonicTone
 
 
 @dataclass(frozen=True)
@@ -146,7 +146,7 @@ def synthetic_ladder(ends: SyntheticEnds, *, weights: tuple[float, ...], recipe:
     steps = [
         recipe.pooled(
             recipe.canonicalizer.canonicalize(
-                prepare_mono(resonant_tone(ends.first.between(ends.second, weight=weight), rate_hz=rate_hz))
+                prepare_mono(harmonic_tone(ends.first.between(ends.second, weight=weight), rate_hz=rate_hz))
             )
         )
         for weight in weights
@@ -178,7 +178,7 @@ def draw_synthetic_ends(
     drawn = []
     for index in range(count):
         interval = intervals[index % len(intervals)]
-        start = ResonantTone(
+        start = HarmonicTone(
             fundamental_hz=_log_uniform(generator, LOWEST_FUNDAMENTAL_HZ, HIGHEST_FUNDAMENTAL_HZ),
             resonance_hz=_log_uniform(generator, LOWEST_RESONANCE_HZ, HIGHEST_RESONANCE_HZ),
         )
@@ -194,14 +194,14 @@ def draw_synthetic_ends(
     return tuple(drawn)
 
 
-def _moved(tone: ResonantTone, *, family: LadderFamily, ratio: float) -> ResonantTone:
+def _moved(tone: HarmonicTone, *, family: LadderFamily, ratio: float) -> HarmonicTone:
     match family:
         case LadderFamily.PITCH:
-            return ResonantTone(fundamental_hz=tone.fundamental_hz * ratio, resonance_hz=tone.resonance_hz)
+            return HarmonicTone(fundamental_hz=tone.fundamental_hz * ratio, resonance_hz=tone.resonance_hz)
         case LadderFamily.RESONANCE:
-            return ResonantTone(fundamental_hz=tone.fundamental_hz, resonance_hz=tone.resonance_hz * ratio)
+            return HarmonicTone(fundamental_hz=tone.fundamental_hz, resonance_hz=tone.resonance_hz * ratio)
         case LadderFamily.CONTRARY:
-            return ResonantTone(fundamental_hz=tone.fundamental_hz * ratio, resonance_hz=tone.resonance_hz / ratio)
+            return HarmonicTone(fundamental_hz=tone.fundamental_hz * ratio, resonance_hz=tone.resonance_hz / ratio)
         case LadderFamily.RETUNED | LadderFamily.UNRELATED:
             raise _read_from_the_library(family)
 
