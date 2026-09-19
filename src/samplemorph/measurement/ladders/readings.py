@@ -12,7 +12,7 @@ from samplemorph.canonicalizers.common import shift_bands
 from samplemorph.measurement.comparison import grid_distance
 from samplemorph.measurement.ladders.axis import PooledAxis
 from samplemorph.measurement.ladders.truth import MIDDLE_WEIGHT, Ladder, UnrelatedPair
-from samplemorph.measurement.ladders.walkers import Walk, crossfade
+from samplemorph.measurement.ladders.walkers import Critique, Walk, crossfade
 from samplemorph.measurement.plausibility import blend_distance, spectral_spread
 
 MINIMUM_DISCRIMINATION_DB: Final[float] = 4.0
@@ -47,6 +47,19 @@ class ShiftReading:
 
 
 @dataclass(frozen=True)
+class CriticReading:
+    """What a model's own critic reads at one step: of a sound there, of the crossfade there, and of the path there.
+
+    For a ladder the sound is the walker's reading of the true step; for a pair of unrelated
+    samples, whose middle nobody knows, it is the walker's readings of the two ends, averaged.
+    """
+
+    sound: float
+    crossfade: float
+    path: float
+
+
+@dataclass(frozen=True)
 class StepReading:
     """One step of a path read against the ladder's truth, every distance a difference of shape in decibels over the trusted bands.
 
@@ -56,7 +69,8 @@ class StepReading:
     stands from the crossfade there, and `reconstruction_db` how far the walker's reading of the
     true step stands from the truth itself. `spread_excess` is how much more widely the step's
     energy spreads across bands than the ends' spread at that weight, which two pictures laid over
-    each other raise. `shift` is read on ladders whose truth is a translation.
+    each other raise. `shift` is read on ladders whose truth is a translation, and `critic` for a
+    walker that brings a critic of its own.
     """
 
     weight: float
@@ -67,6 +81,7 @@ class StepReading:
     reconstruction_db: float
     spread_excess: float
     shift: ShiftReading | None
+    critic: CriticReading | None
 
     @property
     def moved_share(self) -> float:
@@ -91,7 +106,8 @@ class PairStepReading:
     """One step of a path between two unrelated samples, read against their crossfade alone.
 
     `departure` is the step's distance from the crossfade over the distance between the two ends,
-    so 0 is the crossfade and 1 as far from it as the ends are from each other.
+    so 0 is the crossfade and 1 as far from it as the ends are from each other. `critic` is read
+    for a walker that brings a critic of its own.
     """
 
     weight: float
@@ -99,6 +115,7 @@ class PairStepReading:
     end_distance_db: float
     endpoint_distance_db: float
     spread_excess: float
+    critic: CriticReading | None
 
 
 def truth_discrimination_db(ladder: Ladder, *, axis: PooledAxis) -> float:
@@ -147,6 +164,7 @@ def read_ladder(ladder: Ladder, walk: Walk, *, axis: PooledAxis) -> tuple[StepRe
                     if ladder.is_translation
                     else None
                 ),
+                critic=_ladder_critic(walk.critique, index=index),
             )
         )
     return tuple(readings)
@@ -170,9 +188,30 @@ def read_pair(pair: UnrelatedPair, walk: Walk, *, axis: PooledAxis) -> tuple[Pai
                 end_distance_db=axis.dynamic_range_db * min(grid_distance(step, first), grid_distance(step, second)),
                 endpoint_distance_db=axis.dynamic_range_db * endpoint_distance,
                 spread_excess=_spread_excess(step, first, second, weight=weight),
+                critic=_pair_critic(walk.critique, index=index),
             )
         )
     return tuple(readings)
+
+
+def _ladder_critic(critique: Critique | None, *, index: int) -> CriticReading | None:
+    if critique is None:
+        return None
+    return CriticReading(
+        sound=float(critique.sounds[index]),
+        crossfade=float(critique.crossfade[index]),
+        path=float(critique.path[index]),
+    )
+
+
+def _pair_critic(critique: Critique | None, *, index: int) -> CriticReading | None:
+    if critique is None:
+        return None
+    return CriticReading(
+        sound=float(critique.sounds.mean()),
+        crossfade=float(critique.crossfade[index]),
+        path=float(critique.path[index]),
+    )
 
 
 def pair_endpoint_distance_db(ends: NDArray[np.float32], *, axis: PooledAxis) -> float:

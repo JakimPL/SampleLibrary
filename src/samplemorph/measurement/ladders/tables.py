@@ -7,7 +7,7 @@ from typing import Final
 import numpy as np
 
 from samplecore.tables import TableValue
-from samplemorph.measurement.ladders.readings import PairStepReading, StepReading, StepVerdict
+from samplemorph.measurement.ladders.readings import CriticReading, PairStepReading, StepReading, StepVerdict
 from samplemorph.measurement.ladders.truth import Ladder, LadderFamily
 
 CENTRAL_REACH: Final[float] = 0.125
@@ -64,6 +64,7 @@ def ladder_rows(read: ReadLadder) -> list[dict[str, TableValue]]:
             "shift_deviation_semitones": (
                 NOT_READ if step.shift is None else round(step.shift.deviation_semitones, DECIMALS)
             ),
+            **_critic_columns(step.critic),
         }
         for step in read.steps
     ]
@@ -80,6 +81,7 @@ def pair_rows(read: ReadPair) -> list[dict[str, TableValue]]:
             "end_distance_db": round(step.end_distance_db, DECIMALS),
             "endpoint_distance_db": round(step.endpoint_distance_db, DECIMALS),
             "spread_excess": round(step.spread_excess, DECIMALS),
+            **_critic_columns(step.critic),
         }
         for step in read.steps
     ]
@@ -116,6 +118,7 @@ def ladder_summary_rows(reads: tuple[ReadLadder, ...]) -> list[dict[str, TableVa
                 "reconstruction_db": _median([step.reconstruction_db for step in steps]),
                 "discrimination_db": _median([step.discrimination_db for step in steps]),
                 "spread_excess": _median([step.spread_excess for step in steps]),
+                **_critic_medians([step.critic for step in steps]),
             }
         )
     return rows
@@ -136,9 +139,33 @@ def pair_summary_rows(reads: tuple[ReadPair, ...]) -> list[dict[str, TableValue]
             "departure": _median([step.departure for step in steps]),
             "end_distance_db": _median([step.end_distance_db for step in steps]),
             "spread_excess": _median([step.spread_excess for step in steps]),
+            **_critic_medians([step.critic for step in steps]),
         }
         for walker, steps in sorted(groups.items())
     ]
+
+
+def _critic_columns(critic: CriticReading | None) -> dict[str, TableValue]:
+    """The critic's reading of one step, left empty for a walker with no critic."""
+    if critic is None:
+        return {"critic_sound": NOT_READ, "critic_crossfade": NOT_READ, "critic_path": NOT_READ}
+    return {
+        "critic_sound": round(critic.sound, DECIMALS),
+        "critic_crossfade": round(critic.crossfade, DECIMALS),
+        "critic_path": round(critic.path, DECIMALS),
+    }
+
+
+def _critic_medians(critics: list[CriticReading | None]) -> dict[str, TableValue]:
+    """The medians of the critic's readings over a group's steps, left empty for a walker with no critic."""
+    read = [critic for critic in critics if critic is not None]
+    if not read:
+        return _critic_columns(None)
+    return {
+        "critic_sound": _median([critic.sound for critic in read]),
+        "critic_crossfade": _median([critic.crossfade for critic in read]),
+        "critic_path": _median([critic.path for critic in read]),
+    }
 
 
 def _median(values: list[float]) -> float:

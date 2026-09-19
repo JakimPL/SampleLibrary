@@ -23,6 +23,7 @@ from samplemorph.commands import (
     response,
     train_codec,
     train_descriptor,
+    train_features,
     train_restorer,
 )
 from samplemorph.service import cli as service_cli
@@ -40,6 +41,7 @@ class MorphCommand(StrEnum):
     EMBED = embed.COMMAND_NAME
     TRAIN_CODEC = train_codec.COMMAND_NAME
     TRAIN_RESTORER = train_restorer.COMMAND_NAME
+    TRAIN_FEATURES = train_features.COMMAND_NAME
     RENDER = render.COMMAND_NAME
     MEASURE = measure.COMMAND_NAME
     DRAW_PAIRS = draw_pairs.COMMAND_NAME
@@ -57,6 +59,7 @@ CATALOG_COMMANDS: Final[dict[MorphCommand, CatalogCommand]] = {
     MorphCommand.EMBED: embed.run,
     MorphCommand.TRAIN_CODEC: train_codec.run,
     MorphCommand.TRAIN_RESTORER: train_restorer.run,
+    MorphCommand.TRAIN_FEATURES: train_features.run,
     MorphCommand.RENDER: render.run,
     MorphCommand.MEASURE: measure.run,
     MorphCommand.DRAW_PAIRS: draw_pairs.run,
@@ -92,6 +95,7 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     embed.add_parser(commands)
     train_codec.add_parser(commands)
     train_restorer.add_parser(commands)
+    train_features.add_parser(commands)
     render.add_parser(commands)
     measure.add_parser(commands)
     draw_pairs.add_parser(commands)

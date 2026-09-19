@@ -31,3 +31,14 @@ RESTORER_VALIDATION_COARSE: Final[str] = "validation/coarse"
 RESTORER_VALIDATION_LEAST_SQUARES: Final[str] = "validation/least_squares"
 
 RESTORER_MONITORED_METRIC: Final[str] = RESTORER_VALIDATION_LOSS
+
+FEATURE_TRAINING_LOSS: Final[str] = "training/loss"
+FEATURE_TRAINING_RECONSTRUCTION: Final[str] = "training/reconstruction"
+FEATURE_TRAINING_ADVERSARIAL: Final[str] = "training/adversarial"
+FEATURE_TRAINING_CRITIC: Final[str] = "training/critic"
+FEATURE_VALIDATION_RECONSTRUCTION: Final[str] = "validation/reconstruction"
+FEATURE_VALIDATION_RECONSTRUCTION_DB: Final[str] = "validation/reconstruction_db"
+FEATURE_VALIDATION_ADVERSARIAL: Final[str] = "validation/adversarial"
+FEATURE_VALIDATION_CRITIC_ERROR: Final[str] = "validation/critic_error"
+
+FEATURE_MONITORED_METRIC: Final[str] = FEATURE_VALIDATION_RECONSTRUCTION

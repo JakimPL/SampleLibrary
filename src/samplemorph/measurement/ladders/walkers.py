@@ -24,17 +24,42 @@ class GridAutoencoder(Protocol):
     def decode(self, latents: NDArray[np.float32]) -> NDArray[np.float32]: ...
 
 
+class GridCritic(Protocol):
+    """Reads how far along a line between two sounds a grid looks: about 0 for a sound, up to 0.5 for a midpoint that shows.
+
+    Shapes: grids are ``(count, bands, columns)`` and scores ``(count,)``.
+    """
+
+    def score(self, grids: NDArray[np.float32]) -> NDArray[np.float32]: ...
+
+
+@dataclass(frozen=True)
+class Critique:
+    """What a model's own critic reads of a walk: the walker's readings of the sounds, the crossfade of its two ends, and its path.
+
+    A critic that reads the crossfade as a sound had nothing to teach its autoencoder against a
+    crossfade, which is what tells a critic that failed from an autoencoder that ignored it.
+    Shapes: `sounds` is ``(reconstructions,)``, `crossfade` and `path` ``(steps,)``.
+    """
+
+    sounds: NDArray[np.float32]
+    crossfade: NDArray[np.float32]
+    path: NDArray[np.float32]
+
+
 @dataclass(frozen=True)
 class Walk:
-    """What one walker made of a ladder: its reading of every true step, and its own path between the ends.
+    """What one walker made of a ladder: its reading of every true step, its own path between the ends, and its critic's view.
 
     A walker is judged against its own readings of the truth, so whatever it loses in
     reconstructing a sound at all cancels, and what remains is how its path runs between the ends.
+    A walker with a critic of its own brings the critic's reading of the walk.
     Shapes: `reconstructions` is ``(true steps, bands, columns)`` and `path` ``(steps, bands, columns)``.
     """
 
     reconstructions: NDArray[np.float32]
     path: NDArray[np.float32]
+    critique: Critique | None
 
 
 class LadderWalker(Protocol):
@@ -61,11 +86,15 @@ class CrossfadeWalker:
 
     def walk(self, ladder: Ladder) -> Walk:
         return Walk(
-            reconstructions=ladder.truth, path=crossfade(ladder.truth[0], ladder.truth[-1], weights=ladder.weights)
+            reconstructions=ladder.truth,
+            path=crossfade(ladder.truth[0], ladder.truth[-1], weights=ladder.weights),
+            critique=None,
         )
 
     def walk_pair(self, pair: UnrelatedPair) -> Walk:
-        return Walk(reconstructions=pair.ends, path=crossfade(pair.ends[0], pair.ends[1], weights=pair.weights))
+        return Walk(
+            reconstructions=pair.ends, path=crossfade(pair.ends[0], pair.ends[1], weights=pair.weights), critique=None
+        )
 
 
 @dataclass(frozen=True)
@@ -94,18 +123,19 @@ class TranslationOracle:
                 for weight in ladder.weights
             ]
         ).astype(np.float32)
-        return Walk(reconstructions=ladder.truth, path=path)
+        return Walk(reconstructions=ladder.truth, path=path, critique=None)
 
     def walk_pair(self, pair: UnrelatedPair) -> None:  # pylint: disable=unused-argument
         return None
 
 
 class LatentWalker:
-    """The straight line between two ends' latent vectors, decoded step by step."""
+    """The straight line between two ends' latent vectors, decoded step by step and read by the model's own critic."""
 
-    def __init__(self, *, name: str, autoencoder: GridAutoencoder) -> None:
+    def __init__(self, *, name: str, autoencoder: GridAutoencoder, critic: GridCritic) -> None:
         self._name = name
         self._autoencoder = autoencoder
+        self._critic = critic
 
     @property
     def name(self) -> str:
@@ -122,7 +152,14 @@ class LatentWalker:
         latents = self._autoencoder.encode(grids)
         shares = np.asarray(weights, dtype=np.float32)[:, None]
         line = (1.0 - shares) * latents[:1] + shares * latents[-1:]
-        return Walk(reconstructions=self._autoencoder.decode(latents), path=self._autoencoder.decode(line))
+        reconstructions = self._autoencoder.decode(latents)
+        path = self._autoencoder.decode(line)
+        critique = Critique(
+            sounds=self._critic.score(reconstructions),
+            crossfade=self._critic.score(crossfade(reconstructions[0], reconstructions[-1], weights=weights)),
+            path=self._critic.score(path),
+        )
+        return Walk(reconstructions=reconstructions, path=path, critique=critique)
 
 
 def crossfade(

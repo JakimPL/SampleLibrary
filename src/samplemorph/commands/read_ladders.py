@@ -4,7 +4,7 @@ import argparse
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 import numpy as np
 from numpy.typing import NDArray
@@ -29,7 +29,8 @@ from samplemorph.measurement.ladders.truth import (
     retuned_ladder,
     synthetic_ladder,
 )
-from samplemorph.measurement.ladders.walkers import CrossfadeWalker, LadderWalker, TranslationOracle
+from samplemorph.measurement.ladders.walkers import CrossfadeWalker, LadderWalker, LatentWalker, TranslationOracle
+from samplemorph.model_paths import features_path
 from samplemorph.registries import canonicalizer_for_geometry
 from samplemorph.training.descriptor_cache import (
     DEFAULT_GRID_CACHE_NAME,
@@ -39,6 +40,9 @@ from samplemorph.training.descriptor_cache import (
 )
 from samplemorph.training.processes import mapped_in_processes
 from samplemorph.training.run_settings import DEFAULT_RANDOM_SEED
+
+if TYPE_CHECKING:
+    from samplemorph.features.store import StoredFeatures
 
 COMMAND_NAME: Final[str] = "read-ladders"
 DEFAULT_LADDER_SAMPLE_COUNT: Final[int] = 100
@@ -52,6 +56,7 @@ DEFAULT_WALKER_NAMES: Final[tuple[str, ...]] = (
     ladder_walkers.ORACLE_WALKER_NAME,
 )
 HASH_PREFIX_LENGTH: Final[int] = 12
+LADDER_DEVICE: Final[str] = "cpu"
 WORKER_CHUNK_SIZE: Final[int] = 2
 
 _logger = logging.getLogger(__name__)
@@ -59,6 +64,10 @@ _logger = logging.getLogger(__name__)
 
 class UnknownWalker(ValueError):
     """Raised when the command names a model to read ladders through that it has none of."""
+
+
+class ForeignFeatures(ValueError):
+    """Raised when a feature model named was taught on another cache than the one the ladders are made on."""
 
 
 @dataclass(frozen=True)
@@ -115,7 +124,10 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         type=str,
         nargs="+",
         default=DEFAULT_WALKER_NAMES,
-        help=f"Which paths to read: {', '.join(DEFAULT_WALKER_NAMES)}.",
+        help=(
+            f"Which paths to read: {', '.join(DEFAULT_WALKER_NAMES)}, or the name of a feature model taught on the "
+            "cache, walked in a straight latent line and read by its own critic."
+        ),
     )
     parser.add_argument(
         "--samples",
@@ -159,6 +171,9 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         help="How many processes build the ladders; none builds them in this one.",
     )
     parser.add_argument(
+        "--device", type=str, default=LADDER_DEVICE, help="Which device the feature models named read ladders on."
+    )
+    parser.add_argument(
         "--output", type=str, required=True, help="The directory to write the tables and pictures into."
     )
 
@@ -168,11 +183,14 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
 
     Library samples are drawn from the cache by the seed, each read at rates spanning every
     interval; synthetic tones move their pitch, their resonance or both the opposite way; and
-    unrelated pairs of the drawn samples show how a path runs where nobody knows the middle.
+    unrelated pairs of the drawn samples show how a path runs where nobody knows the middle. When
+    feature models are named, the samples are drawn from those every one of them was judged on and
+    never taught.
 
     Raises:
-        SystemExit: the cache is not built, a model name is unknown, the steps or intervals leave
-            nothing to read, or every ladder stands too close to its own crossfade.
+        SystemExit: the cache is not built, a model name is unknown or names a model taught on
+            another cache, the steps or intervals leave nothing to read, or every ladder stands too
+            close to its own crossfade.
     """
     with ending_in_one_line("Read no ladder", (ValueError,)):
         cache = _opened_cache(config.library_root, name=arguments.cache)
@@ -181,12 +199,14 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
             band_count=cache.description.band_count,
             bands_per_semitone=cache.description.bands_per_semitone,
         )
-        walkers = _walkers(tuple(dict.fromkeys(arguments.models)), axis=axis)
+        names = tuple(dict.fromkeys(arguments.models))
+        models = _feature_models(names, library_root=config.library_root, cache=cache, device=arguments.device)
+        walkers = _walkers(names, axis=axis, models=models)
         weights = ladder_weights(arguments.steps)
         intervals = _intervals(arguments.intervals)
         audio = SampleAudio.from_catalog(connection, config.library_root)
         sample_hashes = _drawn_hashes(
-            cache,
+            _unseen_hashes(cache, models=tuple(models.values())),
             audio=audio,
             count=arguments.samples,
             minimum_frames=_minimum_frames(arguments.minimum_seconds, axis=axis, widest=max(intervals)),
@@ -237,12 +257,46 @@ def _opened_cache(library_root: Path, *, name: str) -> GridCache:
         raise ValueError(f"{error}; build it with cache-grids") from error
 
 
-def _walkers(names: tuple[str, ...], *, axis: PooledAxis) -> tuple[LadderWalker, ...]:
-    """The paths the names ask for.
+def _feature_models(
+    names: tuple[str, ...], *, library_root: Path, cache: GridCache, device: str
+) -> dict[str, StoredFeatures]:
+    """Every feature model the names ask for beside the reference paths, loaded on `device`.
 
     Raises:
-        UnknownWalker: a name is none of the paths this command reads.
+        UnknownWalker: a name is neither a reference path nor a stored feature model.
+        ForeignFeatures: a feature model was taught on another cache.
     """
+    # The networks are imported here, so a reading through the reference paths alone and every
+    # other command stay clear of them.
+    # pylint: disable=import-outside-toplevel
+    import torch
+
+    from samplemorph.features.store import load_features
+
+    models: dict[str, StoredFeatures] = {}
+    for name in names:
+        if name in DEFAULT_WALKER_NAMES:
+            continue
+        path = features_path(library_root, name=name)
+        if not path.is_file():
+            raise UnknownWalker(
+                f"no path is named {name}: the paths are {', '.join(DEFAULT_WALKER_NAMES)}, "
+                f"or a feature model stored under {path.parent}"
+            )
+        model = load_features(path, device=torch.device(device))
+        if model.description.cache != cache.directory.name:
+            raise ForeignFeatures(
+                f"{name} was taught on the cache {model.description.cache}, and the ladders are made on "
+                f"{cache.directory.name}"
+            )
+        models[name] = model
+    return models
+
+
+def _walkers(
+    names: tuple[str, ...], *, axis: PooledAxis, models: dict[str, StoredFeatures]
+) -> tuple[LadderWalker, ...]:
+    """The paths the names ask for, in the order asked: the reference paths, and each feature model's latent line."""
     walkers: list[LadderWalker] = []
     for name in names:
         match name:
@@ -251,8 +305,23 @@ def _walkers(names: tuple[str, ...], *, axis: PooledAxis) -> tuple[LadderWalker,
             case ladder_walkers.ORACLE_WALKER_NAME:
                 walkers.append(TranslationOracle(bands_per_semitone=axis.bands_per_semitone))
             case _:
-                raise UnknownWalker(f"no path is named {name}; the paths are {', '.join(DEFAULT_WALKER_NAMES)}")
+                walkers.append(LatentWalker(name=name, autoencoder=models[name], critic=models[name]))
     return tuple(walkers)
+
+
+def _unseen_hashes(cache: GridCache, *, models: tuple[StoredFeatures, ...]) -> tuple[str, ...]:
+    """The cached samples every model was judged on and never taught, in the cache's order, or all of them when no model is read.
+
+    Raises:
+        ValueError: the models share no held-out sample in the cache.
+    """
+    if not models:
+        return cache.hashes
+    unseen = frozenset.intersection(*(frozenset(model.description.validation_hashes) for model in models))
+    candidates = tuple(sample_hash for sample_hash in cache.hashes if sample_hash in unseen)
+    if not candidates:
+        raise ValueError("the feature models named share no held-out sample in the cache")
+    return candidates
 
 
 def _intervals(requested: list[float]) -> tuple[float, ...]:
@@ -273,22 +342,22 @@ def _minimum_frames(minimum_seconds: float, *, axis: PooledAxis, widest: float) 
 
 
 def _drawn_hashes(
-    cache: GridCache, *, audio: SampleAudio, count: int, minimum_frames: int, random_seed: int
+    candidates: tuple[str, ...], *, audio: SampleAudio, count: int, minimum_frames: int, random_seed: int
 ) -> tuple[str, ...]:
-    """The first `count` of the cache's samples, in the seed's order, that can be read now and last long enough.
+    """The first `count` of the candidate samples, in the seed's order, that can be read now and last long enough.
 
     Raises:
-        ValueError: no cached sample can be read and lasts long enough.
+        ValueError: no candidate sample can be read and lasts long enough.
     """
     chosen: list[str] = []
-    for position in np.random.default_rng(random_seed).permutation(cache.sample_count):
-        sample_hash = cache.hashes[int(position)]
+    for position in np.random.default_rng(random_seed).permutation(len(candidates)):
+        sample_hash = candidates[int(position)]
         if audio.is_available(sample_hash) and audio.frame_count(sample_hash) >= minimum_frames:
             chosen.append(sample_hash)
         if len(chosen) == count:
             break
     if not chosen:
-        raise ValueError(f"no sample in the cache can be read now and lasts {minimum_frames} frames or more")
+        raise ValueError(f"no candidate sample can be read now and lasts {minimum_frames} frames or more")
     return tuple(chosen)
 
 

@@ -251,3 +251,22 @@ forbidden_modules = [
     "samplemorph.commands",
     "samplemorph.service",
 ]
+
+[[tool.importlinter.contracts]]
+name = "the feature models are taught by the training and read by the shell, and read none of the layers over them"
+type = "forbidden"
+source_modules = ["samplemorph.features"]
+forbidden_modules = [
+    "samplemorph.training",
+    "samplemorph.routes",
+    "samplemorph.listening",
+    "samplemorph.measurement",
+    "samplemorph.commands",
+    "samplemorph.service",
+]
+
+[[tool.importlinter.contracts]]
+name = "the ladders read any model through their own protocols, and the shell hands them the feature models"
+type = "forbidden"
+source_modules = ["samplemorph.measurement.ladders"]
+forbidden_modules = ["samplemorph.features"]

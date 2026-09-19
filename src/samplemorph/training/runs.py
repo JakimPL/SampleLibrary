@@ -128,12 +128,15 @@ def fit_and_export(
     what a reader of the model loads. Progress reaches the log as lines throughout, and the
     progress bar draws on a terminal. A run that finishes every epoch with a model exported writes
     a `RunFinished` record beside them.
+
+    The trainer clips every step's gradients to `GRADIENT_CLIP`, and a module that steps its own
+    optimizers clips its own gradients, one optimizer at a time.
     """
     trainer = Trainer(
         max_epochs=settings.epochs,
         accelerator=settings.accelerator,
         precision=settings.precision,
-        gradient_clip_val=GRADIENT_CLIP,
+        gradient_clip_val=GRADIENT_CLIP if module.automatic_optimization else None,
         default_root_dir=placement.directory,
         logger=[CSVLogger(save_dir=placement.directory, name=""), TrackedRunLogger(placement.tracker)],
         callbacks=[export, resume_checkpoint(placement.directory), ProgressLines()],

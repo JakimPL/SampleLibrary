@@ -35,10 +35,26 @@ class _FlatteningAutoencoder:
         return latents.reshape(latents.shape[0], *self._shape)
 
 
+class _LoudnessCritic:
+    """A critic that reads how loud a grid is on average, so every reading can be told from where it came."""
+
+    def score(self, grids: NDArray[np.float32]) -> NDArray[np.float32]:
+        loudness: NDArray[np.float32] = grids.mean(axis=(1, 2)).astype(np.float32)
+        return loudness
+
+
+def _flat_walker() -> LatentWalker:
+    return LatentWalker(
+        name="flat",
+        autoencoder=_FlatteningAutoencoder((AXIS.band_count, AXIS.geometry.time_columns)),
+        critic=_LoudnessCritic(),
+    )
+
+
 def _switched(ladder: Ladder) -> Walk:
     """A path that holds the first end until the middle and the second from there."""
     path = np.stack([ladder.truth[0] if weight < 0.5 else ladder.truth[-1] for weight in ladder.weights])
-    return Walk(reconstructions=ladder.truth, path=path)
+    return Walk(reconstructions=ladder.truth, path=path, critique=None)
 
 
 def test_the_crossfade_reads_as_a_crossfade_at_every_step(retuned: Ladder) -> None:
@@ -94,13 +110,38 @@ def test_the_oracle_walks_only_a_ladder_whose_truth_is_a_translation(recipe: Lad
 
 
 def test_a_latent_that_is_the_grid_itself_walks_the_crossfade(retuned: Ladder) -> None:
-    autoencoder = _FlatteningAutoencoder((AXIS.band_count, AXIS.geometry.time_columns))
-
-    latent = LatentWalker(name="flat", autoencoder=autoencoder).walk(retuned)
+    latent = _flat_walker().walk(retuned)
     crossfade = CrossfadeWalker().walk(retuned)
 
     assert np.allclose(latent.path, crossfade.path, atol=1e-6)
     assert np.array_equal(latent.reconstructions, crossfade.reconstructions)
+
+
+def test_a_latent_walker_brings_its_critic_s_reading_of_the_true_step_the_crossfade_and_its_path(
+    retuned: Ladder,
+) -> None:
+    steps = read_ladder(retuned, _flat_walker().walk(retuned), axis=AXIS)
+
+    for index, step in enumerate(steps, start=1):
+        assert step.critic is not None
+        assert step.critic.sound == pytest.approx(float(retuned.truth[index].mean()), rel=1e-5)
+        assert step.critic.path == pytest.approx(step.critic.crossfade, rel=1e-5)
+    assert all(step.critic is None for step in read_ladder(retuned, CrossfadeWalker().walk(retuned), axis=AXIS))
+
+
+def test_on_a_pair_the_critic_s_sound_is_its_reading_of_the_two_ends(recipe: LadderRecipe) -> None:
+    ends = np.stack(
+        [
+            recipe.pooled(recipe.canonicalizer.canonicalize(prepare_mono(resonant_tone(tone, rate_hz=44100.0))))
+            for tone in (ResonantTone(110.0, 900.0), ResonantTone(330.0, 2500.0))
+        ]
+    )
+    pair = UnrelatedPair(name="pair", weights=WEIGHTS, ends=ends)
+
+    steps = read_pair(pair, _flat_walker().walk_pair(pair), axis=AXIS)
+
+    sounds = [step.critic.sound for step in steps if step.critic is not None]
+    assert sounds == pytest.approx([float(ends.mean())] * len(steps), rel=1e-5)
 
 
 def test_a_crossfade_between_unrelated_samples_departs_from_nothing(recipe: LadderRecipe) -> None:

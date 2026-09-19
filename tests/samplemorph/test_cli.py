@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import soundfile
+import torch
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
@@ -35,9 +36,10 @@ from samplemorph.descriptors.descriptor_shape import DESCRIPTOR_SIZE
 from samplemorph.envelope.payload import response_from_payload
 from samplemorph.envelope.response import HeldEnd
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
+from samplemorph.features.store import load_features
 from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.listening.pairs import CatalogPair, PairEnd, PairSet, write_pair_set
-from samplemorph.model_paths import codec_path, descriptor_path, restorer_path
+from samplemorph.model_paths import codec_path, descriptor_path, features_path, restorer_path
 from samplemorph.model_store import model_path
 from samplemorph.partials.presets import PROFILE_PRESETS
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
@@ -460,6 +462,79 @@ def test_ladders_are_read_on_the_cache_s_own_axis_through_both_references(
     assert all(float(row["verdict_faded"]) == 1.0 for row in summary if row["model"] == "crossfade")
     assert {row["family"] for row in _rows(output / "ladders.csv")} <= {"retuned", "pitch", "resonance", "contrary"}
     assert any((output / "pictures").rglob("*.png"))
+
+
+def test_a_feature_model_is_taught_on_the_cache_and_read_on_ladders_of_the_samples_it_never_saw(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["cache-grids", "--cache", "features-under-test", "--views", "1", "--workers", "0"], prog=PROGRAM)
+    output = tmp_path / "ladders"
+
+    main(
+        [
+            "train-features",
+            "--cache",
+            "features-under-test",
+            "--features",
+            "critic",
+            "--critic-weight",
+            "0.5",
+            "--latent-size",
+            "8",
+            "--width",
+            "4",
+            "--validation-share",
+            "0.25",
+            "--epochs",
+            "1",
+            "--batch",
+            "4",
+            "--workers",
+            "0",
+            "--device",
+            "cpu",
+            "--no-tracking",
+        ],
+        prog=PROGRAM,
+    )
+    main(
+        [
+            "read-ladders",
+            "--cache",
+            "features-under-test",
+            "--models",
+            "crossfade",
+            "critic",
+            "--samples",
+            "4",
+            "--synthetic",
+            "1",
+            "--unrelated",
+            "1",
+            "--intervals",
+            "5",
+            "--steps",
+            "5",
+            "--minimum-seconds",
+            "0.01",
+            "--output",
+            str(output),
+        ],
+        prog=PROGRAM,
+    )
+
+    stored = load_features(features_path(tmp_path, name="critic"), device=torch.device("cpu"))
+    unseen = {sample_hash[:12] for sample_hash in stored.description.validation_hashes}
+    ladders = _rows(output / "ladders.csv")
+    assert {row["model"] for row in ladders} == {"crossfade", "critic"}
+    assert {row["ladder"].split("-")[0] for row in ladders if row["family"] == "retuned"} <= unseen
+    assert all(row["critic_path"] != "" for row in ladders if row["model"] == "critic")
+    assert all(row["critic_path"] == "" for row in ladders if row["model"] == "crossfade")
 
 
 def test_reading_ladders_through_a_path_it_has_none_of_ends_with_one_message(

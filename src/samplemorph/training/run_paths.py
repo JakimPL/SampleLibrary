@@ -20,6 +20,7 @@ class RunFamily(StrEnum):
 
     CODEC = "codec"
     DESCRIPTOR = "descriptor"
+    FEATURES = "features"
     RESTORER = "restorer"
 
 
