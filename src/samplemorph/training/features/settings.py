@@ -5,12 +5,12 @@ from typing import Final
 
 from samplemorph.features.shape import DEFAULT_FEATURE_WIDTH, DEFAULT_LATENT_SIZE
 from samplemorph.training.run_settings import RunSettings
+from samplemorph.training.splits import DEFAULT_VALIDATION_SHARE
 
 DEFAULT_FEATURE_EPOCHS: Final[int] = 20
 DEFAULT_FEATURE_BATCH_SIZE: Final[int] = 64
 DEFAULT_FEATURE_LEARNING_RATE: Final[float] = 1e-4
 DEFAULT_CRITIC_MIX: Final[float] = 0.2
-DEFAULT_VALIDATION_SHARE: Final[float] = 0.05
 
 
 def default_run_settings() -> RunSettings:

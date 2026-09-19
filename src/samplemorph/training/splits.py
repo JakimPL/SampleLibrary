@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
@@ -10,6 +11,8 @@ from sqlalchemy import Connection
 from samplecore.equivalence_classes import EquivalenceClass, classes_by_member_hash, compute_equivalence_classes
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplemorph.training.refusals import TrainingDataShortfall
+
+DEFAULT_VALIDATION_SHARE: Final[float] = 0.05
 
 
 @dataclass(frozen=True)

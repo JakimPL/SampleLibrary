@@ -20,6 +20,7 @@ from samplemorph.commands import (
     measure,
     publish,
     read_ladders,
+    read_pitch,
     render,
     response,
     train_codec,
@@ -49,6 +50,7 @@ class MorphCommand(StrEnum):
     DRAW_PAIRS = draw_pairs.COMMAND_NAME
     COMPARE = compare.COMMAND_NAME
     READ_LADDERS = read_ladders.COMMAND_NAME
+    READ_PITCH = read_pitch.COMMAND_NAME
     RESPONSE = response.COMMAND_NAME
     PUBLISH = publish.COMMAND_NAME
     SERVE = service_cli.COMMAND_NAME
@@ -68,6 +70,7 @@ CATALOG_COMMANDS: Final[dict[MorphCommand, CatalogCommand]] = {
     MorphCommand.DRAW_PAIRS: draw_pairs.run,
     MorphCommand.COMPARE: compare.run,
     MorphCommand.READ_LADDERS: read_ladders.run,
+    MorphCommand.READ_PITCH: read_pitch.run,
     MorphCommand.RESPONSE: response.run,
 }
 
@@ -105,6 +108,7 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     draw_pairs.add_parser(commands)
     compare.add_parser(commands)
     read_ladders.add_parser(commands)
+    read_pitch.add_parser(commands)
     response.add_parser(commands)
     publish.add_parser(commands)
     service_cli.add_parser(commands)

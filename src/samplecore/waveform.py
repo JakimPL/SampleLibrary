@@ -8,6 +8,8 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
 from scipy.signal import butter, buttord, resample_poly, sosfiltfilt
+from trackmod.binary.pcm.quantize import dequantize, quantize
+from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.base import FROZEN
 from samplecore.models.thumbnail import SampleThumbnail
@@ -125,6 +127,11 @@ def heard_at_rate(
     """
     semitones = SEMITONES_PER_OCTAVE * float(np.log2(playback_rate_hz / stored_rate_hz))
     return resample_by_semitones(waveform, semitones=semitones)
+
+
+def requantized(waveform: NDArray[np.float64], *, depth: BitDepth) -> NDArray[np.float64]:
+    """A waveform as the library holds it once stored at `depth`, rounded by the same rule its files are."""
+    return dequantize(quantize(waveform, depth), depth)
 
 
 def resample_to_fraction_points(values: NDArray[np.float64], *, point_count: int, axis: int = 0) -> NDArray[np.float64]:

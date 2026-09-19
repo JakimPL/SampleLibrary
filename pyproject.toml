@@ -282,6 +282,12 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "the pitch readings read any reader through their own protocol, and the shell hands them the readers"
+type = "forbidden"
+source_modules = ["samplemorph.measurement.pitch"]
+forbidden_modules = ["samplemorph.coordinates", "samplemorph.routes", "samplemorph.training"]
+
+[[tool.importlinter.contracts]]
 name = "the ladders read any model through their own protocols, and the shell hands them the feature models"
 type = "forbidden"
 source_modules = ["samplemorph.measurement.ladders"]

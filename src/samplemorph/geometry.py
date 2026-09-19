@@ -69,6 +69,11 @@ class Anchor(StrEnum):
 DEFAULT_ANCHOR: Final[Anchor] = Anchor.NONE
 
 
+def semitones_from_reference(frequency_hz: float) -> float:
+    """How far a frequency lies from `REFERENCE_FREQUENCY_HZ`, in semitones, the scale every pitch reading states."""
+    return SEMITONES_PER_OCTAVE * float(np.log2(frequency_hz / REFERENCE_FREQUENCY_HZ))
+
+
 def shift_headroom_bands(*, anchor: Anchor, maximum_shift_semitones: float, bands_per_semitone: float) -> int:
     """How many empty bands a grid carries at each end, so an anchoring rule moves content without losing it.
 

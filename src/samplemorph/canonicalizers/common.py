@@ -107,11 +107,19 @@ def fundamental_band(grid: NDArray[np.float64], *, geometry: Geometry) -> int:
     a third as often; `16-pitch-anchor.md` holds the table.
     """
     profile = to_magnitudes(grid.mean(axis=1), dynamic_range_db=geometry.dynamic_range_db, log_gain=0.0)
-    frequencies = geometry.band_frequencies
+    return int(np.argmax(harmonic_sum(profile, frequencies=geometry.band_frequencies)))
+
+
+def harmonic_sum(profile: NDArray[np.float64], *, frequencies: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Every band's score as a fundamental: the magnitude at its first `HARMONIC_COUNT` multiples, each counting less by `HARMONIC_DECAY`.
+
+    `profile` is a linear magnitude over bands centered at `frequencies`, and a multiple beyond the
+    highest band reads as silence.
+    """
     total = np.zeros_like(profile)
     for harmonic in range(1, HARMONIC_COUNT + 1):
         total += HARMONIC_DECAY ** (harmonic - 1) * np.interp(harmonic * frequencies, frequencies, profile, right=0.0)
-    return int(np.argmax(total))
+    return total
 
 
 def anchor_band(grid: NDArray[np.float64], *, geometry: Geometry) -> int:

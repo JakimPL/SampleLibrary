@@ -436,6 +436,46 @@ def test_frames_are_cached_for_every_sample_as_stored_and_retuned(
     assert np.all(np.abs(cache.offsets) <= cache.description.retuning_range_semitones)
 
 
+def test_pitch_is_read_on_the_frame_cache_s_held_out_samples_and_on_synthetic_sounds(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["cache-frames", "--cache", "frames-under-test", "--workers", "0"], prog=PROGRAM)
+    output = tmp_path / "pitch"
+
+    main(
+        [
+            "read-pitch",
+            "--cache",
+            "frames-under-test",
+            "--samples",
+            "1",
+            "--tones",
+            "1",
+            "--pairs",
+            "1",
+            "--noises",
+            "1",
+            "--output",
+            str(output),
+        ],
+        prog=PROGRAM,
+    )
+
+    readings = _rows(output / "readings.csv")
+    assert {row["reader"] for row in readings} == {"subharmonic", "pyin"}
+    assert {row["reading"] for row in readings} >= {"retuning", "invariance", "family", "pair"}
+    assert "envelope-first-middle" in {row["group"] for row in readings}
+    assert {row["separation"] for row in _rows(output / "reliability.csv")} == {
+        "tones-against-noise",
+        "tonal-against-noise",
+    }
+
+
 def test_every_command_but_serving_and_publishing_runs_on_the_catalog() -> None:
     assert set(CATALOG_COMMANDS) == set(MorphCommand) - {MorphCommand.SERVE, MorphCommand.PUBLISH}
 

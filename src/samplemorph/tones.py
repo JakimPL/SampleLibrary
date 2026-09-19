@@ -67,10 +67,15 @@ def harmonic_tone(tone: HarmonicTone, *, rate_hz: float) -> NDArray[np.float64]:
     waveform = np.zeros_like(times)
     for frequency, amplitude, phase in zip(frequencies, amplitudes, phases, strict=True):
         waveform += amplitude * np.sin(2.0 * np.pi * frequency * times + phase)
-    envelope = np.minimum(times / ATTACK_SECONDS, 1.0) * np.exp(-times / DECAY_SECONDS)
-    struck = waveform * envelope
+    struck = waveform * struck_envelope(times)
     scaled: NDArray[np.float64] = TONE_PEAK * struck / float(np.abs(struck).max())
     return scaled[:, None]
+
+
+def struck_envelope(times: NDArray[np.float64]) -> NDArray[np.float64]:
+    """The level of a struck sound at each time in seconds: a 5 ms attack, then a fall by e every half second."""
+    envelope: NDArray[np.float64] = np.minimum(times / ATTACK_SECONDS, 1.0) * np.exp(-times / DECAY_SECONDS)
+    return envelope
 
 
 def _series(tone: HarmonicTone, *, rate_hz: float) -> tuple[NDArray[np.float64], NDArray[np.float64]]:

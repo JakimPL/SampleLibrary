@@ -17,9 +17,9 @@ from samplemorph.training.features.settings import (
     DEFAULT_FEATURE_BATCH_SIZE,
     DEFAULT_FEATURE_EPOCHS,
     DEFAULT_FEATURE_LEARNING_RATE,
-    DEFAULT_VALIDATION_SHARE,
     FeatureTrainingSettings,
 )
+from samplemorph.training.splits import DEFAULT_VALIDATION_SHARE
 
 COMMAND_NAME: Final[str] = "train-features"
 FEATURES_EXPERIMENT_NAME: Final[str] = "features"

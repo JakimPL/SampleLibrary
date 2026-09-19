@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 
 from samplemorph.canonicalizers.common import fundamental_band, restore_columns, to_normalized_decibels
 from samplemorph.codecs import SampleCodec
-from samplemorph.geometry import REFERENCE_FREQUENCY_HZ, SEMITONES_PER_OCTAVE
+from samplemorph.geometry import semitones_from_reference
 from samplemorph.images import SampleLatent, SoundImage
 from samplemorph.measurement.comparison import grid_distance
 from samplemorph.morphers import Morpher, MorphWeights
@@ -209,7 +209,7 @@ def heard_pitch_semitones(image: SoundImage) -> float:
     normalized, _ = to_normalized_decibels(columns, dynamic_range_db=image.geometry.dynamic_range_db)
     band = fundamental_band(normalized, geometry=image.geometry)
     frequency = max(float(image.geometry.band_frequencies[band]), PITCH_FLOOR_HZ)
-    return SEMITONES_PER_OCTAVE * float(np.log2(frequency / REFERENCE_FREQUENCY_HZ))
+    return semitones_from_reference(frequency)
 
 
 def grid_magnitudes(grid: NDArray[np.float64]) -> NDArray[np.float64]:
