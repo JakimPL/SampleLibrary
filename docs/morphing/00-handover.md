@@ -46,7 +46,7 @@ timbre can morph at constant pitch. The argument behind every part of that is in
 | [`22-correspondence.md`](22-correspondence.md) | How a partial finds its partner: one priced assignment over every channel, the moves two sounds agree on, and the presets as dials on it. |
 | [`23-envelope.md`](23-envelope.md) | Why every route that moves partials plays two pitch contents in the middle, and the route that moves the spectral envelope under one sound's excitation instead, which the application serves. |
 | [`24-learned-features.md`](24-learned-features.md) | What sixty papers say about making a learned coordinate carry position rather than a lit bin, how our three failures are named in them, and a staged plan from two classical upgrades through an interpolation critic to named equivariant coordinates. |
-| [`25-interpolation-critic.md`](25-interpolation-critic.md) | Step 1 of note 24 measured: an interpolation critic makes a grid autoencoder glide over 3 semitones and switch past a fifth, read on ladders whose middle is known. |
+| [`25-interpolation-critic.md`](25-interpolation-critic.md) | Step 1 of note 24 measured and failed: an interpolation critic makes a grid autoencoder glide over 3 semitones and switch past a fifth, read on ladders whose middle is known. |
 | [`terms.md`](terms.md) | The vocabulary the morph documents use precisely: partial, track, note, channel, line, place, move, and the words they avoid. |
 
 ## The first three things to do

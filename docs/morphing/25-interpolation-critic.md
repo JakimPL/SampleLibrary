@@ -201,10 +201,12 @@ here is about 3–5 semitones.
 
 ## Where this stands
 
-Two readings are open, and this run does not decide between them. The first is resolution: at one
-band per semitone the ladders read the models through a blur, and where the blur leaves room the
-critic arm moves at 3 semitones every time, so full resolution would likely read a higher share
-there. The second is the switch past 5 semitones, which shows at every separation the models keep
-and which the next model has to rule out by construction or by a term that prices it: a path whose
-steps must be evenly spaced in the latent's decoded distance, or the named equivariant coordinates
-of Step 2 in [`24-learned-features.md`](24-learned-features.md), which move by construction.
+The critic arm fails the gate on the numbers and on the pictures: beyond a slant at 3 semitones,
+its paths do not read as one sound moving. As note 24 planned for this outcome, Step 2 follows:
+named coordinates, starting with a transposition-equivariant pitch head trained on rolled analyses
+of the library's own sounds, which moves by construction rather than by a critic's approval.
+
+Two findings carry over to Step 3, where the critic returns beside those coordinates. At one band
+per semitone the ladders read a model through a blur, so a later reading belongs at full
+resolution. And a critic that reads each point alone accepts a switch, so a critic in Step 3 needs
+a term that prices one, such as decoded steps held evenly spaced along the path.
