@@ -54,13 +54,18 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
 
     Raises:
         SystemExit: either hash names no cataloged sample, a sample none of whose files holds it now,
-            or a selection naming a route other than the envelope one.
+            or a selection naming a route other than the envelope one, or one that glides.
     """
     audio = SampleAudio.from_catalog(connection, config.library_root)
     try:
         selection = read_route_selection(Path(arguments.selection))
         if selection.route is not RouteKind.ENVELOPE:
             raise ValueError(f"a response is the envelope route's filter, and this selection names {selection.route}")
+        if selection.glide is not None:
+            raise ValueError(
+                "a response filters one sample toward another under a moving envelope, and a glide moves "
+                f"its harmonics as well, which no filter holds; this selection glides by {selection.glide}"
+            )
         first = read_heard_sample(connection, audio, require_sample(connection, arguments.first))
         second = read_heard_sample(connection, audio, require_sample(connection, arguments.second))
     except (SampleNotCataloged, SampleUnavailableError, ValueError) as error:

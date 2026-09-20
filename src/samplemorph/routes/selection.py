@@ -7,6 +7,7 @@ import yaml
 from pydantic import BaseModel, ValidationError, field_validator
 
 from samplecore.models.base import FROZEN
+from samplemorph.coordinates.readers import CLASSICAL_READERS
 from samplemorph.envelope.settings import EnvelopeSettings
 from samplemorph.model_paths import DEFAULT_RESTORER_NAME
 from samplemorph.model_store import DEFAULT_MODEL_NAME
@@ -44,18 +45,28 @@ class PartialsSelection(BaseModel):
 class RouteSelection(BaseModel):
     """Which route one process renders through, with the settings each kind reads.
 
-    The envelope route reads `envelope`, the partials route the profile `partials` names, and the
-    latent route the stored model, vocoder, restorer, morpher and device `latent` names; the
-    transport and the blend read their default settings alone. A YAML file holds one selection, so
-    what the application serves is stated in one place and changed there.
+    The envelope route reads `envelope`, and `glide` names the pitch reader it carries its
+    excitation between the two sounds' pitches by; left out, the excitation holds its own pitch. The
+    partials route reads the profile `partials` names, and the latent route the stored model,
+    vocoder, restorer, morpher and device `latent` names; the transport and the blend read their
+    default settings alone. A YAML file holds one selection, so what the application serves is
+    stated in one place and changed there.
     """
 
     model_config = FROZEN
 
     route: RouteKind
     envelope: EnvelopeSettings = EnvelopeSettings()
+    glide: str | None = None
     partials: PartialsSelection = PartialsSelection()
     latent: RouteChoice = DEFAULT_LATENT_CHOICE
+
+    @field_validator("glide")
+    @classmethod
+    def _names_a_reader(cls, glide: str | None) -> str | None:
+        if glide is not None and glide not in CLASSICAL_READERS:
+            raise ValueError(f"must be one of {', '.join(CLASSICAL_READERS)}")
+        return glide
 
 
 def read_route_selection(path: Path) -> RouteSelection:

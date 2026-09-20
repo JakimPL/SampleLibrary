@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from samplecore.models.morph import MORPH_WEIGHT_STEPS, HeardMorphPoint
 from samplecore.storage import audio_store
 from samplemorph.canonicalizers.common import analysis_transform
+from samplemorph.coordinates.readers import SUBHARMONIC_READER_NAME
 from samplemorph.envelope.filtering import filtered_waveform
 from samplemorph.envelope.payload import response_from_payload
 from samplemorph.envelope.response import HeldEnd
@@ -248,6 +249,24 @@ def test_a_pair_answers_with_the_filter_between_its_two_samples(
         assert response.description.rate_hz == max(FIRST_RATE_HZ, SECOND_RATE_HZ)
         assert response.first.held is HeldEnd.FIRST
         assert response.second.held is HeldEnd.SECOND
+
+
+def test_a_gliding_envelope_route_renders_morphs_and_hands_over_no_filter(
+    envelope_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    gliding = replace(
+        envelope_settings, selection=envelope_settings.selection.model_copy(update={"glide": SUBHARMONIC_READER_NAME})
+    )
+
+    with TestClient(create_app(load_renderer(gliding))) as client:
+        status = client.get(STATUS_PATH).json()
+        rendered = client.get(AUDIO_PATH, params=_params(library, 0.5))
+        answered = client.get(RESPONSE_PATH, params=_pair_params(library))
+
+    assert status["name"].endswith(f"-glide-{SUBHARMONIC_READER_NAME}")
+    assert status["description"]["pitch_reader"]["reader"] == SUBHARMONIC_READER_NAME
+    assert rendered.status_code == HTTPStatus.OK
+    assert answered.status_code == HTTPStatus.CONFLICT
 
 
 def test_a_pair_asked_for_twice_is_read_once(envelope_settings: ServiceSettings, library: StoredLibrary) -> None:

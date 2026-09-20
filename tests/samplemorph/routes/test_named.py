@@ -28,9 +28,10 @@ HELD_TO_FIRST = EnvelopeSettings(excitation=Excitation.FIRST, timeline=Timeline.
 HELD_TO_SECOND = EnvelopeSettings(excitation=Excitation.FIRST, timeline=Timeline.SECOND)
 
 
-def _selection(kind: RouteKind) -> RouteSelection:
+def _selection(kind: RouteKind, *, glide: str | None = None) -> RouteSelection:
     return RouteSelection(
         route=kind,
+        glide=glide,
         latent=LATENT_NAMES,
         partials=PartialsSelection(profile="stepped"),
         envelope=EnvelopeSettings(excitation=Excitation.SECOND),
@@ -106,3 +107,10 @@ def test_a_gliding_envelope_route_is_named_by_its_reader_and_describes_it() -> N
     assert named.kind is RouteKind.ENVELOPE
     assert named.name == "envelope-first-on-first-glide-subharmonic"
     assert named.description["pitch_reader"] == reader.description()
+
+
+def test_a_selection_that_names_a_reader_glides_by_it(tmp_path: Path) -> None:
+    named = select_route(tmp_path, _selection(RouteKind.ENVELOPE, glide="subharmonic"))
+
+    assert named.name == "envelope-second-glide-subharmonic"
+    assert named.description["pitch_reader"]["reader"] == "subharmonic"

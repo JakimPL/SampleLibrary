@@ -1117,6 +1117,38 @@ def test_a_response_is_written_as_the_filter_between_two_samples(
     assert response.first.coefficients.shape[1] == response.first.description.frame_count
 
 
+def test_a_response_asked_for_under_a_gliding_route_says_so(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    hashes = _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    selection = tmp_path / "morph.yaml"
+    selection.write_text("route: envelope\nglide: subharmonic\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "response",
+                "--first",
+                hashes[0],
+                "--second",
+                hashes[-1],
+                "--selection",
+                str(selection),
+                "--output",
+                str(tmp_path / "response.bin"),
+            ],
+            prog=PROGRAM,
+        )
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert "glides by subharmonic" in capsys.readouterr().err
+
+
 def test_a_response_asked_for_under_another_route_says_so(
     connection: Connection,
     _database_url: str,

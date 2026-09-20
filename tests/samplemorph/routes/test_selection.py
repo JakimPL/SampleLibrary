@@ -14,6 +14,7 @@ route: envelope
 envelope:
   excitation: both
   coefficient_count: 12
+glide: subharmonic
 partials:
   profile: stepped
 latent:
@@ -36,6 +37,7 @@ def test_a_file_names_the_route_and_the_settings_each_kind_reads(tmp_path: Path)
 
     assert selection.route is RouteKind.ENVELOPE
     assert selection.envelope == EnvelopeSettings(excitation=Excitation.BOTH, coefficient_count=12)
+    assert selection.glide == "subharmonic"
     assert selection.partials.profile == "stepped"
     assert selection.latent == RouteChoice(
         model_name="pca", vocoder_name="pghi", restorer_name="restorer", morpher_name="linear", device="cpu"
@@ -47,6 +49,7 @@ def test_a_file_naming_the_route_alone_leaves_every_kind_its_own_settings(tmp_pa
 
     assert selection.route is RouteKind.TRANSPORT
     assert selection.envelope == EnvelopeSettings()
+    assert selection.glide is None
 
 
 @pytest.mark.parametrize(
@@ -58,6 +61,7 @@ def test_a_file_naming_the_route_alone_leaves_every_kind_its_own_settings(tmp_pa
         ("route: envelope\nenvelope:\n  excitation: neither\n", "neither"),
         ("route: envelope\nenvelope:\n  timeline: nowhere\n", "nowhere"),
         ("route: partials\npartials:\n  profile: nowhere\n", "must be one of"),
+        ("route: envelope\nglide: nobody\n", "must be one of"),
         ("route: latent\nlatent:\n  model_name: pca\n", "vocoder_name"),
         ("route: [\n", "holds no route selection"),
     ],
@@ -68,6 +72,7 @@ def test_a_file_naming_the_route_alone_leaves_every_kind_its_own_settings(tmp_pa
         "an excitation this route lacks",
         "a course this route lacks",
         "a profile this route lacks",
+        "a pitch reader this route lacks",
         "a latent choice left incomplete",
         "text that is no YAML",
     ),

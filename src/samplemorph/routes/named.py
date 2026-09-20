@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
-from samplemorph.coordinates.readers import PitchReader
+from samplemorph.coordinates.readers import CLASSICAL_READERS, PitchReader
 from samplemorph.envelope.morph import EnvelopePath
 from samplemorph.envelope.settings import EnvelopeSettings, Timeline
 from samplemorph.geometry import log_frequency_geometry
@@ -72,7 +72,14 @@ def select_route(library_root: Path, selection: RouteSelection) -> NamedRoute:
         case RouteKind.PARTIALS:
             return partials_route(selection.partials.profile)
         case RouteKind.ENVELOPE:
-            return envelope_route(selection.envelope)
+            return _selected_envelope_route(selection)
+
+
+def _selected_envelope_route(selection: RouteSelection) -> NamedRoute:
+    """The envelope route the selection names, gliding when it names a reader to glide by."""
+    if selection.glide is None:
+        return envelope_route(selection.envelope)
+    return gliding_envelope_route(selection.envelope, reader=CLASSICAL_READERS[selection.glide]())
 
 
 def latent_route(loaded: LoadedRoute) -> NamedRoute:
