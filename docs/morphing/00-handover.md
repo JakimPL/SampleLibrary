@@ -48,6 +48,7 @@ timbre can morph at constant pitch. The argument behind every part of that is in
 | [`24-learned-features.md`](24-learned-features.md) | What sixty papers say about making a learned coordinate carry position rather than a lit bin, how our three failures are named in them, and a staged plan from two classical upgrades through an interpolation critic to named equivariant coordinates. |
 | [`25-interpolation-critic.md`](25-interpolation-critic.md) | Step 1 of note 24 measured and failed: an interpolation critic makes a grid autoencoder glide over 3 semitones and switch past a fifth, read on ladders whose middle is known. |
 | [`26-pitch-glide.md`](26-pitch-glide.md) | Step 0 of note 24, built and heard: two classical pitch readers measured against known answers, the envelope route's excitation carried between the two sounds' pitches, and the crossfaded gliding route the ear picked. |
+| [`27-pitch-head.md`](27-pitch-head.md) | Step 2 of note 24: a transposition-equivariant pitch head trained on the library's own frames with no pitch label anywhere, the gate it is judged by, and what it read against the two classical readers. |
 | [`terms.md`](terms.md) | The vocabulary the morph documents use precisely: partial, track, note, channel, line, place, move, and the words they avoid. |
 
 ## The first three things to do

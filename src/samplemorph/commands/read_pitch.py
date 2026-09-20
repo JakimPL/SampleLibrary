@@ -43,6 +43,7 @@ DEFAULT_NOISE_COUNT: Final[int] = 24
 CLASSICAL_READER_NAMES: Final[tuple[str, ...]] = tuple(CLASSICAL_READERS)
 REFEREES: Final[tuple[str, str]] = (SUBHARMONIC_READER_NAME, PYIN_READER_NAME)
 MIDDLE_WEIGHT: Final[float] = 0.5
+DEFAULT_HEAD_DEVICE: Final[str] = "cpu"
 WORKER_CHUNK_SIZE: Final[int] = 1
 
 _logger = logging.getLogger(__name__)
@@ -83,9 +84,14 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--readers",
         type=str,
         nargs="+",
-        choices=CLASSICAL_READER_NAMES,
         default=CLASSICAL_READER_NAMES,
-        help="Which readers to read with; both classical readers together also settle where held-out samples lie.",
+        help=(
+            f"Which readers to read with: {', '.join(CLASSICAL_READER_NAMES)}, or the name a pitch head is stored "
+            "under. Both classical readers together also settle where held-out samples lie."
+        ),
+    )
+    parser.add_argument(
+        "--device", type=str, default=DEFAULT_HEAD_DEVICE, help="Which device a stored pitch head reads on."
     )
     parser.add_argument(
         "--samples",
@@ -143,7 +149,9 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
             count=arguments.samples,
             random_seed=arguments.seed,
         )
-        readers = _readers(tuple(dict.fromkeys(arguments.readers)))
+        readers = _readers(
+            tuple(dict.fromkeys(arguments.readers)), library_root=config.library_root, device=arguments.device
+        )
         reader_names = tuple(reader.name for reader in readers)
         changes = default_changes()
         morphs: tuple[PitchKeepingMorph, ...] = (
@@ -233,6 +241,31 @@ def _drawn_samples(
     )
 
 
-def _readers(names: tuple[str, ...]) -> tuple[PitchReader, ...]:
-    """The readers the names ask for, in the order asked."""
-    return tuple(CLASSICAL_READERS[name]() for name in names)
+def _readers(names: tuple[str, ...], *, library_root: Path, device: str) -> tuple[PitchReader, ...]:
+    """The readers the names ask for, in the order asked: the classical ones by name, and any other name a stored head.
+
+    The head's weights are imported here, so a command that reads with the classical readers alone
+    parses and runs with no network library loaded.
+
+    Raises:
+        ValueError: a name is neither a classical reader nor a pitch head stored under it.
+    """
+    # pylint: disable=import-outside-toplevel
+    import torch
+
+    from samplemorph.coordinates.pitch_head.store import load_pitch_head
+    from samplemorph.model_paths import pitch_head_path
+
+    readers: list[PitchReader] = []
+    for name in names:
+        if name in CLASSICAL_READERS:
+            readers.append(CLASSICAL_READERS[name]())
+            continue
+        try:
+            readers.append(load_pitch_head(pitch_head_path(library_root, name=name), device=torch.device(device)))
+        except FileNotFoundError as error:
+            raise ValueError(
+                f"{name} is neither a classical reader ({', '.join(CLASSICAL_READER_NAMES)}) nor a stored pitch head; "
+                f"{error}"
+            ) from error
+    return tuple(readers)

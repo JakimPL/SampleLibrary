@@ -439,6 +439,28 @@ def test_frames_are_cached_for_every_sample_as_stored_and_retuned(
     assert np.all(np.abs(cache.offsets) <= cache.description.retuning_range_semitones)
 
 
+def _train_pitch_arguments(*, cache: str, head: str) -> list[str]:
+    """One epoch of a pitch head on the processor, at the smallest size that still exercises the run."""
+    return [
+        "train-pitch",
+        "--cache",
+        cache,
+        "--head",
+        head,
+        "--validation-share",
+        "0.25",
+        "--epochs",
+        "1",
+        "--batch",
+        "4",
+        "--workers",
+        "0",
+        "--device",
+        "cpu",
+        "--no-tracking",
+    ]
+
+
 def test_a_pitch_head_is_taught_on_the_frame_cache_and_reads_the_pitch_of_a_sound_afterwards(
     connection: Connection,
     _database_url: str,
@@ -449,27 +471,7 @@ def test_a_pitch_head_is_taught_on_the_frame_cache_and_reads_the_pitch_of_a_soun
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
     main(["cache-frames", "--cache", "head-under-test", "--workers", "0"], prog=PROGRAM)
 
-    main(
-        [
-            "train-pitch",
-            "--cache",
-            "head-under-test",
-            "--head",
-            PITCH_HEAD_NAME,
-            "--validation-share",
-            "0.25",
-            "--epochs",
-            "1",
-            "--batch",
-            "4",
-            "--workers",
-            "0",
-            "--device",
-            "cpu",
-            "--no-tracking",
-        ],
-        prog=PROGRAM,
-    )
+    main(_train_pitch_arguments(cache="head-under-test", head=PITCH_HEAD_NAME), prog=PROGRAM)
 
     stored = load_pitch_head(pitch_head_path(tmp_path, name=PITCH_HEAD_NAME), device=torch.device("cpu"))
     cache = open_frame_cache(frame_cache_directory(tmp_path, name="head-under-test"))
@@ -479,6 +481,67 @@ def test_a_pitch_head_is_taught_on_the_frame_cache_and_reads_the_pitch_of_a_soun
     reading = stored.read(prepare_mono(harmonic_tone(SAMPLE_FRAME_COUNT, frequency=220.0)))
     assert reading is not None
     assert 0.0 <= reading.reliability <= 1.0
+
+
+def test_pitch_is_read_through_a_stored_head_under_its_own_name(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["cache-frames", "--cache", "read-under-test", "--workers", "0"], prog=PROGRAM)
+    main(
+        _train_pitch_arguments(cache="read-under-test", head=PITCH_HEAD_NAME),
+        prog=PROGRAM,
+    )
+    output = tmp_path / "pitch-head"
+
+    main(
+        [
+            "read-pitch",
+            "--cache",
+            "read-under-test",
+            "--readers",
+            PITCH_HEAD_NAME,
+            "subharmonic",
+            "--samples",
+            "1",
+            "--tones",
+            "1",
+            "--pairs",
+            "1",
+            "--noises",
+            "1",
+            "--output",
+            str(output),
+        ],
+        prog=PROGRAM,
+    )
+
+    assert {row["reader"] for row in _rows(output / "readings.csv")} == {PITCH_HEAD_NAME, "subharmonic"}
+
+
+def test_reading_pitch_through_a_reader_the_library_has_none_of_ends_with_one_message(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["cache-frames", "--cache", "read-under-test", "--workers", "0"], prog=PROGRAM)
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            ["read-pitch", "--cache", "read-under-test", "--readers", "elsewhere", "--output", str(tmp_path)],
+            prog=PROGRAM,
+        )
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert "neither a classical reader" in capsys.readouterr().err
 
 
 def test_pitch_is_read_on_the_frame_cache_s_held_out_samples_and_on_synthetic_sounds(
