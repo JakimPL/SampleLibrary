@@ -157,18 +157,25 @@ def fit_and_export(
     )
 
 
-def begin_cached_run(
-    placement: RunPlacement, *, settings: RunSettings, parameters: dict[str, str], cache: GridCache
-) -> None:
-    """Seed the run and record what it was asked to do and which cache it reads, before the first epoch.
+def begin_run(placement: RunPlacement, *, settings: RunSettings, parameters: dict[str, str]) -> None:
+    """Seed the run and record what it was asked to do, before the first epoch.
 
     A pass that ends badly is then still identifiable by what it ran under.
     """
     seed_everything(settings.random_seed, workers=True)
-    placement.tracker.log_parameters(
-        parameters
+    placement.tracker.log_parameters(parameters)
+
+
+def begin_cached_run(
+    placement: RunPlacement, *, settings: RunSettings, parameters: dict[str, str], cache: GridCache
+) -> None:
+    """Seed the run and record what it was asked to do and which grid cache it reads."""
+    begin_run(
+        placement,
+        settings=settings,
+        parameters=parameters
         | {"cache": cache.directory.name, "canonicalizer": cache.description.canonicalizer}
-        | geometry_parameters(cache.description.geometry)
+        | geometry_parameters(cache.description.geometry),
     )
 
 

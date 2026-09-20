@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Final
+from typing import Final, Generic, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -93,3 +93,38 @@ class FixedCropSampler(Sampler[CropRequest]):
 
     def __iter__(self) -> Iterator[CropRequest]:
         return iter(enumerate(self._seeds))
+
+
+Request = TypeVar("Request")
+
+
+class BatchesOfDraws(Sampler[list[Request]], Generic[Request]):
+    """Whole batches of items in a fresh order every epoch, each item read at something drawn for it.
+
+    What is drawn for an item is the reading set's own business; the order, the epoch's generator
+    and the short tail left out are the same wherever a trainer draws per item. The order and the
+    draws are functions of the seed and the epoch the trainer hands to `sampler`.
+    """
+
+    def __init__(self, positions: NDArray[np.intp], *, batch_size: int, random_seed: int) -> None:
+        super().__init__()
+        self.sampler = EpochPermutation(positions, random_seed=random_seed)
+        self._batch_size = batch_size
+        self._random_seed = random_seed
+
+    def __len__(self) -> int:
+        return len(self.sampler) // self._batch_size
+
+    def __iter__(self) -> Iterator[list[Request]]:
+        generator = epoch_generator(self._random_seed, stream=VIEW_STREAM, epoch=self.sampler.epoch)
+        order = list(self.sampler)
+        for start in range(0, len(self) * self._batch_size, self._batch_size):
+            yield self.drawn(order[start : start + self._batch_size], generator=generator)
+
+    def drawn(self, positions: list[int], *, generator: np.random.Generator) -> list[Request]:
+        """What each position of one batch is read at.
+
+        Raises:
+            NotImplementedError: the reading set says nothing about what to draw.
+        """
+        raise NotImplementedError

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Final
+from pathlib import Path
+from typing import Final, Generic, Protocol, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -11,6 +12,7 @@ from sqlalchemy import Connection
 from samplecore.equivalence_classes import EquivalenceClass, classes_by_member_hash, compute_equivalence_classes
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplemorph.training.refusals import TrainingDataShortfall
+from samplemorph.training.run_settings import RunSettings
 
 DEFAULT_VALIDATION_SHARE: Final[float] = 0.05
 
@@ -65,3 +67,62 @@ def held_out_by_class(
     chosen = order[: int(np.searchsorted(np.cumsum(sizes), share * len(hashes))) + 1]
     held_out: NDArray[np.bool_] = np.isin(members, chosen)
     return held_out
+
+
+class CachedSamples(Protocol):
+    """A cache of samples a model is taught over: where it sits, and which samples it holds, in order."""
+
+    @property
+    def directory(self) -> Path: ...
+
+    @property
+    def hashes(self) -> tuple[str, ...]: ...
+
+
+Cache = TypeVar("Cache", bound=CachedSamples)
+
+
+@dataclass(frozen=True)
+class CachedCorpus(Generic[Cache]):
+    """A cache split into the samples a model is taught on and the ones it is judged on, beside the library they came from."""
+
+    cache: Cache
+    library_root: Path
+    training_positions: NDArray[np.intp]
+    validation_positions: NDArray[np.intp]
+
+    @property
+    def validation_hashes(self) -> tuple[str, ...]:
+        return tuple(self.cache.hashes[int(position)] for position in self.validation_positions)
+
+
+class SplitSettings(Protocol):
+    """What a trainer's settings tell a split: the share to hold out, and the run whose seed draws it."""
+
+    @property
+    def validation_share(self) -> float: ...
+
+    @property
+    def run(self) -> RunSettings: ...
+
+
+def split_corpus(
+    connection: Connection, *, cache: Cache, library_root: Path, settings: SplitSettings
+) -> CachedCorpus[Cache]:
+    """A cache split by the catalog's equivalence classes under a run's seed.
+
+    Raises:
+        TrainingDataShortfall: the split leaves nothing to train on or nothing to validate on.
+    """
+    split = split_by_class(
+        cache.hashes,
+        classes=catalog_classes(connection),
+        share=settings.validation_share,
+        random_seed=settings.run.random_seed,
+    )
+    return CachedCorpus(
+        cache=cache,
+        library_root=library_root,
+        training_positions=split.training_positions,
+        validation_positions=split.validation_positions,
+    )

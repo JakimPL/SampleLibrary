@@ -9,7 +9,7 @@ from sqlalchemy import Connection
 from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import positive_integer
 from samplecore.config import LibraryConfig
-from samplemorph.commands.run_arguments import add_run_arguments, run_settings_from, train_and_report
+from samplemorph.commands.run_arguments import add_cached_training_arguments, run_settings_from, train_and_report
 from samplemorph.features.shape import DEFAULT_FEATURE_WIDTH, DEFAULT_LATENT_SIZE
 from samplemorph.training.descriptor_cache import DEFAULT_GRID_CACHE_NAME, grid_cache_directory, open_grid_cache
 from samplemorph.training.features.settings import (
@@ -19,7 +19,6 @@ from samplemorph.training.features.settings import (
     DEFAULT_FEATURE_LEARNING_RATE,
     FeatureTrainingSettings,
 )
-from samplemorph.training.splits import DEFAULT_VALIDATION_SHARE
 
 COMMAND_NAME: Final[str] = "train-features"
 FEATURES_EXPERIMENT_NAME: Final[str] = "features"
@@ -53,15 +52,11 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument(
         "--width", type=positive_integer, default=DEFAULT_FEATURE_WIDTH, help="How many channels the first stage has."
     )
-    parser.add_argument(
-        "--validation-share",
-        type=float,
-        default=DEFAULT_VALIDATION_SHARE,
-        help="The share of cached samples held out by equivalence class, to be judged and read on.",
-    )
-    add_run_arguments(parser)
-    parser.set_defaults(
-        epochs=DEFAULT_FEATURE_EPOCHS, batch=DEFAULT_FEATURE_BATCH_SIZE, learning_rate=DEFAULT_FEATURE_LEARNING_RATE
+    add_cached_training_arguments(
+        parser,
+        epochs=DEFAULT_FEATURE_EPOCHS,
+        batch_size=DEFAULT_FEATURE_BATCH_SIZE,
+        learning_rate=DEFAULT_FEATURE_LEARNING_RATE,
     )
 
 
@@ -71,10 +66,10 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     # train nothing stay clear of them.
     # pylint: disable=import-outside-toplevel
     from samplecore.tracking.session import open_run
-    from samplemorph.training.features.data import load_feature_corpus
     from samplemorph.training.features.run import run_feature_training
     from samplemorph.training.run_paths import RunFamily
     from samplemorph.training.runs import RunPlacement, TrainingOutcome, check_resume_point
+    from samplemorph.training.splits import split_corpus
 
     cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))
 
@@ -90,7 +85,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
             critic_mix=arguments.critic_mix,
             validation_share=arguments.validation_share,
         )
-        corpus = load_feature_corpus(connection, cache=cache, library_root=config.library_root, settings=settings)
+        corpus = split_corpus(connection, cache=cache, library_root=config.library_root, settings=settings)
         _logger.info(
             "Training over %d cached samples, %d held out by equivalence class, under critic weight %g.",
             len(corpus.training_positions),

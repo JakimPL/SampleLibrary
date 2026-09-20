@@ -31,7 +31,9 @@ from samplecore.storage.repositories.feature_vector import PostgresSampleFeature
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.cli import CATALOG_COMMANDS, MorphCommand, main
+from samplemorph.coordinates.pitch_head.store import load_pitch_head
 from samplemorph.descriptors.descriptor_shape import DESCRIPTOR_SIZE
 from samplemorph.envelope.payload import response_from_payload
 from samplemorph.envelope.response import HeldEnd
@@ -39,7 +41,7 @@ from samplemorph.envelope.settings import EnvelopeSettings, Excitation
 from samplemorph.features.store import load_features
 from samplemorph.geometry import Anchor, log_frequency_geometry
 from samplemorph.listening.pairs import CatalogPair, PairEnd, PairSet, write_pair_set
-from samplemorph.model_paths import codec_path, descriptor_path, features_path, restorer_path
+from samplemorph.model_paths import codec_path, descriptor_path, features_path, pitch_head_path, restorer_path
 from samplemorph.model_store import model_path
 from samplemorph.partials.presets import PROFILE_PRESETS
 from samplemorph.training.descriptor_cache import grid_cache_directory, open_grid_cache
@@ -56,6 +58,7 @@ MODEL_NAME = "under-test"
 DESCRIPTOR_NAME = "descriptor-under-test"
 CODEC_NAME = "codec-under-test"
 RESTORER_NAME = "restorer-under-test"
+PITCH_HEAD_NAME = "pitch-under-test"
 RESTORER_CHANNELS = 8
 RESTORER_CROP_FRAMES = 8
 
@@ -434,6 +437,48 @@ def test_frames_are_cached_for_every_sample_as_stored_and_retuned(
     assert cache.sample_count == CATALOG_SIZE
     assert np.all(cache.counts > 0)
     assert np.all(np.abs(cache.offsets) <= cache.description.retuning_range_semitones)
+
+
+def test_a_pitch_head_is_taught_on_the_frame_cache_and_reads_the_pitch_of_a_sound_afterwards(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["cache-frames", "--cache", "head-under-test", "--workers", "0"], prog=PROGRAM)
+
+    main(
+        [
+            "train-pitch",
+            "--cache",
+            "head-under-test",
+            "--head",
+            PITCH_HEAD_NAME,
+            "--validation-share",
+            "0.25",
+            "--epochs",
+            "1",
+            "--batch",
+            "4",
+            "--workers",
+            "0",
+            "--device",
+            "cpu",
+            "--no-tracking",
+        ],
+        prog=PROGRAM,
+    )
+
+    stored = load_pitch_head(pitch_head_path(tmp_path, name=PITCH_HEAD_NAME), device=torch.device("cpu"))
+    cache = open_frame_cache(frame_cache_directory(tmp_path, name="head-under-test"))
+    assert stored.description.cache == "head-under-test"
+    assert stored.description.analysis == cache.description.analysis
+    assert set(stored.description.validation_hashes) <= set(cache.hashes)
+    reading = stored.read(prepare_mono(harmonic_tone(SAMPLE_FRAME_COUNT, frequency=220.0)))
+    assert reading is not None
+    assert 0.0 <= reading.reliability <= 1.0
 
 
 def test_pitch_is_read_on_the_frame_cache_s_held_out_samples_and_on_synthetic_sounds(

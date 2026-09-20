@@ -106,7 +106,7 @@ def test_a_gliding_envelope_route_is_named_by_its_reader_and_describes_it() -> N
 
     assert named.kind is RouteKind.ENVELOPE
     assert named.name == "envelope-first-on-first-glide-subharmonic"
-    assert named.description["pitch_reader"] == reader.description()
+    assert named.description["pitch_reader"] == reader.describe()
 
 
 def test_a_selection_that_names_a_reader_glides_by_it(tmp_path: Path) -> None:

@@ -1,56 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from dataclasses import dataclass
-from pathlib import Path
-
 import numpy as np
-from lightning.pytorch import LightningDataModule
 from numpy.typing import NDArray
-from sqlalchemy import Connection
-from torch.utils.data import DataLoader, Dataset, Sampler
+from torch.utils.data import DataLoader, Dataset
 
 from samplemorph.training.descriptor_cache import STORED_VIEW, GridCache, GridSource, MappedGrids
-from samplemorph.training.epoch_draws import VIEW_STREAM, EpochPermutation, ViewRequest, epoch_generator
+from samplemorph.training.epoch_draws import BatchesOfDraws, ViewRequest
 from samplemorph.training.features.settings import FeatureTrainingSettings
-from samplemorph.training.loaders import build_batched_loader, build_loader, require_full_batch
-from samplemorph.training.splits import catalog_classes, split_by_class
+from samplemorph.training.loaders import CachedDataModule, build_batched_loader, build_loader
+from samplemorph.training.splits import CachedCorpus
 
-
-@dataclass(frozen=True)
-class FeatureCorpus:
-    """A grid cache split into the samples a feature model is taught on and the ones it is judged on."""
-
-    cache: GridCache
-    library_root: Path
-    training_positions: NDArray[np.intp]
-    validation_positions: NDArray[np.intp]
-
-    @property
-    def validation_hashes(self) -> tuple[str, ...]:
-        return tuple(self.cache.hashes[int(position)] for position in self.validation_positions)
-
-
-def load_feature_corpus(
-    connection: Connection, *, cache: GridCache, library_root: Path, settings: FeatureTrainingSettings
-) -> FeatureCorpus:
-    """The cache split by the catalog's equivalence classes under the run's seed.
-
-    Raises:
-        TrainingDataShortfall: the split leaves nothing to train on or nothing to validate on.
-    """
-    split = split_by_class(
-        cache.hashes,
-        classes=catalog_classes(connection),
-        share=settings.validation_share,
-        random_seed=settings.run.random_seed,
-    )
-    return FeatureCorpus(
-        cache=cache,
-        library_root=library_root,
-        training_positions=split.training_positions,
-        validation_positions=split.validation_positions,
-    )
+# A grid cache split the way every trainer splits its cache.
+FeatureCorpus = CachedCorpus[GridCache]
 
 
 class ViewGridSet(Dataset[NDArray[np.float32]]):
@@ -80,51 +41,27 @@ class StoredGridSet(Dataset[NDArray[np.float32]]):
         return grid
 
 
-class ViewBatchSampler(Sampler[list[ViewRequest]]):
+class ViewBatchSampler(BatchesOfDraws[ViewRequest]):
     """Whole batches of training samples, each read at one of its views drawn afresh every epoch.
 
     The stored grid and every retuned view are equally likely, so the retuned views are ordinary
-    training grids here. The order and the views are functions of the seed and the epoch the
-    trainer hands to `sampler`.
+    training grids here.
     """
 
     def __init__(self, positions: NDArray[np.intp], *, batch_size: int, view_count: int, random_seed: int) -> None:
-        super().__init__()
-        self.sampler = EpochPermutation(positions, random_seed=random_seed)
-        self._batch_size = batch_size
+        super().__init__(positions, batch_size=batch_size, random_seed=random_seed)
         self._view_count = view_count
-        self._random_seed = random_seed
 
-    def __len__(self) -> int:
-        return len(self.sampler) // self._batch_size
-
-    def __iter__(self) -> Iterator[list[ViewRequest]]:
-        generator = epoch_generator(self._random_seed, stream=VIEW_STREAM, epoch=self.sampler.epoch)
-        order = list(self.sampler)
-        for start in range(0, len(self) * self._batch_size, self._batch_size):
-            positions = order[start : start + self._batch_size]
-            views = generator.integers(0, self._view_count, len(positions)).tolist()
-            yield list(zip(positions, views, strict=True))
+    def drawn(self, positions: list[int], *, generator: np.random.Generator) -> list[ViewRequest]:
+        views = generator.integers(0, self._view_count, len(positions)).tolist()
+        return list(zip(positions, views, strict=True))
 
 
-class FeatureDataModule(LightningDataModule):
-    """Hands the trainer the cached grids: views of the training samples to learn from, the held-out stored grids to be judged on.
-
-    Raises:
-        TrainingDataShortfall: the training samples fill no batch.
-    """
+class FeatureDataModule(CachedDataModule[GridCache]):
+    """Hands the trainer the cached grids: views of the training samples to learn from, the held-out stored grids to be judged on."""
 
     def __init__(self, corpus: FeatureCorpus, *, settings: FeatureTrainingSettings) -> None:
-        super().__init__()
-        require_full_batch(len(corpus.training_positions), batch_size=settings.run.batch_size, flags="--batch")
-        self._corpus = corpus
-        self._batch_size = settings.run.batch_size
-        self._worker_count = settings.run.worker_count
-        self._random_seed = settings.run.random_seed
-
-    @property
-    def training_sample_count(self) -> int:
-        return len(self._corpus.training_positions)
+        super().__init__(corpus, run=settings.run)
 
     def train_dataloader(self) -> DataLoader[NDArray[np.float32]]:
         sampler = ViewBatchSampler(

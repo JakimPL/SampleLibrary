@@ -22,6 +22,7 @@ class RunFamily(StrEnum):
     DESCRIPTOR = "descriptor"
     FEATURES = "features"
     RESTORER = "restorer"
+    PITCH = "pitch"
 
 
 class RunFinished(BaseModel):

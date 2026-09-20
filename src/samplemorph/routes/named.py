@@ -131,7 +131,7 @@ def gliding_envelope_route(envelope_settings: EnvelopeSettings, *, reader: Pitch
             "geometry": geometry.model_dump(mode="json"),
             "settings": settings.model_dump(mode="json"),
             "envelope_settings": envelope_settings.model_dump(mode="json"),
-            "pitch_reader": reader.description(),
+            "pitch_reader": reader.describe(),
         },
     )
 

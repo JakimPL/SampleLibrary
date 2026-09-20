@@ -20,11 +20,26 @@ from samplemorph.training.run_settings import (
     TRAINING_PRECISIONS,
     RunSettings,
 )
+from samplemorph.training.splits import DEFAULT_VALIDATION_SHARE
 
 if TYPE_CHECKING:
     from samplemorph.training.runs import TrainingOutcome
 
 _logger = logging.getLogger(__name__)
+
+
+def add_cached_training_arguments(
+    parser: argparse.ArgumentParser, *, epochs: int, batch_size: int, learning_rate: float
+) -> None:
+    """The flags a command that teaches a model over a cache shares: the held-out share, the run flags, and the run shape it starts from."""
+    parser.add_argument(
+        "--validation-share",
+        type=float,
+        default=DEFAULT_VALIDATION_SHARE,
+        help="The share of cached samples held out by equivalence class, to be judged and read on.",
+    )
+    add_run_arguments(parser)
+    parser.set_defaults(epochs=epochs, batch=batch_size, learning_rate=learning_rate)
 
 
 def add_run_arguments(parser: argparse.ArgumentParser) -> None:

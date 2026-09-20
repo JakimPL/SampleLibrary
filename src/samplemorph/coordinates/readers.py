@@ -57,7 +57,7 @@ class PitchReader(Protocol):
 
     def read(self, mono: PreparedMono) -> PitchReading | None: ...
 
-    def description(self) -> dict[str, JsonValue]: ...
+    def describe(self) -> dict[str, JsonValue]: ...
 
 
 class SubharmonicReader(BaseModel):
@@ -81,7 +81,7 @@ class SubharmonicReader(BaseModel):
     def name(self) -> str:
         return SUBHARMONIC_READER_NAME
 
-    def description(self) -> dict[str, JsonValue]:
+    def describe(self) -> dict[str, JsonValue]:
         return {"reader": self.name, **self.model_dump(mode="json")}
 
     def read(self, mono: PreparedMono) -> PitchReading | None:
@@ -89,6 +89,10 @@ class SubharmonicReader(BaseModel):
         frames = constant_q_frames(mono, analysis=self.analysis)
         if frames.shape[0] == 0:
             return None
+        return self.read_frames(frames)
+
+    def read_frames(self, frames: NDArray[np.float32]) -> PitchReading:
+        """The pitch a sound's kept frames sound. Shape: `frames` is ``(frames, bands)``."""
         profile = to_magnitudes(
             frames.mean(axis=0).astype(np.float64), dynamic_range_db=self.analysis.frame_range_db, log_gain=0.0
         )
@@ -122,7 +126,7 @@ class PyinReader(BaseModel):
     def name(self) -> str:
         return PYIN_READER_NAME
 
-    def description(self) -> dict[str, JsonValue]:
+    def describe(self) -> dict[str, JsonValue]:
         return {"reader": self.name, **self.model_dump(mode="json")}
 
     def read(self, mono: PreparedMono) -> PitchReading | None:

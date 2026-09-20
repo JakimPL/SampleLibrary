@@ -67,6 +67,54 @@ class FrameCache:
 
 
 @dataclass(frozen=True)
+class FrameSource:
+    """What a reading set needs to know about a frame cache without holding its mapped frames.
+
+    A worker started fresh maps the file itself from the directory, so handing it this rather than
+    the cache keeps the frames out of what is sent to every process. The shape the trainer opened
+    travels too, so a worker that maps a cache rebuilt in the meantime notices.
+    """
+
+    directory: Path
+    frame_shape: tuple[int, ...]
+    counts: NDArray[np.int16]
+    offsets: NDArray[np.float32]
+
+    @classmethod
+    def of(cls, cache: FrameCache) -> FrameSource:
+        return cls(
+            directory=cache.directory,
+            frame_shape=tuple(cache.frames.shape),
+            counts=cache.counts,
+            offsets=cache.offsets,
+        )
+
+
+class MappedFrames:
+    """A cache's frames, mapped on first use in whichever process reads them."""
+
+    def __init__(self, source: FrameSource) -> None:
+        self._source = source
+        self._frames: NDArray[np.float16] | None = None
+
+    def array(self) -> NDArray[np.float16]:
+        """The mapped frames.
+
+        Raises:
+            ValueError: the file under the cache's directory is no longer the cache the run opened.
+        """
+        if self._frames is None:
+            frames: NDArray[np.float16] = np.load(self._source.directory / FRAMES_FILE_NAME, mmap_mode="r")
+            if tuple(frames.shape) != self._source.frame_shape:
+                raise ValueError(
+                    f"the frame cache under {self._source.directory} was rebuilt while this run read it; "
+                    "start the run again"
+                )
+            self._frames = frames
+        return self._frames
+
+
+@dataclass(frozen=True)
 class FrameCacheRecipe:
     """What one frame cache is built from: the analysis, and how far the retuned reading may sit."""
 
