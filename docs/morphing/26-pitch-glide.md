@@ -97,12 +97,16 @@ one route that both moves the pitch and carries both timbres, and it removes the
 defect that made `both` unusable before: the two excitations now sound at one pitch, so they add up
 as one note instead of a chord.
 
-The routes stand side by side rather than replacing each other. The served selection (`morph.yaml`)
-still names the route the application has been serving, and `glide: subharmonic` turns any envelope
-route into its gliding form; `morph compare --glides` renders both for listening. The morph filter a
-VST reads is refused under a glide, by the command and by the service alike: that filter is the
+The routes stand side by side rather than replacing each other. `glide: subharmonic` turns any
+envelope route into its gliding form, and `morph compare --glides` renders both for listening.
+
+On the user's decision (2026-09-21) the gliding crossfade is what the application serves: the
+committed selection now names `excitation: both` with `glide: subharmonic`. The morph filter a VST
+reads is refused under a glide, by the command and by the service alike — that filter is the
 identity `magnitude(w) = first · (envelope_2 / envelope_1)^w`, which holds while the harmonics stay
-put and fails once they move.
+put and fails once they move — so the filter keeps a committed selection of its own, naming the
+envelope route with no glide, which `morph response --selection` reads it under. The renderer glides
+and the filter holds still, each under its own file.
 
 ## Where this stands
 

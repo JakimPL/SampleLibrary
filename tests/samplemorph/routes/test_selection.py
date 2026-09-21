@@ -7,7 +7,7 @@ import pytest
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
 from samplemorph.pipeline import RouteChoice
 from samplemorph.routes.kinds import RouteKind
-from samplemorph.routes.selection import read_route_selection
+from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, read_route_selection
 
 FULL_SELECTION = """
 route: envelope
@@ -85,3 +85,16 @@ def test_a_file_this_process_cannot_serve_is_refused_naming_the_reason(tmp_path:
 def test_an_absent_file_is_refused_by_its_path(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="absent.yaml"):
         read_route_selection(tmp_path / "absent.yaml")
+
+
+def test_the_committed_filter_selection_is_one_a_response_can_answer() -> None:
+    """The file exists so a VST's filter has a selection to be read under while the renderer glides.
+
+    A response is the envelope route's filter, and it holds for a path whose harmonics stand where
+    they stood, so this pair of properties is what the file is for rather than a default it happens
+    to carry.
+    """
+    selection = read_route_selection(DEFAULT_SELECTION_PATH.with_name("morph-filter.yaml"))
+
+    assert selection.route is RouteKind.ENVELOPE
+    assert selection.glide is None

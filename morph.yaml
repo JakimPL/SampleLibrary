@@ -1,5 +1,9 @@
 # What `samplelibrary morph serve` renders between two samples. The process reads this file when it
 # starts, so a change takes effect on its next start.
+#
+# The morph filter a VST reads is built under `morph-filter.yaml` beside this file, because a filter
+# holds for a path whose harmonics stay put and this one glides them. `morph response --selection
+# morph-filter.yaml` writes it.
 
 # The route every morph takes: envelope, transport, blend, partials or latent.
 route: envelope
@@ -11,17 +15,16 @@ route: envelope
 # The timeline says whose course through time the path is heard on: `morphed` runs between the two
 # lengths, and `first` or `second` holds one sample's course, so every point lasts as long as it.
 envelope:
-  excitation: first
+  excitation: both
   timeline: morphed
   coefficient_count: 40
   floor_db: 80.0
 
 # The pitch reader the envelope route glides its excitation by, from the first sample's pitch to the
 # second's: `subharmonic` reads the harmonic series of the constant-Q frames, `pyin` follows the
-# waveform's period. Left out, the excitation holds its own pitch, which is what the morph filter a
-# VST reads is built from; a gliding route serves morphs and refuses that filter. A pair glides only
-# where both samples read a pitch the reader trusts.
-# glide: subharmonic
+# waveform's period. Left out, the excitation holds its own pitch. A pair glides only where both
+# samples read a pitch the reader trusts, so drums and noise render as they did before.
+glide: subharmonic
 
 # The partials route follows one profile: glide, stepped, eased, switch, pivot, slide, crossfade or rigid.
 partials:

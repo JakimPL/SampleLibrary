@@ -69,7 +69,8 @@ under its `[library]` table:
 The `[inference]` table holds one key, `url`: the address the morph renderer listens on and the API
 reaches it at, `http://127.0.0.1:8010` by default. It names a port of its own.
 
-`morph.yaml`, beside `config.toml`, is committed and names the morph the renderer plays; see
+`morph.yaml`, beside `config.toml`, is committed and names the morph the renderer plays, and
+`morph-filter.yaml` beside it names the one the morph filter is read under; see
 [Morphing two samples](#morphing-two-samples).
 
 The optional `[pipeline]` table holds the settings `just rebuild` builds the library with:
@@ -237,10 +238,13 @@ uv run samplelibrary morph serve                      # the renderer, in a termi
 
 `morph.yaml` at the repository root says what the renderer plays; edit it and start the renderer
 again. As committed, it morphs through the samples' own spectral analyses, moving the spectral
-envelope from one sample's to the other's over the first sample's harmonics and noise, and needs
-nothing fitted. `excitation: second` keeps the second sample's harmonics instead, and
-`excitation: both` crossfades the two. `route: latent` renders through a codec fitted to your
-library, which needs one first:
+envelope from one sample's to the other's while both samples' harmonics sound under it and slide
+from the first sample's pitch to the second's, and needs nothing fitted. `excitation: first` keeps
+only the first sample's harmonics along the whole path and `excitation: second` only the second's;
+dropping `glide` holds every harmonic where it stands, so the morph arrives at its new pitch at the
+far end instead of gliding there. A pair glides only where both samples read a pitch the reader
+trusts, so drums and noise sound as they would without it. `route: latent` renders through a codec
+fitted to your library, which needs one first:
 
 ```sh
 uv run samplelibrary morph fit      # a linear codec, a few minutes on the processor
@@ -250,6 +254,18 @@ uv run samplelibrary morph serve    # the renderer through it, with `route: late
 The fit reads 4,000 samples between 4,000 and 200,000 frames long, in about three gigabytes of
 memory, and keeps 256 components, so a library holding fewer such samples fits with a smaller
 `--latent-size`; the command names the largest that fits.
+
+A plugin or any other program can play its own audio through a morph instead of asking the renderer
+for each point. Held to one sample, the morph is a filter on it, and the whole path between two
+samples fits in a few numbers per frame that a caller applies at any weight:
+
+```sh
+uv run samplelibrary morph response --first <hash> --second <hash> \
+  --selection morph-filter.yaml --output pair.bin
+```
+
+`morph-filter.yaml` is that command's own settings file. A filter describes a path whose harmonics
+stay where they are, so it is read without the glide that `morph.yaml` plays.
 
 `just serve-inference` starts the renderer on whatever `morph.yaml` names, and `--selection` points
 it at another file. The latent route with the restored vocoder sounds closer to the original and needs a restorer trained on a GPU first:

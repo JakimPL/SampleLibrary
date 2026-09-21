@@ -479,7 +479,8 @@ as paths inside the container, and `database_url` unless the environment supplie
 
 The inference process (`samplelibrary morph serve`) installs the `morph` extra, reads the library
 root and the sample directories its configuration lists, renders through the route `morph.yaml` at the
-repository root names, the envelope morph as committed and the fitted models loaded for the latent route alone,
+repository root names, as committed the envelope morph whose excitation crossfades both ends and
+glides between their read pitches, and the fitted models loaded for the latent route alone,
 and opens no database: a
 morph names two samples and a weight, and the API, which knows the catalog, reads each sample's
 playback rate the way it does everywhere else, together with the file an end found only in sample
