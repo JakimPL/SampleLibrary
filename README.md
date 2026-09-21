@@ -13,8 +13,8 @@ label and rate them — including a visual "cloud" of the whole library.
 - Node.js 25.9 or later, and npm, for the frontend
 - [just](https://just.systems/) 1.56 or later, which runs the setup and everyday recipes;
   `uv tool install rust-just` installs it
-- An NVIDIA GPU, to train the restorer that turns a morph back into sound and the descriptor that
-  lays out the cloud. Everything else in the project runs on the processor alone.
+- An NVIDIA GPU, to train the descriptor that lays out the cloud. Everything else in the project runs
+  on the processor alone.
 - About a gigabyte of disk for the pretrained listening model the `clap` cloud backend downloads
   on first use. `just install` installs every extra, this one included.
 
@@ -54,7 +54,7 @@ database names belong to someone else, create your library's database alone with
 under its `[library]` table:
 
 - `module_source_directory`: your module collection, read with every folder inside it.
-- `library_root`: where extracted audio, fitted models and recorded runs are kept.
+- `library_root`: where extracted audio, the trained descriptor and recorded runs are kept.
 - `database_url`: the PostgreSQL connection. The `SAMPLELIBRARY_DATABASE_URL` environment variable
   takes precedence over it, except for a command given `--config`, which reads everything from the
   file it names.
@@ -95,11 +95,9 @@ just frontend-dev    # start the frontend in a second terminal, then open http:/
 
 `just rebuild` builds the whole library in one command: it reads your modules and sample folders
 into the catalog, finds near-duplicates, draws thumbnails, hears every sample with the listening
-model and gives it a category, teaches the descriptor, lays out the cloud, and fits the models the
-morph renderer uses. Run it again whenever you add modules or samples: every step checks what it
+model and gives it a category, teaches the descriptor, and lays out the cloud. Run it again whenever you add modules or samples: every step checks what it
 was built from, and only the steps whose inputs changed run again, so a library that stands still
-is done in moments. `just rebuild catalog`, `just rebuild cloud` and `just rebuild morph` build one
-part and whatever it needs. `just status` says what each step would do now and why.
+is done in moments. `just rebuild catalog` and `just rebuild cloud` build one part and whatever it needs. `just status` says what each step would do now and why.
 
 A run that fails or is interrupted with Ctrl+C stops at that step, and the next `just rebuild` picks
 up there: extraction keeps the modules it finished, and training continues from its last epoch. Each
@@ -171,7 +169,7 @@ together with the API at `http://127.0.0.1:8000`. The Docker image does the same
 |---|---|
 | `just install` | Installs the Python and frontend dependencies and the git hooks, and puts `config.toml` in place |
 | `just database` | Creates the role and the library, sandbox and test databases on the configured server, wherever they are missing |
-| `just rebuild [targets]` | Builds the library, or the `catalog`, `cloud` or `morph` part of it, running only the steps whose inputs changed |
+| `just rebuild [targets]` | Builds the library, or the `catalog` or `cloud` part of it, running only the steps whose inputs changed |
 | `just status [targets]` | Says what each step of the library would do now, and why |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
@@ -191,42 +189,9 @@ The sandbox shares the PostgreSQL server `config.toml` names, under its own `sam
 database, so `just dev-build` needs your configuration in place first. To browse it, start the
 frontend with `VITE_BACKEND_DEV_URL=http://127.0.0.1:8001`.
 
-Work on generating audio from a point between two samples lives in the `samplemorph` package,
-one module per command under `samplemorph.commands`: fitting a linear codec, teaching the restorer
-that puts back what the grid smooths away before a morph is made audible, caching the canonical
-grids, teaching a descriptor and a codec that decodes from it, describing the library through a
-descriptor, and rendering a listening set. The research behind
-it is documented separately under `docs/morphing/`, starting from `docs/morphing/00-handover.md`.
-
-That package installs PyTorch built for CUDA 12.8, which is a large download and the reason
-`just install` takes a while the first time. It needs a card new enough for that build; an older one
-installs cleanly and then fails the moment it is first asked to compute.
-
-## Labeling and rating samples
-
-Click a sample's category in the list and type what it is; words you have used before are offered
-as you type, and Enter records it. Labels are kept in one spelling — capitals, one space after each
-colon and comma, each tag once — so one wording stays one label however you typed it. Emptying the field brings back what the listening model heard. Five stars
-and a heart sit in the same row, saved as you click, and a sample's own page offers all three as
-well. Near-duplicates get the same decision by default, whenever the list has them grouped. The
-samples list can then show only your favorites, or put your best-rated first, across the whole
-library.
-
-Labels, ratings and favorites are the one thing here that nothing can rebuild, so they are kept
-apart from everything the pipelines generate, and `just reset` leaves them alone.
-`uv run samplelibrary annotations export` writes them to `annotations.jsonl` — keep a copy of your
-own — and `annotations import` reads one back. `annotations relink` reattaches them if a sample's
-hash ever changes.
-
-The listening model can give every sample a category.
-`uv run samplelibrary cloud embed --backend clap --extract-only --heard-rate` describes the catalog
-with it, hearing each sample at the rate it is played at (about an hour), and
-`uv run samplelibrary cloud categorize --experiment-id <that experiment's id>` ranks a vocabulary of
-instruments against every sample in minutes; `--vocabulary hand-labels` ranks the wordings you have
-used instead, and a file with one label per line works too. A sample's category is then what the
-model heard first, wherever you have not written a label of your own, and the cloud colors by it. A
-sample's page lists every category the model heard with its confidence: a click adds one to your
-label.
+The morph renderer lives in the `samplemorph` package and the learned descriptor the cloud embeds
+with in `sampledescriptor`; the descriptor's commands (`uv run samplelibrary descriptor --help`) cache
+the sounds' grids, teach the descriptor and describe the library through it.
 
 ## Morphing two samples
 
@@ -237,23 +202,14 @@ uv run samplelibrary morph serve                      # the renderer, in a termi
 ```
 
 `morph.yaml` at the repository root says what the renderer plays; edit it and start the renderer
-again. As committed, it morphs through the samples' own spectral analyses, moving the spectral
-envelope from one sample's to the other's while both samples' harmonics sound under it and slide
-from the first sample's pitch to the second's, and needs nothing fitted. `excitation: first` keeps
-only the first sample's harmonics along the whole path and `excitation: second` only the second's;
-dropping `glide` holds every harmonic where it stands, so the morph arrives at its new pitch at the
-far end instead of gliding there. A pair glides only where both samples read a pitch the reader
-trusts, so drums and noise sound as they would without it. `route: latent` renders through a codec
-fitted to your library, which needs one first:
-
-```sh
-uv run samplelibrary morph fit      # a linear codec, a few minutes on the processor
-uv run samplelibrary morph serve    # the renderer through it, with `route: latent` and `vocoder_name: pghi` in morph.yaml
-```
-
-The fit reads 4,000 samples between 4,000 and 200,000 frames long, in about three gigabytes of
-memory, and keeps 256 components, so a library holding fewer such samples fits with a smaller
-`--latent-size`; the command names the largest that fits.
+again. Every morph moves the spectral envelope from one sample's to the other's through the samples'
+own spectral analyses, and nothing needs fitting. As committed, both samples' harmonics sound under
+the moving envelope and slide from the first sample's pitch to the second's (`excitation: both` with
+`glide: subharmonic`). `excitation: first` keeps only the first sample's harmonics along the whole
+path and `excitation: second` only the second's; dropping `glide` holds every harmonic where it
+stands, so the morph arrives at its new pitch at the far end instead of gliding there. A pair glides
+only where both samples read a pitch the reader trusts, so drums and noise sound as they would
+without it.
 
 A plugin or any other program can play its own audio through a morph instead of asking the renderer
 for each point. Held to one sample, the morph is a filter on it, and the whole path between two
@@ -268,8 +224,8 @@ uv run samplelibrary morph response --first <hash> --second <hash> \
 stay where they are, so it is read without the glide that `morph.yaml` plays.
 
 `just serve-inference` starts the renderer on whatever `morph.yaml` names, and `--selection` points
-it at another file. The latent route with the restored vocoder sounds closer to the original and needs a restorer trained on a GPU first:
-`uv run samplelibrary morph train-restorer` takes about an hour an epoch over a large library.
+it at another file. The renderer needs the `morph` extra alone, so it runs on a machine without the
+training libraries.
 
 With the renderer running, in the cloud, press the right mouse button on one sample and release it
 on another: a line follows your cursor while the button is down, and the release joins the two with

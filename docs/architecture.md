@@ -6,7 +6,7 @@ their tracker-specific properties and the sample files they were found in; a con
 store of extracted audio; detected equivalence classes between near-duplicate samples; and a web
 application for navigating and visualizing all of it. The project has two
 natures — an offline, batch-oriented extraction/analysis tool, and a served read-only web app —
-kept as six packages under one `pyproject.toml` so each keeps its own dependency footprint and
+kept as seven packages under one `pyproject.toml` so each keeps its own dependency footprint and
 its own write/read boundary, enforced by the `[tool.importlinter]` contracts in `pyproject.toml`.
 
 ## Package map (`src/`)
@@ -15,8 +15,9 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 |---|---|---|
 | `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the reading of a hand label as tag paths and the agreement between two of them (`samplecore.labeling`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the pitch rule that turns an occurrence rate and a pressed key into the one rate a sample is really played at, the anchoring rule that keeps a hand label attached to its sample, the sample files read in place from configured sample directories (`samplecore.sample_files` decodes one into the sample it holds, and `samplecore.storage.sample_audio.SampleAudio` is the one reader of every sample's audio, from the store or from its files), the waveform hygiene every analysis shares (folding to mono, the subsonic high-pass), the auditory front end (`samplecore.auditory`: an ERB-spaced gammatone bank, subband envelopes and the two-lobe modulation spectrum a listener hears flutter and roughness on, designed once as data so a numpy reading and a torch loss apply the same kernels), and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `scipy`, `pydantic`, `soundfile` |
 | `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, scanning the configured sample directories into the catalog in place (`sampleextract.files`, the `samplelibrary files` command), spreading either pass over worker processes (`sampleextract.parallel`), computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each) and folding those notes into the rate each sample is heard at, the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
-| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `samplemorph` trains, and through its text tower gives every sample a category from a vocabulary of prompts (`samplecloud.categories`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the note events say the library plays alike, and whether it groups what a person labeled alike. Depends on `samplecore`, and on `samplemorph` inside its `learned` backend's factory, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `samplemorph` (the `learned` backend), `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn`, `mlflow` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
-| `samplemorph` | The decodable-representation pipeline: canonicalizing a sample into a fixed-size sound image on a log-frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a pluggable `Vocoder` turning a magnitude spectrogram back into audible frames -- in production a restorer taught what the grid's band averaging removes from this library's own sounds, followed by phase gradient heap integration under a Gaussian analysis -- and a learned `Descriptor` (`samplemorph.descriptors`) that reads the canonical grid as one vector: distilled from the pretrained listening model, taught by retuned views that a retuning changes nothing, and by the hand labels what the listener calls alike. A conditioned codec (`samplemorph.codecs.conditioned`) decodes the grid from that descriptor beside a small residual under a prior, so a morph moves a sound's identity through the space the harness judges and its particulars through a space where every point decodes. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner -- which is what leaves the representation invertible where the sample cloud's descriptors are not. Training passes (`samplemorph.training`) run under a run tracker and read a grid cache canonicalized once under the library root. `samplemorph.features` holds a grid autoencoder beside a critic of its own latent interpolants, taught by `morph train-features` to decode every point of a latent line as one sound, and `samplemorph.measurement.ladders` (`morph read-ladders`) reads how far any path between two grids moves rather than fades, on ladders whose middle is known: a sample retuned step by step, and synthetic tones whose pitch or resonance moves. A training-free spectral transport (`samplemorph.transport`) morphs two sounds' own analyses by carrying their partials, bands and envelopes along paths of their own; over it, `samplemorph.partials` reads a sound as notes and harmonic channels over a residual, sounds the channels as oscillators along the paths a `MorphProfile` names and transports the residual, which holds a chord's voices steady where the transport alone warbles. One priced assignment settles which channel travels to which and which fades where it stands, read once for a pair of sounds, so a partial glides one path from end to end. Beside it, `samplemorph.envelope` moves the spectral envelope between two analyses and keeps one sound's excitation whole under it, so a chord stays one chord at every point of the path while its timbre travels. Held to one sound's course through time, that route is a filter on that sound: its whole path is the cepstral coefficients of the ratio between the two envelopes, which `samplemorph.envelope.response` measures and `samplemorph.envelope.filtering` applies at any weight, so a caller reads a pair once and moves its own weight. `samplemorph.routes` puts all of them, the decibel crossfade control and the latent route behind one protocol, and names each for a manifest or a status, which the listening comparison (`samplemorph.listening`, run by `morph draw-pairs` and `morph compare`) renders side by side with readings of every path. Each shell command is one module under `samplemorph.commands`, and the ones that train import the trainer only when they run, so parsing arguments and the commands that train nothing stay clear of it. `samplemorph.service` is the same pipeline over HTTP: the morph inference process (`samplelibrary morph serve`), which renders any point between two cataloged samples on request through the route its selection file (`morph.yaml`) names, the envelope morph as committed and the latent route over the fitted models, loaded once, on demand, reading a sample found in a sample directory from the file the request names inside the directories its own configuration lists, and is what the web API dials for a morph. Serving the envelope route it also hands over the filter between two samples, which holds for every point between them, so a caller rendering its own audio asks once per pair. Depends on `samplecore` only. | `samplecore`, `librosa`, `scikit-learn`, `torch`, `fastapi`, `uvicorn` (the `morph` extra) |
+| `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `sampledescriptor` trains, and through its text tower gives every sample a category from a vocabulary of prompts (`samplecloud.categories`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the note events say the library plays alike, and whether it groups what a person labeled alike. Depends on `samplecore`, and on `sampledescriptor` inside its `learned` backend's factory, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sampledescriptor` (the `learned` backend), `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn`, `mlflow` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
+| `samplemorph` | The morph renderer: the envelope route, which moves the spectral envelope from one sample's analysis to the other's and sounds an excitation under it. `samplemorph.transport` analyzes a sound into the Gaussian spectrogram the route reads and maps two sounds' courses through time onto each other; `samplemorph.envelope` splits each frame into its cepstral envelope and its excitation and blends the envelopes in decibels, while the excitation sounds as the first sound's, the second's or the two crossfaded with the weight, so a chord stays one chord at every point of the path while its timbre travels. `samplemorph.coordinates` reads a sound's pitch by Hermes's subharmonic summation over constant-Q frames, and the envelope route can glide the excitation from the first sound's pitch to the second's; `samplemorph.vocoders.pghi` makes the magnitude audible by phase gradient heap integration. Held to one sound's course through time, the route is a filter on that sound: its whole path is the cepstral coefficients of the ratio between the two envelopes, which `samplemorph.envelope.response` measures and `samplemorph.envelope.filtering` applies at any weight, so a caller reads a pair once and moves its own weight. `samplemorph.routes` builds the route a selection names (`morph.yaml`: the excitation, the timeline, the envelope drawing and the glide) and names it for a status. `samplemorph.service` is the morph inference process (`samplelibrary morph serve`), which renders any point between two cataloged samples on request, reading a sample found in a sample directory from the file the request names inside the directories its own configuration lists, and is what the web API dials for a morph; it also hands over the filter between two samples, which holds for every point between them, so a caller rendering its own audio asks once per pair. `morph response` writes that filter from the shell. Depends on `samplecore` only. | `samplecore`, `librosa`, `pghipy`, `fastapi`, `uvicorn`, `pyyaml` (the `morph` extra) |
+| `sampledescriptor` | The learned descriptor the cloud embeds with: a log-frequency canonicalizer that turns a sample into a fixed-size sound image on a frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a `Descriptor` (`sampledescriptor.descriptors`) that reads the grid as one vector: distilled from the pretrained listening model, taught by retuned views that a retuning changes nothing, and by the hand labels what the listener calls alike. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner. Training (`sampledescriptor.training`) runs under a run tracker and reads a grid cache canonicalized once under the library root; `sampledescriptor.commands` holds the three shell commands (`cache-grids`, `train`, `embed`), and the ones that train import the trainer only when they run. Depends on `samplecore` and on the analysis kernels of `samplemorph`. | `samplecore`, `samplemorph`, `torch`, `lightning`, `threadpoolctl`, `mlflow`, `scikit-learn`, `librosa` (the `descriptor` extra) |
 | `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples, and the morph routes, which relay renders from the inference process over HTTP. Every route is served under `API_PREFIX` (`/api`), which keeps the whole API inside one path segment and leaves every other path to the single-page application's own routes. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn`, `httpx` (the `server` extra) |
 | `samplelibrary` | The `samplelibrary` command line: one parser naming every operation on the library, which hands the rest of a command line to the module owning that command and imports that module as the command runs, so listing the commands stays instant and each command needs its own package's extras alone. A global `--config` sets `SAMPLELIBRARY_CONFIG` and drops any exported `SAMPLELIBRARY_DATABASE_URL`, so the file it names supplies the database too, and every process a command starts inherits both -- uvicorn's workers and a pipeline's worker processes included. The dispatcher accepts a command's own arguments only after its name. It also holds the commands that belong to no pipeline: `setup` (the config file and the databases), `reset`, and `tracking uri` / `tracking ui`, and the sandbox's synthetic modules and sample pack (`samplelibrary.sandbox`). Every command ends with one of the statuses `samplecore.exit_status.ExitStatus` names: 0 once its work is committed, per-item failures included as warnings, 1 when something broke, 2 for a malformed command line, 3 for a request it refuses, and 4 for a process that outgrew its memory ceiling. `--memory-cap 16G` holds the command and everything it starts to a memory ceiling before it loads anything of its own (`samplelibrary.limits`): on Linux the process starts again inside a systemd user scope with swap closed off and reads the ceiling back from its own control group, on Windows it assigns itself to a job object of that name, and a system offering neither refuses a ceiling rather than running uncapped. `--memory-scope` names the scope, which is what another process finds a running step by. When `SAMPLELIBRARY_STEP_LOCK` names a lock, the dispatcher holds that Postgres advisory lock for the life of the command, which is how a pipeline recognizes a step still running. It sits over every other package. | every package above |
 
@@ -24,24 +25,26 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 
 - `samplecore` has no dependents among its peers: nothing it does can accidentally couple to the
   extraction pipeline, the embedding pipeline, or the web server.
-- `sampleserver` never imports `sampleextract`, `samplecloud` or `samplemorph`: the read API cannot trigger a
-  batch job, and cannot inherit either pipeline's heavier dependencies. The pipelines never import
-  `sampleserver` either: they write the catalog the server reads, and meet it there alone.
-- `sampleextract` is declared independent of both `samplecloud` and `samplemorph`: extraction
-  never waits on embedding, and a change to either pipeline's dependencies never touches it.
-- `samplemorph` never imports `samplecloud`, while `samplecloud` may import `samplemorph`: the
-  cloud is the more general layer, and its `learned` backend loads a descriptor the morph pipeline
-  trained. The import sits inside that backend's factory, so a pass over a hand-built descriptor
-  keeps needing no torch. The morph pipeline still reaches the cloud through the catalog, writing
-  a descriptor's vectors as `sample_feature_vector` rows under an `Experiment` that records the
-  model's name, which is how the cloud's evaluation rebuilds the extractor and how a promotion
-  finds the same vectors. This shape is provisional: if a model of the morph pipeline becomes the
-  cloud's provider outright, the cloud turns into a layer over embedding providers, and the
-  approach that passes the quality bar decides how the packages are reshaped.
-- `samplemorph.service` reaches the pipeline alone: it never imports `samplemorph.training`,
-  `samplemorph.commands` or any other package, and the shell and the service stay independent of
-  each other, two skins over one pipeline. The web API reaches the service over HTTP, which is
-  what keeps torch and the fitted models out of the API process while morphs play in the app.
+- `sampleserver` never imports `sampleextract`, `samplecloud`, `samplemorph` or `sampledescriptor`: the read
+  API cannot trigger a batch job, and cannot inherit any pipeline's heavier dependencies. The pipelines
+  never import `sampleserver` either: they write the catalog the server reads, and meet it there alone.
+- `sampleextract` is declared independent of `samplecloud`, `samplemorph` and `sampledescriptor`: extraction
+  never waits on embedding, and a change to another pipeline's dependencies never touches it.
+- `samplemorph` and `sampledescriptor` never import `samplecloud`, while `samplecloud` may import
+  `sampledescriptor`: the cloud is the more general layer, and its `learned` backend loads a descriptor the
+  descriptor pipeline trained. The import sits inside that backend's factory, so a pass over a hand-built
+  descriptor keeps needing no torch. The descriptor pipeline reaches the cloud through the catalog, writing
+  a descriptor's vectors as `sample_feature_vector` rows under an `Experiment` that records the model's
+  name, which is how the cloud's evaluation rebuilds the extractor and how a promotion finds the same
+  vectors.
+- `samplemorph` never imports `sampledescriptor`, `samplecore.tracking`, torch, lightning, mlflow,
+  scikit-learn or threadpoolctl, while `sampledescriptor` may import the analysis kernels of `samplemorph`:
+  `just serve-inference` needs the `morph` extra alone, and training with its run tracking lives in the
+  `descriptor` extra.
+- `samplemorph.service` reaches the pipeline alone: it never imports `samplemorph.commands` or any other
+  package, and the shell and the service stay independent of each other, two skins over one pipeline. The
+  web API reaches the service over HTTP, which is what keeps the analysis stack out of the API process while
+  morphs play in the app.
 - `samplelibrary` sits over every package, and none of them imports it. Each command keeps its
   parser and its `main(argv, prog=...)` in the package that owns the work, so a test runs a command
   the way a shell does.
@@ -291,7 +294,7 @@ whose files qualifies raises `SampleUnavailableError`, which each pass catches a
 and counts: thumbnails, equivalence detection (at fingerprinting, and for a pair whose file vanishes
 while the pass runs), feature extraction (the sample stays pending), transposition probes, the
 reproducibility probe of a resumed experiment (which compares the first samples it can read), and
-the morph training sets. A fit, a grid cache or a training run sized to its samples first keeps the
+the descriptor's training sets. A grid cache or a training run sized to its samples first keeps the
 samples `readable_samples` finds, and a file vanishing mid-build stops that build with the previous
 cache left in place. A missing stored object is a damaged store and still raises
 `FileNotFoundError`. The API serves such a sample's audio as the WAV the store would hold for it,
@@ -397,8 +400,7 @@ steps, one at a time and each in a process of its own: the catalog passes (`labe
 `sample-files`, `notes`, `thumbnails`, `equivalence`, `relink`), the listening model's two readings
 and its categories (`teacher`, `hearing-teacher`, `categories`), the descriptor from its grid cache
 to the cloud (`grid-cache`, `descriptor`, `embedding`, `completion`, `evaluation`,
-`module-evaluation`, `cloud`, `module-placeholders`), and the renderer's models (`morph-codec`,
-`restorer`, `morph-models`). The targets `catalog`, `cloud`, `morph` and `all` name groups of them,
+`module-evaluation`, `cloud`, `module-placeholders`). The targets `catalog`, `cloud` and `all` name groups of them,
 and a run takes every step its targets need, in the order `steps/library.py` declares them.
 
 **A step decides from what exists.** Progress lives with the outputs themselves. Just before it
@@ -477,11 +479,10 @@ keeps the frontend and the workers; the health check reads `/api/stats`, so a he
 whose catalog answers. The config mounted into it names `module_source_directory` and `library_root`
 as paths inside the container, and `database_url` unless the environment supplies it.
 
-The inference process (`samplelibrary morph serve`) installs the `morph` extra, reads the library
-root and the sample directories its configuration lists, renders through the route `morph.yaml` at the
+The inference process (`samplelibrary morph serve`) installs the `morph` extra alone, reads the library
+root and the sample directories its configuration lists, renders under the settings `morph.yaml` at the
 repository root names, as committed the envelope morph whose excitation crossfades both ends and
-glides between their read pitches, and the fitted models loaded for the latent route alone,
-and opens no database: a
+glides between their read pitches, and opens no database: a
 morph names two samples and a weight, and the API, which knows the catalog, reads each sample's
 playback rate the way it does everywhere else, together with the file an end found only in sample
 directories is read from — the first still as it was scanned, or a 404 before the process is dialed
@@ -490,21 +491,20 @@ the file decodes to the hash the request names. Both processes read one setting,
 process binds it, the API dials it, and a morph request reaching the API while no process answers
 comes back as 503 with that address in its detail, a render outlasting the client's wait as 504, and
 any other failure of the process as 502. Renders are deterministic given what a route reads, so
-each carries a validator built from a fingerprint over the route's description, its settings or the
-digests of the files it loaded, and `RENDER_REVISION`, together with the point, under `Cache-Control: private, no-cache`: a browser
+each carries a validator built from a fingerprint over the route's description, its settings, and `RENDER_REVISION`, together with the point, under `Cache-Control: private, no-cache`: a browser
 revalidates every play, and one holding the render is answered with a 304 by the process that made
 it. A point whose ends are heard more than sixteen times apart in rate, or that would render past
 `MAXIMUM_RENDER_FRAMES`, is refused with 422 before any rendering, and the render and pair caches
 are bounded by the bytes they hold.
 
-Beside the audio and the status, a process serving the envelope route answers `GET /morph/response`
+Beside the audio and the status, a process whose selection holds every pitch answers `GET /morph/response`
 with the filter between two samples, named by a validator over the pair alone since it holds at
 every weight between them, and `POST /morph/response` with the filter between two audio files the
 caller uploads, which is how a sampler holding its own audio asks. Uploads are named by a digest of
 their bytes, carry at most `MAXIMUM_UPLOAD_BYTES` each, and are heard at the higher of the two rates
 their files state. The API relays the audio and the status, which is what a browser plays
 and what it asks before offering to; a caller of the filter renders its own audio from it and dials
-the process directly, so the filter travels between the two of them alone. A process serving another route answers 409,
+the process directly, so the filter travels between the two of them alone. A process whose selection glides answers 409,
 naming the route it serves, and the response cache is bounded by its bytes the way the others are.
 
 Every route the API serves sits under `/api` (`sampleserver.app.API_PREFIX`), so one path always
@@ -644,7 +644,7 @@ backend, the `reading`, for a learned descriptor the model's name, and for the l
 commit of its checkpoint this build pins (`TEACHER_REVISION`), so an experiment heard through
 another commit is refused rather than extended. An experiment may carry a key, unique across the
 catalog (`experiment.key`): `cloud embed --key K` starts an experiment under K following the recipe
-flags, and every later run naming K resumes it, and `morph embed --key K` writes its experiment and
+flags, and every later run naming K resumes it, and `descriptor embed --key K` writes its experiment and
 every vector in one transaction, so an experiment a key names holds its whole cache. A resumed experiment follows
 the recipe its own row records, so `--experiment-id` refuses a `--backend`, `--model` or
 `--heard-rate` naming another, and a label, which names a new experiment. Before new vectors join an
@@ -659,7 +659,7 @@ The `clap` backend reads a pretrained audio-text model (`samplecloud.backends.te
 behind the `teacher` extra), which knows sound from what people wrote about recordings and, on the
 first hand labels, leads both hand-built descriptors by a wide margin. It computes the model's own
 log-mel picture on the device, at a quarter of the library extractor's cost. Beside its place in
-the cloud it is the teacher the `samplemorph` descriptor is distilled from, which is where its one
+the cloud it is the teacher the `sampledescriptor` descriptor is distilled from, which is where its one
 weakness -- it moves under an octave's retuning -- is repaired.
 
 Every pass reads a sample one of two ways (`samplecloud.hearing`), recorded in the experiment's
@@ -725,14 +725,9 @@ compared from the store rather than from two terminals; `--no-tracking` keeps a 
 it. The harness itself returns the report and writes nothing, and `samplecloud.evaluation.recording`
 is the one place that reads the report into a run.
 
-This lives in `samplecloud` rather than `samplemorph` because it judges embeddings, which is what
-`samplecloud` owns. A learned codec's latents reach it as an ordinary experiment through the
-database, with no import in either direction, which is what keeps the two pipelines independent.
-
-A descriptor of this kind answers what a sample resembles. Producing audio from a point between two
-samples asks for a representation carrying a decoder as well, which is a separate design: the
-research behind it, the measured facts about the corpus it rests on, and the staged plan for the
-`samplemorph` package live under [`morphing/`](morphing/00-handover.md).
+This lives in `samplecloud` because it judges embeddings, which is what `samplecloud` owns. A learned
+descriptor's vectors reach it as an ordinary experiment through the database, with no import in either
+direction.
 
 ## Labels on a sample
 
