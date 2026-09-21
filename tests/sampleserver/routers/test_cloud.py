@@ -1,27 +1,28 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
-from trackmod.trackers.xm.tuning import Tuning
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecloud.categories.scoring import show_scoring
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import VOCABULARY_PARAMETER, ZERO_SHOT_BACKEND_NAME
-from samplecore.models.label_suggestion import SampleLabelSuggestion
 from samplecore.models.module import Module
 from samplecore.models.sample import Sample
-from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
+from samplecore.models.sample_category import SampleCategory
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
+from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
     PostgresModuleCloudCoordinateRepository,
 )
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.playback_rate import (
     PostgresSamplePlaybackRateRepository,
@@ -30,9 +31,8 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
-from samplecore.storage.repositories.sample_properties import (
-    PostgresSamplePropertiesRepository,
-)
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 
 SAMPLE_HASH = "a" * 64
 MODULE_HASH = "c" * 64
@@ -54,7 +54,6 @@ def test_get_cloud_returns_every_stored_coordinate(client: TestClient, connectio
     assert body[0]["sample_hash"] == SAMPLE_HASH
     assert body[0]["x"] == 1.5
     assert body[0]["y"] == -2.5
-    assert body[0]["category"] == "uncategorized"
     assert "hand_label" not in body[0]
     assert "computed_at" not in body[0]
 
@@ -73,47 +72,6 @@ def test_get_cloud_rounds_each_coordinate_to_what_a_viewer_can_place(
 
     assert body[0]["x"] == 1.2346
     assert body[0]["y"] == -2.9877
-
-
-def test_get_cloud_resolves_each_point_s_category_from_its_occurrence_names(
-    client: TestClient, connection: Connection
-) -> None:
-    PostgresSampleRepository(connection).upsert(
-        Sample(hash=SAMPLE_HASH, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
-    )
-    module_repository = PostgresModuleRepository(connection)
-    module = Module(
-        hash=MODULE_HASH,
-        id=module_repository.next_id(),
-        filename="song.xm",
-        tracker=TrackerFormat.XM,
-        title="a song",
-        channel_count=4,
-        pattern_count=1,
-        instrument_count=1,
-        sample_count=1,
-        file_size=1024,
-        ingested_at=datetime.now(UTC),
-    )
-    module_repository.insert(module)
-    PostgresSamplePropertiesRepository(connection).upsert(
-        XMSampleProperties(
-            sample_hash=SAMPLE_HASH,
-            occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=0),
-            name="kick",
-            rate=8363,
-            volume=64,
-            tuning=Tuning(relative_note=0, finetune=0),
-        )
-    )
-    PostgresCloudCoordinateRepository(connection).upsert(
-        SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
-    )
-
-    response = client.get("/cloud")
-
-    assert response.status_code == 200
-    assert response.json()[0]["category"] == "kick"
 
 
 def test_get_cloud_carries_the_rate_a_point_is_heard_at(client: TestClient, connection: Connection) -> None:
@@ -154,6 +112,26 @@ def test_the_cloud_follows_a_fresh_embedding_and_a_replaced_rate(client: TestCli
     by_hash = {point["sample_hash"]: point for point in client.get("/cloud").json()}
 
     assert by_hash[SAMPLE_HASH]["playback_rate_hz"] == 16726
+
+
+def test_the_cloud_follows_a_scanned_sample_file(client: TestClient, connection: Connection) -> None:
+    _store_samples(connection, SAMPLE_HASH)
+    PostgresCloudCoordinateRepository(connection).upsert(
+        SampleCloudCoordinate(sample_hash=SAMPLE_HASH, x=1.5, y=-2.5, computed_at=datetime.now(UTC))
+    )
+    assert client.get("/cloud").json()[0]["playback_rate_hz"] is None
+
+    PostgresSampleFileRepository(connection).upsert(
+        SampleFile(
+            sample_hash=SAMPLE_HASH,
+            location=SampleFileLocation(directory=Path("/samples"), relative_path="Snares/001.wav"),
+            rate=44100,
+            fingerprint=FileFingerprint(size_bytes=64, modified_ns=0),
+        )
+    )
+    point = client.get("/cloud").json()[0]
+
+    assert point["playback_rate_hz"] == 44100
 
 
 def test_the_cloud_goes_out_gzipped_only_when_the_caller_accepts_it(client: TestClient, connection: Connection) -> None:
@@ -246,13 +224,13 @@ VOCABULARY = ("SNARE", "BASS DRUM", "HI-HAT: CLOSED")
 
 
 def seed_scoring(connection: Connection, picks: dict[str, tuple[tuple[str, float], ...]]) -> int:
-    """A scoring over the catalog: each sample's suggested labels with scores, closest first, under one experiment."""
+    """A scoring over the catalog: each sample's categories with scores, closest first, under one experiment."""
     experiment_id = PostgresExperimentRepository(connection).create(
-        backend_name=ZERO_SHOT_BACKEND_NAME, label=None, params={VOCABULARY_PARAMETER: list(VOCABULARY)}
+        backend_name=ZERO_SHOT_BACKEND_NAME, label=None, params={VOCABULARY_PARAMETER: list(VOCABULARY)}, key=None
     )
-    PostgresSampleLabelSuggestionRepository(connection).insert_many(
+    PostgresSampleCategoryRepository(connection).insert_many(
         [
-            SampleLabelSuggestion(
+            SampleCategory(
                 experiment_id=experiment_id,
                 sample_hash=sample_hash,
                 rank=rank,
@@ -260,10 +238,11 @@ def seed_scoring(connection: Connection, picks: dict[str, tuple[tuple[str, float
                 score=score,
                 computed_at=datetime.now(UTC),
             )
-            for sample_hash, suggestions in picks.items()
-            for rank, (label, score) in enumerate(suggestions)
+            for sample_hash, categories in picks.items()
+            for rank, (label, score) in enumerate(categories)
         ]
     )
+    show_scoring(connection, experiment_id)
     return experiment_id
 
 
@@ -274,32 +253,34 @@ def _store_samples(connection: Connection, *hashes: str) -> None:
         )
 
 
-def test_get_cloud_suggestions_carries_each_sample_s_closest_pick(client: TestClient, connection: Connection) -> None:
+def test_get_cloud_categories_carry_each_sample_s_top_category(client: TestClient, connection: Connection) -> None:
     _store_samples(connection, SAMPLE_HASH)
     seed_scoring(connection, {SAMPLE_HASH: (("HI-HAT: CLOSED", 0.7), ("SNARE", 0.4))})
 
-    response = client.get("/cloud/suggestions")
+    response = client.get("/cloud/categories")
 
     assert response.status_code == 200
     assert response.json() == [{"sample_hash": SAMPLE_HASH, "path": ["HI-HAT", "CLOSED"], "score": 0.7}]
 
 
-def test_get_cloud_suggestions_reads_the_newest_scoring_alone(client: TestClient, connection: Connection) -> None:
-    """A scoring written after the first answer reaches the next one: the newest scoring is the revision."""
+def test_get_cloud_categories_read_the_scoring_on_show_alone(client: TestClient, connection: Connection) -> None:
+    """Showing a scoring reaches the next answer, an earlier one shown again included: the shown scoring is the revision."""
     _store_samples(connection, SAMPLE_HASH)
-    seed_scoring(connection, {SAMPLE_HASH: (("SNARE", 0.5),)})
-    assert [entry["path"] for entry in client.get("/cloud/suggestions").json()] == [["SNARE"]]
+    earlier = seed_scoring(connection, {SAMPLE_HASH: (("SNARE", 0.5),)})
+    assert [entry["path"] for entry in client.get("/cloud/categories").json()] == [["SNARE"]]
 
     seed_scoring(connection, {SAMPLE_HASH: (("BASS DRUM", 0.6),)})
-    body = client.get("/cloud/suggestions").json()
+    assert [entry["path"] for entry in client.get("/cloud/categories").json()] == [["BASS DRUM"]]
+    show_scoring(connection, earlier)
+    body = client.get("/cloud/categories").json()
 
-    assert [entry["path"] for entry in body] == [["BASS DRUM"]]
+    assert [entry["path"] for entry in body] == [["SNARE"]]
 
 
-def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_first_picks(
+def test_get_cloud_category_tags_rank_by_the_scoring_s_vocabulary_and_count_top_categories(
     client: TestClient, connection: Connection
 ) -> None:
-    """The closed hat is picked first twice, counting toward the hat category; a tag outside the vocabulary ranks last."""
+    """The closed hat is picked first twice, counting toward the hat tag; a tag outside the vocabulary ranks last."""
     _store_samples(connection, SAMPLE_HASH, "b" * 64, "d" * 64, "e" * 64)
     seed_scoring(
         connection,
@@ -311,7 +292,7 @@ def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_fi
         },
     )
 
-    response = client.get("/cloud/suggestion-tags")
+    response = client.get("/cloud/category-tags")
 
     assert response.status_code == 200
     assert response.json() == [
@@ -322,9 +303,9 @@ def test_get_cloud_suggestion_tags_rank_by_the_scoring_s_vocabulary_and_count_fi
     ]
 
 
-def test_cloud_suggestions_on_a_catalog_without_a_scoring_return_nothing(client: TestClient) -> None:
-    assert client.get("/cloud/suggestions").json() == []
-    assert client.get("/cloud/suggestion-tags").json() == []
+def test_cloud_categories_on_a_catalog_without_a_scoring_return_nothing(client: TestClient) -> None:
+    assert client.get("/cloud/categories").json() == []
+    assert client.get("/cloud/category-tags").json() == []
 
 
 def _annotation(sample_hash: str, *, label: str | None, rating: int | None) -> SampleAnnotation:
@@ -333,9 +314,11 @@ def _annotation(sample_hash: str, *, label: str | None, rating: int | None) -> S
         rating=rating,
         favorite=False,
         sample_hash=sample_hash,
-        occurrence=SampleOccurrence(module_hash=MODULE_HASH, instrument_index=0, sample_slot=0),
-        module_filename="song.xm",
-        sample_name="a sample",
+        anchor=ModuleSlotAnchor(
+            occurrence=SampleOccurrence(module_hash=MODULE_HASH, instrument_index=0, sample_slot=0),
+            module_filename="song.xm",
+            sample_name="a sample",
+        ),
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC),
     )

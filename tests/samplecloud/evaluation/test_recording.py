@@ -8,7 +8,7 @@ from sqlalchemy import Connection
 
 from samplecloud.evaluation.harness import evaluate_experiment
 from samplecloud.evaluation.recording import record_report, run_name_for
-from samplecloud.evaluation.settings import EvaluationSettings
+from samplecloud.evaluation.settings import EvaluationScope, EvaluationSettings
 from samplecloud.evaluation.transposition import OffsetRetrieval, TranspositionRetrieval
 from tests.samplecloud.evaluation.conftest import SeededCatalog, label_catalog
 
@@ -44,7 +44,6 @@ def test_every_metric_a_report_holds_reaches_the_run(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -54,7 +53,8 @@ def test_every_metric_a_report_holds_reaches_the_run(
 
     assert run.parameters["backend"] == "stub"
     assert run.parameters["experiment_id"] == str(separable_catalog.experiment_id)
-    assert {"categories/accuracy", "categories/kick/f1", "notes/single_pitch_auc"} <= set(run.metrics)
+    assert "notes/single_pitch_auc" in run.metrics
+    assert not any(name.startswith("categories/") for name in run.metrics)
     assert {
         "hand_labels/ndcg",
         "hand_labels/snare/average_precision",
@@ -71,7 +71,6 @@ def test_a_retuning_is_named_by_its_direction_and_size(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -84,7 +83,7 @@ def test_a_retuning_is_named_by_its_direction_and_size(
     stubbed = replace(
         report,
         transposition=TranspositionRetrieval(
-            offsets=offsets, probe_sample_count=4, catalog_sample_count=32, random_seed=0
+            offsets=offsets, probe_sample_count=4, unavailable_probe_count=0, catalog_sample_count=32, random_seed=0
         ),
     )
     run = RecordingRun()
@@ -96,4 +95,4 @@ def test_a_retuning_is_named_by_its_direction_and_size(
 
 
 def test_a_run_is_named_after_the_descriptor_and_its_experiment() -> None:
-    assert run_name_for(backend_name="librosa", experiment_id=3) == "librosa-3"
+    assert run_name_for(backend_name="librosa", experiment_id=3, scope=EvaluationScope.MODULES) == "librosa-3-modules"

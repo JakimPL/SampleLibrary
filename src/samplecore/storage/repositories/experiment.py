@@ -6,7 +6,7 @@ from typing import Any, Protocol
 
 from sqlalchemy import Connection, Row, select
 
-from samplecore.models.experiment import Experiment
+from samplecore.models.experiment import Experiment, ExperimentKey
 from samplecore.storage.database import experiment, experiment_id_sequence
 
 
@@ -17,11 +17,17 @@ class ExperimentRepository(Protocol):
 
     def insert(self, experiment_: Experiment) -> None: ...
 
-    def create(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int: ...
+    def create(
+        self, *, backend_name: str, label: str | None, params: dict[str, Any], key: ExperimentKey | None
+    ) -> int: ...
 
-    def insert_new(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int: ...
+    def insert_new(
+        self, *, backend_name: str, label: str | None, params: dict[str, Any], key: ExperimentKey | None
+    ) -> int: ...
 
     def get(self, experiment_id: int) -> Experiment | None: ...
+
+    def get_by_key(self, key: ExperimentKey) -> Experiment | None: ...
 
 
 class PostgresExperimentRepository:
@@ -38,17 +44,26 @@ class PostgresExperimentRepository:
     def next_id(self) -> int:
         return self._connection.execute(select(experiment_id_sequence.next_value())).scalar_one()
 
-    def create(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int:
+    def create(self, *, backend_name: str, label: str | None, params: dict[str, Any], key: ExperimentKey | None) -> int:
         """Open a new experiment now, committed at once so a later resume finds it whatever happens next."""
-        new_id = self.insert_new(backend_name=backend_name, label=label, params=params)
+        new_id = self.insert_new(backend_name=backend_name, label=label, params=params, key=key)
         self._connection.commit()
         return new_id
 
-    def insert_new(self, *, backend_name: str, label: str | None, params: dict[str, Any]) -> int:
+    def insert_new(
+        self, *, backend_name: str, label: str | None, params: dict[str, Any], key: ExperimentKey | None
+    ) -> int:
         """Open a new experiment inside the caller's transaction, which lands it together with whatever else it writes."""
         new_id = self.next_id()
         self.insert(
-            Experiment(id=new_id, backend_name=backend_name, params=params, created_at=datetime.now(UTC), label=label)
+            Experiment(
+                id=new_id,
+                backend_name=backend_name,
+                params=params,
+                created_at=datetime.now(UTC),
+                label=label,
+                key=key,
+            )
         )
         return new_id
 
@@ -60,11 +75,17 @@ class PostgresExperimentRepository:
                 params=json.dumps(experiment_.params),
                 created_at=experiment_.created_at,
                 label=experiment_.label,
+                key=experiment_.key,
             )
         )
 
     def get(self, experiment_id: int) -> Experiment | None:
         row = self._connection.execute(select(experiment).where(experiment.c.id == experiment_id)).fetchone()
+        return _row_to_experiment(row) if row is not None else None
+
+    def get_by_key(self, key: ExperimentKey) -> Experiment | None:
+        """The experiment filed under ``key``, or nothing when no experiment carries it."""
+        row = self._connection.execute(select(experiment).where(experiment.c.key == key)).fetchone()
         return _row_to_experiment(row) if row is not None else None
 
 
@@ -76,4 +97,5 @@ def _row_to_experiment(row: Row[Any]) -> Experiment:
         params=json.loads(row.params),
         created_at=row.created_at,
         label=row.label,
+        key=row.key,
     )

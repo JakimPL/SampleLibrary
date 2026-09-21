@@ -3,18 +3,15 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 from typing import Final
 
 from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import port_number
 from samplecore.config import LibraryConfig
-from samplemorph.route_arguments import (
-    add_model_argument,
-    add_morpher_argument,
-    add_vocoder_arguments,
-    route_choice_from,
-)
-from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
+from samplecore.exit_status import ExitStatus
+from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, read_route_selection
+from samplemorph.service.settings import ServiceSettings
 
 COMMAND_NAME: Final[str] = "serve"
 
@@ -27,32 +24,38 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument(
         "--port", type=port_number, default=None, help="The port to bind, in place of the configured one."
     )
-    add_model_argument(parser)
-    add_vocoder_arguments(parser, device_default=DEFAULT_INFERENCE_DEVICE)
-    add_morpher_argument(parser)
+    parser.add_argument(
+        "--selection",
+        type=Path,
+        default=DEFAULT_SELECTION_PATH,
+        help="The YAML file naming the settings every morph renders under.",
+    )
 
 
 def run(config: LibraryConfig, arguments: argparse.Namespace) -> None:
-    """Load the route the flags pick, then serve morphs over HTTP at the address the configuration names.
+    """Build the route the selection file names, then serve morphs over HTTP at the address the configuration names.
 
     Raises:
-        SystemExit: the route cannot be loaded, reported in one line before any address is bound.
+        SystemExit: the selection file cannot be read, reported in one line before any address is bound.
     """
-    # The server and the networks it loads are imported here, so parsing arguments stays clear of them.
+    # The server is imported here, so parsing arguments stays clear of it.
     # pylint: disable=import-outside-toplevel
     import uvicorn
 
-    from samplemorph.pipeline import ModelFileChanged
     from samplemorph.service.app import create_app
     from samplemorph.service.renderer import load_renderer
 
     host, port = _bind_address(config, arguments)
-    settings = ServiceSettings(library_root=config.library_root, choice=route_choice_from(arguments))
     try:
+        settings = ServiceSettings(
+            library_root=config.library_root,
+            sample_directories=config.sample_directories,
+            selection=read_route_selection(arguments.selection),
+        )
         renderer = load_renderer(settings)
-    except (FileNotFoundError, ValueError, ModelFileChanged) as error:
+    except ValueError as error:
         _logger.error("Serving nothing: %s.", error)
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
 
     uvicorn.run(create_app(renderer), host=host, port=port)
 

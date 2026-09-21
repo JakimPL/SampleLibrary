@@ -51,6 +51,12 @@ def _extract(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _files(argv: list[str], *, prog: str) -> None:
+    from sampleextract.files.cli import main
+
+    main(argv, prog=prog)
+
+
 def _equivalence(argv: list[str], *, prog: str) -> None:
     from sampleextract.equivalence.cli import main
 
@@ -93,14 +99,26 @@ def _cloud_evaluate(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
-def _cloud_suggest(argv: list[str], *, prog: str) -> None:
-    from samplecloud.suggestions.cli import main
+def _cloud_categorize(argv: list[str], *, prog: str) -> None:
+    from samplecloud.categories.cli import main
+
+    main(argv, prog=prog)
+
+
+def _pipeline(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.pipeline.cli import main
 
     main(argv, prog=prog)
 
 
 def _morph(argv: list[str], *, prog: str) -> None:
     from samplemorph.cli import main
+
+    main(argv, prog=prog)
+
+
+def _descriptor(argv: list[str], *, prog: str) -> None:
+    from sampledescriptor.cli import main
 
     main(argv, prog=prog)
 
@@ -133,6 +151,7 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
     Command(name="setup", summary="Put a config file in place, or prepare the databases it names.", run=_setup),
     Command(name="reset", summary="Empty the configured library's catalog and content store.", run=_reset),
     Command(name="extract", summary="Catalog every module under the configured source directory.", run=_extract),
+    Command(name="files", summary="Catalog the audio files in the configured sample directories.", run=_files),
     Command(
         name="equivalence",
         summary="Detect bit-depth, amplification and resampled variants among the cataloged samples.",
@@ -163,17 +182,23 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
                 run=_cloud_evaluate,
             ),
             Command(
-                name="suggest",
-                summary="Suggest labels for every sample of a listening-model experiment.",
-                run=_cloud_suggest,
+                name="categorize",
+                summary="Give every sample of a listening-model experiment its categories.",
+                run=_cloud_categorize,
             ),
         ),
     ),
     Command(
-        name="morph",
-        summary="Fit, train and render the decodable representation, and serve morphs over HTTP.",
-        run=_morph,
+        name="pipeline",
+        summary="Build the library through its steps, or say what each would do.",
+        run=_pipeline,
     ),
+    Command(
+        name="descriptor",
+        summary="Cache the sounds' grids, teach the learned descriptor, and describe every sample with it.",
+        run=_descriptor,
+    ),
+    Command(name="morph", summary="Serve morphs between two samples over HTTP, and write morph filters.", run=_morph),
     Command(name="serve", summary="Serve the library's API, and the built frontend when named, over HTTP.", run=_serve),
     Command(name="schema", summary="Print the API's OpenAPI schema as JSON, or write it to a file.", run=_schema),
     CommandGroup(

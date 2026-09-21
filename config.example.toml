@@ -13,6 +13,32 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # The library keeps samples at least this many frames long.
 # minimum_sample_frames = 512
 
+# Folders of plain audio files (WAV, AIFF, FLAC) the library reads in place, without copying them.
+# `samplelibrary files` catalogs them; a file that goes missing later is skipped until it is back.
+# sample_directories = ["/path/to/your/sample/packs"]
+
+# Patterns naming files and folders inside those folders to leave out, matched without regard to case
+# against each path relative to its folder, where * also crosses folders.
+# sample_exclusions = ["*loop*", "*.aif"]
+
 [inference]
 # Where the morph renderer listens, and where the app reaches it.
 # url = "http://127.0.0.1:8010"
+
+[pipeline]
+# How `samplelibrary pipeline run` builds the library. Every setting here is optional.
+
+# The memory ceiling every step runs under, such as "16G", or "none".
+# memory_cap = "16G"
+
+# The device training and learned descriptors run on, and how many processes a pass spreads over.
+# device = "cuda"
+# workers = 8
+
+# A file of hand labels a fresh catalog reads in, as `samplelibrary annotations export` writes it.
+# labels = "/path/to/annotations.jsonl"
+
+# A table per step sets that step's parameters and its own ceiling; outputs are named by the parameters.
+# [pipeline.descriptor]
+# epochs = 40
+# memory_cap = "24G"

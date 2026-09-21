@@ -3,20 +3,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Final
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
-from samplecore.categorization import classify_sample_category
 from samplecore.equivalence_classes import classes_by_member_hash, compute_equivalence_classes
 from samplecore.models.base import FROZEN
-from samplecore.models.category import SampleCategory
 from samplecore.models.module import Module
 from samplecore.models.note_event import SamplePlaybackRate
 from samplecore.models.relation import SampleRelation
 from samplecore.models.sample import DescribedSample, SampleSelection, SampleSort, SampleSummary
+from samplecore.models.sample_file import SampleFileLocation
 from samplecore.models.sample_properties import TrackerSampleProperties
 from samplecore.models.scalars import (
     MAXIMUM_RATING,
@@ -26,7 +25,7 @@ from samplecore.models.scalars import (
     SampleHash,
 )
 from samplecore.models.tracker import TrackerFormat
-from samplecore.naming import choose_dominant_name
+from samplecore.naming import NO_DISPLAY_NAME
 from samplecore.pitch import (
     playback_rates_of,
     tally_playback_rates,
@@ -34,21 +33,30 @@ from samplecore.pitch import (
 from samplecore.spectral_distance import SpectralVectors, euclidean_distance, nearest_neighbors
 from samplecore.storage import audio_store
 from samplecore.storage.playback_rates import resolved_playback_rates
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError, is_unchanged
 from samplecore.waveform import WaveformPeak
 from sampleserver.caching import IMMUTABLE_CACHE_CONTROL
-from sampleserver.dependencies import get_connection, get_library_root, get_spectral_vectors
+from sampleserver.dependencies import (
+    ConnectionOpener,
+    get_connection,
+    get_connection_opener,
+    get_library_root,
+    get_shown_experiment_id,
+    get_spectral_vectors,
+)
 from sampleserver.equivalence import equivalence_class_members
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
-from sampleserver.parameters import MAX_PAGE_OFFSET, NOT_FOUND_RESPONSE, WAV_CONTENT, SampleHashPath
+from sampleserver.parameters import MAX_PAGE_OFFSET, NOT_FOUND_RESPONSE, WAV_CONTENT, WAV_MEDIA_TYPE, SampleHashPath
 
 router = APIRouter(prefix="/samples", tags=["samples"])
 
@@ -76,6 +84,20 @@ class SampleOccurrenceDetail(BaseModel):
     module: SampleOccurrenceModule
 
 
+class SampleFileDetail(BaseModel):
+    """One file a sample was found in, read in place from a sample directory.
+
+    ``available`` says whether the file is there now with the size and write time it was scanned
+    at, which is what playing the sample from it needs.
+    """
+
+    model_config = FROZEN
+
+    location: SampleFileLocation
+    rate: Rate
+    available: bool
+
+
 class SampleDistance(BaseModel):
     """The spectral distance between two samples' persisted, standardized feature vectors."""
 
@@ -87,16 +109,17 @@ class SampleDistance(BaseModel):
 
 
 class SamplePreview(BaseModel):
-    """What a glance at a sample shows: its name, category and hand label, and the stored thumbnail of its waveform.
+    """What a glance at a sample shows: its name, what it is taken to be, and the stored thumbnail of its waveform.
 
-    ``thumbnail`` is ``None`` for a sample the thumbnail pass has not reached, since a preview
-    with nothing to draw is still a preview with a name.
+    ``category`` is the closest label the scoring on show heard the sample as, beside the
+    ``hand_label`` a person wrote. ``thumbnail`` is ``None`` for a sample the thumbnail pass has not
+    reached, since a preview with nothing to draw is still a preview with a name.
     """
 
     model_config = FROZEN
 
     display_name: str
-    category: SampleCategory
+    category: str | None
     hand_label: str | None
     thumbnail: tuple[WaveformPeak, ...] | None
 
@@ -113,8 +136,8 @@ class SimilarSample(SamplePreview):
     playback_rate_hz: Rate | None
 
 
-class SuggestedLabel(BaseModel):
-    """One tag a listening model suggests for a sample, in the hand-label grammar, and how sure it was."""
+class ScoredCategory(BaseModel):
+    """One tag a listening model gives a sample, in the hand-label grammar, and how sure it was."""
 
     model_config = FROZEN
 
@@ -123,19 +146,21 @@ class SuggestedLabel(BaseModel):
 
 
 class SampleDetail(DescribedSample):
-    """A sample together with every module occurrence that references it, and the rates it is heard at.
+    """A sample together with every module occurrence and sample file holding it, and the rates it is heard at.
 
     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
-    ``suggested_labels`` are what the newest scoring of the listening model hears the sample as,
-    closest first, for a person to accept into the hand label or pass over.
+    ``categories`` are what the scoring on show of the listening model hears the sample as, closest
+    first, for a person to accept into the hand label or pass over; ``category`` is the first
+    of them.
     """
 
     occurrences: tuple[SampleOccurrenceDetail, ...]
+    files: tuple[SampleFileDetail, ...]
     duration_seconds: float
     playback_rates: tuple[SamplePlaybackRate, ...]
     equivalence_member_count: Count
-    suggested_labels: tuple[SuggestedLabel, ...]
+    categories: tuple[ScoredCategory, ...]
 
 
 def get_selection(
@@ -153,12 +178,16 @@ def get_selection(
 
 
 @router.get("")
+# FastAPI reads a route's query parameters and dependencies off its signature, which is what makes
+# this one long; each entry is one of the two, with nothing to group them under.
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def list_samples(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)] = DEFAULT_PAGE_LIMIT,
     offset: Annotated[int, Query(ge=0, le=MAX_PAGE_OFFSET)] = 0,
     group_by_equivalence: bool = False,
     selection: SampleSelection = Depends(get_selection),
     connection: Connection = Depends(get_connection),
+    shown_experiment_id: int | None = Depends(get_shown_experiment_id),
 ) -> Page[SampleSummary]:
     """A page of the catalog's samples, narrowed and ordered by what a person has decided.
 
@@ -171,7 +200,13 @@ def list_samples(
     class_by_hash = classes_by_member_hash(compute_equivalence_classes(relations))
 
     repository = PostgresSampleRepository(connection)
-    items = repository.list_page(limit=limit, offset=offset, class_by_hash=class_by_hash, selection=selection)
+    items = repository.list_page(
+        limit=limit,
+        offset=offset,
+        class_by_hash=class_by_hash,
+        selection=selection,
+        shown_experiment_id=shown_experiment_id,
+    )
     total = repository.count(selection=selection)
     if group_by_equivalence:
         items = _collapse_by_equivalence(items)
@@ -212,8 +247,12 @@ def _collapse_by_equivalence(items: tuple[SampleSummary, ...]) -> tuple[SampleSu
 
 
 @router.get("/{sample_hash}", responses=NOT_FOUND_RESPONSE)
-def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get_connection)) -> SampleDetail:
-    """One sample's own fields plus every module occurrence that references it.
+def get_sample(
+    sample_hash: SampleHashPath,
+    connection: Connection = Depends(get_connection),
+    shown_experiment_id: int | None = Depends(get_shown_experiment_id),
+) -> SampleDetail:
+    """One sample's own fields plus every module occurrence and sample file holding it.
 
     ``equivalence_member_count`` travels with the sample so a caller labeling it knows how many
     near-duplicates the same choice would reach. ``playback_rate_hz`` is the rate every reader
@@ -235,18 +274,21 @@ def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get
         for item in properties
     )
     tally = tally_playback_rates(PostgresNoteEventRepository(connection).note_usage_for_sample(sample_hash))
+    display_names, _ = PostgresSampleRepository(connection).display_names_and_rates_by_hash([sample_hash])
+    categories = _categories(connection, sample_hash, shown_experiment_id=shown_experiment_id)
     return SampleDetail(
         hash=sample.hash,
         depth=sample.depth,
         channels=sample.channels,
         frames=sample.frames,
         occurrences=occurrences,
-        size_bytes=sample.stored_bytes,
-        display_name=choose_dominant_name(item.name for item in properties),
-        category=classify_sample_category(
-            tuple(item.name for item in properties)
-            + PostgresSampleRepository(connection).instrument_names_by_hash([sample.hash]).get(sample.hash, ())
+        files=tuple(
+            SampleFileDetail(location=found.location, rate=found.rate, available=is_unchanged(found))
+            for found in PostgresSampleFileRepository(connection).list_for_samples([sample_hash])
         ),
+        size_bytes=sample.stored_bytes,
+        display_name=display_names.get(sample_hash, NO_DISPLAY_NAME),
+        category=categories[0].label if categories else None,
         hand_label=annotation.label if annotation is not None else None,
         rating=annotation.rating if annotation is not None else None,
         favorite=annotation.favorite if annotation is not None else False,
@@ -254,19 +296,20 @@ def get_sample(sample_hash: SampleHashPath, connection: Connection = Depends(get
         duration_seconds=sample.frames / audio_store.NOMINAL_WAV_RATE,
         playback_rates=playback_rates_of(tally),
         equivalence_member_count=len(equivalence_class_members(connection, sample_hash)),
-        suggested_labels=_suggested_labels(connection, sample_hash),
+        categories=categories,
     )
 
 
-def _suggested_labels(connection: Connection, sample_hash: str) -> tuple[SuggestedLabel, ...]:
-    """The newest scoring's suggestions for one sample, closest first; none for a sample it did not reach."""
-    repository = PostgresSampleLabelSuggestionRepository(connection)
-    latest = repository.latest_experiment_id()
-    if latest is None:
+def _categories(
+    connection: Connection, sample_hash: str, *, shown_experiment_id: int | None
+) -> tuple[ScoredCategory, ...]:
+    """The shown scoring's categories for one sample, closest first; none for a sample it did not reach."""
+    if shown_experiment_id is None:
         return ()
+    repository = PostgresSampleCategoryRepository(connection)
     return tuple(
-        SuggestedLabel(label=suggestion.label, score=suggestion.score)
-        for suggestion in repository.get_many(latest, [sample_hash]).get(sample_hash, ())
+        ScoredCategory(label=category.label, score=category.score)
+        for category in repository.get_many(shown_experiment_id, [sample_hash]).get(sample_hash, ())
     )
 
 
@@ -278,28 +321,49 @@ def _suggested_labels(connection: Connection, sample_hash: str) -> tuple[Suggest
 def get_sample_audio(
     sample_hash: SampleHashPath,
     library_root: Path = Depends(get_library_root),
-) -> FileResponse:
-    """The sample's own canonical audio, as stored in the content-addressable store.
+    open_connection: ConnectionOpener = Depends(get_connection_opener),
+) -> Response:
+    """The sample's own canonical audio: its stored object, or the WAV the store would hold for it.
 
-    The object is content-addressed, so it is served with a cache lifetime of a year and read
-    straight off the store by its hash, with no catalog round trip on the way to a sound: the
-    hash's own shape is checked on the path, which is what keeps a request inside the store.
+    A stored object is read straight off the store by its hash, with no catalog round trip on the
+    way to a sound: the hash's own shape is checked on the path, which is what keeps a request inside
+    the store. A sample found in a sample file is read from the file the catalog names and encoded
+    the way the store encodes an object, so both kinds play at the same nominal header rate. Either
+    way the bytes are those of the hash, so they are served with a cache lifetime of a year.
 
     Raises:
-        HTTPException: 404 when the store holds no object under this hash.
+        HTTPException: 404 when the store holds no object under this hash and no cataloged file
+            holds the sample now.
     """
     path = audio_store.object_path(library_root, sample_hash)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail=f"no sample stored with hash {sample_hash!r}")
+    if path.is_file():
+        return FileResponse(path, media_type=WAV_MEDIA_TYPE, headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
 
-    return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
+    with open_connection() as connection:
+        sample_files = PostgresSampleFileRepository(connection).list_for_samples([sample_hash])
+    try:
+        sample_pcm = SampleAudio.of_files(library_root, sample_files).read_by_hash(sample_hash)
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=404, detail=f"no sample stored with hash {sample_hash!r}") from error
+    except SampleUnavailableError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+    return Response(
+        audio_store.encode_wav(sample_pcm),
+        media_type=WAV_MEDIA_TYPE,
+        headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL},
+    )
 
 
 @router.get("/{sample_hash}/preview", responses=NOT_FOUND_RESPONSE)
-def get_sample_preview(sample_hash: SampleHashPath, connection: Connection = Depends(get_connection)) -> SamplePreview:
+def get_sample_preview(
+    sample_hash: SampleHashPath,
+    connection: Connection = Depends(get_connection),
+    shown_experiment_id: int | None = Depends(get_shown_experiment_id),
+) -> SamplePreview:
     """A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
 
-    Four narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
+    Five narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
     point a cursor crosses, so it costs what a glance is worth.
 
     Raises:
@@ -308,23 +372,27 @@ def get_sample_preview(sample_hash: SampleHashPath, connection: Connection = Dep
     if PostgresSampleRepository(connection).get(sample_hash) is None:
         raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
-    return _previews_by_hash(connection, [sample_hash])[sample_hash]
+    return _previews_by_hash(connection, [sample_hash], shown_experiment_id=shown_experiment_id)[sample_hash]
 
 
-def _previews_by_hash(connection: Connection, sample_hashes: list[str]) -> dict[str, SamplePreview]:
-    """A glance at each given sample, from four lookups over the whole list at once."""
-    repository = PostgresSampleRepository(connection)
-    names_by_hash, _ = repository.names_and_rates_by_hash(sample_hashes)
-    instrument_names_by_hash = repository.instrument_names_by_hash(sample_hashes)
+def _previews_by_hash(
+    connection: Connection, sample_hashes: list[str], *, shown_experiment_id: int | None
+) -> dict[str, SamplePreview]:
+    """A glance at each given sample, from five lookups over the whole list at once."""
+    display_names, _ = PostgresSampleRepository(connection).display_names_and_rates_by_hash(sample_hashes)
     annotations_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(sample_hashes)
     thumbnails_by_hash = PostgresSampleThumbnailRepository(connection).get_many(sample_hashes)
+    top_category_by_hash = (
+        {}
+        if shown_experiment_id is None
+        else PostgresSampleCategoryRepository(connection).top_category_labels(shown_experiment_id, sample_hashes)
+    )
     previews: dict[str, SamplePreview] = {}
     for sample_hash in sample_hashes:
-        names = names_by_hash.get(sample_hash, ())
         annotation = annotations_by_hash.get(sample_hash)
         previews[sample_hash] = SamplePreview(
-            display_name=choose_dominant_name(names),
-            category=classify_sample_category(names + instrument_names_by_hash.get(sample_hash, ())),
+            display_name=display_names.get(sample_hash, NO_DISPLAY_NAME),
+            category=top_category_by_hash.get(sample_hash),
             hand_label=annotation.label if annotation is not None else None,
             thumbnail=peaks_from_thumbnail(thumbnails_by_hash.get(sample_hash)),
         )
@@ -375,6 +443,7 @@ def get_similar_samples(
     limit: Annotated[int, Query(ge=1, le=MAX_SIMILAR_SAMPLES_LIMIT)] = DEFAULT_SIMILAR_SAMPLES_LIMIT,
     connection: Connection = Depends(get_connection),
     vectors: SpectralVectors = Depends(get_spectral_vectors),
+    shown_experiment_id: int | None = Depends(get_shown_experiment_id),
 ) -> tuple[SimilarSample, ...]:
     """The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
 
@@ -391,7 +460,7 @@ def get_similar_samples(
 
     neighbors = nearest_neighbors(sample_hash, vectors, limit=limit)
     neighbor_hashes = [neighbor_hash for neighbor_hash, _ in neighbors]
-    previews_by_hash = _previews_by_hash(connection, neighbor_hashes)
+    previews_by_hash = _previews_by_hash(connection, neighbor_hashes, shown_experiment_id=shown_experiment_id)
     playback_rate_by_hash = resolved_playback_rates(connection, neighbor_hashes)
     return tuple(
         _similar_sample(

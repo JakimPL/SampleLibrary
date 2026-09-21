@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy.exc import OperationalError
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from sampleserver import cli
 from sampleserver.frontend import (
     FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE,
@@ -125,7 +126,7 @@ def test_a_missing_configuration_ends_the_start_before_uvicorn(tmp_path: Path, m
     with pytest.raises(SystemExit) as raised:
         cli.main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert not starts
 
 

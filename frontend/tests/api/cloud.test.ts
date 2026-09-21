@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getCloud, getCloudLabels, getCloudSuggestions, getModuleCloud, getSuggestionTags } from "../../src/api/cloud";
+import { getCategoryTags, getCloud, getCloudCategories, getCloudLabels, getModuleCloud } from "../../src/api/cloud";
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -39,24 +39,24 @@ describe("getCloudLabels", () => {
     });
 });
 
-describe("getCloudSuggestions", () => {
-    it("requests the cloud's suggestions endpoint", async () => {
+describe("getCloudCategories", () => {
+    it("requests the cloud's categories endpoint", async () => {
         const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
         vi.stubGlobal("fetch", fetchMock);
 
-        await getCloudSuggestions();
+        await getCloudCategories();
 
-        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/suggestions");
+        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/categories");
     });
 });
 
-describe("getSuggestionTags", () => {
-    it("requests the suggested tags endpoint", async () => {
+describe("getCategoryTags", () => {
+    it("requests the category tags endpoint", async () => {
         const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve([]) });
         vi.stubGlobal("fetch", fetchMock);
 
-        await getSuggestionTags();
+        await getCategoryTags();
 
-        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/suggestion-tags");
+        expect(fetchMock).toHaveBeenCalledWith("/api/cloud/category-tags");
     });
 });

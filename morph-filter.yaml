@@ -1,0 +1,16 @@
+# What `samplelibrary morph response --selection morph-filter.yaml` reads two samples under, to write
+# the morph filter a VST applies at any weight.
+#
+# A response is the envelope route held to one sound: its whole path is the cepstral coefficients of
+# the ratio between the two envelopes, so a caller reads a pair once and moves its own weight. That
+# identity holds while the harmonics stand where they stood, which is why this file leaves the glide
+# out, where `morph.yaml` beside it glides what the renderer plays.
+
+# A response carries each end in turn and takes that end's own excitation and course through time
+# from the end itself, so what it reads here is how the envelope is drawn: by its first
+# `coefficient_count` cosines, down to `floor_db` under the sample's loudest bin. These are the
+# numbers the filter's coefficients are counted in, so a reader of the bytes and the renderer that
+# wrote them agree only while they match.
+envelope:
+  coefficient_count: 40
+  floor_db: 80.0

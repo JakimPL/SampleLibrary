@@ -9,18 +9,26 @@ from sqlalchemy.dialects.postgresql import insert
 from trackmod.core.samples.depth import BitDepth
 from trackmod.schema.scalars import Rate
 
-from samplecore.categorization import classify_sample_category
+from samplecore.digests import digest_of_rows
 from samplecore.equivalence_classes import EquivalenceClass
 from samplecore.models.annotation import SampleAnnotation
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample, SampleSelection, SampleSort, SampleSummary
+from samplecore.models.sample_file import stem_of
 from samplecore.models.thumbnail import SampleThumbnail
-from samplecore.naming import choose_dominant_name
+from samplecore.naming import NO_DISPLAY_NAME, choose_dominant_name
 from samplecore.pitch import choose_playback_rate
 from samplecore.storage.curation import sample_annotation
-from samplecore.storage.database import HASH_CHUNK_SIZE, chunks, module_instrument, sample, sample_properties
+from samplecore.storage.database import (
+    HASH_CHUNK_SIZE,
+    chunks,
+    sample,
+    sample_file,
+    sample_properties,
+)
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
 
 _SelectT = TypeVar("_SelectT", bound=Select[Any])
@@ -42,20 +50,24 @@ class SampleRepository(Protocol):
     ) -> tuple[Sample, ...]: ...
 
     def list_page(
-        self, *, limit: int, offset: int, class_by_hash: dict[str, EquivalenceClass], selection: SampleSelection
+        self,
+        *,
+        limit: int,
+        offset: int,
+        class_by_hash: dict[str, EquivalenceClass],
+        selection: SampleSelection,
+        shown_experiment_id: int | None,
     ) -> tuple[SampleSummary, ...]: ...
 
     def count(self, *, selection: SampleSelection) -> int: ...
 
-    def names_and_rates_by_hash(
+    def display_names_and_rates_by_hash(
         self, hashes: list[str]
-    ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]: ...
+    ) -> tuple[dict[str, str], dict[str, tuple[Rate, ...]]]: ...
 
-    def names_and_rates_for_every_sample(self) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]: ...
+    def rates_by_hash(self, hashes: list[str]) -> dict[str, tuple[Rate, ...]]: ...
 
-    def instrument_names_by_hash(self, hashes: list[str]) -> dict[str, tuple[str, ...]]: ...
-
-    def instrument_names_for_every_sample(self) -> dict[str, tuple[str, ...]]: ...
+    def rates_for_every_sample(self) -> dict[str, tuple[Rate, ...]]: ...
 
 
 class PostgresSampleRepository:
@@ -111,8 +123,17 @@ class PostgresSampleRepository:
         rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_sample(row) for row in rows)
 
+    # The page is assembled from one row query and the by-hash lookups that fill it out, each an
+    # independent source with nothing to group them under.
+    # pylint: disable-next=too-many-locals
     def list_page(
-        self, *, limit: int, offset: int, class_by_hash: dict[str, EquivalenceClass], selection: SampleSelection
+        self,
+        *,
+        limit: int,
+        offset: int,
+        class_by_hash: dict[str, EquivalenceClass],
+        selection: SampleSelection,
+        shown_experiment_id: int | None,
     ) -> tuple[SampleSummary, ...]:
         """A page of samples, one row per exact content hash, in the order ``selection`` asks for.
 
@@ -124,6 +145,9 @@ class PostgresSampleRepository:
         ``selection`` narrows and orders the page through the annotation a person made, joined
         here rather than filtered afterwards: a favorite is rare and scattered, so a page walked
         over the whole catalog would hold almost none of them.
+
+        ``shown_experiment_id`` names the scoring whose top categories fill each row's category,
+        resolved once by the caller; with no scoring on show every row carries none.
         """
         # func.count()/func.coalesce() are SQLAlchemy's dynamically-generated SQL functions, invisible
         # to pylint's static analysis -- both false positives below are this same proxy limitation.
@@ -150,21 +174,25 @@ class PostgresSampleRepository:
         )
         rows = self._connection.execute(_with_selection(statement, selection)).fetchall()
         hashes = [row.hash for row in rows]
-        names_by_hash, rates_by_hash = self.names_and_rates_by_hash(hashes)
-        instrument_names_by_hash = self.instrument_names_by_hash(hashes)
+        display_names, rates_by_hash = self.display_names_and_rates_by_hash(hashes)
         playback_rate_by_hash = PostgresSamplePlaybackRateRepository(self._connection).get_many(hashes)
         thumbnails_by_hash = PostgresSampleThumbnailRepository(self._connection).get_many(hashes)
         annotation_by_hash = PostgresSampleAnnotationRepository(self._connection).annotations_by_hash(hashes)
+        top_category_by_hash = (
+            {}
+            if shown_experiment_id is None
+            else PostgresSampleCategoryRepository(self._connection).top_category_labels(shown_experiment_id, hashes)
+        )
         return tuple(
             _row_to_sample_summary(
                 row,
-                names=names_by_hash.get(row.hash, ()),
-                instrument_names=instrument_names_by_hash.get(row.hash, ()),
+                display_name=display_names.get(row.hash, NO_DISPLAY_NAME),
                 rates=rates_by_hash.get(row.hash, ()),
                 recorded_playback_rate=playback_rate_by_hash.get(row.hash),
                 thumbnail=thumbnails_by_hash.get(row.hash),
                 equivalence_class=class_by_hash.get(row.hash),
                 annotation=annotation_by_hash.get(row.hash),
+                category=top_category_by_hash.get(row.hash),
             )
             for row in rows
         )
@@ -179,89 +207,81 @@ class PostgresSampleRepository:
         statement = select(func.count()).select_from(sample)
         return self._connection.execute(_with_selection(statement, selection)).scalar_one()
 
-    def names_and_rates_by_hash(
-        self, hashes: list[str]
-    ) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]:
-        """Every occurrence's raw name and rate for each given sample hash, in chunked queries.
+    def display_names_and_rates_by_hash(self, hashes: list[str]) -> tuple[dict[str, str], dict[str, tuple[Rate, ...]]]:
+        """The name each given sample is shown by, and every rate it is declared at, in chunked queries.
 
-        Chunked by ``HASH_CHUNK_SIZE`` so the lookup stays within Postgres's own parameter ceiling,
-        which a page of any size stays comfortably inside.
+        Both come from each module occurrence and each sample file; a sample neither names is left
+        out of the names. Chunked by ``HASH_CHUNK_SIZE`` so each lookup stays within Postgres's own
+        parameter ceiling, which a page of any size stays comfortably inside.
         """
-        return _names_and_rates_of(self._chunked(_NAMES_AND_RATES, hashes))
+        return _display_names_and_rates_of(
+            occurrences=self._chunked(_OCCURRENCE_NAMES_AND_RATES, sample_properties.c.sample_hash, hashes),
+            files=self._chunked(_FILE_PATHS_AND_RATES, sample_file.c.sample_hash, hashes),
+        )
 
-    def names_and_rates_for_every_sample(self) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]:
-        """The same, for the whole catalog, in one scan of the occurrences.
+    def rates_by_hash(self, hashes: list[str]) -> dict[str, tuple[Rate, ...]]:
+        """Every rate each given sample is declared at, by its module occurrences and its sample files."""
+        return _rates_of(
+            self._chunked(_OCCURRENCE_NAMES_AND_RATES, sample_properties.c.sample_hash, hashes),
+            self._chunked(_FILE_PATHS_AND_RATES, sample_file.c.sample_hash, hashes),
+        )
 
-        A whole-catalog reader arrives here rather than at ``names_and_rates_by_hash``: naming a
-        hundred thousand hashes costs Postgres more in parameters alone than reading every
-        occurrence there is, and the answer covers the same rows either way.
-        """
-        return _names_and_rates_of(self._connection.execute(_NAMES_AND_RATES).fetchall())
+    def rates_for_every_sample(self) -> dict[str, tuple[Rate, ...]]:
+        """The same, for the whole catalog, in one scan of the occurrences and one of the sample files."""
+        return _rates_of(
+            self._connection.execute(_OCCURRENCE_NAMES_AND_RATES).fetchall(),
+            self._connection.execute(_FILE_PATHS_AND_RATES).fetchall(),
+        )
 
-    def instrument_names_by_hash(self, hashes: list[str]) -> dict[str, tuple[str, ...]]:
-        """The name of every instrument slot each given sample is reached through, in chunked queries.
-
-        A tracker names an instrument apart from the waveforms its keys reach, so these carry
-        description a sample's own name leaves out -- a waveform stored as "smp03" reached through an
-        instrument called "warm pad" says what it is only here. Chunked by ``HASH_CHUNK_SIZE``, the
-        same way occurrence names are.
-        """
-        return _names_of(self._chunked(_INSTRUMENT_NAMES, hashes))
-
-    def instrument_names_for_every_sample(self) -> dict[str, tuple[str, ...]]:
-        """The same, for the whole catalog, in one scan of the occurrences and their instruments."""
-        return _names_of(self._connection.execute(_INSTRUMENT_NAMES).fetchall())
-
-    def _chunked(self, statement: Select[Any], hashes: list[str]) -> list[Row[Any]]:
+    def _chunked(self, statement: Select[Any], hash_column: ColumnElement[str], hashes: list[str]) -> list[Row[Any]]:
         """Every row ``statement`` reaches for ``hashes``, asked for in parameter-sized chunks."""
         rows: list[Row[Any]] = []
         for chunk in chunks(hashes, HASH_CHUNK_SIZE):
-            narrowed = statement.where(sample_properties.c.sample_hash.in_(chunk))
-            rows.extend(self._connection.execute(narrowed).fetchall())
+            rows.extend(self._connection.execute(statement.where(hash_column.in_(chunk))).fetchall())
 
         return rows
 
+    def membership_digest(self) -> str:
+        """One digest over every cataloged sample's hash, so a pass reading the catalog can tell whether the set moved."""
+        rows = self._connection.execute(select(sample.c.hash).order_by(sample.c.hash)).scalars()
+        return digest_of_rows((str(sample_hash),) for sample_hash in rows)
 
-_NAMES_AND_RATES: Final[Select[Any]] = select(
+    def hashes_held_by_modules(self) -> frozenset[str]:
+        """Every sample a module occurrence holds, which is the part of the catalog the tracker modules supply."""
+        rows = self._connection.execute(select(sample_properties.c.sample_hash).distinct()).scalars()
+        return frozenset(str(sample_hash) for sample_hash in rows)
+
+
+_OCCURRENCE_NAMES_AND_RATES: Final[Select[Any]] = select(
     sample_properties.c.sample_hash, sample_properties.c.name, sample_properties.c.rate
 )
 
-_INSTRUMENT_NAMES: Final[Select[Any]] = (
-    select(sample_properties.c.sample_hash, module_instrument.c.name)
-    .select_from(
-        sample_properties.join(
-            module_instrument,
-            (module_instrument.c.module_id == sample_properties.c.module_id)
-            & (module_instrument.c.instrument_index == sample_properties.c.instrument_index),
-        )
-    )
-    .where(module_instrument.c.name != "")
-)
+_FILE_PATHS_AND_RATES: Final[Select[Any]] = select(
+    sample_file.c.sample_hash, sample_file.c.relative_path, sample_file.c.rate
+).order_by(sample_file.c.directory, sample_file.c.relative_path)
 
 
-def _names_and_rates_of(
-    rows: Sequence[Row[Any]],
-) -> tuple[dict[str, tuple[str, ...]], dict[str, tuple[Rate, ...]]]:
-    """Gather occurrence rows into the names and the rates each sample hash carries."""
-    names_by_hash: dict[str, list[str]] = defaultdict(list)
+def _display_names_and_rates_of(
+    *, occurrences: Sequence[Row[Any]], files: Sequence[Row[Any]]
+) -> tuple[dict[str, str], dict[str, tuple[Rate, ...]]]:
+    """Gather occurrence and file rows into the name each sample hash is shown by and the rates it is declared at."""
+    own_names: dict[str, list[str]] = defaultdict(list)
+    for row in occurrences:
+        own_names[row.sample_hash].append(row.name)
+    for row in files:
+        own_names[row.sample_hash].append(stem_of(row.relative_path))
+
+    display_names = {sample_hash: choose_dominant_name(names) for sample_hash, names in own_names.items()}
+    return display_names, _rates_of(occurrences, files)
+
+
+def _rates_of(occurrences: Sequence[Row[Any]], files: Sequence[Row[Any]]) -> dict[str, tuple[Rate, ...]]:
+    """Gather rate-carrying rows into the rates each sample hash is declared at."""
     rates_by_hash: dict[str, list[Rate]] = defaultdict(list)
-    for row in rows:
-        names_by_hash[row.sample_hash].append(row.name)
+    for row in (*occurrences, *files):
         rates_by_hash[row.sample_hash].append(row.rate)
 
-    return (
-        {hash_: tuple(names) for hash_, names in names_by_hash.items()},
-        {hash_: tuple(rates) for hash_, rates in rates_by_hash.items()},
-    )
-
-
-def _names_of(rows: Sequence[Row[Any]]) -> dict[str, tuple[str, ...]]:
-    """Gather name-carrying rows into the names each sample hash is reached through."""
-    names_by_hash: dict[str, list[str]] = defaultdict(list)
-    for row in rows:
-        names_by_hash[row.sample_hash].append(row.name)
-
-    return {hash_: tuple(names) for hash_, names in names_by_hash.items()}
+    return {hash_: tuple(rates) for hash_, rates in rates_by_hash.items()}
 
 
 def _row_to_sample(row: Row[Any]) -> Sample:
@@ -307,20 +327,19 @@ def _order_by(sort: SampleSort, occurrence_count: ColumnElement[int]) -> tuple[C
 def _row_to_sample_summary(
     row: Row[Any],
     *,
-    names: tuple[str, ...],
-    instrument_names: tuple[str, ...],
+    display_name: str,
     rates: tuple[Rate, ...],
     recorded_playback_rate: Rate | None,
     thumbnail: SampleThumbnail | None,
     equivalence_class: EquivalenceClass | None,
     annotation: SampleAnnotation | None,
+    category: str | None,
 ) -> SampleSummary:
-    """Reconstruct a SampleSummary from a Core row plus its occurrences' names/rates, thumbnail, and class.
+    """Reconstruct a SampleSummary from a Core row plus its display name and rates, thumbnail, and class.
 
-    The display name is drawn from the sample's own occurrence names, keeping it the label a tracker
-    shows, while the category reads the instrument names too, since a voice is often described where
-    the waveform it reaches is only numbered. Both stay filled in beside what a person decided, so a
-    reader sees their own wording next to what the keyword table guessed.
+    The display name is drawn from the names the waveform itself is stored under, keeping it the
+    label a tracker or a file shows. It stays filled in beside what a person decided and what a
+    listening model heard, so a reader meets every reading of the sample at once.
     """
     sample_ = _row_to_sample(row)
     return SampleSummary(
@@ -329,8 +348,8 @@ def _row_to_sample_summary(
         channels=sample_.channels,
         frames=sample_.frames,
         occurrence_count=row.occurrence_count,
-        display_name=choose_dominant_name(names),
-        category=classify_sample_category(names + instrument_names),
+        display_name=display_name,
+        category=category,
         size_bytes=sample_.stored_bytes,
         thumbnail=peaks_from_thumbnail(thumbnail),
         playback_rate_hz=choose_playback_rate(note_event_rate=recorded_playback_rate, occurrence_rates=rates),

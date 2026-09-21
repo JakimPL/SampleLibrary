@@ -11,7 +11,7 @@ from sqlalchemy import Connection, create_engine, inspect, text
 from sqlalchemy.engine import URL, make_url
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.cluster.provisioning import (
     ADMIN_URL_ENVIRONMENT_VARIABLE,
@@ -197,9 +197,11 @@ def test_preparing_a_database_twice_keeps_the_annotations_it_holds(prepared_data
         label="kick drum",
         rating=5,
         favorite=True,
-        module_filename="song.xm",
-        occurrence=SampleOccurrence(module_hash="b" * 64, instrument_index=1, sample_slot=0),
-        sample_name="kick",
+        anchor=ModuleSlotAnchor(
+            occurrence=SampleOccurrence(module_hash="b" * 64, instrument_index=1, sample_slot=0),
+            module_filename="song.xm",
+            sample_name="kick",
+        ),
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC),
     )

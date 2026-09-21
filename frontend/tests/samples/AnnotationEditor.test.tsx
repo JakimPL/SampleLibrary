@@ -29,9 +29,10 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         channels: 1,
         frames: 4096,
         occurrences: [],
+        files: [],
         size_bytes: 8192,
         display_name: "smp01",
-        category: "uncategorized",
+        category: null,
         hand_label: null,
         rating: null,
         favorite: false,
@@ -39,7 +40,7 @@ function buildSample(overrides: Partial<SampleDetail> = {}): SampleDetail {
         duration_seconds: 0.1,
         playback_rates: [],
         equivalence_member_count: 1,
-        suggested_labels: [],
+        categories: [],
         ...overrides,
     };
 }
@@ -237,10 +238,10 @@ describe("AnnotationRows", () => {
         });
     });
 
-    it("sends a clicked suggestion to this sample alone once the group box is unticked", async () => {
+    it("sends a clicked category to this sample alone once the group box is unticked", async () => {
         getLabelVocabulary.mockResolvedValue([]);
         resolvesTo({ ...NOTHING, label: "SNARE" }, [SAMPLE_HASH]);
-        renderRows(buildSample({ equivalence_member_count: 3, suggested_labels: [{ label: "SNARE", score: 0.5 }] }));
+        renderRows(buildSample({ equivalence_member_count: 3, categories: [{ label: "SNARE", score: 0.5 }] }));
 
         await userEvent.click(screen.getByRole("checkbox"));
         await userEvent.click(screen.getByRole("button", { name: /SNARE/ }));

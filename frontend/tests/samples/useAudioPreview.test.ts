@@ -2,21 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
-import { previewPlaybackRate, samplePreview, useAudioPreview } from "../../src/samples/useAudioPreview";
-
-describe("previewPlaybackRate", () => {
-    it("plays the stored file as it stands when no rate is known", () => {
-        expect(previewPlaybackRate(null)).toBe(1);
-    });
-
-    it("runs the stored file at the ratio between the library's rate and the file's own", () => {
-        expect(previewPlaybackRate(8363)).toBeCloseTo(8363 / NOMINAL_WAV_RATE_HZ);
-    });
-
-    it("sounds a sample the library reads twice as fast at twice the speed", () => {
-        expect(previewPlaybackRate(16726)).toBeCloseTo((8363 * 2) / NOMINAL_WAV_RATE_HZ);
-    });
-});
+import { samplePreview, useAudioPreview, usePreviewProgress } from "../../src/samples/useAudioPreview";
 
 describe("samplePreview", () => {
     it("keys a sample's preview by its hash and points it at the sample's audio route", () => {
@@ -54,6 +40,21 @@ describe("useAudioPreview", () => {
         });
 
         expect(result.current.playingKey).toBe("/api/morph/audio?first=b&second=c&weight=0.5");
+    });
+
+    it("stands a preview that has just started at its own beginning", () => {
+        const preview = renderHook(() => useAudioPreview());
+        const { result } = renderHook(() => usePreviewProgress());
+
+        act(() => {
+            preview.result.current.play(samplePreview("sample-preview-c", null));
+        });
+
+        expect(result.current).toEqual({
+            key: "sample-preview-c",
+            currentTimeSeconds: 0,
+            durationSeconds: 0,
+        });
     });
 
     it("two hook instances observe the same playing source", () => {
@@ -195,7 +196,7 @@ describe("a preview the browser cannot play", () => {
         expect(result.current.playingKey).toBe("second");
         expect(result.current.failure).toBeNull();
         expect(pauses.count).toBe(0);
-        expect(element.listeners).toEqual(["ended"]);
+        expect(element.listeners).toEqual(["ended", "timeupdate"]);
         vi.unstubAllGlobals();
     });
 

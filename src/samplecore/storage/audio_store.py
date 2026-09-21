@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,6 +62,13 @@ def write(library_root: Path, sample_pcm: SamplePCM) -> Path:
 
     write_atomically(path, lambda stream: _write_wav(stream, sample_pcm))
     return path
+
+
+def encode_wav(sample_pcm: SamplePCM) -> bytes:
+    """The WAV file the store would hold for a sample, as bytes, for a sample whose audio lives elsewhere."""
+    buffer = io.BytesIO()
+    _write_wav(buffer, sample_pcm)
+    return buffer.getvalue()
 
 
 def _write_wav(stream: IO[bytes], sample_pcm: SamplePCM) -> None:

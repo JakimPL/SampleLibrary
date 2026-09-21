@@ -7,7 +7,7 @@ set shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "By
 MEMORY_CAP := "16G"
 DEV_CONFIG := "dev-library/config.toml"
 DEV_PORT := "8001"
-CAPPED_SAMPLELIBRARY := if os() == "linux" { "systemd-run --user --scope -p MemoryMax=" + MEMORY_CAP + " -p MemorySwapMax=0 -q -- uv run samplelibrary" } else { "uv run samplelibrary" }
+CAPPED_SAMPLELIBRARY := "uv run samplelibrary --memory-cap " + MEMORY_CAP
 
 [group("setup")]
 install: && frontend-install
@@ -36,6 +36,14 @@ test:
     uv run pytest -n auto
 
 [group("quality")]
+test-pipeline:
+    uv run pytest -m pipeline_real tests/samplelibrary/pipeline/scenarios/real
+
+[group("quality")]
+explore-pipeline:
+    uv run pytest -m pipeline_explore tests/samplelibrary/pipeline/scenarios/test_exploration.py
+
+[group("quality")]
 coverage:
     uv run pytest --cov --cov-report=term-missing
 
@@ -55,18 +63,26 @@ tracking-ui:
     uv run samplelibrary tracking ui
 
 [group("library")]
-rebuild:
-    {{ CAPPED_SAMPLELIBRARY }} extract
-    {{ CAPPED_SAMPLELIBRARY }} notes
-    {{ CAPPED_SAMPLELIBRARY }} thumbnails
-    {{ CAPPED_SAMPLELIBRARY }} cloud embed --resume-promoted
-    {{ CAPPED_SAMPLELIBRARY }} cloud placeholders
+rebuild *targets:
+    uv run samplelibrary pipeline run {{ targets }}
 
 [group("library")]
-[linux]
+status *targets:
+    uv run samplelibrary pipeline status {{ targets }}
+
+[group("library")]
+[unix]
 [positional-arguments]
 capped *arguments:
     {{ CAPPED_SAMPLELIBRARY }} "$@"
+
+[group("library")]
+[windows]
+[positional-arguments]
+[script("powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File")]
+capped *arguments:
+    {{ CAPPED_SAMPLELIBRARY }} @args
+    exit $LASTEXITCODE
 
 [group("library")]
 reset: && _reset-confirmed
@@ -77,13 +93,9 @@ _reset-confirmed:
     uv run samplelibrary reset --confirm
 
 [group("dev")]
-dev-build:
+dev-build *targets:
     uv run python scripts/build_dev_library.py
-    uv run samplelibrary --config {{ DEV_CONFIG }} extract
-    uv run samplelibrary --config {{ DEV_CONFIG }} notes
-    uv run samplelibrary --config {{ DEV_CONFIG }} thumbnails
-    uv run samplelibrary --config {{ DEV_CONFIG }} cloud embed --resume-promoted
-    uv run samplelibrary --config {{ DEV_CONFIG }} cloud placeholders
+    uv run samplelibrary --config {{ DEV_CONFIG }} pipeline run {{ targets }}
 
 [group("dev")]
 [unix]

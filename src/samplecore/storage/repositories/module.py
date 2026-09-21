@@ -4,6 +4,7 @@ from typing import Any, Protocol, TypeVar
 
 from sqlalchemy import Connection, Row, Select, func, select
 
+from samplecore.digests import digest_of_rows
 from samplecore.models.module import Module
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.database import module, module_id_sequence, sample_properties
@@ -54,6 +55,11 @@ class PostgresModuleRepository:
 
     def next_id(self) -> int:
         return self._connection.execute(select(module_id_sequence.next_value())).scalar_one()
+
+    def membership_digest(self) -> str:
+        """One digest over every cataloged module's hash, so a pass can tell whether the set of modules moved."""
+        rows = self._connection.execute(select(module.c.hash).order_by(module.c.hash)).fetchall()
+        return digest_of_rows((str(row.hash),) for row in rows)
 
     def insert(self, module_: Module) -> None:
         self._connection.execute(

@@ -23,7 +23,7 @@ interface SampleRowProps {
 /**
  * One sample as the listing shows it, and as a person decides about it.
  *
- * The category, the rating and the favorite mark are all editable here, so working through a
+ * The label behind the category, the rating and the favorite mark are all editable here, so working through a
  * library is one pass down the list rather than a detour into each sample in turn. An edit reaches
  * exactly what the row stands for: the whole equivalence class while the listing groups them, and
  * this one sample otherwise. An edit that fails to save says so in the row, the reason in its tooltip.

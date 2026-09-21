@@ -10,8 +10,9 @@ from sqlalchemy import Connection
 
 from samplecore.cli_parsing import add_subcommand, command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection, open_catalog_reader
+from samplecore.exit_status import ExitStatus
 from samplecore.labeling.vocabulary import read_vocabulary
-from samplecore.models.annotation import SampleAnnotation
+from samplecore.models.annotation import AnnotationAnchor, ModuleSlotAnchor, SampleAnnotation, SampleFileAnchor
 from sampleextract.annotations.relink import RelinkSummary, relink_annotations
 from sampleextract.annotations.transfer import (
     DEFAULT_ANNOTATION_FILE,
@@ -54,7 +55,7 @@ def main(argv: list[str], *, prog: str) -> None:
             _run(command, arguments, connection)
         except AnnotationFileRefused as error:
             _logger.error("Moved nothing: %s.", error)
-            sys.exit(1)
+            sys.exit(ExitStatus.REFUSED)
 
 
 def _run(command: AnnotationCommand, arguments: argparse.Namespace, connection: Connection) -> None:
@@ -81,25 +82,29 @@ def _report_relink(summary: RelinkSummary) -> None:
     )
     for annotation in summary.unresolved:
         _logger.warning(
-            "Left alone: %s on %s, whose slot %d/%d in %s is no longer cataloged.",
+            "Left alone: %s on %s, whose %s is no longer cataloged.",
             _describe(annotation),
             annotation.sample_hash,
-            annotation.occurrence.instrument_index,
-            annotation.occurrence.sample_slot,
-            annotation.module_filename,
+            _describe_anchor(annotation.anchor),
         )
     for annotation in summary.conflicting:
         _logger.warning(
-            "Left alone: %s on %s, whose slot %d/%d in %s now holds a sample with a decision of its own.",
+            "Left alone: %s on %s, whose %s now holds a sample with a decision of its own.",
             _describe(annotation),
             annotation.sample_hash,
-            annotation.occurrence.instrument_index,
-            annotation.occurrence.sample_slot,
-            annotation.module_filename,
+            _describe_anchor(annotation.anchor),
         )
 
-    if summary.needs_a_person:
-        sys.exit(1)
+
+def _describe_anchor(anchor: AnnotationAnchor) -> str:
+    """Where an annotation was anchored, in the words a person would find the place by."""
+    match anchor:
+        case ModuleSlotAnchor():
+            return (
+                f"slot {anchor.occurrence.instrument_index}/{anchor.occurrence.sample_slot} in {anchor.module_filename}"
+            )
+        case SampleFileAnchor():
+            return f"file {anchor.location.path}"
 
 
 def _describe(annotation: SampleAnnotation) -> str:

@@ -3,19 +3,26 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import type * as CloudApi from "../../src/api/cloud";
 import type * as CurationApi from "../../src/api/curation";
 import type { SampleSummary } from "../../src/api/samples";
 import { SampleRow } from "../../src/samples/SampleRow";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 
-const { changeSampleAnnotation, getLabelVocabulary } = vi.hoisted(() => ({
+const { changeSampleAnnotation, getLabelVocabulary, getCategoryTags } = vi.hoisted(() => ({
     changeSampleAnnotation: vi.fn(),
     getLabelVocabulary: vi.fn(),
+    getCategoryTags: vi.fn(),
 }));
 
 vi.mock("../../src/api/curation", async () => {
     const actual = await vi.importActual<typeof CurationApi>("../../src/api/curation");
     return { ...actual, changeSampleAnnotation, getLabelVocabulary };
+});
+
+vi.mock("../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../src/api/cloud");
+    return { ...actual, getCategoryTags };
 });
 
 const NOTHING = { label: null, rating: null, favorite: false };
@@ -28,7 +35,7 @@ function buildSample(overrides: Partial<SampleSummary> = {}): SampleSummary {
     return {
         hash: "abc123",
         display_name: "kick",
-        category: "kick",
+        category: null,
         hand_label: null,
         rating: null,
         favorite: false,
@@ -52,6 +59,7 @@ interface RowOverrides {
 
 function renderRow(overrides: RowOverrides = {}): ReturnType<typeof render> {
     getLabelVocabulary.mockResolvedValue([]);
+    getCategoryTags.mockResolvedValue([]);
     return render(
         <MemoryRouter initialEntries={["/"]}>
             <Routes>
@@ -104,9 +112,9 @@ describe("SampleRow", () => {
         });
     });
 
-    it("takes a hand label back when the field is emptied, leaving the guess showing", async () => {
+    it("takes a hand label back when the field is emptied, leaving what the model heard showing", async () => {
         resolvesTo(null);
-        renderRow({ sample: buildSample({ hand_label: "warm pad" }) });
+        renderRow({ sample: buildSample({ category: "SYNTH: PAD", hand_label: "warm pad" }) });
 
         await userEvent.click(screen.getByRole("button", { name: "Edit category" }));
         await userEvent.clear(screen.getByLabelText("Hand label"));
@@ -115,7 +123,7 @@ describe("SampleRow", () => {
         await waitFor(() => {
             expect(changeSampleAnnotation).toHaveBeenCalledWith("abc123", "sample", { label: null });
         });
-        expect(await screen.findByText("Kick")).toBeInTheDocument();
+        expect(await screen.findByText("SYNTH: PAD")).toBeInTheDocument();
     });
 
     it("rates a sample from the listing by sending the rating alone", async () => {

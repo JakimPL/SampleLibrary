@@ -14,11 +14,17 @@ EXAMPLE_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
 DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_DATABASE_URL"
 DEFAULT_MINIMUM_SAMPLE_FRAMES: Final[int] = 512
+DEFAULT_SAMPLE_DIRECTORIES: Final[tuple[Path, ...]] = ()
+DEFAULT_SAMPLE_EXCLUSIONS: Final[tuple[str, ...]] = ()
 DEFAULT_INFERENCE_URL: Final[str] = "http://127.0.0.1:8010"
 LIBRARY_TABLE: Final[str] = "library"
 INFERENCE_TABLE: Final[str] = "inference"
+# The pipeline reads its own table, since what it holds is named by the steps rather than by the
+# settings every command shares.
+PIPELINE_TABLE: Final[str] = "pipeline"
 INFERENCE_SCHEME: Final[str] = "http"
 CONFIG_RELATIVE_PATH_SETTINGS: Final[tuple[str, ...]] = ("module_source_directory", "library_root")
+CONFIG_RELATIVE_PATH_LIST_SETTINGS: Final[tuple[str, ...]] = ("sample_directories",)
 
 # The example file's own stand-in paths. A config still carrying one has been copied but not yet
 # filled in, and saying so is far more use than whatever the first pipeline to walk that path would
@@ -72,6 +78,12 @@ class LibraryConfig(BaseModel):
     point the library at the wrong place, or the wrong database, silently rather than failing loudly
     when configuration is missing. The inference address has a default, since one machine running
     both processes is the common case and the port is free to choose.
+
+    ``sample_directories`` names folders of plain audio files the library reads in place, beside the
+    samples it extracts from modules, and ``sample_exclusions`` holds the patterns naming what inside
+    them stays out of the library. The catalog records each file by its directory and its path within
+    it, so every directory is absolute and stands apart from the others, which gives one file exactly
+    one place in the catalog.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -80,7 +92,28 @@ class LibraryConfig(BaseModel):
     library_root: Path
     database_url: str
     minimum_sample_frames: int = DEFAULT_MINIMUM_SAMPLE_FRAMES
+    sample_directories: tuple[Path, ...] = DEFAULT_SAMPLE_DIRECTORIES
+    sample_exclusions: tuple[str, ...] = DEFAULT_SAMPLE_EXCLUSIONS
     inference: InferenceConfig = InferenceConfig()
+
+    @field_validator("sample_directories")
+    @classmethod
+    def _names_separate_absolute_directories(cls, directories: tuple[Path, ...]) -> tuple[Path, ...]:
+        for directory in directories:
+            if not directory.is_absolute():
+                raise ValueError(f"{directory} must be an absolute path")
+        for index, directory in enumerate(directories):
+            for other in directories[index + 1 :]:
+                if directory.is_relative_to(other) or other.is_relative_to(directory):
+                    raise ValueError(f"{directory} and {other} overlap; name each folder of samples once")
+        return directories
+
+    @field_validator("sample_exclusions")
+    @classmethod
+    def _holds_patterns(cls, exclusions: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not pattern.strip() for pattern in exclusions):
+            raise ValueError("an exclusion must be a pattern such as *loop*")
+        return exclusions
 
     @field_validator("database_url")
     @classmethod
@@ -169,6 +202,9 @@ def create_config_file(path: Path) -> bool:
 def _read_tables(config_path: Path) -> dict[str, object]:
     """The file's top-level tables, each of them one this project reads.
 
+    The pipeline's own table is read by the pipeline rather than here, since the steps it names
+    settle what belongs in it.
+
     Raises:
         ConfigurationError: the file is not valid TOML, or it holds a table this project does not read.
     """
@@ -178,11 +214,11 @@ def _read_tables(config_path: Path) -> dict[str, object]:
     except tomllib.TOMLDecodeError as error:
         raise ConfigurationError(f"{config_path} is not valid TOML: {error}") from error
 
-    unknown_tables = sorted(set(data) - {LIBRARY_TABLE, INFERENCE_TABLE})
+    unknown_tables = sorted(set(data) - {LIBRARY_TABLE, INFERENCE_TABLE, PIPELINE_TABLE})
     if unknown_tables:
         raise ConfigurationError(
             f"{config_path} holds settings this project does not read: {', '.join(unknown_tables)}. "
-            f"Settings belong under [{LIBRARY_TABLE}] and [{INFERENCE_TABLE}]."
+            f"Settings belong under [{LIBRARY_TABLE}], [{INFERENCE_TABLE}] and [{PIPELINE_TABLE}]."
         )
     return data
 
@@ -205,11 +241,24 @@ def _anchored_paths(library_data: dict[str, object], config_directory: Path) -> 
     anchored = dict(library_data)
     for name in CONFIG_RELATIVE_PATH_SETTINGS:
         match anchored.get(name):
-            case str() as raw_path if not Path(raw_path).is_absolute():
-                anchored[name] = str(config_directory / raw_path)
+            case str() as raw_path:
+                anchored[name] = _anchored_path(raw_path, config_directory)
+            case _:
+                pass
+    for name in CONFIG_RELATIVE_PATH_LIST_SETTINGS:
+        match anchored.get(name):
+            case list() as raw_paths:
+                anchored[name] = [
+                    _anchored_path(raw_path, config_directory) if isinstance(raw_path, str) else raw_path
+                    for raw_path in raw_paths
+                ]
             case _:
                 pass
     return anchored
+
+
+def _anchored_path(raw_path: str, config_directory: Path) -> str:
+    return raw_path if Path(raw_path).is_absolute() else str(config_directory / raw_path)
 
 
 def _required_host(parts: SplitResult) -> str:
@@ -240,11 +289,12 @@ def _reject_placeholder_paths(config: LibraryConfig, resolved_path: Path) -> Non
     Raises:
         ConfigurationError: a path still holds the example's stand-in.
     """
-    placeholders = tuple(
+    placeholders = dict.fromkeys(
         name
         for name, value in (
             ("module_source_directory", config.module_source_directory),
             ("library_root", config.library_root),
+            *(("sample_directories", directory) for directory in config.sample_directories),
         )
         if value.as_posix().startswith(PLACEHOLDER_PATH_PREFIX)
     )

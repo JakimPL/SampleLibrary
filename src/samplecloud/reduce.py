@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Final
 
 import numpy as np
-import umap
+from numpy.typing import NDArray
 from sqlalchemy import Connection
 
 from samplecloud.standardization import standardize
@@ -38,6 +38,18 @@ class CloudSummary:
     """What one coordinate-reduction pass did, across one experiment's feature vectors."""
 
     samples_reduced: int
+
+
+def fit_plane(standardized: NDArray[np.float64], *, n_neighbors: int) -> NDArray[np.float64]:
+    """Lay standardized feature vectors out on a plane with UMAP: two coordinates per vector, in the order given."""
+    # UMAP compiles its kernels as it is imported, which a pass extracting features and laying out
+    # nothing spares itself by importing it here.
+    import umap  # pylint: disable=import-outside-toplevel
+
+    coordinates: NDArray[np.float64] = umap.UMAP(
+        n_neighbors=n_neighbors, metric=DISTANCE_METRIC, random_state=RANDOM_SEED, verbose=True
+    ).fit_transform(standardized)
+    return coordinates
 
 
 def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -> CloudSummary:
@@ -72,9 +84,7 @@ def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -
     standardized = standardize(feature_matrix)
     n_neighbors = max(MINIMUM_N_NEIGHBORS, min(DEFAULT_N_NEIGHBORS, len(sample_hashes) - 1))
     _logger.info("Fitting UMAP over %d feature vectors...", len(sample_hashes))
-    coordinates = umap.UMAP(
-        n_neighbors=n_neighbors, metric=DISTANCE_METRIC, random_state=RANDOM_SEED, verbose=True
-    ).fit_transform(standardized)
+    coordinates = fit_plane(standardized, n_neighbors=n_neighbors)
     _logger.info("UMAP fit complete.")
 
     coordinate_repository: CloudCoordinateRepository = PostgresCloudCoordinateRepository(connection)

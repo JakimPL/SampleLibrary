@@ -7,16 +7,17 @@ from pathlib import Path
 from sqlalchemy import Connection
 
 from samplecloud.backends.learned_backend import DEFAULT_LEARNED_DEVICE
-from samplecloud.evaluation.categories import CategoryAgreement
 from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.harness import evaluate_experiment
 from samplecloud.evaluation.notes import NoteAgreement
 from samplecloud.evaluation.recording import EVALUATION_EXPERIMENT_NAME, record_report, run_name_for
 from samplecloud.evaluation.report import EvaluationReport, report_json
 from samplecloud.evaluation.settings import (
+    DEFAULT_EVALUATION_SCOPE,
     DEFAULT_LABEL_DEPTH,
     DEFAULT_PROBE_COUNT,
     DEFAULT_RANDOM_SEED,
+    EvaluationScope,
     EvaluationSettings,
 )
 from samplecloud.evaluation.transposition import ProbeDescriber, TranspositionRetrieval
@@ -26,6 +27,8 @@ from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, ending_in_one_line, open_catalog_connection, positive_integer
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import Experiment
+from samplecore.storage.atomic import write_bytes_atomically
+from samplecore.storage.sample_audio import SampleAudio
 from samplecore.tracking.session import open_run
 
 _logger = logging.getLogger(__name__)
@@ -33,7 +36,7 @@ _logger = logging.getLogger(__name__)
 
 def main(argv: list[str], *, prog: str) -> None:
     """Score one experiment's descriptor, record the pass, and report what it measured."""
-    arguments = _parse_arguments(argv, prog=prog)
+    arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with open_catalog_connection(config.database_url) as connection:
         with ending_in_one_line("Scored nothing", (ExperimentRefused,)):
@@ -44,23 +47,26 @@ def main(argv: list[str], *, prog: str) -> None:
             config.library_root,
             recorded=not arguments.no_tracking,
             experiment_name=EVALUATION_EXPERIMENT_NAME,
-            run_name=run_name_for(backend_name=experiment.backend_name, experiment_id=experiment.id),
+            run_name=run_name_for(
+                backend_name=experiment.backend_name, experiment_id=experiment.id, scope=arguments.scope
+            ),
         ) as tracker:
             report = evaluate_experiment(
                 connection,
                 experiment_id=experiment.id,
-                library_root=config.library_root,
                 describer=describer,
                 settings=EvaluationSettings(
-                    random_seed=arguments.seed, probe_count=arguments.probes, label_depth=arguments.label_depth
+                    random_seed=arguments.seed,
+                    probe_count=arguments.probes,
+                    label_depth=arguments.label_depth,
+                    scope=arguments.scope,
                 ),
             )
             record_report(report, tracker)
 
     if arguments.output is not None:
         output = Path(arguments.output)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(report_json(report), encoding="utf-8")
+        write_bytes_atomically(output, report_json(report).encode("utf-8"))
         _logger.info("Wrote the report to %s.", output)
 
     _report(report)
@@ -81,22 +87,22 @@ def _describer(
     return ProbeDescriber(
         feature_extractor=extractor_for(recipe, library_root=config.library_root, device=arguments.device),
         hearing=hearing_for(connection, recipe.reading),
+        audio=SampleAudio.from_catalog(connection, config.library_root),
     )
 
 
 def _report(report: EvaluationReport) -> None:
     """Log what the pass measured, in the order the metrics answer their questions."""
     _logger.info(
-        "Experiment %d (%s), %d samples, seed %d.",
+        "Experiment %d (%s), %d samples in the %s scope, seed %d.",
         report.experiment_id,
         report.backend_name,
         report.sample_count,
+        report.scope.value,
         report.random_seed,
     )
     if report.transposition is not None:
         _report_transposition(report.transposition)
-    if report.categories is not None:
-        _report_categories(report.categories)
     if report.notes is not None:
         _report_notes(report.notes)
     if report.hand_labels is not None:
@@ -105,8 +111,10 @@ def _report(report: EvaluationReport) -> None:
 
 def _report_transposition(retrieval: TranspositionRetrieval) -> None:
     _logger.info(
-        "Transposition retrieval over %d probes against %d samples: rank-1 %.1f%%, median rank %.0f.",
+        "Transposition retrieval over %d probes (%d with no file to read now) against %d samples: "
+        "rank-1 %.1f%%, median rank %.0f.",
         retrieval.probe_sample_count,
+        retrieval.unavailable_probe_count,
         retrieval.catalog_sample_count,
         100.0 * retrieval.rank_one_share,
         retrieval.median_rank,
@@ -120,18 +128,6 @@ def _report_transposition(retrieval: TranspositionRetrieval) -> None:
             offset.median_rank,
             offset.trial_count,
         )
-
-
-def _report_categories(agreement: CategoryAgreement) -> None:
-    _logger.info(
-        "Category agreement over %d keyword-labeled samples (%.1f%% of the catalog): accuracy %.3f, macro-F1 %.3f.",
-        agreement.scored_sample_count,
-        100.0 * agreement.coverage,
-        agreement.accuracy,
-        agreement.macro_f1,
-    )
-    for score in sorted(agreement.per_category, key=lambda entry: entry.support, reverse=True):
-        _logger.info("  %-14s F1 %.3f over %5d samples.", score.category, score.f1, score.support)
 
 
 def _report_notes(agreement: NoteAgreement) -> None:
@@ -168,7 +164,7 @@ def _report_hand_labels(agreement: HandLabelAgreement) -> None:
         _logger.info("  %-28s AP %.3f over %4d samples.", score.path, score.average_precision, score.support)
 
 
-def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = command_parser(
         prog=prog, description="Score an experiment's descriptor against the catalog's own targets."
     )
@@ -182,6 +178,13 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         help="How many samples to retune for transposition retrieval.",
     )
     parser.add_argument("--seed", type=int, default=DEFAULT_RANDOM_SEED, help="The seed every split and draw uses.")
+    parser.add_argument(
+        "--scope",
+        type=EvaluationScope,
+        choices=tuple(EvaluationScope),
+        default=DEFAULT_EVALUATION_SCOPE,
+        help="Which samples to score: every one the experiment describes, or the ones tracker modules hold.",
+    )
     parser.add_argument("--output", type=str, default=None, help="Where to write the report as JSON, if anywhere.")
     parser.add_argument(
         "--skip-transposition",

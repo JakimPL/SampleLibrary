@@ -53,10 +53,11 @@ const MODULE_DETAIL = {
 };
 
 describe("ModuleDetailPanel", () => {
-    it("shows a placeholder when no module is focused", () => {
-        renderPanel();
+    it("asks the catalog for nothing and stands in its empty state while no module is focused", () => {
+        const { container } = renderPanel();
 
-        expect(screen.getByText(/No module selected yet/)).toBeInTheDocument();
+        expect(getModule).not.toHaveBeenCalled();
+        expect(container.querySelector(".no-selection")).toBeInTheDocument();
     });
 
     it("shows the focused module's detail once loaded", async () => {
@@ -68,6 +69,7 @@ describe("ModuleDetailPanel", () => {
         await waitFor(() => {
             expect(screen.getByRole("heading", { name: "A Song" })).toBeInTheDocument();
         });
+        expect(screen.getByText("abc")).toBeInTheDocument();
         expect(screen.getByRole("link", { name: "lead" })).toHaveAttribute("href", "/samples/sample-1");
     });
 

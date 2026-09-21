@@ -15,8 +15,8 @@ interface CategoryCellProps {
  * What a sample is, as a listing shows it and as a person changes it.
  *
  * The badge turns into a field on a click, so naming a sample takes a click and a word from
- * wherever it is listed. Emptying the field takes the hand label back and leaves the guessed
- * category showing, which is what makes a wrong guess one gesture to correct and one to undo.
+ * wherever it is listed. Emptying the field takes the hand label back and leaves what the listening
+ * model heard showing, which is what makes a wrong category one gesture to correct and one to undo.
  */
 export function CategoryCell({ sample, label, onCommit }: CategoryCellProps): ReactElement {
     const [isEditing, setIsEditing] = useState(false);

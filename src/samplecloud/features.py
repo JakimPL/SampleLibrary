@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Final
 
 from sqlalchemy import Connection
@@ -13,9 +12,9 @@ from samplecloud.backends import FeatureExtractor
 from samplecloud.hearing import Hearing
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.models.sample import Sample
-from samplecore.storage import audio_store
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError, readable_sample_hashes
 
 EXTRACTION_CHECKPOINT_INTERVAL: Final[int] = 500
 
@@ -24,11 +23,16 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class FeatureExtractionSummary:
-    """What one feature-extraction run did, across every sample it considered."""
+    """What one feature-extraction run did, across every sample it considered.
+
+    ``unavailable`` counts the pending samples whose audio lives only in sample files none of which
+    holds it now; they stay pending, so a later run describes them once a file is back.
+    """
 
     cataloged: int
     already_extracted: int
     newly_extracted: int
+    unavailable: int
 
 
 @dataclass(frozen=True)
@@ -46,19 +50,28 @@ class FeaturePass:
 
 @dataclass(frozen=True)
 class PendingSamples:
-    """The cataloged samples an experiment holds no vector for yet, in hash order, and what it already holds."""
+    """The cataloged samples an experiment still has to describe, in hash order, and what it holds that stands.
+
+    ``moved`` names the samples it holds a vector for that was heard at a rate the library no longer
+    plays them at; they are pending too, and their vectors are replaced as they are described again.
+    """
 
     cataloged: int
     already_extracted: int
     samples: tuple[Sample, ...]
+    moved: frozenset[str]
 
 
-def pending_samples(connection: Connection, experiment_id: int, *, sample_limit: int | None) -> PendingSamples:
+def pending_samples(
+    connection: Connection, experiment_id: int, *, hearing: Hearing, sample_limit: int | None
+) -> PendingSamples:
     """The samples a pass over one experiment still has to describe, the first ``sample_limit`` of them when given.
 
-    Read before any extractor is built, so a pass with nothing left to describe loads no model.
-    ``sample_limit`` bounds a pass for validating a run over a small slice; the same slice comes
-    first every run, since samples arrive in hash order.
+    Read before any extractor is built, so a pass with nothing left to describe loads no model. A
+    sample is pending when the experiment holds no vector for it, or holds one heard at another rate
+    than ``hearing`` hears it at now, which a new module playing the sample, or a sample file
+    declaring another rate, brings about. ``sample_limit`` bounds a pass for validating a run over a
+    small slice; the same slice comes first every run, since samples arrive in hash order.
 
     Raises:
         ValueError: ``sample_limit`` is below one.
@@ -67,17 +80,34 @@ def pending_samples(connection: Connection, experiment_id: int, *, sample_limit:
         raise ValueError(f"a sample limit counts samples to describe, so it is at least 1, got {sample_limit}")
 
     samples = PostgresSampleRepository(connection).list_all()
-    already = PostgresSampleFeatureVectorRepository(connection).sample_hashes_for_experiment(experiment_id)
-    missing = tuple(sample for sample in samples if sample.hash not in already)
+    held = PostgresSampleFeatureVectorRepository(connection).heard_rates_for_experiment(experiment_id)
+    moved = frozenset(sample_hash for sample_hash, rate in held.items() if rate != hearing.rate_for(sample_hash))
+    missing = tuple(sample for sample in samples if sample.hash not in held or sample.hash in moved)
     return PendingSamples(
         cataloged=len(samples),
-        already_extracted=len(already),
+        already_extracted=len(held) - len(moved),
         samples=missing if sample_limit is None else missing[:sample_limit],
+        moved=moved,
+    )
+
+
+def readable_pending_count(connection: Connection, experiment_id: int, *, hearing: Hearing) -> int:
+    """How many samples whose audio can be read now an experiment still has to describe, read without any audio.
+
+    The pending rule is `pending_samples`' own, over the samples a pass can reach: a sample whose
+    only file is gone stays out of the count until the file is back, so an experiment describing
+    everything readable counts nothing left.
+    """
+    held = PostgresSampleFeatureVectorRepository(connection).heard_rates_for_experiment(experiment_id)
+    return sum(
+        1
+        for sample_hash in readable_sample_hashes(connection)
+        if sample_hash not in held or held[sample_hash] != hearing.rate_for(sample_hash)
     )
 
 
 def extract_features(
-    connection: Connection, library_root: Path, feature_pass: FeaturePass, pending: PendingSamples
+    connection: Connection, audio: SampleAudio, feature_pass: FeaturePass, pending: PendingSamples
 ) -> FeatureExtractionSummary:
     """Extract a feature vector for every pending sample of the pass's experiment.
 
@@ -88,7 +118,8 @@ def extract_features(
     Vectors are committed to the catalog every ``EXTRACTION_CHECKPOINT_INTERVAL`` samples, not only
     once at the end -- extraction is the slowest stage of an embedding run, so an interruption
     partway through a real library's pass loses at most one checkpoint's worth of work on restart,
-    rather than the whole pass.
+    rather than the whole pass. A moved sample's old vector leaves in the checkpoint that stores its
+    new one, so the experiment holds one vector per sample throughout.
     """
     experiment_id = feature_pass.experiment_id
     feature_vector_repository = PostgresSampleFeatureVectorRepository(connection)
@@ -96,8 +127,14 @@ def extract_features(
 
     pending_vectors: list[SampleFeatureVector] = []
     newly_extracted_count = 0
+    unavailable_count = 0
     for sample in tqdm(pending.samples, desc="Extracting features"):
-        heard = feature_pass.hearing.hear(sample.hash, audio_store.read(library_root, sample).pcm)
+        try:
+            sample_pcm = audio.read(sample)
+        except SampleUnavailableError:
+            unavailable_count += 1
+            continue
+        heard = feature_pass.hearing.hear(sample.hash, sample_pcm.pcm)
         raw_vector = feature_pass.feature_extractor.extract(heard)
         pending_vectors.append(
             SampleFeatureVector(
@@ -105,17 +142,39 @@ def extract_features(
                 sample_hash=sample.hash,
                 vector=tuple(float(value) for value in raw_vector),
                 computed_at=datetime.now(UTC),
+                heard_rate=feature_pass.hearing.rate_for(sample.hash),
             )
         )
         newly_extracted_count += 1
         if len(pending_vectors) >= EXTRACTION_CHECKPOINT_INTERVAL:
-            feature_vector_repository.insert_many(pending_vectors)
-            connection.commit()
+            _store_checkpoint(
+                connection, feature_vector_repository, pending_vectors, experiment_id=experiment_id, moved=pending.moved
+            )
             pending_vectors = []
 
-    feature_vector_repository.insert_many(pending_vectors)
-    connection.commit()
+    _store_checkpoint(
+        connection, feature_vector_repository, pending_vectors, experiment_id=experiment_id, moved=pending.moved
+    )
     _logger.info("Feature extraction complete.")
     return FeatureExtractionSummary(
-        cataloged=pending.cataloged, already_extracted=pending.already_extracted, newly_extracted=newly_extracted_count
+        cataloged=pending.cataloged,
+        already_extracted=pending.already_extracted,
+        newly_extracted=newly_extracted_count,
+        unavailable=unavailable_count,
     )
+
+
+def _store_checkpoint(
+    connection: Connection,
+    repository: PostgresSampleFeatureVectorRepository,
+    vectors: list[SampleFeatureVector],
+    *,
+    experiment_id: int,
+    moved: frozenset[str],
+) -> None:
+    """Commit a checkpoint of vectors, replacing the ones a moved sample held."""
+    repository.delete_for_samples(
+        experiment_id, [vector.sample_hash for vector in vectors if vector.sample_hash in moved]
+    )
+    repository.insert_many(vectors)
+    connection.commit()

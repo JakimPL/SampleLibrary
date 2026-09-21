@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.models.annotation import SampleAnnotation
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from sampleextract.annotations.cli import main
@@ -72,19 +73,19 @@ def test_relink_reports_a_label_it_reattached(
     assert "1 relinked" in capsys.readouterr().out
 
 
-def test_relink_exits_nonzero_when_a_label_needs_a_person(
+def test_relink_ends_a_success_naming_the_label_that_needs_a_person(
     connection: Connection,
     stored_annotation: SampleAnnotation,
     forget_the_labeled_occurrence: Callable[[], None],
     configured: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A label nobody can reattach automatically is worth failing the command over."""
+    """A label nobody can reattach automatically describes the library, so it is a warning and the pass succeeds."""
     forget_the_labeled_occurrence()
 
-    with pytest.raises(SystemExit) as exit_info:
-        main(["relink"], prog=PROGRAM)
+    main(["relink"], prog=PROGRAM)
 
-    assert exit_info.value.code == 1
+    assert "Left alone" in capsys.readouterr().err
 
 
 def test_a_command_is_required(configured: Path) -> None:
@@ -119,7 +120,7 @@ def test_an_import_from_a_file_that_is_not_there_ends_with_one_message(
     with pytest.raises(SystemExit) as raised:
         main(["import", "--path", str(tmp_path / "absent.jsonl")], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     reported = capsys.readouterr().err
     assert "Moved nothing:" in reported
     assert "Traceback" not in reported

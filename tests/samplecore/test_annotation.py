@@ -12,6 +12,7 @@ from samplecore.models.annotation import (
     AnnotationDecision,
     AnnotationDecisions,
     AnnotationSource,
+    ModuleSlotAnchor,
     SampleAnnotation,
 )
 from samplecore.models.sample_properties import SampleOccurrence
@@ -29,9 +30,11 @@ def _annotation(
         label=label,
         rating=rating,
         favorite=favorite,
-        occurrence=SampleOccurrence(module_hash=format(1, "064x"), instrument_index=0, sample_slot=0),
-        module_filename="song.it",
-        sample_name="smp01",
+        anchor=ModuleSlotAnchor(
+            occurrence=SampleOccurrence(module_hash=format(1, "064x"), instrument_index=0, sample_slot=0),
+            module_filename="song.it",
+            sample_name="smp01",
+        ),
         source=AnnotationSource.SAMPLE,
         annotated_at=datetime.now(UTC),
     )

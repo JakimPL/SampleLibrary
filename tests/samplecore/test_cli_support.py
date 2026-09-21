@@ -16,6 +16,7 @@ from samplecore.cli_support import (
     positive_multiple_of,
 )
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, LibraryConfig
+from samplecore.exit_status import ExitStatus
 
 
 def test_configure_console_output_encoding_lets_stdout_print_an_unencodable_character(
@@ -71,7 +72,7 @@ def test_load_config_or_exit_reports_a_missing_config_file_and_exits(
     with pytest.raises(SystemExit) as raised:
         load_config_or_exit()
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Configuration error" in capsys.readouterr().err
 
 

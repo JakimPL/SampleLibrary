@@ -22,7 +22,10 @@
     --critical-soft: rgb(181 57 42 / 14%);
     --badge-tint-strength: 14%;
     --shadow: 0 8px 24px rgb(20 23 28 / 14%);
+    --range-thumb-size: 14px;
     --wave-fill: #b9bec9;
+    --wave-first: #2f6f9f;
+    --wave-second: #c0622a;
     --wave-bg: var(--surface-1);
     --wave-cursor: var(--accent);
     --wave-progress: var(--accent);
@@ -31,23 +34,41 @@
     --cloud-point-selected: var(--accent);
     --cloud-ping-color: var(--accent);
     --cloud-link-color: var(--accent);
+    --cloud-link-end-color: var(--cloud-link-color);
+    --cloud-link-node-color: var(--cloud-link-color);
+    --cloud-link-width: 1.5px;
+    --cloud-link-casing-width: 4px;
+    --cloud-band-dash: 2 4;
+    --cloud-ping-radius: 50%;
+    --cloud-ping-border-width: 3px;
+    --cloud-hover-color: var(--text-primary);
 
-    /* One hue per SampleCategory in samples/category.ts. Fourteen hues blur together for some
-       viewers, so every place a color appears also names its category. */
-    --category-kick: #2a78d6;
-    --category-snare: #eb6834;
-    --category-clap: #1baf7a;
-    --category-hi-hat: #eda100;
-    --category-cymbal: #e87ba4;
-    --category-percussion: #008300;
-    --category-bass: #4a3aa7;
-    --category-lead: #e34948;
-    --category-pad: #0e9594;
-    --category-pluck: #a15c2e;
-    --category-vocal: #d6336c;
-    --category-fx: #5c8a0a;
-    --category-loop: #6d5ce8;
-    --category-uncategorized: #7a7972;
+    /* Read by cloud/cloudRenderSettings.ts: sizes in CSS pixels, opacities in [0, 1]. The substrate is
+       every point that names nothing, drawn fainter and beneath the rest. */
+    --cloud-point-shape: circle;
+    --cloud-point-size: 2.5;
+    --cloud-substrate-size: 1.8;
+    --cloud-point-opacity: 0.9;
+    --cloud-substrate-opacity: 0.6;
+    --cloud-point-size-selected: 2;
+    --cloud-point-outline-width: 0;
+    --cloud-point-scale-mode: asinh;
+    --cloud-marker-size: 13;
+    --cloud-marker-line-width: 1.5;
+    --cloud-marker-casing-width: 1.5;
+    --cloud-node-mode: detail;
+    --cloud-node-size: 7;
+    --cloud-node-line-width: 1;
+    --cloud-node-fill-opacity: 0.2;
+    --cloud-node-substrate-opacity: 0.8;
+    --cloud-grid-axes: both;
+    --cloud-grid-spacing: 44;
+    --cloud-grid-line-width: 1;
+    --cloud-grid-row: rgb(27 31 38 / 3.5%);
+    --cloud-grid-beat: rgb(27 31 38 / 6%);
+    --cloud-grid-measure: rgb(27 31 38 / 10%);
+    --cloud-grid-center: transparent;
+    --cloud-glow-opacity: 0;
     --cloud-point-uncategorized: #d5d4ce;
 
     /* Read by theme/labelPalette.ts, which takes the hues from the tags' ranks. */
@@ -89,21 +110,17 @@
         --badge-tint-strength: 16%;
         --shadow: 0 12px 32px rgb(0 0 0 / 45%);
         --wave-fill: #4a5364;
-        --category-kick: #3987e5;
-        --category-snare: #d95926;
-        --category-clap: #199e70;
-        --category-hi-hat: #c98500;
-        --category-cymbal: #d55181;
-        --category-percussion: #008300;
-        --category-bass: #9085e9;
-        --category-lead: #e66767;
-        --category-pad: #14b3b1;
-        --category-pluck: #c17a45;
-        --category-vocal: #e85d90;
-        --category-fx: #8fc020;
-        --category-loop: #8f82f0;
-        --category-uncategorized: #a3a196;
+        --wave-first: #4f8fc4;
+        --wave-second: #d98246;
         --cloud-point-uncategorized: #6e6d64;
+        --cloud-hover-color: #fff;
+        --cloud-point-opacity: 0.85;
+        --cloud-substrate-size: 1.6;
+        --cloud-substrate-opacity: 0.28;
+        --cloud-grid-row: rgb(236 232 222 / 4%);
+        --cloud-grid-beat: rgb(236 232 222 / 6.5%);
+        --cloud-grid-measure: rgb(236 232 222 / 10%);
+        --cloud-glow-opacity: 0.45;
         --label-lightness: 0.74;
         --label-chroma: 0.15;
     }
@@ -134,21 +151,17 @@
     --badge-tint-strength: 16%;
     --shadow: 0 12px 32px rgb(0 0 0 / 45%);
     --wave-fill: #4a5364;
-    --category-kick: #3987e5;
-    --category-snare: #d95926;
-    --category-clap: #199e70;
-    --category-hi-hat: #c98500;
-    --category-cymbal: #d55181;
-    --category-percussion: #008300;
-    --category-bass: #9085e9;
-    --category-lead: #e66767;
-    --category-pad: #14b3b1;
-    --category-pluck: #c17a45;
-    --category-vocal: #e85d90;
-    --category-fx: #8fc020;
-    --category-loop: #8f82f0;
-    --category-uncategorized: #a3a196;
+    --wave-first: #4f8fc4;
+    --wave-second: #d98246;
     --cloud-point-uncategorized: #6e6d64;
+    --cloud-hover-color: #fff;
+    --cloud-point-opacity: 0.85;
+    --cloud-substrate-size: 1.6;
+    --cloud-substrate-opacity: 0.28;
+    --cloud-grid-row: rgb(236 232 222 / 4%);
+    --cloud-grid-beat: rgb(236 232 222 / 6.5%);
+    --cloud-grid-measure: rgb(236 232 222 / 10%);
+    --cloud-glow-opacity: 0.45;
     --label-lightness: 0.74;
     --label-chroma: 0.15;
 }
@@ -177,30 +190,49 @@
     --badge-tint-strength: 16%;
     --shadow: 0 2px 6px rgb(0 0 0 / 25%);
     --wave-fill: #f00;
+    --wave-first: #00a8a8;
+    --wave-second: #f00;
     --wave-bg: #000;
     --wave-cursor: #c0c0c0;
     --wave-progress: var(--wave-fill);
     --cloud-bg: #000;
     --cloud-point: #fff;
-    --cloud-point-selected: var(--wave-fill);
+
+    /* OpenMPT's envelope editor: crisp square nodes, the dragged one yellow, joined by a yellow line. */
+    --cloud-point-selected: #ff0;
     --cloud-ping-color: #ff0;
     --cloud-link-color: #ff0;
-
-    /* The dark theme's category steps, since this theme's cloud canvas is near-black too. */
-    --category-kick: #3987e5;
-    --category-snare: #d95926;
-    --category-clap: #199e70;
-    --category-hi-hat: #c98500;
-    --category-cymbal: #d55181;
-    --category-percussion: #008300;
-    --category-bass: #9085e9;
-    --category-lead: #e66767;
-    --category-pad: #14b3b1;
-    --category-pluck: #c17a45;
-    --category-vocal: #e85d90;
-    --category-fx: #8fc020;
-    --category-loop: #8f82f0;
-    --category-uncategorized: #a3a196;
+    --cloud-link-end-color: #fff;
+    --cloud-link-node-color: #fff;
+    --cloud-link-width: 1px;
+    --cloud-link-casing-width: 0;
+    --cloud-band-dash: 1 2;
+    --cloud-ping-radius: 0;
+    --cloud-ping-border-width: 1px;
+    --cloud-hover-color: #fff;
+    --cloud-point-shape: square;
+    --cloud-point-size: 2;
+    --cloud-substrate-size: 2;
+    --cloud-point-opacity: 1;
+    --cloud-substrate-opacity: 1;
+    --cloud-point-size-selected: 1;
+    --cloud-point-scale-mode: constant;
+    --cloud-marker-size: 7;
+    --cloud-marker-line-width: 1;
+    --cloud-marker-casing-width: 0;
+    --cloud-node-mode: always;
+    --cloud-node-size: 7;
+    --cloud-node-line-width: 1;
+    --cloud-node-fill-opacity: 0;
+    --cloud-node-substrate-opacity: 1;
+    --cloud-grid-axes: vertical;
+    --cloud-grid-spacing: 36;
+    --cloud-grid-line-width: 1;
+    --cloud-grid-row: #333;
+    --cloud-grid-beat: #555;
+    --cloud-grid-measure: #808080;
+    --cloud-grid-center: #8a8a8a;
+    --cloud-glow-opacity: 0;
     --cloud-point-uncategorized: #63625a;
     --label-lightness: 0.74;
     --label-chroma: 0.15;
@@ -540,6 +572,11 @@ tr.is-focused {
     color: var(--critical);
 }
 
+.badge-unavailable {
+    background: color-mix(in srgb, var(--warn) var(--badge-tint-strength), var(--surface-1));
+    color: var(--warn);
+}
+
 .badge-equivalence {
     background: color-mix(in srgb, var(--accent) var(--badge-tint-strength), var(--surface-1));
     color: var(--accent);
@@ -551,41 +588,74 @@ tr.is-focused {
     border: 1px solid var(--border-strong);
 }
 
-.suggested-labels {
+/* A free-text label shrinks to the cell holding it, so its end is cut by an ellipsis inside the border. */
+.badge-hand-label,
+.badge-category {
+    max-width: 100%;
+}
+
+.badge-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.badge-category {
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px dashed var(--border-strong);
+}
+
+/* A dot in the category's own color, the legend's swatch at badge size. */
+.badge-swatch {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex: none;
+}
+
+.badge-unlabeled {
+    background: transparent;
+    color: var(--text-faint);
+    border: 1px dashed var(--border);
+}
+
+.category-choices {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.suggested-labels-row {
+.category-choices-row {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
 }
 
-.badge-suggestion {
+.badge-category-choice {
     background: transparent;
     color: var(--text-primary);
     border: 1px dashed var(--border-strong);
     cursor: pointer;
 }
 
-.badge-suggestion:hover:not(:disabled) {
+.badge-category-choice:hover:not(:disabled) {
     background: var(--surface-2);
 }
 
-.badge-suggestion[aria-pressed="true"] {
+.badge-category-choice[aria-pressed="true"] {
     background: var(--surface-2);
     border-style: solid;
     cursor: default;
 }
 
-.badge-suggestion:disabled:not([aria-pressed="true"]) {
+.badge-category-choice:disabled:not([aria-pressed="true"]) {
     cursor: default;
     opacity: 0.55;
 }
 
-.suggestion-score {
+.category-score {
     color: var(--text-muted);
     font-weight: 400;
 }
@@ -720,77 +790,6 @@ table.data td .annotation-editor-input {
     color: var(--critical);
 }
 
-.badge-category-kick {
-    background: color-mix(in srgb, var(--category-kick) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-kick);
-}
-
-.badge-category-snare {
-    background: color-mix(in srgb, var(--category-snare) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-snare);
-}
-
-.badge-category-clap {
-    background: color-mix(in srgb, var(--category-clap) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-clap);
-}
-
-/* stylelint-disable-next-line selector-class-pattern */
-.badge-category-hi_hat {
-    background: color-mix(in srgb, var(--category-hi-hat) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-hi-hat);
-}
-
-.badge-category-cymbal {
-    background: color-mix(in srgb, var(--category-cymbal) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-cymbal);
-}
-
-.badge-category-percussion {
-    background: color-mix(in srgb, var(--category-percussion) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-percussion);
-}
-
-.badge-category-bass {
-    background: color-mix(in srgb, var(--category-bass) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-bass);
-}
-
-.badge-category-lead {
-    background: color-mix(in srgb, var(--category-lead) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-lead);
-}
-
-.badge-category-pad {
-    background: color-mix(in srgb, var(--category-pad) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-pad);
-}
-
-.badge-category-pluck {
-    background: color-mix(in srgb, var(--category-pluck) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-pluck);
-}
-
-.badge-category-vocal {
-    background: color-mix(in srgb, var(--category-vocal) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-vocal);
-}
-
-.badge-category-fx {
-    background: color-mix(in srgb, var(--category-fx) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-fx);
-}
-
-.badge-category-loop {
-    background: color-mix(in srgb, var(--category-loop) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-loop);
-}
-
-.badge-category-uncategorized {
-    background: color-mix(in srgb, var(--category-uncategorized) var(--badge-tint-strength), var(--surface-1));
-    color: var(--category-uncategorized);
-}
-
 .panel-stack {
     display: flex;
     flex-direction: column;
@@ -865,7 +864,6 @@ table.data td .annotation-editor-input {
 .panel-filter button,
 .detail-tabs button,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
-.spectral-distance-readout button,
 .morph-panel button:not(.thumbnail-button) {
     border: 1px solid var(--border);
     background: var(--surface-0);
@@ -878,16 +876,14 @@ table.data td .annotation-editor-input {
 }
 
 .panel-filter button:disabled,
-.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):disabled,
-.spectral-distance-readout button:disabled {
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):disabled {
     color: var(--text-faint);
     cursor: default;
 }
 
 .panel-filter button:hover:enabled,
 .detail-tabs button:hover:enabled,
-.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled,
-.spectral-distance-readout button:hover:enabled {
+.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled {
     color: var(--text-primary);
     border-color: var(--border-strong);
 }
@@ -915,22 +911,59 @@ table.data td .annotation-editor-input {
     overflow: hidden;
 }
 
+/* regl-scatterplot clears its canvas to transparent; this background is what shows through every layer. */
 .cloud-wrap {
-    position: absolute;
-    inset: 0;
-}
-
-/* regl-scatterplot clears its canvas to transparent; this background is what shows through. */
-.cloud-canvas {
     position: absolute;
     inset: 0;
     background: var(--cloud-bg);
 }
 
-.cloud-canvas canvas {
+.cloud-underlay {
+    position: absolute;
+    inset: 0;
     display: block;
     width: 100%;
     height: 100%;
+    pointer-events: none;
+}
+
+.cloud-canvas {
+    position: absolute;
+    inset: 0;
+}
+
+.cloud-dots {
+    display: block;
+    width: 100%;
+    height: 100%;
+    transition: opacity 160ms ease-out;
+}
+
+/* The node layer takes over from the dots it redraws as markers; the dots' canvas keeps the pointer. */
+.cloud-nodes {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease-out;
+}
+
+.cloud-wrap-nodes .cloud-nodes {
+    opacity: 1;
+}
+
+.cloud-wrap-nodes .cloud-dots {
+    opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cloud-nodes,
+    .cloud-dots {
+        transition: none;
+    }
 }
 
 .cloud-caption {
@@ -1089,6 +1122,35 @@ table.data td .annotation-editor-input {
     gap: 6px;
 }
 
+.cloud-markers {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+/* The background's own color beneath a marker's stroke keeps it legible over a dense patch of points. */
+.cloud-marker-casing {
+    fill: none;
+    stroke: var(--cloud-bg);
+    stroke-opacity: 0.85;
+}
+
+.cloud-marker-stroke {
+    fill: none;
+}
+
+.cloud-marker-selected {
+    stroke: var(--cloud-point-selected);
+}
+
+.cloud-marker-hover {
+    stroke: var(--cloud-hover-color);
+}
+
 .cloud-ping {
     position: absolute;
     z-index: 1;
@@ -1102,8 +1164,8 @@ table.data td .annotation-editor-input {
     position: absolute;
     top: 0;
     left: 0;
-    border-radius: 50%;
-    border: 3px solid var(--cloud-ping-color);
+    border-radius: var(--cloud-ping-radius);
+    border: var(--cloud-ping-border-width) solid var(--cloud-ping-color);
     animation: cloud-ping-expand 1400ms cubic-bezier(0.16, 0.6, 0.32, 1) forwards;
 }
 
@@ -1149,20 +1211,68 @@ table.data td .annotation-editor-input {
     font-size: 12px;
 }
 
+/* The frame the contours, the notice and the playhead are positioned against; the host inside it
+   carries the box the waveform is measured and scrolled in. */
 .wave-canvas-wrap {
     flex: 1 1 auto;
     position: relative;
     min-height: 60px;
-    overflow: auto hidden;
     display: flex;
-    align-items: center;
     background: var(--wave-bg);
 }
 
-/* wavesurfer's host div is a flex item here, which shrinks to its content; the full width keeps the
-   waveform wide. */
-.wave-canvas-wrap > div {
+/* The host is stretched rather than centered, since the waveform's own height is read from this
+   box: a flex item left to its content would measure zero and hold the waveform to its floor. */
+.wave-host {
+    flex: 1 1 auto;
+    align-self: stretch;
+    min-width: 0;
+    overflow: auto hidden;
+    display: flex;
+    align-items: center;
+}
+
+/* wavesurfer's own wrapper is a flex item here, which shrinks to its content; the full width keeps
+   the waveform wide. */
+.wave-host > div {
     width: 100%;
+}
+
+/* Each contour carries the strength it is drawn at in its own color, so the render stands out from
+   the ends it runs between. */
+.wave-traces {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.wave-notice {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0 12px;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--text-faint);
+    pointer-events: none;
+}
+
+.wave-notice-failed {
+    color: var(--critical);
+}
+
+.wave-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--wave-cursor);
+    pointer-events: none;
 }
 
 .wave-canvas-wrap canvas {
@@ -1208,6 +1318,28 @@ table.data td .annotation-editor-input {
     background: var(--accent-strong);
 }
 
+.transport .download-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin-left: auto;
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface-0);
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.transport .download-link:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
 .transport .time {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -1227,6 +1359,30 @@ table.data td .annotation-editor-input {
 
 .detail-scroll {
     padding: 10px 12px;
+}
+
+/* The listing's name cell, scaled up: one column, so any length of name leaves the rows below it in place. */
+.detail-header {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    line-height: 1.3;
+    margin: 0 0 10px;
+}
+
+.detail-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.detail-hash {
+    margin: 0;
+    font-size: 10.5px;
+    color: var(--text-faint);
+    overflow-wrap: anywhere;
 }
 
 .kv {
@@ -1284,18 +1440,6 @@ table.data td .annotation-editor-input {
     font-weight: 600;
 }
 
-.spectral-distance-readout {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 14px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    background: var(--accent-soft);
-    font-size: 11px;
-}
-
 .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1308,6 +1452,10 @@ table.data td .annotation-editor-input {
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px 12px;
+}
+
+.stat-tile.is-wide {
+    grid-column: span 2;
 }
 
 .stat-tile .big {
@@ -1468,14 +1616,47 @@ table.data td .annotation-editor-input {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    height: 100%;
     padding: 10px 12px;
+}
+
+/* The waveform takes whatever height the rows above it leave, down to the frame's own minimum. */
+.morph-wave {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+}
+
+.morph-wave .transport {
+    padding: 6px 0 0;
+    border-top: none;
+    background: transparent;
 }
 
 .morph-endpoints {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: 1fr auto 1fr auto;
     align-items: center;
     gap: 8px;
+}
+
+.morph-gap {
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+}
+
+/* Centered as a box rather than by line height, which a glyph's own metrics sit off-center within. */
+.morph-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1;
+    color: var(--text-muted);
 }
 
 .morph-endpoint {
@@ -1513,6 +1694,15 @@ table.data td .annotation-editor-input {
     gap: 10px;
 }
 
+.morph-weight-track {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    padding-top: 13px;
+}
+
 .morph-weight input[type="range"] {
     flex: 1 1 auto;
     min-width: 0;
@@ -1536,42 +1726,38 @@ table.data td .annotation-editor-input {
 
 .morph-weight input[type="range"]::-webkit-slider-thumb {
     appearance: none;
-    width: 14px;
-    height: 14px;
-    margin-top: -5px;
+    width: var(--range-thumb-size);
+    height: var(--range-thumb-size);
+    margin-top: calc((4px - var(--range-thumb-size)) / 2);
     border-radius: 50%;
     background: var(--accent);
     border: 2px solid var(--surface-1);
 }
 
 .morph-weight input[type="range"]::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
+    width: var(--range-thumb-size);
+    height: var(--range-thumb-size);
     border-radius: 50%;
     background: var(--accent);
     border: 2px solid var(--surface-1);
 }
 
 .morph-readout {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    font-size: 11px;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    pointer-events: none;
 }
 
-.morph-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.morph-actions label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-left: auto;
-    font-size: 11.5px;
+.morph-distance {
+    margin: 0;
+    font-size: 11px;
     color: var(--text-muted);
+    white-space: nowrap;
 }
 
 .morph-offline {
@@ -1598,17 +1784,39 @@ table.data td .annotation-editor-input {
     overflow: visible;
 }
 
-.morph-link-line {
-    stroke: var(--cloud-link-color);
-    stroke-width: 2;
-    stroke-dasharray: 4 3;
+.morph-link-casing {
     fill: none;
+    stroke: var(--cloud-bg);
+    stroke-width: var(--cloud-link-casing-width);
+    stroke-linecap: round;
+    stroke-opacity: 0.85;
+}
+
+.morph-link-line {
+    fill: none;
+    stroke: var(--cloud-link-color);
+    stroke-width: var(--cloud-link-width);
+    stroke-linecap: round;
 }
 
 .morph-link-end {
-    fill: none;
-    stroke: var(--cloud-link-color);
-    stroke-width: 2;
+    stroke: var(--cloud-link-end-color);
+}
+
+.morph-link-node {
+    stroke: var(--cloud-link-node-color);
+}
+
+.morph-link-node .cloud-marker-filled {
+    fill: var(--cloud-link-node-color);
+}
+
+.morph-link-node-dragging {
+    stroke: var(--cloud-point-selected);
+}
+
+.morph-link-node-dragging .cloud-marker-filled {
+    fill: var(--cloud-point-selected);
 }
 
 .morph-link-marker {
@@ -1629,6 +1837,17 @@ table.data td .annotation-editor-input {
     cursor: grabbing;
 }
 
+/* The square node beneath is drawn on whole device pixels; this element keeps the pointer and the focus. */
+.morph-link-marker-square {
+    width: 13px;
+    height: 13px;
+    margin: -6.5px 0 0 -6.5px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
 .morph-band {
     position: absolute;
     inset: 0;
@@ -1640,17 +1859,15 @@ table.data td .annotation-editor-input {
 }
 
 .morph-band-line {
-    stroke: var(--cloud-link-color);
-    stroke-width: 1.5;
-    stroke-dasharray: 2 4;
-    opacity: 0.75;
     fill: none;
+    stroke: var(--cloud-link-color);
+    stroke-width: var(--cloud-link-width);
+    stroke-dasharray: var(--cloud-band-dash);
+    opacity: 0.75;
 }
 
 .morph-band-origin {
-    fill: none;
-    stroke: var(--cloud-link-color);
-    stroke-width: 2;
+    stroke: var(--cloud-link-end-color);
     opacity: 0.75;
 }
 
@@ -1659,10 +1876,29 @@ table.data td .annotation-editor-input {
     background: transparent;
 }
 
-.not-found {
+.not-found,
+.route-error {
     display: grid;
     place-content: center;
     gap: 0.5rem;
     min-height: 100vh;
     text-align: center;
+}
+
+.error-boundary {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+    padding: 12px;
+}
+
+.error-boundary-retry {
+    border: 1px solid var(--border);
+    background: var(--surface-0);
+    border-radius: 5px;
+    height: 22px;
+    padding: 0 8px;
+    font-size: 11.5px;
+    cursor: pointer;
+    color: var(--text-muted);
 }

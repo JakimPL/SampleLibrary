@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBytes, formatDuration, shortHash } from "../../src/shared/format";
+import { fileNameStem, formatBytes, formatDuration, shortHash } from "../../src/shared/format";
 
 describe("formatBytes", () => {
     it("formats zero bytes", () => {
@@ -37,5 +37,27 @@ describe("shortHash", () => {
 
     it("returns the whole value when it is already shorter than the short form", () => {
         expect(shortHash("abc")).toBe("abc");
+    });
+});
+
+/** One name a thing is saved under: what the catalog calls it, and the stem a file takes. */
+interface FileNameCase {
+    readonly name: string;
+    readonly given: string;
+    readonly stem: string;
+}
+
+const FILE_NAME_CASES: readonly FileNameCase[] = [
+    { name: "keeps a name a file system takes as it reads", given: "crash cymbal 2", stem: "crash cymbal 2" },
+    { name: "keeps the dots and dashes a name carries", given: "kick-808.loud", stem: "kick-808.loud" },
+    { name: "puts one underscore where a path separator stood", given: "drums/kick", stem: "drums_kick" },
+    { name: "puts one underscore where a run of reserved characters stood", given: 'a<>:"|?*b', stem: "a_b" },
+    { name: "falls back for a name that is only spacing", given: "   ", stem: "fallback" },
+    { name: "falls back for a name the catalog leaves empty", given: "", stem: "fallback" },
+];
+
+describe("fileNameStem", () => {
+    it.each(FILE_NAME_CASES)("$name", ({ given, stem }: FileNameCase) => {
+        expect(fileNameStem(given, "fallback")).toBe(stem);
     });
 });

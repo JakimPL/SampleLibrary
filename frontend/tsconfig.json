@@ -18,5 +18,5 @@
         "types": ["vite/client"],
         "noEmit": true
     },
-    "include": ["src", "tests"]
+    "include": ["src", "tests", "dev"]
 }

@@ -4,11 +4,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from queue import Queue
-from typing import Any, Final, Protocol
+from typing import Any, Protocol
 
 from tqdm import tqdm
-
-EXTRACTION_DESCRIPTION: Final[str] = "Extracting modules"
 
 
 class ProgressSink(Protocol):
@@ -34,10 +32,10 @@ class BarProgress:
 
 
 @contextmanager
-def extraction_bar(total: int) -> Iterator[BarProgress]:
-    """One bar covering a whole extraction pass, closed once the pass ends."""
-    with tqdm(total=total, desc=EXTRACTION_DESCRIPTION) as progress_bar:
-        yield BarProgress(progress_bar)
+def progress_bar(total: int, *, description: str) -> Iterator[BarProgress]:
+    """One bar covering a whole pass, closed once the pass ends."""
+    with tqdm(total=total, desc=description) as tqdm_bar:
+        yield BarProgress(tqdm_bar)
 
 
 @dataclass(frozen=True)

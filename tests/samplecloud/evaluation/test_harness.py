@@ -17,6 +17,7 @@ from samplecloud.evaluation.settings import EvaluationSettings
 from samplecloud.evaluation.transposition import OffsetRetrieval, TranspositionRetrieval
 from samplecloud.experiments import ExperimentRefused
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.models.sample import Sample
@@ -47,13 +48,11 @@ def test_a_pass_without_an_extractor_scores_the_stored_vectors_alone(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
 
     assert report.transposition is None
-    assert report.categories is not None
     assert report.notes is not None
     assert report.hand_labels is None
     assert report.sample_count == len(separable_catalog.sample_hashes)
@@ -68,7 +67,6 @@ def test_a_pass_scores_the_hand_labels_once_enough_samples_carry_one(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -78,8 +76,10 @@ def test_a_pass_scores_the_hand_labels_once_enough_samples_carry_one(
 
 
 def test_a_corpus_too_small_to_fold_leaves_those_metrics_out(connection: Connection, tmp_path: Path) -> None:
-    """A library with a handful of uncategorized samples no pattern plays still gets a report."""
-    experiment_id = PostgresExperimentRepository(connection).create(backend_name="stub", label=None, params={})
+    """A library with a handful of samples no pattern plays and nobody labeled still gets a report."""
+    experiment_id = PostgresExperimentRepository(connection).create(
+        backend_name="stub", label=None, params={}, key=None
+    )
     for index in range(3):
         sample_hash = format(index + 1, "064x")
         PostgresSampleRepository(connection).upsert(
@@ -97,12 +97,10 @@ def test_a_corpus_too_small_to_fold_leaves_those_metrics_out(connection: Connect
         )
     connection.commit()
 
-    report = evaluate_experiment(
-        connection, experiment_id=experiment_id, library_root=tmp_path, describer=None, settings=SETTINGS
-    )
+    report = evaluate_experiment(connection, experiment_id=experiment_id, describer=None, settings=SETTINGS)
 
-    assert (report.categories, report.notes, report.hand_labels) == (None, None, None)
-    assert json.loads(report_json(report))["categories"] is None
+    assert (report.notes, report.hand_labels) == (None, None)
+    assert json.loads(report_json(report))["notes"] is None
 
 
 def test_a_score_no_metric_could_read_is_written_as_null(
@@ -111,19 +109,18 @@ def test_a_score_no_metric_could_read_is_written_as_null(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
-    assert report.categories is not None
-    unreadable = replace(report, categories=replace(report.categories, macro_f1=float("nan")))
+    assert report.notes is not None
+    unreadable = replace(report, notes=replace(report.notes, single_pitch_auc=float("nan")))
 
-    assert json.loads(report_json(unreadable))["categories"]["macro_f1"] is None
+    assert json.loads(report_json(unreadable))["notes"]["single_pitch_auc"] is None
 
 
 def test_an_unknown_experiment_says_so(connection: Connection, tmp_path: Path) -> None:
     with pytest.raises(ExperimentRefused, match="holds no experiment"):
-        evaluate_experiment(connection, experiment_id=9999, library_root=tmp_path, describer=None, settings=SETTINGS)
+        evaluate_experiment(connection, experiment_id=9999, describer=None, settings=SETTINGS)
 
 
 def test_a_report_renders_as_json_a_tracker_can_read(
@@ -132,7 +129,6 @@ def test_a_report_renders_as_json_a_tracker_can_read(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -140,7 +136,6 @@ def test_a_report_renders_as_json_a_tracker_can_read(
     rendered = json.loads(report_json(report))
 
     assert rendered["backend_name"] == "stub"
-    assert rendered["categories"]["per_category"]
     assert rendered["notes"]["targets"]
 
 
@@ -201,7 +196,7 @@ def test_the_command_reports_an_experiment_extracted_by_an_unknown_backend(
     with pytest.raises(SystemExit) as raised:
         main(["--experiment-id", str(separable_catalog.experiment_id)], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "stub backend, unknown here" in capsys.readouterr().err
     assert not (tmp_path / TRACKING_DATABASE_NAME).exists()
 
@@ -220,7 +215,6 @@ def test_the_command_reports_every_metric_it_ran(
     main(["--experiment-id", str(separable_catalog.experiment_id), "--skip-transposition"], prog=PROGRAM)
 
     reported = capsys.readouterr().out
-    assert "Category agreement" in reported
     assert "of the catalog" in reported
     assert "Note-event agreement" in reported
     assert "single-pitch AUC" in reported
@@ -260,7 +254,6 @@ def test_the_command_reports_retrieval_offset_by_offset(
     report = evaluate_experiment(
         connection,
         experiment_id=separable_catalog.experiment_id,
-        library_root=tmp_path,
         describer=None,
         settings=SETTINGS,
     )
@@ -273,6 +266,7 @@ def test_the_command_reports_retrieval_offset_by_offset(
                 ),
             ),
             probe_sample_count=4,
+            unavailable_probe_count=0,
             catalog_sample_count=32,
             random_seed=0,
         ),

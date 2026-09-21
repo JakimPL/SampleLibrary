@@ -36,14 +36,14 @@ def test_a_label_reads_as_the_tag_paths_a_person_typed(case: ParseCase) -> None:
     assert SampleLabel.parse(case.text).paths == case.paths
 
 
-def test_a_specification_asserts_every_category_above_it() -> None:
+def test_a_specification_asserts_every_tag_above_it() -> None:
     label = SampleLabel.parse("PIANO: ELECTRIC: RHODES, LO-FI")
 
     assert label.closure == {("PIANO",), ("PIANO", "ELECTRIC"), ("PIANO", "ELECTRIC", "RHODES"), ("LO-FI",)}
     assert label.top_level == {"PIANO", "LO-FI"}
 
 
-def test_the_same_name_under_two_categories_is_two_tags() -> None:
+def test_the_same_name_under_two_top_levels_is_two_tags() -> None:
     assert SampleLabel.parse("BASS: ELECTRIC").paths.isdisjoint(SampleLabel.parse("GUITAR: ELECTRIC").paths)
 
 
@@ -124,7 +124,7 @@ def test_text_naming_no_tag_is_no_label(text: str) -> None:
         canonical_label(text)
 
 
-def test_tags_rank_by_first_use_with_the_categories_above_them_and_the_written_order() -> None:
+def test_tags_rank_by_first_use_with_the_tags_above_them_and_the_written_order() -> None:
     ranks = first_use_ranks(["HI-HAT: CLOSED", "LO-FI, SNARE", "SNARE, LO-FI"])
 
     assert ranks == {("HI-HAT",): 0, ("HI-HAT", "CLOSED"): 1, ("LO-FI",): 2, ("SNARE",): 3}

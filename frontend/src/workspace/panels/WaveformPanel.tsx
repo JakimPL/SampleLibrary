@@ -5,10 +5,15 @@ import type { components } from "../../api/schema";
 import { useSampleDetail } from "../../samples/useSampleDetail";
 import { type RateOption, WaveformPlayer } from "../../samples/WaveformPlayer";
 import { ErrorNotice } from "../../shared/ErrorNotice";
+import { fileNameStem, shortHash } from "../../shared/format";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
 
+const NO_SAMPLE_HINT = "Double-click a sample to hear it here.";
+
 type PlaybackRate = components["schemas"]["SamplePlaybackRate"];
+
+const WAV_EXTENSION = ".wav";
 
 interface FocusedWaveformProps {
     readonly sampleHash: string;
@@ -47,6 +52,7 @@ function FocusedWaveform({ sampleHash }: FocusedWaveformProps): ReactElement {
     return (
         <WaveformPlayer
             sampleHash={sample.hash}
+            fileName={`${fileNameStem(sample.display_name, shortHash(sample.hash))}${WAV_EXTENSION}`}
             rateHz={rateHz}
             rateOptions={rateOptions}
             onRateChange={setSelectedRateHz}
@@ -58,7 +64,7 @@ export function WaveformPanel(): ReactElement {
     const focusedSampleHash = useSelectionStore((state) => state.focusedSampleHash);
 
     if (focusedSampleHash === null) {
-        return <p className="no-selection">No sample selected yet — double-click a sample to hear it here.</p>;
+        return <p className="no-selection">{NO_SAMPLE_HINT}</p>;
     }
 
     return <FocusedWaveform sampleHash={focusedSampleHash} />;

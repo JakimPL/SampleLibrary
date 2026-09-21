@@ -1,12 +1,11 @@
 import type { ReactElement } from "react";
 
 import type { SampleDetail, SampleRelation, SimilarSample } from "../api/samples";
+import { DetailHeader } from "../shared/DetailHeader";
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
-import { OptionalLabel } from "../shared/OptionalLabel";
-import { SpectralDistanceReadout } from "../workspace/panels/SpectralDistanceReadout";
 import { AnnotationRows } from "./AnnotationRows";
-import { CategoryBadge } from "./CategoryBadge";
+import { SampleFileRow } from "./SampleFileRow";
 import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { SampleRelationRow } from "./SampleRelationRow";
 import { SimilarSampleRow } from "./SimilarSampleRow";
@@ -26,7 +25,7 @@ interface DetailTabChoice {
     readonly label: string;
 }
 
-function OccurrencesSection({ sample }: { readonly sample: SampleDetail }): ReactElement {
+function ModuleOccurrencesTable({ sample }: { readonly sample: SampleDetail }): ReactElement {
     return (
         <table className="mini">
             <thead>
@@ -49,6 +48,42 @@ function OccurrencesSection({ sample }: { readonly sample: SampleDetail }): Reac
                 ))}
             </tbody>
         </table>
+    );
+}
+
+function SampleFilesTable({ sample }: { readonly sample: SampleDetail }): ReactElement {
+    return (
+        <table className="mini">
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th>Directory</th>
+                    <th>Rate</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {sample.files.map((sampleFile) => (
+                    <SampleFileRow
+                        key={`${sampleFile.location.directory}/${sampleFile.location.relative_path}`}
+                        sampleFile={sampleFile}
+                    />
+                ))}
+            </tbody>
+        </table>
+    );
+}
+
+/** Every place the sample was found: the module slots holding it, then the files of sample directories. */
+function OccurrencesSection({ sample }: { readonly sample: SampleDetail }): ReactElement {
+    if (sample.occurrences.length === 0 && sample.files.length === 0) {
+        return <p className="placeholder-box">No module or sample file holds this sample any more.</p>;
+    }
+    return (
+        <>
+            {sample.occurrences.length > 0 && <ModuleOccurrencesTable sample={sample} />}
+            {sample.files.length > 0 && <SampleFilesTable sample={sample} />}
+        </>
     );
 }
 
@@ -124,7 +159,7 @@ export function SampleDetailView({
     onTabChange,
 }: SampleDetailViewProps): ReactElement {
     const choices: readonly DetailTabChoice[] = [
-        { id: "occurrences", label: `Occurrences (${String(sample.occurrences.length)})` },
+        { id: "occurrences", label: `Occurrences (${String(sample.occurrences.length + sample.files.length)})` },
         { id: "relations", label: `Relations (${String(relations.length)})` },
         { id: "similar", label: `Similar (${String(similar.length)})` },
         { id: "cooccurrence", label: "Co-occurs" },
@@ -145,16 +180,8 @@ export function SampleDetailView({
 
     return (
         <section className="detail-scroll">
-            <h2>
-                <OptionalLabel value={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} />
-            </h2>
-            <p className="hash mono cell-muted">{sample.hash}</p>
-            <SpectralDistanceReadout />
+            <DetailHeader name={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} hash={sample.hash} />
             <dl className="kv">
-                <dt>Category</dt>
-                <dd>
-                    <CategoryBadge sampleHash={sample.hash} category={sample.category} handLabel={sample.hand_label} />
-                </dd>
                 <AnnotationRows key={sample.hash} sample={sample} />
                 <dt>Size</dt>
                 <dd className="mono">{formatBytes(sample.size_bytes)}</dd>

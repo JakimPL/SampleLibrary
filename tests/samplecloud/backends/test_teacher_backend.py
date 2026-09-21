@@ -7,11 +7,13 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from samplecloud.backends import teacher_backend
+from samplecloud.backends import teacher_backend, transformers_teacher
 from samplecloud.backends.teacher_backend import (
     TEACHER_BACKEND_NAME,
+    TEACHER_CHECKPOINT,
     TEACHER_EMBEDDING_SIZE,
     TEACHER_RATE_HZ,
+    TEACHER_REVISION,
     ClapFeatureExtractor,
     load_teacher,
     prepare_for_teacher,
@@ -103,3 +105,20 @@ def test_a_clip_fills_the_window_whole_and_rests_against_silence(case: WindowCas
 
     assert filled.shape == (case.window,)
     assert tuple(filled.tolist()) == case.expected_head
+
+
+def test_the_teacher_loads_the_commit_this_build_pins(monkeypatch: pytest.MonkeyPatch) -> None:
+    loaded: list[dict[str, object]] = []
+
+    class RecordingTransformersTeacher:
+        def __init__(self, **arguments: object) -> None:
+            loaded.append(arguments)
+
+    monkeypatch.setattr(teacher_backend, "teacher_available", lambda: True)
+    monkeypatch.setattr(transformers_teacher, "TransformersTeacher", RecordingTransformersTeacher)
+
+    load_teacher(device="cpu")
+
+    assert loaded == [
+        {"checkpoint": TEACHER_CHECKPOINT, "revision": TEACHER_REVISION, "rate_hz": TEACHER_RATE_HZ, "device": "cpu"}
+    ]

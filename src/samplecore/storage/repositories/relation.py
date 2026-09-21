@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from sqlalchemy import Connection, Row, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
+from samplecore.digests import digest_of_rows
 from samplecore.models.relation import RelationReview, RelationType, SampleRelation
 from samplecore.storage.database import sample_relation, sample_relation_id_sequence
 
@@ -92,6 +93,27 @@ class PostgresSampleRelationRepository:
         )
         rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_relation(row) for row in rows)
+
+    def membership_digest(self) -> str:
+        """One digest over which pairs are related and how, so a reader of equivalence classes can tell whether they moved.
+
+        The review columns stay out of it, since a person reviewing a relation leaves the classes as they were.
+        """
+        statement = select(
+            sample_relation.c.subject_hash,
+            sample_relation.c.reference_hash,
+            sample_relation.c.relation_type,
+            sample_relation.c.method,
+        ).order_by(
+            sample_relation.c.subject_hash,
+            sample_relation.c.reference_hash,
+            sample_relation.c.relation_type,
+            sample_relation.c.method,
+        )
+        return digest_of_rows(
+            (str(row.subject_hash), str(row.reference_hash), str(row.relation_type), str(row.method))
+            for row in self._connection.execute(statement)
+        )
 
 
 def _row_to_relation(row: Row[Any]) -> SampleRelation:

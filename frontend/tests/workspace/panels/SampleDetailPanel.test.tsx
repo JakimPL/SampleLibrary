@@ -3,20 +3,26 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../../../src/api/client";
+import type * as CloudApi from "../../../src/api/cloud";
 import type * as SamplesApi from "../../../src/api/samples";
 import { SampleDetailPanel } from "../../../src/workspace/panels/SampleDetailPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
-const { getSample, getSampleRelations, getSimilarSamples, getSampleDistance } = vi.hoisted(() => ({
+const { getSample, getSampleRelations, getSimilarSamples, getCategoryTags } = vi.hoisted(() => ({
     getSample: vi.fn(),
     getSampleRelations: vi.fn(),
     getSimilarSamples: vi.fn(),
-    getSampleDistance: vi.fn(),
+    getCategoryTags: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations, getSimilarSamples, getSampleDistance };
+    return { ...actual, getSample, getSampleRelations, getSimilarSamples };
+});
+
+vi.mock("../../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
+    return { ...actual, getCategoryTags };
 });
 
 function renderPanel(): ReturnType<typeof render> {
@@ -37,11 +43,12 @@ const SAMPLE_DETAIL = {
     channels: 1,
     frames: 4096,
     display_name: "kick",
-    category: "kick",
+    category: "BASS DRUM",
+    hand_label: null,
     size_bytes: 8192,
     duration_seconds: 0.09,
     playback_rate_hz: 8363,
-    suggested_labels: [],
+    categories: [],
     occurrences: [
         {
             properties: {
@@ -56,13 +63,15 @@ const SAMPLE_DETAIL = {
             module: { hash: "module-1", title: "A Song", filename: "song.xm", tracker: "xm" },
         },
     ],
+    files: [],
 };
 
 describe("SampleDetailPanel", () => {
-    it("shows a placeholder when no sample is focused", () => {
-        renderPanel();
+    it("asks the catalog for nothing and stands in its empty state while no sample is focused", () => {
+        const { container } = renderPanel();
 
-        expect(screen.getByText(/No sample selected yet/)).toBeInTheDocument();
+        expect(getSample).not.toHaveBeenCalled();
+        expect(container.querySelector(".no-selection")).toBeInTheDocument();
     });
 
     it("shows the focused sample's detail once loaded", async () => {
@@ -76,10 +85,41 @@ describe("SampleDetailPanel", () => {
         await waitFor(() => {
             expect(screen.getByRole("heading", { name: "kick" })).toBeInTheDocument();
         });
+        expect(screen.getByText("abc")).toBeInTheDocument();
+        expect([...document.querySelectorAll(".kv dt")].map((term) => term.textContent).slice(0, 2)).toEqual([
+            "Label",
+            "Categories",
+        ]);
+        expect(screen.queryByText("Category")).not.toBeInTheDocument();
         expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/module-1");
         expect(screen.getByRole("button", { name: "Occurrences (1)" })).toHaveAttribute("aria-pressed", "true");
         expect(screen.getByRole("button", { name: "Similar (0)" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Co-occurs" })).toBeInTheDocument();
+    });
+
+    it("lists the sample files a sample was found in beside its module slots, marking a file gone since its scan", async () => {
+        getSample.mockResolvedValue({
+            ...SAMPLE_DETAIL,
+            occurrences: [],
+            files: [
+                { location: { directory: "/packs", relative_path: "Kicks/Kick 01.wav" }, rate: 44100, available: true },
+                {
+                    location: { directory: "/packs", relative_path: "Kicks/Kick 02.wav" },
+                    rate: 44100,
+                    available: false,
+                },
+            ],
+        });
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+        useSelectionStore.getState().focusSample("abc");
+
+        renderPanel();
+
+        expect(await screen.findByRole("button", { name: "Occurrences (2)" })).toHaveAttribute("aria-pressed", "true");
+        expect(screen.getByText("Kicks/Kick 01.wav")).toBeInTheDocument();
+        expect(screen.getAllByText("unavailable")).toHaveLength(1);
+        expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
     });
 
     it("renders the sample's spectral neighbors on their own tab, with what a glance shows", async () => {
@@ -91,7 +131,7 @@ describe("SampleDetailPanel", () => {
                 distance: 1.5,
                 playback_rate_hz: null,
                 display_name: "snare_909",
-                category: "snare",
+                category: "SNARE",
                 hand_label: null,
                 thumbnail: null,
             },
@@ -103,6 +143,7 @@ describe("SampleDetailPanel", () => {
 
         expect(screen.getByText("dddddddd")).toBeInTheDocument();
         expect(screen.getByText("snare_909")).toBeInTheDocument();
+        expect(screen.getByText("SNARE")).toBeInTheDocument();
         expect(screen.getByText("1.500")).toBeInTheDocument();
         expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
     });
@@ -147,24 +188,6 @@ describe("SampleDetailPanel", () => {
         await waitFor(() => {
             expect(screen.getByRole("alert")).toHaveTextContent("no sample cataloged with hash 'abc'");
         });
-    });
-
-    it("shows the spectral distance to a comparison sample and clears it on request", async () => {
-        getSample.mockResolvedValue(SAMPLE_DETAIL);
-        getSampleRelations.mockResolvedValue([]);
-        getSimilarSamples.mockResolvedValue([]);
-        getSampleDistance.mockResolvedValue({ sample_hash: "abc", other_hash: "def", distance: 2.5 });
-        useSelectionStore.getState().focusSample("abc");
-        useSelectionStore.getState().setComparisonSample("def");
-
-        renderPanel();
-
-        expect(await screen.findByText("distance 2.500")).toBeInTheDocument();
-        expect(getSampleDistance).toHaveBeenCalledWith("abc", "def");
-
-        fireEvent.click(screen.getByRole("button", { name: "Clear comparison" }));
-
-        expect(useSelectionStore.getState().comparisonSampleHash).toBeNull();
     });
 
     it("highlights an occurrence's module row on a plain click and navigates to it on a double-click", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { useSelectionStore } from "../../src/workspace/selectionStore";
+import { INITIAL_SELECTION_STATE, morphAnchorOf, useSelectionStore } from "../../src/workspace/selectionStore";
 
 describe("selectionStore", () => {
     it("starts with nothing highlighted or focused", () => {
@@ -51,26 +51,29 @@ describe("selectionStore", () => {
         expect(state.focusedSampleHash).toBe("sample-a");
         expect(state.highlighted).toEqual({ kind: "module", hash: "module-a" });
     });
+});
 
-    it("setComparisonSample sets the comparison sample without touching the highlight or focus", () => {
+describe("morphAnchorOf", () => {
+    it("takes the highlighted sample, the one in hand", () => {
+        useSelectionStore.setState(INITIAL_SELECTION_STATE);
         useSelectionStore.getState().focusSample("sample-a");
+        useSelectionStore.getState().highlightEntity({ kind: "sample", hash: "sample-b" });
 
-        useSelectionStore.getState().setComparisonSample("sample-b");
-
-        const state = useSelectionStore.getState();
-        expect(state.comparisonSampleHash).toBe("sample-b");
-        expect(state.focusedSampleHash).toBe("sample-a");
-        expect(state.highlighted).toEqual({ kind: "sample", hash: "sample-a" });
+        expect(morphAnchorOf(useSelectionStore.getState())).toBe("sample-b");
     });
 
-    it("clearComparisonSample removes the comparison sample without touching the highlight or focus", () => {
+    it("falls back to the focused sample while a module is highlighted", () => {
+        useSelectionStore.setState(INITIAL_SELECTION_STATE);
         useSelectionStore.getState().focusSample("sample-a");
-        useSelectionStore.getState().setComparisonSample("sample-b");
+        useSelectionStore.getState().highlightEntity({ kind: "module", hash: "module-a" });
 
-        useSelectionStore.getState().clearComparisonSample();
+        expect(morphAnchorOf(useSelectionStore.getState())).toBe("sample-a");
+    });
 
-        const state = useSelectionStore.getState();
-        expect(state.comparisonSampleHash).toBeNull();
-        expect(state.focusedSampleHash).toBe("sample-a");
+    it("answers with nothing while no sample is in hand", () => {
+        useSelectionStore.setState(INITIAL_SELECTION_STATE);
+        useSelectionStore.getState().highlightEntity({ kind: "module", hash: "module-a" });
+
+        expect(morphAnchorOf(useSelectionStore.getState())).toBeNull();
     });
 });

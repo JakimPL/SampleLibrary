@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -15,13 +16,16 @@ from samplecore.storage.database import (
     SCHEMA_LOCK_KEY,
     checkout_read_only,
     chunks,
+    claim_named_lock,
     connect,
     connect_for_curation,
     create_pooled_engine,
     create_schema,
     module,
+    named_lock_key,
 )
 
+LOCK_RELEASE_DEADLINE_SECONDS = 10.0
 EXPECTED_TABLES = frozenset(
     {
         "sample",
@@ -30,7 +34,7 @@ EXPECTED_TABLES = frozenset(
         "xm_sample_properties",
         "it_sample_properties",
         "sample_relation",
-        "sample_label_suggestion",
+        "sample_category",
     }
 )
 
@@ -105,7 +109,7 @@ def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alo
         connection.close()
 
     assert catalog_tables == set()
-    assert curation_tables == {"sample_annotation", "tag_rank"}
+    assert curation_tables == {"sample_annotation", "tag_rank", "annotation_import"}
 
 
 def test_a_curation_connection_waits_for_the_schema_claim(connection: Connection, _database_url: str) -> None:
@@ -208,3 +212,28 @@ def test_a_writable_checkout_between_read_only_ones_writes_and_leaves_the_next_r
             checked_out.close()
     finally:
         engine.dispose()
+
+
+def test_one_lock_name_stands_for_one_key_in_the_signed_64_bit_range() -> None:
+    names = ("samplelibrary-a-teacher", "samplelibrary-a-descriptor", "samplelibrary-b-teacher")
+    keys = [named_lock_key(name) for name in names]
+
+    assert keys == [named_lock_key(name) for name in names]
+    assert len(set(keys)) == len(names)
+    assert all(-(2**63) <= key < 2**63 for key in keys)
+
+
+def test_a_named_lock_is_free_again_once_the_connection_holding_it_closes(
+    connection: Connection, _database_url: str
+) -> None:
+    holder = connect(_database_url, read_only=True)
+    assert claim_named_lock(holder, "samplelibrary-held-step")
+
+    assert not claim_named_lock(connection, "samplelibrary-held-step")
+    holder.close()
+    # The server lets go of a closed session's locks as its backend exits, a moment after the close.
+    deadline = time.monotonic() + LOCK_RELEASE_DEADLINE_SECONDS
+    while not claim_named_lock(connection, "samplelibrary-held-step"):
+        assert time.monotonic() < deadline, "the lock stayed held after its connection closed"
+        time.sleep(0.05)
+    connection.execute(select(func.pg_advisory_unlock(named_lock_key("samplelibrary-held-step"))))

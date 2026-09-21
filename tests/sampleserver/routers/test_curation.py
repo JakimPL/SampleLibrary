@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -10,11 +11,12 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation, SampleFileAnchor
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.repositories.module import PostgresModuleRepository
@@ -23,6 +25,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import (
     PostgresSampleAnnotationRepository,
 )
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import (
     PostgresSamplePropertiesRepository,
 )
@@ -142,9 +145,31 @@ def test_an_annotation_is_anchored_to_the_module_slot_it_was_found_in(
 
     stored = PostgresSampleAnnotationRepository(connection).get(SAMPLE_HASH_A)
     assert stored is not None
-    assert stored.occurrence == SampleOccurrence(module_hash="c" * 64, instrument_index=0, sample_slot=0)
-    assert stored.module_filename == "song.xm"
-    assert stored.sample_name == "lead"
+    assert stored.anchor == ModuleSlotAnchor(
+        occurrence=SampleOccurrence(module_hash="c" * 64, instrument_index=0, sample_slot=0),
+        module_filename="song.xm",
+        sample_name="lead",
+    )
+
+
+def test_a_sample_found_only_in_a_file_is_anchored_to_that_file(client: TestClient, connection: Connection) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    location = SampleFileLocation(directory=Path("/samples"), relative_path="Kicks/Deep 01.wav")
+    PostgresSampleFileRepository(connection).upsert(
+        SampleFile(
+            sample_hash=sample.hash,
+            location=location,
+            rate=44100,
+            fingerprint=FileFingerprint(size_bytes=64, modified_ns=0),
+        )
+    )
+
+    response = _change(client, SAMPLE_HASH_A, rating=4)
+
+    assert response.json()["skipped"] == []
+    stored = PostgresSampleAnnotationRepository(connection).get(SAMPLE_HASH_A)
+    assert stored is not None
+    assert stored.anchor == SampleFileAnchor(location=location)
 
 
 def test_an_annotated_sample_reports_its_decisions_in_its_own_detail(
@@ -156,7 +181,6 @@ def test_an_annotated_sample_reports_its_decisions_in_its_own_detail(
     body = client.get(f"/samples/{SAMPLE_HASH_A}").json()
 
     assert (body["hand_label"], body["rating"], body["favorite"]) == ("WARM PAD", 3, True)
-    assert body["category"] == "lead"
 
 
 def test_an_annotated_sample_reports_its_decisions_in_the_listing(client: TestClient, connection: Connection) -> None:
@@ -297,7 +321,11 @@ def test_a_group_member_with_nothing_to_anchor_it_is_left_saying_nothing(
 
 def test_a_group_member_keeps_the_anchor_its_own_annotation_carries(client: TestClient, connection: Connection) -> None:
     module = _seed_a_pair_with_an_unplaced_member(connection)
-    stored_anchor = SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=9)
+    stored_anchor = ModuleSlotAnchor(
+        occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=9),
+        module_filename="song.xm",
+        sample_name="gone",
+    )
     repository = PostgresSampleAnnotationRepository(connection)
     repository.upsert_many(
         (
@@ -306,9 +334,7 @@ def test_a_group_member_keeps_the_anchor_its_own_annotation_carries(client: Test
                 label="stale",
                 rating=3,
                 favorite=False,
-                occurrence=stored_anchor,
-                module_filename="song.xm",
-                sample_name="gone",
+                anchor=stored_anchor,
                 source=AnnotationSource.SAMPLE,
                 annotated_at=datetime.now(UTC),
             ),
@@ -320,7 +346,7 @@ def test_a_group_member_keeps_the_anchor_its_own_annotation_carries(client: Test
 
     stored = repository.get(SAMPLE_HASH_B)
     assert stored is not None
-    assert (stored.label, stored.rating, stored.occurrence) == ("CLAP", 3, stored_anchor)
+    assert (stored.label, stored.rating, stored.anchor) == ("CLAP", 3, stored_anchor)
 
 
 def test_annotating_a_sample_neither_cataloged_nor_annotated_is_refused(client: TestClient) -> None:
@@ -372,9 +398,11 @@ def test_an_annotation_whose_sample_left_the_catalog_can_be_changed_and_removed(
                 label="orphaned",
                 rating=None,
                 favorite=True,
-                occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=3),
-                module_filename="song.xm",
-                sample_name="gone",
+                anchor=ModuleSlotAnchor(
+                    occurrence=SampleOccurrence(module_hash=module.hash, instrument_index=0, sample_slot=3),
+                    module_filename="song.xm",
+                    sample_name="gone",
+                ),
                 source=AnnotationSource.SAMPLE,
                 annotated_at=datetime.now(UTC),
             ),

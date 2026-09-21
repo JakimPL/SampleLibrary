@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 from typing import Any, Final, Protocol
 
 from sqlalchemy import Connection, Row, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.digests import digest_of_rows
+from samplecore.models.annotation import (
+    AnnotationAnchor,
+    AnnotationSource,
+    ModuleSlotAnchor,
+    SampleAnnotation,
+    SampleFileAnchor,
+)
+from samplecore.models.sample_file import SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.curation import sample_annotation
 from samplecore.storage.database import HASH_CHUNK_SIZE, POSTGRES_PARAMETER_LIMIT, chunks, sample
@@ -142,6 +151,18 @@ class PostgresSampleAnnotationRepository:
         )
         return tuple(row.label for row in self._connection.execute(statement).fetchall())
 
+    def label_digest(self) -> str:
+        """One digest over every hand label by sample, so a pass taught by the labels can tell whether one changed.
+
+        Ratings and favorites stay out of it, since nothing trained on the labels reads them.
+        """
+        statement = (
+            select(sample_annotation.c.sample_hash, sample_annotation.c.label)
+            .where(sample_annotation.c.label.is_not(None))
+            .order_by(sample_annotation.c.sample_hash)
+        )
+        return digest_of_rows((str(row.sample_hash), str(row.label)) for row in self._connection.execute(statement))
+
 
 def _sample_annotation_to_values(annotation: SampleAnnotation) -> dict[str, Any]:
     return {
@@ -149,14 +170,35 @@ def _sample_annotation_to_values(annotation: SampleAnnotation) -> dict[str, Any]
         "label": annotation.label,
         "rating": annotation.rating,
         "favorite": annotation.favorite,
-        "module_hash": annotation.occurrence.module_hash,
-        "module_filename": annotation.module_filename,
-        "instrument_index": annotation.occurrence.instrument_index,
-        "sample_slot": annotation.occurrence.sample_slot,
-        "sample_name": annotation.sample_name,
+        **_anchor_values(annotation.anchor),
         "source": annotation.source.value,
         "annotated_at": annotation.annotated_at,
     }
+
+
+def _anchor_values(anchor: AnnotationAnchor) -> dict[str, str | int | None]:
+    """The anchor columns of a row, those of the anchor's own kind filled and the others left empty."""
+    match anchor:
+        case ModuleSlotAnchor():
+            return {
+                "module_hash": anchor.occurrence.module_hash,
+                "module_filename": anchor.module_filename,
+                "instrument_index": anchor.occurrence.instrument_index,
+                "sample_slot": anchor.occurrence.sample_slot,
+                "sample_name": anchor.sample_name,
+                "file_directory": None,
+                "file_relative_path": None,
+            }
+        case SampleFileAnchor():
+            return {
+                "module_hash": None,
+                "module_filename": None,
+                "instrument_index": None,
+                "sample_slot": None,
+                "sample_name": None,
+                "file_directory": anchor.location.directory.as_posix(),
+                "file_relative_path": anchor.location.relative_path,
+            }
 
 
 def _row_to_sample_annotation(row: Row[Any]) -> SampleAnnotation:
@@ -166,13 +208,22 @@ def _row_to_sample_annotation(row: Row[Any]) -> SampleAnnotation:
         label=row.label,
         rating=row.rating,
         favorite=row.favorite,
+        anchor=_row_to_anchor(row),
+        source=AnnotationSource(row.source),
+        annotated_at=row.annotated_at,
+    )
+
+
+def _row_to_anchor(row: Row[Any]) -> AnnotationAnchor:
+    """The anchor a row holds, told apart by which anchor's columns are filled, as the table's CHECK keeps them."""
+    if row.module_hash is None:
+        return SampleFileAnchor(
+            location=SampleFileLocation(directory=Path(row.file_directory), relative_path=row.file_relative_path)
+        )
+    return ModuleSlotAnchor(
         occurrence=SampleOccurrence(
-            module_hash=row.module_hash,
-            instrument_index=row.instrument_index,
-            sample_slot=row.sample_slot,
+            module_hash=row.module_hash, instrument_index=row.instrument_index, sample_slot=row.sample_slot
         ),
         module_filename=row.module_filename,
         sample_name=row.sample_name,
-        source=AnnotationSource(row.source),
-        annotated_at=row.annotated_at,
     )

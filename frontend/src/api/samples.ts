@@ -53,7 +53,7 @@ export async function getSimilarSamples(sampleHash: string): Promise<readonly Si
     return requestJson<readonly SimilarSample[]>(`/samples/${sampleHash}/similar`);
 }
 
-/** A sample as a hover shows it: name, category, hand label and the stored thumbnail, in one light request. */
+/** A sample as a hover shows it: name, category and hand label, and the stored thumbnail, in one light request. */
 export async function getSamplePreview(sampleHash: string): Promise<SamplePreview> {
     return requestJson<SamplePreview>(`/samples/${sampleHash}/preview`);
 }

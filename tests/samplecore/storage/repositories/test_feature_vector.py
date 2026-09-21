@@ -61,7 +61,7 @@ def test_an_experiments_vectors_are_listed_in_sample_hash_order(
     assert [vector.sample_hash for vector in listed] == sorted(sample.hash for sample in by_descending_hash)
 
 
-def test_an_experiments_sample_hashes_and_first_vectors_are_read_on_their_own(
+def test_an_experiments_sample_hashes_and_vectors_in_hash_order_are_read_on_their_own(
     connection: Connection, stored_sample: Sample, stored_sample_b: Sample
 ) -> None:
     experiment_id = _create_experiment(connection)
@@ -72,7 +72,12 @@ def test_an_experiments_sample_hashes_and_first_vectors_are_read_on_their_own(
     first_hash = min(stored_sample.hash, stored_sample_b.hash)
 
     assert repository.sample_hashes_for_experiment(experiment_id) == {stored_sample.hash, stored_sample_b.hash}
-    assert [vector.sample_hash for vector in repository.first_vectors(experiment_id, count=1)] == [first_hash]
+    assert [vector.sample_hash for vector in repository.vectors_in_hash_order(experiment_id, count=1, offset=0)] == [
+        first_hash
+    ]
+    assert [vector.sample_hash for vector in repository.vectors_in_hash_order(experiment_id, count=5, offset=1)] == [
+        max(stored_sample.hash, stored_sample_b.hash)
+    ]
 
 
 def test_two_experiments_hold_independent_vectors_for_the_same_sample(
@@ -101,3 +106,41 @@ def test_inserting_a_vector_for_an_uncataloged_sample_fails(connection: Connecti
 def test_inserting_a_vector_for_an_unknown_experiment_fails(connection: Connection, stored_sample: Sample) -> None:
     with pytest.raises(psycopg.errors.ForeignKeyViolation):
         PostgresSampleFeatureVectorRepository(connection).insert_many([_vector(999_999, stored_sample.hash)])
+
+
+def test_the_membership_digest_moves_with_a_heard_rate_and_leaves_other_experiments_alone(
+    connection: Connection, stored_sample: Sample
+) -> None:
+    experiments = PostgresExperimentRepository(connection)
+    heard = experiments.create(backend_name="clap", label=None, params={}, key=None)
+    other = experiments.create(backend_name="clap", label=None, params={}, key=None)
+    repository = PostgresSampleFeatureVectorRepository(connection)
+    repository.insert_many(
+        [
+            SampleFeatureVector(
+                experiment_id=heard,
+                sample_hash=stored_sample.hash,
+                vector=(1.0, 0.0),
+                computed_at=datetime.now(UTC),
+                heard_rate=22050,
+            )
+        ]
+    )
+    before = (repository.membership_digest(heard), repository.membership_digest(other))
+
+    repository.delete_for_samples(heard, [stored_sample.hash])
+    repository.insert_many(
+        [
+            SampleFeatureVector(
+                experiment_id=heard,
+                sample_hash=stored_sample.hash,
+                vector=(1.0, 0.0),
+                computed_at=datetime.now(UTC),
+                heard_rate=11025,
+            )
+        ]
+    )
+
+    assert repository.membership_digest(heard) != before[0]
+    assert repository.membership_digest(other) == before[1]
+    assert repository.heard_rates_for_experiment(heard) == {stored_sample.hash: 11025}

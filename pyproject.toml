@@ -23,19 +23,22 @@ server = ["fastapi>=0.120", "uvicorn>=0.35", "httpx>=0.28"]
 cloud = ["librosa>=0.11", "umap-learn>=0.5", "scikit-learn>=1.9", "mlflow>=3.6"]
 morph = [
     "librosa>=0.11",
+    "pghipy>=0.1",
+    "fastapi>=0.120",
+    "uvicorn>=0.35",
+    "pyyaml>=6.0",
+    "python-multipart>=0.0.20",
+]
+descriptor = [
+    "librosa>=0.11",
     "scikit-learn>=1.9",
     "torch>=2.9",
     "lightning>=2.5",
     "threadpoolctl>=3.6",
-    "pyloudnorm>=0.2",
-    "pghipy>=0.1",
-    "fastapi>=0.120",
-    "uvicorn>=0.35",
     "mlflow>=3.6",
 ]
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]
-perceptual = ["torch>=2.9", "cdpam>=0.0.4", "resampy>=0.4"]
 
 [project.scripts]
 samplelibrary = "samplelibrary.cli:main"
@@ -66,6 +69,9 @@ dev = [
     "import-linter>=2.5",
     "pre-commit==4.6.0",
     "marimo>=0.23",
+    "hypothesis==6.168.0",
+    "types-pyyaml==6.0.12.20260906",
+    "threadpoolctl>=3.6",
 ]
 
 [build-system]
@@ -79,6 +85,7 @@ packages = [
     "src/samplecloud",
     "src/sampleserver",
     "src/samplemorph",
+    "src/sampledescriptor",
     "src/samplelibrary",
 ]
 
@@ -88,6 +95,7 @@ packages = [
 "src/samplecloud/py.typed" = "samplecloud/py.typed"
 "src/sampleserver/py.typed" = "sampleserver/py.typed"
 "src/samplemorph/py.typed" = "samplemorph/py.typed"
+"src/sampledescriptor/py.typed" = "sampledescriptor/py.typed"
 "src/samplelibrary/py.typed" = "samplelibrary/py.typed"
 
 [tool.black]
@@ -98,16 +106,20 @@ extend-exclude = "trackmod"
 [tool.isort]
 profile = "black"
 line_length = 120
-known_first_party = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "samplelibrary"]
+known_first_party = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "sampledescriptor", "samplelibrary"]
 known_third_party = ["trackmod"]
 skip = ["trackmod"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib -m 'not pipeline_real and not pipeline_explore'"
+markers = [
+    "pipeline_real: runs the pipeline's real programs, listening model and training included; `just test-pipeline` runs them",
+    "pipeline_explore: acts on a library in orders Hypothesis draws, for minutes; `just explore-pipeline` runs it",
+]
 
 [tool.coverage.run]
-source = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "samplelibrary"]
+source = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "sampledescriptor", "samplelibrary"]
 # Extraction's worker processes count only when coverage follows multiprocessing's children.
 concurrency = ["multiprocessing", "thread"]
 sigterm = true
@@ -151,30 +163,45 @@ disable = [
 max-line-length = 120
 
 [tool.importlinter]
-root_packages = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "samplelibrary"]
+root_packages = [
+    "samplecore",
+    "sampleextract",
+    "samplecloud",
+    "sampleserver",
+    "samplemorph",
+    "sampledescriptor",
+    "samplelibrary",
+]
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "the command line sits over every package, and none of them imports it"
 type = "forbidden"
-source_modules = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph"]
+source_modules = ["samplecore", "sampleextract", "samplecloud", "sampleserver", "samplemorph", "sampledescriptor"]
 forbidden_modules = ["samplelibrary"]
+
+[[tool.importlinter.contracts]]
+name = "the memory ceiling boundary reaches the core alone"
+type = "forbidden"
+source_modules = ["samplelibrary.limits"]
+forbidden_modules = ["sampleextract", "samplecloud", "sampleserver", "samplemorph", "sampledescriptor"]
 
 [[tool.importlinter.contracts]]
 name = "core has no dependents among peer packages"
 type = "forbidden"
 source_modules = ["samplecore"]
-forbidden_modules = ["sampleextract", "samplecloud", "sampleserver", "samplemorph"]
+forbidden_modules = ["sampleextract", "samplecloud", "sampleserver", "samplemorph", "sampledescriptor"]
 
 [[tool.importlinter.contracts]]
 name = "server never imports the offline batch pipelines"
 type = "forbidden"
 source_modules = ["sampleserver"]
-forbidden_modules = ["sampleextract", "samplecloud", "samplemorph"]
+forbidden_modules = ["sampleextract", "samplecloud", "samplemorph", "sampledescriptor"]
 
 [[tool.importlinter.contracts]]
 name = "the offline pipelines never import the server, which reads what they write"
 type = "forbidden"
-source_modules = ["sampleextract", "samplecloud", "samplemorph"]
+source_modules = ["sampleextract", "samplecloud", "samplemorph", "sampledescriptor"]
 forbidden_modules = ["sampleserver"]
 
 [[tool.importlinter.contracts]]
@@ -188,18 +215,61 @@ type = "independence"
 modules = ["sampleextract", "samplemorph"]
 
 [[tool.importlinter.contracts]]
-name = "the morph pipeline never imports the cloud, which is the layer over it"
+name = "extraction stays independent of the descriptor pipeline"
+type = "independence"
+modules = ["sampleextract", "sampledescriptor"]
+
+[[tool.importlinter.contracts]]
+name = "the morph and descriptor pipelines never import the cloud, which is the layer over them"
 type = "forbidden"
-source_modules = ["samplemorph"]
+source_modules = ["samplemorph", "sampledescriptor"]
 forbidden_modules = ["samplecloud"]
 
 [[tool.importlinter.contracts]]
-name = "the morph service is the pipeline over HTTP, clear of training and of every other package"
+name = "the morph renderer never reaches the descriptor, the run tracking or the training stack"
+type = "forbidden"
+source_modules = ["samplemorph"]
+forbidden_modules = [
+    "sampledescriptor",
+    "samplecore.tracking",
+    "torch",
+    "lightning",
+    "mlflow",
+    "sklearn",
+    "threadpoolctl",
+]
+
+[[tool.importlinter.contracts]]
+name = "the morph service is the pipeline over HTTP, clear of the shell and of every other package"
 type = "forbidden"
 source_modules = ["samplemorph.service"]
-forbidden_modules = ["samplemorph.training", "samplemorph.commands", "sampleextract", "samplecloud", "sampleserver"]
+forbidden_modules = ["samplemorph.commands", "sampleextract", "samplecloud", "sampleserver"]
 
 [[tool.importlinter.contracts]]
 name = "the morph shell and the morph service are two skins over one pipeline"
 type = "independence"
 modules = ["samplemorph.commands", "samplemorph.service"]
+
+[[tool.importlinter.contracts]]
+name = "the transport is the analysis the envelope morph stands on, and stands on its own"
+type = "forbidden"
+source_modules = ["samplemorph.transport"]
+forbidden_modules = ["samplemorph.envelope", "samplemorph.routes", "samplemorph.service"]
+
+[[tool.importlinter.contracts]]
+name = "the envelope morph is read by the routes, the shell and the service, and reads none of them"
+type = "forbidden"
+source_modules = ["samplemorph.envelope"]
+forbidden_modules = ["samplemorph.routes", "samplemorph.commands", "samplemorph.service"]
+
+[[tool.importlinter.contracts]]
+name = "the pitch readers are read by the routes, and read none of the layers over them"
+type = "forbidden"
+source_modules = ["samplemorph.coordinates"]
+forbidden_modules = [
+    "samplemorph.routes",
+    "samplemorph.commands",
+    "samplemorph.service",
+    "samplemorph.envelope",
+    "samplemorph.transport",
+]

@@ -14,6 +14,9 @@ from samplecore.waveform import fold_to_mono
 
 TEACHER_BACKEND_NAME: Final[str] = "clap"
 TEACHER_CHECKPOINT: Final[str] = "laion/larger_clap_music_and_speech"
+# The hub serves a checkpoint's newest commit unless told otherwise, so the commit is pinned: a
+# vector read today and one read after the checkpoint's authors push again come from one model.
+TEACHER_REVISION: Final[str] = "195c3a3e68faebb3e2088b9a79e79b43ddbda76b"
 TEACHER_RATE_HZ: Final[int] = 48_000
 TEACHER_EMBEDDING_SIZE: Final[int] = 512
 TEACHER_EXTRA: Final[str] = "teacher"
@@ -81,7 +84,9 @@ def load_teacher(*, device: str = TEACHER_DEVICE_AUTOMATIC) -> Teacher:
     from samplecloud.backends.transformers_teacher import TransformersTeacher, preferred_device
 
     chosen = preferred_device() if device == TEACHER_DEVICE_AUTOMATIC else device
-    return TransformersTeacher(checkpoint=TEACHER_CHECKPOINT, rate_hz=TEACHER_RATE_HZ, device=chosen)
+    return TransformersTeacher(
+        checkpoint=TEACHER_CHECKPOINT, revision=TEACHER_REVISION, rate_hz=TEACHER_RATE_HZ, device=chosen
+    )
 
 
 def build_teacher_extractor() -> ClapFeatureExtractor:

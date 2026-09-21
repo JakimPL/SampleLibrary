@@ -9,6 +9,7 @@ from trackmod.schema.scalars import Rate
 
 _SANITIZED_NAME_PATTERN: Final = re.compile(r"[^a-z0-9 _-]")
 _WHITESPACE_PATTERN: Final = re.compile(r"\s+")
+NO_DISPLAY_NAME: Final[str] = ""
 
 _Candidate = TypeVar("_Candidate", str, int)
 
@@ -45,7 +46,7 @@ def choose_dominant_name(names: Iterable[str]) -> str:
     """
     sanitized_names = [sanitize_sample_name(name) for name in names]
     non_empty_names = [name for name in sanitized_names if name != ""]
-    return _choose_by_frequency(non_empty_names) or ""
+    return _choose_by_frequency(non_empty_names) or NO_DISPLAY_NAME
 
 
 def choose_dominant_rate(rates: Iterable[Rate]) -> Rate | None:

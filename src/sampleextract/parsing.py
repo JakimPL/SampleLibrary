@@ -23,16 +23,17 @@ RECOVERABLE_MODULE_ERRORS: Final[tuple[type[Exception], ...]] = (ValueError, str
 
 @unique
 class FailureStage(StrEnum):
-    """Where one module's way into the catalog stopped: its file, its format, or what it holds."""
+    """Where one file's way into the catalog stopped: reading it, parsing or decoding it, or what it holds."""
 
     READ = "read"
     PARSE = "parse"
+    DECODE = "decode"
     CATALOG = "catalog"
 
 
 @dataclass(frozen=True)
 class ExtractionFailure:
-    """One module a pass could not take in, the stage it stopped at, and why."""
+    """One file a pass could not take in, the stage it stopped at, and why."""
 
     path: Path
     stage: FailureStage

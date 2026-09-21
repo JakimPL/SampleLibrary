@@ -3,6 +3,7 @@ const BYTES_PER_UNIT_STEP = 1024;
 const DECIMAL_PLACES = 1;
 const DURATION_DECIMAL_PLACES = 2;
 const SHORT_HASH_LENGTH = 8;
+const UNSAFE_FILE_NAME_CHARACTERS = /[^\w.\- ]+/g;
 
 export function formatBytes(bytes: number): string {
     if (bytes === 0) {
@@ -32,4 +33,16 @@ export function formatDuration(seconds: number): string {
  */
 export function shortHash(hash: string): string {
     return hash.slice(0, SHORT_HASH_LENGTH);
+}
+
+/**
+ * A name a file can be saved under, from whatever the catalog calls the thing.
+ *
+ * Letters, digits, spaces, dots and dashes stand as they are and every other run becomes a single
+ * underscore, so a name carrying a path separator or a character a file system reserves still
+ * saves. A thing the catalog names with nothing at all is saved under `fallback`.
+ */
+export function fileNameStem(name: string, fallback: string): string {
+    const safe = name.replace(UNSAFE_FILE_NAME_CHARACTERS, "_").trim();
+    return safe.length > 0 ? safe : fallback;
 }

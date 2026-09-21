@@ -1,27 +1,46 @@
 import type { ReactElement } from "react";
 
+import { UNLABELED_SAMPLE_LABEL } from "../shared/labels";
 import { useSampleAnnotation } from "./annotationStore";
-import { CATEGORY_LABELS, type SampleCategory } from "./category";
+import { useCategoryColor } from "./useCategoryColor";
 
 interface CategoryBadgeProps {
     readonly sampleHash: string;
-    readonly category: SampleCategory;
+    readonly category: string | null | undefined;
     readonly handLabel: string | null;
 }
 
 /**
  * The badge naming what a sample is, wherever a sample's name appears.
  *
- * A hand label wins over the guessed category, being what a person actually decided. The fourteen
- * guessed roles each own a fixed hue, which a free-text label has no place in, so a hand label
- * wears one style of its own and reads as the different kind of statement it is.
+ * A hand label wins, being what a person actually decided, and wears a solid style of its own. In
+ * its place stands what the listening model heard first, in the dashed style a machine-made
+ * statement takes, with a swatch in its top level's color; a sample neither has named reads as
+ * unlabeled, an answer carrying no category field included, so a server built before the field
+ * existed leaves the badge saying what it knows. The label set in this session counts at once, so a
+ * badge follows an edit the moment it is made. A label longer than the room it is given ends in an
+ * ellipsis, whole in its tooltip.
  */
 export function CategoryBadge({ sampleHash, category, handLabel }: CategoryBadgeProps): ReactElement {
     const annotation = useSampleAnnotation(sampleHash, { label: handLabel, rating: null, favorite: false });
+    const colorOf = useCategoryColor();
     const resolved = annotation?.label ?? null;
     if (resolved !== null) {
-        return <span className="badge badge-hand-label">{resolved}</span>;
+        return (
+            <span className="badge badge-hand-label" title={resolved}>
+                <span className="badge-text">{resolved}</span>
+            </span>
+        );
+    }
+    if (category === null || category === undefined) {
+        return <span className="badge badge-unlabeled">{UNLABELED_SAMPLE_LABEL}</span>;
     }
 
-    return <span className={`badge badge-category-${category}`}>{CATEGORY_LABELS[category]}</span>;
+    const color = colorOf(category);
+    return (
+        <span className="badge badge-category" title={category}>
+            {color !== null && <span className="badge-swatch" style={{ background: color }} aria-hidden />}
+            <span className="badge-text">{category}</span>
+        </span>
+    );
 }

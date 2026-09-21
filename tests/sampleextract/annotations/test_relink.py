@@ -23,7 +23,7 @@ def test_a_label_follows_its_sample_through_a_change_of_hash(
     recovered = repository.get(current_hash)
     assert recovered is not None
     assert recovered.label == stored_annotation.label
-    assert recovered.occurrence == stored_annotation.occurrence
+    assert recovered.anchor == stored_annotation.anchor
 
 
 def test_a_label_whose_sample_is_still_cataloged_is_left_exactly_as_it_is(

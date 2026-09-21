@@ -78,7 +78,7 @@ def test_run_embedding_extracts_and_lays_out_the_whole_catalog(
     connection: Connection, _database_url: str, tmp_path: Path
 ) -> None:
     _store_samples(connection, tmp_path, seeds=range(SAMPLE_COUNT))
-    experiment_id = create_experiment(connection, STUB_RECIPE, label=None)
+    experiment_id = create_experiment(connection, STUB_RECIPE, label=None, key=None)
 
     summary = run_embedding(
         _config(tmp_path, _database_url), connection, experiment_id, extractor=_stub, options=PROMOTE
@@ -93,7 +93,7 @@ def test_run_embedding_extracts_and_lays_out_the_whole_catalog(
 
 def test_run_embedding_respects_the_sample_limit(connection: Connection, _database_url: str, tmp_path: Path) -> None:
     _store_samples(connection, tmp_path, seeds=range(SAMPLE_COUNT))
-    experiment_id = create_experiment(connection, STUB_RECIPE, label=None)
+    experiment_id = create_experiment(connection, STUB_RECIPE, label=None, key=None)
 
     summary = run_embedding(
         _config(tmp_path, _database_url),
@@ -109,7 +109,7 @@ def test_run_embedding_respects_the_sample_limit(connection: Connection, _databa
 def test_a_pass_over_an_empty_catalog_builds_no_extractor_and_records_no_promotion(
     connection: Connection, _database_url: str, tmp_path: Path
 ) -> None:
-    experiment_id = create_experiment(connection, STUB_RECIPE, label=None)
+    experiment_id = create_experiment(connection, STUB_RECIPE, label=None, key=None)
 
     summary = run_embedding(
         _config(tmp_path, _database_url), connection, experiment_id, extractor=_never_built, options=PROMOTE
@@ -125,7 +125,7 @@ def test_run_embedding_keeps_the_cloud_as_it_was_when_asked_only_to_extract(
     connection: Connection, _database_url: str, tmp_path: Path
 ) -> None:
     _store_samples(connection, tmp_path, seeds=range(SAMPLE_COUNT))
-    experiment_id = create_experiment(connection, STUB_RECIPE, label=None)
+    experiment_id = create_experiment(connection, STUB_RECIPE, label=None, key=None)
 
     summary = run_embedding(
         _config(tmp_path, _database_url),
@@ -146,7 +146,7 @@ def test_resuming_the_shown_experiment_with_nothing_new_keeps_its_layout(
 ) -> None:
     config = _config(tmp_path, _database_url)
     _store_samples(connection, tmp_path, seeds=range(SAMPLE_COUNT))
-    experiment_id = create_experiment(connection, STUB_RECIPE, label=None)
+    experiment_id = create_experiment(connection, STUB_RECIPE, label=None, key=None)
     run_embedding(config, connection, experiment_id, extractor=_stub, options=PROMOTE)
     laid_out = PostgresCloudCoordinateRepository(connection).revision()
 
@@ -161,9 +161,9 @@ def test_promoting_an_experiment_the_cloud_does_not_show_lays_it_out(
 ) -> None:
     config = _config(tmp_path, _database_url)
     _store_samples(connection, tmp_path, seeds=range(SAMPLE_COUNT))
-    shown = create_experiment(connection, STUB_RECIPE, label=None)
+    shown = create_experiment(connection, STUB_RECIPE, label=None, key=None)
     run_embedding(config, connection, shown, extractor=_stub, options=PROMOTE)
-    measured = create_experiment(connection, STUB_RECIPE, label=None)
+    measured = create_experiment(connection, STUB_RECIPE, label=None, key=None)
     run_embedding(
         config,
         connection,
@@ -183,7 +183,7 @@ def test_resuming_with_an_extractor_that_describes_its_samples_again_adds_the_ne
 ) -> None:
     config = _config(tmp_path, _database_url)
     _store_samples(connection, tmp_path, seeds=range(2))
-    experiment_id = create_experiment(connection, STUB_RECIPE, label=None)
+    experiment_id = create_experiment(connection, STUB_RECIPE, label=None, key=None)
     run_embedding(config, connection, experiment_id, extractor=_stub, options=PROMOTE)
     _store_samples(connection, tmp_path, seeds=range(2, SAMPLE_COUNT))
 
@@ -197,7 +197,7 @@ def test_resuming_with_a_changed_extractor_is_refused_before_any_vector_is_added
 ) -> None:
     config = _config(tmp_path, _database_url)
     _store_samples(connection, tmp_path, seeds=range(2))
-    experiment_id = create_experiment(connection, STUB_RECIPE, label=None)
+    experiment_id = create_experiment(connection, STUB_RECIPE, label=None, key=None)
     run_embedding(config, connection, experiment_id, extractor=_stub, options=PROMOTE)
     _store_samples(connection, tmp_path, seeds=range(2, SAMPLE_COUNT))
 
@@ -210,7 +210,9 @@ def test_resuming_with_a_changed_extractor_is_refused_before_any_vector_is_added
 def test_create_experiment_records_the_recipe_and_label(connection: Connection) -> None:
     recipe = EmbeddingRecipe(backend_name="learned", reading=Reading.HEARD_RATE, model_name="tiny")
 
-    experiment = PostgresExperimentRepository(connection).get(create_experiment(connection, recipe, label="one"))
+    experiment = PostgresExperimentRepository(connection).get(
+        create_experiment(connection, recipe, label="one", key=None)
+    )
 
     assert experiment is not None
     assert experiment.params == {"reading": "heard_rate", "model": "tiny"}
@@ -218,7 +220,7 @@ def test_create_experiment_records_the_recipe_and_label(connection: Connection) 
 
 
 def test_a_rebuild_resumes_the_experiment_the_cloud_shows(connection: Connection) -> None:
-    shown = create_experiment(connection, STUB_RECIPE, label=None)
+    shown = create_experiment(connection, STUB_RECIPE, label=None, key=None)
     PostgresCloudPromotionRepository(connection).record(
         CloudPromotion(experiment_id=shown, promoted_at=datetime.now(UTC))
     )

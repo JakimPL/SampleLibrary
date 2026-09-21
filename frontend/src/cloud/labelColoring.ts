@@ -13,18 +13,18 @@ export interface TopLevelTag {
     readonly rank: number;
 }
 
-/** How the cloud's sample points are colored: by the keyword category, or by the painted tags. */
-export type PointColoring =
-    | { readonly kind: "category" }
-    | {
-          readonly kind: "label";
-          /** The palette slot of every labeled sample that a painted tag reaches. */
-          readonly slotByHash: ReadonlyMap<string, number>;
-          /** The lasting rank of each painted tag, in slot order; slot `i + 1` paints in `ranks[i]`'s color. */
-          readonly ranks: readonly number[];
-      };
+/** How the cloud's sample points are colored: the painted tags, each in the color of its lasting rank. */
+export interface PointColoring {
+    /** The palette slot of every sample that a painted tag reaches. */
+    readonly slotByHash: ReadonlyMap<string, number>;
+    /** The lasting rank of each painted tag, in slot order; slot `i + 1` paints in `ranks[i]`'s color. */
+    readonly ranks: readonly number[];
+}
 
-/** The broad categories alone, most used first, ties by name. */
+/** The coloring while a mode's tags are on their way: every sample point on the ground, awaiting its color. */
+export const SUBSTRATE_ONLY_COLORING: PointColoring = { slotByHash: new Map(), ranks: [] };
+
+/** The top levels alone, most used first, ties by name. */
 export function topLevelTags(tags: readonly TagSummary[]): readonly TopLevelTag[] {
     return tags
         .flatMap((tag): TopLevelTag[] => {
@@ -75,7 +75,6 @@ export function labelColoring(
         return rank === undefined ? [] : [{ name, rank }];
     });
     return {
-        kind: "label",
         slotByHash: labelSlots(
             labels,
             known.map((tag) => tag.name),

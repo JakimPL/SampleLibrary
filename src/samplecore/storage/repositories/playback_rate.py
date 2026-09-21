@@ -6,6 +6,7 @@ from typing import Final, Protocol
 from sqlalchemy import Connection, String, cast, func, select
 from trackmod.schema.scalars import Rate
 
+from samplecore.digests import digest_of_rows
 from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, chunks, sample_playback_rate
 
 _COLUMN_NAMES: Final[tuple[str, ...]] = ("sample_hash", "rate")
@@ -79,3 +80,10 @@ class PostgresSamplePlaybackRateRepository:
         # pylint: disable-next=not-callable
         row = self._connection.execute(select(func.count(), func.coalesce(func.sum(digest), 0))).one()
         return int(row[0]), int(row[1])
+
+    def rate_digest(self) -> str:
+        """One digest over every recorded rate by sample, so a pass hearing samples as played can tell whether one moved."""
+        statement = select(sample_playback_rate.c.sample_hash, sample_playback_rate.c.rate).order_by(
+            sample_playback_rate.c.sample_hash
+        )
+        return digest_of_rows((str(row.sample_hash), int(row.rate)) for row in self._connection.execute(statement))

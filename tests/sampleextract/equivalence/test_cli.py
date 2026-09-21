@@ -8,11 +8,13 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from sampleextract.cli import main as extract_main
 from sampleextract.equivalence.cli import main
 
 PROGRAM = "samplelibrary equivalence"
@@ -42,7 +44,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     with pytest.raises(SystemExit) as raised:
         main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Configuration error" in capsys.readouterr().err
 
 
@@ -81,3 +83,45 @@ def test_a_limit_below_one_sample_is_a_usage_error() -> None:
         main(["--limit", "0"], prog=PROGRAM)
 
     assert raised.value.code == 2
+
+
+NOTHING_TO_DETECT = "nothing to detect"
+
+
+def test_a_pass_over_the_samples_the_last_complete_pass_compared_ends_at_once(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    xm_module_bytes: bytes,
+    mod_module_bytes: bytes,
+) -> None:
+    """A module holding only samples the catalog has already leaves the readable samples, and the relations, as they were."""
+    modules = tmp_path / "modules"
+    modules.mkdir()
+    (modules / "song.xm").write_bytes(xm_module_bytes)
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nmodule_source_directory = "{modules.as_posix()}"\nlibrary_root = "{tmp_path.as_posix()}"\n'
+        f'database_url = "{_database_url}"\nminimum_sample_frames = 16\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+    extract_main(["--workers", "1"], prog="samplelibrary extract")
+
+    main(["--limit", "1"], prog=PROGRAM)
+    main([], prog=PROGRAM)
+    assert NOTHING_TO_DETECT not in capsys.readouterr().out
+
+    main([], prog=PROGRAM)
+    assert NOTHING_TO_DETECT in capsys.readouterr().out
+
+    main(["--force"], prog=PROGRAM)
+    assert NOTHING_TO_DETECT not in capsys.readouterr().out
+
+    (modules / "eight-bit.mod").write_bytes(mod_module_bytes)
+    extract_main(["--workers", "1"], prog="samplelibrary extract")
+    capsys.readouterr()
+    main([], prog=PROGRAM)
+    assert NOTHING_TO_DETECT not in capsys.readouterr().out

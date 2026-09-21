@@ -81,7 +81,7 @@ export interface paths {
         };
         /**
          * Get Sample
-         * @description One sample's own fields plus every module occurrence that references it.
+         * @description One sample's own fields plus every module occurrence and sample file holding it.
          *
          *     ``equivalence_member_count`` travels with the sample so a caller labeling it knows how many
          *     near-duplicates the same choice would reach. ``playback_rate_hz`` is the rate every reader
@@ -109,14 +109,17 @@ export interface paths {
         };
         /**
          * Get Sample Audio
-         * @description The sample's own canonical audio, as stored in the content-addressable store.
+         * @description The sample's own canonical audio: its stored object, or the WAV the store would hold for it.
          *
-         *     The object is content-addressed, so it is served with a cache lifetime of a year and read
-         *     straight off the store by its hash, with no catalog round trip on the way to a sound: the
-         *     hash's own shape is checked on the path, which is what keeps a request inside the store.
+         *     A stored object is read straight off the store by its hash, with no catalog round trip on the
+         *     way to a sound: the hash's own shape is checked on the path, which is what keeps a request inside
+         *     the store. A sample found in a sample file is read from the file the catalog names and encoded
+         *     the way the store encodes an object, so both kinds play at the same nominal header rate. Either
+         *     way the bytes are those of the hash, so they are served with a cache lifetime of a year.
          *
          *     Raises:
-         *         HTTPException: 404 when the store holds no object under this hash.
+         *         HTTPException: 404 when the store holds no object under this hash and no cataloged file
+         *             holds the sample now.
          */
         readonly get: operations["get_sample_audio_api_samples__sample_hash__audio_get"];
         readonly put?: never;
@@ -138,7 +141,7 @@ export interface paths {
          * Get Sample Preview
          * @description A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
          *
-         *     Four narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
+         *     Five narrow lookups answer this, against the eight a detail makes: a tooltip appears on every
          *     point a cursor crosses, so it costs what a glance is worth.
          *
          *     Raises:
@@ -259,9 +262,10 @@ export interface paths {
          * @description Every sample's position in the library's 2D embedding space, as of the latest embedding run.
          *
          *     The answer is built once per revision of what it reads and served from memory after that: the
-         *     coordinates' count and last write, the playback rates on file and the modules cataloged are
-         *     what a pipeline moves, and three scalar queries say whether any has. A caller that accepts
-         *     gzip receives the body compressed once at the best level rather than per request.
+         *     coordinates' count and last write, the playback rates on file, the modules cataloged and the
+         *     sample files scanned are what a pipeline moves, and four scalar queries say whether any has. A caller that accepts
+         *     gzip receives the body compressed once at the best level rather than per request. The scoring on
+         *     show belongs to the revision of `/cloud/categories` alone, since the points carry none of it.
          */
         readonly get: operations["get_cloud_api_cloud_get"];
         readonly put?: never;
@@ -298,7 +302,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/api/cloud/suggestions": {
+    readonly "/api/cloud/categories": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -306,14 +310,14 @@ export interface paths {
             readonly cookie?: never;
         };
         /**
-         * Get Cloud Suggestions
-         * @description Every sample's first suggested tag from the newest scoring, for coloring the cloud by what a model hears.
+         * Get Cloud Categories
+         * @description Every sample's top category from the scoring on show, for coloring the cloud by what a model hears.
          *
-         *     These travel apart from the points the way the hand labels do: a scoring changes only when a
-         *     pass writes a new one, so the newest scoring's id is the whole revision, and a viewer joins
-         *     them to the points by hash. An empty answer says no scoring has been written.
+         *     These travel apart from the points the way the hand labels do: a scoring's categories never
+         *     change once written, so the id of the scoring on show is the whole revision, and a viewer joins
+         *     them to the points by hash. An empty answer says no scoring is shown.
          */
-        readonly get: operations["get_cloud_suggestions_api_cloud_suggestions_get"];
+        readonly get: operations["get_cloud_categories_api_cloud_categories_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -322,7 +326,7 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/api/cloud/suggestion-tags": {
+    readonly "/api/cloud/category-tags": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -330,16 +334,20 @@ export interface paths {
             readonly cookie?: never;
         };
         /**
-         * Get Cloud Suggestion Tags
-         * @description Every tag the newest scoring suggests first for some sample, with how many and a lasting rank.
+         * Get Cloud Category Tags
+         * @description Every tag the scoring on show gives as a top category, with how many and a lasting rank.
          *
-         *     A specification counts toward its category the way a written label's does, so the legend can
-         *     paint by category while the suggestions name what is under it. The rank is the tag's place in
-         *     the vocabulary the scoring ranked, recorded with the scoring, a category taking the place of
+         *     A specification counts toward its top level the way a written label's does, so the legend can
+         *     paint by top level while the categories name what is under it. The rank is the tag's place in
+         *     the vocabulary the scoring ranked, recorded with the scoring, a top level taking the place of
          *     its first entry, so a tag keeps its color across the scorings that share a vocabulary; a tag
          *     the vocabulary leaves unnamed ranks after the vocabulary, by name.
+         *
+         *     The counts come from a group-by over every top category in the catalog, and every badge naming a
+         *     sample reads these ranks, so the answer is held like the categories beside it: a scoring's
+         *     categories never change once written, which makes the id of the scoring on show the whole revision.
          */
-        readonly get: operations["get_cloud_suggestion_tags_api_cloud_suggestion_tags_get"];
+        readonly get: operations["get_cloud_category_tags_api_cloud_category_tags_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -539,9 +547,9 @@ export interface components {
          * AnnotationDecisions
          * @description The three things a person can decide about a sample.
          *
-         *     The label says what the sample is, as free text: it records what a listener actually decided,
-         *     ahead of any vocabulary being settled, so it stays unconstrained by `SampleCategory`'s fourteen
-         *     guessed roles and wins wherever it exists. It is kept in upper case, which is the case it is
+         *     The label says what the sample is, as free text: it records what a listener actually decided, in
+         *     their own words ahead of any vocabulary being settled, and wins over the category the listening
+         *     model gives it wherever it exists. It is kept in upper case, which is the case it is
          *     shown in, so the vocabulary a person builds by habit collects one entry per wording. The rating and the favorite mark say what the
          *     listener thought of it, which is what turns browsing the library into a collection of a person's
          *     own.
@@ -599,6 +607,21 @@ export interface components {
          */
         readonly ChannelLayout: 1 | 2;
         /**
+         * CloudCategory
+         * @description What a listening model hears one sample as first: its top category as a tag path, and how sure it was.
+         *
+         *     The top category is the one a viewer paints the point with, the way the first written tag of a
+         *     hand label is, and the one the legend counts; a sample's detail lists the ones behind it.
+         */
+        readonly CloudCategory: {
+            /** Sample Hash */
+            readonly sample_hash: string;
+            /** Path */
+            readonly path: readonly string[];
+            /** Score */
+            readonly score: number;
+        };
+        /**
          * CloudLabel
          * @description What a person decided one sample is, as the tag paths they wrote, in the order they wrote them.
          *
@@ -610,21 +633,6 @@ export interface components {
             readonly sample_hash: string;
             /** Paths */
             readonly paths: readonly (readonly string[])[];
-        };
-        /**
-         * CloudSuggestion
-         * @description What a listening model hears one sample as first: its closest suggested tag path, and how sure it was.
-         *
-         *     The first pick is the one a viewer paints the point with, the way the first written tag of a
-         *     hand label is, and the one the legend counts; a sample's detail lists the picks behind it.
-         */
-        readonly CloudSuggestion: {
-            /** Sample Hash */
-            readonly sample_hash: string;
-            /** Path */
-            readonly path: readonly string[];
-            /** Score */
-            readonly score: number;
         };
         /**
          * ErrorDetail
@@ -672,9 +680,13 @@ export interface components {
             readonly filename?: string | null;
             readonly vibrato?: components["schemas"]["Vibrato"] | null;
         };
+        readonly JsonValue: unknown;
         /**
          * LibraryStats
          * @description A snapshot of the catalog's overall size and composition.
+         *
+         *     ``sample_properties_count`` counts the module occurrences of samples and ``sample_file_count``
+         *     the files samples were found in, the two ways a sample reaches the catalog.
          */
         readonly LibraryStats: {
             /** Module Count */
@@ -683,6 +695,8 @@ export interface components {
             readonly sample_count: number;
             /** Sample Properties Count */
             readonly sample_properties_count: number;
+            /** Sample File Count */
+            readonly sample_file_count: number;
             /** Modules By Tracker */
             readonly modules_by_tracker: readonly components["schemas"]["TrackerModuleCount"][];
             /** Relations By Type */
@@ -865,7 +879,7 @@ export interface components {
         };
         /**
          * MorphAvailability
-         * @description Whether morphs can be rendered right now, and by which model when they can.
+         * @description Whether morphs can be rendered right now, and through which route when they can.
          */
         readonly MorphAvailability: {
             /** Available */
@@ -874,30 +888,23 @@ export interface components {
         };
         /**
          * MorphServiceStatus
-         * @description What an inference process serves: the model, the route it renders through, and the device it runs on.
+         * @description What an inference process serves: the name of the route it renders through, and the fingerprint its renders are named by.
          *
-         *     The fingerprint names the exact model files loaded, so a render's cache identity changes with
-         *     the model and with nothing else.
+         *     `name` tells the excitation, the timeline and the glide the route renders with apart, and
+         *     `description` says everything the route reads. The fingerprint follows the description, so a
+         *     render's cache identity changes with what renders it and with nothing else.
          */
         readonly MorphServiceStatus: {
-            /** Model */
-            readonly model: string;
-            /** Codec */
-            readonly codec: string;
-            /** Canonicalizer */
-            readonly canonicalizer: string;
-            /** Latent Size */
-            readonly latent_size: number;
-            /** Vocoder */
-            readonly vocoder: string;
-            /** Restorer */
-            readonly restorer: string | null;
-            /** Device */
-            readonly device: string;
+            /** Name */
+            readonly name: string;
             /** Fingerprint */
             readonly fingerprint: string;
             /** Weight Steps */
             readonly weight_steps: number;
+            /** Description */
+            readonly description: {
+                readonly [key: string]: components["schemas"]["JsonValue"];
+            };
         };
         /** Page[Module] */
         readonly Page_Module_: {
@@ -981,25 +988,17 @@ export interface components {
             readonly filename?: string | null;
         };
         /**
-         * SampleCategory
-         * @description A coarse instrument-role classification for a sample, guessed from its occurrence names.
-         * @enum {string}
-         */
-        readonly SampleCategory: "kick" | "snare" | "clap" | "hi_hat" | "cymbal" | "percussion" | "bass" | "lead" | "pad" | "pluck" | "vocal" | "fx" | "loop" | "uncategorized";
-        /**
          * SampleCloudPoint
-         * @description One sample's place in the embedding, with what a viewer needs to color and hear the point.
+         * @description One sample's place in the embedding, with the rate a viewer hears the point at.
          *
-         *     ``category`` is computed the same way `SampleSummary.category` is -- at read time, from the
-         *     sample's own occurrence names together with the names of the instruments reaching it -- rather
-         *     than stored alongside the coordinate itself. ``playback_rate_hz`` travels with the point so
-         *     clicking one plays it at the speed the library really sounds it at; it is ``None`` for a sample
-         *     the catalog knows no rate for.
+         *     ``playback_rate_hz`` travels with the point so clicking one plays it at the speed the library
+         *     really sounds it at; it is ``None`` for a sample the catalog knows no rate for.
          *
          *     This carries the coordinate's own fields rather than inheriting them, since a view of the whole
          *     catalog is a hundred thousand of these at once: when the run that placed them was computed says
-         *     nothing about any one point, and a timestamp per point is several megabytes over the wire. The
-         *     hand labels travel apart, through `/cloud/labels`, for the same reason.
+         *     nothing about any one point, and a timestamp per point is several megabytes over the wire. What
+         *     colors a point travels apart for the same reason: the hand labels through `/cloud/labels`, and
+         *     what the listening model heard through `/cloud/categories`.
          */
         readonly SampleCloudPoint: {
             /** Sample Hash */
@@ -1008,18 +1007,18 @@ export interface components {
             readonly x: number;
             /** Y */
             readonly y: number;
-            readonly category: components["schemas"]["SampleCategory"];
             /** Playback Rate Hz */
             readonly playback_rate_hz: number | null;
         };
         /**
          * SampleDetail
-         * @description A sample together with every module occurrence that references it, and the rates it is heard at.
+         * @description A sample together with every module occurrence and sample file holding it, and the rates it is heard at.
          *
          *     ``playback_rates`` holds every effective rate the library sounds this sample at, the most played
          *     first, so a listener can hear each of them; ``playback_rate_hz`` is the first of them.
-         *     ``suggested_labels`` are what the newest scoring of the listening model hears the sample as,
-         *     closest first, for a person to accept into the hand label or pass over.
+         *     ``categories`` are what the scoring on show of the listening model hears the sample as, closest
+         *     first, for a person to accept into the hand label or pass over; ``category`` is the first
+         *     of them.
          */
         readonly SampleDetail: {
             /** Hash */
@@ -1030,7 +1029,8 @@ export interface components {
             readonly frames: number;
             /** Display Name */
             readonly display_name: string;
-            readonly category: components["schemas"]["SampleCategory"];
+            /** Category */
+            readonly category: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Rating */
@@ -1043,14 +1043,16 @@ export interface components {
             readonly playback_rate_hz: number | null;
             /** Occurrences */
             readonly occurrences: readonly components["schemas"]["SampleOccurrenceDetail"][];
+            /** Files */
+            readonly files: readonly components["schemas"]["SampleFileDetail"][];
             /** Duration Seconds */
             readonly duration_seconds: number;
             /** Playback Rates */
             readonly playback_rates: readonly components["schemas"]["SamplePlaybackRate"][];
             /** Equivalence Member Count */
             readonly equivalence_member_count: number;
-            /** Suggested Labels */
-            readonly suggested_labels: readonly components["schemas"]["SuggestedLabel"][];
+            /** Categories */
+            readonly categories: readonly components["schemas"]["ScoredCategory"][];
         };
         /**
          * SampleDistance
@@ -1063,6 +1065,37 @@ export interface components {
             readonly other_hash: string;
             /** Distance */
             readonly distance: number;
+        };
+        /**
+         * SampleFileDetail
+         * @description One file a sample was found in, read in place from a sample directory.
+         *
+         *     ``available`` says whether the file is there now with the size and write time it was scanned
+         *     at, which is what playing the sample from it needs.
+         */
+        readonly SampleFileDetail: {
+            readonly location: components["schemas"]["SampleFileLocation"];
+            /** Rate */
+            readonly rate: number;
+            /** Available */
+            readonly available: boolean;
+        };
+        /**
+         * SampleFileLocation
+         * @description Where a sample file sits: one of the configured sample directories, and its path inside it.
+         *
+         *     The path inside the directory is written with forward slashes on every system and names a file
+         *     below the directory, which keeps a location read from a request or a catalog row within the
+         *     directory it names.
+         */
+        readonly SampleFileLocation: {
+            /**
+             * Directory
+             * Format: path
+             */
+            readonly directory: string;
+            /** Relative Path */
+            readonly relative_path: string;
         };
         /**
          * SampleOccurrence
@@ -1118,15 +1151,17 @@ export interface components {
         };
         /**
          * SamplePreview
-         * @description What a glance at a sample shows: its name, category and hand label, and the stored thumbnail of its waveform.
+         * @description What a glance at a sample shows: its name, what it is taken to be, and the stored thumbnail of its waveform.
          *
-         *     ``thumbnail`` is ``None`` for a sample the thumbnail pass has not reached, since a preview
-         *     with nothing to draw is still a preview with a name.
+         *     ``category`` is the closest label the scoring on show heard the sample as, beside the
+         *     ``hand_label`` a person wrote. ``thumbnail`` is ``None`` for a sample the thumbnail pass has not
+         *     reached, since a preview with nothing to draw is still a preview with a name.
          */
         readonly SamplePreview: {
             /** Display Name */
             readonly display_name: string;
-            readonly category: components["schemas"]["SampleCategory"];
+            /** Category */
+            readonly category: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Thumbnail */
@@ -1193,7 +1228,8 @@ export interface components {
             readonly frames: number;
             /** Display Name */
             readonly display_name: string;
-            readonly category: components["schemas"]["SampleCategory"];
+            /** Category */
+            readonly category: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Rating */
@@ -1214,6 +1250,16 @@ export interface components {
             readonly equivalence_member_count: number;
         };
         /**
+         * ScoredCategory
+         * @description One tag a listening model gives a sample, in the hand-label grammar, and how sure it was.
+         */
+        readonly ScoredCategory: {
+            /** Label */
+            readonly label: string;
+            /** Score */
+            readonly score: number;
+        };
+        /**
          * SimilarSample
          * @description One neighbor in a sample's spectral-distance nearest-neighbor listing: a glance at it, how far it sits, and the rate to hear it at.
          *
@@ -1223,7 +1269,8 @@ export interface components {
         readonly SimilarSample: {
             /** Display Name */
             readonly display_name: string;
-            readonly category: components["schemas"]["SampleCategory"];
+            /** Category */
+            readonly category: string | null;
             /** Hand Label */
             readonly hand_label: string | null;
             /** Thumbnail */
@@ -1234,16 +1281,6 @@ export interface components {
             readonly distance: number;
             /** Playback Rate Hz */
             readonly playback_rate_hz: number | null;
-        };
-        /**
-         * SuggestedLabel
-         * @description One tag a listening model suggests for a sample, in the hand-label grammar, and how sure it was.
-         */
-        readonly SuggestedLabel: {
-            /** Label */
-            readonly label: string;
-            /** Score */
-            readonly score: number;
         };
         /**
          * TagSummary
@@ -1790,7 +1827,7 @@ export interface operations {
             };
         };
     };
-    readonly get_cloud_suggestions_api_cloud_suggestions_get: {
+    readonly get_cloud_categories_api_cloud_categories_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1805,12 +1842,12 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": readonly components["schemas"]["CloudSuggestion"][];
+                    readonly "application/json": readonly components["schemas"]["CloudCategory"][];
                 };
             };
         };
     };
-    readonly get_cloud_suggestion_tags_api_cloud_suggestion_tags_get: {
+    readonly get_cloud_category_tags_api_cloud_category_tags_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;

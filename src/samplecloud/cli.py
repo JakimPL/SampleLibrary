@@ -19,16 +19,23 @@ from samplecloud.experiments import (
 from samplecloud.registries import BACKEND_REGISTRY, DEFAULT_BACKEND_NAME
 from samplecloud.run import EmbeddingOptions, EmbeddingSummary, create_experiment, experiment_to_rebuild, run_embedding
 from samplecore.cli_parsing import command_parser
-from samplecore.cli_support import bootstrap_cli, ending_in_one_line, open_catalog_connection, positive_integer
+from samplecore.cli_support import (
+    bootstrap_cli,
+    ending_in_one_line,
+    experiment_key,
+    open_catalog_connection,
+    positive_integer,
+)
 from samplecore.config import LibraryConfig
 from samplecore.models.experiment import LEARNED_BACKEND_NAME, Reading
+from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 
 _logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str], *, prog: str) -> None:
     """Run one embedding pass over the catalog and report the result."""
-    arguments = _parse_arguments(argv, prog=prog)
+    arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with (
         open_catalog_connection(config.database_url) as connection,
@@ -68,11 +75,12 @@ def _embed(config: LibraryConfig, connection: Connection, arguments: argparse.Na
 def _chosen_experiment(
     config: LibraryConfig, connection: Connection, arguments: argparse.Namespace
 ) -> ChosenExperiment:
-    """The experiment the arguments name: the one the cloud shows, one resumed by its id, or a new one.
+    """The experiment the arguments name: the one the cloud shows, one resumed by its id or key, or a new one.
 
     A resumed experiment builds its extractor only when a sample is missing from it. A new
     experiment's extractor is built before its row is written, so a descriptor that fails to load
-    leaves the catalog as it was.
+    leaves the catalog as it was. A key names the experiment a first run files under it and every
+    later run resumes, following the recipe that first run recorded.
 
     Raises:
         ExperimentRefused: the arguments name an experiment that cannot be resumed as asked.
@@ -90,13 +98,19 @@ def _chosen_experiment(
         return resumed(experiment_id, recipe_of(experiment_named(connection, experiment_id)), promote=True)
     if arguments.experiment_id is not None:
         recipe = recipe_of(experiment_named(connection, arguments.experiment_id))
-        _refuse_conflicts(arguments, recipe)
+        _refuse_conflicts(arguments, recipe, experiment_id=arguments.experiment_id)
         return resumed(arguments.experiment_id, recipe, promote=not arguments.extract_only)
+    if arguments.key is not None:
+        filed = PostgresExperimentRepository(connection).get_by_key(arguments.key)
+        if filed is not None:
+            recipe = recipe_of(filed)
+            _refuse_conflicts(arguments, recipe, experiment_id=filed.id)
+            return resumed(filed.id, recipe, promote=not arguments.extract_only)
 
     recipe = _requested_recipe(arguments)
     feature_extractor = extractor_for(recipe, library_root=config.library_root, device=arguments.device)
     return ChosenExperiment(
-        experiment_id=create_experiment(connection, recipe, label=arguments.label),
+        experiment_id=create_experiment(connection, recipe, label=arguments.label, key=arguments.key),
         recipe=recipe,
         promote=not arguments.extract_only,
         extractor=lambda: feature_extractor,
@@ -146,7 +160,7 @@ def _refuse_beside_resume_promoted(arguments: argparse.Namespace) -> None:
         )
 
 
-def _refuse_conflicts(arguments: argparse.Namespace, recipe: EmbeddingRecipe) -> None:
+def _refuse_conflicts(arguments: argparse.Namespace, recipe: EmbeddingRecipe, *, experiment_id: int) -> None:
     """Refuse flags naming a recipe other than the resumed experiment's own, and a label, which names a new one.
 
     Raises:
@@ -163,23 +177,25 @@ def _refuse_conflicts(arguments: argparse.Namespace, recipe: EmbeddingRecipe) ->
         conflicts.append("--label (a label names a new experiment)")
     if conflicts:
         raise ExperimentRefused(
-            f"experiment {arguments.experiment_id} keeps its own recipe, which conflicts with {'; '.join(conflicts)}"
+            f"experiment {experiment_id} keeps its own recipe, which conflicts with {'; '.join(conflicts)}"
         )
 
 
 def _report(summary: EmbeddingSummary) -> None:
     _logger.info(
-        "Experiment %d: extracted features for %d new samples (%d already known, %d cataloged).",
+        "Experiment %d: extracted features for %d new samples (%d already known, %d with no file to read now, "
+        "%d cataloged).",
         summary.experiment_id,
         summary.extraction.newly_extracted,
         summary.extraction.already_extracted,
+        summary.extraction.unavailable,
         summary.extraction.cataloged,
     )
     if summary.reduction is not None:
         _logger.info("Reduced %d samples to 2D coordinates.", summary.reduction.samples_reduced)
 
 
-def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
+def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = command_parser(prog=prog, description="Extract sample features and reduce them to cloud coordinates.")
     parser.add_argument(
         "--backend",
@@ -200,6 +216,12 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         type=positive_integer,
         default=None,
         help="Resume an existing experiment's extraction, following the recipe it records.",
+    )
+    chosen_experiment.add_argument(
+        "--key",
+        type=experiment_key,
+        default=None,
+        help="Resume the experiment filed under this key, or start one under it following the recipe flags.",
     )
     chosen_experiment.add_argument(
         "--resume-promoted",

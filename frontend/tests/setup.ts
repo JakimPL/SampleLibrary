@@ -69,9 +69,11 @@ afterEach(() => {
 // jsdom lacks a canvas renderer; components handle a null 2D context, so tests take that path quietly.
 vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 
-// jsdom logs a "not implemented" error for every play() and pause() call.
+// jsdom logs a "not implemented" error for every play(), pause() and load() call; wavesurfer loads
+// on creation and again as it is destroyed.
 vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
 vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
 
 // jsdom lacks ResizeObserver, which dockview uses to fit its layout to its host element.
 class ResizeObserverStub implements ResizeObserver {

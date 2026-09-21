@@ -4,10 +4,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Final
 
-from samplecloud.evaluation.categories import CategoryAgreement
 from samplecloud.evaluation.hand_labels import HandLabelAgreement
 from samplecloud.evaluation.notes import NoteAgreement
 from samplecloud.evaluation.report import EvaluationReport, report_json
+from samplecloud.evaluation.settings import EvaluationScope
 from samplecloud.evaluation.transposition import TranspositionRetrieval
 from samplecore.tracking import TrackedRun
 
@@ -17,9 +17,9 @@ REPORT_ARTIFACT_NAME: Final[str] = "report.json"
 REPORT_STEP: Final[int] = 0
 
 
-def run_name_for(*, backend_name: str, experiment_id: int) -> str:
-    """The name a recorded evaluation goes by: the descriptor and the experiment it was read from."""
-    return f"{backend_name}-{experiment_id}"
+def run_name_for(*, backend_name: str, experiment_id: int, scope: EvaluationScope) -> str:
+    """The name a recorded evaluation goes by: the descriptor, the experiment it was read from, and the scope it scored."""
+    return f"{backend_name}-{experiment_id}-{scope.value}"
 
 
 def record_report(report: EvaluationReport, tracker: TrackedRun) -> None:
@@ -33,6 +33,8 @@ def record_report(report: EvaluationReport, tracker: TrackedRun) -> None:
         {
             "experiment_id": str(report.experiment_id),
             "backend": report.backend_name,
+            "scope": report.scope.value,
+            "corpus_digest": report.corpus_digest,
             "sample_count": str(report.sample_count),
             "random_seed": str(report.random_seed),
         }
@@ -40,8 +42,6 @@ def record_report(report: EvaluationReport, tracker: TrackedRun) -> None:
     metrics: dict[str, float] = {}
     if report.transposition is not None:
         metrics.update(_transposition_metrics(report.transposition))
-    if report.categories is not None:
-        metrics.update(_category_metrics(report.categories))
     if report.notes is not None:
         metrics.update(_note_metrics(report.notes))
     if report.hand_labels is not None:
@@ -70,17 +70,6 @@ def _offset_name(semitones: float) -> str:
     """A retuning as a metric name, since a sign is not a character a metric name may carry."""
     direction = "down" if semitones < 0 else "up"
     return f"{direction}_{abs(semitones):g}"
-
-
-def _category_metrics(agreement: CategoryAgreement) -> dict[str, float]:
-    metrics = {
-        "categories/accuracy": agreement.accuracy,
-        "categories/macro_f1": agreement.macro_f1,
-        "categories/coverage": agreement.coverage,
-    }
-    for score in agreement.per_category:
-        metrics[f"categories/{score.category}/f1"] = score.f1
-    return metrics
 
 
 def _note_metrics(agreement: NoteAgreement) -> dict[str, float]:

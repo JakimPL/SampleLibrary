@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.schema.scalars import Rate
 
+from samplecore.digests import digest_of_rows
 from samplecore.models.experiment import Reading
 from samplecore.pitch import choose_playback_rate
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
@@ -23,6 +24,24 @@ class Hearing:
     reading: Reading
     playback_rate_by_hash: Mapping[str, Rate]
 
+    @property
+    def rates_digest(self) -> str:
+        """One digest over every rate this hearing plays a sample at, so a pass can tell whether any moved."""
+        return digest_of_rows(
+            (sample_hash, int(rate)) for sample_hash, rate in sorted(self.playback_rate_by_hash.items())
+        )
+
+    def rate_for(self, sample_hash: str) -> Rate | None:
+        """The rate this pass hears a sample at, recorded beside its vector; nothing under the nominal reading.
+
+        A sample the library has no playback rate for is heard as stored, at the nominal rate.
+        """
+        match self.reading:
+            case Reading.NOMINAL:
+                return None
+            case Reading.HEARD_RATE:
+                return self.playback_rate_by_hash.get(sample_hash, NOMINAL_WAV_RATE)
+
     def hear(self, sample_hash: str, pcm: NDArray[np.float64]) -> NDArray[np.float64]:
         """The stored frames as this pass hands them to the extractor.
 
@@ -30,27 +49,23 @@ class Hearing:
         sound at the stored rate the way it sounds when played; a sample the library never plays
         keeps the nominal reading, the only one there is for it.
         """
-        match self.reading:
-            case Reading.NOMINAL:
-                return pcm
-            case Reading.HEARD_RATE:
-                rate = self.playback_rate_by_hash.get(sample_hash)
-                if rate is None or rate == NOMINAL_WAV_RATE:
-                    return pcm
-                return heard_at_rate(pcm, playback_rate_hz=float(rate), stored_rate_hz=NOMINAL_WAV_RATE)
+        rate = self.rate_for(sample_hash)
+        if rate is None or rate == NOMINAL_WAV_RATE:
+            return pcm
+        return heard_at_rate(pcm, playback_rate_hz=float(rate), stored_rate_hz=NOMINAL_WAV_RATE)
 
 
 def hearing_for(connection: Connection, reading: Reading) -> Hearing:
     """The hearing a pass asked for, its playback rates read once for the whole catalog.
 
     The rate of a sample is the one the library plays it at, the way the application sounds it:
-    the rate its note events settle on where a pattern plays it, its occurrences' dominant rate
-    otherwise.
+    the rate its note events settle on where a pattern plays it, and otherwise the dominant rate its
+    module occurrences and sample files declare.
     """
     if reading is Reading.NOMINAL:
         return Hearing(reading=reading, playback_rate_by_hash={})
 
-    _, occurrence_rates = PostgresSampleRepository(connection).names_and_rates_for_every_sample()
+    occurrence_rates = PostgresSampleRepository(connection).rates_for_every_sample()
     recorded = PostgresSamplePlaybackRateRepository(connection).list_all()
     playback_rate_by_hash: dict[str, Rate] = {}
     for sample_hash in occurrence_rates.keys() | recorded.keys():

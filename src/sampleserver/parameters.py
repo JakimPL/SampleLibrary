@@ -23,4 +23,5 @@ class ErrorDetail(BaseModel):
 
 
 NOT_FOUND_RESPONSE: Final[dict[int | str, dict[str, object]]] = {404: {"model": ErrorDetail}}
-WAV_CONTENT: Final[dict[str, dict[str, object]]] = {"audio/wav": {}}
+WAV_MEDIA_TYPE: Final[str] = "audio/wav"
+WAV_CONTENT: Final[dict[str, dict[str, object]]] = {WAV_MEDIA_TYPE: {}}

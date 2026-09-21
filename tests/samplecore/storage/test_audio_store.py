@@ -194,3 +194,12 @@ def test_an_object_reads_by_its_hash_alone_exactly_as_by_its_sample(
 def test_an_object_the_store_lacks_is_reported_by_hash(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="no object is stored"):
         audio_store.read_object(tmp_path, "f" * 64)
+
+
+def test_encoding_a_sample_gives_the_bytes_the_store_holds_for_it(tmp_path: Path) -> None:
+    pcm = np.linspace(-1.0, 0.999, 24, dtype=np.float64).reshape(-1, 2)
+    sample_pcm = _sample_pcm(BitDepth.SIXTEEN, ChannelLayout.STEREO, pcm)
+
+    stored = audio_store.write(tmp_path, sample_pcm)
+
+    assert audio_store.encode_wav(sample_pcm) == stored.read_bytes()

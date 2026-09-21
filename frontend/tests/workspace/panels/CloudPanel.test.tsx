@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as CloudApi from "../../../src/api/cloud";
+import type * as CurationApi from "../../../src/api/curation";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as MorphApi from "../../../src/api/morph";
 import type * as SamplesApi from "../../../src/api/samples";
@@ -16,8 +17,10 @@ const {
     createScatterplotMock,
     getCloud,
     getModuleCloud,
-    getCloudSuggestions,
-    getSuggestionTags,
+    getCloudCategories,
+    getCategoryTags,
+    getCloudLabels,
+    getLabelTags,
     getSamplePreview,
     getModule,
     getMorphStatus,
@@ -30,6 +33,9 @@ const {
         readonly destroy = vi.fn();
         readonly set = vi.fn().mockResolvedValue(undefined);
         readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
+        readonly get = vi.fn((property: string) =>
+            property === "cameraView" ? new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]) : undefined,
+        );
         private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 
         subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
@@ -61,8 +67,10 @@ const {
         createScatterplotMock,
         getCloud: vi.fn(),
         getModuleCloud: vi.fn(),
-        getCloudSuggestions: vi.fn().mockResolvedValue([]),
-        getSuggestionTags: vi.fn().mockResolvedValue([]),
+        getCloudCategories: vi.fn().mockResolvedValue([]),
+        getCategoryTags: vi.fn().mockResolvedValue([]),
+        getCloudLabels: vi.fn().mockResolvedValue([]),
+        getLabelTags: vi.fn().mockResolvedValue([]),
         getSamplePreview: vi.fn(),
         getModule: vi.fn(),
         getMorphStatus: vi.fn().mockResolvedValue({ available: true, service: null }),
@@ -76,7 +84,12 @@ vi.mock("regl-scatterplot", () => ({
 
 vi.mock("../../../src/api/cloud", async () => {
     const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
-    return { ...actual, getCloud, getModuleCloud, getCloudSuggestions, getSuggestionTags };
+    return { ...actual, getCloud, getModuleCloud, getCloudCategories, getCategoryTags, getCloudLabels };
+});
+
+vi.mock("../../../src/api/curation", async () => {
+    const actual = await vi.importActual<typeof CurationApi>("../../../src/api/curation");
+    return { ...actual, getLabelTags };
 });
 
 vi.mock("../../../src/api/samples", async () => {
@@ -110,7 +123,7 @@ function latestInstance(): (typeof instances)[number] {
 }
 
 function latestCanvas(): HTMLCanvasElement {
-    const canvas = document.querySelector("canvas");
+    const canvas = document.querySelector<HTMLCanvasElement>("canvas.cloud-dots");
     if (canvas === null) {
         throw new Error("canvas not found");
     }
@@ -140,13 +153,13 @@ describe("CloudPanel", () => {
     });
 
     it("renders a canvas for the Samples tab once its points have loaded", async () => {
-        getCloud.mockResolvedValue([{ sample_hash: "a".repeat(64), x: 0, y: 0, category: "uncategorized" }]);
+        getCloud.mockResolvedValue([{ sample_hash: "a".repeat(64), x: 0, y: 0 }]);
         getModuleCloud.mockResolvedValue([]);
 
         renderPanel();
 
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
     });
 
@@ -163,11 +176,11 @@ describe("CloudPanel", () => {
 
     it("highlights the clicked sample in the shared selection store", async () => {
         const sampleHash = "b".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, category: "uncategorized" }]);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0 }]);
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
 
         latestInstance().emit("select", { points: [0] });
@@ -177,11 +190,11 @@ describe("CloudPanel", () => {
 
     it("clears the shared highlight on a click that misses every point", async () => {
         const sampleHash = "f".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, category: "uncategorized" }]);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0 }]);
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         useSelectionStore.getState().highlightEntity({ kind: "sample", hash: sampleHash });
 
@@ -192,13 +205,13 @@ describe("CloudPanel", () => {
 
     it("navigates to the double-clicked sample's route", async () => {
         const sampleHash = "c".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, category: "uncategorized" }]);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0 }]);
         getModuleCloud.mockResolvedValue([]);
         // The hover tooltip fetches a sample preview as soon as pointOver fires below.
         getSamplePreview.mockReturnValue(new Promise(() => undefined));
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         latestInstance().emit("pointOver", 0);
 
@@ -217,7 +230,7 @@ describe("CloudPanel", () => {
 
         expect(screen.getByText(/spectral-distance embedding/)).toBeInTheDocument();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
     });
 
@@ -230,7 +243,7 @@ describe("CloudPanel", () => {
         renderPanel();
         fireEvent.click(screen.getByRole("button", { name: "Modules" }));
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         latestInstance().emit("pointOver", 0);
 
@@ -241,17 +254,17 @@ describe("CloudPanel", () => {
 
     it("shows a hover tooltip with the sample's name and hash", async () => {
         const sampleHash = "1".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, category: "uncategorized" }]);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0 }]);
         getModuleCloud.mockResolvedValue([]);
         getSamplePreview.mockResolvedValue({
             display_name: "kick",
-            category: "kick",
+            category: null,
             hand_label: null,
             thumbnail: [],
         });
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
 
         latestInstance().emit("pointOver", 0);
@@ -260,19 +273,15 @@ describe("CloudPanel", () => {
         expect(screen.getByText(sampleHash.slice(0, 8))).toBeInTheDocument();
     });
 
-    it("colors by the listening model's suggestions, with a legend of the tags it suggests first", async () => {
+    it("colors by category from the start, each sample by its first pick under a legend of the tags picked first", async () => {
         const sampleHash = "3".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, category: "uncategorized" }]);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0 }]);
         getModuleCloud.mockResolvedValue([]);
-        getCloudSuggestions.mockResolvedValue([{ sample_hash: sampleHash, path: ["BASS DRUM"], score: 0.8 }]);
-        getSuggestionTags.mockResolvedValue([{ path: ["BASS DRUM"], sample_count: 1, rank: 0 }]);
+        getCloudCategories.mockResolvedValue([{ sample_hash: sampleHash, path: ["BASS DRUM"], score: 0.8 }]);
+        getCategoryTags.mockResolvedValue([{ path: ["BASS DRUM"], sample_count: 1, rank: 0 }]);
         renderPanel();
-        await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
-        });
 
-        fireEvent.click(screen.getByRole("button", { name: "Suggestions" }));
-
+        expect(screen.getByRole("button", { name: "Category" })).toHaveAttribute("aria-pressed", "true");
         expect(await screen.findByRole("button", { name: /BASS DRUM/ })).toHaveAttribute("aria-pressed", "true");
         await waitFor(() => {
             expect(latestInstance().draw).toHaveBeenCalledWith([[expect.any(Number), expect.any(Number), 1]], {
@@ -283,17 +292,17 @@ describe("CloudPanel", () => {
 
     it("hides the hover tooltip once the cursor leaves the point", async () => {
         const sampleHash = "2".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, category: "uncategorized" }]);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0 }]);
         getModuleCloud.mockResolvedValue([]);
         getSamplePreview.mockResolvedValue({
             display_name: "snare",
-            category: "snare",
+            category: null,
             hand_label: null,
             thumbnail: [],
         });
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         latestInstance().emit("pointOver", 0);
         await screen.findByText("snare");
@@ -309,13 +318,13 @@ describe("CloudPanel", () => {
         const anchor = "4".repeat(64);
         const other = "5".repeat(64);
         getCloud.mockResolvedValue([
-            { sample_hash: anchor, x: 0, y: 0, category: "uncategorized", playback_rate_hz: 8363 },
-            { sample_hash: other, x: 1, y: 1, category: "uncategorized", playback_rate_hz: 16726 },
+            { sample_hash: anchor, x: 0, y: 0, playback_rate_hz: 8363 },
+            { sample_hash: other, x: 1, y: 1, playback_rate_hz: 16726 },
         ]);
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         act(() => {
             useSelectionStore.getState().highlightEntity({ kind: "sample", hash: anchor });
@@ -326,7 +335,6 @@ describe("CloudPanel", () => {
         fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
 
         expect(useMorphStore.getState()).toMatchObject({ first: anchor, second: other });
-        expect(useSelectionStore.getState().comparisonSampleHash).toBe(other);
         expect(play).not.toHaveBeenCalled();
     });
 
@@ -334,13 +342,13 @@ describe("CloudPanel", () => {
         const first = "9".repeat(64);
         const second = "0".repeat(64);
         getCloud.mockResolvedValue([
-            { sample_hash: first, x: 0, y: 0, category: "uncategorized", playback_rate_hz: 8363 },
-            { sample_hash: second, x: 1, y: 1, category: "uncategorized", playback_rate_hz: 16726 },
+            { sample_hash: first, x: 0, y: 0, playback_rate_hz: 8363 },
+            { sample_hash: second, x: 1, y: 1, playback_rate_hz: 16726 },
         ]);
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         latestInstance().emit("pointOver", 0);
 
@@ -349,7 +357,6 @@ describe("CloudPanel", () => {
         fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
 
         expect(useMorphStore.getState()).toMatchObject({ first, second });
-        expect(useSelectionStore.getState().comparisonSampleHash).toBe(second);
         expect(useSelectionStore.getState().highlighted).toBeNull();
     });
 
@@ -357,16 +364,16 @@ describe("CloudPanel", () => {
         const first = "6".repeat(64);
         const second = "7".repeat(64);
         getCloud.mockResolvedValue([
-            { sample_hash: first, x: 0, y: 0, category: "uncategorized", playback_rate_hz: 8363 },
-            { sample_hash: second, x: 1, y: 1, category: "uncategorized", playback_rate_hz: 16726 },
+            { sample_hash: first, x: 0, y: 0, playback_rate_hz: 8363 },
+            { sample_hash: second, x: 1, y: 1, playback_rate_hz: 16726 },
         ]);
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         act(() => {
-            useMorphStore.getState().setPair(first, second);
+            useMorphStore.getState().join(first, second);
         });
         const marker = await screen.findByRole("slider", { name: "Morph weight" });
 
@@ -385,8 +392,8 @@ describe("CloudPanel", () => {
         const second = "7".repeat(64);
         getMorphStatus.mockResolvedValue({ available: false, service: null });
         getCloud.mockResolvedValue([
-            { sample_hash: first, x: 0, y: 0, category: "uncategorized", playback_rate_hz: 8363 },
-            { sample_hash: second, x: 1, y: 1, category: "uncategorized", playback_rate_hz: 16726 },
+            { sample_hash: first, x: 0, y: 0, playback_rate_hz: 8363 },
+            { sample_hash: second, x: 1, y: 1, playback_rate_hz: 16726 },
         ]);
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
@@ -394,7 +401,7 @@ describe("CloudPanel", () => {
             expect(getMorphStatus).toHaveBeenCalled();
         });
         act(() => {
-            useMorphStore.getState().setPair(first, second);
+            useMorphStore.getState().join(first, second);
         });
         const marker = await screen.findByRole("slider", { name: "Morph weight" });
 
@@ -403,23 +410,24 @@ describe("CloudPanel", () => {
 
         expect(play).not.toHaveBeenCalled();
     });
-    it("asks for the suggestions and their tags only once the Suggestions mode is chosen", async () => {
+    it("asks for the hand labels and their tags only once the Labels mode is chosen", async () => {
         const sampleHash = "8".repeat(64);
-        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0, category: "uncategorized" }]);
+        getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0 }]);
         getModuleCloud.mockResolvedValue([]);
         renderPanel();
         await waitFor(() => {
-            expect(document.querySelector("canvas")).toBeInTheDocument();
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
 
-        expect(getCloudSuggestions).not.toHaveBeenCalled();
-        expect(getSuggestionTags).not.toHaveBeenCalled();
+        expect(getCloudCategories).toHaveBeenCalledTimes(1);
+        expect(getCloudLabels).not.toHaveBeenCalled();
+        expect(getLabelTags).not.toHaveBeenCalled();
 
-        fireEvent.click(screen.getByRole("button", { name: "Suggestions" }));
+        fireEvent.click(screen.getByRole("button", { name: "Labels" }));
 
         await waitFor(() => {
-            expect(getCloudSuggestions).toHaveBeenCalledTimes(1);
+            expect(getCloudLabels).toHaveBeenCalledTimes(1);
         });
-        expect(getSuggestionTags).toHaveBeenCalledTimes(1);
+        expect(getLabelTags).toHaveBeenCalledTimes(1);
     });
 });

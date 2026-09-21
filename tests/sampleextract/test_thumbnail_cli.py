@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from sampleextract.thumbnail_cli import main
 
 PROGRAM = "samplelibrary thumbnails"
@@ -32,7 +33,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     with pytest.raises(SystemExit) as raised:
         main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Configuration error" in capsys.readouterr().err
 
 
@@ -47,7 +48,10 @@ def test_main_reports_an_empty_catalog(
 
     main([], prog=PROGRAM)
 
-    assert "0 samples cataloged: 0 thumbnail(s) computed, 0 already cached." in capsys.readouterr().out
+    assert (
+        "0 samples cataloged: 0 thumbnail(s) computed, 0 already cached, 0 with no file to read now."
+        in capsys.readouterr().out
+    )
 
 
 def test_the_force_flag_is_accepted(

@@ -1,0 +1,24 @@
+# What `samplelibrary morph serve` renders between two samples. The process reads this file when it
+# starts, so a change takes effect on its next start.
+#
+# The morph filter a VST reads is built under `morph-filter.yaml` beside this file, because a filter
+# holds for a path whose harmonics stay put and this one glides them. `morph response --selection
+# morph-filter.yaml` writes it.
+
+# Every morph moves the spectral envelope from the first sample's to the second's and sounds an
+# excitation under it: `first` keeps the first sample's harmonics and noise along the whole path,
+# `second` keeps the second's, and `both` crossfades the two with the weight. The envelope is drawn
+# by its first `coefficient_count` cosines, read down to `floor_db` under the sample's loudest bin.
+# The timeline says whose course through time the path is heard on: `morphed` runs between the two
+# lengths, and `first` or `second` holds one sample's course, so every point lasts as long as it.
+envelope:
+  excitation: both
+  timeline: morphed
+  coefficient_count: 40
+  floor_db: 80.0
+
+# The pitch reader the excitation glides by, from the first sample's pitch to the second's:
+# `subharmonic` reads the harmonic series of the constant-Q frames. Left out, the excitation holds
+# its own pitch. A pair glides only where both samples read a pitch the reader trusts, so drums and
+# noise render as they did before.
+glide: subharmonic

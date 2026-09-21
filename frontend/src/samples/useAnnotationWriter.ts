@@ -7,7 +7,7 @@ import { useAnnotationError, useIsSavingSample } from "./annotationStore";
 import { queueAnnotationChange } from "./annotationWriteQueue";
 import { LABEL_TAGS_CACHE_KEY } from "./useLabelTags";
 import { sampleDetailCacheKey } from "./useSampleDetail";
-import { sampleHoverCacheKey } from "./useSampleHoverPreview";
+import { samplePreviewCacheKey } from "./useSamplePreview";
 
 export const VOCABULARY_CACHE_KEY = "label-vocabulary";
 
@@ -21,7 +21,7 @@ export interface AnnotationWriter {
 function forgetWhatTheWriteChanged(written: AnnotationsWritten, changes: AnnotationChanges): void {
     for (const item of written.samples) {
         invalidateRequest(sampleDetailCacheKey(item.sample_hash));
-        invalidateRequest(sampleHoverCacheKey(item.sample_hash));
+        invalidateRequest(samplePreviewCacheKey(item.sample_hash));
     }
     if (changes.label !== undefined) {
         invalidateRequest(VOCABULARY_CACHE_KEY);

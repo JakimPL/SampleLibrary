@@ -74,21 +74,22 @@ function buildSampleDetail(overrides: SampleDetailOverrides): unknown {
         channels: 1,
         frames: 4096,
         display_name: "kick",
-        category: "kick",
         size_bytes: 8192,
         duration_seconds: 0.09,
         playback_rate_hz: overrides.playbackRateHz,
         playback_rates: overrides.playbackRates ?? [],
-        suggested_labels: [],
+        categories: [],
         occurrences: [],
+        files: [],
     };
 }
 
 describe("WaveformPanel", () => {
-    it("shows a placeholder when no sample is focused", () => {
-        render(<WaveformPanel />);
+    it("asks the catalog for nothing and stands in its empty state while no sample is focused", () => {
+        const { container } = render(<WaveformPanel />);
 
-        expect(screen.getByText(/No sample selected yet/)).toBeInTheDocument();
+        expect(getSample).not.toHaveBeenCalled();
+        expect(container.querySelector(".no-selection")).toBeInTheDocument();
     });
 
     it("plays the selected sample at the rate the library really sounds it at", async () => {

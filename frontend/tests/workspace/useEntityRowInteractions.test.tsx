@@ -3,7 +3,8 @@ import type { MouseEvent, ReactElement, ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import { useSelectionStore } from "../../src/workspace/selectionStore";
+import { useMorphStore } from "../../src/morph/morphStore";
+import { INITIAL_SELECTION_STATE, useSelectionStore } from "../../src/workspace/selectionStore";
 import { useEntityRowInteractions } from "../../src/workspace/useEntityRowInteractions";
 
 function wrapper({ children }: { children: ReactNode }): ReactElement {
@@ -70,7 +71,8 @@ describe("useEntityRowInteractions", () => {
         expect(useSelectionStore.getState().highlighted).toBeNull();
     });
 
-    it("a Shift-click on a sample sets it as the comparison target and prevents the default navigation", () => {
+    it("a Shift-click on a sample joins it to the sample in hand and prevents the default navigation", () => {
+        useSelectionStore.getState().focusSample("anchor");
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
         const { event, preventDefault } = fakeMouseEvent({ shiftKey: true });
 
@@ -79,11 +81,25 @@ describe("useEntityRowInteractions", () => {
         });
 
         expect(preventDefault).toHaveBeenCalled();
-        expect(useSelectionStore.getState().comparisonSampleHash).toBe("abc");
-        expect(useSelectionStore.getState().highlighted).toBeNull();
+        expect(useMorphStore.getState()).toMatchObject({ first: "anchor", second: "abc" });
+        expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "anchor" });
     });
 
-    it("a Shift-click on a module does nothing, since modules have no comparison concept", () => {
+    it("a Shift-click with nothing in hand opens a pair on the clicked sample", () => {
+        useSelectionStore.setState(INITIAL_SELECTION_STATE);
+        useMorphStore.getState().clear();
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
+        const { event } = fakeMouseEvent({ shiftKey: true });
+
+        act(() => {
+            result.current.onClick(event);
+        });
+
+        expect(useMorphStore.getState()).toMatchObject({ first: "abc", second: null });
+    });
+
+    it("a Shift-click on a module does nothing, since a module has no pair to join", () => {
+        useMorphStore.getState().clear();
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
         const { event, preventDefault } = fakeMouseEvent({ shiftKey: true });
 
@@ -92,7 +108,7 @@ describe("useEntityRowInteractions", () => {
         });
 
         expect(preventDefault).not.toHaveBeenCalled();
-        expect(useSelectionStore.getState().comparisonSampleHash).toBeNull();
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
     });
 
     it("a double-click navigates to the entity's own route", async () => {

@@ -1,14 +1,21 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type * as CloudApi from "../../../src/api/cloud";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as SamplesApi from "../../../src/api/samples";
 import { CloudHoverTooltip } from "../../../src/workspace/panels/CloudHoverTooltip";
 
-const { getSamplePreview, getModule } = vi.hoisted(() => ({
+const { getSamplePreview, getModule, getCategoryTags } = vi.hoisted(() => ({
     getSamplePreview: vi.fn(),
     getModule: vi.fn(),
+    getCategoryTags: vi.fn().mockResolvedValue([]),
 }));
+
+vi.mock("../../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../../src/api/cloud");
+    return { ...actual, getCategoryTags };
+});
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
@@ -37,7 +44,7 @@ describe("CloudHoverTooltip", () => {
     it("shows the sample's display name and short hash once the one preview request lands", async () => {
         getSamplePreview.mockResolvedValue({
             display_name: "kick",
-            category: "kick",
+            category: "BASS DRUM",
             hand_label: null,
             thumbnail: [{ minimum: -0.5, maximum: 0.5 }],
         });
@@ -48,14 +55,14 @@ describe("CloudHoverTooltip", () => {
             expect(screen.getByText("kick")).toBeInTheDocument();
         });
         expect(screen.getByText(SAMPLE_HASH.slice(0, 8))).toBeInTheDocument();
-        expect(screen.getByText("Kick")).toBeInTheDocument();
+        expect(screen.getByText("BASS DRUM")).toBeInTheDocument();
         expect(getSamplePreview).toHaveBeenCalledWith(SAMPLE_HASH);
     });
 
     it("falls back to the unnamed-sample placeholder for an empty display name, with no thumbnail yet", async () => {
         getSamplePreview.mockResolvedValue({
             display_name: "",
-            category: "uncategorized",
+            category: null,
             hand_label: null,
             thumbnail: null,
         });
@@ -79,6 +86,7 @@ describe("CloudHoverTooltip", () => {
             file_size: 4096,
             ingested_at: "2026-01-01T00:00:00Z",
             occurrences: [],
+            files: [],
         });
 
         render(<CloudHoverTooltip entity={{ kind: "module", hash: MODULE_HASH }} x={10} y={20} />);
@@ -104,6 +112,7 @@ describe("CloudHoverTooltip", () => {
             file_size: 4096,
             ingested_at: "2026-01-01T00:00:00Z",
             occurrences: [],
+            files: [],
         });
 
         render(<CloudHoverTooltip entity={{ kind: "module", hash: MODULE_HASH }} x={10} y={20} />);

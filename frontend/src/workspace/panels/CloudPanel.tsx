@@ -1,22 +1,23 @@
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { CloudLabel, CloudPoint, CloudSuggestion, ModuleCloudPoint } from "../../api/cloud";
+import type { CloudCategory, CloudLabel, CloudPoint, ModuleCloudPoint } from "../../api/cloud";
 import { type CloudLink, CloudView } from "../../cloud/CloudView";
 import type { CloudEntityPoint } from "../../cloud/geometry";
 import {
     defaultPaintedTags,
     labelColoring,
     type PointColoring,
+    SUBSTRATE_ONLY_COLORING,
     type TopLevelTag,
     topLevelTags,
 } from "../../cloud/labelColoring";
 import { TagLegend } from "../../cloud/TagLegend";
+import { useCategoryTags } from "../../cloud/useCategoryTags";
 import { useCloud } from "../../cloud/useCloud";
+import { useCloudCategories } from "../../cloud/useCloudCategories";
 import { useCloudLabels } from "../../cloud/useCloudLabels";
-import { useCloudSuggestions } from "../../cloud/useCloudSuggestions";
 import { useModuleCloud } from "../../cloud/useModuleCloud";
-import { useSuggestionTags } from "../../cloud/useSuggestionTags";
 import { morphPreview } from "../../morph/morphPreview";
 import { useMorphStore } from "../../morph/morphStore";
 import { useMorphStatus } from "../../morph/useMorphStatus";
@@ -25,15 +26,18 @@ import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
 import { Loading } from "../../shared/Loading";
-import { type EntityRef, useSelectionStore } from "../selectionStore";
+import { type EntityRef, morphAnchorOf, useSelectionStore } from "../selectionStore";
 import { entityRoute } from "../useEntityRowInteractions";
 import { CloudHoverTooltip } from "./CloudHoverTooltip";
 
 type CloudTab = "samples" | "modules";
-type ColoringMode = "category" | "label" | "suggestion";
+type ColoringMode = "category" | "label";
 
-const CATEGORY_COLORING: PointColoring = { kind: "category" };
 const NO_TAGS: readonly TopLevelTag[] = [];
+const EMPTY_CAPTIONS: Readonly<Record<ColoringMode, string>> = {
+    category: "No sample carries a category yet. A scoring of the listening model writes them.",
+    label: "No sample carries a label yet. Labels written in a sample's detail panel appear here.",
+};
 
 interface HoveredPoint {
     readonly entity: EntityRef;
@@ -48,7 +52,6 @@ function samplePoints(coordinates: readonly CloudPoint[]): readonly CloudEntityP
         ref: { kind: "sample", hash: coordinate.sample_hash },
         x: coordinate.x,
         y: coordinate.y,
-        category: coordinate.category,
         ...(coordinate.playback_rate_hz !== null && { playbackRateHz: coordinate.playback_rate_hz }),
     }));
 }
@@ -95,20 +98,20 @@ function useActiveCloudPoints(tab: CloudTab): FetchState<readonly CloudEntityPoi
     return tab === "samples" ? samplePointsState : modulePointsState;
 }
 
-/** A sample's first suggestion in the shape the label coloring paints by: one path, the way a written label's first tag is. */
-function suggestionsAsLabels(suggestions: readonly CloudSuggestion[]): readonly CloudLabel[] {
-    return suggestions.map((suggestion) => ({ sample_hash: suggestion.sample_hash, paths: [suggestion.path] }));
+/** A sample's top category in the shape the label coloring paints by: one path, the way a written label's first tag is. */
+function categoriesAsLabels(categories: readonly CloudCategory[]): readonly CloudLabel[] {
+    return categories.map((category) => ({ sample_hash: category.sample_hash, paths: [category.path] }));
 }
 
 /**
- * How the sample points are colored. Under the label mode the tags a person has painted are their
- * own choice once they touch the legend, and the most used ones until then -- so a vocabulary that
- * grows during a labeling session keeps showing whatever was chosen, and a fresh session shows
- * the tags with the most to show. The suggestion mode paints the same way from what the listening
- * model heard, its own legend drawn from the scoring's vocabulary; a chosen set belongs to one mode,
- * so switching starts the other from its own most-used tags. A mode's sources are fetched the first
- * time it is chosen and kept for the session, so the category mode, which needs none of them,
- * costs nothing beyond the points.
+ * How the sample points are colored. The category mode paints each sample by the tag the listening
+ * model heard first, its legend drawn from the scoring's vocabulary, so a point wears the color its
+ * badge does. The label mode paints the same way from the tags a person wrote. In either, the
+ * painted tags are a person's own choice once they touch the legend, and the most used ones until
+ * then -- so a vocabulary that grows during a labeling session keeps showing whatever was chosen,
+ * and a fresh session shows the tags with the most to show; a chosen set belongs to one mode, so
+ * switching starts the other from its own most-used tags. A mode's sources are fetched the first
+ * time it is chosen and kept for the session, and until they land every point waits on the ground.
  */
 function useSampleColoring(mode: ColoringMode): {
     readonly coloring: PointColoring;
@@ -118,26 +121,26 @@ function useSampleColoring(mode: ColoringMode): {
 } {
     const labelsState = useCloudLabels(mode === "label");
     const tagsState = useLabelTags(mode === "label");
-    const suggestionsState = useCloudSuggestions(mode === "suggestion");
-    const suggestionTagsState = useSuggestionTags(mode === "suggestion");
+    const categoriesState = useCloudCategories(mode === "category");
+    const categoryTagsState = useCategoryTags(mode === "category");
     const [chosen, setChosen] = useState<readonly string[] | null>(null);
     useEffect(() => {
         setChosen(null);
     }, [mode]);
     const tags = useMemo(() => {
-        const source = mode === "suggestion" ? suggestionTagsState : tagsState;
+        const source = mode === "category" ? categoryTagsState : tagsState;
         return source.status === "success" ? topLevelTags(source.data) : NO_TAGS;
-    }, [mode, tagsState, suggestionTagsState]);
+    }, [mode, tagsState, categoryTagsState]);
     const painted = useMemo(() => chosen ?? defaultPaintedTags(tags), [chosen, tags]);
     const coloring = useMemo((): PointColoring => {
         if (mode === "label" && labelsState.status === "success") {
             return labelColoring(labelsState.data, tags, painted);
         }
-        if (mode === "suggestion" && suggestionsState.status === "success") {
-            return labelColoring(suggestionsAsLabels(suggestionsState.data), tags, painted);
+        if (mode === "category" && categoriesState.status === "success") {
+            return labelColoring(categoriesAsLabels(categoriesState.data), tags, painted);
         }
-        return CATEGORY_COLORING;
-    }, [mode, labelsState, suggestionsState, tags, painted]);
+        return SUBSTRATE_ONLY_COLORING;
+    }, [mode, labelsState, categoriesState, tags, painted]);
 
     function togglePainted(name: string): void {
         setChosen(painted.includes(name) ? painted.filter((candidate) => candidate !== name) : [...painted, name]);
@@ -154,14 +157,12 @@ export function CloudPanel(): ReactElement {
     const { coloring, tags, painted, togglePainted } = useSampleColoring(mode);
     const navigate = useNavigate();
     const highlighted = useSelectionStore((selection) => selection.highlighted);
-    const focusedSampleHash = useSelectionStore((selection) => selection.focusedSampleHash);
+    const morphAnchor = useSelectionStore(morphAnchorOf);
     const highlightEntity = useSelectionStore((selection) => selection.highlightEntity);
     const clearHighlight = useSelectionStore((selection) => selection.clearHighlight);
-    const setComparisonSample = useSelectionStore((selection) => selection.setComparisonSample);
     const morphFirst = useMorphStore((morph) => morph.first);
     const morphSecond = useMorphStore((morph) => morph.second);
     const weight = useMorphStore((morph) => morph.weight);
-    const playOnRelease = useMorphStore((morph) => morph.playOnRelease);
     const join = useMorphStore((morph) => morph.join);
     const setWeight = useMorphStore((morph) => morph.setWeight);
     const { play } = useAudioPreview();
@@ -171,7 +172,6 @@ export function CloudPanel(): ReactElement {
             morphFirst !== null && morphSecond !== null ? { first: morphFirst, second: morphSecond, weight } : null,
         [morphFirst, morphSecond, weight],
     );
-    const morphAnchor = highlighted?.kind === "sample" ? highlighted.hash : focusedSampleHash;
     const rateByHash = useMemo(() => {
         const rates = new Map<string, number>();
         if (state.status === "success") {
@@ -202,22 +202,20 @@ export function CloudPanel(): ReactElement {
         void navigate(entityRoute(entity));
     }
 
-    function handleCompare(entity: EntityRef): void {
+    function handleJoinToAnchor(entity: EntityRef): void {
         if (entity.kind === "sample") {
-            setComparisonSample(entity.hash);
             join(morphAnchor, entity.hash);
         }
     }
 
     function handleJoin(first: EntityRef, second: EntityRef): void {
         if (first.kind === "sample" && second.kind === "sample") {
-            setComparisonSample(second.hash);
             join(first.hash, second.hash);
         }
     }
 
     function handleWeightCommit(): void {
-        if (playOnRelease && link !== null && morphStatus.available) {
+        if (link !== null && morphStatus.available) {
             play(morphPreview(link.first, link.second, link.weight));
         }
     }
@@ -271,21 +269,12 @@ export function CloudPanel(): ReactElement {
                         >
                             Labels
                         </button>
-                        <button
-                            type="button"
-                            aria-pressed={mode === "suggestion"}
-                            onClick={() => {
-                                setMode("suggestion");
-                            }}
-                        >
-                            Suggestions
-                        </button>
                     </>
                 )}
             </div>
             {tab === "modules" && <p className="cloud-caption">{MODULE_TAB_CAPTION}</p>}
-            {tab === "samples" && mode !== "category" && (
-                <TagLegend tags={tags} painted={painted} onToggle={togglePainted} />
+            {tab === "samples" && (
+                <TagLegend tags={tags} painted={painted} onToggle={togglePainted} emptyCaption={EMPTY_CAPTIONS[mode]} />
             )}
             <div className="panel-body cloud-body">
                 {state.status === "loading" && <Loading />}
@@ -300,7 +289,7 @@ export function CloudPanel(): ReactElement {
                             onFocus={handleFocus}
                             onClear={clearHighlight}
                             onHover={handleHover}
-                            onCompare={handleCompare}
+                            onJoinToAnchor={handleJoinToAnchor}
                             onJoin={handleJoin}
                             onActivate={handleActivate}
                             link={tab === "samples" ? link : null}

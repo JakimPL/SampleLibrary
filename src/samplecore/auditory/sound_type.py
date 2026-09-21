@@ -7,8 +7,8 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
-from samplecore.auditory.envelope import local_rms_envelope
 from samplecore.auditory.framing import frame_series, hann_taper
+from samplecore.auditory.strikes import read_strikes
 
 ANALYSIS_FFT_LENGTH: Final[int] = 2048
 ANALYSIS_HOP_LENGTH: Final[int] = 512
@@ -16,7 +16,6 @@ FLATNESS_LOWEST_HZ: Final[float] = 50.0
 FLATNESS_HIGHEST_HZ: Final[float] = 16000.0
 NOISE_FLATNESS_THRESHOLD: Final[float] = 0.2
 SUSTAIN_DEPTH_DB: Final[float] = 12.0
-ONSET_LOOKBACK_SECONDS: Final[float] = 0.02
 PERCUSSIVE_DECAY_SECONDS: Final[float] = 0.5
 PERCUSSIVE_ATTACK_SECONDS: Final[float] = 0.1
 PERCUSSIVE_THRESHOLD: Final[float] = 0.5
@@ -104,27 +103,20 @@ def _spectral_flatness(mono: NDArray[np.float64], *, sample_rate_hz: int) -> flo
 def _percussiveness(mono: NDArray[np.float64], *, sample_rate_hz: int) -> float:
     """How fast the clip's strikes arrive and fall away, each strike scored on its own and weighted by its energy.
 
-    The clip is cut into strikes wherever the level climbs `SUSTAIN_DEPTH_DB` within
-    `ONSET_LOOKBACK_SECONDS`, so a loop of hits is read hit by hit. A strike scores by the time
-    its level takes to fall `SUSTAIN_DEPTH_DB` below its peak, full marks at once and none at
-    `PERCUSSIVE_DECAY_SECONDS`, scaled by how promptly the peak arrived, none at
+    The clip is cut into strikes by `read_strikes`, so a loop of hits is read hit by hit. A strike
+    scores by the time its level takes to fall `SUSTAIN_DEPTH_DB` below its peak, full marks at
+    once and none at `PERCUSSIVE_DECAY_SECONDS`, scaled by how promptly the peak arrived, none at
     `PERCUSSIVE_ATTACK_SECONDS`. Absolute times keep a kick a kick whatever the clip's length, and
     a struck sound that rings on -- a cymbal, a plucked string -- reads low, since its identity is
-    carried by what sustains. Against the keyword categories, nine in ten leads, pads and vocals
-    read under the percussive bar, and the struck categories split along exactly that ring.
+    carried by what sustains. Checked against sample names that state a role, nine in ten leads,
+    pads and vocals read under the percussive bar, and the struck roles split along exactly that ring.
     """
-    level = local_rms_envelope(mono, sample_rate_hz=sample_rate_hz)
-    decibels = 20.0 * np.log10(level / float(level.max()))
-    lookback = max(int(ONSET_LOOKBACK_SECONDS * sample_rate_hz), 1)
-    rise = decibels[lookback:] - decibels[:-lookback]
-    climbing = np.concatenate((np.zeros(lookback, dtype=bool), rise >= SUSTAIN_DEPTH_DB))
-    onsets = np.flatnonzero(climbing[1:] & ~climbing[:-1]) + 1
-    starts = np.concatenate(([0], onsets))
-    ends = np.concatenate((onsets, [decibels.shape[0]]))
+    strikes = read_strikes(mono, sample_rate_hz=sample_rate_hz)
+    spans = tuple(zip(strikes.starts, strikes.ends))
     scores = np.array(
-        [_strike_score(decibels[start:end], sample_rate_hz=sample_rate_hz) for start, end in zip(starts, ends)]
+        [_strike_score(strikes.decibels[start:end], sample_rate_hz=sample_rate_hz) for start, end in spans]
     )
-    energies = np.array([float((level[start:end] ** 2).sum()) for start, end in zip(starts, ends)])
+    energies = np.array([float((strikes.level[start:end] ** 2).sum()) for start, end in spans])
     return _energy_weighted(scores, energies)
 
 

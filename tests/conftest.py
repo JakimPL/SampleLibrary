@@ -2,19 +2,51 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Final
 
+import numpy as np
 import pytest
+import soundfile
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.pool import NullPool
+from threadpoolctl import threadpool_limits
 
 from samplecore.config import ConfigurationError, load_config
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
+from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage.curation import curation_metadata
 from samplecore.storage.database import connect, metadata
+from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 
 SERVER_URL_VARIABLE: Final[str] = "SAMPLELIBRARY_TEST_DATABASE_URL"
 TEST_DATABASE_NAME: Final[str] = "samplelibrary_test"
 DEFAULT_SERVER_URL: Final[str] = f"postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/{TEST_DATABASE_NAME}"
+VANISHED_SAMPLE_FRAMES: Final[int] = 2048
+VANISHED_SAMPLE_RATE: Final[int] = 44100
+SINGLE_THREAD: Final[int] = 1
+SINGLE_THREADED_MATH: Final[dict[str, str]] = {
+    "OPENBLAS_NUM_THREADS": str(SINGLE_THREAD),
+    "OMP_NUM_THREADS": str(SINGLE_THREAD),
+    "MKL_NUM_THREADS": str(SINGLE_THREAD),
+    "NUMBA_NUM_THREADS": str(SINGLE_THREAD),
+}
+
+
+def pytest_configure() -> None:
+    """Hold every test process, and every process a test starts, to one thread per numerical library.
+
+    The suite runs a worker on every core, so one thread each lets every worker compute at full speed
+    on a core of its own; measured on a 24-core machine, a renderer test took 5.6 s alone and 114 s in
+    a suite whose workers each opened a thread pool on every core. The libraries size their pools
+    from these variables when they first load, which covers torch and numba in each worker and every
+    library in the processes a scenario starts, since those inherit the environment. numpy is loaded
+    by the time this hook runs, so its pool is resized in place.
+    """
+    os.environ.update(SINGLE_THREADED_MATH)
+    threadpool_limits(limits=SINGLE_THREAD)
 
 
 @pytest.fixture(scope="session")
@@ -46,28 +78,28 @@ def _database_url(_server_url: str, worker_id: str) -> Iterator[str]:
     fixture's habit of emptying every table between tests would otherwise reach into whatever the
     other workers are doing at that moment. One database per worker keeps that cleanup local to the
     worker performing it. ``CREATE DATABASE``/``DROP DATABASE`` cannot run inside a transaction
-    block, hence the ``AUTOCOMMIT`` isolation level.
+    block, hence the ``AUTOCOMMIT`` isolation level. The server connection is open only while it
+    creates and drops the database, so the session leaves the server's connections to the tests.
     """
     server_url = make_url(_server_url)
     database_name = f"{server_url.database}_{worker_id}"
-    admin_engine = create_engine(server_url, isolation_level="AUTOCOMMIT")
+    admin_engine = create_engine(server_url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
     with admin_engine.connect() as admin_connection:
         admin_connection.execute(text(f'DROP DATABASE IF EXISTS "{database_name}" WITH (FORCE)'))
         admin_connection.execute(text(f'CREATE DATABASE "{database_name}"'))
-        try:
-            # str() on a URL renders its password as "***"; the yielded URL has to carry the real one.
-            yield server_url.set(database=database_name).render_as_string(hide_password=False)
-        finally:
+    try:
+        # str() on a URL renders its password as "***"; the yielded URL has to carry the real one.
+        yield server_url.set(database=database_name).render_as_string(hide_password=False)
+    finally:
+        with admin_engine.connect() as admin_connection:
             admin_connection.execute(text(f'DROP DATABASE "{database_name}" WITH (FORCE)'))
-    admin_engine.dispose()
 
 
 @pytest.fixture
 def connection(_database_url: str) -> Iterator[Connection]:
     """A catalog connection to this worker's database, with an empty schema on every test.
 
-    Emptying every table at teardown, in the same reverse-dependency order ``reset_library`` uses,
-    gives each test the same "starts from nothing" guarantee -- rolling back first discards any
+    Emptying every table at teardown, children before the tables they reference, gives each test the same "starts from nothing" guarantee -- rolling back first discards any
     transaction a failing test left open, so the cleanup deletes themselves always run against a
     clean transaction state.
 
@@ -84,3 +116,28 @@ def connection(_database_url: str) -> Iterator[Connection]:
             open_connection.execute(table.delete())
         open_connection.commit()
         open_connection.close()
+
+
+@pytest.fixture
+def vanished_sample_file(connection: Connection, tmp_path: Path) -> SampleFile:
+    """A sample a scan found in a file of a sample directory, whose file has since been deleted.
+
+    The catalog still holds the sample, its thumbnail and its file row, so every pass reaches it and
+    none can read it: the case of a folder of samples on a drive that is no longer plugged in.
+    """
+    directory = tmp_path / "vanished pack"
+    path = directory / "Kicks" / "Gone 01.wav"
+    path.parent.mkdir(parents=True)
+    soundfile.write(path, np.linspace(-0.5, 0.5, VANISHED_SAMPLE_FRAMES), VANISHED_SAMPLE_RATE, subtype="PCM_16")
+    decoded = decode_sample_file(path)
+    sample_file = SampleFile(
+        sample_hash=decoded.sample_pcm.sample.hash,
+        location=SampleFileLocation(directory=directory, relative_path="Kicks/Gone 01.wav"),
+        rate=decoded.rate,
+        fingerprint=FileFingerprint.of(path.stat()),
+    )
+    PostgresSampleRepository(connection).upsert(decoded.sample_pcm.sample)
+    PostgresSampleFileRepository(connection).upsert(sample_file)
+    connection.commit()
+    path.unlink()
+    return sample_file

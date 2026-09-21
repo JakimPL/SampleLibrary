@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { TopLevelTag } from "../../src/cloud/labelColoring";
 import { TagLegend } from "../../src/cloud/TagLegend";
 
+const EMPTY_CAPTION = "No sample carries a tag yet.";
+
 const TAGS: readonly TopLevelTag[] = [
     { name: "LO-FI", sampleCount: 33, rank: 4 },
     { name: "SNARE", sampleCount: 21, rank: 0 },
@@ -13,7 +15,7 @@ const TAGS: readonly TopLevelTag[] = [
 
 describe("TagLegend", () => {
     it("lists the painted tags with their counts, and every tag once expanded", async () => {
-        render(<TagLegend tags={TAGS} painted={["SNARE"]} onToggle={vi.fn()} />);
+        render(<TagLegend tags={TAGS} painted={["SNARE"]} onToggle={vi.fn()} emptyCaption={EMPTY_CAPTION} />);
 
         const snare = screen.getByRole("button", { name: /SNARE/ });
         expect(snare).toHaveAttribute("aria-pressed", "true");
@@ -30,7 +32,7 @@ describe("TagLegend", () => {
     });
 
     it("collapses back to the painted tags", async () => {
-        render(<TagLegend tags={TAGS} painted={["SNARE"]} onToggle={vi.fn()} />);
+        render(<TagLegend tags={TAGS} painted={["SNARE"]} onToggle={vi.fn()} emptyCaption={EMPTY_CAPTION} />);
         await userEvent.click(screen.getByRole("button", { name: "+2 more" }));
 
         await userEvent.click(screen.getByRole("button", { name: "Painted only" }));
@@ -40,7 +42,14 @@ describe("TagLegend", () => {
     });
 
     it("offers the toggle only while some tags are hidden", () => {
-        render(<TagLegend tags={TAGS} painted={["LO-FI", "SNARE", "PIANO"]} onToggle={vi.fn()} />);
+        render(
+            <TagLegend
+                tags={TAGS}
+                painted={["LO-FI", "SNARE", "PIANO"]}
+                onToggle={vi.fn()}
+                emptyCaption={EMPTY_CAPTION}
+            />,
+        );
 
         expect(screen.queryByRole("button", { name: /more/ })).not.toBeInTheDocument();
         expect(screen.getAllByRole("button")).toHaveLength(TAGS.length);
@@ -48,7 +57,7 @@ describe("TagLegend", () => {
 
     it("reports the tag a person toggles, whether painted or revealed", async () => {
         const onToggle = vi.fn();
-        render(<TagLegend tags={TAGS} painted={["SNARE"]} onToggle={onToggle} />);
+        render(<TagLegend tags={TAGS} painted={["SNARE"]} onToggle={onToggle} emptyCaption={EMPTY_CAPTION} />);
 
         await userEvent.click(screen.getByRole("button", { name: /SNARE/ }));
         await userEvent.click(screen.getByRole("button", { name: "+2 more" }));
@@ -59,8 +68,8 @@ describe("TagLegend", () => {
     });
 
     it("says so when nothing is labeled yet", () => {
-        render(<TagLegend tags={[]} painted={[]} onToggle={vi.fn()} />);
+        render(<TagLegend tags={[]} painted={[]} onToggle={vi.fn()} emptyCaption={EMPTY_CAPTION} />);
 
-        expect(screen.getByText(/No sample carries a label yet/)).toBeInTheDocument();
+        expect(screen.getByText(EMPTY_CAPTION)).toBeInTheDocument();
     });
 });

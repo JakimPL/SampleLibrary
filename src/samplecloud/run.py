@@ -15,10 +15,11 @@ from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
 from samplecloud.registries import DEFAULT_BACKEND_NAME
 from samplecore.config import LibraryConfig
 from samplecore.models.cloud import CloudPromotion
-from samplecore.models.experiment import Reading
+from samplecore.models.experiment import ExperimentKey, Reading
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository, PostgresCloudPromotionRepository
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.sample_audio import SampleAudio
 
 REBUILT_RECIPE = EmbeddingRecipe(backend_name=DEFAULT_BACKEND_NAME, reading=Reading.NOMINAL, model_name=None)
 
@@ -47,10 +48,12 @@ class EmbeddingSummary:
     reduction: CloudSummary | None
 
 
-def create_experiment(connection: Connection, recipe: EmbeddingRecipe, *, label: str | None) -> int:
-    """Open a new experiment recording ``recipe``, committed at once so a later resume can find it."""
+def create_experiment(
+    connection: Connection, recipe: EmbeddingRecipe, *, label: str | None, key: ExperimentKey | None
+) -> int:
+    """Open a new experiment recording ``recipe``, committed at once so a later resume can find it by its id or key."""
     return PostgresExperimentRepository(connection).create(
-        backend_name=recipe.backend_name, label=label, params=recipe.parameters
+        backend_name=recipe.backend_name, label=label, params=recipe.parameters, key=key
     )
 
 
@@ -75,7 +78,7 @@ def experiment_to_rebuild(connection: Connection) -> int:
 
     with start_batch(connection):
         experiment_id = PostgresExperimentRepository(connection).insert_new(
-            backend_name=REBUILT_RECIPE.backend_name, label=None, params=REBUILT_RECIPE.parameters
+            backend_name=REBUILT_RECIPE.backend_name, label=None, params=REBUILT_RECIPE.parameters, key=None
         )
         PostgresCloudPromotionRepository(connection).record(
             CloudPromotion(experiment_id=experiment_id, promoted_at=datetime.now(UTC))
@@ -100,28 +103,30 @@ def run_embedding(
 
     Raises:
         ExtractorChanged: the extractor no longer reproduces the experiment's own vectors.
+        ExperimentRefused: none of the experiment's samples can be read now to check the extractor against.
     """
-    pending = pending_samples(connection, experiment_id, sample_limit=options.sample_limit)
+    hearing = hearing_for(connection, options.reading)
+    pending = pending_samples(connection, experiment_id, hearing=hearing, sample_limit=options.sample_limit)
     if pending.samples:
         feature_extractor = extractor()
-        hearing = hearing_for(connection, options.reading)
+        audio = SampleAudio.from_catalog(connection, config.library_root)
         if pending.already_extracted:
             require_reproducible(
                 connection,
-                config.library_root,
+                audio,
                 experiment_id=experiment_id,
                 extractor=feature_extractor,
                 hearing=hearing,
             )
         extraction = extract_features(
             connection,
-            config.library_root,
+            audio,
             FeaturePass(experiment_id=experiment_id, feature_extractor=feature_extractor, hearing=hearing),
             pending,
         )
     else:
         extraction = FeatureExtractionSummary(
-            cataloged=pending.cataloged, already_extracted=pending.already_extracted, newly_extracted=0
+            cataloged=pending.cataloged, already_extracted=pending.already_extracted, newly_extracted=0, unavailable=0
         )
 
     return EmbeddingSummary(

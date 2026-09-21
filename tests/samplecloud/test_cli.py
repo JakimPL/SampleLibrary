@@ -12,6 +12,7 @@ from samplecloud.experiments import EmbeddingRecipe
 from samplecloud.registries import DEFAULT_BACKEND_NAME
 from samplecloud.run import create_experiment
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplecore.exit_status import ExitStatus
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import Reading
 from samplecore.models.sample import Sample
@@ -46,7 +47,7 @@ def test_main_reports_a_configuration_error_and_exits_without_a_config_file(
     with pytest.raises(SystemExit) as raised:
         main([], prog=PROGRAM)
 
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     assert "Configuration error" in capsys.readouterr().err
 
 
@@ -93,7 +94,7 @@ def test_main_rejects_an_unknown_backend(capsys: pytest.CaptureFixture[str]) -> 
 
 
 def _refusal(raised: pytest.ExceptionInfo[SystemExit], capsys: pytest.CaptureFixture[str]) -> str:
-    assert raised.value.code == 1
+    assert raised.value.code == ExitStatus.REFUSED
     captured = capsys.readouterr()
     return captured.out + captured.err
 
@@ -155,6 +156,7 @@ def test_resuming_an_experiment_refuses_flags_naming_another_recipe(
         connection,
         EmbeddingRecipe(backend_name=DEFAULT_BACKEND_NAME, reading=Reading.NOMINAL, model_name=None),
         label=None,
+        key=None,
     )
 
     with pytest.raises(SystemExit) as raised:
@@ -175,6 +177,7 @@ def test_resuming_an_experiment_accepts_flags_repeating_its_recipe(
         connection,
         EmbeddingRecipe(backend_name=DEFAULT_BACKEND_NAME, reading=Reading.NOMINAL, model_name=None),
         label=None,
+        key=None,
     )
 
     main(["--experiment-id", str(experiment_id), "--backend", DEFAULT_BACKEND_NAME, "--extract-only"], prog=PROGRAM)
@@ -217,3 +220,58 @@ def test_a_rebuild_and_a_named_experiment_are_one_choice() -> None:
         main(["--resume-promoted", "--experiment-id", "1"], prog=PROGRAM)
 
     assert raised.value.code == 2
+
+
+def _catalog_tone(connection: Connection, library_root: Path, sample_hash: str, *, frequency: float) -> None:
+    frames = 4096
+    sample = Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=frames)
+    tone = 0.5 * np.sin(2 * np.pi * frequency * np.arange(frames) / audio_store.NOMINAL_WAV_RATE)
+    PostgresSampleRepository(connection).upsert(sample)
+    audio_store.write(library_root, SamplePCM(sample=sample, pcm=tone.reshape(-1, 1)))
+    connection.commit()
+
+
+def test_a_key_files_the_first_run_s_experiment_and_every_later_run_resumes_it(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    _catalog_tone(connection, tmp_path, SAMPLE_HASH, frequency=440.0)
+    main(["--backend", "librosa", "--key", "librosa-nominal", "--extract-only"], prog=PROGRAM)
+    filed = PostgresExperimentRepository(connection).get_by_key("librosa-nominal")
+    _catalog_tone(connection, tmp_path, "b" * 64, frequency=660.0)
+    capsys.readouterr()
+
+    main(["--backend", "librosa", "--key", "librosa-nominal", "--extract-only"], prog=PROGRAM)
+
+    assert filed is not None
+    assert PostgresExperimentRepository(connection).get_by_key("librosa-nominal") == filed
+    assert f"Experiment {filed.id}: extracted features for 1 new samples (1 already known" in capsys.readouterr().out
+    assert PostgresCloudPromotionRepository(connection).current() is None
+
+
+def test_a_key_filed_by_another_recipe_is_refused(
+    connection: Connection,
+    _database_url: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
+    main(["--backend", "librosa", "--key", "descriptor", "--extract-only"], prog=PROGRAM)
+
+    with pytest.raises(SystemExit) as raised:
+        main(["--backend", "invariant", "--key", "descriptor", "--extract-only"], prog=PROGRAM)
+
+    assert "--backend invariant" in _refusal(raised, capsys)
+
+
+def test_a_key_names_the_experiment_in_place_of_an_id(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["--key", "teacher", "--experiment-id", "1"], prog=PROGRAM)
+
+    assert raised.value.code == ExitStatus.USAGE
+    assert "not allowed with argument" in capsys.readouterr().err

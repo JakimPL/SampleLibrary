@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Protocol
 
-from sqlalchemy import Connection, Row, select
+from sqlalchemy import Connection, Row, delete, select
+from trackmod.schema.scalars import Rate
 
+from samplecore.digests import digest_of_rows
 from samplecore.models.experiment import SampleFeatureVector
-from samplecore.storage.database import bulk_insert, sample_feature_vector
+from samplecore.storage.database import HASH_CHUNK_SIZE, bulk_insert, chunks, sample_feature_vector
 
 
 class SampleFeatureVectorRepository(Protocol):
@@ -16,7 +18,13 @@ class SampleFeatureVectorRepository(Protocol):
 
     def sample_hashes_for_experiment(self, experiment_id: int) -> frozenset[str]: ...
 
-    def first_vectors(self, experiment_id: int, *, count: int) -> tuple[SampleFeatureVector, ...]: ...
+    def heard_rates_for_experiment(self, experiment_id: int) -> dict[str, Rate | None]: ...
+
+    def delete_for_samples(self, experiment_id: int, sample_hashes: Sequence[str]) -> None: ...
+
+    def vectors_in_hash_order(
+        self, experiment_id: int, *, count: int, offset: int
+    ) -> tuple[SampleFeatureVector, ...]: ...
 
     def list_for_experiment(self, experiment_id: int) -> tuple[SampleFeatureVector, ...]: ...
 
@@ -24,9 +32,10 @@ class SampleFeatureVectorRepository(Protocol):
 class PostgresSampleFeatureVectorRepository:
     """A SampleFeatureVectorRepository backed by the catalog's ``sample_feature_vector`` table.
 
-    ``insert_many`` never needs conflict resolution: a resumed experiment's caller only ever passes
-    hashes ``list_for_experiment`` has not already returned for that same experiment, so a
-    (experiment_id, sample_hash) pair this table already holds is never re-inserted.
+    ``insert_many`` never needs conflict resolution: a resumed experiment's caller passes hashes the
+    experiment holds no vector for, or first deletes the vectors it describes again
+    (``delete_for_samples``), so a (experiment_id, sample_hash) pair this table already holds is
+    never inserted a second time.
     """
 
     def __init__(self, connection: Connection) -> None:
@@ -39,8 +48,11 @@ class PostgresSampleFeatureVectorRepository:
         bulk_insert(
             self._connection,
             sample_feature_vector,
-            ["experiment_id", "sample_hash", "vector", "computed_at"],
-            ((vector.experiment_id, vector.sample_hash, list(vector.vector), vector.computed_at) for vector in vectors),
+            ["experiment_id", "sample_hash", "vector", "computed_at", "heard_rate"],
+            (
+                (vector.experiment_id, vector.sample_hash, list(vector.vector), vector.computed_at, vector.heard_rate)
+                for vector in vectors
+            ),
         )
 
     def sample_hashes_for_experiment(self, experiment_id: int) -> frozenset[str]:
@@ -50,13 +62,30 @@ class PostgresSampleFeatureVectorRepository:
         )
         return frozenset(str(row.sample_hash) for row in self._connection.execute(statement))
 
-    def first_vectors(self, experiment_id: int, *, count: int) -> tuple[SampleFeatureVector, ...]:
-        """The vectors of an experiment's first ``count`` samples in hash order, the same few every call."""
+    def heard_rates_for_experiment(self, experiment_id: int) -> dict[str, Rate | None]:
+        """The rate each of an experiment's samples was heard at when described, read without the vectors."""
+        statement = select(sample_feature_vector.c.sample_hash, sample_feature_vector.c.heard_rate).where(
+            sample_feature_vector.c.experiment_id == experiment_id
+        )
+        return {str(row.sample_hash): row.heard_rate for row in self._connection.execute(statement)}
+
+    def delete_for_samples(self, experiment_id: int, sample_hashes: Sequence[str]) -> None:
+        """Drop an experiment's vectors for these samples, ahead of describing them again."""
+        for chunk in chunks(sample_hashes, HASH_CHUNK_SIZE):
+            self._connection.execute(
+                delete(sample_feature_vector)
+                .where(sample_feature_vector.c.experiment_id == experiment_id)
+                .where(sample_feature_vector.c.sample_hash.in_(chunk))
+            )
+
+    def vectors_in_hash_order(self, experiment_id: int, *, count: int, offset: int) -> tuple[SampleFeatureVector, ...]:
+        """Up to ``count`` of an experiment's vectors in sample-hash order, past the first ``offset``, the same ones every call."""
         statement = (
             select(sample_feature_vector)
             .where(sample_feature_vector.c.experiment_id == experiment_id)
             .order_by(sample_feature_vector.c.sample_hash)
             .limit(count)
+            .offset(offset)
         )
         return tuple(_row_to_feature_vector(row) for row in self._connection.execute(statement))
 
@@ -70,6 +99,18 @@ class PostgresSampleFeatureVectorRepository:
         rows = self._connection.execute(statement).fetchall()
         return tuple(_row_to_feature_vector(row) for row in rows)
 
+    def membership_digest(self, experiment_id: int) -> str:
+        """One digest over which samples an experiment describes and the rate each was heard at, read without the vectors."""
+        statement = (
+            select(sample_feature_vector.c.sample_hash, sample_feature_vector.c.heard_rate)
+            .where(sample_feature_vector.c.experiment_id == experiment_id)
+            .order_by(sample_feature_vector.c.sample_hash)
+        )
+        return digest_of_rows(
+            (str(row.sample_hash), None if row.heard_rate is None else int(row.heard_rate))
+            for row in self._connection.execute(statement)
+        )
+
 
 def _row_to_feature_vector(row: Row[Any]) -> SampleFeatureVector:
     """Reconstruct a SampleFeatureVector from a Core row, addressed by its own column names."""
@@ -78,4 +119,5 @@ def _row_to_feature_vector(row: Row[Any]) -> SampleFeatureVector:
         sample_hash=row.sample_hash,
         vector=tuple(row.vector),
         computed_at=row.computed_at,
+        heard_rate=row.heard_rate,
     )

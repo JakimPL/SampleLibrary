@@ -3,8 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import type * as CloudApi from "../../src/api/cloud";
 import { type SampleSelection, type SampleSummary, WHOLE_CATALOG } from "../../src/api/samples";
 import { SamplesTable } from "../../src/samples/SamplesTable";
+
+const { getCategoryTags } = vi.hoisted(() => ({ getCategoryTags: vi.fn().mockResolvedValue([]) }));
+
+vi.mock("../../src/api/cloud", async () => {
+    const actual = await vi.importActual<typeof CloudApi>("../../src/api/cloud");
+    return { ...actual, getCategoryTags };
+});
 
 function buildSample(
     overrides: Pick<SampleSummary, "hash" | "display_name" | "occurrence_count"> &
@@ -14,7 +22,7 @@ function buildSample(
         depth: 16,
         channels: 1,
         frames: 4096,
-        category: "uncategorized",
+        category: null,
         hand_label: null,
         rating: null,
         favorite: false,

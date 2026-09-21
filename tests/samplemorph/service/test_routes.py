@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import io
+from dataclasses import replace
+from http import HTTPStatus
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -8,19 +11,30 @@ import soundfile
 from fastapi.testclient import TestClient
 
 from samplecore.models.morph import MORPH_WEIGHT_STEPS, HeardMorphPoint
-from samplemorph.model_store import DEFAULT_MODEL_NAME
-from samplemorph.registries import PGHI_VOCODER_NAME
+from samplecore.storage import audio_store
+from samplemorph.canonicalizers.common import analysis_transform
+from samplemorph.envelope.filtering import filtered_waveform
+from samplemorph.envelope.payload import response_from_payload
+from samplemorph.envelope.response import HeldEnd
+from samplemorph.envelope.settings import EnvelopeSettings, Timeline
+from samplemorph.geometry import log_frequency_geometry
 from samplemorph.rendering import FULL_SCALE_CEILING
+from samplemorph.routes.route import hear_in_frame
+from samplemorph.routes.selection import Glide
 from samplemorph.service.app import create_app
 from samplemorph.service.renderer import MorphRenderer, load_renderer
-from samplemorph.service.settings import DEFAULT_INFERENCE_DEVICE, ServiceSettings
+from samplemorph.service.settings import RESPONSE_MEDIA_TYPE, ServiceSettings
 from tests.samplemorph.service.conftest import StoredLibrary
 
 AUDIO_PATH = "/morph/audio"
+RESPONSE_PATH = "/morph/response"
 STATUS_PATH = "/morph/status"
 DIGEST_LENGTH = 64
 FIRST_RATE_HZ = 8_363
 SECOND_RATE_HZ = 16_726
+SOUND_TOLERANCE = 1e-6
+UPLOAD_RATE_HZ = 22_050
+UPLOAD_BYTE_BOUND = 1024
 
 
 def _renderer(client: TestClient) -> MorphRenderer:
@@ -38,15 +52,23 @@ def _params(library: StoredLibrary, weight: float) -> dict[str, str | float | in
     }
 
 
-def test_the_status_names_what_the_process_serves(client: TestClient) -> None:
+def test_the_status_names_what_the_process_serves(client: TestClient, settings: ServiceSettings) -> None:
     status = client.get(STATUS_PATH).json()
 
-    assert status["model"] == DEFAULT_MODEL_NAME
-    assert status["vocoder"] == PGHI_VOCODER_NAME
-    assert status["restorer"] is None
-    assert status["device"] == DEFAULT_INFERENCE_DEVICE
+    served = settings.selection.envelope
+    assert status["name"] == f"envelope-{served.excitation.value}"
+    assert status["description"]["envelope_settings"] == served.model_dump(mode="json")
     assert status["weight_steps"] == MORPH_WEIGHT_STEPS
     assert len(status["fingerprint"]) == DIGEST_LENGTH
+
+
+def test_the_route_renders_end_to_end_reading_only_the_stored_samples(
+    client: TestClient, library: StoredLibrary
+) -> None:
+    response = client.get(AUDIO_PATH, params=_params(library, 0.5))
+
+    assert response.status_code == 200
+    assert soundfile.read(io.BytesIO(response.content))[1] == SECOND_RATE_HZ
 
 
 def test_a_point_renders_as_a_wav_at_the_rate_the_pair_is_heard_at_with_its_caching_headers(
@@ -74,7 +96,7 @@ def test_the_endpoints_sound_for_their_own_heard_length(client: TestClient, libr
 
 
 def test_a_weight_off_the_grid_is_refused(client: TestClient, library: StoredLibrary) -> None:
-    assert client.get(AUDIO_PATH, params=_params(library, 0.3)).status_code == 422
+    assert client.get(AUDIO_PATH, params=_params(library, 0.305)).status_code == 422
 
 
 def test_a_point_asked_for_without_its_rates_is_refused(client: TestClient, library: StoredLibrary) -> None:
@@ -103,22 +125,12 @@ def test_a_render_the_caller_holds_is_answered_without_rendering_again(
     assert _renderer(client).render_count == rendered
 
 
-def test_a_pair_is_encoded_once_however_many_weights_are_asked_for(client: TestClient, library: StoredLibrary) -> None:
+def test_a_pair_is_prepared_once_however_many_weights_are_asked_for(client: TestClient, library: StoredLibrary) -> None:
     for step in range(0, MORPH_WEIGHT_STEPS + 1, MORPH_WEIGHT_STEPS // 4):
         assert client.get(AUDIO_PATH, params=_params(library, step / MORPH_WEIGHT_STEPS)).status_code == 200
 
-    assert _renderer(client).latent_count == 2
+    assert _renderer(client).pair_count == 1
     assert _renderer(client).render_count == 5
-
-
-def test_the_restored_route_renders_end_to_end(restored_settings: ServiceSettings, library: StoredLibrary) -> None:
-    with TestClient(create_app(load_renderer(restored_settings))) as client:
-        status = client.get(STATUS_PATH).json()
-        response = client.get(AUDIO_PATH, params=_params(library, 0.5))
-
-    assert status["restorer"] is not None
-    assert response.status_code == 200
-    assert soundfile.read(io.BytesIO(response.content))[1] == SECOND_RATE_HZ
 
 
 @pytest.mark.parametrize(
@@ -154,3 +166,238 @@ def test_a_quiet_point_keeps_its_level(client: TestClient, library: StoredLibrar
     frames, _ = soundfile.read(io.BytesIO(client.get(AUDIO_PATH, params=_params(library, 0.5)).content))
 
     assert float(np.abs(frames).max()) <= FULL_SCALE_CEILING + 1.0 / 32768
+
+
+def test_an_end_found_in_a_sample_directory_renders_from_its_file(client: TestClient, library: StoredLibrary) -> None:
+    params = {**_params(library, 0.5), "second": library.file_hash, "second_file": str(library.file_path)}
+
+    response = client.get(AUDIO_PATH, params=params)
+
+    assert response.status_code == 200
+    assert soundfile.read(io.BytesIO(response.content))[1] == SECOND_RATE_HZ
+
+
+def test_a_file_outside_every_served_sample_directory_is_refused(
+    client: TestClient, library: StoredLibrary, tmp_path: Path
+) -> None:
+    elsewhere = tmp_path / "elsewhere.wav"
+    elsewhere.write_bytes(library.file_path.read_bytes())
+    climbing = library.sample_directory / ".." / elsewhere.name
+
+    for named in (elsewhere, climbing):
+        params = {**_params(library, 0.5), "second": library.file_hash, "second_file": str(named)}
+        response = client.get(AUDIO_PATH, params=params)
+
+        assert response.status_code == 404
+        assert "no sample directory" in response.json()["detail"]
+
+
+def test_a_file_holding_another_sample_than_the_one_named_is_refused(
+    client: TestClient, library: StoredLibrary
+) -> None:
+    params = {**_params(library, 0.5), "second": library.hashes[2], "second_file": str(library.file_path)}
+
+    response = client.get(AUDIO_PATH, params=params)
+
+    assert response.status_code == 404
+    assert "holds another sample" in response.json()["detail"]
+
+
+def _pair_params(library: StoredLibrary) -> dict[str, str | float | int]:
+    return {
+        "first": library.hashes[0],
+        "second": library.hashes[1],
+        "first_rate_hz": FIRST_RATE_HZ,
+        "second_rate_hz": SECOND_RATE_HZ,
+    }
+
+
+def test_a_pair_answers_with_the_filter_between_its_two_samples(
+    settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        answered = client.get(RESPONSE_PATH, params=_pair_params(library))
+
+        assert answered.status_code == HTTPStatus.OK
+        assert answered.headers["content-type"] == RESPONSE_MEDIA_TYPE
+        response = response_from_payload(answered.content)
+        assert response.description.rate_hz == max(FIRST_RATE_HZ, SECOND_RATE_HZ)
+        assert response.first.held is HeldEnd.FIRST
+        assert response.second.held is HeldEnd.SECOND
+
+
+def test_a_gliding_envelope_route_renders_morphs_and_hands_over_no_filter(
+    gliding_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(gliding_settings))) as client:
+        status = client.get(STATUS_PATH).json()
+        rendered = client.get(AUDIO_PATH, params=_params(library, 0.5))
+        answered = client.get(RESPONSE_PATH, params=_pair_params(library))
+
+    assert status["name"].endswith(f"-glide-{Glide.SUBHARMONIC.value}")
+    assert status["description"]["pitch_reader"]["reader"] == Glide.SUBHARMONIC.value
+    assert rendered.status_code == HTTPStatus.OK
+    assert answered.status_code == HTTPStatus.CONFLICT
+
+
+def test_a_pair_asked_for_twice_is_read_once(settings: ServiceSettings, library: StoredLibrary) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        for _ in range(2):
+            client.get(RESPONSE_PATH, params=_pair_params(library))
+
+        assert _renderer(client).response_count == 1
+
+
+def test_a_caller_holding_the_filter_is_answered_without_reading_it_again(
+    settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        first = client.get(RESPONSE_PATH, params=_pair_params(library))
+
+        again = client.get(
+            RESPONSE_PATH, params=_pair_params(library), headers={"If-None-Match": first.headers["etag"]}
+        )
+
+        assert again.status_code == HTTPStatus.NOT_MODIFIED
+        assert again.content == b""
+
+
+def test_a_pair_naming_a_sample_the_store_lacks_is_refused(settings: ServiceSettings, library: StoredLibrary) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        answered = client.get(RESPONSE_PATH, params={**_pair_params(library), "second": "f" * DIGEST_LENGTH})
+
+        assert answered.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_the_filter_a_pair_answers_with_returns_that_sample_as_the_pair_hears_it(
+    settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    held_to_first = replace(
+        settings,
+        selection=settings.selection.model_copy(update={"envelope": EnvelopeSettings(timeline=Timeline.FIRST)}),
+    )
+    with TestClient(create_app(load_renderer(held_to_first))) as client:
+        response = response_from_payload(client.get(RESPONSE_PATH, params=_pair_params(library)).content)
+
+    heard = hear_in_frame(
+        audio_store.read_object(library.root, library.hashes[0]).pcm,
+        rate_hz=float(FIRST_RATE_HZ),
+        target_rate_hz=response.description.rate_hz,
+    )
+    geometry = log_frequency_geometry()
+
+    filtered = filtered_waveform(
+        analysis_transform(heard.mono, geometry=geometry), response.first, weight=0.0, geometry=geometry
+    )
+
+    np.testing.assert_allclose(filtered, heard.mono, atol=SOUND_TOLERANCE)
+
+
+def _wav(pcm: np.ndarray, *, rate_hz: int) -> bytes:
+    written = io.BytesIO()
+    soundfile.write(written, pcm, rate_hz, format="WAV", subtype="FLOAT")
+    return written.getvalue()
+
+
+def _uploads(library: StoredLibrary, *, first_rate_hz: int, second_rate_hz: int) -> dict[str, tuple[str, bytes, str]]:
+    first = audio_store.read_object(library.root, library.hashes[0]).pcm
+    second = audio_store.read_object(library.root, library.hashes[1]).pcm
+    return {
+        "first": ("first.wav", _wav(first, rate_hz=first_rate_hz), "audio/wav"),
+        "second": ("second.wav", _wav(second, rate_hz=second_rate_hz), "audio/wav"),
+    }
+
+
+def test_two_uploaded_sounds_answer_with_the_filter_between_them(
+    settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+        )
+
+    assert answered.status_code == HTTPStatus.OK
+    response = response_from_payload(answered.content)
+    assert response.description.rate_hz == UPLOAD_RATE_HZ
+    assert response.first.description.sample_count == library.frame_counts[0]
+    assert response.second.description.sample_count == library.frame_counts[1]
+
+
+def test_uploads_at_two_rates_are_heard_at_the_higher(settings: ServiceSettings, library: StoredLibrary) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ * 2)
+        )
+
+    assert response_from_payload(answered.content).description.rate_hz == UPLOAD_RATE_HZ * 2
+
+
+def test_the_same_uploads_sent_twice_are_read_once(settings: ServiceSettings, library: StoredLibrary) -> None:
+    uploads = _uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+    with TestClient(create_app(load_renderer(settings))) as client:
+        first = client.post(RESPONSE_PATH, files=uploads)
+        again = client.post(RESPONSE_PATH, files=uploads)
+
+        assert _renderer(client).response_count == 1
+    assert again.content == first.content
+
+
+def test_the_filter_from_uploads_returns_the_first_sound_at_its_own_end(
+    settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+        )
+    response = response_from_payload(answered.content)
+    heard = hear_in_frame(
+        audio_store.read_object(library.root, library.hashes[0]).pcm,
+        rate_hz=float(UPLOAD_RATE_HZ),
+        target_rate_hz=float(UPLOAD_RATE_HZ),
+    )
+    geometry = log_frequency_geometry()
+
+    filtered = filtered_waveform(
+        analysis_transform(heard.mono, geometry=geometry), response.first, weight=0.0, geometry=geometry
+    )
+
+    np.testing.assert_allclose(filtered, heard.mono, atol=SOUND_TOLERANCE)
+
+
+def test_an_upload_holding_no_audio_is_refused(settings: ServiceSettings, library: StoredLibrary) -> None:
+    uploads = _uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+    uploads["second"] = ("second.wav", b"no audio in here", "audio/wav")
+    with TestClient(create_app(load_renderer(settings))) as client:
+        answered = client.post(RESPONSE_PATH, files=uploads)
+
+    assert answered.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert "no audio" in answered.json()["detail"]
+
+
+def test_an_upload_past_the_byte_bound_is_refused(settings: ServiceSettings, library: StoredLibrary) -> None:
+    uploads = _uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+    bounded = replace(settings, limits=replace(settings.limits, maximum_upload_bytes=UPLOAD_BYTE_BOUND))
+    with TestClient(create_app(load_renderer(bounded))) as client:
+        answered = client.post(RESPONSE_PATH, files=uploads)
+
+    assert answered.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+
+
+def test_uploads_heard_too_far_apart_in_rate_are_refused(settings: ServiceSettings, library: StoredLibrary) -> None:
+    with TestClient(create_app(load_renderer(settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ * 32)
+        )
+
+    assert answered.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+
+def test_uploads_to_a_process_serving_a_gliding_route_are_told_it_holds_no_filter(
+    gliding_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    with TestClient(create_app(load_renderer(gliding_settings))) as client:
+        answered = client.post(
+            RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
+        )
+
+    assert answered.status_code == HTTPStatus.CONFLICT

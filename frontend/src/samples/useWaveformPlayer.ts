@@ -22,6 +22,7 @@ const CURSOR_COLOR_FALLBACK = "#a8690f";
 export interface WaveformPlayer {
     readonly containerRef: RefObject<HTMLDivElement | null>;
     readonly isReady: boolean;
+    readonly hasFailed: boolean;
     readonly isPlaying: boolean;
     readonly currentTimeSeconds: number;
     readonly durationSeconds: number;
@@ -68,6 +69,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
     const waveSurferRef = useRef<WaveSurfer | null>(null);
     const playbackRateRef = useRef(playbackRateFor(initialRateHz));
     const [isReady, setIsReady] = useState(false);
+    const [hasFailed, setHasFailed] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
     const [durationSeconds, setDurationSeconds] = useState(0);
@@ -80,6 +82,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
         }
 
         setIsReady(false);
+        setHasFailed(false);
         setIsPlaying(false);
         setCurrentTimeSeconds(0);
         setDurationSeconds(0);
@@ -120,6 +123,9 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
             setIsReady(true);
             setDurationSeconds(duration);
         });
+        waveSurfer.on("error", () => {
+            setHasFailed(true);
+        });
         waveSurfer.on("play", () => {
             setIsPlaying(true);
         });
@@ -151,6 +157,7 @@ export function useWaveformPlayer(audioUrl: string, initialRateHz: number): Wave
     return {
         containerRef,
         isReady,
+        hasFailed,
         isPlaying,
         currentTimeSeconds,
         durationSeconds,

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import soundfile
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 from trackmod.core.notes.pitch import Note
@@ -16,17 +17,20 @@ from samplecore.models.module import Module
 from samplecore.models.note_event import NoteEvent
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
+from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_event import PostgresNoteEventRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
@@ -113,6 +117,25 @@ def test_list_samples_returns_a_page(client: TestClient, connection: Connection)
     assert {item["hash"] for item in body["items"]} == {first.hash, second.hash}
 
 
+def test_list_samples_carry_the_shown_scoring_s_top_category(client: TestClient, connection: Connection) -> None:
+    scored = _insert_sample(connection, SAMPLE_HASH_A)
+    _insert_sample(connection, SAMPLE_HASH_B)
+    seed_scoring(connection, {scored.hash: (("BASS DRUM", 0.9), ("TOM", 0.1))})
+
+    body = client.get("/samples").json()
+
+    by_hash = {item["hash"]: item["category"] for item in body["items"]}
+    assert by_hash == {scored.hash: "BASS DRUM", SAMPLE_HASH_B: None}
+
+
+def test_list_samples_name_no_label_while_no_scoring_is_shown(client: TestClient, connection: Connection) -> None:
+    _insert_sample(connection, SAMPLE_HASH_A)
+
+    body = client.get("/samples").json()
+
+    assert body["items"][0]["category"] is None
+
+
 def test_list_samples_ranks_by_occurrence_count(client: TestClient, connection: Connection) -> None:
     frequent = _insert_sample(connection, SAMPLE_HASH_A)
     rare = _insert_sample(connection, SAMPLE_HASH_B)
@@ -126,7 +149,6 @@ def test_list_samples_ranks_by_occurrence_count(client: TestClient, connection: 
     assert [item["hash"] for item in body["items"]] == [frequent.hash, rare.hash]
     assert body["items"][0]["occurrence_count"] == 2
     assert body["items"][0]["display_name"] == "kick"
-    assert body["items"][0]["category"] == "kick"
 
 
 def test_list_samples_falls_back_to_the_dominant_occurrence_rate(client: TestClient, connection: Connection) -> None:
@@ -293,7 +315,6 @@ def test_get_sample_returns_detail_with_occurrences_and_module_context(
     body = response.json()
     assert body["hash"] == sample.hash
     assert body["display_name"] == "lead"
-    assert body["category"] == "lead"
     assert len(body["occurrences"]) == 1
     occurrence = body["occurrences"][0]
     assert occurrence["properties"]["name"] == "lead"
@@ -305,7 +326,7 @@ def test_get_sample_returns_detail_with_occurrences_and_module_context(
     }
 
 
-def test_get_sample_carries_the_newest_scoring_s_suggestions_closest_first(
+def test_get_sample_carries_the_shown_scoring_s_categories_closest_first(
     client: TestClient, connection: Connection
 ) -> None:
     sample = _insert_sample(connection, SAMPLE_HASH_A)
@@ -315,8 +336,10 @@ def test_get_sample_carries_the_newest_scoring_s_suggestions_closest_first(
     body = client.get(f"/samples/{sample.hash}").json()
     other = client.get(f"/samples/{SAMPLE_HASH_B}").json()
 
-    assert body["suggested_labels"] == [{"label": "BASS DRUM", "score": 0.8}, {"label": "SNARE", "score": 0.3}]
-    assert other["suggested_labels"] == []
+    assert body["categories"] == [{"label": "BASS DRUM", "score": 0.8}, {"label": "SNARE", "score": 0.3}]
+    assert body["category"] == "BASS DRUM"
+    assert other["categories"] == []
+    assert other["category"] is None
 
 
 def test_get_sample_falls_back_to_the_dominant_occurrence_rate(client: TestClient, connection: Connection) -> None:
@@ -433,7 +456,7 @@ def test_get_sample_audio_refuses_a_path_that_is_no_hash(client: TestClient) -> 
     assert response.status_code == 422
 
 
-def test_get_sample_preview_reads_the_name_the_category_and_the_stored_thumbnail(
+def test_get_sample_preview_reads_the_name_the_labels_and_the_stored_thumbnail(
     client: TestClient, connection: Connection
 ) -> None:
     sample = _insert_sample(connection, SAMPLE_HASH_A)
@@ -448,10 +471,21 @@ def test_get_sample_preview_reads_the_name_the_category_and_the_stored_thumbnail
     assert response.status_code == 200
     assert response.json() == {
         "display_name": "kick",
-        "category": "kick",
+        "category": None,
         "hand_label": None,
         "thumbnail": [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}],
     }
+
+
+def test_get_sample_preview_carries_the_shown_scoring_s_top_category(
+    client: TestClient, connection: Connection
+) -> None:
+    sample = _insert_sample(connection, SAMPLE_HASH_A)
+    seed_scoring(connection, {sample.hash: (("HI-HAT: CLOSED", 0.7), ("SNARE", 0.2))})
+
+    body = client.get(f"/samples/{sample.hash}/preview").json()
+
+    assert body["category"] == "HI-HAT: CLOSED"
 
 
 def test_get_sample_preview_has_no_thumbnail_before_the_pass_reaches_the_sample(
@@ -462,7 +496,6 @@ def test_get_sample_preview_has_no_thumbnail_before_the_pass_reaches_the_sample(
     body = client.get(f"/samples/{SAMPLE_HASH_A}/preview").json()
 
     assert body["thumbnail"] is None
-    assert body["category"] == "uncategorized"
 
 
 def test_get_sample_preview_404s_for_an_unknown_hash(client: TestClient) -> None:
@@ -594,7 +627,7 @@ def test_get_similar_samples_carry_what_a_glance_shows(client: TestClient, conne
     body = client.get(f"/samples/{target.hash}/similar").json()
 
     assert [(item["display_name"], item["category"], item["hand_label"], item["thumbnail"]) for item in body] == [
-        ("kick", "kick", None, [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}])
+        ("kick", None, None, [{"minimum": -0.5, "maximum": 0.5}, {"minimum": -0.25, "maximum": 0.25}])
     ]
 
 
@@ -684,3 +717,75 @@ def test_a_neighbor_search_from_an_uncataloged_sample_says_so(client: TestClient
 
     assert response.status_code == 404
     assert "no sample cataloged" in response.json()["detail"]
+
+
+@pytest.fixture
+def cataloged_kick_file(connection: Connection, tmp_path: Path) -> SampleFile:
+    """A sample found in a file of a sample directory beside the library, cataloged the way a scan leaves it."""
+    directory = tmp_path / "packs"
+    path = directory / "Kicks" / "Deep 01.wav"
+    path.parent.mkdir(parents=True)
+    soundfile.write(path, np.linspace(-0.5, 0.5, 64), 48000, subtype="PCM_16")
+    decoded = decode_sample_file(path)
+    sample_file = SampleFile(
+        sample_hash=decoded.sample_pcm.sample.hash,
+        location=SampleFileLocation(directory=directory, relative_path="Kicks/Deep 01.wav"),
+        rate=decoded.rate,
+        fingerprint=FileFingerprint.of(path.stat()),
+    )
+    PostgresSampleRepository(connection).upsert(decoded.sample_pcm.sample)
+    PostgresSampleFileRepository(connection).upsert(sample_file)
+    return sample_file
+
+
+def test_a_sample_found_in_a_file_is_detailed_with_its_file_name_and_rate(
+    client: TestClient, cataloged_kick_file: SampleFile
+) -> None:
+    response = client.get(f"/samples/{cataloged_kick_file.sample_hash}")
+
+    assert response.status_code == 200
+    detail = response.json()
+    assert (detail["display_name"], detail["playback_rate_hz"]) == ("deep 01", 48000)
+    assert detail["occurrences"] == []
+    assert detail["files"] == [
+        {
+            "location": {
+                "directory": cataloged_kick_file.location.directory.as_posix(),
+                "relative_path": "Kicks/Deep 01.wav",
+            },
+            "rate": 48000,
+            "available": True,
+        }
+    ]
+
+
+def test_a_sample_whose_file_is_gone_is_detailed_as_unavailable(
+    client: TestClient, cataloged_kick_file: SampleFile
+) -> None:
+    cataloged_kick_file.location.path.unlink()
+
+    response = client.get(f"/samples/{cataloged_kick_file.sample_hash}")
+
+    assert response.json()["files"][0]["available"] is False
+
+
+def test_a_sample_found_in_a_file_is_served_as_the_wav_the_store_would_hold(
+    client: TestClient, cataloged_kick_file: SampleFile
+) -> None:
+    response = client.get(f"/samples/{cataloged_kick_file.sample_hash}/audio")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/wav"
+    assert "immutable" in response.headers["cache-control"]
+    assert response.content == audio_store.encode_wav(decode_sample_file(cataloged_kick_file.location.path).sample_pcm)
+
+
+def test_the_audio_of_a_sample_whose_file_is_gone_is_not_found_naming_the_file(
+    client: TestClient, cataloged_kick_file: SampleFile
+) -> None:
+    cataloged_kick_file.location.path.unlink()
+
+    response = client.get(f"/samples/{cataloged_kick_file.sample_hash}/audio")
+
+    assert response.status_code == 404
+    assert "Deep 01.wav" in response.json()["detail"]

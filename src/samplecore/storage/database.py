@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections.abc
+import hashlib
 from collections.abc import Iterable, Iterator
 from typing import Final, TypeVar, cast
 
@@ -38,6 +39,7 @@ from trackmod.spec.levels import MAX_INSTRUMENT_VOLUME, MAX_PANNING, MIN_INSTRUM
 from trackmod.spec.pitch import NOTE_COUNT
 
 from samplecore.models.channels import ChannelLayout
+from samplecore.models.pass_completion import PassKind
 from samplecore.models.relation import RelationType
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.constraints import all_null_together, non_negative
@@ -219,6 +221,25 @@ s3m_sample_properties = Table(
     ),
 )
 
+# A plain audio file read in place from a configured sample directory: the occurrence of a sample
+# that lives outside any module. Its audio stays where the file is, so the stat fingerprint recorded
+# beside the hash is what tells a reader whether the file still holds that sample.
+sample_file = Table(
+    "sample_file",
+    metadata,
+    Column("directory", String, nullable=False),
+    Column("relative_path", String, nullable=False),
+    Column("sample_hash", String(64), ForeignKey("sample.hash"), nullable=False),
+    Column("rate", UInteger, nullable=False),
+    Column("size_bytes", UBigInt, nullable=False),
+    Column("modified_ns", UBigInt, nullable=False),
+    PrimaryKeyConstraint("directory", "relative_path"),
+    Index("sample_file_sample_hash_index", "sample_hash"),
+    CheckConstraint(column("rate") > 0, name="sample_file_rate_check"),
+    CheckConstraint(non_negative("size_bytes"), name="sample_file_size_bytes_check"),
+    CheckConstraint(non_negative("modified_ns"), name="sample_file_modified_ns_check"),
+)
+
 sample_relation = Table(
     "sample_relation",
     metadata,
@@ -295,6 +316,8 @@ experiment = Table(
     Column("params", String, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("label", String, nullable=True),
+    Column("key", String, nullable=True),
+    UniqueConstraint("key", name="experiment_key_key"),
 )
 
 cloud_promotion = Table(
@@ -313,11 +336,12 @@ sample_feature_vector = Table(
     Column("sample_hash", String(64), ForeignKey("sample.hash"), nullable=False),
     Column("vector", ARRAY(Double), nullable=False),
     Column("computed_at", DateTime(timezone=True), nullable=False),
+    Column("heard_rate", UInteger, nullable=True),
     PrimaryKeyConstraint("experiment_id", "sample_hash"),
 )
 
-sample_label_suggestion = Table(
-    "sample_label_suggestion",
+sample_category = Table(
+    "sample_category",
     metadata,
     Column("experiment_id", Integer, ForeignKey("experiment.id"), nullable=False),
     Column("sample_hash", String(64), ForeignKey("sample.hash"), nullable=False),
@@ -326,8 +350,30 @@ sample_label_suggestion = Table(
     Column("score", Double, nullable=False),
     Column("computed_at", DateTime(timezone=True), nullable=False),
     PrimaryKeyConstraint("experiment_id", "sample_hash", "rank"),
-    CheckConstraint(non_negative("rank"), name="sample_label_suggestion_rank_check"),
-    CheckConstraint(column("label") != "", name="sample_label_suggestion_label_check"),
+    CheckConstraint(non_negative("rank"), name="sample_category_rank_check"),
+    CheckConstraint(column("label") != "", name="sample_category_label_check"),
+)
+
+# One row per pass over the whole library that finished completely, naming the digest of what it had
+# in front of it, so a pass finding that digest again ends with nothing to do.
+pass_completion = Table(
+    "pass_completion",
+    metadata,
+    Column("kind", String, primary_key=True),
+    Column("digest", String(64), nullable=False),
+    Column("completed_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(column("kind").in_([kind.value for kind in PassKind]), name="pass_completion_kind_check"),
+)
+
+# The scoring the application shows, one row like the cloud's own promotion, written in the
+# transaction that writes a scoring or by a later request to show an earlier one again.
+category_promotion = Table(
+    "category_promotion",
+    metadata,
+    Column("slot", Integer, primary_key=True),
+    Column("experiment_id", Integer, ForeignKey("experiment.id"), nullable=False),
+    Column("promoted_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(column("slot") == PROMOTION_SLOT, name="category_promotion_slot_check"),
 )
 
 module_instrument = Table(
@@ -520,6 +566,20 @@ def share_extraction_lock(connection: Connection) -> None:
     adding a sample and a prune removing samples no module holds never run at once.
     """
     connection.execute(select(func.pg_advisory_lock_shared(EXTRACTION_LOCK_KEY)))
+
+
+def named_lock_key(name: str) -> int:
+    """The advisory lock key a name stands for: the first eight bytes of its SHA-256 as a signed 64-bit integer.
+
+    Postgres keys an advisory lock by a bigint, so every process naming one lock agrees on its key,
+    and two different names meet on one key no more often than two 64-bit digests do.
+    """
+    return int.from_bytes(hashlib.sha256(name.encode("utf-8")).digest()[:8], "big", signed=True)
+
+
+def claim_named_lock(connection: Connection, name: str) -> bool:
+    """Take the advisory lock a name stands for, for as long as the connection stays open, reporting whether it was free."""
+    return bool(connection.execute(select(func.pg_try_advisory_lock(named_lock_key(name)))).scalar_one())
 
 
 def claim_extraction_lock(connection: Connection) -> bool:

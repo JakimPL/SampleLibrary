@@ -24,7 +24,7 @@ from sqlalchemy.schema import CreateSchema
 from samplecore.labeling.labels import LEVEL_SEPARATOR, LabelPath, first_use_ranks, format_path
 from samplecore.models.annotation import AnnotationSource
 from samplecore.models.scalars import MAXIMUM_RATING, MINIMUM_RATING
-from samplecore.storage.constraints import non_negative
+from samplecore.storage.constraints import all_null_together, non_negative
 from samplecore.storage.types import USmallInt, UTinyInt
 
 CURATION_SCHEMA: Final[str] = "curation"
@@ -32,6 +32,14 @@ CURATION_SCHEMA: Final[str] = "curation"
 ANNOTATION_WRITE_LOCK_KEY: Final[int] = 4_120_559_871_306_442_117
 
 _ANNOTATION_SOURCE_VALUES: Final[tuple[str, ...]] = tuple(source.value for source in AnnotationSource)
+MODULE_SLOT_ANCHOR_COLUMNS: Final[tuple[str, ...]] = (
+    "module_hash",
+    "module_filename",
+    "instrument_index",
+    "sample_slot",
+    "sample_name",
+)
+SAMPLE_FILE_ANCHOR_COLUMNS: Final[tuple[str, ...]] = ("file_directory", "file_relative_path")
 
 # A MetaData of its own, in a schema of its own, is what keeps hand-made work safe from the passes
 # that rebuild everything else. Both places this project empties a database -- `samplelibrary reset`
@@ -48,11 +56,13 @@ sample_annotation = Table(
     Column("label", String, nullable=True),
     Column("rating", UTinyInt, nullable=True),
     Column("favorite", Boolean, nullable=False),
-    Column("module_hash", String(64), nullable=False),
-    Column("module_filename", String, nullable=False),
-    Column("instrument_index", USmallInt, nullable=False),
-    Column("sample_slot", USmallInt, nullable=False),
-    Column("sample_name", String, nullable=False),
+    Column("module_hash", String(64), nullable=True),
+    Column("module_filename", String, nullable=True),
+    Column("instrument_index", USmallInt, nullable=True),
+    Column("sample_slot", USmallInt, nullable=True),
+    Column("sample_name", String, nullable=True),
+    Column("file_directory", String, nullable=True),
+    Column("file_relative_path", String, nullable=True),
     Column("source", String, nullable=False),
     Column("annotated_at", DateTime(timezone=True), nullable=False),
     CheckConstraint(column("label").is_(None) | (column("label") != ""), name="sample_annotation_label_check"),
@@ -65,6 +75,14 @@ sample_annotation = Table(
         name="sample_annotation_decision_check",
     ),
     CheckConstraint(column("source").in_(_ANNOTATION_SOURCE_VALUES), name="sample_annotation_source_check"),
+    # Every annotation is anchored exactly once: the module slot columns filled together, or the
+    # sample file columns, and which of the two a row holds is what tells the anchor's kind.
+    CheckConstraint(all_null_together(*MODULE_SLOT_ANCHOR_COLUMNS), name="sample_annotation_module_slot_check"),
+    CheckConstraint(all_null_together(*SAMPLE_FILE_ANCHOR_COLUMNS), name="sample_annotation_sample_file_check"),
+    CheckConstraint(
+        column(MODULE_SLOT_ANCHOR_COLUMNS[0]).is_(None) != column(SAMPLE_FILE_ANCHOR_COLUMNS[0]).is_(None),
+        name="sample_annotation_anchor_check",
+    ),
     CheckConstraint(non_negative("instrument_index"), name="sample_annotation_instrument_index_check"),
     CheckConstraint(non_negative("sample_slot"), name="sample_annotation_sample_slot_check"),
 )
@@ -75,6 +93,17 @@ tag_rank = Table(
     Column("path", String, primary_key=True),
     Column("rank", Integer, nullable=False, unique=True),
     CheckConstraint(non_negative("rank"), name="tag_rank_rank_check"),
+)
+
+# One row per labels file read into the table, named by the digest of its bytes, so a pipeline can
+# tell a file the library already took in from one it has not.
+annotation_import = Table(
+    "annotation_import",
+    curation_metadata,
+    Column("file_sha256", String(64), primary_key=True),
+    Column("annotation_count", Integer, nullable=False),
+    Column("imported_at", DateTime(timezone=True), nullable=False),
+    CheckConstraint(non_negative("annotation_count"), name="annotation_import_annotation_count_check"),
 )
 
 # SQLAlchemy creates tables but never the schema qualifying them, so the CREATE SCHEMA is attached

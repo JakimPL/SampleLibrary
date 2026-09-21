@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Final
 
 import pytest
 from sqlalchemy import Connection
 from sqlalchemy.exc import IntegrityError
 
-from samplecore.models.annotation import AnnotationSource, SampleAnnotation
+from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation, SampleFileAnchor
 from samplecore.models.sample import Sample
+from samplecore.models.sample_file import SampleFileLocation
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.storage.curation import sample_annotation
 from samplecore.storage.repositories import sample_annotation as sample_annotation_repository
@@ -30,26 +32,39 @@ def _annotation(
         label=label,
         rating=rating,
         favorite=favorite,
-        occurrence=SampleOccurrence(module_hash=format(7, "064x"), instrument_index=1, sample_slot=2),
-        module_filename="song.it",
-        sample_name="smp01",
+        anchor=ModuleSlotAnchor(
+            occurrence=SampleOccurrence(module_hash=format(7, "064x"), instrument_index=1, sample_slot=2),
+            module_filename="song.it",
+            sample_name="smp01",
+        ),
         source=source,
         annotated_at=datetime.now(UTC),
     )
 
 
-def _raw_values(sample_hash: str, *, rating: int | None, favorite: bool) -> dict[str, object]:
+MODULE_SLOT_VALUES: Final[dict[str, object]] = {
+    "module_hash": format(7, "064x"),
+    "module_filename": "song.it",
+    "instrument_index": 1,
+    "sample_slot": 2,
+    "sample_name": "smp01",
+}
+NO_MODULE_SLOT_VALUES: Final[dict[str, object]] = dict.fromkeys(MODULE_SLOT_VALUES)
+SAMPLE_FILE_VALUES: Final[dict[str, object]] = {"file_directory": "/samples", "file_relative_path": "Kicks/Deep 01.wav"}
+NO_SAMPLE_FILE_VALUES: Final[dict[str, object]] = dict.fromkeys(SAMPLE_FILE_VALUES)
+ANCHORED_TO_A_MODULE_SLOT: Final[dict[str, object]] = MODULE_SLOT_VALUES | NO_SAMPLE_FILE_VALUES
+
+
+def _raw_values(
+    sample_hash: str, *, rating: int | None, favorite: bool, anchor: dict[str, object]
+) -> dict[str, object]:
     """A row built past the model, for pinning guards the database holds on its own."""
     return {
         "sample_hash": sample_hash,
         "label": None,
         "rating": rating,
         "favorite": favorite,
-        "module_hash": format(7, "064x"),
-        "module_filename": "song.it",
-        "instrument_index": 1,
-        "sample_slot": 2,
-        "sample_name": "smp01",
+        **anchor,
         "source": AnnotationSource.SAMPLE.value,
         "annotated_at": datetime.now(UTC),
     }
@@ -115,7 +130,49 @@ def test_writing_again_replaces_every_decision_including_the_ones_left_empty(
 def test_a_row_recording_nothing_is_refused_by_the_database(connection: Connection, sample_hash_a: str) -> None:
     """The model refuses this too; here the table's own guard is pinned, which no path can slip past."""
     with pytest.raises(IntegrityError):
-        connection.execute(sample_annotation.insert().values(_raw_values(sample_hash_a, rating=None, favorite=False)))
+        connection.execute(
+            sample_annotation.insert().values(
+                _raw_values(sample_hash_a, rating=None, favorite=False, anchor=ANCHORED_TO_A_MODULE_SLOT)
+            )
+        )
+
+    connection.rollback()
+
+
+def test_an_annotation_round_trips_with_the_sample_file_it_was_anchored_to(
+    connection: Connection, sample_hash_a: str
+) -> None:
+    repository = PostgresSampleAnnotationRepository(connection)
+    annotation = _annotation(sample_hash_a, label="kick").model_copy(
+        update={
+            "anchor": SampleFileAnchor(
+                location=SampleFileLocation(directory=Path("/samples"), relative_path="Kicks/Deep 01.wav")
+            )
+        }
+    )
+
+    repository.upsert_many((annotation,))
+
+    assert repository.get(sample_hash_a) == annotation
+
+
+@pytest.mark.parametrize(
+    "anchor",
+    [
+        MODULE_SLOT_VALUES | SAMPLE_FILE_VALUES,
+        NO_MODULE_SLOT_VALUES | NO_SAMPLE_FILE_VALUES,
+        MODULE_SLOT_VALUES | {"sample_name": None} | NO_SAMPLE_FILE_VALUES,
+        NO_MODULE_SLOT_VALUES | {"file_directory": "/samples", "file_relative_path": None},
+    ],
+    ids=("both anchors", "no anchor", "a module slot missing a column", "a file missing its path"),
+)
+def test_a_row_anchored_other_than_exactly_once_is_refused_by_the_database(
+    anchor: dict[str, object], connection: Connection, sample_hash_a: str
+) -> None:
+    with pytest.raises(IntegrityError):
+        connection.execute(
+            sample_annotation.insert().values(_raw_values(sample_hash_a, rating=3, favorite=False, anchor=anchor))
+        )
 
     connection.rollback()
 
@@ -125,7 +182,11 @@ def test_a_rating_outside_the_scale_is_refused_by_the_database(
     rating: int, connection: Connection, sample_hash_a: str
 ) -> None:
     with pytest.raises(IntegrityError):
-        connection.execute(sample_annotation.insert().values(_raw_values(sample_hash_a, rating=rating, favorite=True)))
+        connection.execute(
+            sample_annotation.insert().values(
+                _raw_values(sample_hash_a, rating=rating, favorite=True, anchor=ANCHORED_TO_A_MODULE_SLOT)
+            )
+        )
 
     connection.rollback()
 
@@ -268,3 +329,16 @@ def test_labels_of_samples_the_catalog_holds_are_the_ones_listed(
     repository.upsert_many((_annotation(stored_sample.hash, label="kick"), _annotation(sample_hash_b, label="orphan")))
 
     assert repository.cataloged_labels() == {stored_sample.hash: "KICK"}
+
+
+def test_the_label_digest_moves_with_a_label_s_text_alone(connection: Connection, stored_sample: Sample) -> None:
+    repository = PostgresSampleAnnotationRepository(connection)
+    repository.upsert_many((_annotation(stored_sample.hash, label="SNARE", rating=3),))
+    labeled = repository.label_digest()
+
+    repository.upsert_many((_annotation(stored_sample.hash, label="SNARE", rating=5, favorite=True),))
+    rated = repository.label_digest()
+    repository.upsert_many((_annotation(stored_sample.hash, label="SNARE: RIM", rating=5),))
+
+    assert rated == labeled
+    assert repository.label_digest() != labeled

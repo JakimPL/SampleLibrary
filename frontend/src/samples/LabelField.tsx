@@ -23,7 +23,7 @@ interface LabelFieldProps {
  * Enter and leaving the field both record the wording, and Escape puts back what was there before:
  * naming a sample is one thought, and a listener working through a library finishes it and moves on
  * rather than reaching for a button. An emptied field takes the label back, which is what leaves the
- * guessed category showing again. The wording already in use is offered as a list, so one vocabulary
+ * category the listening model heard showing again. The wording already in use is offered as a list, so one vocabulary
  * settles by habit rather than by a schema nobody has designed yet.
  */
 export function LabelField({ label, onCommit, onLeave, takesFocus }: LabelFieldProps): ReactElement {

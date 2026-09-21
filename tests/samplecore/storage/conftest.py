@@ -1,24 +1,20 @@
 from __future__ import annotations
 
-import importlib.util
-import types
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from sqlalchemy import Connection, select
-from trackmod.core.samples.depth import BitDepth
 
 from samplecore.hashing import compute_module_hash
-from samplecore.models.channels import ChannelLayout
 from samplecore.models.cloud import CloudPromotion, ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
-from samplecore.models.label_suggestion import SampleLabelSuggestion
-from samplecore.models.module import Module
-from samplecore.models.sample import Sample
+from samplecore.models.pass_completion import PassCompletion, PassKind
+from samplecore.models.sample_category import CategoryPromotion, SampleCategory
+from samplecore.models.sample_file import FileFingerprint
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
-from samplecore.models.tracker import TrackerFormat
+from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage.database import metadata
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
@@ -27,91 +23,25 @@ from samplecore.storage.repositories.cloud import (
 )
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
-from samplecore.storage.repositories.label_suggestion import PostgresSampleLabelSuggestionRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
-from samplecore.storage.repositories.sample import PostgresSampleRepository
+from samplecore.storage.repositories.pass_completion import PostgresPassCompletionRepository
+from samplecore.storage.repositories.sample_category import (
+    PostgresCategoryPromotionRepository,
+    PostgresSampleCategoryRepository,
+)
 from samplecore.storage.repositories.spectral import PostgresSampleSpectralFeatureRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
+from samplecore.storage.sample_audio import SampleAudio
 from sampleextract.discovery import FORMAT_LOADERS
 from sampleextract.equivalence.detect import detect_equivalences
+from sampleextract.files.discovery import discover_sample_files
+from sampleextract.files.ingest import ingest_sample_file
 from sampleextract.ingest import ingest_module
 from sampleextract.notes.playback_rates import record_playback_rates
 from sampleextract.parsing import parse_module
-
-
-@pytest.fixture
-def stored_sample(connection: Connection, sample_hash_a: str) -> Sample:
-    sample = Sample(hash=sample_hash_a, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
-    PostgresSampleRepository(connection).upsert(sample)
-    connection.commit()
-    return sample
-
-
-@pytest.fixture
-def stored_sample_b(connection: Connection, sample_hash_b: str) -> Sample:
-    sample = Sample(hash=sample_hash_b, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=8)
-    PostgresSampleRepository(connection).upsert(sample)
-    connection.commit()
-    return sample
-
-
-@pytest.fixture
-def stored_module(connection: Connection, module_hash_a: str) -> Module:
-    repository = PostgresModuleRepository(connection)
-    module = Module(
-        hash=module_hash_a,
-        id=repository.next_id(),
-        filename="song.it",
-        tracker=TrackerFormat.IT,
-        title="untitled",
-        channel_count=4,
-        pattern_count=1,
-        instrument_count=1,
-        sample_count=1,
-        file_size=1024,
-        ingested_at=datetime.now(UTC),
-    )
-    repository.insert(module)
-    connection.commit()
-    return module
-
-
-@pytest.fixture
-def stored_module_b(connection: Connection, module_hash_b: str) -> Module:
-    repository = PostgresModuleRepository(connection)
-    module = Module(
-        hash=module_hash_b,
-        id=repository.next_id(),
-        filename="song2.it",
-        tracker=TrackerFormat.IT,
-        title="untitled 2",
-        channel_count=4,
-        pattern_count=1,
-        instrument_count=1,
-        sample_count=1,
-        file_size=1024,
-        ingested_at=datetime.now(UTC),
-    )
-    repository.insert(module)
-    connection.commit()
-    return module
-
+from samplelibrary.sandbox.build import SAMPLE_PACK_DIRECTORY_NAME, build_sandbox
 
 SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
-
-_BUILD_DEV_LIBRARY_PATH = Path(__file__).resolve().parents[3] / "scripts" / "build_dev_library.py"
-
-
-def _load_script(path: Path, name: str) -> types.ModuleType:
-    """Imports a script by file path -- it lives outside every installed package, by design."""
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-build_dev_library = _load_script(_BUILD_DEV_LIBRARY_PATH, "build_dev_library")
 
 
 def _ingest_all(connection: Connection, library_root: Path, modules_directory: Path) -> None:
@@ -131,17 +61,27 @@ def _ingest_all(connection: Connection, library_root: Path, modules_directory: P
         )
 
 
+def _catalog_the_sample_pack(connection: Connection, sample_pack_directory: Path) -> None:
+    for location in discover_sample_files((sample_pack_directory,), exclusions=()).locations:
+        ingest_sample_file(
+            connection,
+            location=location,
+            decoded=decode_sample_file(location.path),
+            fingerprint=FileFingerprint.of(location.path.stat()),
+        )
+
+
 @pytest.fixture
 def populated_library(connection: Connection, tmp_path: Path) -> Path:
     """Seeds a throwaway catalog with at least one row in every table and at least one stored
     object -- every table the schema declares, not only the ones a plain extraction pass happens to
     touch. Returns the filesystem library root the content store was written under.
     """
-    build_dev_library.build_dev_library(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
     library_root = tmp_path / "catalog"
     _ingest_all(connection, library_root, tmp_path / "modules")
     connection.commit()
-    detect_equivalences(connection, library_root)
+    detect_equivalences(connection, SampleAudio.from_catalog(connection, library_root))
     connection.commit()
     record_playback_rates(connection)
 
@@ -176,9 +116,10 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
         ]
     )
     PostgresCloudPromotionRepository(connection).record(CloudPromotion(experiment_id=experiment_id, promoted_at=now))
-    PostgresSampleLabelSuggestionRepository(connection).insert_many(
+    _catalog_the_sample_pack(connection, tmp_path / SAMPLE_PACK_DIRECTORY_NAME)
+    PostgresSampleCategoryRepository(connection).insert_many(
         [
-            SampleLabelSuggestion(
+            SampleCategory(
                 experiment_id=experiment_id,
                 sample_hash=first_sample_hash,
                 rank=0,
@@ -187,6 +128,12 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
                 computed_at=now,
             )
         ]
+    )
+    PostgresCategoryPromotionRepository(connection).record(
+        CategoryPromotion(experiment_id=experiment_id, promoted_at=now)
+    )
+    PostgresPassCompletionRepository(connection).record(
+        PassCompletion(kind=PassKind.MODULES, digest="0" * 64, completed_at=now)
     )
     connection.commit()
 

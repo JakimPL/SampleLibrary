@@ -1,9 +1,9 @@
 # SampleLibrary
 
-A personal library and web app for the samples inside tracker modules (XM, IT, MOD, S3M). It
-collects every sample from your module collection, drops exact duplicates, groups near-duplicates
-together, and lets you browse, label and rate them — including a visual "cloud" of the whole
-library.
+A personal library and web app for the samples inside tracker modules (XM, IT, MOD, S3M), and for
+folders of plain audio files beside them. It collects every sample from your module collection and
+your sample folders, drops exact duplicates, groups near-duplicates together, and lets you browse,
+label and rate them — including a visual "cloud" of the whole library.
 
 ## Requirements
 
@@ -13,8 +13,8 @@ library.
 - Node.js 25.9 or later, and npm, for the frontend
 - [just](https://just.systems/) 1.56 or later, which runs the setup and everyday recipes;
   `uv tool install rust-just` installs it
-- An NVIDIA GPU, to train the restorer that turns a morph back into sound and the descriptor that
-  lays out the cloud. Everything else in the project runs on the processor alone.
+- An NVIDIA GPU, to train the descriptor that lays out the cloud. Everything else in the project runs
+  on the processor alone.
 - About a gigabyte of disk for the pretrained listening model the `clap` cloud backend downloads
   on first use. `just install` installs every extra, this one included.
 
@@ -27,7 +27,8 @@ just install
 ```
 
 `just install` also creates `config.toml`. Open it and set two paths: where your modules are, and
-where extracted samples should go (see [Configuration](#configuration)).
+where extracted samples should go. Folders of sample packs are optional and can be added at any time
+(see [Configuration](#configuration)).
 
 No PostgreSQL on the machine? `docker compose up -d postgres` starts one on port 5432. If that port is
 taken, put another in a file named `.env` beside `docker-compose.yml`, such as `POSTGRES_PORT=5433`:
@@ -53,14 +54,33 @@ database names belong to someone else, create your library's database alone with
 under its `[library]` table:
 
 - `module_source_directory`: your module collection, read with every folder inside it.
-- `library_root`: where extracted audio, fitted models and recorded runs are kept.
+- `library_root`: where extracted audio, the trained descriptor and recorded runs are kept.
 - `database_url`: the PostgreSQL connection. The `SAMPLELIBRARY_DATABASE_URL` environment variable
   takes precedence over it, except for a command given `--config`, which reads everything from the
   file it names.
 - `minimum_sample_frames`: the shortest sample extraction keeps, 512 frames by default.
+- `sample_directories`: folders of WAV, AIFF and FLAC files to add to the library, such as
+  `["/home/you/Samples/Packs"]`. Their files are read where they are, so they keep taking up disk
+  space in their own folders alone. Each folder must stand apart from the others.
+- `sample_exclusions`: patterns for files and folders inside those folders to leave out, such as
+  `["*loop*"]`. Each pattern is matched against a path relative to its folder, ignoring case, and
+  `*` also matches across folders.
 
 The `[inference]` table holds one key, `url`: the address the morph renderer listens on and the API
 reaches it at, `http://127.0.0.1:8010` by default. It names a port of its own.
+
+`morph.yaml`, beside `config.toml`, is committed and names the morph the renderer plays, and
+`morph-filter.yaml` beside it names the one the morph filter is read under; see
+[Morphing two samples](#morphing-two-samples).
+
+The optional `[pipeline]` table holds the settings `just rebuild` builds the library with:
+
+- `memory_cap`: the memory ceiling every step runs under, such as `"16G"`; `"none"` by default.
+- `device` and `workers`: the device training runs on (`"cuda"` by default) and how many processes a
+  pass spreads over.
+- `labels`: a file of hand labels, as `annotations export` writes it, read into a fresh library.
+- A table per step, such as `[pipeline.descriptor]`, sets that step's parameters (`epochs = 40`) and
+  its own `memory_cap`. `config.example.toml` shows the shape.
 
 Paths take forward slashes or your system's own separator; a backslash is written twice, as in
 `"C:\\Users\\you\\Modules"`.
@@ -73,30 +93,47 @@ just serve           # start the API
 just frontend-dev    # start the frontend in a second terminal, then open http://localhost:5173
 ```
 
-`just rebuild` runs the passes the app reads, one after another: extraction, the notes your modules
-play (which set the speed a sample sounds at), waveform thumbnails, and the cloud's layout. Run it
-again whenever you add modules: extraction, notes and thumbnails pick up the new ones, and the cloud
-describes the new samples the way it described the rest and lays itself out again; with nothing new,
-the cloud stays as it is. Extraction takes a while over a large collection, so it spreads itself
-across your machine's cores. `uv run samplelibrary extract --prune` also removes the modules whose
+`just rebuild` builds the whole library in one command: it reads your modules and sample folders
+into the catalog, finds near-duplicates, draws thumbnails, hears every sample with the listening
+model and gives it a category, teaches the descriptor, and lays out the cloud. Run it again whenever you add modules or samples: every step checks what it
+was built from, and only the steps whose inputs changed run again, so a library that stands still
+is done in moments. `just rebuild catalog` and `just rebuild cloud` build one part and whatever it needs. `just status` says what each step would do now and why.
+
+A run that fails or is interrupted with Ctrl+C stops at that step, and the next `just rebuild` picks
+up there: extraction keeps the modules it finished, and training continues from its last epoch. Each
+run keeps its log files and a record of every step under `pipeline/runs` in your library root.
+`uv run samplelibrary pipeline run --from-scratch` empties the catalog and everything the pipeline
+built, keeping your labels, and builds it all again; `--redo descriptor` teaches the descriptor again
+on its own. Extraction takes a while over a large collection, so it spreads itself across your
+machine's cores. `uv run samplelibrary extract --prune` also removes the modules whose
 files are gone from your collection, with the samples only they held; it refuses when a file or a
 folder could not be read, so a disconnected drive empties nothing.
 
+Sample folders are scanned by `uv run samplelibrary files`. A second scan reads only the files that
+changed since the last one. Because the files stay where
+they are, a sample whose file has gone missing — a deleted file, an unplugged drive — stays in the
+library: the app marks it unavailable, and every pass skips it and picks it up again once the file
+is back. `uv run samplelibrary files --prune` removes the files that are gone, the ones your
+exclusions now leave out, and every file of a folder you took out of `sample_directories`. Like
+extraction, it refuses when a configured folder is missing or empty, so an unplugged drive empties
+nothing.
+
 Every operation on the library is a `samplelibrary` command: `uv run samplelibrary --help` lists
 them, and each command's own `--help` lists its options — `uv run samplelibrary extract --workers 2`
-holds extraction to two processes, for example. On Linux, `just rebuild` and `just capped <command>`
-run under a memory ceiling, so the kernel stops a pass that outgrows the machine and the machine
-stays up; this uses a systemd user session. On macOS and Windows `just rebuild` runs the same passes
-without a ceiling, and `just capped` is Linux's alone.
+holds extraction to two processes, for example. Any command takes `--memory-cap 16G`, which holds it
+and every process it starts to that much memory, so a pass that outgrows the machine is stopped and
+the machine stays up: Linux holds it in a systemd user scope, Windows in a job object.
+`just capped <command>` passes a 16 GB ceiling for you, and `just rebuild` holds every step to the
+`memory_cap` of the `[pipeline]` table. A system offering neither way to hold a process runs the
+command only with a ceiling of `none`.
 
 Near-duplicate detection is a command of its own, `uv run samplelibrary equivalence`. It reads every
 sample once into a short fingerprint, then compares only the samples whose fingerprints are alike,
 in under three gigabytes of memory; over 127,588 samples it took two and a quarter hours on one
 core, and an interrupted run keeps what it finished.
 
-`just reset` empties the catalog and the stored audio. To fill the library again, run `just rebuild`,
-then `uv run samplelibrary equivalence`, and `uv run samplelibrary cloud suggest` for label
-suggestions; your labels, models and training runs are kept throughout.
+`just reset` empties the catalog and the stored audio, and `just rebuild` fills the library again;
+your labels, models and training runs are kept throughout.
 
 Everything listens on this machine alone:
 
@@ -113,6 +150,13 @@ To point the frontend at an API on another port, set `VITE_BACKEND_DEV_URL` befo
 app from another device, run `npm run dev -- --host` inside `frontend`; anyone on your network can
 then change your labels, since the app asks nobody to sign in.
 
+The sandbox library holds a few dozen samples, too few to show how the cloud behaves at the size of a
+real library. `VITE_CLOUD_DENSIFY=100000 VITE_BACKEND_DEV_URL=http://127.0.0.1:8001 just frontend-dev`
+grows the sandbox's cloud to a hundred thousand points while the frontend runs under Vite; every added
+point borrows a real sample's identity, so hovering, playing and morphing keep working. A library with
+no embedding yet is laid out from its own samples, a cluster per category, so the view fills either way.
+`VITE_CLOUD_DENSIFY_MODULES` does the same for the Modules tab.
+
 `just frontend-build` builds the frontend for production, and
 `uv run samplelibrary serve --frontend frontend/dist`, run in place of `just serve`, serves it
 together with the API at `http://127.0.0.1:8000`. The Docker image does the same;
@@ -125,84 +169,73 @@ together with the API at `http://127.0.0.1:8000`. The Docker image does the same
 |---|---|
 | `just install` | Installs the Python and frontend dependencies and the git hooks, and puts `config.toml` in place |
 | `just database` | Creates the role and the library, sandbox and test databases on the configured server, wherever they are missing |
-| `just rebuild` | Extracts your modules, reads their notes, draws thumbnails and lays out the cloud, capped on Linux |
+| `just rebuild [targets]` | Builds the library, or the `catalog` or `cloud` part of it, running only the steps whose inputs changed |
+| `just status [targets]` | Says what each step of the library would do now, and why |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
 | `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
-| `just capped <command>` | Runs a `samplelibrary` command under a 16 GB memory ceiling, on Linux alone; `just MEMORY_CAP=24G capped …` raises it |
+| `just capped <command>` | Runs a `samplelibrary` command under a 16 GB memory ceiling; `just MEMORY_CAP=24G capped …` raises it |
 | `just reset` | Names the library and database it would empty, then empties the catalog and stored audio once you confirm; labels, ratings, favorites, models and runs stay |
 | `just check` | Formats, lints and tests the Python code and the frontend |
 | `just format`, `just lint`, `just test`, `just coverage` | Runs one part of the Python checks; `coverage` also reports the lines the tests leave unrun |
+| `just test-pipeline` | Builds a tiny library with every real program, the listening model and training included, on the processor |
+| `just explore-pipeline` | Acts on a small library in orders drawn at random for a few minutes, holding every run of the pipeline to its checks |
 | `just frontend-install`, `just frontend-dev` | Installs the frontend's dependencies; starts its development server |
 | `just frontend-check`, `just frontend-build`, `just frontend-types` | Checks the frontend, builds it for production, and regenerates its API types from the schema |
-| `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Builds a 30-module sandbox in `dev-library` and fills its catalog, runs a `samplelibrary` command on it, serves it on port 8001, and empties its database and deletes its files |
+| `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Writes a sandbox of 30 modules, 300 one-shots and ten labels in `dev-library` and builds it, runs a `samplelibrary` command on it, serves it on port 8001, and empties its database and deletes its files |
 | `just docker-build`, `just docker-run <library> <config>` | Builds the app's image, and runs it over a library directory and a config written for the container, both read from where you run the recipe |
 
 The sandbox shares the PostgreSQL server `config.toml` names, under its own `samplelibrary_dev`
 database, so `just dev-build` needs your configuration in place first. To browse it, start the
 frontend with `VITE_BACKEND_DEV_URL=http://127.0.0.1:8001`.
 
-Work on generating audio from a point between two samples lives in the `samplemorph` package,
-one module per command under `samplemorph.commands`: fitting a linear codec, teaching the restorer
-that puts back what the grid smooths away before a morph is made audible, caching the canonical
-grids, teaching a descriptor and a codec that decodes from it, describing the library through a
-descriptor, and rendering a listening set. The research behind
-it is documented separately under `docs/morphing/`, starting from `docs/morphing/00-handover.md`.
-
-That package installs PyTorch built for CUDA 12.8, which is a large download and the reason
-`just install` takes a while the first time. It needs a card new enough for that build; an older one
-installs cleanly and then fails the moment it is first asked to compute.
-
-## Labeling and rating samples
-
-Click a sample's category in the list and type what it is; words you have used before are suggested
-as you type, and Enter records it. Labels are kept in one spelling — capitals, one space after each
-colon and comma, each tag once — so one wording stays one label however you typed it. Emptying the field brings back the app's own guess. Five stars
-and a heart sit in the same row, saved as you click, and a sample's own page offers all three as
-well. Near-duplicates get the same decision by default, whenever the list has them grouped. The
-samples list can then show only your favorites, or put your best-rated first, across the whole
-library.
-
-Labels, ratings and favorites are the one thing here that nothing can rebuild, so they are kept
-apart from everything the pipelines generate, and `just reset` leaves them alone.
-`uv run samplelibrary annotations export` writes them to `annotations.jsonl` — keep a copy of your
-own — and `annotations import` reads one back. `annotations relink` reattaches them if a sample's
-hash ever changes.
-
-The listening model can suggest labels for every sample.
-`uv run samplelibrary cloud embed --backend clap --extract-only --heard-rate` describes the catalog
-with it, hearing each sample at the rate it is played at (about an hour), and
-`uv run samplelibrary cloud suggest --experiment-id <that experiment's id>` ranks a vocabulary of
-instruments against every sample in minutes; `--vocabulary hand-labels` ranks the wordings you have
-used instead, and a file with one label per line works too. The cloud then colors by suggestion, and
-a sample's page lists its suggestions with the model's confidence: a click adds one to the label,
-and the rest stay suggestions.
+The morph renderer lives in the `samplemorph` package and the learned descriptor the cloud embeds
+with in `sampledescriptor`; the descriptor's commands (`uv run samplelibrary descriptor --help`) cache
+the sounds' grids, teach the descriptor and describe the library through it.
 
 ## Morphing two samples
 
-The app can play a sound between any two samples, through a morph renderer running beside the API.
-The renderer reads models fitted to your library, so it needs one first:
+The app can play a sound between any two samples, through a morph renderer running beside the API:
 
 ```sh
-uv run samplelibrary morph fit                        # a linear codec, a few minutes on the processor
-uv run samplelibrary morph serve --vocoder pghi       # the renderer, in a terminal of its own
+uv run samplelibrary morph serve                      # the renderer, in a terminal of its own
 ```
 
-The fit reads 4,000 samples between 4,000 and 200,000 frames long, in about three gigabytes of
-memory, and keeps 256 components, so a library holding fewer such samples fits with a smaller
-`--latent-size`; the command names the largest that fits.
+`morph.yaml` at the repository root says what the renderer plays; edit it and start the renderer
+again. Every morph moves the spectral envelope from one sample's to the other's through the samples'
+own spectral analyses, and nothing needs fitting. As committed, both samples' harmonics sound under
+the moving envelope and slide from the first sample's pitch to the second's (`excitation: both` with
+`glide: subharmonic`). `excitation: first` keeps only the first sample's harmonics along the whole
+path and `excitation: second` only the second's; dropping `glide` holds every harmonic where it
+stands, so the morph arrives at its new pitch at the far end instead of gliding there. A pair glides
+only where both samples read a pitch the reader trusts, so drums and noise sound as they would
+without it.
 
-`just serve-inference` starts the renderer with the restored vocoder, which sounds closer to the
-original and needs a restorer trained on a GPU first: `uv run samplelibrary morph train-restorer`
-takes about an hour an epoch over a large library.
+A plugin or any other program can play its own audio through a morph instead of asking the renderer
+for each point. Held to one sample, the morph is a filter on it, and the whole path between two
+samples fits in a few numbers per frame that a caller applies at any weight:
+
+```sh
+uv run samplelibrary morph response --first <hash> --second <hash> \
+  --selection morph-filter.yaml --output pair.bin
+```
+
+`morph-filter.yaml` is that command's own settings file. A filter describes a path whose harmonics
+stay where they are, so it is read without the glide that `morph.yaml` plays.
+
+`just serve-inference` starts the renderer on whatever `morph.yaml` names, and `--selection` points
+it at another file. The renderer needs the `morph` extra alone, so it runs on a machine without the
+training libraries.
 
 With the renderer running, in the cloud, press the right mouse button on one sample and release it
 on another: a line follows your cursor while the button is down, and the release joins the two with
 a dashed line whose marker is how far from the first sample toward the second you stand. A plain
-right-click on a sample joins it to the one you last clicked instead. Drag the marker, or move the
-slider in the Morph panel, and the morph plays when you let go. The two ends play as
-the model reconstructs them, with each original one click away beside its name, and a double-click
-on either name opens it in the Sample Detail. Without the renderer running, the panel says so and
+right-click on a sample joins it to the one you last clicked instead, and so does a Shift-click on a
+sample in any list. Drag the marker, or move the slider in the Morph panel, and the morph plays when
+you let go; beneath the play button the panel shows how far apart the two samples sound. The two ends play as
+the route renders them, so with the first sample's harmonics kept the far end is the second sample's
+spectral shape over the first sample's notes; each original is one click away beside its name, and a
+double-click on either name opens it in the Sample Detail. Without the renderer running, the panel says so and
 offers to check again.
 
 ## Development

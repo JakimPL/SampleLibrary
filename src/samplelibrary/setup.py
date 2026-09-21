@@ -8,6 +8,7 @@ from enum import StrEnum, unique
 from samplecore.cli_parsing import add_subcommand, command_parser
 from samplecore.cli_support import bootstrap_cli, configure_console_output_encoding, configure_logging
 from samplecore.config import ConfigurationError, create_config_file, resolve_config_path
+from samplecore.exit_status import ExitStatus
 from samplecore.storage.cluster.provisioning import ProvisioningError, ProvisioningSummary, provision
 
 _logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ def _run_config() -> None:
         created = create_config_file(config_path)
     except ConfigurationError as error:
         _logger.error("%s", error)
-        sys.exit(1)
+        sys.exit(ExitStatus.REFUSED)
 
     if created:
         _logger.warning("Wrote %s. Open it and fill in your own paths before running anything else.", config_path)
@@ -66,7 +67,7 @@ def _run_database() -> None:
         summary = provision(config.database_url)
     except ProvisioningError as error:
         _report_obstacle(error)
-        sys.exit(1)
+        sys.exit(ExitStatus.FAILED)
 
     _report(summary)
 
