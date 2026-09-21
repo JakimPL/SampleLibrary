@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
-from samplemorph.geometry import LogFrequencyGeometry
+from sampledescriptor.geometry import GridGeometry
 
 
 class Conditioners(BaseModel):
@@ -36,16 +36,14 @@ class SoundImage:
 
     `grid` holds normalized log magnitude in ``[0, 1]``, on a frequency axis by duration-fraction
     grid whose shape is the same for every sample however long or loud it was. By default every
-    band holds the frequency the analysis measured, so a kick and a pad sit where they sound and a
-    codec learns each as it is. Under an anchoring rule the band the rule picks is moved to the
+    band holds the frequency the analysis measured, so a kick and a pad sit where they sound. Under an anchoring rule the band the rule picks is moved to the
     geometry's reference band instead, so two readings of one waveform at different rates produce
-    the same grid and differing conditioners, and a linear codec interpolates two samples at
-    different pitches into a single sound rather than a chord of both.
+    the same grid and differing conditioners.
     """
 
     grid: NDArray[np.float64]
     conditioners: Conditioners
-    geometry: LogFrequencyGeometry
+    geometry: GridGeometry
 
     def __post_init__(self) -> None:
         if self.grid.shape != self.geometry.grid_shape:

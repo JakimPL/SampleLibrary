@@ -7,7 +7,6 @@ from lightning.pytorch.loggers import Logger
 from samplecore.tracking import TrackedRun
 
 LOGGER_NAME: Final[str] = "tracked-run"
-EPOCH_METRIC: Final[str] = "epoch"
 
 
 class TrackedRunLogger(Logger):

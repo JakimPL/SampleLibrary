@@ -13,11 +13,11 @@ from samplecore.models.sample import Sample
 from samplecore.storage.sample_audio import SampleAudio
 from sampledescriptor.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
 from sampledescriptor.descriptors.views import retuned_view
+from sampledescriptor.geometry import Anchor, GridGeometry
 from sampledescriptor.registries import CANONICALIZER_REGISTRY, canonicalizer_for_geometry
 from sampledescriptor.training.cache_staging import CACHE_DIRECTORY_NAME, fresh_staging, publish_staged
 from sampledescriptor.training.processes import mapped_in_processes
 from samplemorph.canonicalizers.common import prepare_mono
-from samplemorph.geometry import Anchor, LogFrequencyGeometry
 
 GRID_CACHE_DIRECTORY_NAME: Final[str] = "grids"
 DEFAULT_GRID_CACHE_NAME: Final[str] = "descriptor"
@@ -41,7 +41,7 @@ class GridCacheDescription(BaseModel):
     model_config = FROZEN
 
     canonicalizer: str
-    geometry: LogFrequencyGeometry
+    geometry: GridGeometry
     bands_per_semitone: int
     band_count: int
     time_columns: int
@@ -266,7 +266,7 @@ class _Worker:
     """
 
     audio: SampleAudio
-    geometry: LogFrequencyGeometry
+    geometry: GridGeometry
     band_count: int
 
     def __call__(self, job: _Job) -> tuple[NDArray[np.float16], NDArray[np.float32]]:

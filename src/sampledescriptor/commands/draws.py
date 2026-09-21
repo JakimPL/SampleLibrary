@@ -11,9 +11,8 @@ from samplecore.config import DEFAULT_MINIMUM_SAMPLE_FRAMES
 from samplecore.models.sample import Sample
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.sample_audio import SampleAudio
-from sampledescriptor.canonicalizers import Canonicalizer
-from sampledescriptor.registries import CANONICALIZER_REGISTRY, DEFAULT_CANONICALIZER_NAME
-from samplemorph.geometry import DEFAULT_ANCHOR, Anchor
+from sampledescriptor.geometry import DEFAULT_ANCHOR, Anchor
+from sampledescriptor.registries import DEFAULT_CANONICALIZER_NAME
 
 # Every sample the catalog holds clears its own ingest floor, and none is too long to read, so a
 # draw with these bounds reaches the whole catalog.
@@ -37,11 +36,6 @@ def add_canonicalizer_argument(parser: argparse.ArgumentParser, *, help_text: st
         default=DEFAULT_ANCHOR,
         help="Which band alignment moves to the reference band: none, the loudest, or the fundamental.",
     )
-
-
-def canonicalizer_from(arguments: argparse.Namespace) -> Canonicalizer:
-    """The canonicalizer the shared axis flags name."""
-    return CANONICALIZER_REGISTRY[arguments.canonicalizer](anchor=arguments.anchor)
 
 
 def draw_cached_samples(

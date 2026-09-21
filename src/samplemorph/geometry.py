@@ -18,9 +18,7 @@ REFERENCE_FREQUENCY_HZ: Final[float] = 440.0
 MINIMUM_FREQUENCY_HZ: Final[float] = 32.70
 DEFAULT_HOP_LENGTH: Final[int] = 256
 DEFAULT_FFT_LENGTH: Final[int] = 2048
-DEFAULT_TIME_COLUMNS: Final[int] = 64
 DEFAULT_DYNAMIC_RANGE_DB: Final[float] = 100.0
-DEFAULT_MAXIMUM_SHIFT_SEMITONES: Final[float] = 48.0
 DEFAULT_CONSTANT_Q_BINS_PER_OCTAVE: Final[int] = 36
 GAUSSIAN_EDGE_LEVEL: Final[float] = 0.01
 # 288 bands per octave keep 77% of the Fourier magnitude's degrees of freedom through the band
@@ -48,43 +46,9 @@ class AnalysisWindow(StrEnum):
 DEFAULT_ANALYSIS_WINDOW: Final[AnalysisWindow] = AnalysisWindow.GAUSSIAN
 
 
-@unique
-class Anchor(StrEnum):
-    """Which band of a sound alignment moves to the reference band, if any.
-
-    `NONE` keeps the picture where the analysis read it: every band holds the frequency it measured,
-    a kick and a pad alike, and the grid is exactly as tall as the analysis range. `LOUDEST` moves
-    the band carrying the most energy over the whole sound, which every kind of material has.
-    `FUNDAMENTAL` moves the band a harmonic series is built on, so two sounds playing one note align
-    on that note whichever of their partials is the strongest, and a morph between them keeps its
-    pitch on the line between theirs.
-    """
-
-    NONE = "none"
-    LOUDEST = "loudest"
-    FUNDAMENTAL = "fundamental"
-
-
-DEFAULT_ANCHOR: Final[Anchor] = Anchor.NONE
-
-
 def semitones_from_reference(frequency_hz: float) -> float:
     """How far a frequency lies from `REFERENCE_FREQUENCY_HZ`, in semitones, the scale every pitch reading states."""
     return SEMITONES_PER_OCTAVE * float(np.log2(frequency_hz / REFERENCE_FREQUENCY_HZ))
-
-
-def shift_headroom_bands(*, anchor: Anchor, maximum_shift_semitones: float, bands_per_semitone: float) -> int:
-    """How many empty bands a grid carries at each end, so an anchoring rule moves content without losing it.
-
-    Alignment translates the whole picture along the frequency axis, and a grid exactly as tall as
-    the analysis range would push whatever passes its edge out of the picture. Reserving the largest
-    shift at both ends keeps every band that entered the grid inside it, whatever pitch a sample sat
-    at -- which matters most for bass material, whose distance from the reference band is greatest.
-    A picture nothing moves needs no room to move in, so it stays as tall as the analysis.
-    """
-    if anchor is Anchor.NONE:
-        return 0
-    return int(round(maximum_shift_semitones * bands_per_semitone))
 
 
 class LogFrequencyGeometry(BaseModel):
@@ -100,7 +64,6 @@ class LogFrequencyGeometry(BaseModel):
     model_config = FROZEN
 
     kind: Literal["log_frequency"] = "log_frequency"
-    anchor: Anchor = DEFAULT_ANCHOR
     analysis_window: AnalysisWindow = DEFAULT_ANALYSIS_WINDOW
     analysis_rate_hz: int
     fft_length: int
@@ -108,25 +71,7 @@ class LogFrequencyGeometry(BaseModel):
     minimum_frequency_hz: float
     bins_per_octave: int
     band_count: int
-    time_columns: int
     dynamic_range_db: float
-    maximum_shift_semitones: float
-
-    @property
-    def shift_headroom_bands(self) -> int:
-        return shift_headroom_bands(
-            anchor=self.anchor,
-            maximum_shift_semitones=self.maximum_shift_semitones,
-            bands_per_semitone=self.bands_per_semitone,
-        )
-
-    @property
-    def grid_shape(self) -> tuple[int, int]:
-        return self.band_count + 2 * self.shift_headroom_bands, self.time_columns
-
-    @property
-    def bands_per_semitone(self) -> float:
-        return self.bins_per_octave / SEMITONES_PER_OCTAVE
 
     @property
     def gaussian_spread(self) -> float:
@@ -145,11 +90,6 @@ class LogFrequencyGeometry(BaseModel):
     def linear_frequencies(self) -> NDArray[np.float64]:
         frequencies: NDArray[np.float64] = librosa.fft_frequencies(sr=self.analysis_rate_hz, n_fft=self.fft_length)
         return frequencies
-
-    @property
-    def reference_band(self) -> int:
-        """The band an aligned image's anchor is moved to, at `REFERENCE_FREQUENCY_HZ`."""
-        return int(round(self.bins_per_octave * np.log2(REFERENCE_FREQUENCY_HZ / self.minimum_frequency_hz)))
 
 
 def analysis_taper(geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
@@ -205,11 +145,9 @@ def bands_reaching_nyquist(*, analysis_rate_hz: int, minimum_frequency_hz: float
 def log_frequency_geometry(
     *,
     bins_per_octave: int = DEFAULT_BINS_PER_OCTAVE,
-    anchor: Anchor = DEFAULT_ANCHOR,
     analysis_window: AnalysisWindow = DEFAULT_ANALYSIS_WINDOW,
 ) -> LogFrequencyGeometry:
     return LogFrequencyGeometry(
-        anchor=anchor,
         analysis_window=analysis_window,
         analysis_rate_hz=NOMINAL_WAV_RATE,
         fft_length=DEFAULT_FFT_LENGTH,
@@ -221,7 +159,5 @@ def log_frequency_geometry(
             minimum_frequency_hz=MINIMUM_FREQUENCY_HZ,
             bins_per_octave=bins_per_octave,
         ),
-        time_columns=DEFAULT_TIME_COLUMNS,
         dynamic_range_db=DEFAULT_DYNAMIC_RANGE_DB,
-        maximum_shift_semitones=DEFAULT_MAXIMUM_SHIFT_SEMITONES,
     )

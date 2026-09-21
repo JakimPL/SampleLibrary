@@ -14,10 +14,10 @@ from sampledescriptor.canonicalizers import Canonicalizer
 from sampledescriptor.descriptors.grid_descriptor import GridDescriptor
 from sampledescriptor.descriptors.pooling import canonical_duration, pool_bands
 from sampledescriptor.descriptors.shape import DescriptorShape
+from sampledescriptor.geometry import GridGeometry
 from sampledescriptor.images import SoundImage
 from sampledescriptor.registries import canonicalizer_for_geometry
 from samplemorph.canonicalizers.common import prepare_mono
-from samplemorph.geometry import LogFrequencyGeometry
 
 
 class DescriptorDescription(BaseModel):
@@ -30,7 +30,7 @@ class DescriptorDescription(BaseModel):
     model_config = FROZEN
 
     canonicalizer: str
-    geometry: LogFrequencyGeometry
+    geometry: GridGeometry
     bands_per_semitone: int
     shape: DescriptorShape
     teacher_experiment_id: int
@@ -62,7 +62,7 @@ class LearnedDescriptor:
         return vector
 
     def describe_many(self, images: tuple[SoundImage, ...]) -> NDArray[np.float64]:
-        """One vector per image, computed in one pass so a listening set costs one forward."""
+        """One vector per image, computed in one pass so a batch of images costs one forward."""
         grids = np.stack([pool_bands(image.grid, band_count=self.description.shape.band_count) for image in images])
         durations = np.array([canonical_duration(image.conditioners) for image in images], dtype=np.float32)
         with torch.no_grad():

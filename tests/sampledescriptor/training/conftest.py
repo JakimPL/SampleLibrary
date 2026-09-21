@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader, Dataset
 from samplecore.labeling.labels import SampleLabel
 from samplecore.labeling.ranking import agreement_matrix
 from sampledescriptor.descriptors.shape import DescriptorShape
+from sampledescriptor.geometry import grid_geometry
 from sampledescriptor.training.descriptor.cache import (
     DESCRIPTION_FILE_NAME,
     DURATIONS_FILE_NAME,
@@ -126,7 +127,7 @@ def write_grid_cache(
     (directory / HASHES_FILE_NAME).write_text("\n".join(hashes), encoding="utf-8")
     description = GridCacheDescription(
         canonicalizer="log_frequency",
-        geometry=log_frequency_geometry(),
+        geometry=grid_geometry(),
         bands_per_semitone=1,
         band_count=BAND_COUNT,
         time_columns=TIME_COLUMNS,

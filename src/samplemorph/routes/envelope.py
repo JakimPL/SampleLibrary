@@ -50,7 +50,7 @@ class EnvelopeRoute:
 
     def analyze(self, heard: HeardMono) -> TransportAnalysis:
         """One end's Gaussian analysis, which is what a filter between two ends is read from."""
-        return analyze(heard.mono, rate_hz=heard.rate_hz, geometry=self.geometry, settings=self.settings)
+        return analyze(heard.mono, rate_hz=heard.rate_hz, geometry=self.geometry)
 
     def prepare(self, heard: HeardMono) -> PitchedAnalysis:
         return PitchedAnalysis(analysis=self.analyze(heard), pitch_semitones=self._trusted_pitch(heard.mono))

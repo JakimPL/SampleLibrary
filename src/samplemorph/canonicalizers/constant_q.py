@@ -9,7 +9,6 @@ from numpy.typing import NDArray
 
 from samplemorph.canonicalizers.common import SHORT_SIGNAL_WARNING, PreparedMono
 
-CANONICAL_FILTER_SCALE: Final[float] = 1.0
 CONSTANT_Q_WINDOW: Final[str] = "hann"
 
 

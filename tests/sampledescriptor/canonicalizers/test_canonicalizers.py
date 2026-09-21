@@ -8,9 +8,10 @@ import pytest
 
 from sampledescriptor.canonicalizers import Canonicalizer
 from sampledescriptor.canonicalizers.log_frequency import band_weights, to_sound_image
+from sampledescriptor.geometry import Anchor, grid_geometry
 from sampledescriptor.registries import CANONICALIZER_REGISTRY
 from samplemorph.canonicalizers.common import analysis_transform, prepare_mono
-from samplemorph.geometry import Anchor, log_frequency_geometry
+from samplemorph.geometry import log_frequency_geometry
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_burst
 
 GAIN_FACTOR = 0.25
@@ -51,7 +52,7 @@ def test_canonicalize_returns_one_shape_whatever_the_input_length(case: Canonica
 
 
 def test_a_hit_shorter_than_one_transform_is_analyzed_without_a_warning() -> None:
-    geometry = log_frequency_geometry()
+    geometry = grid_geometry()
     hit = np.zeros(geometry.fft_length // 4)
     hit[0] = 1.0
 
@@ -122,7 +123,7 @@ def test_a_transposed_tone_lands_closer_than_unrelated_content(case: Canonicaliz
 
 def test_the_log_frequency_axis_reads_prepared_frames_as_they_are() -> None:
     """The subsonic band leaves once, where audio comes in, so canonicalizing filters nothing further."""
-    geometry = log_frequency_geometry()
+    geometry = grid_geometry()
     mono = prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=55.0))
     bands = band_weights(geometry) @ np.abs(analysis_transform(mono, geometry=geometry))
 
@@ -132,7 +133,7 @@ def test_the_log_frequency_axis_reads_prepared_frames_as_they_are() -> None:
 
 
 def test_the_band_weights_are_built_once_per_geometry_and_shared_read_only() -> None:
-    geometry = log_frequency_geometry()
+    geometry = grid_geometry()
 
     assert band_weights(geometry) is band_weights(geometry)
     with pytest.raises(ValueError, match="read-only"):

@@ -7,10 +7,10 @@ import pytest
 
 from samplecore.waveform import resample_by_semitones
 from sampledescriptor.canonicalizers import Canonicalizer
+from sampledescriptor.geometry import Anchor
 from sampledescriptor.images import SoundImage
 from sampledescriptor.registries import CANONICALIZER_REGISTRY
 from samplemorph.canonicalizers.common import prepare_mono
-from samplemorph.geometry import Anchor
 from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_burst
 
 REFERENCE_FREQUENCY_HZ = 440.0

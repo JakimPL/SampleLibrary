@@ -18,6 +18,7 @@ from samplecore.storage.repositories.sample_annotation import PostgresSampleAnno
 from samplecore.storage.sample_audio import readable_membership_digest
 from sampledescriptor.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE
 from sampledescriptor.descriptors.shape import DEFAULT_WIDTH
+from sampledescriptor.geometry import DEFAULT_ANCHOR, Anchor
 from sampledescriptor.model_paths import descriptor_path
 from sampledescriptor.registries import DEFAULT_CANONICALIZER_NAME
 from sampledescriptor.training.descriptor.cache import (
@@ -64,7 +65,6 @@ from samplelibrary.pipeline.steps.shared import (
     training_run_flags,
     vectors_digest,
 )
-from samplemorph.geometry import DEFAULT_ANCHOR, Anchor
 
 GRID_CACHE: Final[str] = "grid-cache"
 DESCRIPTOR: Final[str] = "descriptor"

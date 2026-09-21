@@ -8,9 +8,9 @@ from numpy.typing import NDArray
 
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.waveform import average_to_fraction_points, triangular_weights
+from sampledescriptor.geometry import DEFAULT_ANCHOR, Anchor, GridGeometry, grid_geometry
 from sampledescriptor.images import Conditioners, SoundImage
 from samplemorph.canonicalizers.common import PreparedMono, analysis_transform, harmonic_sum, to_magnitudes
-from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, LogFrequencyGeometry, log_frequency_geometry
 
 GAIN_FLOOR: Final[float] = 2.0**-40
 MAGNITUDE_FLOOR_RATIO: Final[float] = 1e-10
@@ -23,11 +23,11 @@ class LogFrequencyCanonicalizer:
     whole-band translation of the picture.
     """
 
-    def __init__(self, geometry: LogFrequencyGeometry) -> None:
+    def __init__(self, geometry: GridGeometry) -> None:
         self._geometry = geometry
 
     @property
-    def geometry(self) -> LogFrequencyGeometry:
+    def geometry(self) -> GridGeometry:
         return self._geometry
 
     def canonicalize(self, mono: PreparedMono) -> SoundImage:
@@ -37,7 +37,7 @@ class LogFrequencyCanonicalizer:
 
 
 @cache
-def band_weights(geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
+def band_weights(geometry: GridGeometry) -> NDArray[np.float64]:
     """Weights averaging the linear Fourier bins each logarithmic band covers.
 
     A band spans one Fourier bin at around 560 Hz and widens with frequency from there, reaching
@@ -62,7 +62,7 @@ def band_weights(geometry: LogFrequencyGeometry) -> NDArray[np.float64]:
 
 
 def build_log_frequency_canonicalizer(*, anchor: Anchor = DEFAULT_ANCHOR) -> LogFrequencyCanonicalizer:
-    return LogFrequencyCanonicalizer(log_frequency_geometry(anchor=anchor))
+    return LogFrequencyCanonicalizer(grid_geometry(anchor=anchor))
 
 
 def to_normalized_decibels(
@@ -92,7 +92,7 @@ def dominant_band(grid: NDArray[np.float64]) -> int:
     return int(np.argmax(grid.mean(axis=1)))
 
 
-def fundamental_band(grid: NDArray[np.float64], *, geometry: LogFrequencyGeometry) -> int:
+def fundamental_band(grid: NDArray[np.float64], *, geometry: GridGeometry) -> int:
     """The band a sound's harmonic series is built on.
 
     Every band is a candidate fundamental, scored by the magnitude found at each of its first
@@ -113,7 +113,7 @@ def fundamental_band(grid: NDArray[np.float64], *, geometry: LogFrequencyGeometr
     return int(np.argmax(harmonic_sum(profile, frequencies=geometry.band_frequencies)))
 
 
-def anchor_band(grid: NDArray[np.float64], *, geometry: LogFrequencyGeometry) -> int:
+def anchor_band(grid: NDArray[np.float64], *, geometry: GridGeometry) -> int:
     """The band the geometry's anchor rule picks, which alignment moves to the reference band.
 
     With no rule the reference band is its own anchor, so the picture stays where it is.
@@ -153,7 +153,7 @@ def _rows_at(grid: NDArray[np.float64], indices: NDArray[np.intp]) -> NDArray[np
 
 
 def align_and_describe(
-    columns: NDArray[np.float64], *, geometry: LogFrequencyGeometry, frame_count: int
+    columns: NDArray[np.float64], *, geometry: GridGeometry, frame_count: int
 ) -> tuple[NDArray[np.float64], Conditioners]:
     """Normalize a magnitude grid into a sound image's grid and the conditioners it removed.
 
@@ -189,7 +189,7 @@ def to_time_columns(magnitude: NDArray[np.float64], *, time_columns: int) -> NDA
     return average_to_fraction_points(magnitude, point_count=time_columns, axis=1)
 
 
-def to_sound_image(bands: NDArray[np.float64], *, geometry: LogFrequencyGeometry, frame_count: int) -> SoundImage:
+def to_sound_image(bands: NDArray[np.float64], *, geometry: GridGeometry, frame_count: int) -> SoundImage:
     """Assemble the canonical image from a frequency axis's own magnitude spectrogram.
 
     Every axis differs only in how it reads a waveform into `bands`; the time axis, the

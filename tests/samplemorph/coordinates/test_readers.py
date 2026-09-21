@@ -13,7 +13,7 @@ from samplemorph.coordinates.readers import (
     subharmonic_reader,
 )
 from samplemorph.geometry import semitones_from_reference
-from samplemorph.tones import HarmonicTone, harmonic_tone
+from tests.samplemorph.tones import HarmonicTone, harmonic_tone
 
 RATE_HZ = 44100.0
 SUBHARMONIC_TOLERANCE_SEMITONES = 0.05

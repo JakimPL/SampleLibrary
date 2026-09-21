@@ -92,9 +92,9 @@ ROUTE_CASES = (
         "samplelibrary pipeline",
     ),
     RouteCase(
-        ["descriptor", "cache-grids", "--cache", "codec", "--views", "0"],
+        ["descriptor", "cache-grids", "--cache", "grids", "--views", "0"],
         "sampledescriptor.cli.main",
-        ["cache-grids", "--cache", "codec", "--views", "0"],
+        ["cache-grids", "--cache", "grids", "--views", "0"],
         "samplelibrary descriptor",
     ),
     RouteCase(

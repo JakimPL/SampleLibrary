@@ -54,7 +54,7 @@ def heard(mono: NDArray[np.float64]) -> HeardSound:
     prepared = prepare_mono(mono)
     return HeardSound(
         mono=prepared,
-        analysis=analyze(prepared, rate_hz=NOMINAL_WAV_RATE, geometry=GEOMETRY, settings=READING.settings),
+        analysis=analyze(prepared, rate_hz=NOMINAL_WAV_RATE, geometry=GEOMETRY),
         transform=analysis_transform(prepared, geometry=GEOMETRY),
     )
 

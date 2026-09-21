@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Final, Generic, TypeVar
+from typing import Final, TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -9,13 +9,9 @@ from torch.utils.data import Sampler
 
 ORDER_STREAM: Final[int] = 0
 VIEW_STREAM: Final[int] = 1
-CROP_STREAM: Final[int] = 2
-VALIDATION_STREAM: Final[int] = 3
 SEED_MODULUS: Final[int] = 2**64
-CROP_SEED_BOUND: Final[int] = 2**63 - 1
 
 # (index into the training set, the seed its crop is drawn from)
-CropRequest = tuple[int, int]
 # (position in the corpus, which retuned view pairs with its stored grid)
 ViewRequest = tuple[int, int]
 
@@ -58,73 +54,4 @@ class EpochPermutation(Sampler[int]):
         return iter(generator.permutation(self._items).tolist())
 
 
-class EpochCropSampler(Sampler[CropRequest]):
-    """Walks a training set in a fresh order every epoch, handing each item the seed of a fresh crop."""
-
-    def __init__(self, count: int, *, random_seed: int) -> None:
-        super().__init__()
-        self._count = count
-        self._random_seed = random_seed
-        self._epoch = 0
-
-    def set_epoch(self, epoch: int) -> None:
-        self._epoch = epoch
-
-    def __len__(self) -> int:
-        return self._count
-
-    def __iter__(self) -> Iterator[CropRequest]:
-        generator = epoch_generator(self._random_seed, stream=CROP_STREAM, epoch=self._epoch)
-        order = generator.permutation(self._count).tolist()
-        seeds = generator.integers(0, CROP_SEED_BOUND, self._count).tolist()
-        return iter(zip(order, seeds, strict=True))
-
-
-class FixedCropSampler(Sampler[CropRequest]):
-    """Walks a validation set in order, each item with the same crop seed every epoch, so epochs compare."""
-
-    def __init__(self, count: int, *, random_seed: int) -> None:
-        super().__init__()
-        generator = np.random.default_rng([random_seed % SEED_MODULUS, VALIDATION_STREAM])
-        self._seeds: list[int] = generator.integers(0, CROP_SEED_BOUND, count).tolist()
-
-    def __len__(self) -> int:
-        return len(self._seeds)
-
-    def __iter__(self) -> Iterator[CropRequest]:
-        return iter(enumerate(self._seeds))
-
-
 Request = TypeVar("Request")
-
-
-class BatchesOfDraws(Sampler[list[Request]], Generic[Request]):
-    """Whole batches of items in a fresh order every epoch, each item read at something drawn for it.
-
-    What is drawn for an item is the reading set's own business; the order, the epoch's generator
-    and the short tail left out are the same wherever a trainer draws per item. The order and the
-    draws are functions of the seed and the epoch the trainer hands to `sampler`.
-    """
-
-    def __init__(self, positions: NDArray[np.intp], *, batch_size: int, random_seed: int) -> None:
-        super().__init__()
-        self.sampler = EpochPermutation(positions, random_seed=random_seed)
-        self._batch_size = batch_size
-        self._random_seed = random_seed
-
-    def __len__(self) -> int:
-        return len(self.sampler) // self._batch_size
-
-    def __iter__(self) -> Iterator[list[Request]]:
-        generator = epoch_generator(self._random_seed, stream=VIEW_STREAM, epoch=self.sampler.epoch)
-        order = list(self.sampler)
-        for start in range(0, len(self) * self._batch_size, self._batch_size):
-            yield self.drawn(order[start : start + self._batch_size], generator=generator)
-
-    def drawn(self, positions: list[int], *, generator: np.random.Generator) -> list[Request]:
-        """What each position of one batch is read at.
-
-        Raises:
-            NotImplementedError: the reading set says nothing about what to draw.
-        """
-        raise NotImplementedError

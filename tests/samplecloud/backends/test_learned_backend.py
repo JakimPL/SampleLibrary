@@ -10,6 +10,7 @@ from sampledescriptor.descriptors.grid_descriptor import GridDescriptor
 from sampledescriptor.descriptors.learned import DescriptorDescription, save_descriptor
 from sampledescriptor.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE, pooled_band_count
 from sampledescriptor.descriptors.shape import DescriptorShape
+from sampledescriptor.geometry import grid_geometry
 from sampledescriptor.model_paths import descriptor_path
 from samplemorph.geometry import log_frequency_geometry
 
@@ -17,7 +18,7 @@ EMBEDDING_SIZE = 8
 
 
 def test_a_stored_descriptor_serves_as_an_extractor_by_name(tmp_path: Path) -> None:
-    geometry = log_frequency_geometry()
+    geometry = grid_geometry()
     shape = DescriptorShape(
         band_count=pooled_band_count(geometry, bands_per_semitone=DESCRIPTOR_BANDS_PER_SEMITONE),
         time_columns=geometry.time_columns,

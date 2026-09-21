@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 from samplecore.waveform import resample_by_semitones
 from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
 from samplemorph.coordinates.frames import constant_q_frames, frame_analysis
-from samplemorph.tones import HarmonicTone, harmonic_tone
+from tests.samplemorph.tones import HarmonicTone, harmonic_tone
 
 RATE_HZ = 44100.0
 ANALYSIS = frame_analysis()

@@ -11,6 +11,7 @@ from sampledescriptor.descriptors.grid_descriptor import GridDescriptor
 from sampledescriptor.descriptors.learned import DescriptorDescription, load_descriptor, save_descriptor
 from sampledescriptor.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE, pooled_band_count
 from sampledescriptor.descriptors.shape import DescriptorShape
+from sampledescriptor.geometry import grid_geometry
 from sampledescriptor.model_paths import descriptor_path
 from samplemorph.canonicalizers.common import prepare_mono
 from samplemorph.geometry import log_frequency_geometry
@@ -21,7 +22,7 @@ EMBEDDING_SIZE = 16
 def _description(shape: DescriptorShape) -> DescriptorDescription:
     return DescriptorDescription(
         canonicalizer="log_frequency",
-        geometry=log_frequency_geometry(),
+        geometry=grid_geometry(),
         bands_per_semitone=DESCRIPTOR_BANDS_PER_SEMITONE,
         shape=shape,
         teacher_experiment_id=4,
@@ -32,7 +33,7 @@ def _description(shape: DescriptorShape) -> DescriptorDescription:
 
 
 def _shape() -> DescriptorShape:
-    geometry = log_frequency_geometry()
+    geometry = grid_geometry()
     return DescriptorShape(
         band_count=pooled_band_count(geometry, bands_per_semitone=DESCRIPTOR_BANDS_PER_SEMITONE),
         time_columns=geometry.time_columns,

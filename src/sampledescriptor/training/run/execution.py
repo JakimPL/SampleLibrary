@@ -15,6 +15,7 @@ from lightning.pytorch.loggers import CSVLogger
 
 from samplecore.storage.atomic import write_atomically, write_bytes_atomically
 from samplecore.tracking import TrackedRun
+from sampledescriptor.geometry import GridGeometry
 from sampledescriptor.training.descriptor.cache import GridCache
 from sampledescriptor.training.export import BestEpochExport
 from sampledescriptor.training.progress import ProgressLines
@@ -29,7 +30,6 @@ from sampledescriptor.training.run.paths import (
 )
 from sampledescriptor.training.run.settings import GRADIENT_CLIP, RunSettings
 from sampledescriptor.training.tracked_logger import TrackedRunLogger
-from samplemorph.geometry import LogFrequencyGeometry
 
 _logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ def begin_cached_run(
     )
 
 
-def geometry_parameters(geometry: LogFrequencyGeometry) -> dict[str, str]:
+def geometry_parameters(geometry: GridGeometry) -> dict[str, str]:
     """The analysis a run was made on, in the form a tracker records.
 
     Two runs on two grids are then told apart in the record by the grid itself: its axis, its

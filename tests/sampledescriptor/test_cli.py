@@ -26,9 +26,9 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from sampledescriptor.cli import main
 from sampledescriptor.descriptors.shape import DESCRIPTOR_SIZE
+from sampledescriptor.geometry import Anchor
 from sampledescriptor.model_paths import descriptor_path
 from sampledescriptor.training.descriptor.cache import grid_cache_directory, open_grid_cache
-from samplemorph.geometry import Anchor
 from tests.samplemorph.conftest import harmonic_tone
 
 PROGRAM = "samplelibrary descriptor"

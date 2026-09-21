@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from sampledescriptor.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
+from sampledescriptor.geometry import grid_geometry
 from sampledescriptor.images import Conditioners
 from samplemorph.geometry import log_frequency_geometry
 
@@ -35,7 +36,7 @@ def test_pooling_lays_its_spans_out_the_way_adaptive_pooling_does(case: PoolCase
 
 
 def test_the_default_grid_pools_to_one_band_per_semitone() -> None:
-    geometry = log_frequency_geometry()
+    geometry = grid_geometry()
 
     band_count = pooled_band_count(geometry, bands_per_semitone=1)
 
@@ -43,7 +44,7 @@ def test_the_default_grid_pools_to_one_band_per_semitone() -> None:
 
 
 def test_a_grid_coarser_than_the_pooling_is_refused() -> None:
-    geometry = log_frequency_geometry()
+    geometry = grid_geometry()
 
     with pytest.raises(ValueError, match="cannot be pooled"):
         pooled_band_count(geometry, bands_per_semitone=round(geometry.bands_per_semitone) + 1)

@@ -10,6 +10,7 @@ from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.storage import audio_store
 from samplecore.storage.sample_audio import SampleAudio
+from sampledescriptor.geometry import Anchor
 from sampledescriptor.training.descriptor import cache as descriptor_cache
 from sampledescriptor.training.descriptor.cache import (
     HASHES_FILE_NAME,
@@ -19,7 +20,6 @@ from sampledescriptor.training.descriptor.cache import (
     build_grid_cache,
     open_grid_cache,
 )
-from samplemorph.geometry import Anchor
 from tests.sampledescriptor.training.conftest import write_grid_cache
 from tests.samplemorph.conftest import harmonic_tone
 

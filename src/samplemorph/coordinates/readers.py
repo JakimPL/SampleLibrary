@@ -78,7 +78,7 @@ class SubharmonicReader(BaseModel):
 
 
 def subharmonic_reader() -> SubharmonicReader:
-    """The subharmonic reader on the frames a pitch head reads."""
+    """The subharmonic reader on the constant-Q frames of the frame analysis."""
     return SubharmonicReader(analysis=frame_analysis(), trusted_reliability=SUBHARMONIC_TRUSTED_RELIABILITY)
 
 

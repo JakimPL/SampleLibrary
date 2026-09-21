@@ -93,9 +93,7 @@ def _response_between(first: HeardSample, second: HeardSample, *, reading: Respo
     heard = tuple(
         hear_in_frame(sample.pcm, rate_hz=sample.rate_hz, target_rate_hz=rate_hz) for sample in (first, second)
     )
-    analyses = tuple(
-        analyze(sound.mono, rate_hz=rate_hz, geometry=reading.geometry, settings=reading.settings) for sound in heard
-    )
+    analyses = tuple(analyze(sound.mono, rate_hz=rate_hz, geometry=reading.geometry) for sound in heard)
     return build_envelope_response(analyses[0], analyses[1], rate_hz=rate_hz, reading=reading)
 
 

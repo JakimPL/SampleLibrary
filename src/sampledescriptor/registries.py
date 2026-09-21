@@ -4,7 +4,7 @@ from typing import Final, Protocol
 
 from sampledescriptor.canonicalizers import Canonicalizer
 from sampledescriptor.canonicalizers.log_frequency import LogFrequencyCanonicalizer, build_log_frequency_canonicalizer
-from samplemorph.geometry import DEFAULT_ANCHOR, Anchor, LogFrequencyGeometry
+from sampledescriptor.geometry import DEFAULT_ANCHOR, Anchor, GridGeometry
 
 DEFAULT_CANONICALIZER_NAME: Final[str] = "log_frequency"
 
@@ -20,6 +20,6 @@ CANONICALIZER_REGISTRY: Final[dict[str, CanonicalizerFactory]] = {
 }
 
 
-def canonicalizer_for_geometry(geometry: LogFrequencyGeometry) -> Canonicalizer:
+def canonicalizer_for_geometry(geometry: GridGeometry) -> Canonicalizer:
     """The canonicalizer that reads exactly this geometry, for rebuilding the axis a stored model was fitted on."""
     return LogFrequencyCanonicalizer(geometry)

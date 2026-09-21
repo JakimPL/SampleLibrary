@@ -74,10 +74,7 @@ def export(output_directory: Path) -> None:
         HeldEnd.FIRST: prepare_mono(_voice(FIRST_SECONDS, frequency_hz=FIRST_HZ, decay=DECAY_PER_SECOND)),
         HeldEnd.SECOND: prepare_mono(_voice(SECOND_SECONDS, frequency_hz=SECOND_HZ, decay=DECAY_PER_SECOND / 2.0)),
     }
-    analyses = {
-        held: analyze(mono, rate_hz=NOMINAL_WAV_RATE, geometry=geometry, settings=reading.settings)
-        for held, mono in sounds.items()
-    }
+    analyses = {held: analyze(mono, rate_hz=NOMINAL_WAV_RATE, geometry=geometry) for held, mono in sounds.items()}
     response = build_envelope_response(
         analyses[HeldEnd.FIRST], analyses[HeldEnd.SECOND], rate_hz=NOMINAL_WAV_RATE, reading=reading
     )

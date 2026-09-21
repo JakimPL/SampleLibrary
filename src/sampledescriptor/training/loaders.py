@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Final, Generic, TypedDict, TypeVar
+from typing import Final, TypedDict, TypeVar
 
 import torch
-from lightning.pytorch import LightningDataModule
 from threadpoolctl import threadpool_limits
 from torch.utils.data import DataLoader, Dataset, Sampler
 
 from sampledescriptor.training import WORKER_START_METHOD
 from sampledescriptor.training.refusals import TrainingDataShortfall
-from sampledescriptor.training.run.settings import RunSettings
-from sampledescriptor.training.splits import Cache, CachedCorpus
 
 PREFETCH_BATCHES: Final[int] = 2
 
@@ -101,23 +98,3 @@ class WorkerOptions(TypedDict):
     worker_init_fn: Callable[[int], None] | None
     prefetch_factor: int | None
     multiprocessing_context: str | None
-
-
-class CachedDataModule(LightningDataModule, Generic[Cache]):
-    """The split corpus and the run's shape, which every trainer's data module hands its loaders.
-
-    Raises:
-        TrainingDataShortfall: the training samples fill no batch.
-    """
-
-    def __init__(self, corpus: CachedCorpus[Cache], *, run: RunSettings) -> None:
-        super().__init__()
-        require_full_batch(len(corpus.training_positions), batch_size=run.batch_size, flags="--batch")
-        self._corpus = corpus
-        self._batch_size = run.batch_size
-        self._worker_count = run.worker_count
-        self._random_seed = run.random_seed
-
-    @property
-    def training_sample_count(self) -> int:
-        return len(self._corpus.training_positions)

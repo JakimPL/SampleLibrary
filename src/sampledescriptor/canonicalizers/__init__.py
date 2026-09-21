@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from sampledescriptor.geometry import GridGeometry
 from sampledescriptor.images import SoundImage
 from samplemorph.canonicalizers.common import PreparedMono
-from samplemorph.geometry import LogFrequencyGeometry
 
 
 class Canonicalizer(Protocol):
@@ -21,6 +21,6 @@ class Canonicalizer(Protocol):
     """
 
     @property
-    def geometry(self) -> LogFrequencyGeometry: ...
+    def geometry(self) -> GridGeometry: ...
 
     def canonicalize(self, mono: PreparedMono) -> SoundImage: ...

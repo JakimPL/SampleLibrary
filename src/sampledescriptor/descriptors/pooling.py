@@ -6,13 +6,14 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
+from sampledescriptor.geometry import GridGeometry
 from sampledescriptor.images import Conditioners
-from samplemorph.geometry import SEMITONES_PER_OCTAVE, LogFrequencyGeometry
+from samplemorph.geometry import SEMITONES_PER_OCTAVE
 
 DESCRIPTOR_BANDS_PER_SEMITONE: Final[int] = 1
 
 
-def pooled_band_count(geometry: LogFrequencyGeometry, *, bands_per_semitone: int) -> int:
+def pooled_band_count(geometry: GridGeometry, *, bands_per_semitone: int) -> int:
     """How many rows a grid keeps once its bands are averaged down to `bands_per_semitone`.
 
     Raises:

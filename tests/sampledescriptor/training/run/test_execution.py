@@ -9,6 +9,7 @@ from lightning.pytorch import LightningDataModule, Trainer
 from torch.utils.data import DataLoader
 
 from samplecore.tracking.silent import SilentRun
+from sampledescriptor.geometry import grid_geometry
 from sampledescriptor.training.export import BEST_LOSS_STATE, BestEpochExport
 from sampledescriptor.training.metrics import DESCRIPTOR_MONITORED_METRIC
 from sampledescriptor.training.refusals import ResumeRefused
@@ -34,7 +35,7 @@ from tests.sampledescriptor.training.conftest import TinyBatch, TinyModule
 
 
 def test_the_recorded_parameters_name_what_tells_one_grid_from_another() -> None:
-    geometry = log_frequency_geometry()
+    geometry = grid_geometry()
 
     parameters = geometry_parameters(geometry)
 

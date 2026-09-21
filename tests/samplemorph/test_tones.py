@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from samplemorph.tones import HarmonicTone, harmonic_tone
+from tests.samplemorph.tones import HarmonicTone, harmonic_tone
 
 RATE_HZ = 44100.0
 LEVEL_FLOOR_DB = -40.0

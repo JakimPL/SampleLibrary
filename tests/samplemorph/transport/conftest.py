@@ -19,7 +19,7 @@ BIN_SPACING_HZ: Final[float] = NOMINAL_WAV_RATE / GEOMETRY.fft_length
 
 
 def analysis_of(mono: NDArray[np.float64]) -> TransportAnalysis:
-    return analyze(prepare_mono(mono), rate_hz=NOMINAL_WAV_RATE, geometry=GEOMETRY, settings=TransportSettings())
+    return analyze(prepare_mono(mono), rate_hz=NOMINAL_WAV_RATE, geometry=GEOMETRY)
 
 
 def times(frame_count: int) -> NDArray[np.float64]:

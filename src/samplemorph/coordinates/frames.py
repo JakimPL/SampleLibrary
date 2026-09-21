@@ -63,7 +63,7 @@ class FrameAnalysis(BaseModel):
 
 
 def frame_analysis() -> FrameAnalysis:
-    """The frame analysis a pitch head reads: three constant-Q bins per semitone, as high as their windows fit."""
+    """The frame analysis a pitch reader reads: three constant-Q bins per semitone, as high as their windows fit."""
     return FrameAnalysis(
         analysis_rate_hz=NOMINAL_WAV_RATE,
         hop_length=DEFAULT_HOP_LENGTH,
