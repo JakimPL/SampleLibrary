@@ -80,13 +80,20 @@ harmonic.
 
 ## The run
 
-`runs/pitch-2026-09-21/run.sh`, on the full catalog of 137,067 samples.
+Three commands in sequence, on the full catalog of 137,067 samples, on one machine with one GPU.
 
-`cache-frames` read every sample twice — as stored and at a seeded true retuning within
-±17 semitones — into 2.8 GB of float16 frames in **29 minutes** on eight workers. `train-pitch` ran
-20 epochs over 130,213 samples, 6,854 held out by equivalence class, in 19 minutes on the GPU, at
-93 seconds an epoch. `read-pitch` then read 200 held-out samples and 384 synthetic sounds through
-the head and both classical readers: 13,797 trials.
+1. **`morph cache-frames`** read every sample twice — as stored, and at a seeded true retuning
+   within ±17 semitones — into 2.8 GB of float16 frames. 29 minutes on eight worker processes.
+2. **`morph train-pitch`** ran 20 epochs over the 130,213 samples that were not held out, at
+   93 seconds an epoch, 19 minutes in all. 6,854 samples were held out by whole equivalence class,
+   so no copy of a held-out sound reached training.
+3. **`morph read-pitch`** read 200 held-out samples and 384 synthetic sounds through the trained
+   head and both classical readers of note 26, at 16 true retunings and every pitch-keeping change:
+   13,797 trials.
+
+Every number below is what the third command measured. Anyone with the catalog and a GPU reproduces
+it by running those three commands with these counts; the metrics, weights and tables themselves are
+written beside the library rather than into this repository, as every run's output is.
 
 The best epoch was the **fourth**. The held-out error fell for four epochs, then rose and oscillated
 for the remaining sixteen, and the head that was kept reads a true retuning a median of 2.99

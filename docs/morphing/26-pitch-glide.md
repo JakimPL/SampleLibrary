@@ -69,8 +69,9 @@ pair renders exactly as the route without the glide, which is what drums and noi
 
 ## What the listening set showed
 
-26 pairs (`runs/transport-2026-09-15/pairs.json`) through four routes: the envelope route keeping
-the first sound's excitation and crossfading both, each with and without the subharmonic glide.
+The 26-pair listening set — the one `morph draw-pairs` wrote for note 20 and every comparison has
+used since — rendered through four routes: the envelope route keeping the first sound's excitation
+and crossfading both, each with and without the subharmonic glide.
 16 pairs glide; the rest read no trusted pitch at one end. Pitch paths are read by pYIN, which never
 drives the glide. Jump share is the largest step over the whole span — 0.125 is an even glide over
 the eight steps, 1.0 a switch:
