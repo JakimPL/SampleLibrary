@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Final
 
+import librosa
 import numpy as np
 import pytest
 
+from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplemorph.canonicalizers.common import prepare_mono
-from samplemorph.coordinates.readers import PyinReader, pyin_reader
 from samplemorph.envelope.glide import (
     PitchedAnalysis,
     PitchGlide,
@@ -15,7 +16,7 @@ from samplemorph.envelope.glide import (
 )
 from samplemorph.envelope.morph import EnvelopePath
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
-from samplemorph.geometry import semitones_from_reference
+from samplemorph.geometry import MINIMUM_FREQUENCY_HZ, semitones_from_reference
 from samplemorph.transport.analysis import TransportAnalysis
 from samplemorph.transport.settings import TransportSettings
 from samplemorph.vocoders.pghi import integrate_and_synthesize
@@ -27,6 +28,8 @@ GLIDE: Final[PitchGlide] = PitchGlide(
     first_semitones=semitones_from_reference(LOW_HZ), second_semitones=semitones_from_reference(HIGH_HZ)
 )
 GLIDE_TOLERANCE_SEMITONES: Final[float] = 0.1
+PYIN_HIGHEST_HZ: Final[float] = 4186.0
+PYIN_FRAME_LENGTH: Final[int] = 4096
 LOBE_BIN: Final[int] = 40
 LOBE_HALF_WIDTH: Final[int] = 3
 
@@ -34,11 +37,6 @@ LOBE_HALF_WIDTH: Final[int] = 3
 @pytest.fixture(scope="module")
 def ends() -> tuple[TransportAnalysis, TransportAnalysis]:
     return analysis_of(tone(LOW_HZ)), analysis_of(tone(HIGH_HZ))
-
-
-@pytest.fixture(scope="module")
-def pyin() -> PyinReader:
-    return pyin_reader()
 
 
 def _pitched(ends: tuple[TransportAnalysis, TransportAnalysis], glide: PitchGlide) -> tuple[PitchedAnalysis, ...]:
@@ -54,24 +52,34 @@ def _heard_semitones(
     *,
     weight: float,
     glide: PitchGlide,
-    reader: PyinReader,
 ) -> float:
     first, second = _pitched(ends, glide)
     spectrogram = path.gliding(first, second, weight=weight, geometry=GEOMETRY, settings=TransportSettings())
     waveform = integrate_and_synthesize(spectrogram.magnitude, geometry=GEOMETRY, frame_count=spectrogram.sample_count)
-    reading = reader.read(prepare_mono(waveform))
-    assert reading is not None
-    return reading.semitones
+    return _pyin_semitones(prepare_mono(waveform))
+
+
+def _pyin_semitones(mono: np.ndarray) -> float:
+    """The median pitch pYIN finds in the voiced frames, which judges a glide independently of the reader that drives it."""
+    frequencies, voiced, _ = librosa.pyin(
+        mono.astype(np.float32),
+        fmin=MINIMUM_FREQUENCY_HZ,
+        fmax=PYIN_HIGHEST_HZ,
+        sr=NOMINAL_WAV_RATE,
+        frame_length=PYIN_FRAME_LENGTH,
+    )
+    assert voiced.any()
+    return float(np.median([semitones_from_reference(float(hertz)) for hertz in frequencies[voiced]]))
 
 
 @pytest.mark.parametrize("excitation", [Excitation.FIRST, Excitation.SECOND, Excitation.BOTH])
 @pytest.mark.parametrize("weight", [0.0, 0.5, 1.0])
 def test_a_glide_sounds_the_pitch_its_weight_of_the_way_between_the_ends(
-    ends: tuple[TransportAnalysis, TransportAnalysis], pyin: PyinReader, excitation: Excitation, weight: float
+    ends: tuple[TransportAnalysis, TransportAnalysis], excitation: Excitation, weight: float
 ) -> None:
     path = EnvelopePath(envelope_settings=EnvelopeSettings(excitation=excitation))
 
-    heard = _heard_semitones(path, ends, weight=weight, glide=GLIDE, reader=pyin)
+    heard = _heard_semitones(path, ends, weight=weight, glide=GLIDE)
 
     expected = GLIDE.first_semitones + weight * GLIDE.interval_semitones
     assert heard == pytest.approx(expected, abs=GLIDE_TOLERANCE_SEMITONES)

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import shutil
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -11,11 +9,7 @@ import pytest
 from numpy.typing import NDArray
 
 from samplecore.models.morph import HeardMorphPoint
-from samplemorph.canonicalizers.log_frequency import linear_axis_inverse
-from samplemorph.geometry import log_frequency_geometry
-from samplemorph.model_store import DEFAULT_MODEL_NAME, load_model, model_path, save_model
-from samplemorph.routes.route import PreparedPair
-from samplemorph.service import renderer as renderer_module
+from samplemorph.routes.envelope import PreparedPair
 from samplemorph.service.renderer import RenderBoundsError, load_renderer
 from samplemorph.service.settings import MAXIMUM_RENDER_FRAMES, RenderLimits, ServiceSettings
 from tests.samplemorph.service.conftest import StoredLibrary
@@ -40,14 +34,14 @@ class _CountingPair:
         return self.prepared.render(weight=weight)
 
 
-def test_the_fingerprint_follows_the_models_the_route_renders_through(
-    settings: ServiceSettings, restored_settings: ServiceSettings
+def test_the_fingerprint_follows_the_settings_the_route_renders_under(
+    settings: ServiceSettings, gliding_settings: ServiceSettings
 ) -> None:
-    integrating = load_renderer(settings)
-    restored = load_renderer(restored_settings)
+    held = load_renderer(settings)
+    gliding = load_renderer(gliding_settings)
 
-    assert integrating.fingerprint == load_renderer(settings).fingerprint
-    assert integrating.fingerprint != restored.fingerprint
+    assert held.fingerprint == load_renderer(settings).fingerprint
+    assert held.fingerprint != gliding.fingerprint
 
 
 def test_a_validator_names_one_point_under_one_model_at_one_pair_of_rates(
@@ -72,31 +66,6 @@ def test_a_validator_names_one_point_under_one_model_at_one_pair_of_rates(
     assert renderer.etag(halfway) != renderer.etag(quarter)
     assert renderer.etag(halfway) != renderer.etag(reversed_pair)
     assert renderer.etag(halfway) != renderer.etag(retuned)
-
-
-def test_warming_up_leaves_the_band_matrix_inverse_in_the_cache(settings: ServiceSettings) -> None:
-    load_renderer(settings)
-
-    assert linear_axis_inverse.cache_info().currsize >= 1
-    assert linear_axis_inverse(log_frequency_geometry()) is linear_axis_inverse(log_frequency_geometry())
-
-
-def test_the_fingerprint_follows_the_bytes_of_the_model_it_was_loaded_from(
-    settings: ServiceSettings, library: StoredLibrary, tmp_path: Path
-) -> None:
-    before = load_renderer(settings).fingerprint
-    root = tmp_path / "library"
-    shutil.copytree(library.root, root)
-    copied = replace(settings, library_root=root)
-    stored = model_path(root, name=DEFAULT_MODEL_NAME)
-    loaded = load_model(stored)
-    save_model(stored, replace(loaded, description=loaded.description.model_copy(update={"random_seed": 7})))
-
-    assert load_renderer(copied).fingerprint != before
-
-
-def test_a_process_rendering_on_the_processor_says_so(settings: ServiceSettings) -> None:
-    assert load_renderer(settings).status().device == "cpu"
 
 
 @pytest.mark.parametrize(
@@ -138,14 +107,15 @@ def test_identical_points_asked_for_at_once_render_once(settings: ServiceSetting
         second_rate_hz=FIRST_RATE_HZ,
     )
     calls: list[int] = []
-    pairing = renderer_module.pair_through
+    route = renderer._named.route  # pylint: disable=protected-access
+    preparing = route.prepare_pair
 
     def counted(*arguments: Any, **options: Any) -> Any:
-        prepared = pairing(*arguments, **options)
+        prepared = preparing(*arguments, **options)
         return _CountingPair(prepared=prepared, calls=calls)
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(renderer_module, "pair_through", counted)
+        patch.setattr(type(route), "prepare_pair", lambda _route, *arguments, **options: counted(*arguments, **options))
         with ThreadPoolExecutor(max_workers=4) as pool:
             rendered = list(pool.map(renderer.render, [point] * 4))
 

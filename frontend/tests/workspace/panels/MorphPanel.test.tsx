@@ -45,15 +45,10 @@ vi.mock("../../../src/samples/useAudioPreview", async () => {
 });
 
 const SERVICE = {
-    model: "principal_components",
-    codec: "principal_components",
-    canonicalizer: "log_frequency",
-    latent_size: 256,
-    vocoder: "restored",
-    restorer: "restorer",
-    device: "cpu",
+    name: "envelope-first",
     fingerprint: "f".repeat(64),
     weight_steps: 16,
+    description: {},
 };
 
 function renderPanel(): ReturnType<typeof render> {

@@ -16,6 +16,28 @@ from samplecore.storage.repositories.playback_rate import PostgresSamplePlayback
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.sample_audio import readable_membership_digest
+from sampledescriptor.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE
+from sampledescriptor.descriptors.shape import DEFAULT_WIDTH
+from sampledescriptor.model_paths import descriptor_path
+from sampledescriptor.registries import DEFAULT_CANONICALIZER_NAME
+from sampledescriptor.training.descriptor.cache import (
+    DEFAULT_RETUNED_VIEW_COUNT,
+    DEFAULT_VIEW_RANGE_SEMITONES,
+    DESCRIPTION_FILE_NAME,
+    grid_cache_directory,
+)
+from sampledescriptor.training.descriptor.settings import (
+    DEFAULT_DESCRIPTOR_BATCH_SIZE,
+    DEFAULT_DESCRIPTOR_EPOCHS,
+    DEFAULT_DESCRIPTOR_LEARNING_RATE,
+    DEFAULT_DISTILLATION_WEIGHT,
+    DEFAULT_LABEL_HOLDOUT_SHARE,
+    DEFAULT_LABEL_WEIGHT,
+    DEFAULT_LABELED_PER_BATCH,
+    DEFAULT_RETUNING_WEIGHT,
+)
+from sampledescriptor.training.run.paths import RunFamily, finished_record_path, resume_path, run_directory
+from sampledescriptor.training.run.settings import DEFAULT_RANDOM_SEED
 from samplelibrary.pipeline.context import PipelineContext
 from samplelibrary.pipeline.results import input_digest
 from samplelibrary.pipeline.settings import StepSettings
@@ -42,29 +64,7 @@ from samplelibrary.pipeline.steps.shared import (
     training_run_flags,
     vectors_digest,
 )
-from samplemorph.descriptors.descriptor_shape import DEFAULT_WIDTH
-from samplemorph.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE
 from samplemorph.geometry import DEFAULT_ANCHOR, Anchor
-from samplemorph.model_paths import descriptor_path
-from samplemorph.registries import DEFAULT_CANONICALIZER_NAME
-from samplemorph.training.descriptor_cache import (
-    DEFAULT_RETUNED_VIEW_COUNT,
-    DEFAULT_VIEW_RANGE_SEMITONES,
-    DESCRIPTION_FILE_NAME,
-    grid_cache_directory,
-)
-from samplemorph.training.descriptor_settings import (
-    DEFAULT_DESCRIPTOR_BATCH_SIZE,
-    DEFAULT_DESCRIPTOR_EPOCHS,
-    DEFAULT_DESCRIPTOR_LEARNING_RATE,
-    DEFAULT_DISTILLATION_WEIGHT,
-    DEFAULT_LABEL_HOLDOUT_SHARE,
-    DEFAULT_LABEL_WEIGHT,
-    DEFAULT_LABELED_PER_BATCH,
-    DEFAULT_RETUNING_WEIGHT,
-)
-from samplemorph.training.run_paths import RunFamily, finished_record_path, resume_path, run_directory
-from samplemorph.training.run_settings import DEFAULT_RANDOM_SEED
 
 GRID_CACHE: Final[str] = "grid-cache"
 DESCRIPTOR: Final[str] = "descriptor"
@@ -205,7 +205,7 @@ def _current_grid_cache(context: PipelineContext) -> Path:
 def _cache_command(context: PipelineContext, artifact: Path, resume: bool) -> tuple[str, ...]:
     settings = _grid_cache_settings(context)
     return (
-        "morph",
+        "descriptor",
         "cache-grids",
         "--cache",
         artifact.name,
@@ -265,8 +265,8 @@ def _sealed_descriptor(context: PipelineContext, content: str) -> Path:
 def _train_command(context: PipelineContext, artifact: Path, resume: bool) -> tuple[str, ...]:
     settings = _descriptor_settings(context)
     return (
-        "morph",
-        "train-descriptor",
+        "descriptor",
+        "train",
         "--cache",
         _current_grid_cache(context).name,
         "--teacher-experiment",
@@ -303,7 +303,7 @@ def _embedding_inputs(context: PipelineContext) -> Inputs:
 def _embed_command(context: PipelineContext, key: ExperimentKey) -> tuple[str, ...]:
     descriptor = _sealed_descriptor(context, _current_descriptor_content(context))
     return (
-        "morph",
+        "descriptor",
         "embed",
         "--cache",
         _current_grid_cache(context).name,

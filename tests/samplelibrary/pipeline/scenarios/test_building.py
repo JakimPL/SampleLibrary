@@ -4,7 +4,6 @@ from samplecore.exit_status import ExitStatus
 from samplelibrary.pipeline.results import AttemptOutcome, StepVerdict
 from samplelibrary.pipeline.steps.kinds import SAMPLES_TO_DESCRIBE, SEALED_COPY_MISSING
 from samplelibrary.pipeline.steps.listening import TEACHER_KEY
-from samplemorph.published import published_restorer_path
 from tests.samplelibrary.pipeline.scenarios.harness.expect import Expect
 from tests.samplelibrary.pipeline.scenarios.harness.observe import ledger_commands
 from tests.samplelibrary.pipeline.scenarios.harness.plans import FaultPlan, GateMoment, ScriptedEffect, StepFault
@@ -31,9 +30,6 @@ EVERY_STEP = (
     "module-evaluation",
     "cloud",
     "module-placeholders",
-    "morph-codec",
-    "restorer",
-    "morph-models",
 )
 PASSES = ("modules", "sample-files", "notes", "thumbnails", "equivalence", "relink", "module-placeholders")
 SETTLED = Expect.completed(EVERY_STEP, StepVerdict.SATISFIED).with_steps(
@@ -89,9 +85,6 @@ def test_a_sample_file_added_rebuilds_exactly_what_the_new_sample_reaches(runner
             evaluation=frozenset({"experiment", "vectors"}),
             module_evaluation=frozenset({"experiment", "vectors"}),
             cloud=frozenset({"vectors"}),
-            morph_codec=frozenset({"readable samples"}),
-            restorer=frozenset({"readable samples"}),
-            morph_models=frozenset({"codec", "restorer"}),
         ).moving("samples", "files", "passes", "experiments", "categories", "cloud", "artifacts"),
         story="the run after a sample file arrived",
     )
@@ -119,9 +112,7 @@ def test_a_descriptor_training_interrupted_partway_continues_from_its_last_epoch
     relaunch = runner.start(Run())
     runner.finish(
         relaunch,
-        SETTLED.with_steps(**_running(*FROM_THE_DESCRIPTOR, "morph-codec", "restorer", "morph-models")).moving(
-            "experiments", "cloud", "artifacts"
-        ),
+        SETTLED.with_steps(**_running(*FROM_THE_DESCRIPTOR)).moving("experiments", "cloud", "artifacts"),
         story="the relaunch",
     )
     assert ledger_commands(relaunch.ledger)["descriptor"][-1] == "--resume"
@@ -150,9 +141,7 @@ def test_a_finished_training_whose_run_died_before_sealing_it_is_sealed_without_
         relaunch,
         SETTLED.with_steps(
             descriptor=StepVerdict.RESEALED,
-            **_running(
-                "embedding", "evaluation", "module-evaluation", "cloud", "morph-codec", "restorer", "morph-models"
-            ),
+            **_running("embedding", "evaluation", "module-evaluation", "cloud"),
         ).moving("experiments", "cloud", "artifacts"),
         story="the relaunch",
     )
@@ -213,35 +202,16 @@ def test_a_descriptor_that_ended_a_success_without_finishing_stops_the_run(runne
     )
 
 
-def test_outputs_lost_or_changed_on_disk_are_built_sealed_or_published_again(
-    runner: ScenarioRunner, world: World
-) -> None:
-    """A model built again into the same bytes needs no publishing; a published copy changed on disk does."""
+def test_a_sealed_model_lost_from_disk_is_sealed_again(runner: ScenarioRunner, world: World) -> None:
+    """A model built again into the same bytes needs no training; a sealed copy that went missing is restored."""
     _built(runner)
-    codec = world.library_root / "models" / f"{world.step_outputs('morph-codec')['artifact']}"
-    restorer = world.library_root / "models" / f"{world.step_outputs('restorer')['artifact']}"
     sealed = world.library_root / "models" / "descriptors" / world.step_outputs("descriptor")["sealed"]
-
-    codec.unlink()
-    runner.run(Run(), SETTLED.with_steps(morph_codec=StepVerdict.RAN), story="the run after the codec was deleted")
-
-    restorer.with_name(restorer.name + ".pipeline.json").unlink()
-    runner.run(
-        Run(),
-        SETTLED.with_steps(restorer=StepVerdict.RESEALED).moving("artifacts"),
-        story="the run after the restorer's sidecar went",
-    )
 
     sealed.unlink()
     runner.run(
         Run(),
         SETTLED.with_steps(descriptor=StepVerdict.RESEALED).because(descriptor=frozenset({SEALED_COPY_MISSING})),
         story="the run after the sealed descriptor was deleted",
-    )
-
-    published_restorer_path(world.library_root).write_bytes(b"someone else's restorer")
-    runner.run(
-        Run(), SETTLED.with_steps(morph_models=StepVerdict.RAN), story="the run after the published restorer changed"
     )
 
 
@@ -256,18 +226,6 @@ def test_a_run_from_scratch_builds_the_same_library_again(runner: ScenarioRunner
 
     assert "scratch completed" in observation.kinds
     assert not stale.exists()
-
-
-def test_the_morph_target_takes_only_what_the_morph_models_need(runner: ScenarioRunner) -> None:
-    runner.run(
-        Run(targets=("morph",)),
-        Expect.completed(
-            ("labels", "modules", "sample-files", "morph-codec", "restorer", "morph-models"), StepVerdict.RAN
-        )
-        .with_steps(labels=StepVerdict.SATISFIED)
-        .moving("modules", "samples", "files", "passes", "artifacts"),
-        story="a run of the morph target on an empty library",
-    )
 
 
 def test_the_machine_a_library_is_built_on_names_none_of_its_outputs(runner: ScenarioRunner, world: World) -> None:

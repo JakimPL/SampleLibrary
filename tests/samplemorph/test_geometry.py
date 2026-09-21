@@ -6,16 +6,14 @@ import numpy as np
 import pytest
 from pydantic import TypeAdapter
 
+from sampledescriptor.registries import canonicalizer_for_geometry
 from samplemorph.geometry import (
     REFERENCE_FREQUENCY_HZ,
     SEMITONES_PER_OCTAVE,
     Anchor,
-    Geometry,
-    constant_q_geometry,
+    LogFrequencyGeometry,
     log_frequency_geometry,
-    mel_geometry,
 )
-from samplemorph.registries import canonicalizer_for_geometry
 
 REFERENCE_BAND_TOLERANCE_HZ = 40.0
 
@@ -25,15 +23,10 @@ class GeometryCase:
     """One frequency axis, checked against the properties every axis is expected to report."""
 
     name: str
-    geometry: Geometry
-    is_exactly_logarithmic: bool
+    geometry: LogFrequencyGeometry
 
 
-GEOMETRY_CASES = (
-    GeometryCase(name="log_frequency", geometry=log_frequency_geometry(), is_exactly_logarithmic=True),
-    GeometryCase(name="constant_q", geometry=constant_q_geometry(), is_exactly_logarithmic=True),
-    GeometryCase(name="mel", geometry=mel_geometry(), is_exactly_logarithmic=False),
-)
+GEOMETRY_CASES = (GeometryCase(name="log_frequency", geometry=log_frequency_geometry()),)
 
 
 @pytest.mark.parametrize("case", GEOMETRY_CASES, ids=lambda case: case.name)
@@ -88,9 +81,7 @@ def test_one_semitone_spans_a_positive_number_of_bands(case: GeometryCase) -> No
     assert case.geometry.bands_per_semitone > 0.0
 
 
-@pytest.mark.parametrize(
-    "case", [case for case in GEOMETRY_CASES if case.is_exactly_logarithmic], ids=lambda case: case.name
-)
+@pytest.mark.parametrize("case", GEOMETRY_CASES, ids=lambda case: case.name)
 def test_a_logarithmic_axis_spaces_every_octave_by_the_same_band_count(case: GeometryCase) -> None:
     """An exactly logarithmic axis is what makes a rate change a whole-band translation."""
     frequencies = case.geometry.band_frequencies
@@ -98,17 +89,6 @@ def test_a_logarithmic_axis_spaces_every_octave_by_the_same_band_count(case: Geo
     octave_steps = np.log2(frequencies[1:] / frequencies[:-1]) * bands_per_octave
 
     assert np.allclose(octave_steps, 1.0)
-
-
-def test_the_mel_axis_spaces_its_low_bands_more_widely_than_a_logarithm_would() -> None:
-    """Mel stays close to linear in the bass, which is what its translation error comes from."""
-    geometry = mel_geometry()
-    frequencies = geometry.band_frequencies
-
-    low_ratio = frequencies[10] / frequencies[9]
-    high_ratio = frequencies[-1] / frequencies[-2]
-
-    assert low_ratio > high_ratio
 
 
 def test_the_log_frequency_bands_reach_every_fourier_bin_the_analysis_produces() -> None:
@@ -122,19 +102,12 @@ def test_the_log_frequency_bands_reach_every_fourier_bin_the_analysis_produces()
     assert geometry.band_frequencies[-1] >= geometry.analysis_rate_hz / 2
 
 
-def test_the_constant_q_bands_stay_below_nyquist() -> None:
-    """A wavelet per band is what this axis is built from, and each one has to fit under Nyquist."""
-    geometry = constant_q_geometry()
-
-    assert geometry.band_frequencies[-1] < geometry.analysis_rate_hz / 2
-
-
 @pytest.mark.parametrize("anchor", tuple(Anchor), ids=lambda anchor: anchor.value)
 def test_the_anchor_survives_a_round_trip_and_rebuilds_the_same_canonicalizer(anchor: Anchor) -> None:
     """A stored model names the anchor its grids were aligned by, so a rebuild aligns the same way."""
     geometry = log_frequency_geometry(anchor=anchor)
 
-    restored = TypeAdapter(Geometry).validate_json(geometry.model_dump_json())
+    restored = TypeAdapter(LogFrequencyGeometry).validate_json(geometry.model_dump_json())
 
     assert restored == geometry
     assert canonicalizer_for_geometry(restored).geometry.anchor is anchor

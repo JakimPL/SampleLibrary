@@ -23,13 +23,10 @@ SAMPLE_PACK_DIRECTORY_NAME: Final[str] = "samples"
 SANDBOX_INFERENCE_URL: Final[str] = "http://127.0.0.1:8011"
 LABELS_FILE_NAME: Final[str] = "labels.jsonl"
 LABELED_AT: Final[datetime] = datetime(2026, 1, 1, tzinfo=UTC)
-# A sandbox a few hundred samples large trains and fits in minutes, so its models are small and
-# its training runs short.
+# A sandbox a few hundred samples large trains in minutes, so its training run is short.
 SANDBOX_PIPELINE_TABLES: Final[str] = (
     'memory_cap = "none"\n'
     "\n[pipeline.descriptor]\nepochs = 4\nlabeled_per_batch = 8\n"
-    "\n[pipeline.restorer]\nepochs = 2\n"
-    "\n[pipeline.morph-codec]\nlatent_size = 32\n"
     "\n[pipeline.evaluation]\nprobes = 50\n"
     "\n[pipeline.module-evaluation]\nprobes = 50\n"
 )

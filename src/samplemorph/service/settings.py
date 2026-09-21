@@ -25,9 +25,8 @@ class RenderLimits:
     A pair is heard at the higher of its two rates, so a slow sample paired with a fast one grows
     by the ratio between them; four octaves of it are served, beyond that the request is refused.
     The frame bound holds one render's memory to what a listener's click should cost: at the bound,
-    about 24 seconds at 44.1 kHz, a render through the restored latent route peaks near 9 GB on the
-    processor, and a longer one grows in proportion. The pair cache keeps the prepared ends of the
-    pairs heard last, which for a route over the sounds' own analyses is two spectrograms a pair.
+    about 24 seconds at 44.1 kHz, and a longer render grows in proportion. The pair cache keeps the
+    prepared ends of the pairs heard last, which are two spectrograms a pair.
     """
 
     maximum_rate_ratio: float = MAXIMUM_RATE_RATIO
@@ -41,7 +40,7 @@ class RenderLimits:
 @dataclass(frozen=True)
 class ServiceSettings:
     """What one inference process serves: the library it reads objects from, the sample directories it
-    reads files from, the route it renders through as its selection file names it, and its limits.
+    reads files from, the settings it renders under as its selection file names them, and its limits.
 
     A request names the file a sample found in a sample directory is read from, and the process reads
     only files inside the directories named here, which are the ones its configuration lists.

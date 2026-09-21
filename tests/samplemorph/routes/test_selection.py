@@ -5,24 +5,13 @@ from pathlib import Path
 import pytest
 
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
-from samplemorph.pipeline import RouteChoice
-from samplemorph.routes.kinds import RouteKind
-from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, read_route_selection
+from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, Glide, read_route_selection
 
 FULL_SELECTION = """
-route: envelope
 envelope:
   excitation: both
   coefficient_count: 12
 glide: subharmonic
-partials:
-  profile: stepped
-latent:
-  model_name: pca
-  vocoder_name: pghi
-  restorer_name: restorer
-  morpher_name: linear
-  device: cpu
 """
 
 
@@ -32,23 +21,17 @@ def _written(tmp_path: Path, text: str) -> Path:
     return path
 
 
-def test_a_file_names_the_route_and_the_settings_each_kind_reads(tmp_path: Path) -> None:
+def test_a_file_names_the_envelope_settings_and_the_glide(tmp_path: Path) -> None:
     selection = read_route_selection(_written(tmp_path, FULL_SELECTION))
 
-    assert selection.route is RouteKind.ENVELOPE
     assert selection.envelope == EnvelopeSettings(excitation=Excitation.BOTH, coefficient_count=12)
-    assert selection.glide == "subharmonic"
-    assert selection.partials.profile == "stepped"
-    assert selection.latent == RouteChoice(
-        model_name="pca", vocoder_name="pghi", restorer_name="restorer", morpher_name="linear", device="cpu"
-    )
+    assert selection.glide is Glide.SUBHARMONIC
 
 
-def test_a_file_naming_the_route_alone_leaves_every_kind_its_own_settings(tmp_path: Path) -> None:
-    selection = read_route_selection(_written(tmp_path, "route: transport\n"))
+def test_a_file_naming_no_glide_holds_the_excitation_at_its_own_pitch(tmp_path: Path) -> None:
+    selection = read_route_selection(_written(tmp_path, "envelope:\n  excitation: first\n"))
 
-    assert selection.route is RouteKind.TRANSPORT
-    assert selection.envelope == EnvelopeSettings()
+    assert selection.envelope == EnvelopeSettings(excitation=Excitation.FIRST)
     assert selection.glide is None
 
 
@@ -56,24 +39,20 @@ def test_a_file_naming_the_route_alone_leaves_every_kind_its_own_settings(tmp_pa
     ("text", "reason"),
     [
         ("", "dictionary"),
-        ("route: elsewhere\n", "elsewhere"),
-        ("route: envelope\nenvelope:\n  excitaton: both\n", "excitaton"),
-        ("route: envelope\nenvelope:\n  excitation: neither\n", "neither"),
-        ("route: envelope\nenvelope:\n  timeline: nowhere\n", "nowhere"),
-        ("route: partials\npartials:\n  profile: nowhere\n", "must be one of"),
-        ("route: envelope\nglide: nobody\n", "must be one of"),
-        ("route: latent\nlatent:\n  model_name: pca\n", "vocoder_name"),
-        ("route: [\n", "holds no route selection"),
+        ("envelope:\n  excitaton: both\n", "excitaton"),
+        ("envelope:\n  excitation: neither\n", "neither"),
+        ("envelope:\n  timeline: nowhere\n", "nowhere"),
+        ("glide: nobody\n", "nobody"),
+        ("route: envelope\n", "route"),
+        ("envelope: [\n", "holds no route selection"),
     ],
     ids=(
         "an empty file",
-        "a route this pipeline lacks",
         "a setting misspelled",
         "an excitation this route lacks",
         "a course this route lacks",
-        "a profile this route lacks",
         "a pitch reader this route lacks",
-        "a latent choice left incomplete",
+        "a route key this pipeline no longer reads",
         "text that is no YAML",
     ),
 )
@@ -91,10 +70,8 @@ def test_the_committed_filter_selection_is_one_a_response_can_answer() -> None:
     """The file exists so a VST's filter has a selection to be read under while the renderer glides.
 
     A response is the envelope route's filter, and it holds for a path whose harmonics stand where
-    they stood, so this pair of properties is what the file is for rather than a default it happens
-    to carry.
+    they stood, so this property is what the file is for rather than a default it happens to carry.
     """
     selection = read_route_selection(DEFAULT_SELECTION_PATH.with_name("morph-filter.yaml"))
 
-    assert selection.route is RouteKind.ENVELOPE
     assert selection.glide is None

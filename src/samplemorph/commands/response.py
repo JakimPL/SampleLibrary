@@ -13,12 +13,10 @@ from samplecore.config import LibraryConfig
 from samplecore.exit_status import ExitStatus
 from samplecore.storage.atomic import write_atomically
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
-from samplemorph.commands.draws import SampleNotCataloged, require_sample
 from samplemorph.envelope.payload import response_payload
 from samplemorph.envelope.response import EnvelopeResponse, ResponseReading, build_envelope_response
 from samplemorph.geometry import log_frequency_geometry
-from samplemorph.pipeline import HeardSample, common_rate, read_heard_sample
-from samplemorph.routes.kinds import RouteKind
+from samplemorph.heard import HeardSample, SampleNotCataloged, common_rate, read_heard_sample, require_sample
 from samplemorph.routes.route import hear_in_frame
 from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, read_route_selection
 from samplemorph.transport.analysis import analyze
@@ -54,13 +52,11 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
 
     Raises:
         SystemExit: either hash names no cataloged sample, a sample none of whose files holds it now,
-            or a selection naming a route other than the envelope one, or one that glides.
+            or a selection that glides.
     """
     audio = SampleAudio.from_catalog(connection, config.library_root)
     try:
         selection = read_route_selection(Path(arguments.selection))
-        if selection.route is not RouteKind.ENVELOPE:
-            raise ValueError(f"a response is the envelope route's filter, and this selection names {selection.route}")
         if selection.glide is not None:
             raise ValueError(
                 "a response filters one sample toward another under a moving envelope, and a glide moves "

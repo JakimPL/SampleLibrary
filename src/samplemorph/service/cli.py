@@ -28,22 +28,20 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--selection",
         type=Path,
         default=DEFAULT_SELECTION_PATH,
-        help="The YAML file naming the route every morph renders through, and the settings it reads.",
+        help="The YAML file naming the settings every morph renders under.",
     )
 
 
 def run(config: LibraryConfig, arguments: argparse.Namespace) -> None:
-    """Load the route the selection file names, then serve morphs over HTTP at the address the configuration names.
+    """Build the route the selection file names, then serve morphs over HTTP at the address the configuration names.
 
     Raises:
-        SystemExit: the selection file cannot be read, or the route it names cannot be loaded, reported
-            in one line before any address is bound.
+        SystemExit: the selection file cannot be read, reported in one line before any address is bound.
     """
-    # The server and the networks it loads are imported here, so parsing arguments stays clear of them.
+    # The server is imported here, so parsing arguments stays clear of it.
     # pylint: disable=import-outside-toplevel
     import uvicorn
 
-    from samplemorph.pipeline import ModelFileChanged
     from samplemorph.service.app import create_app
     from samplemorph.service.renderer import load_renderer
 
@@ -55,7 +53,7 @@ def run(config: LibraryConfig, arguments: argparse.Namespace) -> None:
             selection=read_route_selection(arguments.selection),
         )
         renderer = load_renderer(settings)
-    except (FileNotFoundError, ValueError, ModelFileChanged) as error:
+    except ValueError as error:
         _logger.error("Serving nothing: %s.", error)
         sys.exit(ExitStatus.REFUSED)
 

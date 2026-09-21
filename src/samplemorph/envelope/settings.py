@@ -6,7 +6,7 @@ from typing import Final
 from pydantic import BaseModel, Field
 
 from samplecore.models.base import FROZEN
-from samplemorph.transport.morph import FIRST_END_WEIGHT, SECOND_END_WEIGHT
+from samplemorph.transport.spectrogram import FIRST_END_WEIGHT, SECOND_END_WEIGHT
 
 DEFAULT_COEFFICIENT_COUNT: Final[int] = 40
 DEFAULT_FLOOR_DB: Final[float] = 80.0

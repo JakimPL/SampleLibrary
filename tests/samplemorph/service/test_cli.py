@@ -10,8 +10,7 @@ from fastapi import FastAPI
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, InferenceConfig
 from samplecore.exit_status import ExitStatus
 from samplemorph.cli import MorphCommand, main
-from samplemorph.routes.kinds import RouteKind
-from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, PROCESSOR, read_route_selection
+from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, read_route_selection
 from samplemorph.service import renderer as renderer_module
 from samplemorph.service.renderer import load_renderer
 from samplemorph.service.settings import ServiceSettings
@@ -20,15 +19,6 @@ PROGRAM = "samplelibrary morph"
 CONFIGURED_HOST = "0.0.0.0"
 CONFIGURED_PORT = 9010
 OVERRIDING_PORT = 9100
-LATENT_SELECTION = """
-route: latent
-latent:
-  model_name: principal_components
-  vocoder_name: pghi
-  restorer_name: restorer
-  morpher_name: linear
-  device: cpu
-"""
 
 
 @dataclass
@@ -47,12 +37,6 @@ def _write_config(tmp_path: Path, *, inference_url: str | None) -> Path:
         encoding="utf-8",
     )
     return config_path
-
-
-def _write_selection(tmp_path: Path, text: str) -> Path:
-    selection_path = tmp_path / "morph.yaml"
-    selection_path.write_text(text, encoding="utf-8")
-    return selection_path
 
 
 @pytest.fixture
@@ -81,7 +65,7 @@ def test_the_process_binds_the_address_the_configuration_names(
 
     assert (recorded.host, recorded.port) == (CONFIGURED_HOST, CONFIGURED_PORT)
     assert recorded.application is not None
-    assert recorded.application.state.renderer.status().device == PROCESSOR
+    assert recorded.application.state.renderer.status().name.startswith("envelope")
 
 
 def test_a_flag_overrides_the_configured_port(
@@ -93,26 +77,6 @@ def test_a_flag_overrides_the_configured_port(
 
     assert recorded.host == InferenceConfig().host
     assert recorded.port == OVERRIDING_PORT
-
-
-def test_serving_a_model_the_library_lacks_ends_with_one_message_before_binding(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    bound: list[str] = []
-    monkeypatch.setattr(uvicorn, "run", lambda *arguments, **options: bound.append("bound"))
-    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, inference_url=None)))
-
-    with pytest.raises(SystemExit) as raised:
-        main(
-            [MorphCommand.SERVE, "--selection", str(_write_selection(tmp_path, LATENT_SELECTION))],
-            prog=PROGRAM,
-        )
-
-    assert raised.value.code == ExitStatus.REFUSED
-    reported = capsys.readouterr().err
-    assert "Serving nothing: no model named" in reported
-    assert "Traceback" not in reported
-    assert not bound
 
 
 def test_a_selection_file_the_process_cannot_read_ends_it_with_one_message_before_binding(
@@ -133,8 +97,8 @@ def test_a_selection_file_the_process_cannot_read_ends_it_with_one_message_befor
     assert not bound
 
 
-def test_the_repository_s_selection_file_names_a_route_to_serve() -> None:
-    assert read_route_selection(DEFAULT_SELECTION_PATH).route in RouteKind
+def test_the_repository_s_selection_file_is_one_the_process_can_serve() -> None:
+    assert read_route_selection(DEFAULT_SELECTION_PATH).envelope is not None
 
 
 def test_a_missing_configuration_ends_the_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -12,7 +12,6 @@ from samplelibrary.sandbox.waveforms import SAMPLE_RATE, decaying, tonal_wavefor
 ONE_SHOT_COUNT: Final[int] = 300
 ONE_SHOTS_DIRECTORY_NAME: Final[str] = "One-shots"
 ONE_SHOT_SEED_OFFSET: Final[int] = 1000
-# Every one-shot is at least this long, which keeps it inside the draws a codec is fitted over.
 ONE_SHOT_FRAMES: Final[int] = SAMPLE_RATE // 2
 SUSTAINED_FRAMES: Final[int] = SAMPLE_RATE
 

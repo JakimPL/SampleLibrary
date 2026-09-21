@@ -19,8 +19,6 @@ TINY_PIPELINE_TABLE: Final[str] = (
     "\n[pipeline.descriptor]\nepochs = 1\nbatch = 4\nwidth = 8\nlabeled_per_batch = 1\n"
     "\n[pipeline.evaluation]\nprobes = 4\n"
     "\n[pipeline.module-evaluation]\nprobes = 4\n"
-    "\n[pipeline.morph-codec]\nlatent_size = 2\nsamples = 8\n"
-    '\n[pipeline.restorer]\nepochs = 1\nbatch = 2\nprecision = "32-true"\nchannels = 8\ncrop = 16\n'
 )
 ADDED_PACK_FILES: Final[int] = 6
 

@@ -8,10 +8,8 @@ import pytest
 from samplecore.waveform import resample_by_semitones
 from samplemorph.canonicalizers.common import PreparedMono, prepare_mono
 from samplemorph.coordinates.readers import (
-    PyinReader,
     SubharmonicReader,
     parabolic_offset,
-    pyin_reader,
     subharmonic_reader,
 )
 from samplemorph.geometry import semitones_from_reference
@@ -19,7 +17,6 @@ from samplemorph.tones import HarmonicTone, harmonic_tone
 
 RATE_HZ = 44100.0
 SUBHARMONIC_TOLERANCE_SEMITONES = 0.05
-PYIN_TOLERANCE_SEMITONES = 0.1
 RETUNING_SEMITONES = 7.0
 PLAIN = HarmonicTone(fundamental_hz=110.0, resonance_hz=110.0, resonance_gain_db=0.0)
 
@@ -47,11 +44,6 @@ TONE_CASES = (
 @pytest.fixture(scope="module")
 def subharmonic() -> SubharmonicReader:
     return subharmonic_reader()
-
-
-@pytest.fixture(scope="module")
-def pyin() -> PyinReader:
-    return pyin_reader()
 
 
 def _mono(tone: HarmonicTone) -> PreparedMono:
@@ -91,19 +83,8 @@ def test_the_subharmonic_reader_trusts_a_tone_over_a_noise(subharmonic: Subharmo
     assert tone.reliability > noise.reliability
 
 
-def test_pyin_places_a_plain_tone_on_its_fundamental(pyin: PyinReader) -> None:
-    reading = pyin.read(_mono(PLAIN))
-
-    assert reading is not None
-    assert abs(reading.semitones - semitones_from_reference(PLAIN.fundamental_hz)) <= PYIN_TOLERANCE_SEMITONES
-    assert 0.0 < reading.reliability <= 1.0
-
-
-@pytest.mark.parametrize("reader_fixture", ["subharmonic", "pyin"])
-def test_a_silent_sound_reads_no_pitch(reader_fixture: str, request: pytest.FixtureRequest) -> None:
-    reader: SubharmonicReader | PyinReader = request.getfixturevalue(reader_fixture)
-
-    assert reader.read(PreparedMono(np.zeros(int(RATE_HZ)))) is None
+def test_a_silent_sound_reads_no_pitch(subharmonic: SubharmonicReader) -> None:
+    assert subharmonic.read(PreparedMono(np.zeros(int(RATE_HZ)))) is None
 
 
 def test_the_parabola_finds_a_peak_between_bins() -> None:

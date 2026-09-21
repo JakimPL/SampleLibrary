@@ -44,7 +44,6 @@ from samplelibrary.pipeline.steps.library import library_graph
 from samplelibrary.sandbox.modules import sandbox_modules
 from samplelibrary.sandbox.sample_pack import sample_pack
 from samplelibrary.sandbox.waveforms import SAMPLE_RATE, decaying, tonal_waveform
-from samplemorph.published import read_published
 
 # The first six of the sandbox's modules are four unrelated songs and one deliberate pair, so a
 # world of this size carries an equivalence relation for the detection pass to find.
@@ -356,7 +355,7 @@ class World:
         return digests
 
     def _artifacts_digest(self) -> str:
-        """Every artifact the pipeline sealed under the library root, by its place and what it holds, and what is published.
+        """Every artifact the pipeline sealed under the library root, by its place and what it holds.
 
         An evaluation report records when it was made, so it counts by its place alone.
         """
@@ -367,14 +366,7 @@ class World:
             )
             for sidecar in self.library_root.rglob(f"*{SIDECAR_SUFFIX}")
         )
-        published = read_published(self.library_root)
-        return digest_of_rows(
-            [
-                *sealed,
-                ("published", None if published is None else published.codec.content),
-                ("published", None if published is None else published.restorer.content),
-            ]
-        )
+        return digest_of_rows(sealed)
 
     def _experiments_digest(self) -> str:
         """Every experiment by its key and backend, with the samples it describes, its id aside."""

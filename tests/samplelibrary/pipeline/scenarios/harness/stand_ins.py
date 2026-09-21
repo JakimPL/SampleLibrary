@@ -107,16 +107,12 @@ def run_stand_in(command: Sequence[str], stand_in: StandIn) -> None:
             _categorize(words[2:])
         case ("cloud", "evaluate"):
             _evaluate(words[2:], stand_in)
-        case ("morph", "cache-grids"):
+        case ("descriptor", "cache-grids"):
             _cache_grids(words[2:], stand_in)
-        case ("morph", "train-descriptor"):
+        case ("descriptor", "train"):
             _train_descriptor(words[2:], stand_in)
-        case ("morph", "embed"):
+        case ("descriptor", "embed"):
             _embed_cache(words[2:])
-        case ("morph", "fit"):
-            _fit(words[2:], stand_in)
-        case ("morph", "train-restorer"):
-            _train_restorer(words[2:], stand_in)
 
 
 # Each command below is imported only by the stand-in running it, so a scripted pass loads none of them.
@@ -159,10 +155,10 @@ def _evaluate(argv: list[str], stand_in: StandIn) -> None:
     samplecloud.evaluation.cli.main(argv, prog=f"{PROGRAM} cloud evaluate")
 
 
-def _morph_arguments(argv: list[str]) -> object:
-    from samplemorph.cli import parse_arguments
+def _descriptor_arguments(argv: list[str]) -> object:
+    from sampledescriptor.cli import parse_arguments
 
-    return parse_arguments(argv, prog=f"{PROGRAM} morph")
+    return parse_arguments(argv, prog=f"{PROGRAM} descriptor")
 
 
 def _content(argv: list[str], stand_in: StandIn) -> bytes:
@@ -181,16 +177,16 @@ def _content(argv: list[str], stand_in: StandIn) -> bytes:
 def _cache_grids(argv: list[str], stand_in: StandIn) -> None:
     from samplecore.storage.database import connect
     from samplecore.storage.sample_audio import readable_sample_hashes
-    from samplemorph.commands.cache_grids import COMMAND_NAME
-    from samplemorph.training.cache_staging import STAGING_SUFFIX
-    from samplemorph.training.descriptor_cache import (
+    from sampledescriptor.commands.cache_grids import COMMAND_NAME
+    from sampledescriptor.training.cache_staging import STAGING_SUFFIX
+    from sampledescriptor.training.descriptor.cache import (
         DESCRIPTION_FILE_NAME,
         GRIDS_FILE_NAME,
         HASHES_FILE_NAME,
         grid_cache_directory,
     )
 
-    arguments = _morph_arguments([COMMAND_NAME, *argv])
+    arguments = _descriptor_arguments([COMMAND_NAME, *argv])
     config = load_config_or_exit()
     with connect(config.database_url) as connection:
         hashes = sorted(readable_sample_hashes(connection))
@@ -207,30 +203,19 @@ def _cache_grids(argv: list[str], stand_in: StandIn) -> None:
 
 
 def _train_descriptor(argv: list[str], stand_in: StandIn) -> None:
-    from samplemorph.commands.train_descriptor import COMMAND_NAME
-    from samplemorph.model_paths import descriptor_path
-    from samplemorph.training.run_paths import RunFamily
+    from sampledescriptor.commands.train_descriptor import COMMAND_NAME
+    from sampledescriptor.model_paths import descriptor_path
+    from sampledescriptor.training.run.paths import RunFamily
 
-    arguments = _morph_arguments([COMMAND_NAME, *argv])
+    arguments = _descriptor_arguments([COMMAND_NAME, *argv])
     root = load_config_or_exit().library_root
     name = arguments.descriptor  # type: ignore[attr-defined]
     _train(arguments, argv, stand_in, family=RunFamily.DESCRIPTOR, name=name, model=descriptor_path(root, name=name))
 
 
-def _train_restorer(argv: list[str], stand_in: StandIn) -> None:
-    from samplemorph.commands.train_restorer import COMMAND_NAME
-    from samplemorph.model_paths import restorer_path
-    from samplemorph.training.run_paths import RunFamily
-
-    arguments = _morph_arguments([COMMAND_NAME, *argv])
-    root = load_config_or_exit().library_root
-    name = arguments.restorer  # type: ignore[attr-defined]
-    _train(arguments, argv, stand_in, family=RunFamily.RESTORER, name=name, model=restorer_path(root, name=name))
-
-
 def _train(arguments: object, argv: list[str], stand_in: StandIn, *, family: object, name: str, model: Path) -> None:
     """Leave what a training run leaves: the best model after every epoch, a resume point, and the finished record last."""
-    from samplemorph.training.run_paths import RunFinished, finished_record_path, resume_path
+    from sampledescriptor.training.run.paths import RunFinished, finished_record_path, resume_path
 
     root = load_config_or_exit().library_root
     resume = resume_path(root, family=family, name=name)  # type: ignore[arg-type]
@@ -267,11 +252,11 @@ def _embed_cache(argv: list[str]) -> None:
     from samplecore.storage.repositories.experiment import PostgresExperimentRepository
     from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
     from samplecore.storage.sample_audio import SampleAudio
-    from samplemorph.commands.embed import COMMAND_NAME
-    from samplemorph.model_paths import descriptor_path
-    from samplemorph.training.descriptor_cache import HASHES_FILE_NAME, grid_cache_directory
+    from sampledescriptor.commands.embed import COMMAND_NAME
+    from sampledescriptor.model_paths import descriptor_path
+    from sampledescriptor.training.descriptor.cache import HASHES_FILE_NAME, grid_cache_directory
 
-    arguments = _morph_arguments([COMMAND_NAME, *argv])
+    arguments = _descriptor_arguments([COMMAND_NAME, *argv])
     config = load_config_or_exit()
     descriptor = descriptor_path(config.library_root, name=arguments.descriptor)  # type: ignore[attr-defined]
     if not descriptor.is_file():
@@ -303,12 +288,3 @@ def _embed_cache(argv: list[str]) -> None:
                     for sample_hash in hashes
                 ]
             )
-
-
-def _fit(argv: list[str], stand_in: StandIn) -> None:
-    from samplemorph.commands.fit import COMMAND_NAME
-    from samplemorph.model_store import model_path
-
-    arguments = _morph_arguments([COMMAND_NAME, *argv])
-    root = load_config_or_exit().library_root
-    write_bytes_atomically(model_path(root, name=arguments.model), _content(argv, stand_in))  # type: ignore[attr-defined]

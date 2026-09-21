@@ -67,7 +67,7 @@ def get_morph_response(
     Raises:
         HTTPException: 404 when the store holds no object for an end, or an end's file is gone, holds
             another sample or lies outside every sample directory served; 409 when this process
-            serves a route that has no filter form; 422 when the pair reaches past the process's limits.
+            serves a route that glides; 422 when the pair reaches past the process's limits.
     """
     etag = renderer.pair_etag(pair)
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
@@ -98,7 +98,7 @@ def post_morph_response(
     sent. The pair is heard at the higher of the two rates the files state.
 
     Raises:
-        HTTPException: 409 when this process serves a route that has no filter form; 413 when an
+        HTTPException: 409 when this process serves a route that glides; 413 when an
             upload runs past the bytes one request may carry; 422 when an upload holds no audio this
             process decodes, or the pair reaches past the process's limits.
     """

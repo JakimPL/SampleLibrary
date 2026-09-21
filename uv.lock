@@ -316,15 +316,6 @@ wheels = [
 ]
 
 [[package]]
-name = "cdpam"
-version = "0.0.6"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/59/76/d4be81f695c7269e05a46c046f9af0c8eba920add735f1c50f9843545a29/cdpam-0.0.6.tar.gz", hash = "sha256:d1e8d9ba0cf49ecb226b8263e13cbabba9574997f9eefe0dce9683e57a7fe734", size = 98327546, upload-time = "2021-09-03T13:14:21.628Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/71/94/a1bb744131083b36f778864bb05338e6e4153e6cde5acf9a6767e50160f6/cdpam-0.0.6-py3-none-any.whl", hash = "sha256:abd860166a55ada94cb653997deed481b518e3a593e9b417a969f99522009eba", size = 98326874, upload-time = "2021-09-03T13:14:15.012Z" },
-]
-
-[[package]]
 name = "certifi"
 version = "2026.7.22"
 source = { registry = "https://pypi.org/simple" }
@@ -3544,19 +3535,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyloudnorm"
-version = "0.2.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-    { name = "scipy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/23/00/f915eaa75326f4209941179c2b93ac477f2040e4aeff5bb21d16eb8058f9/pyloudnorm-0.2.0.tar.gz", hash = "sha256:8bf597658ea4e1975c275adf490f6deb5369ea409f2901f939915efa4b681b16", size = 14037, upload-time = "2026-01-04T11:43:35.265Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/b6/65a49a05614b2548edbba3aab118f2ebe7441dfd778accdcdce9f6567f20/pyloudnorm-0.2.0-py3-none-any.whl", hash = "sha256:9bb69afb904f59d007a7f9ba3d75d16fb8aeef35c44d6df822a9f192d69cf13f", size = 10879, upload-time = "2026-01-04T11:43:34.534Z" },
-]
-
-[[package]]
 name = "pymdown-extensions"
 version = "11.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3970,19 +3948,6 @@ wheels = [
 ]
 
 [[package]]
-name = "resampy"
-version = "0.4.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numba" },
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/29/f1/34be702a69a5d272e844c98cee82351f880985cfbca0cc86378011078497/resampy-0.4.3.tar.gz", hash = "sha256:a0d1c28398f0e55994b739650afef4e3974115edbe96cd4bb81968425e916e47", size = 3080604, upload-time = "2024-03-05T20:36:08.119Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4d/b9/3b00ac340a1aab3389ebcc52c779914a44aadf7b0cb7a3bf053195735607/resampy-0.4.3-py3-none-any.whl", hash = "sha256:ad2ed64516b140a122d96704e32bc0f92b23f45419e8b8f478e5a05f83edcebd", size = 3076529, upload-time = "2024-03-05T20:36:02.439Z" },
-]
-
-[[package]]
 name = "rich"
 version = "15.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4042,26 +4007,22 @@ cloud = [
     { name = "scikit-learn" },
     { name = "umap-learn" },
 ]
-morph = [
-    { name = "fastapi" },
+descriptor = [
     { name = "librosa" },
     { name = "lightning" },
     { name = "mlflow" },
-    { name = "pghipy" },
-    { name = "pyloudnorm" },
-    { name = "python-multipart" },
-    { name = "pyyaml" },
     { name = "scikit-learn" },
     { name = "threadpoolctl" },
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform != 'darwin'" },
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
-    { name = "uvicorn" },
 ]
-perceptual = [
-    { name = "cdpam" },
-    { name = "resampy" },
-    { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform != 'darwin'" },
-    { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
+morph = [
+    { name = "fastapi" },
+    { name = "librosa" },
+    { name = "pghipy" },
+    { name = "python-multipart" },
+    { name = "pyyaml" },
+    { name = "uvicorn" },
 ]
 server = [
     { name = "fastapi" },
@@ -4093,41 +4054,38 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
+    { name = "threadpoolctl" },
     { name = "types-pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "cdpam", marker = "extra == 'perceptual'", specifier = ">=0.0.4" },
     { name = "fastapi", marker = "extra == 'morph'", specifier = ">=0.120" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.120" },
     { name = "httpx", marker = "extra == 'server'", specifier = ">=0.28" },
     { name = "librosa", marker = "extra == 'cloud'", specifier = ">=0.11" },
+    { name = "librosa", marker = "extra == 'descriptor'", specifier = ">=0.11" },
     { name = "librosa", marker = "extra == 'morph'", specifier = ">=0.11" },
-    { name = "lightning", marker = "extra == 'morph'", specifier = ">=2.5" },
+    { name = "lightning", marker = "extra == 'descriptor'", specifier = ">=2.5" },
     { name = "mlflow", marker = "extra == 'cloud'", specifier = ">=3.6" },
-    { name = "mlflow", marker = "extra == 'morph'", specifier = ">=3.6" },
+    { name = "mlflow", marker = "extra == 'descriptor'", specifier = ">=3.6" },
     { name = "mlflow", marker = "extra == 'tracking'", specifier = ">=3.6" },
     { name = "numpy", specifier = ">=2.1" },
     { name = "pghipy", marker = "extra == 'morph'", specifier = ">=0.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pyloudnorm", marker = "extra == 'morph'", specifier = ">=0.2" },
     { name = "python-multipart", marker = "extra == 'morph'", specifier = ">=0.0.20" },
     { name = "pytz", specifier = ">=2025.2" },
     { name = "pyyaml", marker = "extra == 'morph'", specifier = ">=6.0" },
-    { name = "resampy", marker = "extra == 'perceptual'", specifier = ">=0.4" },
     { name = "scikit-learn", marker = "extra == 'cloud'", specifier = ">=1.9" },
-    { name = "scikit-learn", marker = "extra == 'morph'", specifier = ">=1.9" },
+    { name = "scikit-learn", marker = "extra == 'descriptor'", specifier = ">=1.9" },
     { name = "scipy", specifier = ">=1.16" },
     { name = "soundfile", specifier = ">=0.14" },
     { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "threadpoolctl", marker = "extra == 'morph'", specifier = ">=3.6" },
-    { name = "torch", marker = "sys_platform == 'darwin' and extra == 'morph'", specifier = ">=2.9" },
-    { name = "torch", marker = "sys_platform == 'darwin' and extra == 'perceptual'", specifier = ">=2.9" },
+    { name = "threadpoolctl", marker = "extra == 'descriptor'", specifier = ">=3.6" },
+    { name = "torch", marker = "sys_platform == 'darwin' and extra == 'descriptor'", specifier = ">=2.9" },
     { name = "torch", marker = "sys_platform == 'darwin' and extra == 'teacher'", specifier = ">=2.9" },
-    { name = "torch", marker = "sys_platform != 'darwin' and extra == 'morph'", specifier = ">=2.9", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "torch", marker = "sys_platform != 'darwin' and extra == 'perceptual'", specifier = ">=2.9", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "torch", marker = "sys_platform != 'darwin' and extra == 'descriptor'", specifier = ">=2.9", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torch", marker = "sys_platform != 'darwin' and extra == 'teacher'", specifier = ">=2.9", index = "https://download.pytorch.org/whl/cu128" },
     { name = "tqdm", specifier = ">=4.67" },
     { name = "trackmod", editable = "trackmod" },
@@ -4136,7 +4094,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'morph'", specifier = ">=0.35" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.35" },
 ]
-provides-extras = ["server", "cloud", "morph", "tracking", "teacher", "perceptual"]
+provides-extras = ["server", "cloud", "morph", "descriptor", "tracking", "teacher"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -4154,6 +4112,7 @@ dev = [
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-cov", specifier = "==7.1.0" },
     { name = "pytest-xdist", specifier = "==3.8.0" },
+    { name = "threadpoolctl", specifier = ">=3.6" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260906" },
 ]
 

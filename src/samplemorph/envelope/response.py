@@ -13,8 +13,8 @@ from samplemorph.envelope.settings import EnvelopeSettings, Excitation, Timeline
 from samplemorph.envelope.split import envelope_cepstrum
 from samplemorph.geometry import LogFrequencyGeometry, fourier_bin_count
 from samplemorph.transport.analysis import TransportAnalysis, read_magnitude
-from samplemorph.transport.morph import FIRST_END_WEIGHT, SECOND_END_WEIGHT
 from samplemorph.transport.settings import TransportSettings
+from samplemorph.transport.spectrogram import FIRST_END_WEIGHT, SECOND_END_WEIGHT
 from samplemorph.transport.time_map import build_time_map
 
 COEFFICIENT_DTYPE: Final[np.dtype[np.float32]] = np.dtype(np.float32)

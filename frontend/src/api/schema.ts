@@ -888,20 +888,15 @@ export interface components {
         };
         /**
          * MorphServiceStatus
-         * @description What an inference process serves: the route it renders through, the device it runs on, and the fingerprint its renders are named by.
+         * @description What an inference process serves: the name of the route it renders through, and the fingerprint its renders are named by.
          *
-         *     `route` is the route's kind and `name` tells the routes of one kind apart; `description` says
-         *     everything the route reads, its settings or the stored model and the files it was loaded from,
-         *     the way a listening set's manifest does. The fingerprint follows the description, so a render's
-         *     cache identity changes with what renders it and with nothing else.
+         *     `name` tells the excitation, the timeline and the glide the route renders with apart, and
+         *     `description` says everything the route reads. The fingerprint follows the description, so a
+         *     render's cache identity changes with what renders it and with nothing else.
          */
         readonly MorphServiceStatus: {
-            /** Route */
-            readonly route: string;
             /** Name */
             readonly name: string;
-            /** Device */
-            readonly device: string;
             /** Fingerprint */
             readonly fingerprint: string;
             /** Weight Steps */

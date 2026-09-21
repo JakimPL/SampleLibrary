@@ -10,12 +10,12 @@ from samplemorph.envelope.settings import EnvelopeSettings, Excitation
 from samplemorph.envelope.split import SplitSpectrum, split_spectrum
 from samplemorph.geometry import LogFrequencyGeometry
 from samplemorph.transport.analysis import TransportAnalysis, read_magnitude
-from samplemorph.transport.morph import (
+from samplemorph.transport.settings import TransportSettings
+from samplemorph.transport.spectrogram import (
     FIRST_END_WEIGHT,
     SECOND_END_WEIGHT,
     TransportedSpectrogram,
 )
-from samplemorph.transport.settings import TransportSettings
 from samplemorph.transport.time_map import build_time_map
 
 

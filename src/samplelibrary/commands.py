@@ -117,6 +117,12 @@ def _morph(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _descriptor(argv: list[str], *, prog: str) -> None:
+    from sampledescriptor.cli import main
+
+    main(argv, prog=prog)
+
+
 def _serve(argv: list[str], *, prog: str) -> None:
     from sampleserver.cli import main
 
@@ -188,10 +194,11 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
         run=_pipeline,
     ),
     Command(
-        name="morph",
-        summary="Fit, train and render the decodable representation, and serve morphs over HTTP.",
-        run=_morph,
+        name="descriptor",
+        summary="Cache the sounds' grids, teach the learned descriptor, and describe every sample with it.",
+        run=_descriptor,
     ),
+    Command(name="morph", summary="Serve morphs between two samples over HTTP, and write morph filters.", run=_morph),
     Command(name="serve", summary="Serve the library's API, and the built frontend when named, over HTTP.", run=_serve),
     Command(name="schema", summary="Print the API's OpenAPI schema as JSON, or write it to a file.", run=_schema),
     CommandGroup(

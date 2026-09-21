@@ -10,12 +10,11 @@ import pytest
 from samplecloud.categories.cli import parse_arguments as parse_category_arguments
 from samplecloud.evaluation.cli import parse_arguments as parse_evaluation_arguments
 from samplecore.config import ConfigurationError
+from sampledescriptor.cli import parse_arguments as parse_descriptor_arguments
 from samplelibrary.pipeline.settings import OPERATIONAL_STEP_SETTINGS, StepSettings, read_pipeline_settings
 from samplelibrary.pipeline.steps.descriptor import DESCRIPTOR, EVALUATION, GRID_CACHE, MODULE_EVALUATION
 from samplelibrary.pipeline.steps.library import settings_model
 from samplelibrary.pipeline.steps.listening import CATEGORIES
-from samplelibrary.pipeline.steps.morph import MORPH_CODEC, RESTORER
-from samplemorph.cli import parse_arguments as parse_morph_arguments
 
 LIBRARY_TABLE = """
 [library]
@@ -26,12 +25,10 @@ database_url = "postgresql+psycopg://user:pass@localhost:5432/library"
 PROGRAM: Final[str] = "samplelibrary"
 UNASKED_COMMANDS: Final[dict[str, Callable[[], argparse.Namespace]]] = {
     CATEGORIES: lambda: parse_category_arguments(["--experiment-id", "1"], prog=PROGRAM),
-    GRID_CACHE: lambda: parse_morph_arguments(["cache-grids"], prog=PROGRAM),
-    DESCRIPTOR: lambda: parse_morph_arguments(["train-descriptor", "--teacher-experiment", "1"], prog=PROGRAM),
+    GRID_CACHE: lambda: parse_descriptor_arguments(["cache-grids"], prog=PROGRAM),
+    DESCRIPTOR: lambda: parse_descriptor_arguments(["train", "--teacher-experiment", "1"], prog=PROGRAM),
     EVALUATION: lambda: parse_evaluation_arguments(["--experiment-id", "1"], prog=PROGRAM),
     MODULE_EVALUATION: lambda: parse_evaluation_arguments(["--experiment-id", "1"], prog=PROGRAM),
-    MORPH_CODEC: lambda: parse_morph_arguments(["fit"], prog=PROGRAM),
-    RESTORER: lambda: parse_morph_arguments(["train-restorer"], prog=PROGRAM),
 }
 
 

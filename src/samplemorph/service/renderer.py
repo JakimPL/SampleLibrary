@@ -17,15 +17,13 @@ from samplecore.storage import audio_store
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.storage.sample_audio import SampleUnavailableError, read_sample_file, read_sample_file_frame_count
 from samplemorph.canonicalizers.common import prepare_mono
-from samplemorph.envelope.morph import EnvelopePath
 from samplemorph.envelope.payload import response_payload
 from samplemorph.envelope.response import ResponseReading, build_envelope_response
-from samplemorph.pipeline import common_rate
+from samplemorph.heard import common_rate
 from samplemorph.rendering import wav_bytes
-from samplemorph.routes.analysis import AnalysisRoute
-from samplemorph.routes.kinds import pair_through
+from samplemorph.routes.envelope import PreparedPair
 from samplemorph.routes.named import NamedRoute, select_route
-from samplemorph.routes.route import HeardMono, PreparedPair, hear_in_frame
+from samplemorph.routes.route import HeardMono, hear_in_frame
 from samplemorph.service.caches import LruCache
 from samplemorph.service.settings import ServiceSettings
 from samplemorph.service.uploads import UploadedSound, decode_upload
@@ -44,7 +42,7 @@ class RenderBoundsError(ValueError):
 
 
 class ResponseUnavailableError(ValueError):
-    """Raised when the route a process serves has no filter between two samples to hand over."""
+    """Raised when the selection a process serves glides, which no filter holds."""
 
 
 class MorphRenderer:
@@ -164,7 +162,7 @@ class MorphRenderer:
         done per pair rather than per point and the bytes are kept the way a render is.
 
         Raises:
-            ResponseUnavailableError: this process serves a route that has no filter form.
+            ResponseUnavailableError: this process serves a route that glides.
             FileNotFoundError: the store holds no object for an end read from the store.
             SampleUnavailableError: an end's file is gone, unreadable, holds another sample, or lies
                 outside every sample directory served.
@@ -186,7 +184,7 @@ class MorphRenderer:
         from memory.
 
         Raises:
-            ResponseUnavailableError: this process serves a route that has no filter form.
+            ResponseUnavailableError: this process serves a route that glides.
         """
         rate_hz = common_rate(first.rate_hz, second.rate_hz)
         return self._response_under(
@@ -222,9 +220,7 @@ class MorphRenderer:
     def status(self) -> MorphServiceStatus:
         """What this renderer serves, for a caller deciding whether and how to ask."""
         return MorphServiceStatus(
-            route=self._named.kind.value,
             name=self._named.name,
-            device=self._named.device,
             fingerprint=self._fingerprint,
             weight_steps=MORPH_WEIGHT_STEPS,
             description=self._named.description,
@@ -233,40 +229,22 @@ class MorphRenderer:
     def warm_up(self) -> None:
         """Render one synthetic tone against itself through the whole route, so the first request pays nothing extra.
 
-        The phase integrator's compilation, and on the latent route the band matrix's pseudo-inverse,
-        are paid on the first synthesis of a process; paying them here keeps them out of a
-        listener's first click.
+        The phase integrator's compilation is paid on the first synthesis of a process; paying it
+        here keeps it out of a listener's first click.
         """
         tone = HeardMono(mono=prepare_mono(_warm_up_tone()), rate_hz=NOMINAL_WAV_RATE)
-        pair_through(self._named.route, tone, tone).render(weight=WARM_UP_WEIGHT)
+        self._named.route.prepare_pair(tone, tone).render(weight=WARM_UP_WEIGHT)
 
-    def _analysis_route(self) -> AnalysisRoute:
-        """The route this process serves, as one rendering between two analyses.
-
-        Raises:
-            ResponseUnavailableError: this process serves a route of another kind.
-        """
-        match self._named.route:
-            case AnalysisRoute() as route:
-                return route
-            case _:
-                raise ResponseUnavailableError(
-                    f"this process serves the {self._named.name} route, and a filter is read between two analyses"
-                )
-
-    def _filtering_path(self) -> EnvelopePath:
-        """The envelope path this process serves, which is the one path a filter stands for.
+    def _refuse_gliding(self) -> None:
+        """Refuse a filter under a selection that glides, since a filter holds while the harmonics stand where they stood.
 
         Raises:
-            ResponseUnavailableError: this process serves a route that moves more than an envelope.
+            ResponseUnavailableError: this process serves a route that glides its excitation.
         """
-        match self._analysis_route().path:
-            case EnvelopePath() as path:
-                return path
-            case _:
-                raise ResponseUnavailableError(
-                    f"this process serves the {self._named.name} route, and a filter is the envelope route's form"
-                )
+        if self._named.route.reader is not None:
+            raise ResponseUnavailableError(
+                f"this process serves the {self._named.name} route, and a filter holds only where the harmonics stay put"
+            )
 
     def _response_under(
         self, key: ResponseKey, *, rate_hz: float, ends: Callable[[], tuple[HeardMono, HeardMono]]
@@ -277,9 +255,9 @@ class MorphRenderer:
         since reading them is the part of the work worth doing once.
 
         Raises:
-            ResponseUnavailableError: this process serves a route that has no filter form.
+            ResponseUnavailableError: this process serves a route that glides.
         """
-        path = self._filtering_path()
+        self._refuse_gliding()
         cached = self._cached_response(key)
         if cached is not None:
             return cached
@@ -289,13 +267,13 @@ class MorphRenderer:
             if cached is not None:
                 return cached
 
-            route = self._analysis_route()
+            route = self._named.route
             first, second = ends()
             reading = ResponseReading(
-                geometry=route.geometry, settings=route.settings, envelope_settings=path.envelope_settings
+                geometry=route.geometry, settings=route.settings, envelope_settings=route.path.envelope_settings
             )
             response = build_envelope_response(
-                route.prepare(first), route.prepare(second), rate_hz=rate_hz, reading=reading
+                route.analyze(first), route.analyze(second), rate_hz=rate_hz, reading=reading
             )
             written = response_payload(response)
             with self._cache_lock:
@@ -346,8 +324,7 @@ class MorphRenderer:
         if cached is not None:
             return cached
 
-        prepared = pair_through(
-            self._named.route,
+        prepared = self._named.route.prepare_pair(
             self._heard(pair.first, pair.first_file, rate_hz=float(pair.first_rate_hz), target_rate_hz=rate_hz),
             self._heard(pair.second, pair.second_file, rate_hz=float(pair.second_rate_hz), target_rate_hz=rate_hz),
         )
@@ -384,13 +361,8 @@ class MorphRenderer:
 
 
 def load_renderer(settings: ServiceSettings) -> MorphRenderer:
-    """Build the route the settings select and warm it, so the renderer answers at speed from its first request.
-
-    Raises:
-        FileNotFoundError: the latent route's model, or the restorer its vocoder reads, is stored under no such name.
-        ModelFileChanged: a model file was written while the latent route was loaded from it.
-    """
-    renderer = MorphRenderer(settings=settings, named=select_route(settings.library_root, settings.selection))
+    """Build the route the settings select and warm it, so the renderer answers at speed from its first request."""
+    renderer = MorphRenderer(settings=settings, named=select_route(settings.selection))
     renderer.warm_up()
     return renderer
 

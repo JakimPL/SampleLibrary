@@ -29,9 +29,7 @@ RENDERED = b"RIFF...rendered..."
 ETAG = '"0123456789abcdef"'
 CACHE_CONTROL = "private, max-age=3600"
 STATUS = {
-    "route": "envelope",
     "name": "envelope-first",
-    "device": "cpu",
     "fingerprint": "f" * 64,
     "weight_steps": 100,
     "description": {"envelope_settings": {"excitation": "first"}},

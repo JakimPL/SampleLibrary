@@ -8,17 +8,17 @@ from pydantic import Field
 from samplecore.models.experiment import ExperimentKey
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
-from samplelibrary.pipeline.artifacts import read_sidecar
-from samplelibrary.pipeline.context import PipelineContext
-from samplelibrary.pipeline.settings import StepSettings
-from samplelibrary.pipeline.steps.kinds import StepRefused
-from samplemorph.training.run_settings import (
+from sampledescriptor.training.run.settings import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_EPOCHS,
     DEFAULT_LEARNING_RATE,
     DEFAULT_PRECISION,
     DEFAULT_RANDOM_SEED,
 )
+from samplelibrary.pipeline.artifacts import read_sidecar
+from samplelibrary.pipeline.context import PipelineContext
+from samplelibrary.pipeline.settings import StepSettings
+from samplelibrary.pipeline.steps.kinds import StepRefused
 
 READABLE_SAMPLES: Final[str] = "readable samples"
 PARAMETERS: Final[str] = "parameters"

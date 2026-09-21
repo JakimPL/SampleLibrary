@@ -7,9 +7,7 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 
-from samplemorph.canonicalizers.linear_axis import onto_linear_axis
-from samplemorph.geometry import AnalysisWindow, Geometry, LogFrequencyGeometry, analysis_taper
-from samplemorph.images import AnalysisSpectrogram
+from samplemorph.geometry import LogFrequencyGeometry, analysis_taper
 from samplemorph.vocoders.levels import floor_level, peak_level
 
 PGHI_TOLERANCE: Final[float] = 1e-6
@@ -38,27 +36,6 @@ def _integrator() -> _PhaseIntegrator:
 
     integrator: _PhaseIntegrator = pghi
     return integrator
-
-
-def gaussian_log_frequency(geometry: Geometry) -> LogFrequencyGeometry:
-    """The geometry as the analysis phase gradient heap integration is derived for.
-
-    Raises:
-        ValueError: the geometry is not a log-frequency analysis under a Gaussian taper.
-    """
-    match geometry:
-        case LogFrequencyGeometry(analysis_window=AnalysisWindow.GAUSSIAN):
-            return geometry
-        case LogFrequencyGeometry():
-            raise ValueError(
-                "phase gradient heap integration reads a Gaussian analysis, and this spectrogram was "
-                f"analyzed under a {geometry.analysis_window.value} taper"
-            )
-        case _:
-            raise ValueError(
-                "phase gradient heap integration reads a log-frequency analysis, and this spectrogram "
-                f"is a {geometry.kind} one"
-            )
 
 
 def integrate_and_synthesize(
@@ -90,29 +67,3 @@ def integrate_and_synthesize(
         length=frame_count,
     )
     return waveform
-
-
-class PghiVocoder:
-    """Estimates the phase a magnitude carries from that magnitude's own gradients.
-
-    Under a Gaussian analysis the phase gradient of a signal is a closed form of its magnitude
-    gradient, so phase gradient heap integration (Prusa, Balazs and Sondergaard, 2017) integrates
-    the phase outward from the loudest bins in one pass, with nothing iterated and nothing learned.
-    Measured on the representation ladder it reads within the flutter of the true phase on a clean
-    Gaussian analysis, which is what retires a learned phase model for reconstruction. The geometry
-    names the analysis, so the vocoder reads the Gaussian's spread from it; the integration wants a
-    transform at least sixteen times its hop to read the gradients cleanly.
-    """
-
-    def synthesize(self, spectrogram: AnalysisSpectrogram) -> NDArray[np.float64]:
-        """Integrate a phase for the magnitude and return the frames it makes audible.
-
-        Raises:
-            ValueError: the spectrogram's geometry is not a log-frequency analysis under a Gaussian taper.
-        """
-        geometry = gaussian_log_frequency(spectrogram.geometry)
-        return integrate_and_synthesize(
-            onto_linear_axis(spectrogram.magnitude, geometry=geometry),
-            geometry=geometry,
-            frame_count=spectrogram.frame_count,
-        )

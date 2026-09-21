@@ -6,9 +6,6 @@
 # identity holds while the harmonics stand where they stood, which is why this file leaves the glide
 # out, where `morph.yaml` beside it glides what the renderer plays.
 
-# The route every morph takes: envelope, transport, blend, partials or latent.
-route: envelope
-
 # A response carries each end in turn and takes that end's own excitation and course through time
 # from the end itself, so what it reads here is how the envelope is drawn: by its first
 # `coefficient_count` cosines, down to `floor_db` under the sample's loudest bin. These are the
