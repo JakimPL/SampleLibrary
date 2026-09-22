@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from samplecore.models.morph import HeardMorphPoint
+from samplecore.models.morph import HeardMorphPoint, MorphPair
 from samplemorph.routes.envelope import PreparedPair
 from samplemorph.service.renderer import RenderBoundsError, load_renderer
 from samplemorph.service.settings import MAXIMUM_RENDER_FRAMES, RenderLimits, ServiceSettings
@@ -42,6 +42,20 @@ def test_the_fingerprint_follows_the_settings_the_route_renders_under(
 
     assert held.fingerprint == load_renderer(settings).fingerprint
     assert held.fingerprint != gliding.fingerprint
+
+
+def test_two_processes_rendering_different_morphs_name_one_filter(
+    settings: ServiceSettings, gliding_settings: ServiceSettings, library: StoredLibrary
+) -> None:
+    """A filter is read under a selection of its own, so what a process renders leaves its validator alone."""
+    pair = MorphPair(
+        first=library.hashes[0], second=library.hashes[1], first_rate_hz=FIRST_RATE_HZ, second_rate_hz=SECOND_RATE_HZ
+    )
+    held = load_renderer(settings)
+    gliding = load_renderer(gliding_settings)
+
+    assert held.pair_etag(pair) == gliding.pair_etag(pair)
+    assert held.response(pair) == gliding.response(pair)
 
 
 def test_a_validator_names_one_point_under_one_model_at_one_pair_of_rates(
@@ -107,7 +121,7 @@ def test_identical_points_asked_for_at_once_render_once(settings: ServiceSetting
         second_rate_hz=FIRST_RATE_HZ,
     )
     calls: list[int] = []
-    route = renderer._named.route  # pylint: disable=protected-access
+    route = renderer._rendered.route  # pylint: disable=protected-access
     preparing = route.prepare_pair
 
     def counted(*arguments: Any, **options: Any) -> Any:

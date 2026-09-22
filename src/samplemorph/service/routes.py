@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from samplecore.models.morph import HeardMorphPoint, MorphPair, MorphServiceStatus
 from samplecore.storage.sample_audio import SampleUnavailableError
 from samplemorph.service.dependencies import get_renderer
-from samplemorph.service.renderer import MorphRenderer, RenderBoundsError, ResponseUnavailableError
+from samplemorph.service.renderer import MorphRenderer, RenderBoundsError
 from samplemorph.service.settings import CACHE_CONTROL, RESPONSE_MEDIA_TYPE, WAV_MEDIA_TYPE
 from samplemorph.service.uploads import UploadTooLargeError, UploadUnreadableError
 
@@ -61,13 +61,13 @@ def get_morph_response(
     """The filter between two samples, which a caller applies at every weight between them.
 
     One answer serves a whole path, so a caller holding it moves its own weight without asking
-    again. The response names itself with a validator built from the loaded route and the pair, so a
-    caller that already holds the filter is answered with a bare 304.
+    again. The response names itself with a validator built from the route filters are read under and
+    the pair, so a caller that already holds the filter is answered with a bare 304.
 
     Raises:
         HTTPException: 404 when the store holds no object for an end, or an end's file is gone, holds
-            another sample or lies outside every sample directory served; 409 when this process
-            serves a route that glides; 422 when the pair reaches past the process's limits.
+            another sample or lies outside every sample directory served; 422 when the pair reaches
+            past the process's limits.
     """
     etag = renderer.pair_etag(pair)
     headers = {"ETag": etag, "Cache-Control": CACHE_CONTROL}
@@ -79,8 +79,6 @@ def get_morph_response(
         written = renderer.response(pair)
     except (FileNotFoundError, SampleUnavailableError) as error:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from error
-    except ResponseUnavailableError as error:
-        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(error)) from error
     except RenderBoundsError as error:
         raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(error)) from error
 
@@ -98,9 +96,8 @@ def post_morph_response(
     sent. The pair is heard at the higher of the two rates the files state.
 
     Raises:
-        HTTPException: 409 when this process serves a route that glides; 413 when an
-            upload runs past the bytes one request may carry; 422 when an upload holds no audio this
-            process decodes, or the pair reaches past the process's limits.
+        HTTPException: 413 when an upload runs past the bytes one request may carry; 422 when an
+            upload holds no audio this process decodes, or the pair reaches past the process's limits.
     """
     try:
         sounds = (renderer.uploaded_sound(first.file), renderer.uploaded_sound(second.file))
@@ -110,8 +107,6 @@ def post_morph_response(
         raise HTTPException(status_code=HTTPStatus.REQUEST_ENTITY_TOO_LARGE, detail=str(error)) from error
     except (UploadUnreadableError, RenderBoundsError) as error:
         raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=str(error)) from error
-    except ResponseUnavailableError as error:
-        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(error)) from error
 
     return Response(content=written, media_type=RESPONSE_MEDIA_TYPE)
 

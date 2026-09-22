@@ -10,7 +10,12 @@ from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import port_number
 from samplecore.config import LibraryConfig
 from samplecore.exit_status import ExitStatus
-from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, read_route_selection
+from samplemorph.routes.selection import (
+    DEFAULT_FILTER_SELECTION_PATH,
+    DEFAULT_SELECTION_PATH,
+    read_filter_selection,
+    read_route_selection,
+)
 from samplemorph.service.settings import ServiceSettings
 
 COMMAND_NAME: Final[str] = "serve"
@@ -30,13 +35,23 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         default=DEFAULT_SELECTION_PATH,
         help="The YAML file naming the settings every morph renders under.",
     )
+    parser.add_argument(
+        "--filter-selection",
+        type=Path,
+        default=DEFAULT_FILTER_SELECTION_PATH,
+        help="The YAML file naming the settings the filter this process hands over is read under.",
+    )
 
 
 def run(config: LibraryConfig, arguments: argparse.Namespace) -> None:
-    """Build the route the selection file names, then serve morphs over HTTP at the address the configuration names.
+    """Build the routes the two selection files name, then serve morphs over HTTP at the address the configuration names.
+
+    One process renders the morph its selection names and hands over the filter its filter selection
+    names, so the renderer plays a gliding morph while a plugin reads the filter beside it.
 
     Raises:
-        SystemExit: the selection file cannot be read, reported in one line before any address is bound.
+        SystemExit: either selection file cannot be read, or the filter selection glides, reported in
+            one line before any address is bound.
     """
     # The server is imported here, so parsing arguments stays clear of it.
     # pylint: disable=import-outside-toplevel
@@ -51,6 +66,7 @@ def run(config: LibraryConfig, arguments: argparse.Namespace) -> None:
             library_root=config.library_root,
             sample_directories=config.sample_directories,
             selection=read_route_selection(arguments.selection),
+            filter_selection=read_filter_selection(arguments.filter_selection),
         )
         renderer = load_renderer(settings)
     except ValueError as error:

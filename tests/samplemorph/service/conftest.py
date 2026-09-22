@@ -23,6 +23,7 @@ from samplemorph.service.settings import ServiceSettings
 from tests.samplemorph.conftest import harmonic_tone
 
 TONES = ((220.0, 4096), (330.0, 8192), (440.0, 6144))
+FILTER_COEFFICIENT_COUNT = 24
 FILE_TONE = (275.0, 5120)
 FILE_RATE_HZ = 44100
 
@@ -71,8 +72,12 @@ def library(tmp_path_factory: pytest.TempPathFactory) -> StoredLibrary:
 
 
 def _settings(library: StoredLibrary, *, selection: RouteSelection) -> ServiceSettings:
+    """One process, rendering what the selection names and handing over filters drawn by their own count of cosines."""
     return ServiceSettings(
-        library_root=library.root, sample_directories=(library.sample_directory,), selection=selection
+        library_root=library.root,
+        sample_directories=(library.sample_directory,),
+        selection=selection,
+        filter_selection=RouteSelection(envelope=EnvelopeSettings(coefficient_count=FILTER_COEFFICIENT_COUNT)),
     )
 
 
@@ -84,7 +89,7 @@ def settings(library: StoredLibrary) -> ServiceSettings:
 
 @pytest.fixture
 def gliding_settings(library: StoredLibrary) -> ServiceSettings:
-    """The envelope route crossfading both excitations and gliding their pitch, which has no filter form."""
+    """The envelope route crossfading both excitations and gliding their pitch, as the committed selection does."""
     return _settings(
         library,
         selection=RouteSelection(envelope=EnvelopeSettings(excitation=Excitation.BOTH), glide=Glide.SUBHARMONIC),

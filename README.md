@@ -70,7 +70,8 @@ The `[inference]` table holds one key, `url`: the address the morph renderer lis
 reaches it at, `http://127.0.0.1:8010` by default. It names a port of its own.
 
 `morph.yaml`, beside `config.toml`, is committed and names the morph the renderer plays, and
-`morph-filter.yaml` beside it names the one the morph filter is read under; see
+`morph-filter.yaml` beside it names the one the morph filter is read under. The renderer reads both,
+so one process plays the morph and hands over the filter; see
 [Morphing two samples](#morphing-two-samples).
 
 The optional `[pipeline]` table holds the settings `just rebuild` builds the library with:
@@ -246,11 +247,13 @@ uv run samplelibrary morph response --first <hash> --second <hash> \
   --selection morph-filter.yaml --output pair.bin
 ```
 
-`morph-filter.yaml` is that command's own settings file. A filter describes a path whose harmonics
-stay where they are, so it is read without the glide that `morph.yaml` plays.
+`morph-filter.yaml` is the settings file both that command and the renderer read a filter under. A
+filter describes a path whose harmonics stay where they are, so it holds every pitch where
+`morph.yaml` glides. A program asks the running renderer for the same filter instead, by sending it
+two audio files of its own, which is how the SampleMorpher plugin plays a morph of any two samples.
 
 `just serve-inference` starts the renderer on whatever `morph.yaml` names, and `--selection` points
-it at another file. The renderer needs the `morph` extra alone, so it runs on a machine without the
+it at another file, as `--filter-selection` does for the filter. The renderer needs the `morph` extra alone, so it runs on a machine without the
 training libraries.
 
 With the renderer running, the strip under the cloud holds the two ends of a morph, A and B, by

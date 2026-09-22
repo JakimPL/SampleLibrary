@@ -41,10 +41,6 @@ class RenderBoundsError(ValueError):
     """Raised when a point would render beyond what one process renders for a request."""
 
 
-class ResponseUnavailableError(ValueError):
-    """Raised when the selection a process serves glides, which no filter holds."""
-
-
 class MorphRenderer:
     """Renders any point between two stored samples through one route, remembering its work.
 
@@ -54,12 +50,18 @@ class MorphRenderer:
     caches are bounded by the bytes they hold. One lock serializes rendering, since a synthesis
     already spreads over every core and two at once would only contend; the caches have a lock of
     their own, so a render already made is served while another is being made.
+
+    Audio is rendered through the route the process serves and a filter is read under the route
+    filters are built from, so a process whose renders glide hands over the filter between a pair all
+    the same.
     """
 
-    def __init__(self, *, settings: ServiceSettings, named: NamedRoute) -> None:
+    def __init__(self, *, settings: ServiceSettings, rendered: NamedRoute, filtered: NamedRoute) -> None:
         self._settings = settings
-        self._named = named
-        self._fingerprint = named.fingerprint
+        self._rendered = rendered
+        self._filtered = filtered
+        self._fingerprint = rendered.fingerprint
+        self._filter_fingerprint = filtered.fingerprint
         self._pairs: LruCache[PairKey, PreparedPair] = LruCache(
             capacity=settings.limits.pair_cache_bytes, weigh=lambda pair: pair.nbytes
         )
@@ -162,7 +164,6 @@ class MorphRenderer:
         done per pair rather than per point and the bytes are kept the way a render is.
 
         Raises:
-            ResponseUnavailableError: this process serves a route that glides.
             FileNotFoundError: the store holds no object for an end read from the store.
             SampleUnavailableError: an end's file is gone, unreadable, holds another sample, or lies
                 outside every sample directory served.
@@ -182,9 +183,6 @@ class MorphRenderer:
 
         The sounds are named by what was sent, so a caller sending the same pair again is answered
         from memory.
-
-        Raises:
-            ResponseUnavailableError: this process serves a route that glides.
         """
         rate_hz = common_rate(first.rate_hz, second.rate_hz)
         return self._response_under(
@@ -197,9 +195,9 @@ class MorphRenderer:
         )
 
     def pair_etag(self, pair: MorphPair) -> str:
-        """A validator that names this pair's filter under the served route, for the caches between here and a caller."""
+        """A validator naming this pair's filter under the route it is read through, for the caches between here and a caller."""
         named = "|".join(
-            (self._fingerprint, pair.first, pair.second, str(pair.first_rate_hz), str(pair.second_rate_hz))
+            (self._filter_fingerprint, pair.first, pair.second, str(pair.first_rate_hz), str(pair.second_rate_hz))
         )
         return f'"{hashlib.sha256(named.encode()).hexdigest()[:ETAG_LENGTH]}"'
 
@@ -220,10 +218,10 @@ class MorphRenderer:
     def status(self) -> MorphServiceStatus:
         """What this renderer serves, for a caller deciding whether and how to ask."""
         return MorphServiceStatus(
-            name=self._named.name,
+            name=self._rendered.name,
             fingerprint=self._fingerprint,
             weight_steps=MORPH_WEIGHT_STEPS,
-            description=self._named.description,
+            description=self._rendered.description,
         )
 
     def warm_up(self) -> None:
@@ -233,18 +231,7 @@ class MorphRenderer:
         here keeps it out of a listener's first click.
         """
         tone = HeardMono(mono=prepare_mono(_warm_up_tone()), rate_hz=NOMINAL_WAV_RATE)
-        self._named.route.prepare_pair(tone, tone).render(weight=WARM_UP_WEIGHT)
-
-    def _refuse_gliding(self) -> None:
-        """Refuse a filter under a selection that glides, since a filter holds while the harmonics stand where they stood.
-
-        Raises:
-            ResponseUnavailableError: this process serves a route that glides its excitation.
-        """
-        if self._named.route.reader is not None:
-            raise ResponseUnavailableError(
-                f"this process serves the {self._named.name} route, and a filter holds only where the harmonics stay put"
-            )
+        self._rendered.route.prepare_pair(tone, tone).render(weight=WARM_UP_WEIGHT)
 
     def _response_under(
         self, key: ResponseKey, *, rate_hz: float, ends: Callable[[], tuple[HeardMono, HeardMono]]
@@ -253,11 +240,7 @@ class MorphRenderer:
 
         The ends are read only once the response is known to be missing, and under the render lock,
         since reading them is the part of the work worth doing once.
-
-        Raises:
-            ResponseUnavailableError: this process serves a route that glides.
         """
-        self._refuse_gliding()
         cached = self._cached_response(key)
         if cached is not None:
             return cached
@@ -267,7 +250,7 @@ class MorphRenderer:
             if cached is not None:
                 return cached
 
-            route = self._named.route
+            route = self._filtered.route
             first, second = ends()
             reading = ResponseReading(
                 geometry=route.geometry, settings=route.settings, envelope_settings=route.path.envelope_settings
@@ -324,7 +307,7 @@ class MorphRenderer:
         if cached is not None:
             return cached
 
-        prepared = self._named.route.prepare_pair(
+        prepared = self._rendered.route.prepare_pair(
             self._heard(pair.first, pair.first_file, rate_hz=float(pair.first_rate_hz), target_rate_hz=rate_hz),
             self._heard(pair.second, pair.second_file, rate_hz=float(pair.second_rate_hz), target_rate_hz=rate_hz),
         )
@@ -361,8 +344,10 @@ class MorphRenderer:
 
 
 def load_renderer(settings: ServiceSettings) -> MorphRenderer:
-    """Build the route the settings select and warm it, so the renderer answers at speed from its first request."""
-    renderer = MorphRenderer(settings=settings, named=select_route(settings.selection))
+    """Build the routes the settings select and warm the one that renders, so the renderer answers at speed from its first request."""
+    renderer = MorphRenderer(
+        settings=settings, rendered=select_route(settings.selection), filtered=select_route(settings.filter_selection)
+    )
     renderer.warm_up()
     return renderer
 
