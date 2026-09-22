@@ -20,15 +20,13 @@ describe("bindTouchGestures", () => {
     it("feeds a finger's presses, moves and lifts to the recognizer in the canvas's coordinates", () => {
         const { canvas, container } = mountCanvas();
         const recognizer = fakeRecognizer();
-        const pairsFrom = vi.fn(() => true);
-        bindTouchGestures(canvas, container, recognizer, { pairsFrom });
+        bindTouchGestures(canvas, container, recognizer);
 
         fireEvent.pointerDown(canvas, { pointerId: 7, pointerType: "touch", clientX: 30, clientY: 40 });
         fireEvent.pointerMove(canvas, { pointerId: 7, pointerType: "touch", clientX: 50, clientY: 40 });
         fireEvent.pointerUp(canvas, { pointerId: 7, pointerType: "touch", clientX: 50, clientY: 40 });
 
-        expect(recognizer.press).toHaveBeenCalledWith({ id: 7, x: 30, y: 40 }, true);
-        expect(pairsFrom).toHaveBeenCalledWith(30, 40);
+        expect(recognizer.press).toHaveBeenCalledWith({ id: 7, x: 30, y: 40 });
         expect(recognizer.move).toHaveBeenCalledWith({ id: 7, x: 50, y: 40 });
         expect(recognizer.release).toHaveBeenCalledWith(7);
     });
@@ -36,7 +34,7 @@ describe("bindTouchGestures", () => {
     it("leaves a mouse to the scatterplot's own handlers", () => {
         const { canvas, container } = mountCanvas();
         const recognizer = fakeRecognizer();
-        bindTouchGestures(canvas, container, recognizer, { pairsFrom: () => false });
+        bindTouchGestures(canvas, container, recognizer);
 
         const down = fireEvent.pointerDown(canvas, { pointerId: 1, pointerType: "mouse", clientX: 30, clientY: 40 });
         fireEvent.pointerUp(canvas, { pointerId: 1, pointerType: "mouse", clientX: 30, clientY: 40 });
@@ -49,7 +47,7 @@ describe("bindTouchGestures", () => {
     it("cancels the browser's own handling of a touch and stops the click a tap raises", () => {
         const { canvas, container } = mountCanvas();
         const recognizer = fakeRecognizer();
-        bindTouchGestures(canvas, container, recognizer, { pairsFrom: () => false });
+        bindTouchGestures(canvas, container, recognizer);
         const canvasClick = vi.fn();
         canvas.addEventListener("click", canvasClick);
 
@@ -65,7 +63,7 @@ describe("bindTouchGestures", () => {
 
     it("lets a click through again once a mouse pressed last", () => {
         const { canvas, container } = mountCanvas();
-        bindTouchGestures(canvas, container, fakeRecognizer(), { pairsFrom: () => false });
+        bindTouchGestures(canvas, container, fakeRecognizer());
         const canvasClick = vi.fn();
         canvas.addEventListener("click", canvasClick);
 
@@ -79,7 +77,7 @@ describe("bindTouchGestures", () => {
     it("cancels the recognizer when the pointer is canceled, and listens no more once unbound", () => {
         const { canvas, container } = mountCanvas();
         const recognizer = fakeRecognizer();
-        const binding = bindTouchGestures(canvas, container, recognizer, { pairsFrom: () => false });
+        const binding = bindTouchGestures(canvas, container, recognizer);
 
         fireEvent.pointerCancel(canvas, { pointerId: 2, pointerType: "touch" });
         expect(recognizer.cancel).toHaveBeenCalledTimes(1);

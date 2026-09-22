@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { NO_DECISIONS } from "../../api/curation";
@@ -9,10 +9,8 @@ import { defaultScopeFor } from "../../samples/AnnotationEditor";
 import { decisionsOf, useSampleAnnotation } from "../../samples/annotationStore";
 import { CategoryBadge } from "../../samples/CategoryBadge";
 import { FavoriteToggle } from "../../samples/FavoriteToggle";
-import { LabelSheet } from "../../samples/LabelSheet";
 import { MiniWaveform } from "../../samples/MiniWaveform";
 import { RatingStars } from "../../samples/RatingStars";
-import { SampleActions } from "../../samples/SampleActions";
 import { useAnnotationWriter } from "../../samples/useAnnotationWriter";
 import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
 import { useSampleDetail } from "../../samples/useSampleDetail";
@@ -24,10 +22,8 @@ import { UNNAMED_SAMPLE_LABEL } from "../../shared/labels";
 import { OptionalLabel } from "../../shared/OptionalLabel";
 import { type EntityRef, useSelectionStore } from "../../workspace/selectionStore";
 import { entityRoute } from "../../workspace/useEntityRowInteractions";
-import { usePhoneShellStore } from "./phoneShellStore";
 
 const SMALLEST_GROUP = 1;
-const LABEL_PLACEHOLDER = "Label…";
 
 interface EntityTrayProps {
     readonly hash: string;
@@ -50,9 +46,6 @@ function SampleTray({ hash }: EntityTrayProps): ReactElement {
     const preview = useSamplePreview(hash);
     const detail = useSampleDetail(hash);
     const sample = detail.status === "success" ? detail.data.sample : null;
-    const expanded = usePhoneShellStore((state) => state.trayExpanded);
-    const setExpanded = usePhoneShellStore((state) => state.setTrayExpanded);
-    const [labelOpen, setLabelOpen] = useState(false);
     const { play, pause, resume, playingKey, paused, source } = useAudioPreview();
     const decisions = useSampleAnnotation(hash, sample === null ? NO_DECISIONS : decisionsOf(sample)) ?? NO_DECISIONS;
     const { change, message } = useAnnotationWriter(hash, sample === null ? "sample" : defaultScopeFor(sample));
@@ -87,14 +80,7 @@ function SampleTray({ hash }: EntityTrayProps): ReactElement {
                         <span aria-hidden>▶</span>
                     )}
                 </button>
-                <button
-                    type="button"
-                    className="tray-identity"
-                    aria-expanded={expanded}
-                    onClick={() => {
-                        setExpanded(!expanded);
-                    }}
-                >
+                <div className="tray-identity">
                     <span className="tray-name">
                         {name === null ? (
                             <span className="mono">{shortHash(hash)}</span>
@@ -102,7 +88,7 @@ function SampleTray({ hash }: EntityTrayProps): ReactElement {
                             <OptionalLabel value={name} placeholder={UNNAMED_SAMPLE_LABEL} />
                         )}
                     </span>
-                    <span className="entity-hash mono">
+                    <span className="entity-hash tray-meta mono">
                         {shortHash(hash)}
                         {sample !== null && sample.equivalence_member_count > SMALLEST_GROUP && (
                             <span className="badge badge-equivalence">×{sample.equivalence_member_count}</span>
@@ -115,55 +101,32 @@ function SampleTray({ hash }: EntityTrayProps): ReactElement {
                             />
                         )}
                     </span>
-                </button>
+                </div>
                 {sample !== null && (
-                    <FavoriteToggle
-                        favorite={decisions.favorite}
-                        onFavoriteChange={(favorite) => {
-                            change({ favorite });
-                        }}
-                    />
+                    <>
+                        <RatingStars
+                            rating={decisions.rating}
+                            onRatingChange={(rating) => {
+                                change({ rating });
+                            }}
+                        />
+                        <FavoriteToggle
+                            favorite={decisions.favorite}
+                            onFavoriteChange={(favorite) => {
+                                change({ favorite });
+                            }}
+                        />
+                    </>
+                )}
+                {message !== null && (
+                    <span className="annotation-row-message" role="alert" title={message}>
+                        Not saved
+                    </span>
                 )}
                 <Link to={entityRoute({ kind: "sample", hash })} className="tray-open" aria-label="Open sample">
                     ›
                 </Link>
             </div>
-            {expanded && sample !== null && (
-                <div className="tray-expanded">
-                    <RatingStars
-                        rating={decisions.rating}
-                        onRatingChange={(rating) => {
-                            change({ rating });
-                        }}
-                    />
-                    <button
-                        type="button"
-                        className="tray-label"
-                        onClick={() => {
-                            setLabelOpen(true);
-                        }}
-                    >
-                        {decisions.label ?? LABEL_PLACEHOLDER}
-                    </button>
-                    <SampleActions sampleHash={hash} playbackRateHz={sample.playback_rate_hz} />
-                    {message !== null && (
-                        <span className="annotation-row-message" role="alert" title={message}>
-                            Not saved
-                        </span>
-                    )}
-                </div>
-            )}
-            {labelOpen && (
-                <LabelSheet
-                    label={decisions.label}
-                    onCommit={(label) => {
-                        change({ label });
-                    }}
-                    onClose={() => {
-                        setLabelOpen(false);
-                    }}
-                />
-            )}
         </div>
     );
 }
@@ -199,10 +162,11 @@ interface TrayProps {
 
 /**
  * The strip above the tabs naming the entity in hand, where the highlight a row or a cloud point
- * gets becomes something to act on: a sample plays, pauses and opens from here, its heart is one
- * tap, and opened out it offers the stars, the label sheet and either end of the morph pair; a
- * module names itself and opens. With nothing in hand the strip shows `idleHint`, or takes no room
- * at all: the cloud keeps its slot, so a tap that fills the tray leaves the points where they were.
+ * gets becomes something to act on, all on one row: a sample plays and pauses from its thumbnail,
+ * takes its stars and its heart, and opens from ›; a module names itself and opens. The label is
+ * written on the sample's page or from a held row. With nothing in hand the strip shows
+ * `idleHint`, or takes no room at all: the cloud keeps its slot, so a tap that fills the tray
+ * leaves the points where they were.
  */
 export function Tray({ idleHint }: TrayProps): ReactElement | null {
     const entity = useEntityInHand();

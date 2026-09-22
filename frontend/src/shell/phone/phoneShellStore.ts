@@ -7,28 +7,21 @@ interface PhoneShellState {
     readonly lastTabPath: string;
     /** Whether a tab has been shown in this visit, which is when the history holds one to go back to. */
     readonly hasShownTab: boolean;
-    /** Whether the tray shows its stars, label and morph actions beneath the sample in hand. */
-    readonly trayExpanded: boolean;
 }
 
 interface PhoneShellActions {
     readonly rememberTab: (path: string) => void;
-    readonly setTrayExpanded: (expanded: boolean) => void;
 }
 
 export const INITIAL_PHONE_SHELL_STATE: PhoneShellState = {
     lastTabPath: HOME_TAB_PATH,
     hasShownTab: false,
-    trayExpanded: false,
 };
 
-/** What the phone shell keeps between addresses: where its tabs were, and how the tray stands. */
+/** What the phone shell keeps between addresses: where its tabs were. */
 export const usePhoneShellStore = create<PhoneShellState & PhoneShellActions>((set) => ({
     ...INITIAL_PHONE_SHELL_STATE,
     rememberTab: (path) => {
         set({ lastTabPath: path, hasShownTab: true });
-    },
-    setTrayExpanded: (expanded) => {
-        set({ trayExpanded: expanded });
     },
 }));

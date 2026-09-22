@@ -8,11 +8,6 @@ export interface TouchBinding {
     readonly lastPointerType: () => string | null;
 }
 
-export interface TouchBindingCallbacks {
-    /** Whether a drag from this press builds a pair rather than panning, judged where the finger landed. */
-    readonly pairsFrom: (x: number, y: number) => boolean;
-}
-
 /**
  * Routes every pointer that is not a mouse through the recognizer, in the canvas's own coordinates.
  * Canceling the touch start and the pointer down keeps the browser's compatibility mouse events
@@ -23,7 +18,6 @@ export function bindTouchGestures(
     canvas: HTMLCanvasElement,
     container: HTMLElement,
     recognizer: TouchGestureRecognizer,
-    callbacks: TouchBindingCallbacks,
 ): TouchBinding {
     let lastPointerType: string | null = null;
 
@@ -39,8 +33,7 @@ export function bindTouchGestures(
         }
         event.preventDefault();
         canvas.setPointerCapture(event.pointerId);
-        const point = pointOf(event);
-        recognizer.press(point, callbacks.pairsFrom(point.x, point.y));
+        recognizer.press(pointOf(event));
     }
 
     function handlePointerMove(event: PointerEvent): void {

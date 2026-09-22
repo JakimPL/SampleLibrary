@@ -191,6 +191,5 @@ describe("PageBody", () => {
         renderHeaderAt(["/samples/b"], { kind: "sample", sampleHash: "b" }, true);
 
         expect(await screen.findByRole("button", { name: "▶" })).toBeInTheDocument();
-        expect(await screen.findByRole("group", { name: "Sample actions" })).toBeInTheDocument();
     });
 });

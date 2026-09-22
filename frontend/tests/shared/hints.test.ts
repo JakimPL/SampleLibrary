@@ -7,8 +7,8 @@ const HINT_IDS: readonly HintId[] = [
     "noModule",
     "noWaveform",
     "cloudIdle",
-    "morphSlotEmpty",
-    "morphSlotOther",
+    "morphSlotIdle",
+    "morphSlotSelected",
 ];
 
 describe("hintFor", () => {

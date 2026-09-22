@@ -97,8 +97,6 @@ interface RenderOverrides {
     readonly onJoin?: (first: EntityRef, second: EntityRef) => void;
     readonly onActivate?: (entity: EntityRef) => void;
     readonly onContextMenu?: (entity: EntityRef, position: readonly [number, number]) => void;
-    readonly pairing?: boolean;
-    readonly onPairTap?: (entity: EntityRef) => void;
     readonly command?: CloudCommand | null;
     readonly link?: CloudLink | null;
     readonly anchor?: string | null;
@@ -133,8 +131,6 @@ function viewProps(overrides: RenderOverrides = {}): Parameters<typeof CloudView
         onJoin: overrides.onJoin ?? vi.fn(),
         onActivate: overrides.onActivate ?? vi.fn(),
         onContextMenu: overrides.onContextMenu ?? vi.fn(),
-        pairing: overrides.pairing ?? false,
-        onPairTap: overrides.onPairTap ?? vi.fn(),
         command: overrides.command ?? null,
         link: overrides.link ?? null,
         onWeightChange: vi.fn(),
@@ -157,8 +153,6 @@ async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnT
             onJoin={overrides.onJoin ?? vi.fn()}
             onActivate={overrides.onActivate ?? vi.fn()}
             onContextMenu={overrides.onContextMenu ?? vi.fn()}
-            pairing={overrides.pairing ?? false}
-            onPairTap={overrides.onPairTap ?? vi.fn()}
             command={overrides.command ?? null}
             link={overrides.link ?? null}
             onWeightChange={vi.fn()}
@@ -230,8 +224,6 @@ describe("CloudView", () => {
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
-                pairing={false}
-                onPairTap={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
@@ -349,8 +341,6 @@ describe("CloudView", () => {
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
-                pairing={false}
-                onPairTap={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
@@ -384,8 +374,6 @@ describe("CloudView", () => {
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
-                pairing={false}
-                onPairTap={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
@@ -431,8 +419,6 @@ describe("CloudView", () => {
                     onJoin={vi.fn()}
                     onActivate={vi.fn()}
                     onContextMenu={vi.fn()}
-                    pairing={false}
-                    onPairTap={vi.fn()}
                     command={null}
                     link={null}
                     onWeightChange={vi.fn()}
@@ -513,8 +499,6 @@ describe("CloudView", () => {
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
-                pairing={false}
-                onPairTap={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
@@ -547,8 +531,6 @@ describe("CloudView", () => {
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
-                pairing={false}
-                onPairTap={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
@@ -1174,31 +1156,6 @@ describe("CloudView touch", () => {
         fingerUp(5, 595);
 
         expect(onContextMenu).toHaveBeenCalledWith(SAMPLE_REF, [10, 20]);
-    });
-
-    it("names a tapped point as an end of the pair while pairing, highlighting nothing", async () => {
-        const onPairTap = vi.fn();
-        const onSelect = vi.fn();
-        await renderCloudView({ points: TWO_POINTS, pairing: true, onPairTap, onSelect });
-
-        tap(5, 595);
-
-        expect(onPairTap).toHaveBeenCalledWith(SAMPLE_REF);
-        expect(onSelect).not.toHaveBeenCalled();
-    });
-
-    it("joins the point a finger drags from to the one it lifts over while pairing, showing the band between", async () => {
-        const onJoin = vi.fn();
-        const { container } = await renderCloudView({ points: TWO_POINTS, pairing: true, onJoin });
-
-        fingerDown(5, 595);
-        fingerMove(300, 300);
-        expect(container.querySelector(".morph-band-line")).toBeInTheDocument();
-        fingerMove(595, 5);
-        fingerUp(595, 5);
-
-        expect(onJoin).toHaveBeenCalledWith(SAMPLE_REF, MODULE_REF);
-        expect(container.querySelector(".morph-band-line")).not.toBeInTheDocument();
     });
 
     it("leaves a mouse press to the scatterplot", async () => {

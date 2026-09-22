@@ -19,16 +19,12 @@ export interface TouchGestureListener {
     readonly onPan: (dxPx: number, dyPx: number) => void;
     /** A spread or squeeze by `factor` about the fingers' midpoint, which itself drifted by `dxPx`, `dyPx`. */
     readonly onPinch: (factor: number, centerX: number, centerY: number, dxPx: number, dyPx: number) => void;
-    readonly onPairDrag: (x: number, y: number) => void;
-    readonly onPairRelease: (x: number, y: number) => void;
-    readonly onCancel: () => void;
 }
 
-export type TouchGestureState = "idle" | "pressing" | "panning" | "pinching" | "held" | "pairing";
+export type TouchGestureState = "idle" | "pressing" | "panning" | "pinching" | "held";
 
 export interface TouchGestureRecognizer {
-    /** A finger landing; `pairs` says a drag from here builds a pair rather than panning the view. */
-    readonly press: (point: TouchPoint, pairs: boolean) => void;
+    readonly press: (point: TouchPoint) => void;
     readonly move: (point: TouchPoint) => void;
     readonly release: (id: number) => void;
     readonly cancel: () => void;
@@ -37,7 +33,6 @@ export interface TouchGestureRecognizer {
 
 interface Press {
     readonly origin: TouchPoint;
-    readonly pairs: boolean;
     readonly callOffHold: () => void;
 }
 
@@ -62,10 +57,10 @@ function midpointOf(first: TouchPoint, second: TouchPoint): readonly [number, nu
  * handed in, so every path can be walked in a test.
  *
  * One finger that lifts within the slop is a tap; one that rests for the hold time is a long press,
- * after which nothing else happens until it lifts; one that moves past the slop pans, or drags a
- * pair when its press said so. A second finger turns a press or a pan into a pinch, reported as a
- * factor about the fingers' midpoint together with the midpoint's own drift; when one of them
- * lifts, the other goes on panning. A cancel drops everything.
+ * after which nothing else happens until it lifts; one that moves past the slop pans. A second
+ * finger turns a press or a pan into a pinch, reported as a factor about the fingers' midpoint
+ * together with the midpoint's own drift; when one of them lifts, the other goes on panning. A
+ * cancel drops everything.
  */
 export function createTouchGestureRecognizer(
     thresholds: TouchGestureThresholds,
@@ -122,14 +117,9 @@ export function createTouchGestureRecognizer(
         if (press === null || Math.hypot(point.x - press.origin.x, point.y - press.origin.y) <= thresholds.tapSlopPx) {
             return;
         }
-        const { origin, pairs } = press;
+        const { origin } = press;
         press.callOffHold();
         press = null;
-        if (pairs) {
-            state = "pairing";
-            listener.onPairDrag(point.x, point.y);
-            return;
-        }
         state = "panning";
         last = point;
         listener.onPan(point.x - origin.x, point.y - origin.y);
@@ -144,7 +134,7 @@ export function createTouchGestureRecognizer(
     }
 
     return {
-        press(point, pairs): void {
+        press(point): void {
             fingers.set(point.id, point);
             if (state === "idle") {
                 const callOffHold = timer(() => {
@@ -155,7 +145,7 @@ export function createTouchGestureRecognizer(
                         listener.onLongPress(origin.x, origin.y);
                     }
                 }, thresholds.holdMs);
-                press = { origin: point, pairs, callOffHold };
+                press = { origin: point, callOffHold };
                 state = "pressing";
                 return;
             }
@@ -178,9 +168,6 @@ export function createTouchGestureRecognizer(
                 case "pinching":
                     continuePinch();
                     break;
-                case "pairing":
-                    listener.onPairDrag(point.x, point.y);
-                    break;
                 case "held":
                 case "idle":
                     break;
@@ -199,10 +186,6 @@ export function createTouchGestureRecognizer(
                     listener.onTap(origin.x, origin.y);
                     break;
                 }
-                case "pairing":
-                    reset();
-                    listener.onPairRelease(point.x, point.y);
-                    break;
                 case "pinching": {
                     const remaining = [...fingers.values()][0];
                     if (remaining === undefined) {
@@ -224,11 +207,7 @@ export function createTouchGestureRecognizer(
             }
         },
         cancel(): void {
-            const wasActive = state !== "idle";
             reset();
-            if (wasActive) {
-                listener.onCancel();
-            }
         },
         state: () => state,
     };

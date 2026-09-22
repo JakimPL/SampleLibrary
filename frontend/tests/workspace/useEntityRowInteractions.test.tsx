@@ -67,6 +67,39 @@ describe("useEntityRowInteractions", () => {
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "abc" });
     });
 
+    it("a plain click on a sample gives it to the selected end of the morph, which stays selected", () => {
+        useMorphStore.getState().toggleSelectedEnd("second");
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
+
+        act(() => {
+            result.current.onClick(fakeMouseEvent().event);
+        });
+
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: "abc", selectedEnd: "second" });
+        expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "abc" });
+    });
+
+    it("a plain click leaves the pair alone while no end is selected", () => {
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
+
+        act(() => {
+            result.current.onClick(fakeMouseEvent().event);
+        });
+
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
+    });
+
+    it("a plain click on a module fills nothing, even with an end selected", () => {
+        useMorphStore.getState().toggleSelectedEnd("first");
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
+
+        act(() => {
+            result.current.onClick(fakeMouseEvent().event);
+        });
+
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null, selectedEnd: "first" });
+    });
+
     it("a modified click is left alone, neither highlighting nor preventing the default navigation", () => {
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
         const { event, preventDefault } = fakeMouseEvent({ ctrlKey: true });

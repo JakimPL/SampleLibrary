@@ -200,9 +200,6 @@ interface CloudViewProps {
     readonly onActivate: (entity: EntityRef) => void;
     /** A point a finger held, with its screen position, for a caller's menu. */
     readonly onContextMenu: (entity: EntityRef, position: ScreenPosition) => void;
-    /** Whether a tap names an end of the morph pair, through `onPairTap`, in place of highlighting. */
-    readonly pairing: boolean;
-    readonly onPairTap: (entity: EntityRef) => void;
     readonly command: CloudCommand | null;
     readonly link: CloudLink | null;
     readonly onWeightChange: (weight: number) => void;
@@ -419,10 +416,8 @@ function selectHighlighted(
  * mouse: a tap selects and activates the point under it within a finger's reach, synchronously,
  * so a caller's playback starts inside the gesture the browser allows sound from; a tap on empty
  * space clears; a held finger reports its point through `onContextMenu`; one finger pans and two
- * pinch, each move driving the camera and asking for the frame that shows it. In pair mode a tap
- * names an end of the pair through `onPairTap`, and a finger dragged from one point to another
- * joins them through the same rule a right-drag follows. A `command` centers the view on a point
- * or steps the zoom, once per sequence number.
+ * pinch, each move driving the camera and asking for the frame that shows it. A `command` centers
+ * the view on a point, frames a pair or steps the zoom, once per sequence number.
  *
  * The selected and the hovered point each carry a marker in the theme's point shape. Every overlay
  * -- the markers, the ping, the band and the link -- follows the library's `drawing` event, which
@@ -461,8 +456,6 @@ export function CloudView({
     onJoin,
     onActivate,
     onContextMenu,
-    pairing,
-    onPairTap,
     command,
     link,
     onWeightChange,
@@ -494,11 +487,7 @@ export function CloudView({
     const onJoinRef = useRef(onJoin);
     const onActivateRef = useRef(onActivate);
     const onContextMenuRef = useRef(onContextMenu);
-    const onPairTapRef = useRef(onPairTap);
-    const pairingRef = useRef(pairing);
     onContextMenuRef.current = onContextMenu;
-    onPairTapRef.current = onPairTap;
-    pairingRef.current = pairing;
     onSelectRef.current = onSelect;
     onFocusRef.current = onFocus;
     onClearRef.current = onClear;
@@ -876,38 +865,12 @@ export function CloudView({
             pairFrom(origin, hoveredIndexRef.current);
         }
 
-        function dropTouchBand(): void {
-            dragOriginRef.current = null;
-            cursorRef.current = null;
-            hoveredIndexRef.current = null;
-            repinBand();
-            repinMarkers();
-        }
-
-        function pairsFrom(x: number, y: number): boolean {
-            if (!pairingRef.current) {
-                return false;
-            }
-            const index = hitAt(x, y);
-            if (index === null) {
-                return false;
-            }
-            dragOriginRef.current = { index, pressedOnPoint: true };
-            cursorRef.current = [x, y];
-            return true;
-        }
-
         function handleTap(x: number, y: number): void {
-            dragOriginRef.current = null;
             const index = hitAt(x, y);
             const entity = index === null ? undefined : pointsRef.current[index]?.ref;
             if (index === null || entity === undefined) {
                 scatterplot.deselect({ preventEvent: true });
                 onClearRef.current();
-                return;
-            }
-            if (pairingRef.current) {
-                onPairTapRef.current(entity);
                 return;
             }
             scatterplot.select([index], { preventEvent: true });
@@ -943,21 +906,6 @@ export function CloudView({
             });
         }
 
-        function handlePairDrag(x: number, y: number): void {
-            cursorRef.current = [x, y];
-            hoveredIndexRef.current = hitAt(x, y);
-            repinBand();
-        }
-
-        function handlePairRelease(x: number, y: number): void {
-            const origin = dragOriginRef.current;
-            const targetIndex = hitAt(x, y);
-            dropTouchBand();
-            if (origin !== null) {
-                pairFrom(origin, targetIndex);
-            }
-        }
-
         const recognizer = createTouchGestureRecognizer(
             { tapSlopPx: TAP_SLOP_PX, holdMs: LONG_PRESS_HOLD_MS, pinchMinimumDistancePx: PINCH_MINIMUM_DISTANCE_PX },
             windowTimer,
@@ -966,12 +914,9 @@ export function CloudView({
                 onLongPress: handleLongPress,
                 onPan: handlePan,
                 onPinch: handlePinch,
-                onPairDrag: handlePairDrag,
-                onPairRelease: handlePairRelease,
-                onCancel: dropTouchBand,
             },
         );
-        const touchBinding = bindTouchGestures(canvas, container, recognizer, { pairsFrom });
+        const touchBinding = bindTouchGestures(canvas, container, recognizer);
 
         function handleContextMenu(event: MouseEvent): void {
             event.preventDefault();

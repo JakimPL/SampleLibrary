@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 
 import type { AnnotationChanges, AnnotationDecisions } from "../api/curation";
 import type { SampleSummary } from "../api/samples";
-import { useMorphStore } from "../morph/morphStore";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { ActionSheet, type SheetAction } from "../shared/overlay/ActionSheet";
 import { entityRoute } from "../workspace/useEntityRowInteractions";
@@ -22,16 +21,12 @@ interface RowActionSheetProps {
 
 /**
  * Everything a held sample row offers a finger: the stars and the heart at a tap's size, then
- * play, open, either end of the morph pair, the label, and the hash for the clipboard. It stands
- * in for the inline editors and the modifier clicks a row answers to under a pointer.
+ * play, open, the label, and the hash for the clipboard. It stands in for the inline editors a
+ * row answers to under a pointer.
  */
 export function RowActionSheet({ sample, decisions, onChange, onClose }: RowActionSheetProps): ReactElement {
     const [editingLabel, setEditingLabel] = useState(false);
     const navigate = useNavigate();
-    const first = useMorphStore((state) => state.first);
-    const second = useMorphStore((state) => state.second);
-    const setFirst = useMorphStore((state) => state.setFirst);
-    const setSecond = useMorphStore((state) => state.setSecond);
     const { play } = useAudioPreview();
     const title = sample.display_name.trim() === "" ? UNNAMED_SAMPLE_LABEL : sample.display_name;
 
@@ -62,22 +57,6 @@ export function RowActionSheet({ sample, decisions, onChange, onClose }: RowActi
             disabled: false,
             run: () => {
                 void navigate(entityRoute({ kind: "sample", hash: sample.hash }));
-            },
-        },
-        {
-            id: "morph-from",
-            label: first === sample.hash ? "This is A" : "Morph from here",
-            disabled: first === sample.hash,
-            run: () => {
-                setFirst(sample.hash);
-            },
-        },
-        {
-            id: "morph-to",
-            label: second === sample.hash ? "This is B" : "Morph to here",
-            disabled: second === sample.hash,
-            run: () => {
-                setSecond(sample.hash);
             },
         },
         {

@@ -1,7 +1,6 @@
 import type { ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useMorphStore } from "../../morph/morphStore";
 import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
 import { shortHash } from "../../shared/format";
 import { ActionSheet, type SheetAction } from "../../shared/overlay/ActionSheet";
@@ -17,15 +16,11 @@ interface CloudPointMenuProps {
 }
 
 /**
- * What a finger held on a point can do with it: play and pair a sample, open either kind, and
- * bring the point to the middle of the view.
+ * What a finger held on a point can do with it: play a sample, open either kind, and bring the
+ * point to the middle of the view.
  */
 export function CloudPointMenu({ entity, playbackRateHz, onLocate, onClose }: CloudPointMenuProps): ReactElement {
     const navigate = useNavigate();
-    const first = useMorphStore((state) => state.first);
-    const second = useMorphStore((state) => state.second);
-    const setFirst = useMorphStore((state) => state.setFirst);
-    const setSecond = useMorphStore((state) => state.setSecond);
     const { play } = useAudioPreview();
 
     const sampleActions: readonly SheetAction[] =
@@ -37,22 +32,6 @@ export function CloudPointMenu({ entity, playbackRateHz, onLocate, onClose }: Cl
                       disabled: false,
                       run: () => {
                           play(samplePreview(entity.hash, playbackRateHz));
-                      },
-                  },
-                  {
-                      id: "morph-from",
-                      label: first === entity.hash ? "This is A" : "Morph from here",
-                      disabled: first === entity.hash,
-                      run: () => {
-                          setFirst(entity.hash);
-                      },
-                  },
-                  {
-                      id: "morph-to",
-                      label: second === entity.hash ? "This is B" : "Morph to here",
-                      disabled: second === entity.hash,
-                      run: () => {
-                          setSecond(entity.hash);
                       },
                   },
               ]

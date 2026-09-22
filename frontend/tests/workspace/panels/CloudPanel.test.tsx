@@ -129,11 +129,18 @@ vi.mock("../../../src/api/modules", async () => {
 });
 
 const RIGHT_BUTTON = 2;
+/** Room for the legend's two requests to land while the whole suite runs at once. */
+const LEGEND_WAIT_MS = 4000;
 
 /** What every test starts from: a renderer that answers, and a catalog that names any sample the strip offers. */
 beforeEach(() => {
     getMorphStatus.mockResolvedValue({ available: true, service: null });
     getSamplePreview.mockResolvedValue({ display_name: "", category: null, hand_label: null, thumbnail: null });
+    getSample.mockImplementation((hash: string) =>
+        Promise.resolve({ hash, display_name: "", playback_rate_hz: 8363, duration_seconds: 0.5 }),
+    );
+    getSampleRelations.mockResolvedValue([]);
+    getSimilarSamples.mockResolvedValue([]);
 });
 
 function latestInstance(): (typeof instances)[number] {
@@ -304,7 +311,10 @@ describe("CloudPanel", () => {
         renderPanel();
 
         expect(screen.getByRole("button", { name: "Category" })).toHaveAttribute("aria-pressed", "true");
-        expect(await screen.findByRole("button", { name: /BASS DRUM/ })).toHaveAttribute("aria-pressed", "true");
+        expect(await screen.findByRole("button", { name: /BASS DRUM/ }, { timeout: LEGEND_WAIT_MS })).toHaveAttribute(
+            "aria-pressed",
+            "true",
+        );
         await waitFor(() => {
             expect(latestInstance().draw).toHaveBeenCalledWith([[expect.any(Number), expect.any(Number), 1]], {
                 zDataType: "categorical",
@@ -528,21 +538,31 @@ describe("CloudPanel on touch", () => {
         fireEvent.pointerUp(latestCanvas(), { ...FINGER, clientX: x, clientY: y });
     }
 
-    it("pairs two tapped samples in Pair mode, then leaves the mode", async () => {
+    it("gives every tapped point to the selected end, playing each, until the end is tapped again", async () => {
         await renderedPanel();
 
-        fireEvent.click(screen.getByRole("button", { name: "Pair" }));
-        expect(screen.getByRole("status")).toHaveTextContent("Pair: tap the first sample");
-
+        fireEvent.click(screen.getByRole("button", { name: /^A: / }));
         tap(5, 595);
-        expect(screen.getByRole("status")).toHaveTextContent("Now tap the second");
-        expect(useSelectionStore.getState().highlighted).toBeNull();
-
+        expect(useMorphStore.getState()).toMatchObject({ first: FIRST_HASH, second: null, selectedEnd: "first" });
         tap(595, 5);
+        expect(useMorphStore.getState()).toMatchObject({ first: SECOND_HASH, second: null, selectedEnd: "first" });
+        expect(play).toHaveBeenCalledTimes(2);
 
-        expect(useMorphStore.getState()).toMatchObject({ first: FIRST_HASH, second: SECOND_HASH });
-        expect(screen.getByRole("button", { name: "Pair" })).toHaveAttribute("aria-pressed", "false");
-        expect(screen.queryByText(/tap the first sample|Now tap the second/)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", { name: /^A: / }));
+        expect(useMorphStore.getState().selectedEnd).toBeNull();
+        tap(5, 595);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: SECOND_HASH, second: null });
+    });
+
+    it("lets the selection go once the Modules tab takes the strip away", async () => {
+        await renderedPanel();
+        fireEvent.click(screen.getByRole("button", { name: /^B: / }));
+        expect(useMorphStore.getState().selectedEnd).toBe("second");
+
+        fireEvent.click(screen.getByRole("button", { name: "Modules" }));
+
+        expect(useMorphStore.getState().selectedEnd).toBeNull();
     });
 
     it("shows a tap card for the point in hand under touch, playing it as the tap lands", async () => {
@@ -555,7 +575,6 @@ describe("CloudPanel on touch", () => {
         await waitFor(() => {
             expect(screen.getByRole("region", { name: "Tapped point" })).toHaveTextContent("kick");
         });
-        expect(screen.getByRole("group", { name: "Sample actions" })).toBeInTheDocument();
         expect(play).toHaveBeenCalledWith(expect.objectContaining({ key: FIRST_HASH, playbackRateHz: 8363 }));
     });
 

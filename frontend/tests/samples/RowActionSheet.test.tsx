@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import type * as CurationApi from "../../src/api/curation";
 import type { SampleSummary } from "../../src/api/samples";
-import { useMorphStore } from "../../src/morph/morphStore";
 import { RowActionSheet } from "../../src/samples/RowActionSheet";
 
 const { getLabelVocabulary } = vi.hoisted(() => ({ getLabelVocabulary: vi.fn().mockResolvedValue([]) }));
@@ -69,16 +68,6 @@ describe("RowActionSheet", () => {
         fireEvent.click(screen.getByRole("button", { name: "Open" }));
 
         expect(await screen.findByText("sample route")).toBeInTheDocument();
-    });
-
-    it("makes the sample either end of the morph pair", () => {
-        const onClose = vi.fn();
-        renderSheet(vi.fn(), onClose);
-
-        fireEvent.click(screen.getByRole("button", { name: "Morph from here" }));
-
-        expect(useMorphStore.getState().first).toBe("abc123");
-        expect(onClose).toHaveBeenCalled();
     });
 
     it("turns into the label sheet on Label", () => {

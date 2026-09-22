@@ -146,6 +146,13 @@ describe("the render on screen", () => {
                 useMorphStore.getState().clear();
             },
         },
+        {
+            name: "the selected end takes a sample",
+            change: () => {
+                useMorphStore.getState().toggleSelectedEnd("second");
+                useMorphStore.getState().takeSample(C);
+            },
+        },
     ];
 
     it.each(PAIR_CHANGES)("drops the render once $name", ({ change }: PairChange) => {
@@ -155,5 +162,69 @@ describe("the render on screen", () => {
         change();
 
         expect(useMorphStore.getState().renderedWeight).toBeNull();
+    });
+});
+
+describe("the selected end", () => {
+    it("selects an end, moves to the other, and lets go on a second toggle", () => {
+        useMorphStore.getState().toggleSelectedEnd("first");
+        expect(useMorphStore.getState().selectedEnd).toBe("first");
+
+        useMorphStore.getState().toggleSelectedEnd("second");
+        expect(useMorphStore.getState().selectedEnd).toBe("second");
+
+        useMorphStore.getState().toggleSelectedEnd("second");
+        expect(useMorphStore.getState().selectedEnd).toBeNull();
+    });
+
+    it("gives the selected end every sample taken, and stays selected", () => {
+        useMorphStore.getState().toggleSelectedEnd("first");
+
+        useMorphStore.getState().takeSample(A);
+        useMorphStore.getState().takeSample(B);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: B, second: null, selectedEnd: "first" });
+    });
+
+    it("takes nothing while no end is selected", () => {
+        useMorphStore.getState().join(A, B);
+
+        useMorphStore.getState().takeSample(C);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: A, second: B, selectedEnd: null });
+    });
+
+    it("leaves the pair and its render alone when the selected end takes its own sample", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().markRendered();
+        useMorphStore.getState().toggleSelectedEnd("first");
+
+        useMorphStore.getState().takeSample(A);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: A, second: B, renderedWeight: DEFAULT_WEIGHT });
+    });
+
+    it("trades the ends, with the weight mirrored, when the selected end takes the other end's sample", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().setWeight(0.25);
+        useMorphStore.getState().toggleSelectedEnd("first");
+
+        useMorphStore.getState().takeSample(B);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: B, second: A, weight: 0.75, selectedEnd: "first" });
+    });
+
+    it("keeps the selected letter through a swap and through letting an end go, and drops it with the pair", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().toggleSelectedEnd("second");
+
+        useMorphStore.getState().swap();
+        expect(useMorphStore.getState().selectedEnd).toBe("second");
+
+        useMorphStore.getState().clearEnd("second");
+        expect(useMorphStore.getState()).toMatchObject({ first: B, second: null, selectedEnd: "second" });
+
+        useMorphStore.getState().clear();
+        expect(useMorphStore.getState().selectedEnd).toBeNull();
     });
 });

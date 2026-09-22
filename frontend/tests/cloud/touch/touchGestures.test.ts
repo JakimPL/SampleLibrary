@@ -29,9 +29,6 @@ function harness(): Harness {
         onLongPress: vi.fn(),
         onPan: vi.fn(),
         onPinch: vi.fn(),
-        onPairDrag: vi.fn(),
-        onPairRelease: vi.fn(),
-        onCancel: vi.fn(),
     };
     return {
         recognizer: createTouchGestureRecognizer(THRESHOLDS, timer, listener),
@@ -46,7 +43,7 @@ describe("createTouchGestureRecognizer", () => {
     it("reads a finger that lifts within the slop as a tap at the point pressed", () => {
         const { recognizer, listener } = harness();
 
-        recognizer.press({ id: 1, x: 100, y: 100 }, false);
+        recognizer.press({ id: 1, x: 100, y: 100 });
         recognizer.move({ id: 1, x: 104, y: 103 });
         recognizer.release(1);
 
@@ -58,7 +55,7 @@ describe("createTouchGestureRecognizer", () => {
     it("reads a finger that rests for the hold time as a long press, and nothing more until it lifts", () => {
         const { recognizer, listener, elapseHold } = harness();
 
-        recognizer.press({ id: 1, x: 40, y: 50 }, false);
+        recognizer.press({ id: 1, x: 40, y: 50 });
         elapseHold();
         recognizer.move({ id: 1, x: 90, y: 50 });
         recognizer.release(1);
@@ -72,7 +69,7 @@ describe("createTouchGestureRecognizer", () => {
     it("pans once a finger moves past the slop, by each move's distance", () => {
         const { recognizer, listener, elapseHold } = harness();
 
-        recognizer.press({ id: 1, x: 100, y: 100 }, false);
+        recognizer.press({ id: 1, x: 100, y: 100 });
         recognizer.move({ id: 1, x: 130, y: 100 });
         recognizer.move({ id: 1, x: 140, y: 120 });
         elapseHold();
@@ -87,8 +84,8 @@ describe("createTouchGestureRecognizer", () => {
     it("pinches with two fingers, by the spread's factor about their drifting midpoint", () => {
         const { recognizer, listener } = harness();
 
-        recognizer.press({ id: 1, x: 200, y: 300 }, false);
-        recognizer.press({ id: 2, x: 300, y: 300 }, false);
+        recognizer.press({ id: 1, x: 200, y: 300 });
+        recognizer.press({ id: 2, x: 300, y: 300 });
         expect(recognizer.state()).toBe("pinching");
         recognizer.move({ id: 2, x: 400, y: 320 });
 
@@ -103,8 +100,8 @@ describe("createTouchGestureRecognizer", () => {
 
     it("goes on panning with the finger left once the other lifts", () => {
         const { recognizer, listener } = harness();
-        recognizer.press({ id: 1, x: 200, y: 300 }, false);
-        recognizer.press({ id: 2, x: 300, y: 300 }, false);
+        recognizer.press({ id: 1, x: 200, y: 300 });
+        recognizer.press({ id: 2, x: 300, y: 300 });
 
         recognizer.release(2);
         recognizer.move({ id: 1, x: 210, y: 305 });
@@ -115,38 +112,13 @@ describe("createTouchGestureRecognizer", () => {
         expect(recognizer.state()).toBe("idle");
     });
 
-    it("drags a pair from a press that said so, and releases it where the finger lifts", () => {
-        const { recognizer, listener } = harness();
-
-        recognizer.press({ id: 1, x: 10, y: 10 }, true);
-        recognizer.move({ id: 1, x: 60, y: 80 });
-        recognizer.move({ id: 1, x: 70, y: 90 });
-        recognizer.release(1);
-
-        expect(listener.onPairDrag).toHaveBeenCalledWith(60, 80);
-        expect(listener.onPairDrag).toHaveBeenLastCalledWith(70, 90);
-        expect(listener.onPairRelease).toHaveBeenCalledWith(70, 90);
-        expect(listener.onPan).not.toHaveBeenCalled();
-    });
-
-    it("still reads a pairing press that stays put as a tap", () => {
-        const { recognizer, listener } = harness();
-
-        recognizer.press({ id: 1, x: 10, y: 10 }, true);
-        recognizer.release(1);
-
-        expect(listener.onTap).toHaveBeenCalledWith(10, 10);
-        expect(listener.onPairRelease).not.toHaveBeenCalled();
-    });
-
-    it("drops everything on a cancel and says so", () => {
+    it("drops everything on a cancel", () => {
         const { recognizer, listener, elapseHold } = harness();
-        recognizer.press({ id: 1, x: 10, y: 10 }, false);
+        recognizer.press({ id: 1, x: 10, y: 10 });
 
         recognizer.cancel();
         elapseHold();
 
-        expect(listener.onCancel).toHaveBeenCalledTimes(1);
         expect(listener.onLongPress).not.toHaveBeenCalled();
         expect(recognizer.state()).toBe("idle");
     });

@@ -18,7 +18,7 @@ const TOUCH_GUIDE: readonly GuideSection[] = [
         title: "Lists",
         entries: [
             { gesture: "Tap a row", meaning: "takes the sample in hand and plays it" },
-            { gesture: "Hold a row", meaning: "opens its stars, heart, label and morph actions" },
+            { gesture: "Hold a row", meaning: "opens its stars, heart and label" },
             { gesture: "Tap ›", meaning: "opens the sample or module as a page" },
             { gesture: "Tap the heart", meaning: "keeps the sample close" },
         ],
@@ -27,7 +27,7 @@ const TOUCH_GUIDE: readonly GuideSection[] = [
         title: "The tray",
         entries: [
             { gesture: "Tap the waveform", meaning: "plays or pauses the sample in hand" },
-            { gesture: "Tap the name", meaning: "opens out the stars, the label and the morph actions" },
+            { gesture: "Tap a star or the heart", meaning: "rates the sample in hand, or keeps it close" },
         ],
     },
     {
@@ -45,9 +45,13 @@ const TOUCH_GUIDE: readonly GuideSection[] = [
             { gesture: "Drag", meaning: "moves the cloud" },
             { gesture: "Pinch", meaning: "zooms about the fingers" },
             { gesture: "Hold a point", meaning: "opens its actions" },
-            { gesture: "Pair, then two taps", meaning: "chooses the two ends of a morph" },
-            { gesture: "A or B under the cloud", meaning: "makes the sample in hand that end of the morph" },
-            { gesture: "⌃ under the cloud", meaning: "opens the morph's slider and waveform" },
+            {
+                gesture: "A or B under the cloud",
+                meaning: "plays that end and selects it: every sample tapped next becomes it, until it is tapped again",
+            },
+            { gesture: "× beside A or B", meaning: "lets that end go" },
+            { gesture: "⇄", meaning: "swaps the ends and mirrors the weight" },
+            { gesture: "The waveform button", meaning: "hides and shows the morph's slider and waveform" },
             { gesture: "⌖", meaning: "centers the cloud on the point in hand" },
         ],
     },
@@ -79,8 +83,14 @@ const POINTER_GUIDE: readonly GuideSection[] = [
             { gesture: "Drag, scroll", meaning: "move and zoom the cloud" },
             { gesture: "Right-click a point", meaning: "joins it to the sample in hand as a morph pair" },
             { gesture: "Right-drag between two points", meaning: "makes them a morph pair" },
-            { gesture: "A or B under the cloud", meaning: "makes the sample in hand that end of the morph" },
-            { gesture: "⌃ under the cloud", meaning: "opens the morph's slider and waveform" },
+            {
+                gesture: "A or B under the cloud",
+                meaning:
+                    "plays that end and selects it: every sample clicked next becomes it, until it is clicked again",
+            },
+            { gesture: "× beside A or B", meaning: "lets that end go" },
+            { gesture: "⇄", meaning: "swaps the ends and mirrors the weight" },
+            { gesture: "The waveform button", meaning: "hides and shows the morph's slider and waveform" },
             { gesture: "Escape", meaning: "lets go of the point in hand" },
         ],
     },

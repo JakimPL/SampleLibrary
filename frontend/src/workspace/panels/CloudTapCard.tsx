@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 
 import { ModuleGlance } from "../../modules/ModuleGlance";
 import { useModule } from "../../modules/useModule";
-import { SampleActions } from "../../samples/SampleActions";
 import { SampleGlance } from "../../samples/SampleGlance";
 import { useSamplePreview } from "../../samples/useSamplePreview";
 import type { EntityRef } from "../selectionStore";
@@ -11,8 +10,6 @@ import { entityRoute } from "../useEntityRowInteractions";
 
 interface CloudTapCardProps {
     readonly entity: EntityRef;
-    /** The rate the sample plays at, or `null` for a module or a sample of unknown rate. */
-    readonly playbackRateHz: number | null;
 }
 
 function SampleGlanceOf({ hash }: { readonly hash: string }): ReactElement | null {
@@ -27,10 +24,10 @@ function ModuleGlanceOf({ hash }: { readonly hash: string }): ReactElement | nul
 
 /**
  * What a finger sees of the point it tapped, in place of the tooltip a mouse hovers: the entity at
- * a glance with the way to open it, and beneath them a sample's actions. It rests along the bottom
- * edge of the cloud, clear of the point itself.
+ * a glance with the way to open it. It rests along the bottom edge of the cloud, clear of the
+ * point itself.
  */
-export function CloudTapCard({ entity, playbackRateHz }: CloudTapCardProps): ReactElement {
+export function CloudTapCard({ entity }: CloudTapCardProps): ReactElement {
     return (
         <div className="cloud-tap-card" role="region" aria-label="Tapped point">
             <div className="cloud-tap-card-row">
@@ -43,7 +40,6 @@ export function CloudTapCard({ entity, playbackRateHz }: CloudTapCardProps): Rea
                     ›
                 </Link>
             </div>
-            {entity.kind === "sample" && <SampleActions sampleHash={entity.hash} playbackRateHz={playbackRateHz} />}
         </div>
     );
 }

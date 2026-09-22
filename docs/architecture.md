@@ -805,7 +805,8 @@ tabs in the same frame, with the shell's header carrying its name. The tabs repl
 a page pushes one, so the back button always leaves a page for the tab it came from; a visit that
 began on a page returns to the tab last remembered in `phoneShellStore`. The tray above the tabs is
 the rendering of the highlight: it names whatever is in hand, the highlighted entity or the focused
-sample, and offers play, the heart, the stars, the label sheet and the morph ends for it. Each
+sample, and offers play, the stars, the heart and the way to open it on one row, the label being
+written on the page or from a held row. Each
 listing publishes the order of the rows it shows to `frontend/src/workspace/listingOrderStore.ts`,
 which a page's ‹ and › and the workspace's Alt+arrows step through, replacing the address each time.
 
@@ -835,8 +836,7 @@ pans and two pinch through `cameraControl.ts`, which drives `scatterplot.get("ca
 a pan is a translation in the camera's normalized space, half the surface's height being one
 unit, and a pinch a scale about the fingers' midpoint; every move ends in `redraw()`, and the
 frame that follows publishes `drawing`, so the layers sync as they do for the mouse. A held finger
-reports its point for a menu, and in the panel's pair mode two taps name the two ends, or a drag
-from one point to another joins them by the rule a right-drag follows.
+reports its point for a menu.
 
 Every layer moves within the frame that draws the points. The scatterplot publishes its `drawing`
 event synchronously inside the animation frame rendering a moved view, and `CloudView` answers it,
@@ -889,8 +889,8 @@ OpenMPT theme as well, so the OpenMPT block declares every token the dark block 
 ## Morphs in the application
 
 A morph is a pair of samples and a weight between them, held in `frontend/src/morph/morphStore.ts`
-apart from the shell's focus and highlight: the pairing gestures alone fill it, so it stays where it
-was put while a person goes on browsing. The cloud fills the pair with the right
+apart from the shell's focus and highlight: the slots under the cloud and the pairing gestures fill
+it, so it stays where it was put while a person goes on browsing. The cloud fills the pair with the right
 mouse button, which regl-scatterplot leaves alone (it pans and selects on the left button only), so
 the browser's menu is the one thing `CloudView` keeps off the canvas: a right-drag from one point to
 another joins the two, and a right-click on a point joins it to the sample in hand. A Shift-click on
@@ -902,10 +902,14 @@ the press landed on empty space, to the cursor, snapping to the point under it
 the join then draws a line between the two ends' markers with a knob on it that is the weight
 (`frontend/src/cloud/MorphLink.tsx`), moving with the points through pan and zoom like every overlay
 on the cloud. The strip along the bottom of the Cloud panel (`frontend/src/morph/MorphStrip.tsx`)
-shows the same pair as two slots that name their ends with the link every listing row carries (a
-click highlights the end, a double-click opens it in the Sample Detail) or offer the sample in hand
-for an empty end, and opens out into a slider mirroring the knob's weight, the distance between the
-ends and the render drawn over both ends' traces. Every point is heard through
+shows the same pair as two slots, A and B. Tapping a slot selects it (`selectedEnd` in the store):
+a chosen end plays and is taken in hand, and the selected end takes every sample tapped next
+through `takeSample`, called from the two places a tap takes a sample in hand, the plain click of
+`frontend/src/workspace/useEntityRowInteractions.ts` and `CloudPanel.handleSelect`, until the
+slot is tapped again; a sample already at the other end trades places. Once both ends are chosen
+the strip opens by itself into a slider mirroring the knob's weight, the distance between the ends
+on a desktop, and the render drawn over both ends' traces, with a waveform button to hide and show
+them. Every point is heard through
 `frontend/src/morph/useMorphPlayback.ts`, which plays the render through the one preview element
 every sample plays through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is
 keyed by its own render's address) and records the weight in `morphStore`, so the waveform draws

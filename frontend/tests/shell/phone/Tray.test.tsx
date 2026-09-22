@@ -6,9 +6,7 @@ import type * as CloudApi from "../../../src/api/cloud";
 import type * as CurationApi from "../../../src/api/curation";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as SamplesApi from "../../../src/api/samples";
-import { useMorphStore } from "../../../src/morph/morphStore";
 import { useAudioPreview } from "../../../src/samples/useAudioPreview";
-import { usePhoneShellStore } from "../../../src/shell/phone/phoneShellStore";
 import { Tray, useEntityInHand } from "../../../src/shell/phone/Tray";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
@@ -187,23 +185,17 @@ describe("Tray", () => {
         });
     });
 
-    it("opens out to the stars, the label sheet and the morph pair", async () => {
+    it("rates the sample from its one row, with no label or morph buttons about", async () => {
         useSelectionStore.getState().highlightEntity({ kind: "sample", hash: SAMPLE_HASH });
         await trayWithDetail();
 
-        fireEvent.click(screen.getByRole("button", { name: /kick/, expanded: false }));
-        expect(usePhoneShellStore.getState().trayExpanded).toBe(true);
-
         fireEvent.click(screen.getByRole("button", { name: "Rate 4" }));
+
         await waitFor(() => {
             expect(changeSampleAnnotation).toHaveBeenCalledWith(SAMPLE_HASH, "equivalence_class", { rating: 4 });
         });
-
-        fireEvent.click(screen.getByRole("button", { name: "Morph from here" }));
-        expect(useMorphStore.getState().first).toBe(SAMPLE_HASH);
-
-        fireEvent.click(screen.getByRole("button", { name: "Label…" }));
-        expect(screen.getByRole("dialog", { name: "Label" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Label…" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /Morph/ })).not.toBeInTheDocument();
     });
 
     it("names the module in hand and offers the way to open it", async () => {

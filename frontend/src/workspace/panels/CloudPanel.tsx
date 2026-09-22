@@ -23,13 +23,11 @@ import { useContainerWidth } from "../../layout/useContainerWidth";
 import { useLayoutMode } from "../../layout/useLayoutMode";
 import { useMorphStore } from "../../morph/morphStore";
 import { MorphStrip } from "../../morph/MorphStrip";
-import { useEndpoint } from "../../morph/useEndpoint";
 import { useMorphPlayback } from "../../morph/useMorphPlayback";
 import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
 import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
-import { shortHash } from "../../shared/format";
 import { Icon } from "../../shared/icons/Icon";
 import { Loading } from "../../shared/Loading";
 import { type EntityRef, morphAnchorOf, useSelectionStore } from "../selectionStore";
@@ -57,40 +55,9 @@ const MODULE_TAB_CAPTION = "Preliminary layout — real positions await a spectr
 /** Below this panel width the legend leaves its row for a sheet. */
 const LEGEND_SHEET_WIDTH_PX = 480;
 const ZOOM_STEP_FACTOR = 1.5;
-const FIRST_END_PROMPT = "Pair: tap the first sample";
 
 interface HeldPoint {
     readonly entity: EntityRef;
-}
-
-interface PairBannerProps {
-    readonly first: EntityRef | null;
-    readonly onCancel: () => void;
-}
-
-function FirstEndName({ hash }: { readonly hash: string }): ReactElement {
-    const { name } = useEndpoint(hash);
-    return <>{name === "" ? shortHash(hash) : name}</>;
-}
-
-/** What pair mode asks for next, and the way out of it. */
-function PairBanner({ first, onCancel }: PairBannerProps): ReactElement {
-    return (
-        <div className="cloud-pair-banner" role="status">
-            <span className="cloud-pair-banner-text">
-                {first === null ? (
-                    FIRST_END_PROMPT
-                ) : (
-                    <>
-                        A: <FirstEndName hash={first.hash} />. Now tap the second
-                    </>
-                )}
-            </span>
-            <button type="button" className="cloud-pair-cancel" onClick={onCancel}>
-                Cancel
-            </button>
-        </div>
-    );
 }
 
 function samplePoints(coordinates: readonly CloudPoint[]): readonly CloudEntityPoint[] {
@@ -199,16 +166,13 @@ function useSampleColoring(mode: ColoringMode): {
  * The cloud with its controls: the tab and the coloring, the legend as a row or as a sheet when
  * the panel is narrow, and the tools that move the view. Under touch a tapped point shows a card
  * in place of the hover tooltip, except on a phone, where the tray names it; a held point opens
- * its menu. Pair mode makes two taps the pairing gesture, one for each end, and the strip along
- * the bottom names the pair, offers the sample in hand for either end, and opens out into the
- * morph's slider and waveform.
+ * its menu. The strip along the bottom holds the morph's two ends: a selected end takes every
+ * tapped point, and the slider and the waveform open under the row once the pair is whole.
  */
 export function CloudPanel(): ReactElement {
     const [tab, setTab] = useState<CloudTab>("samples");
     const [mode, setMode] = useState<ColoringMode>("category");
     const [hovered, setHovered] = useState<HoveredPoint | null>(null);
-    const [pairing, setPairing] = useState(false);
-    const [pairFirst, setPairFirst] = useState<EntityRef | null>(null);
     const [held, setHeld] = useState<HeldPoint | null>(null);
     const [legendOpen, setLegendOpen] = useState(false);
     const [command, setCommand] = useState<CloudCommand | null>(null);
@@ -227,6 +191,7 @@ export function CloudPanel(): ReactElement {
     const morphSecond = useMorphStore((morph) => morph.second);
     const weight = useMorphStore((morph) => morph.weight);
     const join = useMorphStore((morph) => morph.join);
+    const takeSample = useMorphStore((morph) => morph.takeSample);
     const setWeight = useMorphStore((morph) => morph.setWeight);
     const { play } = useAudioPreview();
     const playback = useMorphPlayback();
@@ -262,23 +227,6 @@ export function CloudPanel(): ReactElement {
         setCommand((current) => ({ sequence: (current?.sequence ?? 0) + 1, action }));
     }
 
-    function leavePairMode(): void {
-        setPairing(false);
-        setPairFirst(null);
-    }
-
-    function handlePairTap(entity: EntityRef): void {
-        if (entity.kind !== "sample") {
-            return;
-        }
-        if (pairFirst === null) {
-            setPairFirst(entity);
-            return;
-        }
-        join(pairFirst.hash, entity.hash);
-        leavePairMode();
-    }
-
     function handleContextMenu(entity: EntityRef): void {
         setHeld({ entity });
     }
@@ -289,6 +237,9 @@ export function CloudPanel(): ReactElement {
 
     function handleSelect(entity: EntityRef): void {
         highlightEntity(entity);
+        if (entity.kind === "sample") {
+            takeSample(entity.hash);
+        }
     }
 
     function handleActivate(entity: EntityRef): void {
@@ -342,19 +293,6 @@ export function CloudPanel(): ReactElement {
                 </button>
                 {tab === "samples" && (
                     <>
-                        <button
-                            type="button"
-                            aria-pressed={pairing}
-                            onClick={() => {
-                                if (pairing) {
-                                    leavePairMode();
-                                } else {
-                                    setPairing(true);
-                                }
-                            }}
-                        >
-                            Pair
-                        </button>
                         <span className="panel-filter-separator" aria-hidden />
                         <span className="panel-filter-caption">Color by</span>
                         <button
@@ -393,7 +331,6 @@ export function CloudPanel(): ReactElement {
             {tab === "samples" && !legendAsSheet && (
                 <TagLegend tags={tags} painted={painted} onToggle={togglePainted} emptyCaption={EMPTY_CAPTIONS[mode]} />
             )}
-            {tab === "samples" && pairing && <PairBanner first={pairFirst} onCancel={leavePairMode} />}
             <div className="panel-body cloud-body">
                 {state.status === "loading" && <Loading />}
                 {state.status === "error" && <ErrorNotice message={state.message} />}
@@ -411,8 +348,6 @@ export function CloudPanel(): ReactElement {
                             onJoin={handleJoin}
                             onActivate={handleActivate}
                             onContextMenu={handleContextMenu}
-                            pairing={tab === "samples" && pairing}
-                            onPairTap={handlePairTap}
                             command={command}
                             link={tab === "samples" ? link : null}
                             onWeightChange={setWeight}
@@ -420,12 +355,7 @@ export function CloudPanel(): ReactElement {
                             anchor={tab === "samples" ? morphAnchor : null}
                         />
                         {hovered !== null && <CloudHoverTooltip entity={hovered.entity} x={hovered.x} y={hovered.y} />}
-                        {tapCardShown && (
-                            <CloudTapCard
-                                entity={inHandHere}
-                                playbackRateHz={rateByHash.get(inHandHere.hash) ?? null}
-                            />
-                        )}
+                        {tapCardShown && <CloudTapCard entity={inHandHere} />}
                         <div className="cloud-tools">
                             <button
                                 type="button"

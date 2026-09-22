@@ -5,7 +5,6 @@ import { DetailHeader } from "../shared/DetailHeader";
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { AnnotationRows } from "./AnnotationRows";
-import { SampleActions } from "./SampleActions";
 import { FILE_COLUMN_LABELS, SampleFileRow } from "./SampleFileRow";
 import { OCCURRENCE_COLUMN_LABELS, SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { RELATION_COLUMN_LABELS, SampleRelationRow } from "./SampleRelationRow";
@@ -168,7 +167,6 @@ export function SampleDetailView({
     return (
         <section className="detail-scroll">
             <DetailHeader name={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} hash={sample.hash} />
-            <SampleActions sampleHash={sample.hash} playbackRateHz={sample.playback_rate_hz} />
             <dl className="kv">
                 <AnnotationRows key={sample.hash} sample={sample} />
                 <dt>Size</dt>

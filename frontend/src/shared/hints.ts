@@ -1,6 +1,6 @@
 import type { InputMode } from "../layout/layoutMode";
 
-export type HintId = "noSample" | "noModule" | "noWaveform" | "cloudIdle" | "morphSlotEmpty" | "morphSlotOther";
+export type HintId = "noSample" | "noModule" | "noWaveform" | "cloudIdle" | "morphSlotIdle" | "morphSlotSelected";
 
 /** What an empty panel says, worded for the gestures the person's input actually has. */
 const HINTS: Readonly<Record<HintId, Readonly<Record<InputMode, string>>>> = {
@@ -20,13 +20,13 @@ const HINTS: Readonly<Record<HintId, Readonly<Record<InputMode, string>>>> = {
         pointer: "Click a point to hear it. Drag to move, scroll to zoom. Right-click a point to pair it.",
         touch: "Tap a point to hear it. Drag to move, pinch to zoom. Hold a point for more.",
     },
-    morphSlotEmpty: {
-        pointer: "click a sample",
-        touch: "tap a sample",
+    morphSlotIdle: {
+        pointer: "click, then a sample",
+        touch: "tap, then a sample",
     },
-    morphSlotOther: {
-        pointer: "click another sample",
-        touch: "tap another sample",
+    morphSlotSelected: {
+        pointer: "now click a sample",
+        touch: "now tap a sample",
     },
 };
 

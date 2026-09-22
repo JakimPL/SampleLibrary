@@ -1,14 +1,14 @@
 import type { ChangeEvent, ReactElement } from "react";
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 
-import { samplePreview, useAudioPreview } from "../samples/useAudioPreview";
-import { morphAnchorOf, useSelectionStore } from "../workspace/selectionStore";
+import { useLayoutMode } from "../layout/useLayoutMode";
+import { Icon } from "../shared/icons/Icon";
 import { MorphDistance } from "./MorphDistance";
-import { END_LETTERS, MorphSlot } from "./MorphSlot";
-import { type MorphEnd, useMorphStore, WEIGHT_STEP } from "./morphStore";
+import { MorphSlot } from "./MorphSlot";
+import { END_LETTERS, useMorphStore, WEIGHT_STEP } from "./morphStore";
 import { useMorphStripStore } from "./morphStripStore";
 import { MorphWaveform } from "./MorphWaveform";
-import { type EndpointReading, useEndpoint } from "./useEndpoint";
+import { useEndpoint } from "./useEndpoint";
 import { type MorphPlayback, useMorphPlayback } from "./useMorphPlayback";
 import type { MorphStatus } from "./useMorphStatus";
 
@@ -22,30 +22,6 @@ function readoutOffset(weight: number): string {
     const share = String(weight * PERCENT_OF_A_SHARE);
     const correction = `(${String(THUMB_CENTER_SHARE)} - ${String(weight)}) * var(--range-thumb-size)`;
     return `calc(${share}% + ${correction})`;
-}
-
-interface EndPlayProps {
-    readonly end: MorphEnd;
-    readonly hash: string;
-    readonly reading: EndpointReading;
-}
-
-/** The original at one end, played at the rate it is heard at. */
-function EndPlay({ end, hash, reading }: EndPlayProps): ReactElement {
-    const { play, playingKey } = useAudioPreview();
-    return (
-        <button
-            type="button"
-            className="morph-strip-tool"
-            aria-label={`Play ${END_LETTERS[end]}`}
-            aria-pressed={playingKey === hash}
-            onClick={() => {
-                play(samplePreview(hash, reading.rateHz));
-            }}
-        >
-            ▶
-        </button>
-    );
 }
 
 interface OfflineNoticeProps {
@@ -73,13 +49,14 @@ interface MorphBodyProps {
     readonly playback: MorphPlayback;
 }
 
-/** The slider between the two originals, the distance between them, and the morph drawn over their traces. */
+/** The slider between the two ends, the distance between them where the panel has room for it, and the morph drawn over their traces. */
 function MorphBody({ id, first, second, playback }: MorphBodyProps): ReactElement {
     const weight = useMorphStore((state) => state.weight);
     const renderedWeight = useMorphStore((state) => state.renderedWeight);
     const setWeight = useMorphStore((state) => state.setWeight);
     const firstReading = useEndpoint(first);
     const secondReading = useEndpoint(second);
+    const { layout } = useLayoutMode();
     const movedRef = useRef(false);
 
     function handleChange(event: ChangeEvent<HTMLInputElement>): void {
@@ -99,7 +76,7 @@ function MorphBody({ id, first, second, playback }: MorphBodyProps): ReactElemen
     return (
         <div className="morph-strip-body" id={id}>
             <div className="morph-weight">
-                <EndPlay end="first" hash={first} reading={firstReading} />
+                <span className="mono cell-muted">{END_LETTERS.first}</span>
                 <div className="morph-weight-track">
                     <span className="morph-readout mono" style={{ left: readoutOffset(weight) }}>
                         {weight.toFixed(WEIGHT_DECIMAL_PLACES)}
@@ -116,9 +93,9 @@ function MorphBody({ id, first, second, playback }: MorphBodyProps): ReactElemen
                         onKeyUp={handleRelease}
                     />
                 </div>
-                <EndPlay end="second" hash={second} reading={secondReading} />
+                <span className="mono cell-muted">{END_LETTERS.second}</span>
             </div>
-            <MorphDistance first={first} second={second} />
+            {layout === "workspace" && <MorphDistance first={first} second={second} />}
             <MorphWaveform
                 first={first}
                 second={second}
@@ -132,29 +109,36 @@ function MorphBody({ id, first, second, playback }: MorphBodyProps): ReactElemen
 }
 
 /**
- * The morph along the bottom of the cloud: two slots naming the ends of the pair, or offering the
- * sample in hand for them, and once both are chosen the weight, a play button for the point it
- * names and a chevron opening the slider, the distance and the waveform. The strip stands in every
- * state, so filling the pair changes what it says and leaves the cloud its room. Letting the
- * slider go sounds the render through the shared preview element, the way the marker on the cloud
- * does, and the waveform draws whichever point was let go last.
+ * The morph along the bottom of the cloud: a slot for each end of the pair, the swap between them
+ * and the waveform button, always that one row. Tapping a slot selects it, and the selected end
+ * takes every sample tapped next until the slot is tapped again; × lets an end go and ⇄ swaps the
+ * ends. Once both ends are chosen, the slider and the waveform open under the row by themselves,
+ * and the waveform button hides and shows them. Letting the slider go sounds the render through the
+ * shared preview element, the way the marker on the cloud does, and the waveform draws whichever
+ * point was let go last. The selection lets go when the strip leaves the screen.
  */
 export function MorphStrip(): ReactElement {
     const first = useMorphStore((state) => state.first);
     const second = useMorphStore((state) => state.second);
-    const weight = useMorphStore((state) => state.weight);
     const swap = useMorphStore((state) => state.swap);
-    const inHand = useSelectionStore(morphAnchorOf);
+    const deselectEnd = useMorphStore((state) => state.deselectEnd);
     const expanded = useMorphStripStore((state) => state.expanded);
     const toggleExpanded = useMorphStripStore((state) => state.toggleExpanded);
     const playback = useMorphPlayback();
     const bodyId = useId();
     const pair = first !== null && second !== null ? { first, second } : null;
 
+    useEffect(
+        () => (): void => {
+            deselectEnd();
+        },
+        [deselectEnd],
+    );
+
     return (
         <section className="morph-strip" aria-label="Morph">
             <div className="morph-strip-row">
-                <MorphSlot end="first" hash={first} otherHash={second} inHand={inHand} />
+                <MorphSlot end="first" hash={first} />
                 <button
                     type="button"
                     className="morph-strip-tool"
@@ -164,31 +148,18 @@ export function MorphStrip(): ReactElement {
                 >
                     ⇄
                 </button>
-                <MorphSlot end="second" hash={second} otherHash={first} inHand={inHand} />
-                {pair !== null && (
-                    <>
-                        <span className="morph-strip-readout mono">{weight.toFixed(WEIGHT_DECIMAL_PLACES)}</span>
-                        <button
-                            type="button"
-                            className="morph-strip-tool morph-strip-hear"
-                            aria-label="Play the morph at this weight"
-                            disabled={!playback.status.available}
-                            onClick={playback.hearCurrentPoint}
-                        >
-                            ▶
-                        </button>
-                        <button
-                            type="button"
-                            className="morph-strip-tool morph-strip-expand"
-                            aria-label={expanded ? "Hide the morph waveform" : "Show the morph waveform"}
-                            aria-expanded={expanded}
-                            aria-controls={bodyId}
-                            onClick={toggleExpanded}
-                        >
-                            {expanded ? "⌄" : "⌃"}
-                        </button>
-                    </>
-                )}
+                <MorphSlot end="second" hash={second} />
+                <button
+                    type="button"
+                    className="morph-strip-tool morph-strip-toggle"
+                    aria-label="Morph waveform"
+                    aria-expanded={pair !== null && expanded}
+                    aria-controls={bodyId}
+                    disabled={pair === null}
+                    onClick={toggleExpanded}
+                >
+                    <Icon name="waveform" label={null} />
+                </button>
             </div>
             {pair !== null && expanded && (
                 <MorphBody id={bodyId} first={pair.first} second={pair.second} playback={playback} />

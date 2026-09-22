@@ -173,15 +173,15 @@ just frontend-dev-lan    # the same as `npm run dev -- --host` inside frontend
 ```
 
 Below 768 pixels of width the app shows three tabs along the bottom, Samples, Cloud and Modules,
-with a tray above them naming the sample or module in hand. A tap on a row takes the sample in
-hand and plays it; the tray's ›, or a held row, opens more. A sample or a module opens as a page
-of its own, whose ‹ and › walk the listing, so labeling a run of samples is one page after
-another. On the cloud, a tap plays a point, a drag moves, a pinch zooms, and a hold opens a
-point's actions. The morph lives under the cloud: its A and B offer the sample in hand, Pair
-makes two taps the two ends, and the strip opens out into the slider and the waveform. The More
-menu on each tab lists the statistics, the theme and a guide to every gesture. A tablet keeps the
-desktop's panels with controls at a finger's size. The browser's "Add to Home Screen" installs the
-app with its own icon.
+with a tray above them naming the sample or module in hand: its stars, its heart and the › that
+opens it, all on one row. A tap on a row takes the sample in hand and plays it; a held row offers
+its label. A sample or a module opens as a page of its own, whose ‹ and › walk the listing, so
+labeling a run of samples is one page after another. On the cloud, a tap plays a point, a drag
+moves, a pinch zooms, and a hold opens a point's actions. The morph lives under the cloud as two
+slots, A and B: tap one, and every sample you tap next becomes that end (see
+[Morphing two samples](#morphing-two-samples)). The More menu on each tab lists the statistics,
+the theme and a guide to every gesture. A tablet keeps the desktop's panels with controls at a
+finger's size. The browser's "Add to Home Screen" installs the app with its own icon.
 
 Everything a phone does goes through the same API as the desktop; the app asks nobody to sign in,
 so anyone on your network who reaches it can change your labels.
@@ -250,18 +250,25 @@ stay where they are, so it is read without the glide that `morph.yaml` plays.
 it at another file. The renderer needs the `morph` extra alone, so it runs on a machine without the
 training libraries.
 
-With the renderer running, in the cloud, press the right mouse button on one sample and release it
-on another: a line follows your cursor while the button is down, and the release joins the two with
-a dashed line whose marker is how far from the first sample toward the second you stand. A plain
-right-click on a sample joins it to the one you last clicked instead, and so does a Shift-click on a
-sample in any list. The strip under the cloud shows the same pair as two slots, A and B, which offer
-the sample you last clicked, so a pair is also two clicks on each end. Drag the marker, or open the
-strip with ⌃ and move its slider, and the morph plays when you let go; the opened strip shows how far
-apart the two samples sound and draws the render over both originals. The two ends play as the route
-renders them, so with the first sample's harmonics kept the far end is the second sample's spectral
-shape over the first sample's notes; each original plays from the opened strip, a click on a name
-takes that sample in hand, and a double-click opens it in the Sample Detail. Without the renderer
-running, the strip says so and offers to check again.
+With the renderer running, the strip under the cloud holds the two ends of a morph, A and B, by
+these rules:
+
+1. A and B are the two ends of the morph, each a slot under the cloud.
+2. Click or tap a slot to select it. A selected slot plays its sample and takes it in hand, and
+   every sample you tap next, in a list or on the cloud, becomes that end, until you tap the slot
+   again or select the other one. A sample already at the other end trades places.
+3. × lets an end go; ⇄ swaps the ends and mirrors the weight. A selected slot stays selected
+   through both.
+4. Once both ends are chosen, the slider and the waveform open under the row; the waveform button
+   hides and shows them.
+5. The marker on the cloud and the slider are one weight: let either go and that point plays and
+   is drawn over both originals, with the distance between the two samples stated on a desktop.
+6. On a desktop, the right mouse button pressed on one point and released on another, a right-click
+   on a point, a Shift-click on a row or the M key also pair, with the sample you last clicked as A.
+
+The two ends play as the route renders them, so with the first sample's harmonics kept the far end
+is the second sample's spectral shape over the first sample's notes. Without the renderer running,
+the strip says so and offers to check again.
 
 ## Development
 

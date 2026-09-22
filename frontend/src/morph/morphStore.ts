@@ -7,6 +7,9 @@ export const DEFAULT_WEIGHT = 0.5;
 /** Which end of the pair a control speaks of. */
 export type MorphEnd = "first" | "second";
 
+/** The letter each end goes by on screen. */
+export const END_LETTERS: Readonly<Record<MorphEnd, string>> = { first: "A", second: "B" };
+
 /**
  * The weight held to the unit interval and to the grid of hundredths the renderer serves, so a
  * snapped weight writes as one two-place decimal in a URL and names exactly one cached render.
@@ -25,6 +28,8 @@ interface MorphPair {
 
 interface MorphState extends MorphPair {
     readonly weight: number;
+    /** The end that takes every sample tapped next, or `null` while neither is selected. */
+    readonly selectedEnd: MorphEnd | null;
 }
 
 interface MorphActions {
@@ -40,6 +45,14 @@ interface MorphActions {
     /** Records the current weight as the point whose render is on screen. */
     readonly markRendered: () => void;
     readonly clear: () => void;
+    /** Selects an end, or lets the selection go when that end already holds it. */
+    readonly toggleSelectedEnd: (end: MorphEnd) => void;
+    readonly deselectEnd: () => void;
+    /**
+     * Gives a tapped sample to the selected end, which stays selected; a sample already at the
+     * other end trades places with it. With no end selected the pair stands as it is.
+     */
+    readonly takeSample: (hash: string) => void;
 }
 
 export const INITIAL_MORPH_STATE: MorphState = {
@@ -47,6 +60,7 @@ export const INITIAL_MORPH_STATE: MorphState = {
     second: null,
     weight: DEFAULT_WEIGHT,
     renderedWeight: null,
+    selectedEnd: null,
 };
 
 /** The ends as chosen, keeping the drawn render only while the pair it was drawn for stays. */
@@ -55,18 +69,25 @@ function pairOf(state: MorphPair, first: string | null, second: string | null): 
     return { first, second, renderedWeight: unchanged ? state.renderedWeight : null };
 }
 
+/** The sample at the end opposite `end`. */
+function otherEndOf(state: MorphPair, end: MorphEnd): string | null {
+    return end === "first" ? state.second : state.first;
+}
+
 /**
- * The pair a morph runs between, how far along it the listener stands, and which point of the
- * path is drawn on screen, shared by the strip under the cloud and the marker on the cloud so the
- * two are one control. The pair is its own state, filled by the pairing gestures and by the
- * controls that name an end, so it stays where it was put while the shell's highlight and focus
- * move on.
+ * The pair a morph runs between, how far along it the listener stands, which point of the path is
+ * drawn on screen, and which end is selected to take the next sample. The strip under the cloud
+ * and the marker on the cloud share it, so the two are one control. The pair is its own state,
+ * filled by the slots and by the pairing gestures, so it stays where it was put while the shell's
+ * highlight and focus move on.
  *
- * `join` is the gestures' way: the anchor, the sample already in view, becomes the first end and
- * the newly chosen one the second; with no anchor the chosen sample opens a pair, or closes one
- * that has a first end waiting. `setFirst` and `setSecond` name one end outright, and `clearEnd`
- * lets one go. `swap` mirrors the weight along with the ends, so the audible point stays where it
- * was. A render belongs to the pair it was drawn for, so any change of the ends drops it.
+ * A selected end takes every sample tapped in a list or on the cloud, through `takeSample`, until
+ * it is deselected; `join` is the gestures' way: the anchor, the sample already in view, becomes
+ * the first end and the newly chosen one the second; with no anchor the chosen sample opens a
+ * pair, or closes one that has a first end waiting. `setFirst` and `setSecond` name one end
+ * outright, and `clearEnd` lets one go. `swap` mirrors the weight along with the ends, so the
+ * audible point stays where it was, and keeps the selected letter. A render belongs to the pair it
+ * was drawn for, so any change of the ends drops it.
  */
 export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
     ...INITIAL_MORPH_STATE,
@@ -107,5 +128,26 @@ export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
     },
     clear: () => {
         set(INITIAL_MORPH_STATE);
+    },
+    toggleSelectedEnd: (end) => {
+        set({ selectedEnd: get().selectedEnd === end ? null : end });
+    },
+    deselectEnd: () => {
+        set({ selectedEnd: null });
+    },
+    takeSample: (hash) => {
+        const state = get();
+        if (state.selectedEnd === null) {
+            return;
+        }
+        if (otherEndOf(state, state.selectedEnd) === hash) {
+            state.swap();
+            return;
+        }
+        if (state.selectedEnd === "first") {
+            state.setFirst(hash);
+        } else {
+            state.setSecond(hash);
+        }
     },
 }));

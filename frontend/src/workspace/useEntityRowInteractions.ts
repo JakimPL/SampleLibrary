@@ -42,7 +42,8 @@ function focusSiblingRowLink(element: HTMLElement, direction: "previous" | "next
 /**
  * Wires the shell's click-to-highlight / double-click-to-focus convention for one row or point.
  *
- * A plain, unmodified click only highlights `entity`, staying on the current view; a Shift-click
+ * A plain, unmodified click highlights `entity`, staying on the current view, and gives a sample to
+ * the morph end selected under the cloud while one is; a Shift-click
  * on a sample instead joins it to the sample in hand as a morph pair, the gesture a right-click on
  * a cloud point makes, leaving the highlight untouched -- a Shift-click on a module has no pair to
  * join, so it is left alone. Any other modified click (ctrl/cmd/alt, or a non-primary button) is left alone too,
@@ -72,6 +73,7 @@ export function useEntityRowInteractions(entity: EntityRef): EntityRowInteractio
     );
     const highlightEntity = useSelectionStore((state) => state.highlightEntity);
     const join = useMorphStore((state) => state.join);
+    const takeSample = useMorphStore((state) => state.takeSample);
 
     function joinToAnchor(): void {
         join(morphAnchorOf(useSelectionStore.getState()), entity.hash);
@@ -93,6 +95,9 @@ export function useEntityRowInteractions(entity: EntityRef): EntityRowInteractio
         }
         event.preventDefault();
         highlightEntity(entity);
+        if (entity.kind === "sample") {
+            takeSample(entity.hash);
+        }
     }
 
     function onDoubleClick(event: MouseEvent): void {
