@@ -146,6 +146,15 @@ describe("PhoneShell", () => {
         });
     });
 
+    it("opens the guide to the gestures from the screen menu", () => {
+        renderShellAt("/");
+
+        fireEvent.click(screen.getByText("More"));
+        fireEvent.click(screen.getByRole("button", { name: "Keyboard and mouse" }));
+
+        expect(screen.getByRole("dialog", { name: "Keyboard and mouse" })).toBeInTheDocument();
+    });
+
     it("shows a panel with no tab as a page from the screen menu", async () => {
         renderShellAt("/");
 

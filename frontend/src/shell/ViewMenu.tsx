@@ -1,10 +1,12 @@
 import type { DockviewApi } from "dockview-react";
 import { type ReactElement, useEffect, useState } from "react";
 
+import { useLayoutMode } from "../layout/useLayoutMode";
 import { DisclosureMenu } from "../shared/overlay/DisclosureMenu";
 import { addRegisteredPanel } from "../workspace/addPanel";
 import { resetLayout } from "../workspace/dockviewPersistence";
 import { PANEL_REGISTRY, type PanelDefinition, type PanelId } from "../workspace/panelRegistry";
+import { GUIDE_TITLES, GuideSheet } from "./GuideSheet";
 import { usePlayerStripStore } from "./player/playerStripStore";
 
 interface ViewMenuProps {
@@ -30,10 +32,13 @@ function openPanelIds(api: DockviewApi): ReadonlySet<PanelId> {
  * reopens it at its registered placement, one for the player strip beneath the panels, and the
  * reset that draws the first-run arrangement again. Reads `PANEL_REGISTRY` generically, so a
  * newly registered panel appears here with no change to this file. The panel controls wait,
- * disabled, until the shell's dockview instance is ready.
+ * disabled, until the shell's dockview instance is ready. The guide to the keys and clicks, or to
+ * the gestures under touch, opens from here as well.
  */
 export function ViewMenu({ api }: ViewMenuProps): ReactElement {
     const [openIds, setOpenIds] = useState<ReadonlySet<PanelId>>(new Set());
+    const [guideOpen, setGuideOpen] = useState(false);
+    const { input } = useLayoutMode();
     const stripVisible = usePlayerStripStore((state) => state.visible);
     const setStripVisible = usePlayerStripStore((state) => state.setVisible);
 
@@ -70,39 +75,58 @@ export function ViewMenu({ api }: ViewMenuProps): ReactElement {
     }
 
     return (
-        <DisclosureMenu label="View" className="view-menu">
-            <ul className="view-menu-list">
-                {Object.values(PANEL_REGISTRY).map((definition) => (
-                    <li key={definition.id}>
+        <>
+            <DisclosureMenu label="View" className="view-menu">
+                <ul className="view-menu-list">
+                    {Object.values(PANEL_REGISTRY).map((definition) => (
+                        <li key={definition.id}>
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    checked={openIds.has(definition.id)}
+                                    disabled={api === null}
+                                    onChange={() => {
+                                        handleToggle(definition);
+                                    }}
+                                />
+                                {definition.title}
+                            </label>
+                        </li>
+                    ))}
+                    <li>
                         <label>
                             <input
                                 type="checkbox"
-                                checked={openIds.has(definition.id)}
-                                disabled={api === null}
-                                onChange={() => {
-                                    handleToggle(definition);
+                                checked={stripVisible}
+                                onChange={(event) => {
+                                    setStripVisible(event.target.checked);
                                 }}
                             />
-                            {definition.title}
+                            Player strip
                         </label>
                     </li>
-                ))}
-                <li>
-                    <label>
-                        <input
-                            type="checkbox"
-                            checked={stripVisible}
-                            onChange={(event) => {
-                                setStripVisible(event.target.checked);
-                            }}
-                        />
-                        Player strip
-                    </label>
-                </li>
-            </ul>
-            <button type="button" className="view-menu-reset" disabled={api === null} onClick={handleReset}>
-                Reset layout
-            </button>
-        </DisclosureMenu>
+                </ul>
+                <button type="button" className="view-menu-reset" disabled={api === null} onClick={handleReset}>
+                    Reset layout
+                </button>
+                <button
+                    type="button"
+                    className="view-menu-reset"
+                    onClick={() => {
+                        setGuideOpen(true);
+                    }}
+                >
+                    {GUIDE_TITLES[input]}
+                </button>
+            </DisclosureMenu>
+            {guideOpen && (
+                <GuideSheet
+                    input={input}
+                    onClose={() => {
+                        setGuideOpen(false);
+                    }}
+                />
+            )}
+        </>
     );
 }

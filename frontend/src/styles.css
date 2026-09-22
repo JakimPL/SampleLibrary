@@ -2075,10 +2075,6 @@ table.data td .annotation-editor-input {
     .chart-card {
         grid-column: auto;
     }
-
-    .morph-endpoints {
-        grid-template-columns: 1fr auto;
-    }
 }
 
 .detail-section h3 {
@@ -2353,6 +2349,36 @@ table.data td .annotation-editor-input {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* In a narrow panel each end takes a row of its own, the swap and the distance between them. */
+@container panel (width <= 480px) {
+    .morph-endpoints {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "first clear"
+            "gap gap"
+            "second second";
+    }
+
+    .morph-endpoints > .morph-endpoint:first-child {
+        grid-area: first;
+    }
+
+    .morph-endpoints > .morph-endpoint:nth-child(3) {
+        grid-area: second;
+    }
+
+    .morph-gap {
+        grid-area: gap;
+        grid-auto-flow: column;
+        justify-content: center;
+        gap: var(--space-4);
+    }
+
+    .morph-clear {
+        grid-area: clear;
+    }
 }
 
 .morph-weight {
@@ -2885,6 +2911,55 @@ table.data td .annotation-editor-input {
     min-height: var(--control-height);
     color: var(--text-primary);
     text-decoration: none;
+}
+
+.screen-menu-button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: var(--control-height);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+/* The guide: a gesture or key on the left, what it does on the right, section by section. */
+.guide-section {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.guide-title {
+    margin: 0;
+    font-size: var(--font-size-small);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.guide {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+}
+
+.guide-entry {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: var(--space-4);
+    font-size: var(--font-size-body);
+}
+
+.guide-gesture {
+    font-weight: 600;
+}
+
+.guide-meaning {
+    margin: 0;
+    color: var(--text-muted);
 }
 
 .screen-menu .theme-menu {

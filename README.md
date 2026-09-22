@@ -163,6 +163,27 @@ together with the API at `http://127.0.0.1:8000`. The Docker image does the same
 `docs/architecture.md` describes running it. The API describes its own routes at
 `http://127.0.0.1:8000/api/docs`.
 
+## Using it on a phone
+
+The same app fits a phone. Start the frontend so that other devices can reach it, and open the
+address Vite prints on a phone on the same network:
+
+```sh
+just frontend-dev-lan    # the same as `npm run dev -- --host` inside frontend
+```
+
+Below 768 pixels of width the app shows four tabs along the bottom, Samples, Cloud, Modules and
+Morph, with a tray above them naming the sample or module in hand. A tap on a row takes the sample
+in hand and plays it; the tray's ›, or a held row, opens more. A sample or a module opens as a
+page of its own, whose ‹ and › walk the listing, so labeling a run of samples is one page after
+another. On the cloud, a tap plays a point, a drag moves, a pinch zooms, a hold opens a point's
+actions, and Pair makes two taps the two ends of a morph. The More menu on each tab lists the
+statistics, the theme and a guide to every gesture. A tablet keeps the desktop's panels with
+controls at a finger's size. The browser's "Add to Home Screen" installs the app with its own icon.
+
+Everything a phone does goes through the same API as the desktop; the app asks nobody to sign in,
+so anyone on your network who reaches it can change your labels.
+
 ## Recipes
 
 | Recipe | What it does |
@@ -180,7 +201,7 @@ together with the API at `http://127.0.0.1:8000`. The Docker image does the same
 | `just format`, `just lint`, `just test`, `just coverage` | Runs one part of the Python checks; `coverage` also reports the lines the tests leave unrun |
 | `just test-pipeline` | Builds a tiny library with every real program, the listening model and training included, on the processor |
 | `just explore-pipeline` | Acts on a small library in orders drawn at random for a few minutes, holding every run of the pipeline to its checks |
-| `just frontend-install`, `just frontend-dev` | Installs the frontend's dependencies; starts its development server |
+| `just frontend-install`, `just frontend-dev`, `just frontend-dev-lan` | Installs the frontend's dependencies; starts its development server, on this machine alone or for every device on the network |
 | `just frontend-check`, `just frontend-build`, `just frontend-types` | Checks the frontend, builds it for production, and regenerates its API types from the schema |
 | `just dev-build`, `just dev <command>`, `just serve-dev`, `just dev-reset` | Writes a sandbox of 30 modules, 300 one-shots and ten labels in `dev-library` and builds it, runs a `samplelibrary` command on it, serves it on port 8001, and empties its database and deletes its files |
 | `just docker-build`, `just docker-run <library> <config>` | Builds the app's image, and runs it over a library directory and a config written for the container, both read from where you run the recipe |

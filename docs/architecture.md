@@ -793,6 +793,21 @@ opens and closes panels at their registered placement and resets the arrangement
 sits beside it. Each panel renders inside a `PanelHost`, the scroll container that is also the
 container its stylesheet rules query, so a panel fits the width it was given rather than the window's.
 
+Two shells mount that one registry. `frontend/src/layout/` reads the viewport as a layout mode,
+`phone` below 768 pixels of width or 560 of height and `workspace` otherwise, and the primary
+pointer as an input mode, `touch` when it is coarse; both are mirrored to `<html data-layout
+data-input>` for the stylesheet. `AppShell` mounts `frontend/src/shell/phone/PhoneShell.tsx` for
+the phone: every panel registered as a tab gets a surface, mounted on its first visit and kept
+mounted out of sight (hidden and inert, never unmounted, so the cloud's canvas keeps its size and a
+list its scroll offset), while a sample, a module or a panel with no tab opens as a page over the
+tabs in the same frame, with the shell's header carrying its name. The tabs replace the address and
+a page pushes one, so the back button always leaves a page for the tab it came from; a visit that
+began on a page returns to the tab last remembered in `phoneShellStore`. The tray above the tabs is
+the rendering of the highlight: it names whatever is in hand, the highlighted entity or the focused
+sample, and offers play, the heart, the stars, the label sheet and the morph ends for it. Each
+listing publishes the order of the rows it shows to `frontend/src/workspace/listingOrderStore.ts`,
+which a page's ‹ and › and the workspace's Alt+arrows step through, replacing the address each time.
+
 ## The cloud on screen
 
 `frontend/src/cloud/CloudView.tsx` draws the cloud as a stack of layers inside `.cloud-wrap`, which

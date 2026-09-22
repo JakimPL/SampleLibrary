@@ -15,6 +15,16 @@ function openMenu(): void {
 }
 
 describe("ViewMenu", () => {
+    it("opens the guide to the keys and clicks", () => {
+        render(<ViewMenu api={null} />);
+        openMenu();
+
+        fireEvent.click(screen.getByRole("button", { name: "Keyboard and mouse" }));
+
+        expect(screen.getByRole("dialog", { name: "Keyboard and mouse" })).toBeInTheDocument();
+        expect(screen.getByText("Shift-click")).toBeInTheDocument();
+    });
+
     it("lists every registered panel, ticked when it is open", () => {
         const api = new FakeDockviewApi(OPEN_EXCEPT_STATS);
         render(<ViewMenu api={api.asApi()} />);
