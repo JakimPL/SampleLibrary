@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 interface MorphStripState {
-    /** Whether the slider and the waveform show under the strip's row once a pair is whole. */
+    /** Whether a waveform shows under the strip's row: a lone end's own, or the morph's with its slider. */
     readonly expanded: boolean;
 }
 
@@ -10,11 +10,11 @@ interface MorphStripActions {
     readonly toggleExpanded: () => void;
 }
 
-export const INITIAL_MORPH_STRIP_STATE: MorphStripState = { expanded: true };
+export const INITIAL_MORPH_STRIP_STATE: MorphStripState = { expanded: false };
 
 /**
- * How the morph strip under the cloud stands: its body opens by itself with the first whole pair,
- * a choice to hide it lasts the visit, and the player strip's Show can open it from outside.
+ * How the morph strip under the cloud stands: its body opens from the waveform button and stays
+ * as it was left for the visit, and the player strip's Show can open it from outside.
  */
 export const useMorphStripStore = create<MorphStripState & MorphStripActions>((set, get) => ({
     ...INITIAL_MORPH_STRIP_STATE,

@@ -906,10 +906,10 @@ shows the same pair as two slots, A and B. Tapping a slot selects it (`selectedE
 a chosen end plays and is taken in hand, and the selected end takes every sample tapped next
 through `takeSample`, called from the two places a tap takes a sample in hand, the plain click of
 `frontend/src/workspace/useEntityRowInteractions.ts` and `CloudPanel.handleSelect`, until the
-slot is tapped again; a sample already at the other end trades places. Once both ends are chosen
-the strip opens by itself into a slider mirroring the knob's weight, the distance between the ends
-on a desktop, and the render drawn over both ends' traces, with a waveform button to hide and show
-them. Every point is heard through
+slot is tapped again; a sample already at the other end trades places. The waveform button opens
+the strip out: with one end chosen into that sample's own player, and with both into a slider
+mirroring the knob's weight, the distance between the ends on a desktop, and the render drawn over
+both ends' traces. Every point is heard through
 `frontend/src/morph/useMorphPlayback.ts`, which plays the render through the one preview element
 every sample plays through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is
 keyed by its own render's address) and records the weight in `morphStore`, so the waveform draws

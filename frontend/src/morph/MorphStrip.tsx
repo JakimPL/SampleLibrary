@@ -3,6 +3,7 @@ import { useEffect, useId, useRef } from "react";
 
 import { useLayoutMode } from "../layout/useLayoutMode";
 import { Icon } from "../shared/icons/Icon";
+import { FocusedSampleTransport } from "../shell/player/FocusedSampleTransport";
 import { MorphDistance } from "./MorphDistance";
 import { MorphSlot } from "./MorphSlot";
 import { END_LETTERS, useMorphStore, WEIGHT_STEP } from "./morphStore";
@@ -112,10 +113,11 @@ function MorphBody({ id, first, second, playback }: MorphBodyProps): ReactElemen
  * The morph along the bottom of the cloud: a slot for each end of the pair, the swap between them
  * and the waveform button, always that one row. Tapping a slot selects it, and the selected end
  * takes every sample tapped next until the slot is tapped again; × lets an end go and ⇄ swaps the
- * ends. Once both ends are chosen, the slider and the waveform open under the row by themselves,
- * and the waveform button hides and shows them. Letting the slider go sounds the render through the
- * shared preview element, the way the marker on the cloud does, and the waveform draws whichever
- * point was let go last. The selection lets go when the strip leaves the screen.
+ * ends. The waveform button opens a waveform under the row: a lone chosen end's own player, and
+ * once both ends are chosen the slider with the morph drawn over both ends. Letting the slider go
+ * sounds the render through the shared preview element, the way the marker on the cloud does, and
+ * the waveform draws whichever point was let go last. The selection lets go when the strip leaves
+ * the screen.
  */
 export function MorphStrip(): ReactElement {
     const first = useMorphStore((state) => state.first);
@@ -127,6 +129,8 @@ export function MorphStrip(): ReactElement {
     const playback = useMorphPlayback();
     const bodyId = useId();
     const pair = first !== null && second !== null ? { first, second } : null;
+    const lone = pair === null ? (first ?? second) : null;
+    const shown = expanded && (pair !== null || lone !== null);
 
     useEffect(
         () => (): void => {
@@ -152,17 +156,22 @@ export function MorphStrip(): ReactElement {
                 <button
                     type="button"
                     className="morph-strip-tool morph-strip-toggle"
-                    aria-label="Morph waveform"
-                    aria-expanded={pair !== null && expanded}
+                    aria-label="Waveform"
+                    aria-expanded={shown}
                     aria-controls={bodyId}
-                    disabled={pair === null}
+                    disabled={pair === null && lone === null}
                     onClick={toggleExpanded}
                 >
                     <Icon name="waveform" label={null} />
                 </button>
             </div>
-            {pair !== null && expanded && (
+            {shown && pair !== null && (
                 <MorphBody id={bodyId} first={pair.first} second={pair.second} playback={playback} />
+            )}
+            {shown && lone !== null && (
+                <div className="morph-strip-sample" id={bodyId}>
+                    <FocusedSampleTransport sampleHash={lone} layout="stacked" />
+                </div>
             )}
             {pair !== null && <OfflineNotice status={playback.status} />}
         </section>
