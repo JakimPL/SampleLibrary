@@ -1,6 +1,13 @@
+import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { readCloudRenderSettings } from "../../src/cloud/cloudRenderSettings";
+import {
+    PHONE_POINT_SCALE,
+    readCloudRenderSettings,
+    useCloudRenderSettings,
+} from "../../src/cloud/cloudRenderSettings";
+import { PHONE_MEDIA_QUERY } from "../../src/layout/layoutMode";
+import { stubMatchMedia } from "../support/matchMedia";
 
 const PROPERTIES = [
     "--cloud-point-shape",
@@ -137,5 +144,24 @@ describe("readCloudRenderSettings", () => {
         expect(node.fillOpacity).toBe(0);
         expect(node.substrateOpacity).toBe(1);
         expect(glow.opacity).toBe(1);
+    });
+});
+
+describe("useCloudRenderSettings", () => {
+    it("draws the points smaller on a phone, where the cloud holds the same points in a third of the area", () => {
+        stubMatchMedia(new Set([PHONE_MEDIA_QUERY]));
+        const base = readCloudRenderSettings().point;
+
+        const { result } = renderHook(() => useCloudRenderSettings());
+
+        expect(result.current.point.sizePx).toBeCloseTo(base.sizePx * PHONE_POINT_SCALE, 5);
+        expect(result.current.point.substrateSizePx).toBeCloseTo(base.substrateSizePx * PHONE_POINT_SCALE, 5);
+        expect(result.current.point.opacity).toBe(base.opacity);
+    });
+
+    it("draws the points at the theme's own size in the workspace", () => {
+        const { result } = renderHook(() => useCloudRenderSettings());
+
+        expect(result.current.point).toEqual(readCloudRenderSettings().point);
     });
 });

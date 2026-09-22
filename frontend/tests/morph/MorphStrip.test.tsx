@@ -85,7 +85,7 @@ function showEmpty(): ReturnType<typeof render> {
     return render(<MorphStrip />);
 }
 
-/** The strip with a whole pair on it, the ends named, and its body still closed. */
+/** The strip with a whole pair on it, the ends named, the slider under them and the waveform still closed. */
 async function showPair(available: boolean): Promise<ReturnType<typeof render>> {
     serveMorph(available);
     serveSamples();
@@ -98,7 +98,7 @@ async function showPair(available: boolean): Promise<ReturnType<typeof render>> 
     return result;
 }
 
-/** The strip with a whole pair on it and its body open. */
+/** The strip with a whole pair on it and its waveform open. */
 async function showPairOpened(available: boolean): Promise<ReturnType<typeof render>> {
     const result = await showPair(available);
     openWaveform();
@@ -111,6 +111,10 @@ function openWaveform(): void {
 
 function slider(): HTMLElement | null {
     return screen.queryByRole("slider", { name: "Point along the morph" });
+}
+
+function morphPlay(): HTMLElement | null {
+    return screen.queryByRole("button", { name: "Play the morph" });
 }
 
 /** Lets the ends' details land, which a slot's play reads its rate from. */
@@ -213,6 +217,7 @@ describe("MorphStrip while the pair is open", () => {
 
         expect(screen.queryByText(`player ${FIRST}`)).not.toBeInTheDocument();
         expect(slider()).toBeInTheDocument();
+        expect(morphPlay()).toBeInTheDocument();
     });
 
     it("selects a slot on a click, which then waits for a sample, and lets go on the next click", () => {
@@ -255,17 +260,18 @@ describe("MorphStrip while the pair is open", () => {
 });
 
 describe("MorphStrip with a whole pair", () => {
-    it("names both ends and keeps the slider until asked for", async () => {
+    it("names both ends with the slider under them, and keeps the waveform until asked for", async () => {
         await showPair(true);
 
         expect(screen.getByText(UNNAMED_SAMPLE_LABEL)).toBeInTheDocument();
-        expect(slider()).not.toBeInTheDocument();
+        expect(slider()).toBeInTheDocument();
+        expect(morphPlay()).not.toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Waveform" })).toHaveAttribute("aria-expanded", "false");
         expect(screen.getByRole("button", { name: "Swap the two ends" })).toBeEnabled();
 
         openWaveform();
 
-        expect(slider()).toBeInTheDocument();
+        expect(morphPlay()).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Waveform" })).toHaveAttribute("aria-expanded", "true");
     });
 
@@ -280,13 +286,14 @@ describe("MorphStrip with a whole pair", () => {
         expect(useMorphStore.getState().selectedEnd).toBe("first");
     });
 
-    it("lets an end go from its ×, and the open body shows the end that stays", async () => {
+    it("lets an end go from its ×, and the open waveform shows the end that stays", async () => {
         await showPairOpened(true);
 
         fireEvent.click(screen.getByRole("button", { name: "Clear B" }));
 
         expect(useMorphStore.getState()).toMatchObject({ first: FIRST, second: null });
         expect(slider()).not.toBeInTheDocument();
+        expect(morphPlay()).not.toBeInTheDocument();
         expect(screen.getByText(`player ${FIRST}`)).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole("button", { name: "Clear A" }));
@@ -306,22 +313,23 @@ describe("MorphStrip with a whole pair", () => {
         expect(useMorphStore.getState()).toMatchObject({ first: SECOND, second: FIRST, weight: 0.75 });
     });
 
-    it("hides its body again from the waveform button, and shows it on request from outside", async () => {
+    it("hides the waveform again from its button, keeping the slider, and shows it on request from outside", async () => {
         await showPairOpened(true);
 
         openWaveform();
-        expect(slider()).not.toBeInTheDocument();
+        expect(morphPlay()).not.toBeInTheDocument();
+        expect(slider()).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Waveform" })).toHaveAttribute("aria-expanded", "false");
 
         act(() => {
             useMorphStripStore.getState().setExpanded(true);
         });
-        expect(slider()).toBeInTheDocument();
+        expect(morphPlay()).toBeInTheDocument();
     });
 
     it("states how far apart the two ends of the pair sit, in the workspace", async () => {
         getSampleDistance.mockResolvedValue({ sample_hash: FIRST, other_hash: SECOND, distance: 25.2468 });
-        await showPairOpened(true);
+        await showPair(true);
 
         expect(await screen.findByText("distance 25.247")).toBeInTheDocument();
         expect(getSampleDistance).toHaveBeenCalledWith(FIRST, SECOND);
@@ -330,7 +338,7 @@ describe("MorphStrip with a whole pair", () => {
     it("leaves the distance out on a phone", async () => {
         stubMatchMedia(new Set([PHONE_MEDIA_QUERY]));
         getSampleDistance.mockClear();
-        await showPairOpened(true);
+        await showPair(true);
 
         expect(slider()).toBeInTheDocument();
         expect(screen.queryByText(/distance/)).not.toBeInTheDocument();
@@ -363,7 +371,7 @@ describe("MorphStrip with a whole pair", () => {
 
 describe("MorphStrip opened out", () => {
     it.each(RELEASE_CASES)("$name", async ({ available, moved, plays }: ReleaseCase) => {
-        await showPairOpened(available);
+        await showPair(available);
 
         const slider = screen.getByRole("slider", { name: "Point along the morph" });
         if (moved) {
@@ -419,7 +427,7 @@ describe("MorphStrip opened out", () => {
     });
 
     it("plays nothing when a key is let go with the weight where it was", async () => {
-        await showPairOpened(true);
+        await showPair(true);
 
         fireEvent.keyUp(screen.getByRole("slider", { name: "Point along the morph" }), { key: "Tab" });
 

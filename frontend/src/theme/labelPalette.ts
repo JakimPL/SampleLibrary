@@ -2,7 +2,7 @@ import { readThemeNumber } from "./readThemeNumber";
 
 const LIGHTNESS_PROPERTY = "--label-lightness";
 const CHROMA_PROPERTY = "--label-chroma";
-const LIGHTNESS_FALLBACK = 0.58;
+const LIGHTNESS_FALLBACK = 0.63;
 const CHROMA_FALLBACK = 0.17;
 // Hues a golden angle apart stay evenly spread however many tags the vocabulary grows to.
 const GOLDEN_ANGLE_DEGREES = 137.50776405;

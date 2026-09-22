@@ -102,7 +102,7 @@
     --cloud-point-uncategorized: #d5d4ce;
 
     /* Read by theme/labelPalette.ts, which takes the hues from the tags' ranks. */
-    --label-lightness: 0.58;
+    --label-lightness: 0.63;
     --label-chroma: 0.17;
     --mini-waveform-color: var(--text-faint);
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
@@ -1554,10 +1554,12 @@ table.data td .annotation-editor-input {
     font-size: var(--font-size-body);
 }
 
+/* The popup stands 14px from its point (`TOOLTIP_GAP_PX` in `tooltipPlacement.ts`), above and to the
+   right unless the cloud's edge is in the way. */
 .cloud-hover-tooltip {
     position: absolute;
     z-index: 1;
-    transform: translate(14px, -110%);
+    transform: translate(14px, calc(-100% - 14px));
     pointer-events: none;
     display: flex;
     flex-direction: column;
@@ -1567,6 +1569,18 @@ table.data td .annotation-editor-input {
     border-radius: var(--radius-3);
     box-shadow: var(--shadow);
     padding: var(--space-3) var(--space-4);
+}
+
+.cloud-hover-tooltip.is-left {
+    transform: translate(calc(-100% - 14px), calc(-100% - 14px));
+}
+
+.cloud-hover-tooltip.is-below {
+    transform: translate(14px, 14px);
+}
+
+.cloud-hover-tooltip.is-left.is-below {
+    transform: translate(calc(-100% - 14px), 14px);
 }
 
 .glance {
@@ -2392,9 +2406,9 @@ table.data td .annotation-editor-input {
     gap: var(--space-3);
 }
 
-/* A waveform takes one fixed height under the row, so opening it costs the cloud the same every time. */
+/* A waveform takes one fixed height under the slider, so opening it costs the cloud the same every time. */
 .morph-wave,
-.morph-strip-sample {
+.morph-strip-wave {
     flex: 0 0 auto;
     height: 160px;
 }
@@ -2769,6 +2783,7 @@ table.data td .annotation-editor-input {
 @media (height < 560px) {
     .morph-strip-toggle,
     .morph-strip-body,
+    .morph-strip-wave,
     .phone-shell[data-tab="cloud"] .tray {
         display: none;
     }

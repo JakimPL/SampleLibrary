@@ -53,8 +53,7 @@ const TOUCH_GUIDE: readonly GuideSection[] = [
             { gesture: "⇄", meaning: "swaps the ends and mirrors the weight" },
             {
                 gesture: "The waveform button",
-                meaning:
-                    "opens a waveform under the row: the chosen sample's, or the morph's with its slider once both ends are chosen",
+                meaning: "opens a waveform under the slider: the morph's, or a lone chosen end's own",
             },
             { gesture: "⌖", meaning: "centers the cloud on the point in hand" },
         ],
@@ -96,8 +95,7 @@ const POINTER_GUIDE: readonly GuideSection[] = [
             { gesture: "⇄", meaning: "swaps the ends and mirrors the weight" },
             {
                 gesture: "The waveform button",
-                meaning:
-                    "opens a waveform under the row: the chosen sample's, or the morph's with its slider once both ends are chosen",
+                meaning: "opens a waveform under the slider: the morph's, or a lone chosen end's own",
             },
             { gesture: "Escape", meaning: "lets go of the point in hand" },
         ],

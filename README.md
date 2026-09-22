@@ -259,8 +259,8 @@ these rules:
    again or select the other one. A sample already at the other end trades places.
 3. × lets an end go; ⇄ swaps the ends and mirrors the weight. A selected slot stays selected
    through both.
-4. The waveform button opens a waveform under the row: the chosen sample's own while one end is
-   chosen, and the slider with the morph drawn over both ends once both are.
+4. Once both ends are chosen, the slider stands under the row. The waveform button opens a waveform
+   beneath it: the morph drawn over both ends, or a lone chosen end's own player.
 5. The marker on the cloud and the slider are one weight: let either go and that point plays and
    is drawn over both originals, with the distance between the two samples stated on a desktop.
 6. On a desktop, the right mouse button pressed on one point and released on another, a right-click

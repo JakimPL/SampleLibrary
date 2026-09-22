@@ -43,20 +43,16 @@ function OfflineNotice({ status }: OfflineNoticeProps): ReactElement | null {
     );
 }
 
-interface MorphBodyProps {
-    readonly id: string;
+interface PairProps {
     readonly first: string;
     readonly second: string;
     readonly playback: MorphPlayback;
 }
 
-/** The slider between the two ends, the distance between them where the panel has room for it, and the morph drawn over their traces. */
-function MorphBody({ id, first, second, playback }: MorphBodyProps): ReactElement {
+/** The slider between the two ends, and the distance between them where the panel has room for it. */
+function MorphSlider({ first, second, playback }: PairProps): ReactElement {
     const weight = useMorphStore((state) => state.weight);
-    const renderedWeight = useMorphStore((state) => state.renderedWeight);
     const setWeight = useMorphStore((state) => state.setWeight);
-    const firstReading = useEndpoint(first);
-    const secondReading = useEndpoint(second);
     const { layout } = useLayoutMode();
     const movedRef = useRef(false);
 
@@ -75,7 +71,7 @@ function MorphBody({ id, first, second, playback }: MorphBodyProps): ReactElemen
     }
 
     return (
-        <div className="morph-strip-body" id={id}>
+        <div className="morph-strip-body">
             <div className="morph-weight">
                 <span className="mono cell-muted">{END_LETTERS.first}</span>
                 <div className="morph-weight-track">
@@ -97,15 +93,25 @@ function MorphBody({ id, first, second, playback }: MorphBodyProps): ReactElemen
                 <span className="mono cell-muted">{END_LETTERS.second}</span>
             </div>
             {layout === "workspace" && <MorphDistance first={first} second={second} />}
-            <MorphWaveform
-                first={first}
-                second={second}
-                firstReading={firstReading}
-                secondReading={secondReading}
-                renderedWeight={renderedWeight}
-                available={playback.status.available}
-            />
         </div>
+    );
+}
+
+/** The morph drawn over both ends' traces, with the transport that sounds the drawn point again. */
+function MorphPairWaveform({ first, second, playback }: PairProps): ReactElement {
+    const renderedWeight = useMorphStore((state) => state.renderedWeight);
+    const firstReading = useEndpoint(first);
+    const secondReading = useEndpoint(second);
+
+    return (
+        <MorphWaveform
+            first={first}
+            second={second}
+            firstReading={firstReading}
+            secondReading={secondReading}
+            renderedWeight={renderedWeight}
+            available={playback.status.available}
+        />
     );
 }
 
@@ -113,11 +119,11 @@ function MorphBody({ id, first, second, playback }: MorphBodyProps): ReactElemen
  * The morph along the bottom of the cloud: a slot for each end of the pair, the swap between them
  * and the waveform button, always that one row. Tapping a slot selects it, and the selected end
  * takes every sample tapped next until the slot is tapped again; × lets an end go and ⇄ swaps the
- * ends. The waveform button opens a waveform under the row: a lone chosen end's own player, and
- * once both ends are chosen the slider with the morph drawn over both ends. Letting the slider go
- * sounds the render through the shared preview element, the way the marker on the cloud does, and
- * the waveform draws whichever point was let go last. The selection lets go when the strip leaves
- * the screen.
+ * ends. Once both ends are chosen the slider stands under the row, and the waveform button opens
+ * a waveform beneath it: the morph drawn over both ends, or a lone chosen end's own player.
+ * Letting the slider go sounds the render through the shared preview element, the way the marker
+ * on the cloud does, and the waveform draws whichever point was let go last. The selection lets go
+ * when the strip leaves the screen.
  */
 export function MorphStrip(): ReactElement {
     const first = useMorphStore((state) => state.first);
@@ -165,11 +171,14 @@ export function MorphStrip(): ReactElement {
                     <Icon name="waveform" label={null} />
                 </button>
             </div>
+            {pair !== null && <MorphSlider first={pair.first} second={pair.second} playback={playback} />}
             {shown && pair !== null && (
-                <MorphBody id={bodyId} first={pair.first} second={pair.second} playback={playback} />
+                <div className="morph-strip-wave" id={bodyId}>
+                    <MorphPairWaveform first={pair.first} second={pair.second} playback={playback} />
+                </div>
             )}
             {shown && lone !== null && (
-                <div className="morph-strip-sample" id={bodyId}>
+                <div className="morph-strip-wave" id={bodyId}>
                     <FocusedSampleTransport sampleHash={lone} layout="stacked" />
                 </div>
             )}
