@@ -36,7 +36,8 @@ const CLOUD_TAB_ID: PanelId = "cloud";
  * The shell a phone gets: one header, one surface at a time over the tabs' panels, the tray naming
  * what is in hand, and the tab bar along the bottom. A sample, a module or a panel with no tab
  * opens as a page in the same frame, taking the header for its own name and steps and covering the
- * tray, whose controls the page carries itself.
+ * tray, whose controls the page carries itself. The shell names the standing tab in `data-tab`, so
+ * the stylesheet can give one tab's surface the tray's room where a short viewport asks for it.
  */
 export function PhoneShell({ view }: PhoneShellProps): ReactElement {
     const tabs = useMemo(tabPanels, []);
@@ -54,7 +55,7 @@ export function PhoneShell({ view }: PhoneShellProps): ReactElement {
     }, [viewTab, rememberTab]);
 
     return (
-        <div className="phone-shell">
+        <div className="phone-shell" data-tab={tab.id}>
             <header className="phone-header">
                 {page === null ? (
                     <>

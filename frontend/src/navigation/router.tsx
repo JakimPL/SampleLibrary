@@ -1,4 +1,4 @@
-import { createBrowserRouter, type RouteObject } from "react-router-dom";
+import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
 
 import { AppShell } from "../shell/AppShell";
 import { PANEL_REGISTRY } from "../workspace/panelRegistry";
@@ -8,6 +8,8 @@ import type { RouteView } from "./shellView";
 
 const SAMPLE_ROUTE_VIEW: RouteView = { kind: "sample" };
 const MODULE_ROUTE_VIEW: RouteView = { kind: "module" };
+/** The address the Morph panel once had, which the strip under the cloud answers now. */
+const RETIRED_MORPH_ROUTE: RouteObject = { path: "/morph", element: <Navigate to="/cloud" replace /> };
 
 /** One address per panel that has one, each rendering the same shell so a change of address keeps it mounted. */
 function panelRoutes(): RouteObject[] {
@@ -19,9 +21,9 @@ function panelRoutes(): RouteObject[] {
 }
 
 /**
- * Every address the application answers: a panel's own, a sample's, a module's, and a plain page
- * for anything else, all under one error element so a render that throws leaves a page stating
- * what broke rather than a blank document.
+ * Every address the application answers: a panel's own, a sample's, a module's, the morph's old
+ * one sent on to the cloud, and a plain page for anything else, all under one error element so a
+ * render that throws leaves a page stating what broke rather than a blank document.
  */
 export const routes: RouteObject[] = [
     {
@@ -30,6 +32,7 @@ export const routes: RouteObject[] = [
             ...panelRoutes(),
             { path: "/samples/:sampleHash", element: <AppShell routeView={SAMPLE_ROUTE_VIEW} /> },
             { path: "/modules/:moduleHash", element: <AppShell routeView={MODULE_ROUTE_VIEW} /> },
+            RETIRED_MORPH_ROUTE,
             { path: "*", element: <NotFoundView /> },
         ],
     },

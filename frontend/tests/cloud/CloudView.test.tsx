@@ -1240,4 +1240,27 @@ describe("CloudView touch", () => {
         expect(latestInstance().camera.scale).toHaveBeenCalledWith([1.5, 1.5], [0, 0]);
         expect(latestInstance().redraw).toHaveBeenCalled();
     });
+
+    it("frames both ends of a pair with room around them, on command", async () => {
+        const { rerender } = await renderCloudView({ points: TWO_POINTS });
+
+        rerender(
+            <CloudView
+                {...viewProps({
+                    points: TWO_POINTS,
+                    command: {
+                        sequence: 1,
+                        action: { kind: "frame", first: SAMPLE_REF.hash, second: MODULE_REF.hash },
+                    },
+                })}
+            />,
+        );
+
+        const [area, options] = latestInstance().zoomToArea.mock.calls[0] as [Record<string, number>, unknown];
+        expect(area.x).toBeCloseTo(-1.5, 5);
+        expect(area.y).toBeCloseTo(-1.5, 5);
+        expect(area.width).toBeCloseTo(3, 5);
+        expect(area.height).toBeCloseTo(3, 5);
+        expect(options).toEqual({ transition: true, transitionDuration: 500 });
+    });
 });

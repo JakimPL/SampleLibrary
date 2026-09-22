@@ -50,6 +50,35 @@ const HALF = 0.5;
 const LOCATE_SPAN = 0.3;
 const LOCATE_HALF_SPAN = LOCATE_SPAN * HALF;
 const LOCATE_TRANSITION_MS = 500;
+/** How much room a framed pair gets around it, as a share of the distance between its ends. */
+const FRAME_MARGIN_SHARE = 0.5;
+
+interface ViewArea {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+}
+
+/** The square of the locate span around one point. */
+function locateArea(point: CloudEntityPoint | null): ViewArea | null {
+    if (point === null) {
+        return null;
+    }
+    return { x: point.x - LOCATE_HALF_SPAN, y: point.y - LOCATE_HALF_SPAN, width: LOCATE_SPAN, height: LOCATE_SPAN };
+}
+
+/** The square holding both ends of a pair with room around them, at least the locate span across. */
+function frameArea(first: CloudEntityPoint | null, second: CloudEntityPoint | null): ViewArea | null {
+    if (first === null || second === null) {
+        return null;
+    }
+    const extent = Math.max(Math.abs(first.x - second.x), Math.abs(first.y - second.y));
+    const span = Math.max(extent * (1 + FRAME_MARGIN_SHARE), LOCATE_SPAN);
+    const centerX = (first.x + second.x) * HALF;
+    const centerY = (first.y + second.y) * HALF;
+    return { x: centerX - span * HALF, y: centerY - span * HALF, width: span, height: span };
+}
 const LEFT_BUTTON = 0;
 const RIGHT_BUTTON = 2;
 // How far a press may travel and still read as a click rather than the end of a pan.
@@ -148,7 +177,9 @@ export interface CloudLink {
 
 /** A move of the view a caller asks for: bringing a point to the middle, or stepping the zoom. */
 export type CloudAction =
-    { readonly kind: "locate"; readonly hash: string } | { readonly kind: "zoom"; readonly factor: number };
+    | { readonly kind: "locate"; readonly hash: string }
+    | { readonly kind: "frame"; readonly first: string; readonly second: string }
+    | { readonly kind: "zoom"; readonly factor: number };
 
 /** One request to move the view, told apart from the one before by its sequence number. */
 export interface CloudCommand {
@@ -1102,20 +1133,22 @@ export function CloudView({
             });
             return;
         }
-        const index = indexByHashRef.current.get(action.hash);
-        const point = index === undefined ? undefined : pointsRef.current[index];
-        if (point === undefined) {
+        const pointOf = (hash: string): CloudEntityPoint | null => {
+            const index = indexByHashRef.current.get(hash);
+            const point = index === undefined ? undefined : pointsRef.current[index];
+            return point ?? null;
+        };
+        const area =
+            action.kind === "locate"
+                ? locateArea(pointOf(action.hash))
+                : frameArea(pointOf(action.first), pointOf(action.second));
+        if (area === null) {
             return;
         }
-        void scatterplot.zoomToArea(
-            {
-                x: point.x - LOCATE_HALF_SPAN,
-                y: point.y - LOCATE_HALF_SPAN,
-                width: LOCATE_SPAN,
-                height: LOCATE_SPAN,
-            },
-            { transition: !window.matchMedia(REDUCED_MOTION_QUERY).matches, transitionDuration: LOCATE_TRANSITION_MS },
-        );
+        void scatterplot.zoomToArea(area, {
+            transition: !window.matchMedia(REDUCED_MOTION_QUERY).matches,
+            transitionDuration: LOCATE_TRANSITION_MS,
+        });
     }, [command, moveCamera]);
 
     useEffect(() => {

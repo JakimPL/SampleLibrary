@@ -21,15 +21,16 @@ import { useCloudLabels } from "../../cloud/useCloudLabels";
 import { useModuleCloud } from "../../cloud/useModuleCloud";
 import { useContainerWidth } from "../../layout/useContainerWidth";
 import { useLayoutMode } from "../../layout/useLayoutMode";
-import { morphPreview } from "../../morph/morphPreview";
 import { useMorphStore } from "../../morph/morphStore";
+import { MorphStrip } from "../../morph/MorphStrip";
 import { useEndpoint } from "../../morph/useEndpoint";
-import { useMorphStatus } from "../../morph/useMorphStatus";
+import { useMorphPlayback } from "../../morph/useMorphPlayback";
 import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
 import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
 import { shortHash } from "../../shared/format";
+import { Icon } from "../../shared/icons/Icon";
 import { Loading } from "../../shared/Loading";
 import { type EntityRef, morphAnchorOf, useSelectionStore } from "../selectionStore";
 import { entityRoute } from "../useEntityRowInteractions";
@@ -198,7 +199,9 @@ function useSampleColoring(mode: ColoringMode): {
  * The cloud with its controls: the tab and the coloring, the legend as a row or as a sheet when
  * the panel is narrow, and the tools that move the view. Under touch a tapped point shows a card
  * in place of the hover tooltip, except on a phone, where the tray names it; a held point opens
- * its menu. Pair mode makes two taps the pairing gesture, one for each end.
+ * its menu. Pair mode makes two taps the pairing gesture, one for each end, and the strip along
+ * the bottom names the pair, offers the sample in hand for either end, and opens out into the
+ * morph's slider and waveform.
  */
 export function CloudPanel(): ReactElement {
     const [tab, setTab] = useState<CloudTab>("samples");
@@ -226,7 +229,7 @@ export function CloudPanel(): ReactElement {
     const join = useMorphStore((morph) => morph.join);
     const setWeight = useMorphStore((morph) => morph.setWeight);
     const { play } = useAudioPreview();
-    const morphStatus = useMorphStatus();
+    const playback = useMorphPlayback();
     const link = useMemo(
         (): CloudLink | null =>
             morphFirst !== null && morphSecond !== null ? { first: morphFirst, second: morphSecond, weight } : null,
@@ -307,12 +310,6 @@ export function CloudPanel(): ReactElement {
     function handleJoin(first: EntityRef, second: EntityRef): void {
         if (first.kind === "sample" && second.kind === "sample") {
             join(first.hash, second.hash);
-        }
-    }
-
-    function handleWeightCommit(): void {
-        if (link !== null && morphStatus.available) {
-            play(morphPreview(link.first, link.second, link.weight));
         }
     }
 
@@ -419,7 +416,7 @@ export function CloudPanel(): ReactElement {
                             command={command}
                             link={tab === "samples" ? link : null}
                             onWeightChange={setWeight}
-                            onWeightCommit={handleWeightCommit}
+                            onWeightCommit={playback.hearCurrentPoint}
                             anchor={tab === "samples" ? morphAnchor : null}
                         />
                         {hovered !== null && <CloudHoverTooltip entity={hovered.entity} x={hovered.x} y={hovered.y} />}
@@ -446,6 +443,19 @@ export function CloudPanel(): ReactElement {
                             <button
                                 type="button"
                                 className="cloud-tool"
+                                aria-label="Frame the pair"
+                                disabled={link === null}
+                                onClick={() => {
+                                    if (link !== null) {
+                                        issue({ kind: "frame", first: link.first, second: link.second });
+                                    }
+                                }}
+                            >
+                                <Icon name="morph" label={null} />
+                            </button>
+                            <button
+                                type="button"
+                                className="cloud-tool"
                                 aria-label="Zoom in"
                                 onClick={() => {
                                     issue({ kind: "zoom", factor: ZOOM_STEP_FACTOR });
@@ -467,6 +477,7 @@ export function CloudPanel(): ReactElement {
                     </>
                 )}
             </div>
+            {tab === "samples" && <MorphStrip />}
             {held !== null && (
                 <CloudPointMenu
                     entity={held.entity}

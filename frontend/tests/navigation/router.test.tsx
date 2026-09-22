@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -40,6 +40,16 @@ describe("routes", () => {
     it("keeps the workspace at a panel's own address", () => {
         render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: ["/cloud"] })} />);
 
+        expect(screen.getByText("workspace")).toBeInTheDocument();
+    });
+
+    it("sends the morph's old address on to the cloud", async () => {
+        const router = createMemoryRouter(routes, { initialEntries: ["/morph"] });
+        render(<RouterProvider router={router} />);
+
+        await waitFor(() => {
+            expect(router.state.location.pathname).toBe("/cloud");
+        });
         expect(screen.getByText("workspace")).toBeInTheDocument();
     });
 

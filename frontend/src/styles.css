@@ -1183,7 +1183,7 @@ table.data td .annotation-editor-input {
 .detail-tabs button,
 .sample-actions button,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
-.morph-panel button:not(.thumbnail-button) {
+.morph-offline button {
     border: 1px solid var(--border);
     background: var(--surface-0);
     border-radius: var(--radius-2);
@@ -2275,65 +2275,64 @@ table.data td .annotation-editor-input {
     color: var(--accent-ink);
 }
 
-.morph-panel {
+/* The strip along the bottom of the cloud: a row of slots, and beneath it the slider and the waveform once opened. */
+.morph-strip {
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    gap: var(--space-5);
-    height: 100%;
-    padding: var(--space-5) var(--space-6);
-}
-
-/* The waveform takes whatever height the rows above it leave, down to the frame's own minimum. */
-.morph-wave {
-    flex: 1 1 auto;
-    min-height: 0;
-    height: auto;
-}
-
-.morph-wave .transport {
-    padding: 6px 0 0;
-    border-top: none;
-    background: transparent;
-}
-
-.morph-endpoints {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr auto;
-    align-items: center;
     gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--border);
+    background: var(--surface-1);
 }
 
-.morph-gap {
-    display: grid;
-    justify-items: center;
-    gap: 2px;
-}
-
-/* Centered as a box rather than by line height, which a glyph's own metrics sit off-center within. */
-.morph-clear {
+.morph-strip-row {
     display: flex;
     align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    font-size: 13px;
-    line-height: 1;
+    gap: var(--space-3);
+}
+
+.morph-slot {
+    flex: 1 1 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+    height: var(--control-height);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    font-size: var(--font-size-small);
+    color: var(--text-primary);
+    text-align: left;
+}
+
+.morph-slot-empty {
+    border-style: dashed;
     color: var(--text-muted);
 }
 
-.morph-endpoint {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    min-width: 0;
+.morph-slot-offer {
+    border-style: dashed;
+    cursor: pointer;
 }
 
-.morph-endpoint-identity {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
+.morph-slot-offer:hover {
+    border-color: var(--border-strong);
+}
+
+.morph-slot-letter {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+}
+
+.morph-slot-name {
+    flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     padding: 2px 4px;
     margin: -2px -4px;
     border-radius: var(--radius-1);
@@ -2341,44 +2340,94 @@ table.data td .annotation-editor-input {
     text-decoration: none;
 }
 
-.morph-endpoint-identity.is-highlighted {
+.morph-slot-name.is-highlighted {
     background: var(--accent-soft);
 }
 
-.morph-endpoint-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+/* Centered as a box rather than by line height, which a glyph's own metrics sit off-center within. */
+.morph-slot-clear {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    line-height: 1;
+    color: var(--text-muted);
+    cursor: pointer;
 }
 
-/* In a narrow panel each end takes a row of its own, the swap and the distance between them. */
+:root[data-input="touch"] .morph-slot-clear {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+}
+
+.morph-strip-tool {
+    flex: 0 0 auto;
+    width: var(--control-height);
+    height: var(--control-height);
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.morph-strip-tool:disabled {
+    color: var(--text-faint);
+    cursor: default;
+}
+
+.morph-strip-tool:hover:enabled {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+}
+
+.morph-strip-tool[aria-pressed="true"] {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.morph-strip-readout {
+    flex: 0 0 auto;
+    font-size: var(--font-size-small);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* A narrow panel gives the readout's and the play button's room to the two names; the knob on the
+   cloud and the opened slider still state the weight and play the point. */
 @container panel (width <= 480px) {
-    .morph-endpoints {
-        grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-areas:
-            "first clear"
-            "gap gap"
-            "second second";
+    .morph-strip-readout,
+    .morph-strip-hear {
+        display: none;
     }
+}
 
-    .morph-endpoints > .morph-endpoint:first-child {
-        grid-area: first;
-    }
+.morph-strip-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
 
-    .morph-endpoints > .morph-endpoint:nth-child(3) {
-        grid-area: second;
-    }
+/* The waveform takes one fixed height under the row, so opening it costs the cloud the same every time. */
+.morph-wave {
+    flex: 0 0 auto;
+    height: 160px;
+}
 
-    .morph-gap {
-        grid-area: gap;
-        grid-auto-flow: column;
-        justify-content: center;
-        gap: var(--space-4);
-    }
-
-    .morph-clear {
-        grid-area: clear;
-    }
+.morph-wave .transport {
+    padding: 6px 0 0;
+    border-top: none;
+    background: transparent;
 }
 
 .morph-weight {
@@ -2450,6 +2499,7 @@ table.data td .annotation-editor-input {
     margin: 0;
     font-size: var(--font-size-small);
     color: var(--text-muted);
+    text-align: center;
     white-space: nowrap;
 }
 
@@ -2737,6 +2787,20 @@ table.data td .annotation-editor-input {
     padding: 0 var(--space-6);
     color: var(--text-muted);
     font-size: var(--font-size-small);
+}
+
+/* A short viewport keeps the morph strip to its row and gives the cloud the tray's room: the strip
+   names the tapped sample, and a held point offers the rest. */
+@media (height < 560px) {
+    .morph-strip-expand,
+    .morph-strip-body,
+    .phone-shell[data-tab="cloud"] .tray {
+        display: none;
+    }
+
+    .cloud-tools {
+        flex-direction: row;
+    }
 }
 
 .tray-row {

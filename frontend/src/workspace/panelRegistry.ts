@@ -4,12 +4,11 @@ import type { IconName } from "../shared/icons/iconPaths";
 import { CloudPanel } from "./panels/CloudPanel";
 import { ModuleDetailPanel } from "./panels/ModuleDetailPanel";
 import { ModulesListPanel } from "./panels/ModulesListPanel";
-import { MorphPanel } from "./panels/MorphPanel";
 import { SampleDetailPanel } from "./panels/SampleDetailPanel";
 import { SamplesListPanel } from "./panels/SamplesListPanel";
 import { StatsPanel } from "./panels/StatsPanel";
 
-export type PanelId = "samples-list" | "modules-list" | "cloud" | "morph" | "sample-detail" | "module-detail" | "stats";
+export type PanelId = "samples-list" | "modules-list" | "cloud" | "sample-detail" | "module-detail" | "stats";
 
 export interface PanelPlacement {
     readonly direction: "right" | "below" | "within";
@@ -101,17 +100,6 @@ export const PANEL_REGISTRY: Readonly<Record<PanelId, PanelDefinition>> = {
         renderer: "onlyWhenVisible",
         path: null,
         phone: { kind: "page" },
-    },
-    morph: {
-        id: "morph",
-        title: "Morph",
-        shortTitle: "Morph",
-        icon: "morph",
-        component: MorphPanel,
-        placement: { direction: "within", referencePanel: "sample-detail" },
-        renderer: "onlyWhenVisible",
-        path: "/morph",
-        phone: { kind: "tab", order: 4 },
     },
     stats: {
         id: "stats",

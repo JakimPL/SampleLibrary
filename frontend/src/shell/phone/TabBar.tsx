@@ -7,7 +7,7 @@ import { Icon } from "../../shared/icons/Icon";
 import type { PanelId } from "../../workspace/panelRegistry";
 import type { PhoneTab } from "./phoneView";
 
-const MORPH_TAB_ID: PanelId = "morph";
+const CLOUD_TAB_ID: PanelId = "cloud";
 
 /** How far the morph pair has come: nothing chosen, one end chosen, or both. */
 export type PairState = "none" | "half" | "full";
@@ -26,8 +26,9 @@ interface TabBarProps {
 
 /**
  * The bar of tabs along the bottom edge. Each tab replaces the address rather than adding to the
- * history, so the back button always leaves a page for the tab it came from. The Morph tab carries
- * a dot while a pair is being built: hollow with one end chosen, filled once both are.
+ * history, so the back button always leaves a page for the tab it came from. The Cloud tab, where
+ * the morph lives, carries a dot while a pair is being built: hollow with one end chosen, filled
+ * once both are.
  */
 export function TabBar({ tabs, activeTabId }: TabBarProps): ReactElement {
     const first = useMorphStore((state) => state.first);
@@ -46,7 +47,7 @@ export function TabBar({ tabs, activeTabId }: TabBarProps): ReactElement {
                 >
                     <Icon name={tab.icon} label={null} />
                     <span className="tab-bar-label">{tab.shortTitle}</span>
-                    {tab.id === MORPH_TAB_ID && pairState !== "none" && (
+                    {tab.id === CLOUD_TAB_ID && pairState !== "none" && (
                         <span
                             className={classNames("tab-bar-dot", pairState === "half" && "is-half")}
                             data-testid="morph-pair-dot"

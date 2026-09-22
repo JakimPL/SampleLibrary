@@ -3,12 +3,11 @@ import { describe, expect, it } from "vitest";
 import { overflowPanels, phonePageOf, tabOf, tabOfPath, tabPanels } from "../../../src/shell/phone/phoneView";
 
 describe("tabPanels", () => {
-    it("lists the four tabs in their registered order, each at its own address", () => {
+    it("lists the three tabs in their registered order, each at its own address", () => {
         expect(tabPanels().map((tab) => [tab.id, tab.path])).toEqual([
             ["samples-list", "/"],
             ["cloud", "/cloud"],
             ["modules-list", "/modules"],
-            ["morph", "/morph"],
         ]);
     });
 });

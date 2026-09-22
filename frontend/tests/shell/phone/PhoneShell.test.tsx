@@ -95,6 +95,7 @@ describe("PhoneShell", () => {
         renderShellAt("/cloud");
 
         expect(await screen.findByText(/Click a point to hear it/)).toHaveClass("tray-hint");
+        expect(document.querySelector(".phone-shell")).toHaveAttribute("data-tab", "cloud");
         fireEvent.click(screen.getByRole("link", { name: "Samples" }));
         await screen.findByRole("heading", { level: 1, name: "Samples" });
 

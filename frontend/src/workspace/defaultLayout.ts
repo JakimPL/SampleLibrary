@@ -23,7 +23,7 @@ const INSPECTOR_COLUMN_SHARE = 0.28;
 
 /**
  * The first-run arrangement: the listings on the left, the cloud in the middle, and an inspector
- * of the details, the morph and the statistics on the right; the transport lives in the player
+ * of the details and the statistics on the right; the transport lives in the player
  * strip beneath them all.
  */
 const DEFAULT_COLUMNS: readonly LayoutColumn[] = [
@@ -31,7 +31,7 @@ const DEFAULT_COLUMNS: readonly LayoutColumn[] = [
     { share: CLOUD_COLUMN_SHARE, rows: [{ share: WHOLE_SHARE, panels: ["cloud"] }] },
     {
         share: INSPECTOR_COLUMN_SHARE,
-        rows: [{ share: WHOLE_SHARE, panels: ["sample-detail", "module-detail", "morph", "stats"] }],
+        rows: [{ share: WHOLE_SHARE, panels: ["sample-detail", "module-detail", "stats"] }],
     },
 ];
 

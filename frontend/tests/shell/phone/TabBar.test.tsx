@@ -26,8 +26,8 @@ describe("TabBar", () => {
         );
 
         const links = screen.getAllByRole("link");
-        expect(links.map((link) => link.textContent)).toEqual(["Samples", "Cloud", "Modules", "Morph"]);
-        expect(links.map((link) => link.getAttribute("href"))).toEqual(["/", "/cloud", "/modules", "/morph"]);
+        expect(links.map((link) => link.textContent)).toEqual(["Samples", "Cloud", "Modules"]);
+        expect(links.map((link) => link.getAttribute("href"))).toEqual(["/", "/cloud", "/modules"]);
         expect(screen.getByRole("link", { name: "Cloud" })).toHaveAttribute("aria-current", "page");
         expect(screen.getByRole("link", { name: "Samples" })).not.toHaveAttribute("aria-current");
     });
@@ -46,7 +46,7 @@ describe("TabBar", () => {
         expect(router.state.historyAction).toBe("REPLACE");
     });
 
-    it("dots the Morph tab as the pair is built", () => {
+    it("dots the Cloud tab as the pair is built", () => {
         render(
             <MemoryRouter>
                 <TabBar tabs={TABS} activeTabId="samples-list" />
@@ -63,5 +63,6 @@ describe("TabBar", () => {
             useMorphStore.getState().setSecond("b");
         });
         expect(screen.getByTestId("morph-pair-dot")).not.toHaveClass("is-half");
+        expect(screen.getByRole("link", { name: "Cloud" })).toContainElement(screen.getByTestId("morph-pair-dot"));
     });
 });

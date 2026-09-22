@@ -172,14 +172,16 @@ address Vite prints on a phone on the same network:
 just frontend-dev-lan    # the same as `npm run dev -- --host` inside frontend
 ```
 
-Below 768 pixels of width the app shows four tabs along the bottom, Samples, Cloud, Modules and
-Morph, with a tray above them naming the sample or module in hand. A tap on a row takes the sample
-in hand and plays it; the tray's ›, or a held row, opens more. A sample or a module opens as a
-page of its own, whose ‹ and › walk the listing, so labeling a run of samples is one page after
-another. On the cloud, a tap plays a point, a drag moves, a pinch zooms, a hold opens a point's
-actions, and Pair makes two taps the two ends of a morph. The More menu on each tab lists the
-statistics, the theme and a guide to every gesture. A tablet keeps the desktop's panels with
-controls at a finger's size. The browser's "Add to Home Screen" installs the app with its own icon.
+Below 768 pixels of width the app shows three tabs along the bottom, Samples, Cloud and Modules,
+with a tray above them naming the sample or module in hand. A tap on a row takes the sample in
+hand and plays it; the tray's ›, or a held row, opens more. A sample or a module opens as a page
+of its own, whose ‹ and › walk the listing, so labeling a run of samples is one page after
+another. On the cloud, a tap plays a point, a drag moves, a pinch zooms, and a hold opens a
+point's actions. The morph lives under the cloud: its A and B offer the sample in hand, Pair
+makes two taps the two ends, and the strip opens out into the slider and the waveform. The More
+menu on each tab lists the statistics, the theme and a guide to every gesture. A tablet keeps the
+desktop's panels with controls at a finger's size. The browser's "Add to Home Screen" installs the
+app with its own icon.
 
 Everything a phone does goes through the same API as the desktop; the app asks nobody to sign in,
 so anyone on your network who reaches it can change your labels.
@@ -252,12 +254,14 @@ With the renderer running, in the cloud, press the right mouse button on one sam
 on another: a line follows your cursor while the button is down, and the release joins the two with
 a dashed line whose marker is how far from the first sample toward the second you stand. A plain
 right-click on a sample joins it to the one you last clicked instead, and so does a Shift-click on a
-sample in any list. Drag the marker, or move the slider in the Morph panel, and the morph plays when
-you let go; beneath the play button the panel shows how far apart the two samples sound. The two ends play as
-the route renders them, so with the first sample's harmonics kept the far end is the second sample's
-spectral shape over the first sample's notes; each original is one click away beside its name, and a
-double-click on either name opens it in the Sample Detail. Without the renderer running, the panel says so and
-offers to check again.
+sample in any list. The strip under the cloud shows the same pair as two slots, A and B, which offer
+the sample you last clicked, so a pair is also two clicks on each end. Drag the marker, or open the
+strip with ⌃ and move its slider, and the morph plays when you let go; the opened strip shows how far
+apart the two samples sound and draws the render over both originals. The two ends play as the route
+renders them, so with the first sample's harmonics kept the far end is the second sample's spectral
+shape over the first sample's notes; each original plays from the opened strip, a click on a name
+takes that sample in hand, and a double-click opens it in the Sample Detail. Without the renderer
+running, the strip says so and offers to check again.
 
 ## Development
 

@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { hintFor, type HintId } from "../../src/shared/hints";
 
-const HINT_IDS: readonly HintId[] = ["noSample", "noModule", "noWaveform", "noPair", "cloudIdle"];
+const HINT_IDS: readonly HintId[] = [
+    "noSample",
+    "noModule",
+    "noWaveform",
+    "cloudIdle",
+    "morphSlotEmpty",
+    "morphSlotOther",
+];
 
 describe("hintFor", () => {
     it.each(HINT_IDS)("words %s for a pointer and for touch", (id) => {

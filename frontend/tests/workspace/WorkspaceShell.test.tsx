@@ -105,7 +105,7 @@ describe("WorkspaceShell", () => {
         renderShellAt("/");
 
         const titles = panelTabTitles();
-        for (const title of ["Modules", "Samples", "Cloud", "Morph", "Module Detail", "Sample Detail", "Stats"]) {
+        for (const title of ["Modules", "Samples", "Cloud", "Module Detail", "Sample Detail", "Stats"]) {
             expect(titles).toContain(title);
         }
     });
@@ -186,42 +186,45 @@ describe("WorkspaceShell", () => {
         });
     });
 
-    it("brings the Morph panel forward once a pair is complete", async () => {
+    it("brings the Cloud panel back once a pair is complete, with the morph strip on it", async () => {
         renderShellAt("/");
+        await closePanelAndSave("Cloud");
+        expect(panelTabTitles()).not.toContain("Cloud");
 
         act(() => {
             useMorphStore.getState().join("a".repeat(64), "b".repeat(64));
         });
 
         await waitFor(() => {
-            expect(activeTabTitles()).toContain("Morph");
+            expect(activeTabTitles()).toContain("Cloud");
         });
+        expect(await screen.findByRole("region", { name: "Morph" })).toBeInTheDocument();
     });
 
     it("keeps a panel closed across a reload once a person closed it", async () => {
         const first = renderShellAt("/");
-        await closePanelAndSave("Morph");
-        expect(panelTabTitles()).not.toContain("Morph");
+        await closePanelAndSave("Stats");
+        expect(panelTabTitles()).not.toContain("Stats");
         first.unmount();
 
         renderShellAt("/");
 
-        expect(panelTabTitles()).not.toContain("Morph");
+        expect(panelTabTitles()).not.toContain("Stats");
     });
 
     it("opens a panel registered since the arrangement was saved", async () => {
         const first = renderShellAt("/");
-        await closePanelAndSave("Morph");
+        await closePanelAndSave("Stats");
         first.unmount();
         const record = savedRecord();
         localStorage.setItem(
             LAYOUT_STORAGE_KEY,
-            JSON.stringify({ ...record, knownPanels: record.knownPanels.filter((id) => id !== "morph") }),
+            JSON.stringify({ ...record, knownPanels: record.knownPanels.filter((id) => id !== "stats") }),
         );
 
         renderShellAt("/");
 
-        expect(panelTabTitles()).toContain("Morph");
+        expect(panelTabTitles()).toContain("Stats");
     });
 
     it("lets a closed panel be reopened through the View menu", async () => {

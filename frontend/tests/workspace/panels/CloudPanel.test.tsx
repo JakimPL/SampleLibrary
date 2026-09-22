@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as CloudApi from "../../../src/api/cloud";
 import type * as CurationApi from "../../../src/api/curation";
@@ -129,6 +129,12 @@ vi.mock("../../../src/api/modules", async () => {
 });
 
 const RIGHT_BUTTON = 2;
+
+/** What every test starts from: a renderer that answers, and a catalog that names any sample the strip offers. */
+beforeEach(() => {
+    getMorphStatus.mockResolvedValue({ available: true, service: null });
+    getSamplePreview.mockResolvedValue({ display_name: "", category: null, hand_label: null, thumbnail: null });
+});
 
 function latestInstance(): (typeof instances)[number] {
     const instance = instances[instances.length - 1];
@@ -401,6 +407,7 @@ describe("CloudPanel", () => {
             url: `/api/morph/audio?first=${first}&second=${second}&weight=0.5`,
             playbackRateHz: null,
         });
+        expect(useMorphStore.getState().renderedWeight).toBe(0.5);
     });
 
     it("plays no morph on a marker release while no renderer answers", async () => {
@@ -426,6 +433,49 @@ describe("CloudPanel", () => {
 
         expect(play).not.toHaveBeenCalled();
     });
+
+    it("carries the morph strip under the samples cloud alone", async () => {
+        getCloud.mockResolvedValue([{ sample_hash: "8".repeat(64), x: 0, y: 0, playback_rate_hz: 8363 }]);
+        getModuleCloud.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
+        });
+
+        expect(screen.getByRole("region", { name: "Morph" })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("button", { name: "Modules" }));
+
+        expect(screen.queryByRole("region", { name: "Morph" })).not.toBeInTheDocument();
+    });
+
+    it("frames both ends of the pair with room around them on request", async () => {
+        const first = "6".repeat(64);
+        const second = "7".repeat(64);
+        getCloud.mockResolvedValue([
+            { sample_hash: first, x: 0, y: 0, playback_rate_hz: 8363 },
+            { sample_hash: second, x: 1, y: 1, playback_rate_hz: 16726 },
+        ]);
+        getModuleCloud.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
+        });
+        expect(screen.getByRole("button", { name: "Frame the pair" })).toBeDisabled();
+        act(() => {
+            useMorphStore.getState().join(first, second);
+        });
+        await screen.findByRole("slider", { name: "Morph weight" });
+
+        fireEvent.click(screen.getByRole("button", { name: "Frame the pair" }));
+
+        const [area] = latestInstance().zoomToArea.mock.calls[0] as [Record<string, number>];
+        expect(area.x).toBeCloseTo(-1.5, 5);
+        expect(area.y).toBeCloseTo(-1.5, 5);
+        expect(area.width).toBeCloseTo(3, 5);
+        expect(area.height).toBeCloseTo(3, 5);
+    });
+
     it("asks for the hand labels and their tags only once the Labels mode is chosen", async () => {
         const sampleHash = "8".repeat(64);
         getCloud.mockResolvedValue([{ sample_hash: sampleHash, x: 0, y: 0 }]);
@@ -492,7 +542,7 @@ describe("CloudPanel on touch", () => {
 
         expect(useMorphStore.getState()).toMatchObject({ first: FIRST_HASH, second: SECOND_HASH });
         expect(screen.getByRole("button", { name: "Pair" })).toHaveAttribute("aria-pressed", "false");
-        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+        expect(screen.queryByText(/tap the first sample|Now tap the second/)).not.toBeInTheDocument();
     });
 
     it("shows a tap card for the point in hand under touch, playing it as the tap lands", async () => {
@@ -502,7 +552,9 @@ describe("CloudPanel on touch", () => {
 
         tap(5, 595);
 
-        expect(await screen.findByRole("region", { name: "Tapped point" })).toHaveTextContent("kick");
+        await waitFor(() => {
+            expect(screen.getByRole("region", { name: "Tapped point" })).toHaveTextContent("kick");
+        });
         expect(screen.getByRole("group", { name: "Sample actions" })).toBeInTheDocument();
         expect(play).toHaveBeenCalledWith(expect.objectContaining({ key: FIRST_HASH, playbackRateHz: 8363 }));
     });

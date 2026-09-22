@@ -14,7 +14,7 @@ import { usePlayerStripStore } from "./playerStripStore";
 const WEIGHT_DECIMAL_PLACES = 2;
 
 interface PlayerStripProps {
-    /** Brings the Morph panel forward, which the strip offers while a morph is what sounds. */
+    /** Brings the morph strip under the cloud forward, which the player offers while a morph is what sounds. */
     readonly onRevealMorph: () => void;
 }
 
@@ -30,7 +30,7 @@ function EndName({ hash }: { readonly hash: string }): ReactElement {
     return <OptionalLabel value={reading.name} placeholder={UNNAMED_SAMPLE_LABEL} />;
 }
 
-/** One line naming the morph now sounding, with the way to the panel that drew it. */
+/** One line naming the morph now sounding, with the way to the strip that drew it. */
 function MorphReadout({ first, second, weight, onReveal }: MorphReadoutProps): ReactElement {
     return (
         <div className="player-strip-morph" role="status">

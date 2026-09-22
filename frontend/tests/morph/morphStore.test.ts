@@ -84,4 +84,76 @@ describe("naming an end outright", () => {
         useMorphStore.getState().setSecond("a");
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: "a" });
     });
+
+    it("lets one end go and keeps the other", () => {
+        useMorphStore.getState().join(A, B);
+
+        useMorphStore.getState().clearEnd("first");
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: B });
+
+        useMorphStore.getState().setFirst(A);
+        useMorphStore.getState().clearEnd("second");
+        expect(useMorphStore.getState()).toMatchObject({ first: A, second: null });
+    });
+});
+
+describe("the render on screen", () => {
+    it("records the weight a point was heard at, and keeps it while the pair stays", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().setWeight(0.25);
+
+        useMorphStore.getState().markRendered();
+        expect(useMorphStore.getState().renderedWeight).toBe(0.25);
+
+        useMorphStore.getState().setWeight(0.75);
+        useMorphStore.getState().setFirst(A);
+        expect(useMorphStore.getState().renderedWeight).toBe(0.25);
+    });
+
+    interface PairChange {
+        readonly name: string;
+        readonly change: () => void;
+    }
+
+    const PAIR_CHANGES: readonly PairChange[] = [
+        {
+            name: "another end is named",
+            change: () => {
+                useMorphStore.getState().setSecond(C);
+            },
+        },
+        {
+            name: "the anchor joins a new sample",
+            change: () => {
+                useMorphStore.getState().join(A, C);
+            },
+        },
+        {
+            name: "the ends swap",
+            change: () => {
+                useMorphStore.getState().swap();
+            },
+        },
+        {
+            name: "an end is let go",
+            change: () => {
+                useMorphStore.getState().clearEnd("first");
+            },
+        },
+        {
+            name: "the pair clears",
+            change: () => {
+                useMorphStore.getState().clear();
+            },
+        },
+    ];
+
+    it.each(PAIR_CHANGES)("drops the render once $name", ({ change }: PairChange) => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().markRendered();
+
+        change();
+
+        expect(useMorphStore.getState().renderedWeight).toBeNull();
+    });
 });

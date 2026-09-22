@@ -780,8 +780,9 @@ cloud mounted across navigations because every route renders the same component.
 described once in `frontend/src/workspace/panelRegistry.ts`: its component, the placement a
 reopened panel returns to, whether dockview keeps its DOM while it is tabbed away (the cloud's
 WebGL scene survives that way), the address that shows it, and where it lives on a phone. The
-routes are generated from that registry, so `/cloud`, `/modules`, `/morph` and `/stats` open and
-reveal their panels, while `/samples/{hash}` and `/modules/{hash}` reveal the details as before.
+routes are generated from that registry, so `/cloud`, `/modules` and `/stats` open and reveal
+their panels, while `/samples/{hash}` and `/modules/{hash}` reveal the details as before, and the
+Morph panel's old `/morph` goes on to the cloud, where the morph lives now.
 
 The first-run arrangement is drawn in `frontend/src/workspace/defaultLayout.ts` as dockview's own
 serialized layout over a nominal box, which dockview scales to the window: the listings on the
@@ -900,12 +901,15 @@ the press landed on empty space, to the cursor, snapping to the point under it
 (`frontend/src/cloud/MorphBand.tsx`), so the pair a release would join is visible before it lands;
 the join then draws a line between the two ends' markers with a knob on it that is the weight
 (`frontend/src/cloud/MorphLink.tsx`), moving with the points through pan and zoom like every overlay
-on the cloud. The Morph
-panel mirrors the same weight as a slider, names both ends with the
-link every listing row carries (a click highlights the end, a double-click opens it in the Sample
-Detail), and plays the render on release through the one preview element every sample plays
-through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is keyed by its own
-render's address). Beneath the play row it states how far apart the two ends sit
+on the cloud. The strip along the bottom of the Cloud panel (`frontend/src/morph/MorphStrip.tsx`)
+shows the same pair as two slots that name their ends with the link every listing row carries (a
+click highlights the end, a double-click opens it in the Sample Detail) or offer the sample in hand
+for an empty end, and opens out into a slider mirroring the knob's weight, the distance between the
+ends and the render drawn over both ends' traces. Every point is heard through
+`frontend/src/morph/useMorphPlayback.ts`, which plays the render through the one preview element
+every sample plays through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is
+keyed by its own render's address) and records the weight in `morphStore`, so the waveform draws
+whichever control let go last. The opened strip states how far apart the two ends sit
 (`frontend/src/morph/MorphDistance.tsx`, over `GET /samples/{hash}/distance/{other}`), so the length
 of the path is read where the path is traveled. Both ends are carried into one frame before they blend: the API resolves the
 rate each is heard at by the one rule every reader of the catalog applies and hands both to the

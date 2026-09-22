@@ -5,6 +5,7 @@ import type { FunctionComponent, ReactElement } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useMorphStore } from "../morph/morphStore";
+import { useMorphStripStore } from "../morph/morphStripStore";
 import type { ShellView } from "../navigation/shellView";
 import { withBoundary } from "../shared/ErrorBoundary";
 import { PanelHost } from "../shared/panel/PanelHost";
@@ -42,13 +43,14 @@ function buildDockviewComponents(): Record<string, FunctionComponent<IDockviewPa
 /**
  * The dockable workspace: the top bar over dockview's groups of panels, and the player strip
  * beneath them. An address reveals its panel or the detail of its entity once the instance is
- * ready, and a completed morph pair brings the Morph panel forward, so the sound a person just
- * paired is one glance away.
+ * ready, and a completed morph pair brings the Cloud panel forward, whose strip names the pair, so
+ * the sound a person just paired is one glance away.
  */
 export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
     const components = useMemo(buildDockviewComponents, []);
     const [api, setApi] = useState<DockviewApi | null>(null);
     const pairComplete = useMorphStore((state) => state.first !== null && state.second !== null);
+    const setMorphStripExpanded = useMorphStripStore((state) => state.setExpanded);
 
     useEffect(() => {
         if (api === null) {
@@ -68,8 +70,8 @@ export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
     }, [view, api]);
 
     useEffect(() => {
-        if (pairComplete) {
-            revealPanel(api, "morph");
+        if (pairComplete && api !== null) {
+            openAndRevealPanel(api, PANEL_REGISTRY.cloud);
         }
     }, [pairComplete, api]);
 
@@ -79,7 +81,10 @@ export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
     }
 
     function handleRevealMorph(): void {
-        revealPanel(api, "morph");
+        if (api !== null) {
+            openAndRevealPanel(api, PANEL_REGISTRY.cloud);
+        }
+        setMorphStripExpanded(true);
     }
 
     return (

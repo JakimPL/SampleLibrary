@@ -4,6 +4,7 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { INITIAL_MORPH_STATE, useMorphStore } from "../src/morph/morphStore";
+import { INITIAL_MORPH_STRIP_STATE, useMorphStripStore } from "../src/morph/morphStripStore";
 import { clearRequestCache } from "../src/shared/requestCache";
 import { INITIAL_PHONE_SHELL_STATE, usePhoneShellStore } from "../src/shell/phone/phoneShellStore";
 import { DEFAULT_THEME_PREFERENCE } from "../src/theme/themeOptions";
@@ -48,6 +49,7 @@ afterEach(async () => {
 
 afterEach(() => {
     useMorphStore.setState(INITIAL_MORPH_STATE);
+    useMorphStripStore.setState(INITIAL_MORPH_STRIP_STATE);
 });
 
 // jsdom lacks pointer capture, which the morph marker takes while it is dragged.

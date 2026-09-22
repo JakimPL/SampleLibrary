@@ -36,9 +36,9 @@ describe("restoreOrBuildLayout", () => {
     });
 
     it("restores a record of the current version as it was saved", () => {
-        const saved = serializedLayoutOf(["cloud", "morph"]);
+        const saved = serializedLayoutOf(["cloud", "stats"]);
         storeRecord({ version: LAYOUT_VERSION, layout: saved, knownPanels: ALL_PANEL_IDS });
-        const api = new FakeDockviewApi(["cloud", "morph"]);
+        const api = new FakeDockviewApi(["cloud", "stats"]);
 
         restoreOrBuildLayout(api.asApi());
 
