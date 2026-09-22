@@ -6,7 +6,6 @@ import type * as SamplesApi from "../../src/api/samples";
 import { PHONE_MEDIA_QUERY } from "../../src/layout/layoutMode";
 import { DEFAULT_WEIGHT, useMorphStore } from "../../src/morph/morphStore";
 import { MorphStrip } from "../../src/morph/MorphStrip";
-import { useMorphStripStore } from "../../src/morph/morphStripStore";
 import type * as AudioPreview from "../../src/samples/useAudioPreview";
 import { UNNAMED_SAMPLE_LABEL } from "../../src/shared/labels";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
@@ -47,7 +46,7 @@ vi.mock("../../src/samples/useAudioPreview", async () => {
     return { ...actual, useAudioPreview: () => ({ play, playingKey: null, failure: null }) };
 });
 
-vi.mock("../../src/shell/player/FocusedSampleTransport", () => ({
+vi.mock("../../src/samples/SampleTransport", () => ({
     FocusedSampleTransport: ({ sampleHash }: { readonly sampleHash: string }) => <p>player {sampleHash}</p>,
 }));
 
@@ -313,7 +312,7 @@ describe("MorphStrip with a whole pair", () => {
         expect(useMorphStore.getState()).toMatchObject({ first: SECOND, second: FIRST, weight: 0.75 });
     });
 
-    it("hides the waveform again from its button, keeping the slider, and shows it on request from outside", async () => {
+    it("hides the waveform again from its button, keeping the slider, and shows it back", async () => {
         await showPairOpened(true);
 
         openWaveform();
@@ -321,10 +320,9 @@ describe("MorphStrip with a whole pair", () => {
         expect(slider()).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Waveform" })).toHaveAttribute("aria-expanded", "false");
 
-        act(() => {
-            useMorphStripStore.getState().setExpanded(true);
-        });
+        openWaveform();
         expect(morphPlay()).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Waveform" })).toHaveAttribute("aria-expanded", "true");
     });
 
     it("states how far apart the two ends of the pair sit, in the workspace", async () => {

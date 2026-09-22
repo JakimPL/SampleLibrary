@@ -14,7 +14,6 @@ import { ModuleDetailPanel } from "../../workspace/panels/ModuleDetailPanel";
 import { SampleDetailPanel } from "../../workspace/panels/SampleDetailPanel";
 import type { EntityRef } from "../../workspace/selectionStore";
 import { entityRoute } from "../../workspace/useEntityRowInteractions";
-import { FocusedSampleTransport } from "../player/FocusedSampleTransport";
 import type { PhonePage } from "./phoneView";
 import { useBack } from "./useBack";
 
@@ -126,18 +125,13 @@ export function PageBody({ page }: PageProps): ReactElement {
     switch (page.kind) {
         case "sample":
             return (
-                <>
-                    <div className="phone-page-transport">
-                        {withBoundary(<FocusedSampleTransport sampleHash={page.sampleHash} layout="stacked" />)}
-                    </div>
-                    <div className="phone-page-body">
-                        {withBoundary(
-                            <PanelHost panelId="sample-detail">
-                                <SampleDetailPanel />
-                            </PanelHost>,
-                        )}
-                    </div>
-                </>
+                <div className="phone-page-body">
+                    {withBoundary(
+                        <PanelHost panelId="sample-detail">
+                            <SampleDetailPanel />
+                        </PanelHost>,
+                    )}
+                </div>
             );
         case "module":
             return (

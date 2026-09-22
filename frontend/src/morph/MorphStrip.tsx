@@ -2,8 +2,8 @@ import type { ChangeEvent, ReactElement } from "react";
 import { useEffect, useId, useRef } from "react";
 
 import { useLayoutMode } from "../layout/useLayoutMode";
+import { FocusedSampleTransport } from "../samples/SampleTransport";
 import { Icon } from "../shared/icons/Icon";
-import { FocusedSampleTransport } from "../shell/player/FocusedSampleTransport";
 import { MorphDistance } from "./MorphDistance";
 import { MorphSlot } from "./MorphSlot";
 import { END_LETTERS, useMorphStore, WEIGHT_STEP } from "./morphStore";
@@ -179,7 +179,7 @@ export function MorphStrip(): ReactElement {
             )}
             {shown && lone !== null && (
                 <div className="morph-strip-wave" id={bodyId}>
-                    <FocusedSampleTransport sampleHash={lone} layout="stacked" />
+                    <FocusedSampleTransport sampleHash={lone} />
                 </div>
             )}
             {pair !== null && <OfflineNotice status={playback.status} />}

@@ -5,11 +5,9 @@ import type { FunctionComponent, ReactElement } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useMorphStore } from "../morph/morphStore";
-import { useMorphStripStore } from "../morph/morphStripStore";
 import type { ShellView } from "../navigation/shellView";
 import { withBoundary } from "../shared/ErrorBoundary";
 import { PanelHost } from "../shared/panel/PanelHost";
-import { PlayerStrip } from "../shell/player/PlayerStrip";
 import { TopBar } from "../shell/TopBar";
 import { restoreOrBuildLayout } from "./dockviewPersistence";
 import { PANEL_REGISTRY } from "./panelRegistry";
@@ -41,16 +39,15 @@ function buildDockviewComponents(): Record<string, FunctionComponent<IDockviewPa
 }
 
 /**
- * The dockable workspace: the top bar over dockview's groups of panels, and the player strip
- * beneath them. An address reveals its panel or the detail of its entity once the instance is
- * ready, and a completed morph pair brings the Cloud panel forward, whose strip names the pair, so
- * the sound a person just paired is one glance away.
+ * The dockable workspace: the top bar over dockview's groups of panels. An address reveals its
+ * panel or the detail of its entity once the instance is ready, and a completed morph pair brings
+ * the Cloud panel forward, whose strip names the pair, so the sound a person just paired is one
+ * glance away.
  */
 export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
     const components = useMemo(buildDockviewComponents, []);
     const [api, setApi] = useState<DockviewApi | null>(null);
     const pairComplete = useMorphStore((state) => state.first !== null && state.second !== null);
-    const setMorphStripExpanded = useMorphStripStore((state) => state.setExpanded);
 
     useEffect(() => {
         if (api === null) {
@@ -80,13 +77,6 @@ export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
         setApi(event.api);
     }
 
-    function handleRevealMorph(): void {
-        if (api !== null) {
-            openAndRevealPanel(api, PANEL_REGISTRY.cloud);
-        }
-        setMorphStripExpanded(true);
-    }
-
     return (
         <div className="workspace-root">
             <TopBar api={api} />
@@ -97,7 +87,6 @@ export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
                 disableFloatingGroups
                 singleTabMode="fullwidth"
             />
-            <PlayerStrip onRevealMorph={handleRevealMorph} />
         </div>
     );
 }

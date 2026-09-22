@@ -2,7 +2,6 @@ import type { ChangeEvent, ReactElement } from "react";
 import { useEffect } from "react";
 
 import { sampleAudioUrl } from "../api/samples";
-import { classNames } from "../shared/classNames";
 import { DownloadLink } from "../shared/DownloadLink";
 import { formatDuration } from "../shared/format";
 import { useAudioPreview } from "./useAudioPreview";
@@ -14,13 +13,6 @@ export interface RateOption {
     readonly eventCount: number;
 }
 
-/**
- * How the player lays itself out: the waveform over the transport in a panel or a page, the
- * transport beside the waveform in a strip, or the transport alone with the waveform kept out of
- * sight while it goes on sounding.
- */
-export type WaveformPlayerLayout = "stacked" | "strip" | "transport";
-
 interface WaveformPlayerProps {
     readonly sampleHash: string;
     /** The name a saved copy of this sample takes, ending in its own extension. */
@@ -28,14 +20,7 @@ interface WaveformPlayerProps {
     readonly rateHz: number;
     readonly rateOptions: readonly RateOption[];
     readonly onRateChange: (rateHz: number) => void;
-    readonly layout: WaveformPlayerLayout;
 }
-
-const LAYOUT_CLASS: Readonly<Record<WaveformPlayerLayout, string | null>> = {
-    stacked: null,
-    strip: "wave-panel-strip",
-    transport: "wave-panel-transport",
-};
 
 function describeRateOption(option: RateOption): string {
     const timeWord = option.eventCount === 1 ? "time" : "times";
@@ -43,9 +28,9 @@ function describeRateOption(option: RateOption): string {
 }
 
 /**
- * The full player of one sample: its decoded waveform, a transport, the rate it is heard at, and
- * a way to save it. It keeps to one voice with the shared preview element: playing here silences a
- * preview, and a preview starting anywhere pauses this player.
+ * The full player of one sample: its decoded waveform over a transport, the rate it is heard at,
+ * and a way to save it. It keeps to one voice with the shared preview element: playing here
+ * silences a preview, and a preview starting anywhere pauses this player.
  */
 export function WaveformPlayer({
     sampleHash,
@@ -53,7 +38,6 @@ export function WaveformPlayer({
     rateHz,
     rateOptions,
     onRateChange,
-    layout,
 }: WaveformPlayerProps): ReactElement {
     const player = useWaveformPlayer(sampleAudioUrl(sampleHash), rateHz);
     const { playingKey, stop } = useAudioPreview();
@@ -82,7 +66,7 @@ export function WaveformPlayer({
     }
 
     return (
-        <div className={classNames("wave-panel", LAYOUT_CLASS[layout])}>
+        <div className="wave-panel">
             <WaveformView
                 containerRef={player.containerRef}
                 isPlaying={player.isPlaying}

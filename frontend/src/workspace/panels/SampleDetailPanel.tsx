@@ -3,7 +3,9 @@ import { useState } from "react";
 
 import { useLayoutMode } from "../../layout/useLayoutMode";
 import { type DetailTab, SampleDetailView } from "../../samples/SampleDetailView";
+import { SampleTransport } from "../../samples/SampleTransport";
 import { useSampleDetail } from "../../samples/useSampleDetail";
+import { withBoundary } from "../../shared/ErrorBoundary";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import { hintFor } from "../../shared/hints";
 import { Loading } from "../../shared/Loading";
@@ -29,11 +31,29 @@ function FocusedSampleDetail({ sampleHash, tab, onTabChange }: FocusedSampleDeta
 
     const { sample, relations, similar } = state.data;
     return (
-        <SampleDetailView sample={sample} relations={relations} similar={similar} tab={tab} onTabChange={onTabChange} />
+        <div className="sample-panel">
+            <div className="sample-panel-transport">
+                {withBoundary(<SampleTransport key={sample.hash} sample={sample} />)}
+            </div>
+            <div className="sample-panel-body">
+                <SampleDetailView
+                    sample={sample}
+                    relations={relations}
+                    similar={similar}
+                    tab={tab}
+                    onTabChange={onTabChange}
+                />
+            </div>
+        </div>
     );
 }
 
-/** The focused sample in full, with the listing tab held here so it outlives each sample's own load. */
+/**
+ * The focused sample in full, from one detail request: its transport at one fixed height over its
+ * detail, which scrolls beneath it, the same in the workspace's panel and on the phone's page. The
+ * transport keeps a boundary of its own, so a player that fails leaves the detail readable, and
+ * the listing tab is held here so it outlives each sample's own load.
+ */
 export function SampleDetailPanel(): ReactElement {
     const focusedSampleHash = useSelectionStore((state) => state.focusedSampleHash);
     const [tab, setTab] = useState<DetailTab>(DEFAULT_DETAIL_TAB);

@@ -9,7 +9,6 @@ import { resetLayout } from "../workspace/dockviewPersistence";
 import { PANEL_REGISTRY, type PanelDefinition, type PanelId } from "../workspace/panelRegistry";
 import { DIAGNOSTICS_TITLE, DiagnosticsSheet } from "./DiagnosticsSheet";
 import { GUIDE_TITLES, GuideSheet } from "./GuideSheet";
-import { usePlayerStripStore } from "./player/playerStripStore";
 
 interface ViewMenuProps {
     readonly api: DockviewApi | null;
@@ -31,19 +30,17 @@ function openPanelIds(api: DockviewApi): ReadonlySet<PanelId> {
 
 /**
  * The menu that says which panels are open: a checkbox per registered panel, which closes it or
- * reopens it at its registered placement, one for the player strip beneath the panels, and the
- * reset that draws the first-run arrangement again. Reads `PANEL_REGISTRY` generically, so a
- * newly registered panel appears here with no change to this file. The panel controls wait,
- * disabled, until the shell's dockview instance is ready. The guide to the keys and clicks, or to
- * the gestures under touch, and the diagnostics open from here as well.
+ * reopens it at its registered placement, and the reset that draws the first-run arrangement
+ * again. Reads `PANEL_REGISTRY` generically, so a newly registered panel appears here with no
+ * change to this file. The panel controls wait, disabled, until the shell's dockview instance is
+ * ready. The guide to the keys and clicks, or to the gestures under touch, and the diagnostics
+ * open from here as well.
  */
 export function ViewMenu({ api }: ViewMenuProps): ReactElement {
     const [openIds, setOpenIds] = useState<ReadonlySet<PanelId>>(new Set());
     const [guideOpen, setGuideOpen] = useState(false);
     const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
     const { input } = useLayoutMode();
-    const stripVisible = usePlayerStripStore((state) => state.visible);
-    const setStripVisible = usePlayerStripStore((state) => state.setVisible);
 
     useEffect(() => {
         if (api === null) {
@@ -96,18 +93,6 @@ export function ViewMenu({ api }: ViewMenuProps): ReactElement {
                             </label>
                         </li>
                     ))}
-                    <li>
-                        <label>
-                            <input
-                                type="checkbox"
-                                checked={stripVisible}
-                                onChange={(event) => {
-                                    setStripVisible(event.target.checked);
-                                }}
-                            />
-                            Player strip
-                        </label>
-                    </li>
                 </ul>
                 <button type="button" className="view-menu-reset" disabled={api === null} onClick={handleReset}>
                     Reset layout

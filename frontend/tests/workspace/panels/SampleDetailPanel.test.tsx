@@ -25,6 +25,22 @@ vi.mock("../../../src/api/cloud", async () => {
     return { ...actual, getCategoryTags };
 });
 
+const { createWaveSurfer } = vi.hoisted(() => ({
+    createWaveSurfer: vi.fn(() => ({
+        on: () => () => undefined,
+        play: vi.fn().mockResolvedValue(undefined),
+        pause: vi.fn(),
+        setTime: vi.fn(),
+        setPlaybackRate: vi.fn(),
+        setOptions: vi.fn(),
+        destroy: vi.fn(),
+    })),
+}));
+
+vi.mock("wavesurfer.js", () => ({
+    default: { create: createWaveSurfer },
+}));
+
 function renderPanel(): ReturnType<typeof render> {
     return render(
         <MemoryRouter initialEntries={["/"]}>
@@ -48,6 +64,7 @@ const SAMPLE_DETAIL = {
     size_bytes: 8192,
     duration_seconds: 0.09,
     playback_rate_hz: 8363,
+    playback_rates: [{ rate_hz: 8363, event_count: 1 }],
     categories: [],
     occurrences: [
         {
@@ -72,6 +89,23 @@ describe("SampleDetailPanel", () => {
 
         expect(getSample).not.toHaveBeenCalled();
         expect(container.querySelector(".no-selection")).toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "Save this sample" })).not.toBeInTheDocument();
+    });
+
+    it("stands the sample's transport over its detail, both from one request", async () => {
+        getSample.mockResolvedValue(SAMPLE_DETAIL);
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+        useSelectionStore.getState().focusSample("abc");
+
+        renderPanel();
+
+        expect(await screen.findByRole("link", { name: "Save this sample" })).toHaveAttribute(
+            "href",
+            "/api/samples/abc/audio",
+        );
+        expect(screen.getByRole("heading", { name: "kick" })).toBeInTheDocument();
+        expect(getSample).toHaveBeenCalledTimes(1);
     });
 
     it("shows the focused sample's detail once loaded", async () => {

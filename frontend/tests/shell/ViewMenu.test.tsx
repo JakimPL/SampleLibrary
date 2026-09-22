@@ -1,7 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { usePlayerStripStore } from "../../src/shell/player/playerStripStore";
 import { ViewMenu } from "../../src/shell/ViewMenu";
 import { defaultSerializedLayout } from "../../src/workspace/defaultLayout";
 import { PANEL_REGISTRY, type PanelId } from "../../src/workspace/panelRegistry";
@@ -42,7 +41,7 @@ describe("ViewMenu", () => {
 
         expect(screen.getByRole("checkbox", { name: "Stats" })).not.toBeChecked();
         expect(screen.getByRole("checkbox", { name: "Cloud" })).toBeChecked();
-        expect(screen.getAllByRole("checkbox")).toHaveLength(ALL_PANEL_IDS.length + 1);
+        expect(screen.getAllByRole("checkbox")).toHaveLength(ALL_PANEL_IDS.length);
     });
 
     it("waits, disabled, until the dockview api is ready", () => {
@@ -107,19 +106,6 @@ describe("ViewMenu", () => {
         await waitFor(() => {
             expect(screen.getByRole("checkbox", { name: "Stats" })).toBeChecked();
         });
-    });
-
-    it("switches the player strip on and off", () => {
-        const api = new FakeDockviewApi(ALL_PANEL_IDS);
-        render(<ViewMenu api={api.asApi()} />);
-        openMenu();
-        const before = usePlayerStripStore.getState().visible;
-
-        fireEvent.click(screen.getByRole("checkbox", { name: "Player strip" }));
-
-        expect(usePlayerStripStore.getState().visible).toBe(!before);
-        fireEvent.click(screen.getByRole("checkbox", { name: "Player strip" }));
-        expect(usePlayerStripStore.getState().visible).toBe(before);
     });
 
     it("draws the first-run arrangement again on reset", () => {

@@ -25,8 +25,6 @@
     --row-height: 40px;
     --toolbar-height: 32px;
     --tab-strip-height: 26px;
-    --player-strip-height: 40px;
-    --player-strip-expanded-height: 72px;
     --phone-header-height: 44px;
     --tab-bar-height: 56px;
     --safe-top: env(safe-area-inset-top, 0px);
@@ -1849,93 +1847,23 @@ table.data td .annotation-editor-input {
     font-size: var(--font-size-small);
 }
 
-/* The window-level player: the transport beside the waveform, or alone once folded. */
-.player-strip {
-    flex: 0 0 auto;
+/* The focused sample's page or panel: its transport at one fixed height over the detail scrolling beneath it. */
+.sample-panel {
     display: flex;
-    align-items: stretch;
-    min-height: var(--player-strip-height);
-    border-top: 1px solid var(--border);
-    background: var(--surface-2);
+    flex-direction: column;
+    height: 100%;
 }
 
-.player-strip-expanded {
-    height: var(--player-strip-expanded-height);
-}
-
-.player-strip .wave-panel {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.player-strip .loading,
-.player-strip .error-notice,
-.player-strip .no-selection {
-    flex: 1 1 auto;
-    padding: var(--space-3) var(--space-4);
-    text-align: left;
-}
-
-.player-strip-morph {
+.sample-panel-transport {
     flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: 0 var(--space-4);
-    border-right: 1px solid var(--border);
-    font-size: var(--font-size-small);
-    white-space: nowrap;
+    height: 160px;
+    border-bottom: 1px solid var(--border);
 }
 
-.player-strip-morph-show {
-    height: var(--control-height-compact);
-    padding: 0 var(--space-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
-    color: var(--text-muted);
-    font-size: var(--font-size-small);
-    cursor: pointer;
-}
-
-.player-strip-toggle {
-    flex: 0 0 auto;
-    width: var(--control-height);
-    border: none;
-    border-left: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 16px;
-    cursor: pointer;
-}
-
-.player-strip-toggle:hover {
-    color: var(--text-primary);
-}
-
-/* The player in a strip: the transport first, the waveform taking the rest of the row. */
-.wave-panel-strip {
-    flex-direction: row-reverse;
-}
-
-.wave-panel-strip .wave-canvas-wrap {
+.sample-panel-body {
     flex: 1 1 auto;
     min-height: 0;
-}
-
-.wave-panel-strip .transport,
-.wave-panel-transport .transport {
-    flex: 0 0 auto;
-    flex-wrap: nowrap;
-    border-top: none;
-}
-
-.wave-panel-strip .transport {
-    border-right: 1px solid var(--border);
-}
-
-.wave-panel-transport .wave-canvas-wrap {
-    display: none;
+    overflow: auto;
 }
 
 .detail-scroll {
@@ -2740,12 +2668,6 @@ table.data td .annotation-editor-input {
     background: var(--surface-1);
 }
 
-.phone-page-transport {
-    flex: 0 0 auto;
-    height: 160px;
-    border-bottom: 1px solid var(--border);
-}
-
 .phone-page-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -2758,7 +2680,8 @@ table.data td .annotation-editor-input {
     min-height: 0;
 }
 
-.phone-shell .panel-host {
+.phone-shell .panel-host,
+.phone-shell .sample-panel-body {
     overscroll-behavior: contain;
 }
 

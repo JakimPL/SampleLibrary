@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
 import { samplePreview, useAudioPreview } from "../../src/samples/useAudioPreview";
-import type { RateOption, WaveformPlayerLayout } from "../../src/samples/WaveformPlayer";
+import type { RateOption } from "../../src/samples/WaveformPlayer";
 import { WaveformPlayer } from "../../src/samples/WaveformPlayer";
 
 const { instances, createMock } = vi.hoisted(() => {
@@ -56,7 +56,6 @@ interface PlayerOverrides {
     readonly rateHz?: number;
     readonly rateOptions?: readonly RateOption[];
     readonly onRateChange?: (rateHz: number) => void;
-    readonly layout?: WaveformPlayerLayout;
 }
 
 function renderPlayer(overrides: PlayerOverrides = {}): RenderResult {
@@ -67,7 +66,6 @@ function renderPlayer(overrides: PlayerOverrides = {}): RenderResult {
             rateHz={overrides.rateHz ?? 8363}
             rateOptions={overrides.rateOptions ?? [{ rateHz: 8363, eventCount: 1 }]}
             onRateChange={overrides.onRateChange ?? vi.fn()}
-            layout={overrides.layout ?? "stacked"}
         />,
     );
 }
@@ -167,24 +165,6 @@ describe("WaveformPlayer", () => {
         const save = screen.getByRole("link", { name: "Save this sample" });
         expect(save).toHaveAttribute("href", "/api/samples/abc/audio");
         expect(save).toHaveAttribute("download", "crash cymbal.wav");
-    });
-
-    it("lays the transport beside the waveform in a strip, and alone once folded", () => {
-        const { container, rerender } = renderPlayer({ layout: "strip" });
-        expect(container.querySelector(".wave-panel")).toHaveClass("wave-panel-strip");
-
-        rerender(
-            <WaveformPlayer
-                sampleHash="abc"
-                fileName="crash cymbal.wav"
-                rateHz={8363}
-                rateOptions={[{ rateHz: 8363, eventCount: 1 }]}
-                onRateChange={vi.fn()}
-                layout="transport"
-            />,
-        );
-
-        expect(container.querySelector(".wave-panel")).toHaveClass("wave-panel-transport");
     });
 
     it("keeps to one voice with the shared preview element", () => {

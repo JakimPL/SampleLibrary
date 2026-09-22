@@ -23,8 +23,7 @@ const INSPECTOR_COLUMN_SHARE = 0.28;
 
 /**
  * The first-run arrangement: the listings on the left, the cloud in the middle, and an inspector
- * of the details and the statistics on the right; the transport lives in the player
- * strip beneath them all.
+ * of the details and the statistics on the right.
  */
 const DEFAULT_COLUMNS: readonly LayoutColumn[] = [
     { share: LISTINGS_COLUMN_SHARE, rows: [{ share: WHOLE_SHARE, panels: ["samples-list", "modules-list"] }] },

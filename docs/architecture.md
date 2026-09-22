@@ -786,13 +786,18 @@ Morph panel's old `/morph` goes on to the cloud, where the morph lives now.
 
 The first-run arrangement is drawn in `frontend/src/workspace/defaultLayout.ts` as dockview's own
 serialized layout over a nominal box, which dockview scales to the window: the listings on the
-left, the cloud over the transport in the middle, and an inspector of the details and the
-statistics on the right. `frontend/src/workspace/dockviewPersistence.ts` saves every change under
+left, the cloud in the middle, and an inspector of the details and the statistics on the right.
+`frontend/src/workspace/dockviewPersistence.ts` saves every change under
 a versioned record; a record of another version is discarded once and the default drawn again,
 which is how a new arrangement reaches a browser that saved an older one. The top bar's View menu
 opens and closes panels at their registered placement and resets the arrangement; the theme select
 sits beside it. Each panel renders inside a `PanelHost`, the scroll container that is also the
 container its stylesheet rules query, so a panel fits the width it was given rather than the window's.
+The Sample Detail panel stands the focused sample's transport
+(`frontend/src/samples/SampleTransport.tsx`, the wavesurfer player over the one detail request
+the panel reads) at one fixed height over the detail, which scrolls beneath it, the same
+composition the phone's sample page shows, so the workspace's frame holds still while a sample or
+a morph sounds.
 
 Two shells mount that one registry. `frontend/src/layout/` reads the viewport as a layout mode,
 `phone` below 768 pixels of width or 560 of height and `workspace` otherwise, and the primary

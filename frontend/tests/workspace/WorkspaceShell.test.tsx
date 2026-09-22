@@ -110,18 +110,34 @@ describe("WorkspaceShell", () => {
         }
     });
 
-    it("shows the player strip once a sample is focused", async () => {
-        getSample.mockRejectedValue(new Error("no catalog behind this test"));
+    it("stands the focused sample's transport in the Sample Detail panel", async () => {
+        getSample.mockResolvedValue({
+            hash: "abc",
+            depth: 8,
+            channels: 1,
+            frames: 4096,
+            display_name: "kick",
+            category: null,
+            hand_label: null,
+            size_bytes: 4096,
+            duration_seconds: 0.09,
+            playback_rate_hz: null,
+            playback_rates: [],
+            categories: [],
+            occurrences: [],
+            files: [],
+        });
         getSampleRelations.mockResolvedValue([]);
         getSimilarSamples.mockResolvedValue([]);
         renderShellAt("/");
-        expect(screen.queryByRole("region", { name: "Player" })).not.toBeInTheDocument();
+        expect(screen.queryByText(/no rate the library is known to play it at/)).not.toBeInTheDocument();
 
         act(() => {
             useSelectionStore.getState().focusSample("abc");
         });
 
-        expect(await screen.findByRole("region", { name: "Player" })).toBeInTheDocument();
+        expect(await screen.findByText(/no rate the library is known to play it at/)).toBeInTheDocument();
+        expect(await screen.findByRole("heading", { name: "kick" })).toBeInTheDocument();
     });
 
     it("seeds the focused module from a deep-linked route without requiring a click", async () => {
