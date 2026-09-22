@@ -1,12 +1,12 @@
 import type { ReactElement } from "react";
 
+import { useLayoutMode } from "../../layout/useLayoutMode";
 import { ModuleDetailView } from "../../modules/ModuleDetailView";
 import { useModule } from "../../modules/useModule";
 import { ErrorNotice } from "../../shared/ErrorNotice";
+import { hintFor } from "../../shared/hints";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
-
-const NO_MODULE_HINT = "Double-click a module to see it here.";
 
 interface FocusedModuleDetailProps {
     readonly moduleHash: string;
@@ -27,9 +27,10 @@ function FocusedModuleDetail({ moduleHash }: FocusedModuleDetailProps): ReactEle
 
 export function ModuleDetailPanel(): ReactElement {
     const focusedModuleHash = useSelectionStore((state) => state.focusedModuleHash);
+    const { input } = useLayoutMode();
 
     if (focusedModuleHash === null) {
-        return <p className="no-selection">{NO_MODULE_HINT}</p>;
+        return <p className="no-selection">{hintFor("noModule", input)}</p>;
     }
 
     return <FocusedModuleDetail moduleHash={focusedModuleHash} />;

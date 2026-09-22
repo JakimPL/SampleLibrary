@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { useState } from "react";
 
+import { useLayoutMode } from "../layout/useLayoutMode";
 import { classNames } from "../shared/classNames";
 import { EMPTY_STAR, FILLED_STAR, RATING_VALUES } from "./rating";
 
@@ -17,10 +18,13 @@ interface RatingStarsProps {
  * takes the rating back, which is the only gesture that would otherwise need a control of its own.
  *
  * Pointing at a star fills it and every star before it, showing the rating the click would leave
- * behind -- four out of five reads as four stars, the way the committed rating does.
+ * behind -- four out of five reads as four stars, the way the committed rating does. A finger
+ * points at nothing before it taps, so under touch the stars answer to the tap alone.
  */
 export function RatingStars({ rating, onRatingChange }: RatingStarsProps): ReactElement {
     const [previewed, setPreviewed] = useState<number | null>(null);
+    const { input } = useLayoutMode();
+    const previews = input === "pointer";
     const shown = previewed ?? rating;
 
     return (
@@ -40,7 +44,9 @@ export function RatingStars({ rating, onRatingChange }: RatingStarsProps): React
                     aria-label={`Rate ${String(value)}`}
                     aria-pressed={rating !== null && value <= rating}
                     onMouseEnter={() => {
-                        setPreviewed(value);
+                        if (previews) {
+                            setPreviewed(value);
+                        }
                     }}
                     onFocus={() => {
                         setPreviewed(value);

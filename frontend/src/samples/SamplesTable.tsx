@@ -1,5 +1,4 @@
 import {
-    createColumnHelper,
     flexRender,
     getCoreRowModel,
     getFilteredRowModel,
@@ -12,30 +11,20 @@ import type { ReactElement } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { SampleSelection, SampleSummary } from "../api/samples";
-import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
+import { useContainerWidth } from "../layout/useContainerWidth";
+import { useLayoutMode } from "../layout/useLayoutMode";
+import { fitColumns } from "../shared/columnFit";
+import { PanelToolbar } from "../shared/panel/PanelToolbar";
 import { TableColgroup } from "../shared/TableColgroup";
-import { TABLE_INITIAL_VIEWPORT_HEIGHT_PX, TABLE_OVERSCAN_ROWS, TABLE_ROW_HEIGHT_PX } from "../shared/tableMetrics";
+import {
+    TABLE_INITIAL_VIEWPORT_HEIGHT_PX,
+    TABLE_OVERSCAN_ROWS,
+    TABLE_ROW_HEIGHT_BY_INPUT,
+} from "../shared/tableMetrics";
+import { SAMPLE_COLUMNS, sampleColumnSpec } from "./sampleColumns";
 import { SampleRow } from "./SampleRow";
 
 const LOAD_MORE_TRIGGER_DISTANCE = 20;
-
-const columnHelper = createColumnHelper<SampleSummary>();
-
-const COLUMNS = [
-    columnHelper.display({ id: "waveform", header: "Waveform", size: 76 }),
-    columnHelper.accessor(
-        (sample) => (sample.display_name.trim() === "" ? UNNAMED_SAMPLE_LABEL : sample.display_name),
-        {
-            id: "name",
-            header: "Name",
-            meta: { flexible: true },
-        },
-    ),
-    columnHelper.display({ id: "category", header: "Category", size: 144 }),
-    columnHelper.display({ id: "verdict", header: "Rating", size: 110 }),
-    columnHelper.accessor("size_bytes", { header: "Size", size: 80 }),
-    columnHelper.accessor("occurrence_count", { header: "Occurrences", size: 84 }),
-];
 
 interface SamplesTableProps {
     readonly samples: readonly SampleSummary[];
@@ -52,6 +41,12 @@ interface SamplesTableProps {
     readonly onSelectionChange: (selection: SampleSelection) => void;
 }
 
+/**
+ * The samples listing: a virtualized table whose columns yield one by one as its panel narrows,
+ * the counts first and the name last, so the same listing reads in a wide workspace column and on
+ * a phone. Under touch the rows grow to a finger's height and the verdict column keeps the heart
+ * alone, the stars being a tap away elsewhere.
+ */
 export function SamplesTable({
     samples,
     loadedCount,
@@ -69,13 +64,21 @@ export function SamplesTable({
     const [globalFilter, setGlobalFilter] = useState("");
     const [sorting, setSorting] = useState<SortingState>([]);
     const scrollElementRef = useRef<HTMLDivElement | null>(null);
+    const { input } = useLayoutMode();
+    const spec = useMemo(() => sampleColumnSpec(input), [input]);
+    const width = useContainerWidth(scrollElementRef);
+    const visibleColumns = useMemo(() => fitColumns(spec, width ?? Number.POSITIVE_INFINITY), [spec, width]);
+    const columnVisibility = useMemo(
+        () => Object.fromEntries(spec.map((column) => [column.id, visibleColumns.has(column.id)])),
+        [spec, visibleColumns],
+    );
 
     const data = useMemo(() => Array.from(samples), [samples]);
 
     const table = useReactTable({
         data,
-        columns: COLUMNS,
-        state: { sorting, globalFilter },
+        columns: SAMPLE_COLUMNS,
+        state: { sorting, globalFilter, columnVisibility },
         onSortingChange: setSorting,
         onGlobalFilterChange: setGlobalFilter,
         getCoreRowModel: getCoreRowModel(),
@@ -83,14 +86,19 @@ export function SamplesTable({
         getFilteredRowModel: getFilteredRowModel(),
     });
     const rows = table.getRowModel().rows;
+    const visibleColumnCount = table.getVisibleLeafColumns().length;
 
+    const rowHeight = TABLE_ROW_HEIGHT_BY_INPUT[input];
     const virtualizer = useVirtualizer({
         count: rows.length,
         getScrollElement: () => scrollElementRef.current,
-        estimateSize: () => TABLE_ROW_HEIGHT_PX,
+        estimateSize: () => rowHeight,
         overscan: TABLE_OVERSCAN_ROWS,
         initialRect: { width: 0, height: TABLE_INITIAL_VIEWPORT_HEIGHT_PX },
     });
+    useEffect(() => {
+        virtualizer.measure();
+    }, [virtualizer, rowHeight]);
     const virtualRows = virtualizer.getVirtualItems();
     const lastVirtualRow = virtualRows[virtualRows.length - 1];
     const paddingTop = virtualRows[0]?.start ?? 0;
@@ -116,64 +124,72 @@ export function SamplesTable({
 
     return (
         <div className="panel-stack">
-            <div className="panel-status">
-                <span className="cell-muted mono">
-                    {loadedCount} of {total} loaded
-                    {groupByEquivalence ? ` · ${String(groupCount)} groups` : ""}
-                    {isLoadingMore && hasMore ? " · loading…" : ""}
-                </span>
-                {isNarrowed && hasMore && (
-                    <button type="button" onClick={onLoadMore} disabled={isLoadingMore}>
-                        Load more
-                    </button>
-                )}
-                {loadMoreError !== null && <span className="error-notice">{loadMoreError}</span>}
-            </div>
-            <div className="panel-filter">
-                <input
-                    type="text"
-                    placeholder="Filter samples…"
-                    value={globalFilter}
-                    onChange={(event) => {
-                        setGlobalFilter(event.target.value);
-                    }}
-                />
-                <label>
+            <PanelToolbar
+                primary={
                     <input
-                        type="checkbox"
-                        checked={groupByEquivalence}
+                        type="text"
+                        placeholder="Filter samples…"
+                        value={globalFilter}
                         onChange={(event) => {
-                            onGroupByEquivalenceChange(event.target.checked);
+                            setGlobalFilter(event.target.value);
                         }}
                     />
-                    Group similar
-                </label>
-                <button
-                    type="button"
-                    aria-pressed={selection.favoritesOnly}
-                    onClick={() => {
-                        onSelectionChange({ ...selection, favoritesOnly: !selection.favoritesOnly });
-                    }}
-                >
-                    Favorites
-                </button>
-                <select
-                    aria-label="Order"
-                    value={selection.sort}
-                    onChange={(event) => {
-                        onSelectionChange({
-                            ...selection,
-                            sort: event.target.value === "rating" ? "rating" : "occurrences",
-                        });
-                    }}
-                >
-                    <option value="occurrences">Most used</option>
-                    <option value="rating">Best rated</option>
-                </select>
-            </div>
+                }
+                secondary={
+                    <>
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={groupByEquivalence}
+                                onChange={(event) => {
+                                    onGroupByEquivalenceChange(event.target.checked);
+                                }}
+                            />
+                            Group similar
+                        </label>
+                        <button
+                            type="button"
+                            aria-pressed={selection.favoritesOnly}
+                            onClick={() => {
+                                onSelectionChange({ ...selection, favoritesOnly: !selection.favoritesOnly });
+                            }}
+                        >
+                            Favorites
+                        </button>
+                        <select
+                            aria-label="Order"
+                            value={selection.sort}
+                            onChange={(event) => {
+                                onSelectionChange({
+                                    ...selection,
+                                    sort: event.target.value === "rating" ? "rating" : "occurrences",
+                                });
+                            }}
+                        >
+                            <option value="occurrences">Most used</option>
+                            <option value="rating">Best rated</option>
+                        </select>
+                    </>
+                }
+                status={
+                    <>
+                        <span className="cell-muted mono">
+                            {loadedCount} of {total} loaded
+                            {groupByEquivalence ? ` · ${String(groupCount)} groups` : ""}
+                            {isLoadingMore && hasMore ? " · loading…" : ""}
+                        </span>
+                        {isNarrowed && hasMore && (
+                            <button type="button" onClick={onLoadMore} disabled={isLoadingMore}>
+                                Load more
+                            </button>
+                        )}
+                        {loadMoreError !== null && <span className="error-notice">{loadMoreError}</span>}
+                    </>
+                }
+            />
             <div className="panel-body" ref={scrollElementRef}>
                 <table className="data">
-                    <TableColgroup table={table} />
+                    <TableColgroup table={table} spec={spec} />
                     <thead>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <tr key={headerGroup.id}>
@@ -204,7 +220,7 @@ export function SamplesTable({
                     <tbody>
                         {paddingTop > 0 && (
                             <tr aria-hidden="true" style={{ height: paddingTop }}>
-                                <td colSpan={COLUMNS.length} />
+                                <td colSpan={visibleColumnCount} />
                             </tr>
                         )}
                         {virtualRows.map((virtualRow) => {
@@ -214,12 +230,14 @@ export function SamplesTable({
                                     key={row.original.hash}
                                     sample={row.original}
                                     groupByEquivalence={groupByEquivalence}
+                                    visibleColumns={visibleColumns}
+                                    input={input}
                                 />
                             ) : null;
                         })}
                         {paddingBottom > 0 && (
                             <tr aria-hidden="true" style={{ height: paddingBottom }}>
-                                <td colSpan={COLUMNS.length} />
+                                <td colSpan={visibleColumnCount} />
                             </tr>
                         )}
                     </tbody>

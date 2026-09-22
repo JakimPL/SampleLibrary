@@ -3,9 +3,19 @@ import { Link } from "react-router-dom";
 
 import type { SampleRelation } from "../api/samples";
 import { classNames } from "../shared/classNames";
+import { RowOpenLink } from "../workspace/RowOpenLink";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
 
 const CONFIDENCE_DECIMAL_PLACES = 2;
+
+/** The columns of the relations table, as its header and its stacked rows both name them. */
+export const RELATION_COLUMN_LABELS = {
+    sample: "Sample",
+    type: "Type",
+    confidence: "Confidence",
+    method: "Method",
+    reviewed: "Reviewed",
+} as const;
 
 function describeReviewStatus(review: SampleRelation["review"]): string {
     if (!review) {
@@ -33,17 +43,24 @@ export function SampleRelationRow({ relation, subjectHash }: SampleRelationRowPr
             onClickCapture={onClick}
             onDoubleClick={onDoubleClick}
         >
-            <td className="cell-name">
+            <td className="cell-name" data-label={RELATION_COLUMN_LABELS.sample}>
                 <Link to={href} className="cell-primary mono">
                     {otherHash}
                 </Link>
+                <RowOpenLink href={href} label="Open sample" />
             </td>
-            <td>
+            <td data-label={RELATION_COLUMN_LABELS.type}>
                 <span className={`badge badge-${relation.relation_type}`}>{relation.relation_type}</span>
             </td>
-            <td className="mono">{relation.confidence.toFixed(CONFIDENCE_DECIMAL_PLACES)}</td>
-            <td className="cell-muted">{relation.method}</td>
-            <td className="cell-muted">{describeReviewStatus(relation.review)}</td>
+            <td className="mono" data-label={RELATION_COLUMN_LABELS.confidence}>
+                {relation.confidence.toFixed(CONFIDENCE_DECIMAL_PLACES)}
+            </td>
+            <td className="cell-muted" data-label={RELATION_COLUMN_LABELS.method}>
+                {relation.method}
+            </td>
+            <td className="cell-muted" data-label={RELATION_COLUMN_LABELS.reviewed}>
+                {describeReviewStatus(relation.review)}
+            </td>
         </tr>
     );
 }

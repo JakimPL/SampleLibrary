@@ -115,6 +115,7 @@
         --tap-target: 44px;
         --toolbar-height: 40px;
         --tab-strip-height: 36px;
+        --row-height: 52px;
         --font-size-input: 16px;
     }
 
@@ -515,11 +516,9 @@ table.mini {
     border-collapse: collapse;
 }
 
-/* A fixed layout holds the <colgroup> widths while a virtualized listing swaps its rows; the minimum
-   keeps the unsized column readable. */
+/* A fixed layout holds the <colgroup> widths while a virtualized listing swaps its rows. */
 table.data {
     table-layout: fixed;
-    min-width: 600px;
 }
 
 table.data thead {
@@ -611,9 +610,43 @@ tr.is-focused {
     box-shadow: inset 2px 0 0 var(--accent);
 }
 
-/* The cap holds the mini tables, whose layout is measured from their content. */
+/* The cap holds the mini tables, whose layout is measured from their content; the room on the
+   right is the chevron's. */
 .cell-name {
+    position: relative;
     max-width: 220px;
+    padding-right: calc(var(--tap-target) + var(--space-2));
+}
+
+/* The chevron that opens the row: hidden until the row is pointed at or focused, always shown to a finger. */
+.row-open {
+    position: absolute;
+    top: 50%;
+    right: var(--space-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    transform: translateY(-50%);
+    border-radius: var(--radius-2);
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1;
+    text-decoration: none;
+    opacity: 0;
+}
+
+.row-open:hover,
+.row-open:focus-visible {
+    color: var(--text-primary);
+    background: var(--surface-2);
+}
+
+tr:hover .row-open,
+tr:focus-within .row-open,
+:root[data-input="touch"] .row-open {
+    opacity: 1;
 }
 
 /* Set tight so a name, a hash and a near-duplicate badge fit the listing row height. */
@@ -960,9 +993,181 @@ table.data td .annotation-editor-input {
     padding: 0 var(--space-3);
 }
 
+/* A sheet rises over everything from the bottom edge; the scrim behind it is the way out. */
+.sheet-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.sheet-scrim {
+    position: absolute;
+    inset: 0;
+    border: none;
+    padding: 0;
+    background: rgb(0 0 0 / 40%);
+    cursor: default;
+}
+
+.sheet {
+    position: relative;
+    width: min(100%, 560px);
+    max-height: calc(100dvh - var(--space-7));
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-3) var(--space-6) calc(var(--space-6) + var(--safe-bottom));
+    background: var(--surface-1);
+    color: var(--text-primary);
+    border-radius: var(--radius-4) var(--radius-4) 0 0;
+    box-shadow: var(--shadow);
+    animation: sheet-rise 160ms ease-out;
+}
+
+.sheet:focus {
+    outline: none;
+}
+
+.sheet-handle {
+    width: 36px;
+    height: 4px;
+    margin: 0 auto var(--space-4);
+    border-radius: 2px;
+    background: var(--border-strong);
+}
+
+.sheet-title {
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.sheet-body {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.sheet-actions {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.sheet-actions button {
+    min-height: var(--tap-target);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-size: var(--font-size-body);
+    text-align: left;
+    cursor: pointer;
+}
+
+.sheet-verdict {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.sheet .rating-star,
+.sheet .favorite-toggle {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    font-size: 20px;
+}
+
+.label-sheet-input {
+    width: 100%;
+    min-height: var(--tap-target);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    text-transform: uppercase;
+}
+
+.label-sheet-helper {
+    margin: 0;
+    font-size: var(--font-size-small);
+    color: var(--text-muted);
+}
+
+.label-sheet-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.label-sheet-chips button {
+    min-height: 32px;
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-size: var(--font-size-small);
+    cursor: pointer;
+}
+
+.label-sheet-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+}
+
+.label-sheet-buttons button {
+    min-height: var(--tap-target);
+    padding: 0 var(--space-6);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-size: var(--font-size-body);
+    cursor: pointer;
+}
+
+@keyframes sheet-rise {
+    from {
+        transform: translateY(24px);
+        opacity: 0;
+    }
+
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sheet {
+        animation: none;
+    }
+}
+
+/* Under touch the column holds the heart alone, one tap target wide. */
+:root[data-input="touch"] .cell-verdict .favorite-toggle {
+    width: var(--tap-target);
+    min-height: var(--tap-target);
+    font-size: 18px;
+}
+
+/* A finger gets a whole target per star and heart wherever they stand on their own. */
+:root[data-input="touch"] .annotation-editor .rating-star,
+:root[data-input="touch"] .annotation-editor .favorite-toggle {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    font-size: 20px;
+}
+
 /* `:where` keeps the star and heart exception out of this selector's specificity. */
 .panel-filter button,
 .detail-tabs button,
+.sample-actions button,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
 .morph-panel button:not(.thumbnail-button) {
     border: 1px solid var(--border);
@@ -976,6 +1181,9 @@ table.data td .annotation-editor-input {
 }
 
 .panel-filter button:disabled,
+.sample-actions button:disabled,
+.sheet-actions button:disabled,
+.label-sheet-buttons button:disabled,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)):disabled {
     color: var(--text-faint);
     cursor: default;
@@ -983,6 +1191,7 @@ table.data td .annotation-editor-input {
 
 .panel-filter button:hover:enabled,
 .detail-tabs button:hover:enabled,
+.sample-actions button:hover:enabled,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled {
     color: var(--text-primary);
     border-color: var(--border-strong);
@@ -993,6 +1202,37 @@ table.data td .annotation-editor-input {
     background: var(--accent-soft);
     color: var(--accent);
     border-color: var(--accent);
+}
+
+/* One row over a listing that wraps its status beneath the controls when the room runs out. */
+.panel-toolbar {
+    flex-wrap: wrap;
+}
+
+.panel-toolbar-primary {
+    flex: 1 1 160px;
+    display: flex;
+    min-width: 0;
+}
+
+.panel-toolbar-secondary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.panel-toolbar-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-left: auto;
+    font-size: var(--font-size-caption);
+    white-space: nowrap;
+}
+
+.panel-toolbar-menu .disclosure-menu-panel {
+    display: grid;
+    gap: var(--space-3);
 }
 
 .thumbnail-button {
@@ -1522,6 +1762,86 @@ table.data td .annotation-editor-input {
     margin-bottom: var(--space-7);
 }
 
+.sample-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin: 0 0 var(--space-5);
+}
+
+/* A narrow panel: stacked mini tables that name each value, one-column property lists, a strip of
+   tabs that scrolls, and the stats and the morph's ends one under the other. */
+@container panel (width <= 480px) {
+    table.mini thead {
+        display: none;
+    }
+
+    table.mini tbody tr {
+        display: block;
+        padding: var(--space-2) 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    table.mini td {
+        display: flex;
+        gap: var(--space-4);
+        align-items: baseline;
+        padding: 1px 0;
+        border-bottom: none;
+    }
+
+    table.mini td::before {
+        content: attr(data-label);
+        flex: 0 0 76px;
+        font-family: var(--font-mono);
+        font-size: var(--font-size-label);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-faint);
+    }
+
+    table.mini td:empty {
+        display: none;
+    }
+
+    table.mini .cell-name {
+        max-width: none;
+    }
+
+    .kv {
+        grid-template-columns: 1fr;
+        gap: var(--space-1) 0;
+    }
+
+    .kv dt {
+        margin-top: var(--space-3);
+    }
+
+    .detail-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        padding-bottom: var(--space-1);
+    }
+
+    .detail-tabs button {
+        flex: 0 0 auto;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-tile.is-wide,
+    .chart-card {
+        grid-column: auto;
+    }
+
+    .morph-endpoints {
+        grid-template-columns: 1fr auto;
+    }
+}
+
 .detail-section h3 {
     margin: 0 0 var(--space-3);
     font-family: var(--font-mono);
@@ -2009,4 +2329,10 @@ table.data td .annotation-editor-input {
     font-size: var(--font-size-small);
     cursor: pointer;
     color: var(--text-muted);
+}
+
+/* A held finger opens a row's actions, so the row itself offers no text to select and no callout. */
+:root[data-input="touch"] table.data tbody tr {
+    user-select: none;
+    -webkit-touch-callout: none;
 }

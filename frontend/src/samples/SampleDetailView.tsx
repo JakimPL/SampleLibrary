@@ -5,10 +5,11 @@ import { DetailHeader } from "../shared/DetailHeader";
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { AnnotationRows } from "./AnnotationRows";
-import { SampleFileRow } from "./SampleFileRow";
-import { SampleOccurrenceRow } from "./SampleOccurrenceRow";
-import { SampleRelationRow } from "./SampleRelationRow";
-import { SimilarSampleRow } from "./SimilarSampleRow";
+import { SampleActions } from "./SampleActions";
+import { FILE_COLUMN_LABELS, SampleFileRow } from "./SampleFileRow";
+import { OCCURRENCE_COLUMN_LABELS, SampleOccurrenceRow } from "./SampleOccurrenceRow";
+import { RELATION_COLUMN_LABELS, SampleRelationRow } from "./SampleRelationRow";
+import { SIMILAR_COLUMN_LABELS, SimilarSampleRow } from "./SimilarSampleRow";
 
 export type DetailTab = "occurrences" | "relations" | "similar" | "cooccurrence";
 
@@ -25,19 +26,21 @@ interface DetailTabChoice {
     readonly label: string;
 }
 
+function HeaderRow({ labels }: { readonly labels: Readonly<Record<string, string>> }): ReactElement {
+    return (
+        <tr>
+            {Object.values(labels).map((label) => (
+                <th key={label}>{label}</th>
+            ))}
+        </tr>
+    );
+}
+
 function ModuleOccurrencesTable({ sample }: { readonly sample: SampleDetail }): ReactElement {
     return (
         <table className="mini">
             <thead>
-                <tr>
-                    <th>Module</th>
-                    <th>Tracker</th>
-                    <th>Name</th>
-                    <th>Rate</th>
-                    <th>Volume</th>
-                    <th>Panning</th>
-                    <th>Loop</th>
-                </tr>
+                <HeaderRow labels={OCCURRENCE_COLUMN_LABELS} />
             </thead>
             <tbody>
                 {sample.occurrences.map((occurrence) => (
@@ -55,12 +58,7 @@ function SampleFilesTable({ sample }: { readonly sample: SampleDetail }): ReactE
     return (
         <table className="mini">
             <thead>
-                <tr>
-                    <th>File</th>
-                    <th>Directory</th>
-                    <th>Rate</th>
-                    <th>Status</th>
-                </tr>
+                <HeaderRow labels={FILE_COLUMN_LABELS} />
             </thead>
             <tbody>
                 {sample.files.map((sampleFile) => (
@@ -100,13 +98,7 @@ function RelationsSection({
     return (
         <table className="mini">
             <thead>
-                <tr>
-                    <th>Sample</th>
-                    <th>Type</th>
-                    <th>Confidence</th>
-                    <th>Method</th>
-                    <th>Reviewed</th>
-                </tr>
+                <HeaderRow labels={RELATION_COLUMN_LABELS} />
             </thead>
             <tbody>
                 {relations.map((relation) => (
@@ -126,12 +118,7 @@ function SimilarSection({ similar }: { readonly similar: readonly SimilarSample[
     return (
         <table className="mini">
             <thead>
-                <tr>
-                    <th>Sample</th>
-                    <th>Name</th>
-                    <th>Category</th>
-                    <th>Distance</th>
-                </tr>
+                <HeaderRow labels={SIMILAR_COLUMN_LABELS} />
             </thead>
             <tbody>
                 {similar.map((neighbor) => (
@@ -181,6 +168,7 @@ export function SampleDetailView({
     return (
         <section className="detail-scroll">
             <DetailHeader name={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} hash={sample.hash} />
+            <SampleActions sampleHash={sample.hash} playbackRateHz={sample.playback_rate_hz} />
             <dl className="kv">
                 <AnnotationRows key={sample.hash} sample={sample} />
                 <dt>Size</dt>

@@ -1,9 +1,10 @@
-import { act, renderHook, screen } from "@testing-library/react";
-import type { MouseEvent, ReactElement, ReactNode } from "react";
+import { act, render, renderHook, screen } from "@testing-library/react";
+import type { KeyboardEvent, MouseEvent, ReactElement, ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { useMorphStore } from "../../src/morph/morphStore";
+import { OPENS_ENTITY_ATTRIBUTE } from "../../src/workspace/RowOpenLink";
 import { INITIAL_SELECTION_STATE, useSelectionStore } from "../../src/workspace/selectionStore";
 import { useEntityRowInteractions } from "../../src/workspace/useEntityRowInteractions";
 
@@ -25,7 +26,8 @@ interface FakeMouseEvent {
 }
 
 function fakeMouseEvent(
-    overrides: Partial<Record<"button" | "ctrlKey" | "shiftKey", number | boolean>> = {},
+    overrides: Partial<Record<"button" | "ctrlKey" | "shiftKey" | "detail", number | boolean>> = {},
+    target: EventTarget | null = null,
 ): FakeMouseEvent {
     const preventDefault = vi.fn();
     const event = {
@@ -34,10 +36,16 @@ function fakeMouseEvent(
         metaKey: false,
         shiftKey: false,
         altKey: false,
+        detail: 1,
+        target,
         preventDefault,
         ...overrides,
     } as unknown as MouseEvent;
     return { event, preventDefault };
+}
+
+function fakeKeyEvent(key: string, currentTarget: HTMLElement): KeyboardEvent<HTMLElement> {
+    return { key, currentTarget, preventDefault: vi.fn() } as unknown as KeyboardEvent<HTMLElement>;
 }
 
 describe("useEntityRowInteractions", () => {
@@ -109,6 +117,81 @@ describe("useEntityRowInteractions", () => {
 
         expect(preventDefault).not.toHaveBeenCalled();
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
+    });
+
+    it("a click a key press raised is left to the link, so Enter opens the entity", () => {
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
+        const { event, preventDefault } = fakeMouseEvent({ detail: 0 });
+
+        act(() => {
+            result.current.onClick(event);
+        });
+
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(useSelectionStore.getState().highlighted).toBeNull();
+    });
+
+    it("a click on a control that opens the entity is left to that control", () => {
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
+        const control = document.createElement("a");
+        control.setAttribute(OPENS_ENTITY_ATTRIBUTE, "");
+        const { event, preventDefault } = fakeMouseEvent({}, control);
+
+        act(() => {
+            result.current.onClick(event);
+        });
+
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(useSelectionStore.getState().highlighted).toBeNull();
+    });
+
+    it("the arrows move the focus down and up the rows' links", () => {
+        render(
+            <table>
+                <tbody>
+                    <tr>
+                        <td>
+                            <a href="/samples/a">first</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <a href="/samples/b">second</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>,
+        );
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "a" }), { wrapper });
+        const first = screen.getByText("first");
+        const second = screen.getByText("second");
+
+        act(() => {
+            result.current.onKeyDown(fakeKeyEvent("ArrowDown", first));
+        });
+        expect(second).toHaveFocus();
+
+        act(() => {
+            result.current.onKeyDown(fakeKeyEvent("ArrowUp", second));
+        });
+        expect(first).toHaveFocus();
+    });
+
+    it("M joins a sample to the one in hand, and does nothing for a module", () => {
+        useSelectionStore.getState().focusSample("anchor");
+        const sample = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
+        const module = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
+        const element = document.createElement("a");
+
+        act(() => {
+            module.result.current.onKeyDown(fakeKeyEvent("m", element));
+        });
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
+
+        act(() => {
+            sample.result.current.onKeyDown(fakeKeyEvent("m", element));
+        });
+        expect(useMorphStore.getState()).toMatchObject({ first: "anchor", second: "abc" });
     });
 
     it("a double-click navigates to the entity's own route", async () => {

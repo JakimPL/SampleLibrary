@@ -95,7 +95,7 @@ describe("SamplesListPanel", () => {
         renderPanel();
         const row = await waitFor(() => screen.getByRole("row", { name: /kick/ }));
 
-        fireEvent.click(row);
+        fireEvent.click(row, { detail: 1 });
 
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "abc" });
     });

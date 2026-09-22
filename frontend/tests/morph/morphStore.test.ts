@@ -63,3 +63,25 @@ describe("morphStore", () => {
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: null, weight: DEFAULT_WEIGHT });
     });
 });
+
+describe("naming an end outright", () => {
+    it("makes a sample the first end and keeps the second unless it is the same sample", () => {
+        useMorphStore.getState().join("a", "b");
+
+        useMorphStore.getState().setFirst("c");
+        expect(useMorphStore.getState()).toMatchObject({ first: "c", second: "b" });
+
+        useMorphStore.getState().setFirst("b");
+        expect(useMorphStore.getState()).toMatchObject({ first: "b", second: null });
+    });
+
+    it("makes a sample the second end and keeps the first unless it is the same sample", () => {
+        useMorphStore.getState().join("a", "b");
+
+        useMorphStore.getState().setSecond("c");
+        expect(useMorphStore.getState()).toMatchObject({ first: "a", second: "c" });
+
+        useMorphStore.getState().setSecond("a");
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: "a" });
+    });
+});

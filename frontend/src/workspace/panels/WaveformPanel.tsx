@@ -2,14 +2,14 @@ import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 
 import type { components } from "../../api/schema";
+import { useLayoutMode } from "../../layout/useLayoutMode";
 import { useSampleDetail } from "../../samples/useSampleDetail";
 import { type RateOption, WaveformPlayer } from "../../samples/WaveformPlayer";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import { fileNameStem, shortHash } from "../../shared/format";
+import { hintFor } from "../../shared/hints";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
-
-const NO_SAMPLE_HINT = "Double-click a sample to hear it here.";
 
 type PlaybackRate = components["schemas"]["SamplePlaybackRate"];
 
@@ -62,9 +62,10 @@ function FocusedWaveform({ sampleHash }: FocusedWaveformProps): ReactElement {
 
 export function WaveformPanel(): ReactElement {
     const focusedSampleHash = useSelectionStore((state) => state.focusedSampleHash);
+    const { input } = useLayoutMode();
 
     if (focusedSampleHash === null) {
-        return <p className="no-selection">{NO_SAMPLE_HINT}</p>;
+        return <p className="no-selection">{hintFor("noWaveform", input)}</p>;
     }
 
     return <FocusedWaveform sampleHash={focusedSampleHash} />;

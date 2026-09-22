@@ -74,7 +74,7 @@ describe("ModulesListPanel", () => {
         renderPanel();
         const row = await waitFor(() => screen.getByRole("row", { name: /A Song/ }));
 
-        fireEvent.click(row);
+        fireEvent.click(row, { detail: 1 });
 
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "module", hash: "abc" });
     });

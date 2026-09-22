@@ -90,7 +90,7 @@ describe("ModuleDetailPanel", () => {
         renderPanel();
         const row = await waitFor(() => screen.getByRole("row", { name: /lead/ }));
 
-        fireEvent.click(row);
+        fireEvent.click(row, { detail: 1 });
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "sample-1" });
 
         fireEvent.doubleClick(row);

@@ -248,7 +248,7 @@ describe("MorphPanel", () => {
         renderPanel();
         await screen.findByText("kick_808");
 
-        fireEvent.click(screen.getByText(FIRST.slice(0, 8)));
+        fireEvent.click(screen.getByText(FIRST.slice(0, 8)), { detail: 1 });
 
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: FIRST });
         expect(screen.getByText("kick_808")).toBeInTheDocument();

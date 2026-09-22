@@ -4,7 +4,7 @@ import type { ModuleDetail } from "../api/modules";
 import { DetailHeader } from "../shared/DetailHeader";
 import { formatBytes } from "../shared/format";
 import { UNTITLED_MODULE_LABEL } from "../shared/labels";
-import { ModuleSampleRow } from "./ModuleSampleRow";
+import { MODULE_SAMPLE_COLUMN_LABELS, ModuleSampleRow } from "./ModuleSampleRow";
 
 interface ModuleDetailViewProps {
     readonly module: ModuleDetail;
@@ -39,16 +39,9 @@ export function ModuleDetailView({ module }: ModuleDetailViewProps): ReactElemen
                 <table className="mini">
                     <thead>
                         <tr>
-                            <th>Waveform</th>
-                            <th>Name</th>
-                            <th>Instrument</th>
-                            <th>Slot</th>
-                            <th>Rate</th>
-                            <th>Volume</th>
-                            <th>Panning</th>
-                            <th>Loop</th>
-                            <th>Size</th>
-                            <th>Depth</th>
+                            {Object.values(MODULE_SAMPLE_COLUMN_LABELS).map((label) => (
+                                <th key={label}>{label}</th>
+                            ))}
                         </tr>
                     </thead>
                     <tbody>

@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { useState } from "react";
 
+import { useLayoutMode } from "../layout/useLayoutMode";
 import { classNames } from "../shared/classNames";
 
 const FILLED_HEART = "♥";
@@ -14,10 +15,11 @@ interface FavoriteToggleProps {
 /** Where a person keeps a sample close, as one click that writes on its own.
  *
  * Pointing at the heart fills it, showing what the click would leave behind, the same way the stars
- * beside it answer to a pointer.
+ * beside it answer to a pointer; under touch the heart answers to the tap alone.
  */
 export function FavoriteToggle({ favorite, onFavoriteChange }: FavoriteToggleProps): ReactElement {
     const [isPointedAt, setIsPointedAt] = useState(false);
+    const { input } = useLayoutMode();
     const isShownFilled = favorite || isPointedAt;
 
     return (
@@ -27,7 +29,9 @@ export function FavoriteToggle({ favorite, onFavoriteChange }: FavoriteTogglePro
             aria-label="Favorite"
             aria-pressed={favorite}
             onMouseEnter={() => {
-                setIsPointedAt(true);
+                if (input === "pointer") {
+                    setIsPointedAt(true);
+                }
             }}
             onMouseLeave={() => {
                 setIsPointedAt(false);

@@ -1,12 +1,16 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type * as CloudApi from "../../src/api/cloud";
 import type * as CurationApi from "../../src/api/curation";
 import type { SampleSummary } from "../../src/api/samples";
+import type { InputMode } from "../../src/layout/layoutMode";
+import { type SampleColumnId, sampleColumnSpec } from "../../src/samples/sampleColumns";
 import { SampleRow } from "../../src/samples/SampleRow";
+import { useAudioPreview } from "../../src/samples/useAudioPreview";
+import { LONG_PRESS_HOLD_MS } from "../../src/shared/gestures/gestureThresholds";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 
 const { changeSampleAnnotation, getLabelVocabulary, getCategoryTags } = vi.hoisted(() => ({
@@ -52,9 +56,13 @@ function buildSample(overrides: Partial<SampleSummary> = {}): SampleSummary {
     };
 }
 
+const EVERY_COLUMN: ReadonlySet<SampleColumnId> = new Set(sampleColumnSpec("pointer").map((column) => column.id));
+
 interface RowOverrides {
     readonly sample?: SampleSummary;
     readonly groupByEquivalence?: boolean;
+    readonly visibleColumns?: ReadonlySet<SampleColumnId>;
+    readonly input?: InputMode;
 }
 
 function renderRow(overrides: RowOverrides = {}): ReturnType<typeof render> {
@@ -71,6 +79,8 @@ function renderRow(overrides: RowOverrides = {}): ReturnType<typeof render> {
                                 <SampleRow
                                     sample={overrides.sample ?? buildSample()}
                                     groupByEquivalence={overrides.groupByEquivalence ?? false}
+                                    visibleColumns={overrides.visibleColumns ?? EVERY_COLUMN}
+                                    input={overrides.input ?? "pointer"}
                                 />
                             </tbody>
                         </table>
@@ -86,7 +96,7 @@ describe("SampleRow", () => {
     it("a plain click on the name highlights the sample without navigating to its own route", () => {
         renderRow();
 
-        fireEvent.click(screen.getByRole("link", { name: /kick/ }));
+        fireEvent.click(screen.getByRole("link", { name: /kick/ }), { detail: 1 });
 
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "abc123" });
         expect(screen.queryByText("sample route")).not.toBeInTheDocument();
@@ -198,6 +208,78 @@ describe("SampleRow", () => {
             expect(changeSampleAnnotation).toHaveBeenLastCalledWith("abc123", "sample", { rating: 5 });
         });
         expect(await screen.findByText("BASS")).toBeInTheDocument();
+    });
+
+    it("names the category beneath the name once the category column has left", () => {
+        const withoutCategory = new Set([...EVERY_COLUMN].filter((id) => id !== "category"));
+        renderRow({ sample: buildSample({ category: "SYNTH: PAD" }), visibleColumns: withoutCategory });
+
+        expect(screen.getByRole("link", { name: /kick/ })).toHaveTextContent("SYNTH: PAD");
+        expect(screen.queryByRole("button", { name: "Edit category" })).not.toBeInTheDocument();
+        expect(screen.queryByText("abc123")).not.toBeInTheDocument();
+    });
+
+    it("keeps the heart alone in the verdict column under touch", () => {
+        renderRow({ input: "touch" });
+
+        expect(screen.getByRole("button", { name: "Favorite" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Rate 3" })).not.toBeInTheDocument();
+    });
+
+    it("plays the sample on the space bar, rates it on a digit and marks it on F while its link is focused", async () => {
+        resolvesTo({ ...NOTHING, rating: 3 });
+        renderRow();
+        const link = screen.getByRole("link", { name: /kick/ });
+        const { result } = renderHook(() => useAudioPreview());
+
+        fireEvent.keyDown(link, { key: " " });
+        expect(result.current.playingKey).toBe("abc123");
+
+        fireEvent.keyDown(link, { key: "3" });
+        await waitFor(() => {
+            expect(changeSampleAnnotation).toHaveBeenCalledWith("abc123", "sample", { rating: 3 });
+        });
+
+        fireEvent.keyDown(link, { key: "f" });
+        await waitFor(() => {
+            expect(changeSampleAnnotation).toHaveBeenCalledWith("abc123", "sample", { favorite: true });
+        });
+    });
+
+    it("offers the row's chevron as the way to open it", () => {
+        renderRow();
+
+        expect(screen.getByRole("link", { name: "Open sample" })).toHaveAttribute("href", "/samples/abc123");
+    });
+
+    describe("under touch", () => {
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it("opens the actions sheet on a held finger", () => {
+            vi.useFakeTimers();
+            renderRow({ input: "touch" });
+            const row = screen.getByRole("link", { name: /kick/ }).closest("tr");
+            if (row === null) {
+                throw new Error("the row is missing");
+            }
+
+            fireEvent.pointerDown(row, { pointerId: 1, pointerType: "touch", clientX: 10, clientY: 10 });
+            act(() => {
+                vi.advanceTimersByTime(LONG_PRESS_HOLD_MS);
+            });
+
+            expect(screen.getByRole("dialog", { name: "kick" })).toBeInTheDocument();
+        });
+
+        it("opens the label sheet from the category badge", () => {
+            renderRow({ input: "touch" });
+
+            fireEvent.click(screen.getByRole("button", { name: "Edit category" }));
+
+            expect(screen.getByRole("dialog", { name: "Label" })).toBeInTheDocument();
+        });
     });
 
     it("fills the heart under the pointer, showing what the click would leave behind", async () => {

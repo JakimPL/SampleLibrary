@@ -76,7 +76,9 @@ function renderTable(
 }
 
 function nameOrder(): string[] {
-    return screen.getAllByRole("link").map((link) => link.querySelector(".cell-primary")?.textContent ?? "");
+    return Array.from(document.querySelectorAll("a.cell-name-stack")).map(
+        (link) => link.querySelector(".cell-primary")?.textContent ?? "",
+    );
 }
 
 describe("SamplesTable", () => {
@@ -239,6 +241,29 @@ describe("SamplesTable columns", () => {
         expect(waveform).toMatch(/px$/);
         expect(name).toBe("");
         expect(rest.every((width) => width.endsWith("px"))).toBe(true);
+    });
+
+    it("lets the counts leave first when the panel narrows, keeping the waveform and the name", () => {
+        vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+            x: 0,
+            y: 0,
+            width: 360,
+            height: 600,
+            top: 0,
+            right: 360,
+            bottom: 600,
+            left: 0,
+            toJSON: () => ({}),
+        });
+
+        const { container } = renderTable();
+
+        const headers = Array.from(container.querySelectorAll("thead th")).map((header) => header.textContent);
+        expect(headers).toContain("Waveform");
+        expect(headers).toContain("Name");
+        expect(headers).not.toContain("Occurrences");
+        expect(headers).not.toContain("Size");
+        expect(container.querySelectorAll("colgroup col")).toHaveLength(headers.length);
     });
 
     it("leaves narrowing by rating to the favorites and order controls", () => {

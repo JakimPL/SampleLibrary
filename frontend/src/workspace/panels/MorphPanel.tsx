@@ -2,6 +2,7 @@ import type { ChangeEvent, ReactElement } from "react";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { useLayoutMode } from "../../layout/useLayoutMode";
 import { MorphDistance } from "../../morph/MorphDistance";
 import { morphPreview } from "../../morph/morphPreview";
 import { useMorphStore, WEIGHT_STEP } from "../../morph/morphStore";
@@ -12,6 +13,7 @@ import { PlayButton } from "../../samples/PlayButton";
 import { useAudioPreview } from "../../samples/useAudioPreview";
 import { classNames } from "../../shared/classNames";
 import { shortHash } from "../../shared/format";
+import { hintFor } from "../../shared/hints";
 import { UNNAMED_SAMPLE_LABEL } from "../../shared/labels";
 import { OptionalLabel } from "../../shared/OptionalLabel";
 import { useEntityRowInteractions } from "../useEntityRowInteractions";
@@ -19,8 +21,6 @@ import { useEntityRowInteractions } from "../useEntityRowInteractions";
 const WEIGHT_DECIMAL_PLACES = 2;
 const PERCENT_OF_A_SHARE = 100;
 const THUMB_CENTER_SHARE = 0.5;
-const NO_PAIR_HINT =
-    "Drag a sample from the Cloud to another with the right mouse button, or click one and right-click another.";
 const OFFLINE_NOTICE = "Morphing is offline.";
 
 /** Where the readout stands over the track: on the thumb's own center, whose travel the thumb's width shortens at either end. */
@@ -175,13 +175,14 @@ export function MorphPanel(): ReactElement {
     const first = useMorphStore((state) => state.first);
     const second = useMorphStore((state) => state.second);
     const status = useMorphStatus();
+    const { input } = useLayoutMode();
 
     return (
         <div className="morph-panel">
             {first !== null && second !== null ? (
                 <MorphPair key={`${first}:${second}`} first={first} second={second} status={status} />
             ) : (
-                <p className="no-selection">{NO_PAIR_HINT}</p>
+                <p className="no-selection">{hintFor("noPair", input)}</p>
             )}
             <OfflineNotice status={status} />
         </div>

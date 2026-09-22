@@ -1,5 +1,7 @@
-// Kept equal to the `table.data tbody tr` height in styles.css, since the virtualizer places rows by it.
-export const TABLE_ROW_HEIGHT_PX = 40;
+import type { InputMode } from "../layout/layoutMode";
+
+/** Kept equal to `--row-height` in styles.css under each input mode, since the virtualizer places a listing's rows by it. */
+export const TABLE_ROW_HEIGHT_BY_INPUT: Readonly<Record<InputMode, number>> = { pointer: 40, touch: 52 };
 
 export const TABLE_OVERSCAN_ROWS = 12;
 

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Module } from "../../src/api/modules";
 import { ModulesTable } from "../../src/modules/ModulesTable";
@@ -32,7 +32,9 @@ function renderTable(): ReturnType<typeof render> {
 }
 
 function titleOrder(): string[] {
-    return screen.getAllByRole("link").map((link) => link.querySelector(".cell-primary")?.textContent ?? "");
+    return Array.from(document.querySelectorAll("a.cell-name-stack")).map(
+        (link) => link.querySelector(".cell-primary")?.textContent ?? "",
+    );
 }
 
 describe("ModulesTable", () => {
@@ -66,6 +68,26 @@ describe("ModulesTable", () => {
         expect(screen.getByText("a")).toBeInTheDocument();
         expect(screen.getByText("b")).toBeInTheDocument();
         expect(screen.getByText("c")).toBeInTheDocument();
+    });
+
+    it("keeps the title while the other columns leave in a narrow panel", () => {
+        vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+            x: 0,
+            y: 0,
+            width: 160,
+            height: 600,
+            top: 0,
+            right: 160,
+            bottom: 600,
+            left: 0,
+            toJSON: () => ({}),
+        });
+
+        const { container } = renderTable();
+
+        const headers = Array.from(container.querySelectorAll("thead th")).map((header) => header.textContent);
+        expect(headers).toEqual(["Title"]);
+        expect(screen.getAllByText("xm")).toHaveLength(2);
     });
 
     it("narrows rows to the selected tracker", () => {
