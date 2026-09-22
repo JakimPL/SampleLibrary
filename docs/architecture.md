@@ -823,6 +823,15 @@ paints the theme's ground. From the bottom:
 | `svg.cloud-markers` | `CloudMarkers` | the hovered and the selected point, each in the theme's point shape |
 | overlays | `CloudView`, `MorphBand`, `MorphLink` | the ping locating a highlighted point, the pairing band and the morph link |
 
+regl-scatterplot draws every point into a 32-bit float framebuffer before the screen, which needs
+`OES_texture_float`, `WEBGL_color_buffer_float` and `EXT_float_blend`; `frontend/src/cloud/floatRendering.ts`
+probes them once per visit. Where WebGL is there but the float pipeline is not, or a person chose
+plain dots in the diagnostics (`frontend/src/cloud/cloudDotsStore.ts`), the node layer draws every
+point as a filled dot in the scatterplot's place (`frontend/src/cloud/plainDots.ts`), the
+scatterplot keeping the camera and the hit-testing. The diagnostics sheet
+(`frontend/src/shell/DiagnosticsSheet.tsx`), reached from the View menu and the phone's More menu,
+shows the probe's findings with the screen and the layout, for a phone with no console to read.
+
 The dots' canvas takes the mouse through regl-scatterplot itself, which pans, zooms, hit-tests and
 selects on its own handlers, and takes a finger through `frontend/src/cloud/touch/`, since the
 library and its camera know only the mouse. `bindTouchGestures.ts` routes every pointer that is not

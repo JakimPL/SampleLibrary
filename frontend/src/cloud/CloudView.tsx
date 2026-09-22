@@ -23,6 +23,7 @@ import type { MarkerAppearance } from "./markerGeometry";
 import { MorphBand } from "./MorphBand";
 import { MorphLink } from "./MorphLink";
 import { type NodeGeometry, nodeGeometryOf, nodePaletteOf } from "./nodeGeometry";
+import { plainDotStyle, usePlainDots } from "./plainDots";
 import { drawOrder, paletteColors, type PointSlots, slotPoints, slotValues } from "./pointPalette";
 import { bindTouchGestures } from "./touch/bindTouchGestures";
 import { cameraOf, type CloudCamera, panBy, zoomAbout } from "./touch/cameraControl";
@@ -424,6 +425,10 @@ function selectHighlighted(
  * arrives within the frame that drew a moved view, and a resize of the container, and commits
  * before that frame paints, so the overlays move in step with the points.
  *
+ * Where the browser cannot blend into float buffers, which regl-scatterplot draws every point
+ * through, or a person chose plain dots, the node layer draws every point as a filled dot in the
+ * scatterplot's place, the scatterplot keeping the camera and the hit-testing.
+ *
  * How the points look comes from the theme through `useCloudRenderSettings`: size, shape, opacity
  * and colors are handed to the library at creation and re-applied through its own `set` whenever
  * the theme changes. Sample points draw with regl-scatterplot's own categorical coloring, one color
@@ -516,8 +521,13 @@ export function CloudView({
     const nodeCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
     const settings = useCloudRenderSettings();
-    const settingsRef = useRef(settings);
-    settingsRef.current = settings;
+    const plainDots = usePlainDots() !== null;
+    const nodeStyle = useMemo(
+        (): NodeStyle => (plainDots ? plainDotStyle(settings.point) : settings.node),
+        [plainDots, settings],
+    );
+    const nodeStyleRef = useRef(nodeStyle);
+    nodeStyleRef.current = nodeStyle;
     const pointShape = settings.point.shape;
     const devicePixelRatio = window.devicePixelRatio;
     const markerAppearance = useMemo(
@@ -547,18 +557,18 @@ export function CloudView({
             nodePaletteOf(
                 slotting === null ? [settings.colors.point] : paletteColors(coloring, settings.colors),
                 slotting?.substrateSlot ?? null,
-                settings.node.substrateOpacity,
+                nodeStyle.substrateOpacity,
             ),
-        [slotting, coloring, settings],
+        [slotting, coloring, settings, nodeStyle],
     );
     const nodeFrameStyle = useMemo(
         (): NodeFrameStyle => ({
             shape: pointShape,
-            sizePx: settings.node.sizePx,
-            lineWidthPx: settings.node.lineWidthPx,
-            fillOpacity: settings.node.fillOpacity,
+            sizePx: nodeStyle.sizePx,
+            lineWidthPx: nodeStyle.lineWidthPx,
+            fillOpacity: nodeStyle.fillOpacity,
         }),
-        [pointShape, settings],
+        [pointShape, nodeStyle],
     );
     const nodeLayer = useNodeLayer(nodeCanvasRef, nodeGeometry, nodePalette, nodeFrameStyle);
     const underlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -670,7 +680,7 @@ export function CloudView({
                 devicePixelRatio: window.devicePixelRatio,
             });
             underlay.draw(transform);
-            const shown = nodesShownAt(transform, nodeGeometryRef.current, settingsRef.current.node);
+            const shown = nodesShownAt(transform, nodeGeometryRef.current, nodeStyleRef.current);
             if (shown) {
                 nodeLayer.draw(transform);
             }
@@ -1095,6 +1105,10 @@ export function CloudView({
             transitionDuration: LOCATE_TRANSITION_MS,
         });
     }, [command, moveCamera]);
+
+    useEffect(() => {
+        scatterplotRef.current?.redraw();
+    }, [plainDots]);
 
     useEffect(() => {
         const container = containerRef.current;

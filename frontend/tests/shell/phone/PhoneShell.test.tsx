@@ -156,6 +156,15 @@ describe("PhoneShell", () => {
         expect(screen.getByRole("dialog", { name: "Keyboard and mouse" })).toBeInTheDocument();
     });
 
+    it("opens the diagnostics from the screen menu", () => {
+        renderShellAt("/");
+
+        fireEvent.click(screen.getByText("More"));
+        fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+
+        expect(screen.getByRole("dialog", { name: "Diagnostics" })).toBeInTheDocument();
+    });
+
     it("shows a panel with no tab as a page from the screen menu", async () => {
         renderShellAt("/");
 

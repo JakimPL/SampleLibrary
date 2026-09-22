@@ -25,6 +25,16 @@ describe("ViewMenu", () => {
         expect(screen.getByText("Shift-click")).toBeInTheDocument();
     });
 
+    it("opens the diagnostics", () => {
+        render(<ViewMenu api={null} />);
+        openMenu();
+
+        fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
+
+        expect(screen.getByRole("dialog", { name: "Diagnostics" })).toBeInTheDocument();
+        expect(screen.getByRole("radio", { name: "Plain dots" })).toBeInTheDocument();
+    });
+
     it("lists every registered panel, ticked when it is open", () => {
         const api = new FakeDockviewApi(OPEN_EXCEPT_STATS);
         render(<ViewMenu api={api.asApi()} />);

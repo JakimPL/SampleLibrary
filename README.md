@@ -180,8 +180,11 @@ labeling a run of samples is one page after another. On the cloud, a tap plays a
 moves, a pinch zooms, and a hold opens a point's actions. The morph lives under the cloud as two
 slots, A and B: tap one, and every sample you tap next becomes that end (see
 [Morphing two samples](#morphing-two-samples)). The More menu on each tab lists the statistics,
-the theme and a guide to every gesture. A tablet keeps the desktop's panels with controls at a
-finger's size. The browser's "Add to Home Screen" installs the app with its own icon.
+the theme, a guide to every gesture and the diagnostics, which say what the browser's WebGL
+supports: the cloud's own renderer blends every point into a float buffer, and a browser without
+that draws the points as plain dots by itself, a choice the diagnostics also offer outright. A
+tablet keeps the desktop's panels with controls at a finger's size. The browser's "Add to Home
+Screen" installs the app with its own icon.
 
 Everything a phone does goes through the same API as the desktop; the app asks nobody to sign in,
 so anyone on your network who reaches it can change your labels.

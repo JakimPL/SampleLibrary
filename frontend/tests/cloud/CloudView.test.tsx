@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useCloudDotsStore } from "../../src/cloud/cloudDotsStore";
 import { type CloudCommand, type CloudLink, CloudView } from "../../src/cloud/CloudView";
 import type { CloudEntityPoint } from "../../src/cloud/geometry";
 import { type PointColoring, SUBSTRATE_ONLY_COLORING } from "../../src/cloud/labelColoring";
@@ -1067,6 +1068,13 @@ describe("CloudView node layer", () => {
 
     it("draws markers at every zoom under a theme that always does", async () => {
         document.documentElement.style.setProperty("--cloud-node-mode", "always");
+        const { container } = await renderCloudView({ points: crowdedPoints() });
+
+        expect(nodesShown(container)).toBe(true);
+    });
+
+    it("draws every point through the node layer in the scatterplot's place once plain dots are chosen", async () => {
+        useCloudDotsStore.setState({ dots: "plain" });
         const { container } = await renderCloudView({ points: crowdedPoints() });
 
         expect(nodesShown(container)).toBe(true);

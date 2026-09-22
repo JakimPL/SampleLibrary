@@ -1,11 +1,13 @@
 import type { DockviewApi } from "dockview-react";
 import { type ReactElement, useEffect, useState } from "react";
 
+import { floatRenderingSupport } from "../cloud/floatRendering";
 import { useLayoutMode } from "../layout/useLayoutMode";
 import { DisclosureMenu } from "../shared/overlay/DisclosureMenu";
 import { addRegisteredPanel } from "../workspace/addPanel";
 import { resetLayout } from "../workspace/dockviewPersistence";
 import { PANEL_REGISTRY, type PanelDefinition, type PanelId } from "../workspace/panelRegistry";
+import { DIAGNOSTICS_TITLE, DiagnosticsSheet } from "./DiagnosticsSheet";
 import { GUIDE_TITLES, GuideSheet } from "./GuideSheet";
 import { usePlayerStripStore } from "./player/playerStripStore";
 
@@ -33,11 +35,12 @@ function openPanelIds(api: DockviewApi): ReadonlySet<PanelId> {
  * reset that draws the first-run arrangement again. Reads `PANEL_REGISTRY` generically, so a
  * newly registered panel appears here with no change to this file. The panel controls wait,
  * disabled, until the shell's dockview instance is ready. The guide to the keys and clicks, or to
- * the gestures under touch, opens from here as well.
+ * the gestures under touch, and the diagnostics open from here as well.
  */
 export function ViewMenu({ api }: ViewMenuProps): ReactElement {
     const [openIds, setOpenIds] = useState<ReadonlySet<PanelId>>(new Set());
     const [guideOpen, setGuideOpen] = useState(false);
+    const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
     const { input } = useLayoutMode();
     const stripVisible = usePlayerStripStore((state) => state.visible);
     const setStripVisible = usePlayerStripStore((state) => state.setVisible);
@@ -118,12 +121,29 @@ export function ViewMenu({ api }: ViewMenuProps): ReactElement {
                 >
                     {GUIDE_TITLES[input]}
                 </button>
+                <button
+                    type="button"
+                    className="view-menu-reset"
+                    onClick={() => {
+                        setDiagnosticsOpen(true);
+                    }}
+                >
+                    {DIAGNOSTICS_TITLE}
+                </button>
             </DisclosureMenu>
             {guideOpen && (
                 <GuideSheet
                     input={input}
                     onClose={() => {
                         setGuideOpen(false);
+                    }}
+                />
+            )}
+            {diagnosticsOpen && (
+                <DiagnosticsSheet
+                    support={floatRenderingSupport()}
+                    onClose={() => {
+                        setDiagnosticsOpen(false);
                     }}
                 />
             )}

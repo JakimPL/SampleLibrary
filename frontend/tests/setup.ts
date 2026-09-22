@@ -3,6 +3,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+import { useCloudDotsStore } from "../src/cloud/cloudDotsStore";
 import { INITIAL_MORPH_STATE, useMorphStore } from "../src/morph/morphStore";
 import { INITIAL_MORPH_STRIP_STATE, useMorphStripStore } from "../src/morph/morphStripStore";
 import { clearRequestCache } from "../src/shared/requestCache";
@@ -50,6 +51,7 @@ afterEach(async () => {
 afterEach(() => {
     useMorphStore.setState(INITIAL_MORPH_STATE);
     useMorphStripStore.setState(INITIAL_MORPH_STRIP_STATE);
+    useCloudDotsStore.setState({ dots: "auto" });
 });
 
 // jsdom lacks pointer capture, which the morph marker takes while it is dragged.
