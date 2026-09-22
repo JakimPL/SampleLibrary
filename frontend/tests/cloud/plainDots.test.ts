@@ -40,7 +40,7 @@ describe("plainDotStyle", () => {
         });
     });
 
-    it("keeps a dot at least a pixel across", () => {
-        expect(plainDotStyle({ ...POINT, sizePx: 0.4 }).sizePx).toBe(1);
+    it("keeps a dot at least two pixels across", () => {
+        expect(plainDotStyle({ ...POINT, sizePx: 0.4 }).sizePx).toBe(2);
     });
 });

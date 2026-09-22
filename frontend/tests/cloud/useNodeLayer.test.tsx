@@ -16,7 +16,7 @@ vi.mock("../../src/cloud/hollowPointRenderer", () => ({ createHollowPointRendere
 
 const GEOMETRY: NodeGeometry = { positions: new Float32Array([0, 0]), slots: new Float32Array([0]), count: 1 };
 const PALETTE = new Uint8Array([255, 255, 255, 255]);
-const STYLE: NodeFrameStyle = { shape: "square", sizePx: 7, lineWidthPx: 1, fillOpacity: 0 };
+const STYLE: NodeFrameStyle = { shape: "square", sizePx: 7, scaleMode: "constant", lineWidthPx: 1, fillOpacity: 0 };
 const TRANSFORM = viewTransformOf(new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]), {
     widthPx: 600,
     heightPx: 400,

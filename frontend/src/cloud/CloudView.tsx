@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import createScatterplot from "regl-scatterplot";
 
+import { useLayoutMode } from "../layout/useLayoutMode";
 import { classNames } from "../shared/classNames";
 import {
     LONG_PRESS_HOLD_MS,
@@ -13,7 +14,13 @@ import {
 import { windowTimer } from "../shared/gestures/longPress";
 import type { EntityRef } from "../workspace/selectionStore";
 import { CloudMarkers, type MarkerPositions, NO_MARKERS, sameMarkers } from "./CloudMarkers";
-import { type CloudRenderSettings, type NodeStyle, useCloudRenderSettings } from "./cloudRenderSettings";
+import {
+    type CloudRenderSettings,
+    type NodeStyle,
+    type PointScaleMode,
+    settingsForLayout,
+    useCloudRenderSettings,
+} from "./cloudRenderSettings";
 import { glowImageOf } from "./densityGlow";
 import { countVisibleUpTo, detailNodeLimit } from "./detailLevel";
 import { type CloudEntityPoint, normalizePoints } from "./geometry";
@@ -42,6 +49,7 @@ const CATEGORICAL_ENCODING = "category";
 const CATEGORICAL_DATA = "categorical";
 const SQUARE_SHAPE = "square";
 const ALWAYS_NODE_MODE = "always";
+const CONSTANT_SCALE_MODE: PointScaleMode = "constant";
 const DOTS_CANVAS_CLASS = "cloud-dots";
 const CAMERA_VIEW_PROPERTY = "cameraView";
 const CAMERA_PROPERTY = "camera";
@@ -427,7 +435,8 @@ function selectHighlighted(
  *
  * Where the browser cannot blend into float buffers, which regl-scatterplot draws every point
  * through, or a person chose plain dots, the node layer draws every point as a filled dot in the
- * scatterplot's place, the scatterplot keeping the camera and the hit-testing.
+ * scatterplot's place, at the theme's point size and growing with the zoom as the scatterplot's
+ * points would, the scatterplot keeping the camera and the hit-testing.
  *
  * How the points look comes from the theme through `useCloudRenderSettings`: size, shape, opacity
  * and colors are handed to the library at creation and re-applied through its own `set` whenever
@@ -521,6 +530,8 @@ export function CloudView({
     const nodeCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
     const settings = useCloudRenderSettings();
+    const { layout } = useLayoutMode();
+    const scatterplotSettings = useMemo(() => settingsForLayout(settings, layout), [settings, layout]);
     const plainDots = usePlainDots() !== null;
     const nodeStyle = useMemo(
         (): NodeStyle => (plainDots ? plainDotStyle(settings.point) : settings.node),
@@ -539,7 +550,10 @@ export function CloudView({
     const slotting = useMemo(() => slotPoints(points, coloring), [points, coloring]);
     const slottingRef = useRef(slotting);
     slottingRef.current = slotting;
-    const appearance = useMemo(() => pointAppearance(slotting, coloring, settings), [slotting, coloring, settings]);
+    const appearance = useMemo(
+        () => pointAppearance(slotting, coloring, scatterplotSettings),
+        [slotting, coloring, scatterplotSettings],
+    );
     const appearanceRef = useRef(appearance);
     appearanceRef.current = appearance;
     const indexByHash = useMemo(() => firstIndexByHash(points), [points]);
@@ -565,10 +579,11 @@ export function CloudView({
         (): NodeFrameStyle => ({
             shape: pointShape,
             sizePx: nodeStyle.sizePx,
+            scaleMode: plainDots ? settings.point.scaleMode : CONSTANT_SCALE_MODE,
             lineWidthPx: nodeStyle.lineWidthPx,
             fillOpacity: nodeStyle.fillOpacity,
         }),
-        [pointShape, nodeStyle],
+        [pointShape, nodeStyle, plainDots, settings],
     );
     const nodeLayer = useNodeLayer(nodeCanvasRef, nodeGeometry, nodePalette, nodeFrameStyle);
     const underlayCanvasRef = useRef<HTMLCanvasElement | null>(null);

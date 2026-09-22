@@ -827,8 +827,9 @@ regl-scatterplot draws every point into a 32-bit float framebuffer before the sc
 `OES_texture_float`, `WEBGL_color_buffer_float` and `EXT_float_blend`; `frontend/src/cloud/floatRendering.ts`
 probes them once per visit. Where WebGL is there but the float pipeline is not, or a person chose
 plain dots in the diagnostics (`frontend/src/cloud/cloudDotsStore.ts`), the node layer draws every
-point as a filled dot in the scatterplot's place (`frontend/src/cloud/plainDots.ts`), the
-scatterplot keeping the camera and the hit-testing. The diagnostics sheet
+point as a filled dot in the scatterplot's place (`frontend/src/cloud/plainDots.ts`), at the
+theme's point size and growing with the zoom by the theme's scale mode as the scatterplot's points
+would (`frontend/src/cloud/pointGrowth.ts`), the scatterplot keeping the camera and the hit-testing. The diagnostics sheet
 (`frontend/src/shell/DiagnosticsSheet.tsx`), reached from the View menu and the phone's More menu,
 shows the probe's findings with the screen and the layout, for a phone with no console to read.
 

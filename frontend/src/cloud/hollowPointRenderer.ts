@@ -1,14 +1,17 @@
 import createRegl from "regl";
 
-import type { PointShape } from "./cloudRenderSettings";
+import type { PointScaleMode, PointShape } from "./cloudRenderSettings";
 import { devicePixels } from "./markerGeometry";
 import type { NodeGeometry } from "./nodeGeometry";
+import { pointGrowth } from "./pointGrowth";
 import type { ViewTransform } from "./viewTransform";
 
-/** How one frame of nodes looks: the marker's shape and sizes in CSS pixels, and how opaque its inside is. */
+/** How one frame of nodes looks: the marker's shape and sizes in CSS pixels, how it grows with the zoom, and how opaque its inside is. */
 export interface NodeFrameStyle {
     readonly shape: PointShape;
+    /** The size at the first view; `scaleMode` says how it grows from there. */
     readonly sizePx: number;
+    readonly scaleMode: PointScaleMode;
     readonly lineWidthPx: number;
     readonly fillOpacity: number;
 }
@@ -133,7 +136,7 @@ void main() {
  * A marker's size and stroke round to whole device pixels and its center snaps to the device grid --
  * an odd-sized marker centered on a pixel, an even-sized one on a pixel corner --
  * so a one-pixel frame stays one crisp pixel at any pixel density and every marker keeps one size
- * whatever the zoom, the way OpenMPT's envelope nodes do.
+ * whatever the zoom, the way OpenMPT's envelope nodes do, unless the frame's style says it grows.
  */
 export function createHollowPointRenderer(canvas: HTMLCanvasElement): HollowPointRenderer | null {
     const gl = canvas.getContext("webgl", CONTEXT_ATTRIBUTES);
@@ -200,7 +203,7 @@ export function createHollowPointRenderer(canvas: HTMLCanvasElement): HollowPoin
                 return;
             }
             const pointSize = Math.min(
-                devicePixels(style.sizePx, transform.devicePixelRatio),
+                devicePixels(style.sizePx * pointGrowth(style.scaleMode, transform.zoom), transform.devicePixelRatio),
                 regl.limits.pointSizeDims[1] ?? 1,
             );
             drawNodes({

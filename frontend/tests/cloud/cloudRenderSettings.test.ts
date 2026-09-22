@@ -1,13 +1,6 @@
-import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-    PHONE_POINT_SCALE,
-    readCloudRenderSettings,
-    useCloudRenderSettings,
-} from "../../src/cloud/cloudRenderSettings";
-import { PHONE_MEDIA_QUERY } from "../../src/layout/layoutMode";
-import { stubMatchMedia } from "../support/matchMedia";
+import { PHONE_POINT_SCALE, readCloudRenderSettings, settingsForLayout } from "../../src/cloud/cloudRenderSettings";
 
 const PROPERTIES = [
     "--cloud-point-shape",
@@ -147,21 +140,20 @@ describe("readCloudRenderSettings", () => {
     });
 });
 
-describe("useCloudRenderSettings", () => {
-    it("draws the points smaller on a phone, where the cloud holds the same points in a third of the area", () => {
-        stubMatchMedia(new Set([PHONE_MEDIA_QUERY]));
-        const base = readCloudRenderSettings().point;
+describe("settingsForLayout", () => {
+    it("draws the scatterplot's points smaller on a phone, where the cloud holds the same points in a third of the area", () => {
+        const settings = readCloudRenderSettings();
 
-        const { result } = renderHook(() => useCloudRenderSettings());
+        const phone = settingsForLayout(settings, "phone");
 
-        expect(result.current.point.sizePx).toBeCloseTo(base.sizePx * PHONE_POINT_SCALE, 5);
-        expect(result.current.point.substrateSizePx).toBeCloseTo(base.substrateSizePx * PHONE_POINT_SCALE, 5);
-        expect(result.current.point.opacity).toBe(base.opacity);
+        expect(phone.point.sizePx).toBeCloseTo(settings.point.sizePx * PHONE_POINT_SCALE, 5);
+        expect(phone.point.substrateSizePx).toBeCloseTo(settings.point.substrateSizePx * PHONE_POINT_SCALE, 5);
+        expect(phone.point.opacity).toBe(settings.point.opacity);
     });
 
-    it("draws the points at the theme's own size in the workspace", () => {
-        const { result } = renderHook(() => useCloudRenderSettings());
+    it("leaves the theme's own sizes to the workspace", () => {
+        const settings = readCloudRenderSettings();
 
-        expect(result.current.point).toEqual(readCloudRenderSettings().point);
+        expect(settingsForLayout(settings, "workspace")).toBe(settings);
     });
 });

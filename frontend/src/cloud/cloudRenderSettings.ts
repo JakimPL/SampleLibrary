@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 
 import type { LayoutMode } from "../layout/layoutMode";
-import { useLayoutMode } from "../layout/useLayoutMode";
 import { type LabelPaletteParameters, readLabelPaletteParameters } from "../theme/labelPalette";
 import { readThemeColor } from "../theme/readThemeColor";
 import { readThemeKeyword } from "../theme/readThemeKeyword";
@@ -232,7 +231,7 @@ export function readCloudRenderSettings(): CloudRenderSettings {
     };
 }
 
-/** The settings as a layout draws them: a phone's points shrink, so the ground reads as grain rather than a fill. */
+/** The settings as the scatterplot draws them in a layout: a phone's points shrink, so the ground reads as grain rather than a fill. */
 export function settingsForLayout(settings: CloudRenderSettings, layout: LayoutMode): CloudRenderSettings {
     if (layout !== "phone") {
         return settings;
@@ -249,16 +248,10 @@ export function settingsForLayout(settings: CloudRenderSettings, layout: LayoutM
 
 /**
  * The cloud's render settings, read again whenever `useThemeSignal` reports the resolved theme
- * could have changed or the layout mode changes. The object keeps its identity between those
- * changes, so an effect that depends on it re-applies the theme exactly when there is a new one
- * to apply.
+ * could have changed. The object keeps its identity between theme changes, so an effect that
+ * depends on it re-applies the theme exactly when there is a new one to apply.
  */
 export function useCloudRenderSettings(): CloudRenderSettings {
     const themeSignal = useThemeSignal();
-    const { layout } = useLayoutMode();
-    return useMemo(
-        () => settingsForLayout(readCloudRenderSettings(), layout),
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- the theme signal is what changes the settings read
-        [themeSignal.preference, themeSignal.systemVersion, layout],
-    );
+    return useMemo(readCloudRenderSettings, [themeSignal.preference, themeSignal.systemVersion]);
 }

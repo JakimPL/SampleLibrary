@@ -13,7 +13,6 @@ import {
     topLevelTags,
 } from "../../cloud/labelColoring";
 import { LegendSheet } from "../../cloud/LegendSheet";
-import { type PlainDotsReason, usePlainDots } from "../../cloud/plainDots";
 import { TagLegend } from "../../cloud/TagLegend";
 import { useCategoryTags } from "../../cloud/useCategoryTags";
 import { useCloud } from "../../cloud/useCloud";
@@ -53,10 +52,7 @@ interface HoveredPoint {
 }
 
 const MODULE_TAB_CAPTION = "Preliminary layout — real positions await a spectral-distance embedding.";
-const PLAIN_DOTS_CAPTIONS: Readonly<Record<PlainDotsReason, string>> = {
-    unsupported: "The points draw as plain dots: this browser's WebGL blends no float buffers. Diagnostics says more.",
-    chosen: "The points draw as plain dots, as chosen in Diagnostics.",
-};
+
 /** Below this panel width the legend leaves its row for a sheet. */
 const LEGEND_SHEET_WIDTH_PX = 480;
 const ZOOM_STEP_FACTOR = 1.5;
@@ -185,7 +181,6 @@ export function CloudPanel(): ReactElement {
     const width = useContainerWidth(panelRef);
     const legendAsSheet = width !== null && width < LEGEND_SHEET_WIDTH_PX;
     const { input, layout } = useLayoutMode();
-    const plainDots = usePlainDots();
     const state = useActiveCloudPoints(tab);
     const { coloring, tags, painted, togglePainted } = useSampleColoring(mode);
     const navigate = useNavigate();
@@ -333,7 +328,6 @@ export function CloudPanel(): ReactElement {
                     </>
                 )}
             </div>
-            {plainDots !== null && <p className="cloud-caption">{PLAIN_DOTS_CAPTIONS[plainDots]}</p>}
             {tab === "modules" && <p className="cloud-caption">{MODULE_TAB_CAPTION}</p>}
             {tab === "samples" && !legendAsSheet && (
                 <TagLegend tags={tags} painted={painted} onToggle={togglePainted} emptyCaption={EMPTY_CAPTIONS[mode]} />

@@ -12,6 +12,8 @@ export interface Viewport {
  * normalized data space onto CSS pixels measured from the surface's top-left corner.
  */
 export interface ViewTransform extends Viewport {
+    /** The camera's scaling: 1 at the view the points were first drawn at, larger zoomed in. */
+    readonly zoom: number;
     /** The screen position of data (x, y) is `[xx * x + xy * y + offsetX, yx * x + yy * y + offsetY]`. */
     readonly xx: number;
     readonly xy: number;
@@ -54,6 +56,7 @@ export function viewTransformOf(cameraView: Float32Array, viewport: Viewport): V
     const unit = viewport.heightPx * HALF;
     return {
         ...viewport,
+        zoom: entry(cameraView, VIEW_XX, IDENTITY_SCALE),
         xx: entry(cameraView, VIEW_XX, IDENTITY_SCALE) * unit,
         xy: entry(cameraView, VIEW_XY, NO_OFFSET) * unit,
         yx: -entry(cameraView, VIEW_YX, NO_OFFSET) * unit,
