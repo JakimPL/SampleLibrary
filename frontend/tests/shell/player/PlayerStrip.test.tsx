@@ -127,6 +127,9 @@ describe("PlayerStrip", () => {
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
+        await waitFor(() => {
+            expect(createMock).toHaveBeenCalled();
+        });
         act(() => {
             latestInstance().emit("ready", 1.0);
         });

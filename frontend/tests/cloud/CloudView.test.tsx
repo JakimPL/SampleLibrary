@@ -1,9 +1,10 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type CloudLink, CloudView } from "../../src/cloud/CloudView";
+import { type CloudCommand, type CloudLink, CloudView } from "../../src/cloud/CloudView";
 import type { CloudEntityPoint } from "../../src/cloud/geometry";
 import { type PointColoring, SUBSTRATE_ONLY_COLORING } from "../../src/cloud/labelColoring";
+import { LONG_PRESS_HOLD_MS } from "../../src/shared/gestures/gestureThresholds";
 import { useThemeStore } from "../../src/theme/themeStore";
 import type { EntityRef } from "../../src/workspace/selectionStore";
 
@@ -16,8 +17,17 @@ const { instances, createScatterplotMock } = vi.hoisted(() => {
         readonly destroy = vi.fn();
         readonly set = vi.fn().mockResolvedValue(undefined);
         readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
+        readonly hover = vi.fn();
+        readonly redraw = vi.fn();
+        readonly zoomToArea = vi.fn().mockResolvedValue(undefined);
+        readonly camera = { pan: vi.fn(), scale: vi.fn() };
         cameraView = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-        readonly get = vi.fn((property: string) => (property === "cameraView" ? this.cameraView : undefined));
+        readonly get = vi.fn((property: string) => {
+            if (property === "cameraView") {
+                return this.cameraView;
+            }
+            return property === "camera" ? this.camera : undefined;
+        });
         private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 
         constructor(options: unknown) {
@@ -86,6 +96,10 @@ interface RenderOverrides {
     readonly onJoinToAnchor?: (entity: EntityRef) => void;
     readonly onJoin?: (first: EntityRef, second: EntityRef) => void;
     readonly onActivate?: (entity: EntityRef) => void;
+    readonly onContextMenu?: (entity: EntityRef, position: readonly [number, number]) => void;
+    readonly pairing?: boolean;
+    readonly onPairTap?: (entity: EntityRef) => void;
+    readonly command?: CloudCommand | null;
     readonly link?: CloudLink | null;
     readonly anchor?: string | null;
 }
@@ -105,6 +119,30 @@ function movedView(): Float32Array {
     return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, viewCounter, 0, 0, 1]);
 }
 
+/** Every prop the view takes, the given ones over inert defaults. */
+function viewProps(overrides: RenderOverrides = {}): Parameters<typeof CloudView>[0] {
+    return {
+        coloring: overrides.coloring ?? SUBSTRATE_ONLY_COLORING,
+        points: overrides.points ?? [],
+        highlighted: overrides.highlighted ?? null,
+        onSelect: overrides.onSelect ?? vi.fn(),
+        onFocus: overrides.onFocus ?? vi.fn(),
+        onClear: overrides.onClear ?? vi.fn(),
+        onHover: overrides.onHover ?? vi.fn(),
+        onJoinToAnchor: overrides.onJoinToAnchor ?? vi.fn(),
+        onJoin: overrides.onJoin ?? vi.fn(),
+        onActivate: overrides.onActivate ?? vi.fn(),
+        onContextMenu: overrides.onContextMenu ?? vi.fn(),
+        pairing: overrides.pairing ?? false,
+        onPairTap: overrides.onPairTap ?? vi.fn(),
+        command: overrides.command ?? null,
+        link: overrides.link ?? null,
+        onWeightChange: vi.fn(),
+        onWeightCommit: vi.fn(),
+        anchor: overrides.anchor ?? null,
+    };
+}
+
 async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnType<typeof render>> {
     const result = render(
         <CloudView
@@ -118,6 +156,10 @@ async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnT
             onJoinToAnchor={overrides.onJoinToAnchor ?? vi.fn()}
             onJoin={overrides.onJoin ?? vi.fn()}
             onActivate={overrides.onActivate ?? vi.fn()}
+            onContextMenu={overrides.onContextMenu ?? vi.fn()}
+            pairing={overrides.pairing ?? false}
+            onPairTap={overrides.onPairTap ?? vi.fn()}
+            command={overrides.command ?? null}
             link={overrides.link ?? null}
             onWeightChange={vi.fn()}
             onWeightCommit={vi.fn()}
@@ -187,6 +229,10 @@ describe("CloudView", () => {
                 onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
+                onContextMenu={vi.fn()}
+                pairing={false}
+                onPairTap={vi.fn()}
+                command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
@@ -302,6 +348,10 @@ describe("CloudView", () => {
                 onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
+                onContextMenu={vi.fn()}
+                pairing={false}
+                onPairTap={vi.fn()}
+                command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
@@ -333,6 +383,10 @@ describe("CloudView", () => {
                 onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
+                onContextMenu={vi.fn()}
+                pairing={false}
+                onPairTap={vi.fn()}
+                command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
@@ -376,6 +430,10 @@ describe("CloudView", () => {
                     onJoinToAnchor={vi.fn()}
                     onJoin={vi.fn()}
                     onActivate={vi.fn()}
+                    onContextMenu={vi.fn()}
+                    pairing={false}
+                    onPairTap={vi.fn()}
+                    command={null}
                     link={null}
                     onWeightChange={vi.fn()}
                     onWeightCommit={vi.fn()}
@@ -454,6 +512,10 @@ describe("CloudView", () => {
                 onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
+                onContextMenu={vi.fn()}
+                pairing={false}
+                onPairTap={vi.fn()}
+                command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
@@ -484,6 +546,10 @@ describe("CloudView", () => {
                 onJoinToAnchor={vi.fn()}
                 onJoin={vi.fn()}
                 onActivate={vi.fn()}
+                onContextMenu={vi.fn()}
+                pairing={false}
+                onPairTap={vi.fn()}
+                command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
@@ -1022,5 +1088,156 @@ describe("CloudView node layer", () => {
         const { container } = await renderCloudView({ points: crowdedPoints() });
 
         expect(nodesShown(container)).toBe(true);
+    });
+});
+
+describe("CloudView touch", () => {
+    // Normalized to (-1, -1) and (1, 1), which the 600px test surface shows at (0, 600) and (600, 0).
+    const TWO_POINTS: readonly CloudEntityPoint[] = [point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)];
+    const FINGER = { pointerId: 1, pointerType: "touch" };
+    const OTHER_FINGER = { pointerId: 2, pointerType: "touch" };
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    function fingerDown(x: number, y: number, finger = FINGER): void {
+        fireEvent.pointerDown(latestCanvas(), { ...finger, clientX: x, clientY: y });
+    }
+
+    function fingerMove(x: number, y: number, finger = FINGER): void {
+        fireEvent.pointerMove(latestCanvas(), { ...finger, clientX: x, clientY: y });
+    }
+
+    function fingerUp(x: number, y: number, finger = FINGER): void {
+        fireEvent.pointerUp(latestCanvas(), { ...finger, clientX: x, clientY: y });
+    }
+
+    function tap(x: number, y: number): void {
+        fingerDown(x, y);
+        fingerUp(x, y);
+    }
+
+    it("selects, reports and activates the point a finger taps, at once", async () => {
+        const onSelect = vi.fn();
+        const onActivate = vi.fn();
+        await renderCloudView({ points: TWO_POINTS, onSelect, onActivate });
+
+        tap(5, 595);
+
+        expect(latestInstance().select).toHaveBeenCalledWith([0], { preventEvent: true });
+        expect(onSelect).toHaveBeenCalledWith(SAMPLE_REF);
+        expect(onActivate).toHaveBeenCalledWith(SAMPLE_REF);
+    });
+
+    it("clears the highlight on a tap that lands on no point", async () => {
+        const onClear = vi.fn();
+        const onSelect = vi.fn();
+        await renderCloudView({ points: TWO_POINTS, onClear, onSelect });
+
+        tap(300, 300);
+
+        expect(onClear).toHaveBeenCalledTimes(1);
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it("pans the view with one finger and asks for the frame that shows it", async () => {
+        await renderCloudView({ points: TWO_POINTS });
+
+        fingerDown(100, 100);
+        fingerMove(130, 115);
+
+        expect(latestInstance().camera.pan).toHaveBeenCalledWith([0.1, -0.05]);
+        expect(latestInstance().redraw).toHaveBeenCalled();
+    });
+
+    it("zooms about two fingers as they spread", async () => {
+        await renderCloudView({ points: TWO_POINTS });
+
+        fingerDown(200, 300);
+        fingerDown(300, 300, OTHER_FINGER);
+        fingerMove(400, 300, OTHER_FINGER);
+
+        expect(latestInstance().camera.scale).toHaveBeenCalledWith([2, 2], [0, 0]);
+        expect(latestInstance().camera.pan).toHaveBeenCalledWith([expect.closeTo(1 / 6, 5), expect.closeTo(0, 5)]);
+    });
+
+    it("reports a point a finger holds, with where it stands", async () => {
+        const onContextMenu = vi.fn();
+        await renderCloudView({ points: TWO_POINTS, onContextMenu });
+        vi.useFakeTimers();
+
+        fingerDown(5, 595);
+        act(() => {
+            vi.advanceTimersByTime(LONG_PRESS_HOLD_MS);
+        });
+        fingerUp(5, 595);
+
+        expect(onContextMenu).toHaveBeenCalledWith(SAMPLE_REF, [10, 20]);
+    });
+
+    it("names a tapped point as an end of the pair while pairing, highlighting nothing", async () => {
+        const onPairTap = vi.fn();
+        const onSelect = vi.fn();
+        await renderCloudView({ points: TWO_POINTS, pairing: true, onPairTap, onSelect });
+
+        tap(5, 595);
+
+        expect(onPairTap).toHaveBeenCalledWith(SAMPLE_REF);
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it("joins the point a finger drags from to the one it lifts over while pairing, showing the band between", async () => {
+        const onJoin = vi.fn();
+        const { container } = await renderCloudView({ points: TWO_POINTS, pairing: true, onJoin });
+
+        fingerDown(5, 595);
+        fingerMove(300, 300);
+        expect(container.querySelector(".morph-band-line")).toBeInTheDocument();
+        fingerMove(595, 5);
+        fingerUp(595, 5);
+
+        expect(onJoin).toHaveBeenCalledWith(SAMPLE_REF, MODULE_REF);
+        expect(container.querySelector(".morph-band-line")).not.toBeInTheDocument();
+    });
+
+    it("leaves a mouse press to the scatterplot", async () => {
+        const onSelect = vi.fn();
+        await renderCloudView({ points: TWO_POINTS, onSelect });
+
+        fireEvent.pointerDown(latestCanvas(), { pointerId: 1, pointerType: "mouse", clientX: 5, clientY: 595 });
+        fireEvent.pointerUp(latestCanvas(), { pointerId: 1, pointerType: "mouse", clientX: 5, clientY: 595 });
+
+        expect(onSelect).not.toHaveBeenCalled();
+        expect(latestInstance().camera.pan).not.toHaveBeenCalled();
+    });
+
+    it("centers the view on a located point, and steps the zoom, on command", async () => {
+        const { rerender } = await renderCloudView({ points: TWO_POINTS });
+
+        rerender(
+            <CloudView
+                {...viewProps({
+                    points: TWO_POINTS,
+                    command: { sequence: 1, action: { kind: "locate", hash: SAMPLE_REF.hash } },
+                })}
+            />,
+        );
+
+        const [area, options] = latestInstance().zoomToArea.mock.calls[0] as [Record<string, number>, unknown];
+        expect(area.x).toBeCloseTo(-1.15, 5);
+        expect(area.y).toBeCloseTo(-1.15, 5);
+        expect(area.width).toBeCloseTo(0.3, 5);
+        expect(area.height).toBeCloseTo(0.3, 5);
+        expect(options).toEqual({ transition: true, transitionDuration: 500 });
+
+        rerender(
+            <CloudView
+                {...viewProps({ points: TWO_POINTS, command: { sequence: 2, action: { kind: "zoom", factor: 1.5 } } })}
+            />,
+        );
+
+        expect(latestInstance().camera.scale).toHaveBeenCalledWith([1.5, 1.5], [0, 0]);
+        expect(latestInstance().redraw).toHaveBeenCalled();
     });
 });

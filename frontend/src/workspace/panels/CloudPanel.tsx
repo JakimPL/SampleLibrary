@@ -1,8 +1,8 @@
-import { type ReactElement, useEffect, useMemo, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { CloudCategory, CloudLabel, CloudPoint, ModuleCloudPoint } from "../../api/cloud";
-import { type CloudLink, CloudView } from "../../cloud/CloudView";
+import { type CloudAction, type CloudCommand, type CloudLink, CloudView } from "../../cloud/CloudView";
 import type { CloudEntityPoint } from "../../cloud/geometry";
 import {
     defaultPaintedTags,
@@ -12,23 +12,30 @@ import {
     type TopLevelTag,
     topLevelTags,
 } from "../../cloud/labelColoring";
+import { LegendSheet } from "../../cloud/LegendSheet";
 import { TagLegend } from "../../cloud/TagLegend";
 import { useCategoryTags } from "../../cloud/useCategoryTags";
 import { useCloud } from "../../cloud/useCloud";
 import { useCloudCategories } from "../../cloud/useCloudCategories";
 import { useCloudLabels } from "../../cloud/useCloudLabels";
 import { useModuleCloud } from "../../cloud/useModuleCloud";
+import { useContainerWidth } from "../../layout/useContainerWidth";
+import { useLayoutMode } from "../../layout/useLayoutMode";
 import { morphPreview } from "../../morph/morphPreview";
 import { useMorphStore } from "../../morph/morphStore";
+import { useEndpoint } from "../../morph/useEndpoint";
 import { useMorphStatus } from "../../morph/useMorphStatus";
 import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
 import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
+import { shortHash } from "../../shared/format";
 import { Loading } from "../../shared/Loading";
 import { type EntityRef, morphAnchorOf, useSelectionStore } from "../selectionStore";
 import { entityRoute } from "../useEntityRowInteractions";
 import { CloudHoverTooltip } from "./CloudHoverTooltip";
+import { CloudPointMenu } from "./CloudPointMenu";
+import { CloudTapCard } from "./CloudTapCard";
 
 type CloudTab = "samples" | "modules";
 type ColoringMode = "category" | "label";
@@ -46,6 +53,44 @@ interface HoveredPoint {
 }
 
 const MODULE_TAB_CAPTION = "Preliminary layout — real positions await a spectral-distance embedding.";
+/** Below this panel width the legend leaves its row for a sheet. */
+const LEGEND_SHEET_WIDTH_PX = 480;
+const ZOOM_STEP_FACTOR = 1.5;
+const FIRST_END_PROMPT = "Pair: tap the first sample";
+
+interface HeldPoint {
+    readonly entity: EntityRef;
+}
+
+interface PairBannerProps {
+    readonly first: EntityRef | null;
+    readonly onCancel: () => void;
+}
+
+function FirstEndName({ hash }: { readonly hash: string }): ReactElement {
+    const { name } = useEndpoint(hash);
+    return <>{name === "" ? shortHash(hash) : name}</>;
+}
+
+/** What pair mode asks for next, and the way out of it. */
+function PairBanner({ first, onCancel }: PairBannerProps): ReactElement {
+    return (
+        <div className="cloud-pair-banner" role="status">
+            <span className="cloud-pair-banner-text">
+                {first === null ? (
+                    FIRST_END_PROMPT
+                ) : (
+                    <>
+                        A: <FirstEndName hash={first.hash} />. Now tap the second
+                    </>
+                )}
+            </span>
+            <button type="button" className="cloud-pair-cancel" onClick={onCancel}>
+                Cancel
+            </button>
+        </div>
+    );
+}
 
 function samplePoints(coordinates: readonly CloudPoint[]): readonly CloudEntityPoint[] {
     return coordinates.map((coordinate) => ({
@@ -149,10 +194,25 @@ function useSampleColoring(mode: ColoringMode): {
     return { coloring, tags, painted, togglePainted };
 }
 
+/**
+ * The cloud with its controls: the tab and the coloring, the legend as a row or as a sheet when
+ * the panel is narrow, and the tools that move the view. Under touch a tapped point shows a card
+ * in place of the hover tooltip, except on a phone, where the tray names it; a held point opens
+ * its menu. Pair mode makes two taps the pairing gesture, one for each end.
+ */
 export function CloudPanel(): ReactElement {
     const [tab, setTab] = useState<CloudTab>("samples");
     const [mode, setMode] = useState<ColoringMode>("category");
     const [hovered, setHovered] = useState<HoveredPoint | null>(null);
+    const [pairing, setPairing] = useState(false);
+    const [pairFirst, setPairFirst] = useState<EntityRef | null>(null);
+    const [held, setHeld] = useState<HeldPoint | null>(null);
+    const [legendOpen, setLegendOpen] = useState(false);
+    const [command, setCommand] = useState<CloudCommand | null>(null);
+    const panelRef = useRef<HTMLDivElement | null>(null);
+    const width = useContainerWidth(panelRef);
+    const legendAsSheet = width !== null && width < LEGEND_SHEET_WIDTH_PX;
+    const { input, layout } = useLayoutMode();
     const state = useActiveCloudPoints(tab);
     const { coloring, tags, painted, togglePainted } = useSampleColoring(mode);
     const navigate = useNavigate();
@@ -183,10 +243,46 @@ export function CloudPanel(): ReactElement {
         }
         return rates;
     }, [state]);
+    const hashesInView = useMemo(
+        () => new Set(state.status === "success" ? state.data.map((point) => point.ref.hash) : []),
+        [state],
+    );
+    const inHandHere = highlighted !== null && hashesInView.has(highlighted.hash) ? highlighted : null;
+    const tapCardShown = input === "touch" && layout === "workspace" && inHandHere !== null;
 
     useEffect(() => {
         setHovered(null);
+        setHeld(null);
     }, [tab]);
+
+    function issue(action: CloudAction): void {
+        setCommand((current) => ({ sequence: (current?.sequence ?? 0) + 1, action }));
+    }
+
+    function leavePairMode(): void {
+        setPairing(false);
+        setPairFirst(null);
+    }
+
+    function handlePairTap(entity: EntityRef): void {
+        if (entity.kind !== "sample") {
+            return;
+        }
+        if (pairFirst === null) {
+            setPairFirst(entity);
+            return;
+        }
+        join(pairFirst.hash, entity.hash);
+        leavePairMode();
+    }
+
+    function handleContextMenu(entity: EntityRef): void {
+        setHeld({ entity });
+    }
+
+    function handleLocate(hash: string): void {
+        issue({ kind: "locate", hash });
+    }
 
     function handleSelect(entity: EntityRef): void {
         highlightEntity(entity);
@@ -227,8 +323,8 @@ export function CloudPanel(): ReactElement {
     }
 
     return (
-        <div className="panel-stack">
-            <div className="panel-filter">
+        <div className="panel-stack" ref={panelRef}>
+            <div className="panel-filter cloud-toolbar">
                 <button
                     type="button"
                     aria-pressed={tab === "samples"}
@@ -249,6 +345,19 @@ export function CloudPanel(): ReactElement {
                 </button>
                 {tab === "samples" && (
                     <>
+                        <button
+                            type="button"
+                            aria-pressed={pairing}
+                            onClick={() => {
+                                if (pairing) {
+                                    leavePairMode();
+                                } else {
+                                    setPairing(true);
+                                }
+                            }}
+                        >
+                            Pair
+                        </button>
                         <span className="panel-filter-separator" aria-hidden />
                         <span className="panel-filter-caption">Color by</span>
                         <button
@@ -269,13 +378,25 @@ export function CloudPanel(): ReactElement {
                         >
                             Labels
                         </button>
+                        {legendAsSheet && tags.length > 0 && (
+                            <button
+                                type="button"
+                                aria-expanded={legendOpen}
+                                onClick={() => {
+                                    setLegendOpen(true);
+                                }}
+                            >
+                                Legend
+                            </button>
+                        )}
                     </>
                 )}
             </div>
             {tab === "modules" && <p className="cloud-caption">{MODULE_TAB_CAPTION}</p>}
-            {tab === "samples" && (
+            {tab === "samples" && !legendAsSheet && (
                 <TagLegend tags={tags} painted={painted} onToggle={togglePainted} emptyCaption={EMPTY_CAPTIONS[mode]} />
             )}
+            {tab === "samples" && pairing && <PairBanner first={pairFirst} onCancel={leavePairMode} />}
             <div className="panel-body cloud-body">
                 {state.status === "loading" && <Loading />}
                 {state.status === "error" && <ErrorNotice message={state.message} />}
@@ -292,15 +413,80 @@ export function CloudPanel(): ReactElement {
                             onJoinToAnchor={handleJoinToAnchor}
                             onJoin={handleJoin}
                             onActivate={handleActivate}
+                            onContextMenu={handleContextMenu}
+                            pairing={tab === "samples" && pairing}
+                            onPairTap={handlePairTap}
+                            command={command}
                             link={tab === "samples" ? link : null}
                             onWeightChange={setWeight}
                             onWeightCommit={handleWeightCommit}
                             anchor={tab === "samples" ? morphAnchor : null}
                         />
                         {hovered !== null && <CloudHoverTooltip entity={hovered.entity} x={hovered.x} y={hovered.y} />}
+                        {tapCardShown && (
+                            <CloudTapCard
+                                entity={inHandHere}
+                                playbackRateHz={rateByHash.get(inHandHere.hash) ?? null}
+                            />
+                        )}
+                        <div className="cloud-tools">
+                            <button
+                                type="button"
+                                className="cloud-tool"
+                                aria-label="Center on the selection"
+                                disabled={inHandHere === null}
+                                onClick={() => {
+                                    if (inHandHere !== null) {
+                                        handleLocate(inHandHere.hash);
+                                    }
+                                }}
+                            >
+                                ⌖
+                            </button>
+                            <button
+                                type="button"
+                                className="cloud-tool"
+                                aria-label="Zoom in"
+                                onClick={() => {
+                                    issue({ kind: "zoom", factor: ZOOM_STEP_FACTOR });
+                                }}
+                            >
+                                +
+                            </button>
+                            <button
+                                type="button"
+                                className="cloud-tool"
+                                aria-label="Zoom out"
+                                onClick={() => {
+                                    issue({ kind: "zoom", factor: 1 / ZOOM_STEP_FACTOR });
+                                }}
+                            >
+                                −
+                            </button>
+                        </div>
                     </>
                 )}
             </div>
+            {held !== null && (
+                <CloudPointMenu
+                    entity={held.entity}
+                    playbackRateHz={rateByHash.get(held.entity.hash) ?? null}
+                    onLocate={handleLocate}
+                    onClose={() => {
+                        setHeld(null);
+                    }}
+                />
+            )}
+            {legendOpen && (
+                <LegendSheet
+                    tags={tags}
+                    painted={painted}
+                    onToggle={togglePainted}
+                    onClose={() => {
+                        setLegendOpen(false);
+                    }}
+                />
+            )}
         </div>
     );
 }

@@ -1,16 +1,19 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type * as CloudApi from "../../../src/api/cloud";
 import type * as CurationApi from "../../../src/api/curation";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as MorphApi from "../../../src/api/morph";
 import type * as SamplesApi from "../../../src/api/samples";
+import { COARSE_POINTER_MEDIA_QUERY } from "../../../src/layout/layoutMode";
 import { useMorphStore } from "../../../src/morph/morphStore";
 import type * as AudioPreview from "../../../src/samples/useAudioPreview";
+import { LONG_PRESS_HOLD_MS } from "../../../src/shared/gestures/gestureThresholds";
 import { CloudPanel } from "../../../src/workspace/panels/CloudPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
+import { stubMatchMedia } from "../../support/matchMedia";
 
 const {
     instances,
@@ -22,6 +25,9 @@ const {
     getCloudLabels,
     getLabelTags,
     getSamplePreview,
+    getSample,
+    getSampleRelations,
+    getSimilarSamples,
     getModule,
     getMorphStatus,
     play,
@@ -33,9 +39,16 @@ const {
         readonly destroy = vi.fn();
         readonly set = vi.fn().mockResolvedValue(undefined);
         readonly getScreenPosition = vi.fn((index: number) => [10 + index, 20 + index] as [number, number]);
-        readonly get = vi.fn((property: string) =>
-            property === "cameraView" ? new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]) : undefined,
-        );
+        readonly hover = vi.fn();
+        readonly redraw = vi.fn();
+        readonly zoomToArea = vi.fn().mockResolvedValue(undefined);
+        readonly camera = { pan: vi.fn(), scale: vi.fn() };
+        readonly get = vi.fn((property: string) => {
+            if (property === "cameraView") {
+                return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+            }
+            return property === "camera" ? this.camera : undefined;
+        });
         private readonly listeners = new Map<string, ((payload: unknown) => void)[]>();
 
         subscribe(event: string, handler: (payload: unknown) => void): { event: string; handler: unknown } {
@@ -72,6 +85,9 @@ const {
         getCloudLabels: vi.fn().mockResolvedValue([]),
         getLabelTags: vi.fn().mockResolvedValue([]),
         getSamplePreview: vi.fn(),
+        getSample: vi.fn().mockRejectedValue(new Error("no catalog behind this test")),
+        getSampleRelations: vi.fn().mockResolvedValue([]),
+        getSimilarSamples: vi.fn().mockResolvedValue([]),
         getModule: vi.fn(),
         getMorphStatus: vi.fn().mockResolvedValue({ available: true, service: null }),
         play: vi.fn(),
@@ -94,7 +110,7 @@ vi.mock("../../../src/api/curation", async () => {
 
 vi.mock("../../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../../src/api/samples");
-    return { ...actual, getSamplePreview };
+    return { ...actual, getSamplePreview, getSample, getSampleRelations, getSimilarSamples };
 });
 
 vi.mock("../../../src/samples/useAudioPreview", async () => {
@@ -429,5 +445,123 @@ describe("CloudPanel", () => {
             expect(getCloudLabels).toHaveBeenCalledTimes(1);
         });
         expect(getLabelTags).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("CloudPanel on touch", () => {
+    const FIRST_HASH = "7".repeat(64);
+    const SECOND_HASH = "8".repeat(64);
+    const FINGER = { pointerId: 1, pointerType: "touch" };
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    /** The panel with two samples drawn: at (0, 600) and (600, 0) of the 600px test surface. */
+    async function renderedPanel(): Promise<void> {
+        getCloud.mockResolvedValue([
+            { sample_hash: FIRST_HASH, x: 0, y: 0, playback_rate_hz: 8363 },
+            { sample_hash: SECOND_HASH, x: 1, y: 1, playback_rate_hz: 16726 },
+        ]);
+        getModuleCloud.mockResolvedValue([]);
+        renderPanel();
+        await waitFor(() => {
+            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
+        });
+        await act(async () => {
+            await Promise.resolve();
+        });
+    }
+
+    function tap(x: number, y: number): void {
+        fireEvent.pointerDown(latestCanvas(), { ...FINGER, clientX: x, clientY: y });
+        fireEvent.pointerUp(latestCanvas(), { ...FINGER, clientX: x, clientY: y });
+    }
+
+    it("pairs two tapped samples in Pair mode, then leaves the mode", async () => {
+        await renderedPanel();
+
+        fireEvent.click(screen.getByRole("button", { name: "Pair" }));
+        expect(screen.getByRole("status")).toHaveTextContent("Pair: tap the first sample");
+
+        tap(5, 595);
+        expect(screen.getByRole("status")).toHaveTextContent("Now tap the second");
+        expect(useSelectionStore.getState().highlighted).toBeNull();
+
+        tap(595, 5);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: FIRST_HASH, second: SECOND_HASH });
+        expect(screen.getByRole("button", { name: "Pair" })).toHaveAttribute("aria-pressed", "false");
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+
+    it("shows a tap card for the point in hand under touch, playing it as the tap lands", async () => {
+        stubMatchMedia(new Set([COARSE_POINTER_MEDIA_QUERY]));
+        getSamplePreview.mockResolvedValue({ display_name: "kick", category: null, hand_label: null, thumbnail: null });
+        await renderedPanel();
+
+        tap(5, 595);
+
+        expect(await screen.findByRole("region", { name: "Tapped point" })).toHaveTextContent("kick");
+        expect(screen.getByRole("group", { name: "Sample actions" })).toBeInTheDocument();
+        expect(play).toHaveBeenCalledWith(expect.objectContaining({ key: FIRST_HASH, playbackRateHz: 8363 }));
+    });
+
+    it("opens a held point's menu, which opens the point", async () => {
+        await renderedPanel();
+        vi.useFakeTimers();
+
+        fireEvent.pointerDown(latestCanvas(), { ...FINGER, clientX: 5, clientY: 595 });
+        act(() => {
+            vi.advanceTimersByTime(LONG_PRESS_HOLD_MS);
+        });
+        fireEvent.pointerUp(latestCanvas(), { ...FINGER, clientX: 5, clientY: 595 });
+        vi.useRealTimers();
+
+        const menu = screen.getByRole("dialog", { name: `Sample ${FIRST_HASH.slice(0, 8)}` });
+        fireEvent.click(within(menu).getByRole("button", { name: "Open" }));
+
+        expect(await screen.findByText("sample route")).toBeInTheDocument();
+    });
+
+    it("moves the legend into a sheet in a narrow panel", async () => {
+        vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+            x: 0,
+            y: 0,
+            width: 300,
+            height: 600,
+            top: 0,
+            right: 300,
+            bottom: 600,
+            left: 0,
+            toJSON: () => ({}),
+        });
+        getCloudCategories.mockResolvedValue([{ sample_hash: FIRST_HASH, path: ["BASS DRUM"], score: 0.8 }]);
+        getCategoryTags.mockResolvedValue([{ path: ["BASS DRUM"], sample_count: 1, rank: 0 }]);
+        await renderedPanel();
+
+        fireEvent.click(await screen.findByRole("button", { name: "Legend" }));
+
+        const sheet = screen.getByRole("dialog", { name: "Painted tags" });
+        expect(screen.queryByRole("group", { name: "Painted tags", hidden: false })).toBe(
+            within(sheet).getByRole("group", { name: "Painted tags" }),
+        );
+        fireEvent.click(within(sheet).getByRole("button", { name: /BASS DRUM/ }));
+        expect(within(sheet).getByRole("button", { name: /BASS DRUM/ })).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("steps the zoom and centers on the point in hand from the tools", async () => {
+        await renderedPanel();
+
+        fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+        expect(latestInstance().camera.scale).toHaveBeenCalledWith([1.5, 1.5], [0, 0]);
+        expect(screen.getByRole("button", { name: "Center on the selection" })).toBeDisabled();
+
+        act(() => {
+            useSelectionStore.getState().highlightEntity({ kind: "sample", hash: SECOND_HASH });
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Center on the selection" }));
+
+        expect(latestInstance().zoomToArea).toHaveBeenCalledTimes(1);
     });
 });

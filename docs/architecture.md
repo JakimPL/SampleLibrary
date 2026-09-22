@@ -806,6 +806,22 @@ paints the theme's ground. From the bottom:
 | `svg.cloud-markers` | `CloudMarkers` | the hovered and the selected point, each in the theme's point shape |
 | overlays | `CloudView`, `MorphBand`, `MorphLink` | the ping locating a highlighted point, the pairing band and the morph link |
 
+The dots' canvas takes the mouse through regl-scatterplot itself, which pans, zooms, hit-tests and
+selects on its own handlers, and takes a finger through `frontend/src/cloud/touch/`, since the
+library and its camera know only the mouse. `bindTouchGestures.ts` routes every pointer that is not
+a mouse into a recognizer (`touchGestures.ts`, a state machine over pointer events with the timer
+handed in) and cancels the touch start, so the browser raises no compatibility mouse events for the
+library to misread; the click a tap may still raise is stopped before the canvas sees it. A tap
+finds its point through `hitTest.ts`, a pass over the points' positions through the same
+`ViewTransform` the overlays use, within a finger's reach; `CloudView` then selects and activates
+it synchronously, inside the gesture, which is what lets playback start on a phone. One finger
+pans and two pinch through `cameraControl.ts`, which drives `scatterplot.get("camera")` directly:
+a pan is a translation in the camera's normalized space, half the surface's height being one
+unit, and a pinch a scale about the fingers' midpoint; every move ends in `redraw()`, and the
+frame that follows publishes `drawing`, so the layers sync as they do for the mouse. A held finger
+reports its point for a menu, and in the panel's pair mode two taps name the two ends, or a drag
+from one point to another joins them by the rule a right-drag follows.
+
 Every layer moves within the frame that draws the points. The scatterplot publishes its `drawing`
 event synchronously inside the animation frame rendering a moved view, and `CloudView` answers it,
 and every resize of the container, in one pass (`syncView`): it derives a `ViewTransform` from the

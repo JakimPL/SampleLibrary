@@ -1,6 +1,6 @@
 import type { InputMode } from "../layout/layoutMode";
 
-export type HintId = "noSample" | "noModule" | "noWaveform" | "noPair";
+export type HintId = "noSample" | "noModule" | "noWaveform" | "noPair" | "cloudIdle";
 
 /** What an empty panel says, worded for the gestures the person's input actually has. */
 const HINTS: Readonly<Record<HintId, Readonly<Record<InputMode, string>>>> = {
@@ -15,6 +15,10 @@ const HINTS: Readonly<Record<HintId, Readonly<Record<InputMode, string>>>> = {
     noWaveform: {
         pointer: "Open a sample to play it here: double-click it, or press Enter on its row.",
         touch: "Open a sample to play it here.",
+    },
+    cloudIdle: {
+        pointer: "Click a point to hear it. Drag to move, scroll to zoom. Right-click a point to pair it.",
+        touch: "Tap a point to hear it. Drag to move, pinch to zoom. Hold a point for more.",
     },
     noPair: {
         pointer:

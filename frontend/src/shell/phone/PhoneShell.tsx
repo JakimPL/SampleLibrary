@@ -1,7 +1,10 @@
 import type { ReactElement } from "react";
 import { useEffect, useMemo } from "react";
 
+import { useLayoutMode } from "../../layout/useLayoutMode";
 import type { ShellView } from "../../navigation/shellView";
+import { hintFor } from "../../shared/hints";
+import type { PanelId } from "../../workspace/panelRegistry";
 import { PageBody, PageHeaderFor } from "./PageLayer";
 import { usePhoneShellStore } from "./phoneShellStore";
 import { PhoneSurfaces } from "./PhoneSurfaces";
@@ -26,6 +29,9 @@ interface PhoneShellProps {
     readonly view: ShellView;
 }
 
+/** The tab whose tray slot stays, with the gestures spelled out, while nothing is in hand. */
+const CLOUD_TAB_ID: PanelId = "cloud";
+
 /**
  * The shell a phone gets: one header, one surface at a time over the tabs' panels, the tray naming
  * what is in hand, and the tab bar along the bottom. A sample, a module or a panel with no tab
@@ -36,6 +42,7 @@ export function PhoneShell({ view }: PhoneShellProps): ReactElement {
     const tabs = useMemo(tabPanels, []);
     const lastTabPath = usePhoneShellStore((state) => state.lastTabPath);
     const rememberTab = usePhoneShellStore((state) => state.rememberTab);
+    const { input } = useLayoutMode();
     const page = phonePageOf(view);
     const viewTab = tabOf(tabs, view);
     const tab = standingTab(tabs, view, lastTabPath);
@@ -66,7 +73,7 @@ export function PhoneShell({ view }: PhoneShellProps): ReactElement {
                     </div>
                 )}
             </div>
-            {page === null && <Tray />}
+            {page === null && <Tray idleHint={tab.id === CLOUD_TAB_ID ? hintFor("cloudIdle", input) : null} />}
             <TabBar tabs={tabs} activeTabId={tab.id} />
         </div>
     );

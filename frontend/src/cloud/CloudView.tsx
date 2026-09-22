@@ -4,6 +4,13 @@ import { flushSync } from "react-dom";
 import createScatterplot from "regl-scatterplot";
 
 import { classNames } from "../shared/classNames";
+import {
+    LONG_PRESS_HOLD_MS,
+    PINCH_MINIMUM_DISTANCE_PX,
+    TAP_SLOP_PX,
+    TOUCH_HIT_RADIUS_PX,
+} from "../shared/gestures/gestureThresholds";
+import { windowTimer } from "../shared/gestures/longPress";
 import type { EntityRef } from "../workspace/selectionStore";
 import { CloudMarkers, type MarkerPositions, NO_MARKERS, sameMarkers } from "./CloudMarkers";
 import { type CloudRenderSettings, type NodeStyle, useCloudRenderSettings } from "./cloudRenderSettings";
@@ -17,9 +24,13 @@ import { MorphBand } from "./MorphBand";
 import { MorphLink } from "./MorphLink";
 import { type NodeGeometry, nodeGeometryOf, nodePaletteOf } from "./nodeGeometry";
 import { drawOrder, paletteColors, type PointSlots, slotPoints, slotValues } from "./pointPalette";
+import { bindTouchGestures } from "./touch/bindTouchGestures";
+import { cameraOf, type CloudCamera, panBy, zoomAbout } from "./touch/cameraControl";
+import { flatPositionsOf, nearestPointIndex } from "./touch/hitTest";
+import { createTouchGestureRecognizer } from "./touch/touchGestures";
 import { useNodeLayer } from "./useNodeLayer";
 import { useUnderlay } from "./useUnderlay";
-import { type ViewTransform, viewTransformOf, visibleBounds } from "./viewTransform";
+import { type Viewport, type ViewTransform, viewTransformOf, visibleBounds } from "./viewTransform";
 
 type Scatterplot = ReturnType<typeof createScatterplot>;
 type ScatterplotProperties = Parameters<Scatterplot["set"]>[0];
@@ -32,6 +43,13 @@ const SQUARE_SHAPE = "square";
 const ALWAYS_NODE_MODE = "always";
 const DOTS_CANVAS_CLASS = "cloud-dots";
 const CAMERA_VIEW_PROPERTY = "cameraView";
+const CAMERA_PROPERTY = "camera";
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+const HALF = 0.5;
+/** The side, in data units, of the box a locate brings into view around its point. */
+const LOCATE_SPAN = 0.3;
+const LOCATE_HALF_SPAN = LOCATE_SPAN * HALF;
+const LOCATE_TRANSITION_MS = 500;
 const LEFT_BUTTON = 0;
 const RIGHT_BUTTON = 2;
 // How far a press may travel and still read as a click rather than the end of a pan.
@@ -128,6 +146,16 @@ export interface CloudLink {
     readonly weight: number;
 }
 
+/** A move of the view a caller asks for: bringing a point to the middle, or stepping the zoom. */
+export type CloudAction =
+    { readonly kind: "locate"; readonly hash: string } | { readonly kind: "zoom"; readonly factor: number };
+
+/** One request to move the view, told apart from the one before by its sequence number. */
+export interface CloudCommand {
+    readonly sequence: number;
+    readonly action: CloudAction;
+}
+
 interface CloudViewProps {
     readonly points: readonly CloudEntityPoint[];
     readonly coloring: PointColoring;
@@ -139,6 +167,12 @@ interface CloudViewProps {
     readonly onJoinToAnchor: (entity: EntityRef) => void;
     readonly onJoin: (first: EntityRef, second: EntityRef) => void;
     readonly onActivate: (entity: EntityRef) => void;
+    /** A point a finger held, with its screen position, for a caller's menu. */
+    readonly onContextMenu: (entity: EntityRef, position: ScreenPosition) => void;
+    /** Whether a tap names an end of the morph pair, through `onPairTap`, in place of highlighting. */
+    readonly pairing: boolean;
+    readonly onPairTap: (entity: EntityRef) => void;
+    readonly command: CloudCommand | null;
     readonly link: CloudLink | null;
     readonly onWeightChange: (weight: number) => void;
     readonly onWeightCommit: () => void;
@@ -350,6 +384,15 @@ function selectHighlighted(
  * `link` names two points in view, a line joins them and its marker is the weight; the hover
  * tracking pauses while the marker is dragged, since the library keeps hit-testing beneath it.
  *
+ * A finger works through its own layer (`touch/`), since the library and its camera know only the
+ * mouse: a tap selects and activates the point under it within a finger's reach, synchronously,
+ * so a caller's playback starts inside the gesture the browser allows sound from; a tap on empty
+ * space clears; a held finger reports its point through `onContextMenu`; one finger pans and two
+ * pinch, each move driving the camera and asking for the frame that shows it. In pair mode a tap
+ * names an end of the pair through `onPairTap`, and a finger dragged from one point to another
+ * joins them through the same rule a right-drag follows. A `command` centers the view on a point
+ * or steps the zoom, once per sequence number.
+ *
  * The selected and the hovered point each carry a marker in the theme's point shape. Every overlay
  * -- the markers, the ping, the band and the link -- follows the library's `drawing` event, which
  * arrives within the frame that drew a moved view, and a resize of the container, and commits
@@ -386,6 +429,10 @@ export function CloudView({
     onJoinToAnchor,
     onJoin,
     onActivate,
+    onContextMenu,
+    pairing,
+    onPairTap,
+    command,
     link,
     onWeightChange,
     onWeightCommit,
@@ -415,6 +462,12 @@ export function CloudView({
     const onJoinToAnchorRef = useRef(onJoinToAnchor);
     const onJoinRef = useRef(onJoin);
     const onActivateRef = useRef(onActivate);
+    const onContextMenuRef = useRef(onContextMenu);
+    const onPairTapRef = useRef(onPairTap);
+    const pairingRef = useRef(pairing);
+    onContextMenuRef.current = onContextMenu;
+    onPairTapRef.current = onPairTap;
+    pairingRef.current = pairing;
     onSelectRef.current = onSelect;
     onFocusRef.current = onFocus;
     onClearRef.current = onClear;
@@ -462,6 +515,9 @@ export function CloudView({
     const indexByHash = useMemo(() => firstIndexByHash(points), [points]);
     const indexByHashRef = useRef(indexByHash);
     indexByHashRef.current = indexByHash;
+    const flatPositions = useMemo(() => flatPositionsOf(points), [points]);
+    const flatPositionsRef = useRef(flatPositions);
+    flatPositionsRef.current = flatPositions;
 
     const nodeGeometry = useMemo(() => nodeGeometryOf(points, slotting), [points, slotting]);
     const nodeGeometryRef = useRef(nodeGeometry);
@@ -614,6 +670,44 @@ export function CloudView({
         [underlay, nodeLayer, repinLink, repinBand, repinPing, repinMarkers],
     );
 
+    const viewportOf = useCallback((): Viewport | null => {
+        const container = containerRef.current;
+        if (container === null) {
+            return null;
+        }
+        const bounds = container.getBoundingClientRect();
+        return { widthPx: bounds.width, heightPx: bounds.height, devicePixelRatio: window.devicePixelRatio };
+    }, []);
+
+    /** The point within a finger's reach of a screen position, once the points are drawn. */
+    const hitAt = useCallback(
+        (x: number, y: number): number | null => {
+            const scatterplot = scatterplotRef.current;
+            const viewport = viewportOf();
+            if (scatterplot === null || viewport === null || !pointsDrawnRef.current) {
+                return null;
+            }
+            const transform = viewTransformOf(scatterplot.get(CAMERA_VIEW_PROPERTY), viewport);
+            return nearestPointIndex(flatPositionsRef.current, transform, [x, y], TOUCH_HIT_RADIUS_PX);
+        },
+        [viewportOf],
+    );
+
+    /** Moves the camera and asks for the frame that shows the move, whose `drawing` event syncs every layer. */
+    const moveCamera = useCallback(
+        (move: (camera: CloudCamera, viewport: Viewport) => void): void => {
+            const scatterplot = scatterplotRef.current;
+            const viewport = viewportOf();
+            const camera = scatterplot === null ? null : cameraOf(scatterplot.get(CAMERA_PROPERTY));
+            if (scatterplot === null || viewport === null || camera === null) {
+                return;
+            }
+            move(camera, viewport);
+            scatterplot.redraw();
+        },
+        [viewportOf],
+    );
+
     useEffect(() => {
         const container = containerRef.current;
         if (container === null) {
@@ -727,14 +821,8 @@ export function CloudView({
             repinBand();
         }
 
-        function handleRightRelease(event: MouseEvent): void {
-            const origin = dragOriginRef.current;
-            if (event.button !== RIGHT_BUTTON || origin === null) {
-                return;
-            }
-            dragOriginRef.current = null;
-            repinBand();
-            const targetIndex = hoveredIndexRef.current;
+        /** Joins the point a drag began at to the one it ended over, or the one it ended on to the anchor. */
+        function pairFrom(origin: DragOrigin, targetIndex: number | null): void {
             const first = pointsRef.current[origin.index]?.ref;
             const second = targetIndex === null ? undefined : pointsRef.current[targetIndex]?.ref;
             if (first === undefined || second === undefined) {
@@ -746,6 +834,113 @@ export function CloudView({
                 onJoinToAnchorRef.current(second);
             }
         }
+
+        function handleRightRelease(event: MouseEvent): void {
+            const origin = dragOriginRef.current;
+            if (event.button !== RIGHT_BUTTON || origin === null) {
+                return;
+            }
+            dragOriginRef.current = null;
+            repinBand();
+            pairFrom(origin, hoveredIndexRef.current);
+        }
+
+        function dropTouchBand(): void {
+            dragOriginRef.current = null;
+            cursorRef.current = null;
+            hoveredIndexRef.current = null;
+            repinBand();
+            repinMarkers();
+        }
+
+        function pairsFrom(x: number, y: number): boolean {
+            if (!pairingRef.current) {
+                return false;
+            }
+            const index = hitAt(x, y);
+            if (index === null) {
+                return false;
+            }
+            dragOriginRef.current = { index, pressedOnPoint: true };
+            cursorRef.current = [x, y];
+            return true;
+        }
+
+        function handleTap(x: number, y: number): void {
+            dragOriginRef.current = null;
+            const index = hitAt(x, y);
+            const entity = index === null ? undefined : pointsRef.current[index]?.ref;
+            if (index === null || entity === undefined) {
+                scatterplot.deselect({ preventEvent: true });
+                onClearRef.current();
+                return;
+            }
+            if (pairingRef.current) {
+                onPairTapRef.current(entity);
+                return;
+            }
+            scatterplot.select([index], { preventEvent: true });
+            selectedIndexRef.current = index;
+            previousHighlightedRef.current = entity;
+            onSelectRef.current(entity);
+            onActivateRef.current(entity);
+            repinMarkers();
+        }
+
+        function handleLongPress(x: number, y: number): void {
+            const index = hitAt(x, y);
+            const entity = index === null ? undefined : pointsRef.current[index]?.ref;
+            if (index === null || entity === undefined) {
+                return;
+            }
+            const position = scatterplot.getScreenPosition(index);
+            if (position !== undefined) {
+                onContextMenuRef.current(entity, position);
+            }
+        }
+
+        function handlePan(dxPx: number, dyPx: number): void {
+            moveCamera((camera, viewport) => {
+                panBy(camera, viewport, dxPx, dyPx);
+            });
+        }
+
+        function handlePinch(factor: number, centerX: number, centerY: number, dxPx: number, dyPx: number): void {
+            moveCamera((camera, viewport) => {
+                panBy(camera, viewport, dxPx, dyPx);
+                zoomAbout(camera, viewport, factor, centerX, centerY);
+            });
+        }
+
+        function handlePairDrag(x: number, y: number): void {
+            cursorRef.current = [x, y];
+            hoveredIndexRef.current = hitAt(x, y);
+            repinBand();
+        }
+
+        function handlePairRelease(x: number, y: number): void {
+            const origin = dragOriginRef.current;
+            const targetIndex = hitAt(x, y);
+            dropTouchBand();
+            if (origin !== null) {
+                pairFrom(origin, targetIndex);
+            }
+        }
+
+        const recognizer = createTouchGestureRecognizer(
+            { tapSlopPx: TAP_SLOP_PX, holdMs: LONG_PRESS_HOLD_MS, pinchMinimumDistancePx: PINCH_MINIMUM_DISTANCE_PX },
+            windowTimer,
+            {
+                onTap: handleTap,
+                onLongPress: handleLongPress,
+                onPan: handlePan,
+                onPinch: handlePinch,
+                onPairDrag: handlePairDrag,
+                onPairRelease: handlePairRelease,
+                onCancel: dropTouchBand,
+            },
+        );
+        const touchBinding = bindTouchGestures(canvas, container, recognizer, { pairsFrom });
 
         function handleContextMenu(event: MouseEvent): void {
             event.preventDefault();
@@ -793,6 +988,8 @@ export function CloudView({
 
         return (): void => {
             canceled = true;
+            recognizer.cancel();
+            touchBinding.unbind();
             canvas.removeEventListener("mousedown", handlePress);
             canvas.removeEventListener("contextmenu", handleContextMenu);
             canvas.removeEventListener("click", handleClick);
@@ -892,6 +1089,34 @@ export function CloudView({
     useEffect(() => {
         repinLink();
     }, [link, repinLink]);
+
+    useEffect(() => {
+        const scatterplot = scatterplotRef.current;
+        if (command === null || scatterplot === null || !pointsDrawnRef.current) {
+            return;
+        }
+        const { action } = command;
+        if (action.kind === "zoom") {
+            moveCamera((camera, viewport) => {
+                zoomAbout(camera, viewport, action.factor, viewport.widthPx * HALF, viewport.heightPx * HALF);
+            });
+            return;
+        }
+        const index = indexByHashRef.current.get(action.hash);
+        const point = index === undefined ? undefined : pointsRef.current[index];
+        if (point === undefined) {
+            return;
+        }
+        void scatterplot.zoomToArea(
+            {
+                x: point.x - LOCATE_HALF_SPAN,
+                y: point.y - LOCATE_HALF_SPAN,
+                width: LOCATE_SPAN,
+                height: LOCATE_SPAN,
+            },
+            { transition: !window.matchMedia(REDUCED_MOTION_QUERY).matches, transitionDuration: LOCATE_TRANSITION_MS },
+        );
+    }, [command, moveCamera]);
 
     useEffect(() => {
         const container = containerRef.current;

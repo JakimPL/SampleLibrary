@@ -101,11 +101,11 @@ function catalogAnswers(): void {
     });
 }
 
-function renderTray(): ReturnType<typeof render> {
+function renderTray(idleHint: string | null = null): ReturnType<typeof render> {
     catalogAnswers();
     return render(
         <MemoryRouter>
-            <Tray />
+            <Tray idleHint={idleHint} />
         </MemoryRouter>,
     );
 }
@@ -138,6 +138,12 @@ describe("Tray", () => {
         const { container } = renderTray();
 
         expect(container).toBeEmptyDOMElement();
+    });
+
+    it("keeps its slot with a hint while nothing is in hand, where one is given", () => {
+        renderTray("Tap a point to hear it.");
+
+        expect(screen.getByText("Tap a point to hear it.")).toHaveClass("tray-hint");
     });
 
     it("names the sample in hand and offers the way to open it", async () => {
