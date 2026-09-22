@@ -8,10 +8,8 @@ import { MorphPanel } from "./panels/MorphPanel";
 import { SampleDetailPanel } from "./panels/SampleDetailPanel";
 import { SamplesListPanel } from "./panels/SamplesListPanel";
 import { StatsPanel } from "./panels/StatsPanel";
-import { WaveformPanel } from "./panels/WaveformPanel";
 
-export type PanelId =
-    "samples-list" | "modules-list" | "cloud" | "waveform" | "morph" | "sample-detail" | "module-detail" | "stats";
+export type PanelId = "samples-list" | "modules-list" | "cloud" | "morph" | "sample-detail" | "module-detail" | "stats";
 
 export interface PanelPlacement {
     readonly direction: "right" | "below" | "within";
@@ -82,28 +80,6 @@ export const PANEL_REGISTRY: Readonly<Record<PanelId, PanelDefinition>> = {
         path: "/cloud",
         phone: { kind: "tab", order: 2 },
     },
-    waveform: {
-        id: "waveform",
-        title: "Waveform",
-        shortTitle: "Waveform",
-        icon: "waveform",
-        component: WaveformPanel,
-        placement: { direction: "below", referencePanel: "cloud" },
-        renderer: "onlyWhenVisible",
-        path: null,
-        phone: { kind: "overflow" },
-    },
-    morph: {
-        id: "morph",
-        title: "Morph",
-        shortTitle: "Morph",
-        icon: "morph",
-        component: MorphPanel,
-        placement: { direction: "within", referencePanel: "waveform" },
-        renderer: "onlyWhenVisible",
-        path: "/morph",
-        phone: { kind: "tab", order: 4 },
-    },
     "sample-detail": {
         id: "sample-detail",
         title: "Sample Detail",
@@ -125,6 +101,17 @@ export const PANEL_REGISTRY: Readonly<Record<PanelId, PanelDefinition>> = {
         renderer: "onlyWhenVisible",
         path: null,
         phone: { kind: "page" },
+    },
+    morph: {
+        id: "morph",
+        title: "Morph",
+        shortTitle: "Morph",
+        icon: "morph",
+        component: MorphPanel,
+        placement: { direction: "within", referencePanel: "sample-detail" },
+        renderer: "onlyWhenVisible",
+        path: "/morph",
+        phone: { kind: "tab", order: 4 },
     },
     stats: {
         id: "stats",

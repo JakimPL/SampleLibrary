@@ -1,8 +1,11 @@
 import type { ChangeEvent, ReactElement } from "react";
+import { useEffect } from "react";
 
 import { sampleAudioUrl } from "../api/samples";
+import { classNames } from "../shared/classNames";
 import { DownloadLink } from "../shared/DownloadLink";
 import { formatDuration } from "../shared/format";
+import { useAudioPreview } from "./useAudioPreview";
 import { useWaveformPlayer } from "./useWaveformPlayer";
 import { NO_TRACES, WaveformView } from "./WaveformView";
 
@@ -11,6 +14,13 @@ export interface RateOption {
     readonly eventCount: number;
 }
 
+/**
+ * How the player lays itself out: the waveform over the transport in a panel or a page, the
+ * transport beside the waveform in a strip, or the transport alone with the waveform kept out of
+ * sight while it goes on sounding.
+ */
+export type WaveformPlayerLayout = "stacked" | "strip" | "transport";
+
 interface WaveformPlayerProps {
     readonly sampleHash: string;
     /** The name a saved copy of this sample takes, ending in its own extension. */
@@ -18,26 +28,49 @@ interface WaveformPlayerProps {
     readonly rateHz: number;
     readonly rateOptions: readonly RateOption[];
     readonly onRateChange: (rateHz: number) => void;
+    readonly layout: WaveformPlayerLayout;
 }
+
+const LAYOUT_CLASS: Readonly<Record<WaveformPlayerLayout, string | null>> = {
+    stacked: null,
+    strip: "wave-panel-strip",
+    transport: "wave-panel-transport",
+};
 
 function describeRateOption(option: RateOption): string {
     const timeWord = option.eventCount === 1 ? "time" : "times";
     return `${String(option.rateHz)} Hz · played ${String(option.eventCount)} ${timeWord}`;
 }
 
+/**
+ * The full player of one sample: its decoded waveform, a transport, the rate it is heard at, and
+ * a way to save it. It keeps to one voice with the shared preview element: playing here silences a
+ * preview, and a preview starting anywhere pauses this player.
+ */
 export function WaveformPlayer({
     sampleHash,
     fileName,
     rateHz,
     rateOptions,
     onRateChange,
+    layout,
 }: WaveformPlayerProps): ReactElement {
     const player = useWaveformPlayer(sampleAudioUrl(sampleHash), rateHz);
+    const { playingKey, stop } = useAudioPreview();
+
+    useEffect(() => {
+        if (playingKey !== null) {
+            player.pause();
+        }
+        // The pause reaches the live wavesurfer instance through a ref, so the player object itself is no dependency.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playingKey]);
 
     function handleTogglePlay(): void {
         if (player.isPlaying) {
             player.pause();
         } else {
+            stop();
             player.play();
         }
     }
@@ -49,7 +82,7 @@ export function WaveformPlayer({
     }
 
     return (
-        <div className="wave-panel">
+        <div className={classNames("wave-panel", LAYOUT_CLASS[layout])}>
             <WaveformView
                 containerRef={player.containerRef}
                 isPlaying={player.isPlaying}

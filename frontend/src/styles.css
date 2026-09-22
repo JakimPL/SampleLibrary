@@ -25,6 +25,8 @@
     --row-height: 40px;
     --toolbar-height: 32px;
     --tab-strip-height: 26px;
+    --player-strip-height: 40px;
+    --player-strip-expanded-height: 72px;
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --surface-0: #f4f5f7;
@@ -1451,9 +1453,21 @@ table.data td .annotation-editor-input {
     padding: var(--space-3) var(--space-4);
 }
 
-.cloud-hover-name {
+.glance {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.glance-name {
     font-size: var(--font-size-body);
     white-space: nowrap;
+}
+
+.glance-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
 }
 
 .entity-hash {
@@ -1462,12 +1476,6 @@ table.data td .annotation-editor-input {
     gap: var(--space-3);
     font-size: 10px;
     color: var(--text-faint);
-}
-
-.cloud-hover-meta {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
 }
 
 .cloud-markers {
@@ -1703,6 +1711,95 @@ table.data td .annotation-editor-input {
     padding: 0 var(--space-3);
     font-family: var(--font-mono);
     font-size: var(--font-size-small);
+}
+
+/* The window-level player: the transport beside the waveform, or alone once folded. */
+.player-strip {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    min-height: var(--player-strip-height);
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
+}
+
+.player-strip-expanded {
+    height: var(--player-strip-expanded-height);
+}
+
+.player-strip .wave-panel {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.player-strip .loading,
+.player-strip .error-notice,
+.player-strip .no-selection {
+    flex: 1 1 auto;
+    padding: var(--space-3) var(--space-4);
+    text-align: left;
+}
+
+.player-strip-morph {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-4);
+    border-right: 1px solid var(--border);
+    font-size: var(--font-size-small);
+    white-space: nowrap;
+}
+
+.player-strip-morph-show {
+    height: var(--control-height-compact);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    color: var(--text-muted);
+    font-size: var(--font-size-small);
+    cursor: pointer;
+}
+
+.player-strip-toggle {
+    flex: 0 0 auto;
+    width: var(--control-height);
+    border: none;
+    border-left: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.player-strip-toggle:hover {
+    color: var(--text-primary);
+}
+
+/* The player in a strip: the transport first, the waveform taking the rest of the row. */
+.wave-panel-strip {
+    flex-direction: row-reverse;
+}
+
+.wave-panel-strip .wave-canvas-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.wave-panel-strip .transport,
+.wave-panel-transport .transport {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    border-top: none;
+}
+
+.wave-panel-strip .transport {
+    border-right: 1px solid var(--border);
+}
+
+.wave-panel-transport .wave-canvas-wrap {
+    display: none;
 }
 
 .detail-scroll {

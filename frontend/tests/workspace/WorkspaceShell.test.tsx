@@ -105,18 +105,23 @@ describe("WorkspaceShell", () => {
         renderShellAt("/");
 
         const titles = panelTabTitles();
-        for (const title of [
-            "Modules",
-            "Samples",
-            "Cloud",
-            "Waveform",
-            "Morph",
-            "Module Detail",
-            "Sample Detail",
-            "Stats",
-        ]) {
+        for (const title of ["Modules", "Samples", "Cloud", "Morph", "Module Detail", "Sample Detail", "Stats"]) {
             expect(titles).toContain(title);
         }
+    });
+
+    it("shows the player strip once a sample is focused", async () => {
+        getSample.mockRejectedValue(new Error("no catalog behind this test"));
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+        renderShellAt("/");
+        expect(screen.queryByRole("region", { name: "Player" })).not.toBeInTheDocument();
+
+        act(() => {
+            useSelectionStore.getState().focusSample("abc");
+        });
+
+        expect(await screen.findByRole("region", { name: "Player" })).toBeInTheDocument();
     });
 
     it("seeds the focused module from a deep-linked route without requiring a click", async () => {

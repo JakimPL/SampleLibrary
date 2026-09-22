@@ -18,7 +18,10 @@ export interface PreviewFailure {
 
 interface PreviewState {
     readonly playingKey: string | null;
+    readonly paused: boolean;
     readonly failure: PreviewFailure | null;
+    /** The last source handed to the element, kept after it ends so a control can play it again. */
+    readonly source: PreviewSource | null;
 }
 
 /** How far the sound now playing has got: which preview it is, where it stands, and how long it runs. */
@@ -33,7 +36,7 @@ const AT_THE_START: PreviewProgress = { key: null, currentTimeSeconds: 0, durati
 const UNPLAYABLE_MESSAGE = "the audio could not be played";
 
 let audioElement: HTMLAudioElement | null = null;
-let state: PreviewState = { playingKey: null, failure: null };
+let state: PreviewState = { playingKey: null, paused: false, failure: null, source: null };
 let progress: PreviewProgress = AT_THE_START;
 let playSequence = 0;
 const listeners = new Set<() => void>();
@@ -66,7 +69,7 @@ function sharedElement(): HTMLAudioElement {
     if (audioElement === null) {
         const element = new Audio();
         element.addEventListener("ended", () => {
-            publish({ ...state, playingKey: null });
+            publish({ ...state, playingKey: null, paused: false });
             publishProgress(AT_THE_START);
         });
         element.addEventListener("timeupdate", () => {
@@ -86,6 +89,16 @@ function isSuperseded(error: unknown): boolean {
     return error instanceof DOMException && error.name === "AbortError";
 }
 
+function reportFailure(element: HTMLAudioElement, source: PreviewSource, error: unknown): void {
+    element.pause();
+    publish({
+        playingKey: null,
+        paused: false,
+        failure: { key: source.key, message: error instanceof Error ? error.message : UNPLAYABLE_MESSAGE },
+        source,
+    });
+}
+
 function play(source: PreviewSource): void {
     playSequence += 1;
     const sequence = playSequence;
@@ -97,19 +110,47 @@ function play(source: PreviewSource): void {
     element.preservesPitch = false;
     element.defaultPlaybackRate = playbackRate;
     element.playbackRate = playbackRate;
-    publish({ playingKey: source.key, failure: null });
+    publish({ playingKey: source.key, paused: false, failure: null, source });
     publishProgress({ ...AT_THE_START, key: source.key });
     element.play().catch((error: unknown) => {
         // A play the next one replaced rejects as it is cut off, which says nothing about the sound now playing.
         if (sequence !== playSequence || isSuperseded(error)) {
             return;
         }
-        element.pause();
-        publish({
-            playingKey: null,
-            failure: { key: source.key, message: error instanceof Error ? error.message : UNPLAYABLE_MESSAGE },
-        });
+        reportFailure(element, source, error);
     });
+}
+
+function pause(): void {
+    if (state.playingKey === null || audioElement === null) {
+        return;
+    }
+    audioElement.pause();
+    publish({ ...state, paused: true });
+}
+
+function resume(): void {
+    const { source } = state;
+    if (state.playingKey === null || !state.paused || audioElement === null || source === null) {
+        return;
+    }
+    const element = audioElement;
+    playSequence += 1;
+    const sequence = playSequence;
+    publish({ ...state, paused: false });
+    element.play().catch((error: unknown) => {
+        if (sequence !== playSequence || isSuperseded(error)) {
+            return;
+        }
+        reportFailure(element, source, error);
+    });
+}
+
+function stop(): void {
+    playSequence += 1;
+    audioElement?.pause();
+    publish({ ...state, playingKey: null, paused: false });
+    publishProgress(AT_THE_START);
 }
 
 function subscribe(listener: () => void): () => void {
@@ -148,8 +189,15 @@ export function usePreviewProgress(): PreviewProgress {
 
 export interface AudioPreview {
     readonly playingKey: string | null;
+    readonly paused: boolean;
     readonly failure: PreviewFailure | null;
+    readonly source: PreviewSource | null;
     readonly play: (source: PreviewSource) => void;
+    /** Holds the sound where it is; `resume` takes it up again from there. */
+    readonly pause: () => void;
+    readonly resume: () => void;
+    /** Silences the element and forgets what was playing, so nothing reads as sounding. */
+    readonly stop: () => void;
 }
 
 /** One shared audio element every preview plays through, so starting a new preview always stops
@@ -159,7 +207,8 @@ export interface AudioPreview {
  * plays a sample at passes it and hears it at that speed. Passing ``null`` sounds the file as
  * stored, which is what a caller with no rate to hand can honestly do. A morph plays through the
  * same element, keyed by its own URL, so the panel and the cloud agree on what is sounding. A
- * preview the browser cannot play is reported under its key until the next one starts.
+ * preview the browser cannot play is reported under its key until the next one starts. The last
+ * source stays known after its sound ends, so a transport can offer to play it again.
  */
 export function useAudioPreview(): AudioPreview {
     const current = useSyncExternalStore(subscribe, getSnapshot);
@@ -167,5 +216,14 @@ export function useAudioPreview(): AudioPreview {
         play(source);
     }, []);
 
-    return { playingKey: current.playingKey, failure: current.failure, play: playSource };
+    return {
+        playingKey: current.playingKey,
+        paused: current.paused,
+        failure: current.failure,
+        source: current.source,
+        play: playSource,
+        pause,
+        resume,
+        stop,
+    };
 }

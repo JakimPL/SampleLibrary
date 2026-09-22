@@ -8,6 +8,7 @@ import { useMorphStore } from "../morph/morphStore";
 import type { ShellView } from "../navigation/shellView";
 import { withBoundary } from "../shared/ErrorBoundary";
 import { PanelHost } from "../shared/panel/PanelHost";
+import { PlayerStrip } from "../shell/player/PlayerStrip";
 import { TopBar } from "../shell/TopBar";
 import { restoreOrBuildLayout } from "./dockviewPersistence";
 import { PANEL_REGISTRY } from "./panelRegistry";
@@ -39,9 +40,10 @@ function buildDockviewComponents(): Record<string, FunctionComponent<IDockviewPa
 }
 
 /**
- * The dockable workspace: the top bar over dockview's groups of panels. An address reveals its
- * panel or the detail of its entity once the instance is ready, and a completed morph pair brings
- * the Morph panel forward, so the sound a person just paired is one glance away.
+ * The dockable workspace: the top bar over dockview's groups of panels, and the player strip
+ * beneath them. An address reveals its panel or the detail of its entity once the instance is
+ * ready, and a completed morph pair brings the Morph panel forward, so the sound a person just
+ * paired is one glance away.
  */
 export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
     const components = useMemo(buildDockviewComponents, []);
@@ -76,6 +78,10 @@ export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
         setApi(event.api);
     }
 
+    function handleRevealMorph(): void {
+        revealPanel(api, "morph");
+    }
+
     return (
         <div className="workspace-root">
             <TopBar api={api} />
@@ -86,6 +92,7 @@ export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
                 disableFloatingGroups
                 singleTabMode="fullwidth"
             />
+            <PlayerStrip onRevealMorph={handleRevealMorph} />
         </div>
     );
 }

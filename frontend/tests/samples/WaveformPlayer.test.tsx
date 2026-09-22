@@ -1,8 +1,9 @@
-import { act, fireEvent, render, type RenderResult, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, type RenderResult, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
-import type { RateOption } from "../../src/samples/WaveformPlayer";
+import { samplePreview, useAudioPreview } from "../../src/samples/useAudioPreview";
+import type { RateOption, WaveformPlayerLayout } from "../../src/samples/WaveformPlayer";
 import { WaveformPlayer } from "../../src/samples/WaveformPlayer";
 
 const { instances, createMock } = vi.hoisted(() => {
@@ -55,6 +56,7 @@ interface PlayerOverrides {
     readonly rateHz?: number;
     readonly rateOptions?: readonly RateOption[];
     readonly onRateChange?: (rateHz: number) => void;
+    readonly layout?: WaveformPlayerLayout;
 }
 
 function renderPlayer(overrides: PlayerOverrides = {}): RenderResult {
@@ -65,6 +67,7 @@ function renderPlayer(overrides: PlayerOverrides = {}): RenderResult {
             rateHz={overrides.rateHz ?? 8363}
             rateOptions={overrides.rateOptions ?? [{ rateHz: 8363, eventCount: 1 }]}
             onRateChange={overrides.onRateChange ?? vi.fn()}
+            layout={overrides.layout ?? "stacked"}
         />,
     );
 }
@@ -164,6 +167,48 @@ describe("WaveformPlayer", () => {
         const save = screen.getByRole("link", { name: "Save this sample" });
         expect(save).toHaveAttribute("href", "/api/samples/abc/audio");
         expect(save).toHaveAttribute("download", "crash cymbal.wav");
+    });
+
+    it("lays the transport beside the waveform in a strip, and alone once folded", () => {
+        const { container, rerender } = renderPlayer({ layout: "strip" });
+        expect(container.querySelector(".wave-panel")).toHaveClass("wave-panel-strip");
+
+        rerender(
+            <WaveformPlayer
+                sampleHash="abc"
+                fileName="crash cymbal.wav"
+                rateHz={8363}
+                rateOptions={[{ rateHz: 8363, eventCount: 1 }]}
+                onRateChange={vi.fn()}
+                layout="transport"
+            />,
+        );
+
+        expect(container.querySelector(".wave-panel")).toHaveClass("wave-panel-transport");
+    });
+
+    it("keeps to one voice with the shared preview element", () => {
+        renderPlayer();
+        const preview = renderHook(() => useAudioPreview());
+        act(() => {
+            latestInstance().emit("ready", 1.0);
+        });
+        act(() => {
+            preview.result.current.play(samplePreview("other", null));
+        });
+
+        fireEvent.click(screen.getByRole("button"));
+        expect(preview.result.current.playingKey).toBeNull();
+        expect(latestInstance().play).toHaveBeenCalled();
+
+        act(() => {
+            latestInstance().emit("play");
+        });
+        act(() => {
+            preview.result.current.play(samplePreview("another", null));
+        });
+
+        expect(latestInstance().pause).toHaveBeenCalled();
     });
 
     it("marks the waveform as sounding only while it is playing", () => {

@@ -216,3 +216,36 @@ describe("a preview the browser cannot play", () => {
         vi.unstubAllGlobals();
     });
 });
+
+describe("holding and taking up a preview", () => {
+    it("pauses the sound where it stands and resumes it under the same key", () => {
+        const { result } = renderHook(() => useAudioPreview());
+
+        act(() => {
+            result.current.play(samplePreview("held", null));
+        });
+        act(() => {
+            result.current.pause();
+        });
+        expect(result.current).toMatchObject({ playingKey: "held", paused: true });
+
+        act(() => {
+            result.current.resume();
+        });
+        expect(result.current).toMatchObject({ playingKey: "held", paused: false });
+    });
+
+    it("stops the sound and forgets that anything is playing, keeping the source to play again", () => {
+        const { result } = renderHook(() => useAudioPreview());
+
+        act(() => {
+            result.current.play(samplePreview("stopped", null));
+        });
+        act(() => {
+            result.current.stop();
+        });
+
+        expect(result.current.playingKey).toBeNull();
+        expect(result.current.source?.key).toBe("stopped");
+    });
+});

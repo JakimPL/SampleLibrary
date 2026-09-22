@@ -20,25 +20,18 @@ const WHOLE_SHARE = 1;
 const LISTINGS_COLUMN_SHARE = 0.38;
 const CLOUD_COLUMN_SHARE = 0.34;
 const INSPECTOR_COLUMN_SHARE = 0.28;
-const CLOUD_ROW_SHARE = 0.68;
-const TRANSPORT_ROW_SHARE = 0.32;
 
 /**
- * The first-run arrangement: the listings on the left, the cloud over the transport in the
- * middle, and an inspector of the details and the statistics on the right.
+ * The first-run arrangement: the listings on the left, the cloud in the middle, and an inspector
+ * of the details, the morph and the statistics on the right; the transport lives in the player
+ * strip beneath them all.
  */
 const DEFAULT_COLUMNS: readonly LayoutColumn[] = [
     { share: LISTINGS_COLUMN_SHARE, rows: [{ share: WHOLE_SHARE, panels: ["samples-list", "modules-list"] }] },
-    {
-        share: CLOUD_COLUMN_SHARE,
-        rows: [
-            { share: CLOUD_ROW_SHARE, panels: ["cloud"] },
-            { share: TRANSPORT_ROW_SHARE, panels: ["waveform", "morph"] },
-        ],
-    },
+    { share: CLOUD_COLUMN_SHARE, rows: [{ share: WHOLE_SHARE, panels: ["cloud"] }] },
     {
         share: INSPECTOR_COLUMN_SHARE,
-        rows: [{ share: WHOLE_SHARE, panels: ["sample-detail", "module-detail", "stats"] }],
+        rows: [{ share: WHOLE_SHARE, panels: ["sample-detail", "module-detail", "morph", "stats"] }],
     },
 ];
 

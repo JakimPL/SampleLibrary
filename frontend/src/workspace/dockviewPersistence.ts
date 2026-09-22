@@ -4,7 +4,7 @@ import { addRegisteredPanel } from "./addPanel";
 import { buildDefaultLayout } from "./defaultLayout";
 import { PANEL_REGISTRY } from "./panelRegistry";
 
-export const LAYOUT_VERSION = 2;
+export const LAYOUT_VERSION = 3;
 export const LAYOUT_STORAGE_KEY = "samplelibrary-workspace-layout";
 /** Held the registry's panel ids beside the arrangement before the record carried them itself. */
 const RETIRED_KNOWN_PANELS_STORAGE_KEY = "samplelibrary-workspace-panels";
