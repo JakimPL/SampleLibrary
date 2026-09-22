@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Module } from "../../src/api/modules";
 import { ModulesTable } from "../../src/modules/ModulesTable";
+import { useListingOrderStore } from "../../src/workspace/listingOrderStore";
 
 function buildModule(overrides: Pick<Module, "hash" | "id" | "title" | "tracker" | "file_size">): Module {
     return {
@@ -42,6 +43,15 @@ describe("ModulesTable", () => {
         renderTable();
 
         expect(titleOrder()).toEqual(["Zeta", "Alpha", "Mid"]);
+    });
+
+    it("publishes the order of the rows it shows, following a sort", () => {
+        renderTable();
+        expect(useListingOrderStore.getState().orderByKind.module).toEqual(["a", "b", "c"]);
+
+        fireEvent.click(screen.getByText("Title"));
+
+        expect(useListingOrderStore.getState().orderByKind.module).toEqual(["b", "c", "a"]);
     });
 
     it("sorts by a column when its header is clicked, toggling direction on a second click", () => {

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import type * as CloudApi from "../../src/api/cloud";
 import { type SampleSelection, type SampleSummary, WHOLE_CATALOG } from "../../src/api/samples";
 import { SamplesTable } from "../../src/samples/SamplesTable";
+import { useListingOrderStore } from "../../src/workspace/listingOrderStore";
 
 const { getCategoryTags } = vi.hoisted(() => ({ getCategoryTags: vi.fn().mockResolvedValue([]) }));
 
@@ -86,6 +87,15 @@ describe("SamplesTable", () => {
         renderTable();
 
         expect(nameOrder()).toEqual(["kick", "snare", "hat"]);
+    });
+
+    it("publishes the order of the rows it shows, following a sort", () => {
+        renderTable();
+        expect(useListingOrderStore.getState().orderByKind.sample).toEqual(["a", "b", "c"]);
+
+        fireEvent.click(screen.getByText("Occurrences"));
+
+        expect(useListingOrderStore.getState().orderByKind.sample).toEqual(["a", "c", "b"]);
     });
 
     it("sorts by a column when its header is clicked, toggling direction on a second click", () => {

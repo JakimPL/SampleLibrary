@@ -21,6 +21,7 @@ import {
     TABLE_OVERSCAN_ROWS,
     TABLE_ROW_HEIGHT_BY_INPUT,
 } from "../shared/tableMetrics";
+import { useListingOrderStore } from "../workspace/listingOrderStore";
 import { SAMPLE_COLUMNS, sampleColumnSpec } from "./sampleColumns";
 import { SampleRow } from "./SampleRow";
 
@@ -86,6 +87,13 @@ export function SamplesTable({
         getFilteredRowModel: getFilteredRowModel(),
     });
     const rows = table.getRowModel().rows;
+    const publishOrder = useListingOrderStore((state) => state.publish);
+    useEffect(() => {
+        publishOrder(
+            "sample",
+            rows.map((row) => row.original.hash),
+        );
+    }, [rows, publishOrder]);
     const visibleColumnCount = table.getVisibleLeafColumns().length;
 
     const rowHeight = TABLE_ROW_HEIGHT_BY_INPUT[input];

@@ -21,6 +21,7 @@ import {
     TABLE_OVERSCAN_ROWS,
     TABLE_ROW_HEIGHT_BY_INPUT,
 } from "../shared/tableMetrics";
+import { useListingOrderStore } from "../workspace/listingOrderStore";
 import { MODULE_COLUMN_SPEC, MODULE_COLUMNS } from "./moduleColumns";
 import { ModuleRow } from "./ModuleRow";
 
@@ -61,6 +62,13 @@ export function ModulesTable({ modules }: ModulesTableProps): ReactElement {
         getFilteredRowModel: getFilteredRowModel(),
     });
     const rows = table.getRowModel().rows;
+    const publishOrder = useListingOrderStore((state) => state.publish);
+    useEffect(() => {
+        publishOrder(
+            "module",
+            rows.map((row) => row.original.hash),
+        );
+    }, [rows, publishOrder]);
     const visibleColumnCount = table.getVisibleLeafColumns().length;
 
     const rowHeight = TABLE_ROW_HEIGHT_BY_INPUT[input];

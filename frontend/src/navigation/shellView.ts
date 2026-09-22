@@ -1,4 +1,5 @@
 import type { PanelId } from "../workspace/panelRegistry";
+import type { EntityRef } from "../workspace/selectionStore";
 
 /** What an address puts in front of a person: one panel, one sample, or one module. */
 export type ShellView =
@@ -37,5 +38,17 @@ export function shellViewOf(routeView: RouteView, parameters: RouteParameters): 
             }
             return { kind: "module", moduleHash: parameters.moduleHash };
         }
+    }
+}
+
+/** The entity a view shows, or `null` for a view that shows a panel. */
+export function entityOf(view: ShellView): EntityRef | null {
+    switch (view.kind) {
+        case "sample":
+            return { kind: "sample", hash: view.sampleHash };
+        case "module":
+            return { kind: "module", hash: view.moduleHash };
+        case "panel":
+            return null;
     }
 }

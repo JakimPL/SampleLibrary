@@ -280,6 +280,31 @@ describe("SampleRow", () => {
 
             expect(screen.getByRole("dialog", { name: "Label" })).toBeInTheDocument();
         });
+
+        it("takes the sample in hand and plays it on a tap", () => {
+            renderRow({ input: "touch" });
+            const { result } = renderHook(() => useAudioPreview());
+            act(() => {
+                result.current.stop();
+            });
+
+            fireEvent.click(screen.getByRole("link", { name: /kick/ }), { detail: 1 });
+
+            expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "abc123" });
+            expect(result.current.playingKey).toBe("abc123");
+        });
+
+        it("leaves the sound alone when the tap is the heart's own", () => {
+            renderRow({ input: "touch" });
+            const { result } = renderHook(() => useAudioPreview());
+            act(() => {
+                result.current.stop();
+            });
+
+            fireEvent.click(screen.getByRole("button", { name: "Favorite" }), { detail: 1 });
+
+            expect(result.current.playingKey).toBeNull();
+        });
     });
 
     it("fills the heart under the pointer, showing what the click would leave behind", async () => {

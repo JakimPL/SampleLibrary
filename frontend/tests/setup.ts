@@ -5,8 +5,10 @@ import { afterEach, vi } from "vitest";
 
 import { INITIAL_MORPH_STATE, useMorphStore } from "../src/morph/morphStore";
 import { clearRequestCache } from "../src/shared/requestCache";
+import { INITIAL_PHONE_SHELL_STATE, usePhoneShellStore } from "../src/shell/phone/phoneShellStore";
 import { DEFAULT_THEME_PREFERENCE } from "../src/theme/themeOptions";
 import { useThemeStore } from "../src/theme/themeStore";
+import { INITIAL_LISTING_ORDER_STATE, useListingOrderStore } from "../src/workspace/listingOrderStore";
 import { INITIAL_SELECTION_STATE, useSelectionStore } from "../src/workspace/selectionStore";
 
 afterEach(() => {
@@ -16,6 +18,8 @@ afterEach(() => {
 // Module-level stores and caches outlive a test, so each one returns to its initial state here.
 afterEach(() => {
     useSelectionStore.setState(INITIAL_SELECTION_STATE);
+    useListingOrderStore.setState(INITIAL_LISTING_ORDER_STATE);
+    usePhoneShellStore.setState(INITIAL_PHONE_SHELL_STATE);
 });
 
 // Set directly, bypassing setPreference, so the reset leaves localStorage to the clear below.
@@ -70,6 +74,23 @@ if (!("PointerEvent" in window)) {
 
     vi.stubGlobal("PointerEvent", PointerEventStub);
 }
+
+// React Router builds a Request for every navigation and hands it the signal of jsdom's
+// AbortController, which Node's Request refuses as foreign. This Request takes any signal and
+// reports it as its own, so a data router navigates under jsdom the way it does in a browser.
+const NativeRequest = globalThis.Request;
+
+class RequestOfAnySignal extends NativeRequest {
+    constructor(input: RequestInfo | URL, init?: RequestInit) {
+        const signal = init?.signal ?? null;
+        super(input, signal === null ? init : { ...init, signal: null });
+        if (signal !== null) {
+            Object.defineProperty(this, "signal", { configurable: true, value: signal });
+        }
+    }
+}
+
+vi.stubGlobal("Request", RequestOfAnySignal);
 
 // jsdom keeps localStorage across the tests of a file, which would carry a saved layout into the next shell.
 afterEach(() => {

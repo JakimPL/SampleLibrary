@@ -139,6 +139,11 @@ frontend-dev:
 
 [group("frontend")]
 [working-directory("frontend")]
+frontend-dev-lan:
+    npm run dev -- --host
+
+[group("frontend")]
+[working-directory("frontend")]
 frontend-build:
     npm run build
 

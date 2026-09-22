@@ -1,0 +1,12 @@
+{
+    "name": "SampleLibrary",
+    "short_name": "Samples",
+    "description": "Browse, audition, label and morph the samples of a tracker module library.",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#f4f5f7",
+    "theme_color": "#e9ebf0",
+    "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

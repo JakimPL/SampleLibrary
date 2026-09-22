@@ -24,6 +24,16 @@ import { Thumbnail } from "./Thumbnail";
 import { useAnnotationWriter } from "./useAnnotationWriter";
 import { samplePreview, useAudioPreview } from "./useAudioPreview";
 
+/** Whether a tap landed on one of the row's own controls, which answer to the tap themselves. */
+function isOwnControl(target: EventTarget | null): boolean {
+    return target instanceof Element && target.closest("button") !== null;
+}
+
+/** Whether the row's click rule took the click as a highlight, which it marks by preventing the click's default. */
+function highlightedTheRow(event: MouseEvent<HTMLTableRowElement>): boolean {
+    return event.defaultPrevented;
+}
+
 interface SampleRowProps {
     readonly sample: SampleSummary;
     /** Whether this row stands for a whole equivalence class, which is how far an edit reaches. */
@@ -43,8 +53,10 @@ interface SampleRowProps {
  * In a narrow listing the category takes the hash's place beneath the name, and under touch the
  * verdict column keeps the heart alone at a finger's size. With the row's link focused, the space
  * bar plays the sample, F flips the favorite mark and a digit rates it, beside the keys every row
- * answers to. A finger held on the row opens a sheet of the same decisions and actions at a tap's
- * size, in place of the modifier clicks and the inline editors a pointer has.
+ * answers to. A finger's tap on the row takes the sample in hand and plays it in one gesture, its
+ * own buttons and chevron keeping their own meaning; a finger held on the row opens a sheet of the
+ * same decisions and actions at a tap's size, in place of the modifier clicks and the inline
+ * editors a pointer has.
  */
 export function SampleRow({ sample, groupByEquivalence, visibleColumns, input }: SampleRowProps): ReactElement {
     const { href, isHighlighted, isFocused, onClick, onDoubleClick, onKeyDown } = useEntityRowInteractions({
@@ -64,8 +76,12 @@ export function SampleRow({ sample, groupByEquivalence, visibleColumns, input }:
 
     function handleClickCapture(event: MouseEvent<HTMLTableRowElement>): void {
         longPress.onClickCapture(event);
-        if (!event.defaultPrevented) {
-            onClick(event);
+        if (event.defaultPrevented) {
+            return;
+        }
+        onClick(event);
+        if (input === "touch" && highlightedTheRow(event) && !isOwnControl(event.target)) {
+            play(samplePreview(sample.hash, sample.playback_rate_hz));
         }
     }
 
