@@ -37,6 +37,12 @@ describe("routes", () => {
         expect(screen.getByText("workspace")).toBeInTheDocument();
     });
 
+    it("keeps the workspace at a panel's own address", () => {
+        render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: ["/cloud"] })} />);
+
+        expect(screen.getByText("workspace")).toBeInTheDocument();
+    });
+
     describe("when a view throws while it renders", () => {
         beforeEach(() => {
             // React reports a caught error to the console itself, which the suite reads as noise.

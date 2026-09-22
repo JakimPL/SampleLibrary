@@ -1,14 +1,14 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as ModulesApi from "../../src/api/modules";
 import type * as SamplesApi from "../../src/api/samples";
-import { KNOWN_PANELS_STORAGE_KEY, LAYOUT_STORAGE_KEY } from "../../src/workspace/dockviewPersistence";
-import { PANEL_REGISTRY } from "../../src/workspace/panelRegistry";
+import { useMorphStore } from "../../src/morph/morphStore";
+import { routes } from "../../src/navigation/router";
+import { LAYOUT_STORAGE_KEY, type StoredLayout } from "../../src/workspace/dockviewPersistence";
 import type * as ModulesListPanelModule from "../../src/workspace/panels/ModulesListPanel";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
-import { WorkspaceShell } from "../../src/workspace/WorkspaceShell";
 
 const MODULES_FAILURE = "the modules panel read a page that was not there";
 
@@ -45,15 +45,16 @@ vi.mock("../../src/api/samples", async () => {
 });
 
 function renderShellAt(initialPath: string): ReturnType<typeof render> {
-    return render(
-        <MemoryRouter initialEntries={[initialPath]}>
-            <Routes>
-                <Route path="/" element={<WorkspaceShell />} />
-                <Route path="/modules/:moduleHash" element={<WorkspaceShell />} />
-                <Route path="/samples/:sampleHash" element={<WorkspaceShell />} />
-            </Routes>
-        </MemoryRouter>,
-    );
+    return render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: [initialPath] })} />);
+}
+
+/** The record the shell saved, as the next visit reads it. */
+function savedRecord(): StoredLayout {
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (raw === null) {
+        throw new Error("the shell saved nothing");
+    }
+    return JSON.parse(raw) as StoredLayout;
 }
 
 /**
@@ -92,11 +93,11 @@ describe("WorkspaceShell", () => {
         vi.spyOn(console, "error").mockImplementation(() => undefined);
         failing.now = true;
 
-        renderShellAt("/");
+        renderShellAt("/modules");
 
         expect(await screen.findByText(MODULES_FAILURE)).toHaveAttribute("role", "alert");
         expect(panelTabTitles()).toContain("Cloud");
-        expect(panelTabTitles()).toContain("Modules");
+        expect(panelTabTitles()).toContain("Samples");
         vi.restoreAllMocks();
     });
 
@@ -154,10 +155,42 @@ describe("WorkspaceShell", () => {
         });
     });
 
-    it("renders the theme picker in the toolbar", () => {
+    it("renders the theme picker in the top bar", () => {
         renderShellAt("/");
 
         expect(screen.getByLabelText("Theme")).toBeInTheDocument();
+    });
+
+    it("brings a panel forward at its own address", async () => {
+        renderShellAt("/modules");
+
+        await waitFor(() => {
+            expect(activeTabTitles()).toContain("Modules");
+        });
+    });
+
+    it("opens a closed panel again when its own address is visited", async () => {
+        const first = renderShellAt("/");
+        await closePanelAndSave("Stats");
+        first.unmount();
+
+        renderShellAt("/stats");
+
+        await waitFor(() => {
+            expect(panelTabTitles()).toContain("Stats");
+        });
+    });
+
+    it("brings the Morph panel forward once a pair is complete", async () => {
+        renderShellAt("/");
+
+        act(() => {
+            useMorphStore.getState().join("a".repeat(64), "b".repeat(64));
+        });
+
+        await waitFor(() => {
+            expect(activeTabTitles()).toContain("Morph");
+        });
     });
 
     it("keeps a panel closed across a reload once a person closed it", async () => {
@@ -175,22 +208,26 @@ describe("WorkspaceShell", () => {
         const first = renderShellAt("/");
         await closePanelAndSave("Morph");
         first.unmount();
-        const knownBefore = Object.keys(PANEL_REGISTRY).filter((id) => id !== "morph");
-        localStorage.setItem(KNOWN_PANELS_STORAGE_KEY, JSON.stringify(knownBefore));
+        const record = savedRecord();
+        localStorage.setItem(
+            LAYOUT_STORAGE_KEY,
+            JSON.stringify({ ...record, knownPanels: record.knownPanels.filter((id) => id !== "morph") }),
+        );
 
         renderShellAt("/");
 
         expect(panelTabTitles()).toContain("Morph");
     });
 
-    it("lets a closed panel be reopened through the Add panel menu", async () => {
+    it("lets a closed panel be reopened through the View menu", async () => {
         renderShellAt("/");
         expect(panelTabTitles()).toContain("Stats");
 
         fireEvent.click(screen.getByRole("button", { name: "Close Stats" }));
         expect(panelTabTitles()).not.toContain("Stats");
 
-        fireEvent.click(await screen.findByRole("button", { name: "Stats" }));
+        fireEvent.click(screen.getByText("View"));
+        fireEvent.click(await screen.findByRole("checkbox", { name: "Stats" }));
 
         await waitFor(() => {
             expect(panelTabTitles()).toContain("Stats");

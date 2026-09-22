@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { useMemo, useState } from "react";
 
+import { classNames } from "../shared/classNames";
 import { labelColor, readLabelPaletteParameters } from "../theme/labelPalette";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import type { TopLevelTag } from "./labelColoring";
@@ -17,10 +18,10 @@ const COLLAPSE_LABEL = "Painted only";
 
 /**
  * The legend that is also the picker: the top-level tags painted on the cloud, most used first,
- * each in the color its rank gives it, with the rest of the vocabulary one toggle away. Showing
- * the painted tags alone at rest is what keeps the strip to a row or two however many tags a
- * person has written; expanded, it lists every tag in the same order, so a chip keeps its place
- * whether or not its neighbors are shown. Colors are read back from the theme's parameters on
+ * each in the color its rank gives it, with the rest of the vocabulary one toggle away. At rest
+ * the strip is one row that scrolls sideways, painted tags first, so the plot beneath keeps its
+ * height however many tags a person has written; expanded, it lists every tag in the same order
+ * and wraps into rows, so a chip keeps its place whether or not its neighbors are shown. Colors are read back from the theme's parameters on
  * every theme change, the same way the cloud re-reads its own, so a swatch and the points it
  * names stay one color.
  */
@@ -42,7 +43,11 @@ export function TagLegend({ tags, painted, onToggle, emptyCaption }: TagLegendPr
     const shown = expanded ? tags : paintedTags;
 
     return (
-        <div className="tag-legend" role="group" aria-label="Painted tags">
+        <div
+            className={classNames("tag-legend", expanded && "tag-legend-expanded")}
+            role="group"
+            aria-label="Painted tags"
+        >
             {shown.map((tag) => (
                 <button
                     key={tag.name}

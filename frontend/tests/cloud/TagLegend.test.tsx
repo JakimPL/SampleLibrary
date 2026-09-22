@@ -29,6 +29,7 @@ describe("TagLegend", () => {
         expect(lofi).toHaveTextContent("33");
         expect(screen.getByRole("button", { name: /PIANO/ })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Painted only" })).toHaveAttribute("aria-expanded", "true");
+        expect(screen.getByRole("group", { name: "Painted tags" })).toHaveClass("tag-legend-expanded");
     });
 
     it("collapses back to the painted tags", async () => {

@@ -1,39 +1,74 @@
-import type { DockviewApi } from "dockview-react";
+import type { DockviewApi, SerializedDockview } from "dockview-react";
 
 import { addRegisteredPanel } from "./addPanel";
 import { buildDefaultLayout } from "./defaultLayout";
 import { PANEL_REGISTRY } from "./panelRegistry";
 
+export const LAYOUT_VERSION = 2;
 export const LAYOUT_STORAGE_KEY = "samplelibrary-workspace-layout";
-export const KNOWN_PANELS_STORAGE_KEY = "samplelibrary-workspace-panels";
+/** Held the registry's panel ids beside the arrangement before the record carried them itself. */
+const RETIRED_KNOWN_PANELS_STORAGE_KEY = "samplelibrary-workspace-panels";
 
-function readStored(key: string): unknown {
+export interface StoredLayout {
+    readonly version: number;
+    readonly layout: SerializedDockview;
+    /** The panels the registry held when the arrangement was saved. */
+    readonly knownPanels: readonly string[];
+}
+
+function isStoredLayout(value: unknown): value is StoredLayout {
+    if (typeof value !== "object" || value === null) {
+        return false;
+    }
+    const record = value as Record<string, unknown>;
+    return (
+        record.version === LAYOUT_VERSION &&
+        typeof record.layout === "object" &&
+        record.layout !== null &&
+        Array.isArray(record.knownPanels) &&
+        record.knownPanels.every((id) => typeof id === "string")
+    );
+}
+
+/** The saved record of this version, or `null` for none, an unreadable one, or one of another version. */
+function readStoredLayout(): StoredLayout | null {
     try {
-        const raw = localStorage.getItem(key);
-        return raw === null ? null : (JSON.parse(raw) as unknown);
+        const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+        if (raw === null) {
+            return null;
+        }
+        const parsed: unknown = JSON.parse(raw);
+        return isStoredLayout(parsed) ? parsed : null;
     } catch {
         return null;
     }
 }
 
-/** The panels the registry held when the arrangement was saved; an arrangement saved before this was recorded knows none. */
-function readKnownPanelIds(): ReadonlySet<string> {
-    const stored = readStored(KNOWN_PANELS_STORAGE_KEY);
-    return new Set(Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : []);
+function discardStoredLayout(): void {
+    try {
+        localStorage.removeItem(LAYOUT_STORAGE_KEY);
+        localStorage.removeItem(RETIRED_KNOWN_PANELS_STORAGE_KEY);
+    } catch {
+        // localStorage throws in private browsing or on a full quota; nothing was kept there anyway.
+    }
 }
 
 function saveWorkspace(api: DockviewApi): void {
+    const record: StoredLayout = {
+        version: LAYOUT_VERSION,
+        layout: api.toJSON(),
+        knownPanels: Object.keys(PANEL_REGISTRY),
+    };
     try {
-        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(api.toJSON()));
-        localStorage.setItem(KNOWN_PANELS_STORAGE_KEY, JSON.stringify(Object.keys(PANEL_REGISTRY)));
+        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(record));
     } catch {
         // localStorage throws in private browsing or on a full quota; the layout then lasts for this session.
     }
 }
 
-function restoreSavedLayout(api: DockviewApi, saved: unknown): boolean {
+function restoreSavedLayout(api: DockviewApi, layout: SerializedDockview): boolean {
     try {
-        api.fromJSON(saved as Parameters<DockviewApi["fromJSON"]>[0]);
+        api.fromJSON(layout);
         return true;
     } catch {
         return false;
@@ -57,17 +92,20 @@ function addPanelsRegisteredSince(api: DockviewApi, knownPanelIds: ReadonlySet<s
 }
 
 /**
- * Restores the shell's last saved panel arrangement, completed with any panel registered since it
- * was saved, or builds the default one on first run, then keeps saving every subsequent layout
- * change -- resizing, rearranging, or adding a panel.
+ * Restores the last saved arrangement of this record version, completed with any panel registered
+ * since it was saved, and otherwise discards whatever was kept and draws the first-run
+ * arrangement; then keeps saving every subsequent layout change -- resizing, rearranging, or
+ * adding a panel. A record of another version is what an older build saved, and the current
+ * arrangement takes its place.
  */
 export function restoreOrBuildLayout(api: DockviewApi): void {
-    const saved = readStored(LAYOUT_STORAGE_KEY);
-    if (saved !== null && restoreSavedLayout(api, saved)) {
-        if (addPanelsRegisteredSince(api, readKnownPanelIds())) {
+    const stored = readStoredLayout();
+    if (stored !== null && restoreSavedLayout(api, stored.layout)) {
+        if (addPanelsRegisteredSince(api, new Set(stored.knownPanels))) {
             saveWorkspace(api);
         }
     } else {
+        discardStoredLayout();
         buildDefaultLayout(api);
     }
 
@@ -76,20 +114,8 @@ export function restoreOrBuildLayout(api: DockviewApi): void {
     });
 }
 
-/**
- * Discards whatever arrangement got saved -- however it got scrambled -- and rebuilds the shell's
- * first-run default in its place.
- */
+/** Discards whatever arrangement got saved, however it got scrambled, and draws the first-run one again. */
 export function resetLayout(api: DockviewApi): void {
-    try {
-        localStorage.removeItem(LAYOUT_STORAGE_KEY);
-        localStorage.removeItem(KNOWN_PANELS_STORAGE_KEY);
-    } catch {
-        // localStorage throws in private browsing or on a full quota; the rebuild below still applies.
-    }
-
-    for (const panel of [...api.panels]) {
-        api.removePanel(panel);
-    }
+    discardStoredLayout();
     buildDefaultLayout(api);
 }

@@ -3,10 +3,7 @@ import type { ChangeEvent, ReactElement } from "react";
 import { isThemePreference, THEME_OPTIONS } from "./themeOptions";
 import { useThemeStore } from "./themeStore";
 
-/**
- * Toolbar control for switching the shell's visual theme, mirroring `AddPanelMenu`'s placement in
- * `WorkspaceShell`'s toolbar.
- */
+/** Top bar control for switching the shell's visual theme, beside the View menu. */
 export function ThemeMenu(): ReactElement {
     const preference = useThemeStore((state) => state.preference);
     const setPreference = useThemeStore((state) => state.setPreference);

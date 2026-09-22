@@ -3,77 +3,88 @@ import "dockview-react/dist/styles/dockview.css";
 import { type DockviewApi, DockviewReact, type DockviewReadyEvent, type IDockviewPanelProps } from "dockview-react";
 import type { FunctionComponent, ReactElement } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
 
+import { useMorphStore } from "../morph/morphStore";
+import type { ShellView } from "../navigation/shellView";
 import { withBoundary } from "../shared/ErrorBoundary";
-import { ThemeMenu } from "../theme/ThemeMenu";
-import { AddPanelMenu } from "./AddPanelMenu";
-import { resetLayout, restoreOrBuildLayout } from "./dockviewPersistence";
+import { PanelHost } from "../shared/panel/PanelHost";
+import { TopBar } from "../shell/TopBar";
+import { restoreOrBuildLayout } from "./dockviewPersistence";
 import { PANEL_REGISTRY } from "./panelRegistry";
-import { revealPanel } from "./revealPanel";
-import { useSelectionStore } from "./selectionStore";
+import { openAndRevealPanel, revealPanel } from "./revealPanel";
+
+interface WorkspaceShellProps {
+    readonly view: ShellView;
+}
 
 /**
  * Adapts each zero-prop panel component into the shape dockview mounts by id, ignoring the
  * `api`/`containerApi`/`params` dockview injects -- no panel in this shell needs them, since every
  * panel reads what it needs from `selectionStore` and its own feature-folder data hook instead.
+ * Every panel sits in its own `PanelHost` under a boundary of its own, so one failure costs one panel.
  */
-/** Every panel the workspace knows, each under a boundary of its own so one failure costs one panel. */
 function buildDockviewComponents(): Record<string, FunctionComponent<IDockviewPanelProps>> {
     return Object.fromEntries(
         Object.values(PANEL_REGISTRY).map((definition) => {
             const PanelComponent = definition.component;
-            const DockviewPanelAdapter: FunctionComponent<IDockviewPanelProps> = () => withBoundary(<PanelComponent />);
+            const DockviewPanelAdapter: FunctionComponent<IDockviewPanelProps> = () =>
+                withBoundary(
+                    <PanelHost panelId={definition.id}>
+                        <PanelComponent />
+                    </PanelHost>,
+                );
             return [definition.id, DockviewPanelAdapter];
         }),
     );
 }
 
-export function WorkspaceShell(): ReactElement {
-    const { sampleHash, moduleHash } = useParams<{ sampleHash?: string; moduleHash?: string }>();
-    const focusSample = useSelectionStore((state) => state.focusSample);
-    const focusModule = useSelectionStore((state) => state.focusModule);
+/**
+ * The dockable workspace: the top bar over dockview's groups of panels. An address reveals its
+ * panel or the detail of its entity once the instance is ready, and a completed morph pair brings
+ * the Morph panel forward, so the sound a person just paired is one glance away.
+ */
+export function WorkspaceShell({ view }: WorkspaceShellProps): ReactElement {
     const components = useMemo(buildDockviewComponents, []);
     const [api, setApi] = useState<DockviewApi | null>(null);
+    const pairComplete = useMorphStore((state) => state.first !== null && state.second !== null);
 
     useEffect(() => {
-        if (sampleHash !== undefined) {
-            focusSample(sampleHash);
-            revealPanel(api, "sample-detail");
+        if (api === null) {
+            return;
         }
-    }, [sampleHash, focusSample, api]);
+        switch (view.kind) {
+            case "panel":
+                openAndRevealPanel(api, PANEL_REGISTRY[view.panelId]);
+                break;
+            case "sample":
+                revealPanel(api, "sample-detail");
+                break;
+            case "module":
+                revealPanel(api, "module-detail");
+                break;
+        }
+    }, [view, api]);
 
     useEffect(() => {
-        if (moduleHash !== undefined) {
-            focusModule(moduleHash);
-            revealPanel(api, "module-detail");
+        if (pairComplete) {
+            revealPanel(api, "morph");
         }
-    }, [moduleHash, focusModule, api]);
+    }, [pairComplete, api]);
 
     function handleReady(event: DockviewReadyEvent): void {
         restoreOrBuildLayout(event.api);
         setApi(event.api);
     }
 
-    function handleResetLayout(): void {
-        if (api !== null) {
-            resetLayout(api);
-        }
-    }
-
     return (
         <div className="workspace-root">
-            <div className="workspace-toolbar">
-                <AddPanelMenu api={api} />
-                <button type="button" className="reset-layout-button" onClick={handleResetLayout}>
-                    Reset layout
-                </button>
-                <ThemeMenu />
-            </div>
+            <TopBar api={api} />
             <DockviewReact
                 className="workspace-shell dockview-theme-abyss"
                 components={components}
                 onReady={handleReady}
+                disableFloatingGroups
+                singleTabMode="fullwidth"
             />
         </div>
     );

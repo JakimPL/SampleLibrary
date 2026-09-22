@@ -771,6 +771,28 @@ the label already asserts shows as taken, a top level included once a specificat
 written; a category more detailed than a tag the label names takes its place where it stood; and one
 diverging below a shared top level goes in beside it.
 
+## The shell on screen
+
+`frontend/src/shell/AppShell.tsx` is what every address renders. It reads the view the address
+names -- a panel, a sample or a module -- focuses the entity through `selectionStore`, and mounts
+the workspace shell (`frontend/src/workspace/WorkspaceShell.tsx`), which keeps dockview and the
+cloud mounted across navigations because every route renders the same component. Every panel is
+described once in `frontend/src/workspace/panelRegistry.ts`: its component, the placement a
+reopened panel returns to, whether dockview keeps its DOM while it is tabbed away (the cloud's
+WebGL scene survives that way), the address that shows it, and where it lives on a phone. The
+routes are generated from that registry, so `/cloud`, `/modules`, `/morph` and `/stats` open and
+reveal their panels, while `/samples/{hash}` and `/modules/{hash}` reveal the details as before.
+
+The first-run arrangement is drawn in `frontend/src/workspace/defaultLayout.ts` as dockview's own
+serialized layout over a nominal box, which dockview scales to the window: the listings on the
+left, the cloud over the transport in the middle, and an inspector of the details and the
+statistics on the right. `frontend/src/workspace/dockviewPersistence.ts` saves every change under
+a versioned record; a record of another version is discarded once and the default drawn again,
+which is how a new arrangement reaches a browser that saved an older one. The top bar's View menu
+opens and closes panels at their registered placement and resets the arrangement; the theme select
+sits beside it. Each panel renders inside a `PanelHost`, the scroll container that is also the
+container its stylesheet rules query, so a panel fits the width it was given rather than the window's.
+
 ## The cloud on screen
 
 `frontend/src/cloud/CloudView.tsx` draws the cloud as a stack of layers inside `.cloud-wrap`, which
