@@ -24,6 +24,12 @@ afterEach(() => {
     delete document.documentElement.dataset.theme;
 });
 
+// The layout attributes follow the live media queries, so a test that stubbed them leaves none behind.
+afterEach(() => {
+    delete document.documentElement.dataset.layout;
+    delete document.documentElement.dataset.input;
+});
+
 afterEach(() => {
     clearRequestCache();
 });
@@ -51,10 +57,14 @@ for (const name of ["setPointerCapture", "releasePointerCapture"] as const) {
 if (!("PointerEvent" in window)) {
     class PointerEventStub extends MouseEvent {
         readonly pointerId: number;
+        readonly pointerType: string;
+        readonly isPrimary: boolean;
 
         constructor(type: string, init: PointerEventInit = {}) {
             super(type, init);
             this.pointerId = init.pointerId ?? 0;
+            this.pointerType = init.pointerType ?? "mouse";
+            this.isPrimary = init.isPrimary ?? true;
         }
     }
 

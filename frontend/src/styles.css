@@ -1,6 +1,31 @@
 :root {
     color-scheme: light dark;
 
+    /* The sizes every control, row and bar is measured in; the touch block below raises the ones a
+       finger needs. `--row-height` equals TABLE_ROW_HEIGHT_PX in `shared/tableMetrics.ts`. */
+    --space-1: 2px;
+    --space-2: 4px;
+    --space-3: 6px;
+    --space-4: 8px;
+    --space-5: 10px;
+    --space-6: 12px;
+    --space-7: 16px;
+    --radius-1: 4px;
+    --radius-2: 5px;
+    --radius-3: 6px;
+    --radius-4: 8px;
+    --radius-pill: 11px;
+    --font-size-body: 12px;
+    --font-size-small: 11px;
+    --font-size-caption: 10.5px;
+    --font-size-label: 9.5px;
+    --control-height: 24px;
+    --control-height-compact: 22px;
+    --tap-target: 24px;
+    --row-height: 40px;
+    --toolbar-height: 30px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
     --surface-0: #f4f5f7;
     --surface-1: #fff;
     --surface-2: #e9ebf0;
@@ -77,6 +102,24 @@
     --mini-waveform-color: var(--text-faint);
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
+}
+
+/* A finger needs what a mouse never asked for: taller controls, a 44px target, and inputs at the
+   size mobile browsers leave unzoomed. The primary pointer alone decides: a desktop without a mouse
+   reports no hover while nothing coarse is pointing. */
+@media (pointer: coarse) {
+    :root {
+        --control-height: 36px;
+        --control-height-compact: 32px;
+        --tap-target: 44px;
+        --font-size-input: 16px;
+    }
+
+    input,
+    select,
+    textarea {
+        font-size: var(--font-size-input);
+    }
 }
 
 /* Browsers paint native controls and scrollbars from `color-scheme`, so a hand-picked theme names
@@ -256,7 +299,7 @@ body {
     background: var(--surface-0);
     color: var(--text-primary);
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: var(--font-size-body);
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
 }
@@ -296,8 +339,8 @@ select:focus-visible,
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    min-height: 30px;
-    padding: 0 8px;
+    min-height: var(--toolbar-height);
+    padding: 0 var(--space-4);
     background: var(--surface-2);
     border-bottom: 1px solid var(--border);
 }
@@ -305,34 +348,34 @@ select:focus-visible,
 .add-panel-menu {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-3);
 }
 
 .add-panel-label {
     color: var(--text-muted);
-    font-size: 11.5px;
-    margin-right: 2px;
+    font-size: var(--font-size-small);
+    margin-right: var(--space-1);
 }
 
 .add-panel-menu button {
     border: 1px solid var(--border);
     background: var(--surface-0);
-    border-radius: 5px;
-    height: 22px;
-    padding: 0 8px;
-    font-size: 11.5px;
+    border-radius: var(--radius-2);
+    height: var(--control-height-compact);
+    padding: 0 var(--space-4);
+    font-size: var(--font-size-small);
     cursor: pointer;
     color: var(--text-muted);
 }
 
 .reset-layout-button {
-    margin-left: 10px;
+    margin-left: var(--space-5);
     border: 1px solid var(--border);
     background: var(--surface-0);
-    border-radius: 5px;
-    height: 22px;
-    padding: 0 8px;
-    font-size: 11.5px;
+    border-radius: var(--radius-2);
+    height: var(--control-height-compact);
+    padding: 0 var(--space-4);
+    font-size: var(--font-size-small);
     cursor: pointer;
     color: var(--text-muted);
 }
@@ -341,10 +384,10 @@ select:focus-visible,
     margin-left: auto;
     border: 1px solid var(--border);
     background: var(--surface-0);
-    border-radius: 5px;
-    height: 24px;
-    padding: 0 8px;
-    font-size: 11.5px;
+    border-radius: var(--radius-2);
+    height: var(--control-height);
+    padding: 0 var(--space-4);
+    font-size: var(--font-size-small);
     color: var(--text-muted);
 }
 
@@ -357,7 +400,7 @@ select:focus-visible,
 .workspace-shell.dockview-theme-abyss {
     --dv-group-view-background-color: var(--surface-1);
     --dv-tabs-and-actions-container-background-color: var(--surface-2);
-    --dv-tabs-and-actions-container-height: 30px;
+    --dv-tabs-and-actions-container-height: var(--toolbar-height);
     --dv-activegroup-visiblepanel-tab-background-color: var(--surface-1);
     --dv-activegroup-visiblepanel-tab-color: var(--text-primary);
     --dv-activegroup-hiddenpanel-tab-background-color: var(--surface-2);
@@ -381,7 +424,7 @@ select:focus-visible,
 
 .workspace-shell .dv-default-tab-content {
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--font-size-caption);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -398,11 +441,11 @@ select:focus-visible,
 p.loading,
 p.error-notice,
 p.no-selection {
-    padding: 30px 16px;
+    padding: 30px var(--space-7);
     margin: 0;
     text-align: center;
     color: var(--text-faint);
-    font-size: 12px;
+    font-size: var(--font-size-body);
 }
 
 .error-notice {
@@ -442,13 +485,13 @@ table.mini th {
 }
 
 table.mini th {
-    font-size: 9.5px;
-    padding: 4px 6px;
+    font-size: var(--font-size-label);
+    padding: var(--space-2) var(--space-3);
 }
 
 table.data th {
-    font-size: 9.5px;
-    padding: 4px 6px;
+    font-size: var(--font-size-label);
+    padding: var(--space-2) var(--space-3);
     cursor: pointer;
     user-select: none;
     overflow: hidden;
@@ -475,16 +518,16 @@ table.mini td {
 }
 
 table.data td {
-    padding: 3px 6px;
-    font-size: 11px;
+    padding: 3px var(--space-3);
+    font-size: var(--font-size-small);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 table.mini td {
-    padding: 4px 6px;
-    font-size: 11.5px;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-small);
 }
 
 table.data tbody tr,
@@ -492,9 +535,9 @@ table.mini tbody tr {
     cursor: pointer;
 }
 
-/* Equal to TABLE_ROW_HEIGHT_PX in `shared/tableMetrics.ts`, which places a virtualized listing's rows. */
+/* `--row-height` equals TABLE_ROW_HEIGHT_PX in `shared/tableMetrics.ts`, which places a virtualized listing's rows. */
 table.data tbody tr {
-    height: 40px;
+    height: var(--row-height);
 }
 
 table.data tbody tr:hover,
@@ -528,7 +571,7 @@ tr.is-focused {
 .cell-primary {
     color: var(--text-primary);
     font-weight: 600;
-    font-size: 10.5px;
+    font-size: var(--font-size-caption);
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -540,14 +583,14 @@ tr.is-focused {
 .badge {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-2);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: var(--font-size-label);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     padding: 1px 5px;
-    border-radius: 4px;
+    border-radius: var(--radius-1);
     line-height: 1.5;
 }
 
@@ -624,13 +667,13 @@ tr.is-focused {
 .category-choices {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-3);
 }
 
 .category-choices-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: var(--space-3);
 }
 
 .badge-category-choice {
@@ -663,31 +706,31 @@ tr.is-focused {
 .annotation-editor {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-3);
 }
 
 .annotation-editor-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-3);
 }
 
 .annotation-editor-input {
     flex: 1 1 140px;
     min-width: 120px;
-    padding: 3px 6px;
+    padding: 3px var(--space-3);
     text-transform: uppercase;
     background: var(--surface-1);
     color: var(--text-primary);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-1);
 }
 
 .annotation-editor-scope {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--space-2);
     flex-basis: 100%;
     color: var(--text-muted);
 }
@@ -699,8 +742,8 @@ tr.is-focused {
 }
 
 .annotation-row-message {
-    margin-left: 4px;
-    font-size: 11px;
+    margin-left: var(--space-2);
+    font-size: var(--font-size-small);
     color: var(--critical);
 }
 
@@ -807,9 +850,9 @@ table.data td .annotation-editor-input {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 3px 8px;
-    font-size: 10.5px;
+    gap: var(--space-4);
+    padding: 3px var(--space-4);
+    font-size: var(--font-size-caption);
     background: var(--surface-1);
 }
 
@@ -824,8 +867,8 @@ table.data td .annotation-editor-input {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
     border-bottom: 1px solid var(--border);
     background: var(--surface-1);
 }
@@ -835,9 +878,9 @@ table.data td .annotation-editor-input {
     min-width: 0;
     border: 1px solid var(--border);
     background: var(--surface-0);
-    border-radius: 5px;
-    height: 24px;
-    padding: 0 8px;
+    border-radius: var(--radius-2);
+    height: var(--control-height);
+    padding: 0 var(--space-4);
 }
 
 .panel-filter input:focus {
@@ -847,17 +890,17 @@ table.data td .annotation-editor-input {
 .panel-filter label {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11.5px;
+    gap: var(--space-3);
+    font-size: var(--font-size-small);
     color: var(--text-muted);
 }
 
 .panel-filter select {
     border: 1px solid var(--border);
     background: var(--surface-0);
-    border-radius: 5px;
-    height: 24px;
-    padding: 0 6px;
+    border-radius: var(--radius-2);
+    height: var(--control-height);
+    padding: 0 var(--space-3);
 }
 
 /* `:where` keeps the star and heart exception out of this selector's specificity. */
@@ -867,10 +910,10 @@ table.data td .annotation-editor-input {
 .morph-panel button:not(.thumbnail-button) {
     border: 1px solid var(--border);
     background: var(--surface-0);
-    border-radius: 5px;
-    height: 24px;
-    padding: 0 10px;
-    font-size: 11px;
+    border-radius: var(--radius-2);
+    height: var(--control-height);
+    padding: 0 var(--space-5);
+    font-size: var(--font-size-small);
     cursor: pointer;
     color: var(--text-muted);
 }
@@ -969,8 +1012,8 @@ table.data td .annotation-editor-input {
 .cloud-caption {
     flex: 0 0 auto;
     margin: 0;
-    padding: 6px 8px;
-    font-size: 11px;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--font-size-small);
     color: var(--text-muted);
     border-bottom: 1px solid var(--border);
     background: var(--surface-1);
@@ -984,22 +1027,22 @@ table.data td .annotation-editor-input {
 }
 
 .panel-filter-caption {
-    font-size: 11px;
+    font-size: var(--font-size-small);
     color: var(--text-muted);
 }
 
 /* Capped at three rows, scrolling beyond, so the plot underneath keeps its height. */
 .tag-legend {
     --legend-rows: 3;
-    --legend-chip-height: 22px;
-    --legend-row-gap: 4px;
-    --legend-padding: 6px;
+    --legend-chip-height: var(--control-height-compact);
+    --legend-row-gap: var(--space-2);
+    --legend-padding: var(--space-3);
 
     flex: 0 0 auto;
     display: flex;
     flex-wrap: wrap;
-    gap: var(--legend-row-gap) 6px;
-    padding: var(--legend-padding) 8px;
+    gap: var(--legend-row-gap) var(--space-3);
+    padding: var(--legend-padding) var(--space-4);
     max-height: calc(
         var(--legend-rows) * var(--legend-chip-height) + (var(--legend-rows) - 1) * var(--legend-row-gap) + 2 *
             var(--legend-padding)
@@ -1016,17 +1059,17 @@ table.data td .annotation-editor-input {
     align-items: center;
     gap: 5px;
     height: var(--legend-chip-height);
-    padding: 0 8px 0 6px;
+    padding: 0 var(--space-4) 0 var(--space-3);
     border: 1px solid var(--border);
-    border-radius: 11px;
+    border-radius: var(--radius-pill);
     background: var(--surface-0);
-    font-size: 11px;
+    font-size: var(--font-size-small);
     color: var(--text-faint);
     cursor: pointer;
 }
 
 .tag-legend-toggle {
-    padding: 0 8px;
+    padding: 0 var(--space-4);
     border-style: dashed;
     color: var(--text-muted);
 }
@@ -1070,7 +1113,7 @@ table.data td .annotation-editor-input {
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-4);
     text-align: center;
     padding: 20px;
     background: var(--surface-0);
@@ -1085,7 +1128,7 @@ table.data td .annotation-editor-input {
     margin: 0;
     max-width: 280px;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: var(--font-size-body);
 }
 
 .cloud-hover-tooltip {
@@ -1095,23 +1138,23 @@ table.data td .annotation-editor-input {
     pointer-events: none;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-2);
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-3);
     box-shadow: var(--shadow);
-    padding: 6px 8px;
+    padding: var(--space-3) var(--space-4);
 }
 
 .cloud-hover-name {
-    font-size: 12px;
+    font-size: var(--font-size-body);
     white-space: nowrap;
 }
 
 .entity-hash {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-3);
     font-size: 10px;
     color: var(--text-faint);
 }
@@ -1119,7 +1162,7 @@ table.data td .annotation-editor-input {
 .cloud-hover-meta {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-3);
 }
 
 .cloud-markers {
@@ -1208,7 +1251,7 @@ table.data td .annotation-editor-input {
     align-items: center;
     justify-content: center;
     color: var(--text-faint);
-    font-size: 12px;
+    font-size: var(--font-size-body);
 }
 
 /* The frame the contours, the notice and the playhead are positioned against; the host inside it
@@ -1255,9 +1298,9 @@ table.data td .annotation-editor-input {
     align-items: center;
     justify-content: center;
     margin: 0;
-    padding: 0 12px;
+    padding: 0 var(--space-6);
     text-align: center;
-    font-size: 11.5px;
+    font-size: var(--font-size-small);
     color: var(--text-faint);
     pointer-events: none;
 }
@@ -1293,16 +1336,16 @@ table.data td .annotation-editor-input {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 7px 10px;
+    gap: var(--space-5);
+    padding: 7px var(--space-5);
     border-top: 1px solid var(--border);
     background: var(--surface-2);
     flex-wrap: wrap;
 }
 
 .play-btn {
-    width: 26px;
-    height: 26px;
+    width: max(26px, var(--tap-target));
+    height: max(26px, var(--tap-target));
     border-radius: 50%;
     background: var(--accent);
     color: var(--accent-ink);
@@ -1324,10 +1367,10 @@ table.data td .annotation-editor-input {
     justify-content: center;
     flex: 0 0 auto;
     margin-left: auto;
-    width: 26px;
-    height: 26px;
+    width: max(26px, var(--tap-target));
+    height: max(26px, var(--tap-target));
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: var(--radius-2);
     background: var(--surface-0);
     color: var(--text-muted);
     font-size: 14px;
@@ -1342,7 +1385,7 @@ table.data td .annotation-editor-input {
 
 .transport .time {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--font-size-small);
     color: var(--text-muted);
     white-space: nowrap;
 }
@@ -1350,15 +1393,15 @@ table.data td .annotation-editor-input {
 .transport select {
     border: 1px solid var(--border);
     background: var(--surface-1);
-    border-radius: 5px;
-    height: 24px;
-    padding: 0 6px;
+    border-radius: var(--radius-2);
+    height: var(--control-height);
+    padding: 0 var(--space-3);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--font-size-small);
 }
 
 .detail-scroll {
-    padding: 10px 12px;
+    padding: var(--space-5) var(--space-6);
 }
 
 /* The listing's name cell, scaled up: one column, so any length of name leaves the rows below it in place. */
@@ -1367,7 +1410,7 @@ table.data td .annotation-editor-input {
     flex-direction: column;
     gap: 1px;
     line-height: 1.3;
-    margin: 0 0 10px;
+    margin: 0 0 var(--space-5);
 }
 
 .detail-title {
@@ -1380,7 +1423,7 @@ table.data td .annotation-editor-input {
 
 .detail-hash {
     margin: 0;
-    font-size: 10.5px;
+    font-size: var(--font-size-caption);
     color: var(--text-faint);
     overflow-wrap: anywhere;
 }
@@ -1388,36 +1431,36 @@ table.data td .annotation-editor-input {
 .kv {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 4px 12px;
+    gap: var(--space-2) var(--space-6);
     margin: 0 0 14px;
 }
 
 .kv dt {
     color: var(--text-faint);
-    font-size: 11px;
+    font-size: var(--font-size-small);
     font-family: var(--font-mono);
 }
 
 .kv dd {
     margin: 0;
-    font-size: 12px;
+    font-size: var(--font-size-body);
 }
 
 .detail-tabs {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin: 0 0 8px;
+    gap: var(--space-3);
+    margin: 0 0 var(--space-4);
 }
 
 .detail-section {
-    margin-bottom: 16px;
+    margin-bottom: var(--space-7);
 }
 
 .detail-section h3 {
-    margin: 0 0 6px;
+    margin: 0 0 var(--space-3);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--font-size-caption);
     text-transform: uppercase;
     letter-spacing: 0.07em;
     color: var(--text-faint);
@@ -1426,10 +1469,10 @@ table.data td .annotation-editor-input {
 
 .placeholder-box {
     border: 1px dashed var(--border-strong);
-    border-radius: 8px;
-    padding: 12px;
+    border-radius: var(--radius-4);
+    padding: var(--space-6);
     color: var(--text-faint);
-    font-size: 11.5px;
+    font-size: var(--font-size-small);
     background: var(--surface-2);
 }
 
@@ -1444,14 +1487,14 @@ table.data td .annotation-editor-input {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 14px;
-    padding: 12px;
+    padding: var(--space-6);
 }
 
 .stat-tile {
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: var(--radius-4);
+    padding: var(--space-5) var(--space-6);
 }
 
 .stat-tile.is-wide {
@@ -1465,7 +1508,7 @@ table.data td .annotation-editor-input {
 }
 
 .stat-tile .label {
-    font-size: 10.5px;
+    font-size: var(--font-size-caption);
     color: var(--text-faint);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -1476,13 +1519,13 @@ table.data td .annotation-editor-input {
     grid-column: span 2;
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: var(--radius-4);
+    padding: var(--space-5) var(--space-6);
 }
 
 .chart-card h3 {
-    margin: 0 0 8px;
-    font-size: 11px;
+    margin: 0 0 var(--space-4);
+    font-size: var(--font-size-small);
     color: var(--text-muted);
     font-family: var(--font-mono);
     text-transform: uppercase;
@@ -1493,7 +1536,7 @@ table.data td .annotation-editor-input {
     margin: 0;
     padding: 0;
     list-style: none;
-    font-size: 12px;
+    font-size: var(--font-size-body);
 }
 
 .chart-card li {
@@ -1543,7 +1586,7 @@ table.data td .annotation-editor-input {
 
 :root[data-theme="openmpt"] .workspace-shell .dv-default-tab-content {
     font-family: var(--font-body);
-    font-size: 12px;
+    font-size: var(--font-size-body);
     font-weight: 400;
     text-transform: none;
     letter-spacing: normal;
@@ -1557,11 +1600,11 @@ table.data td .annotation-editor-input {
 }
 
 :root[data-theme="openmpt"] table.data th {
-    font-size: 11px;
+    font-size: var(--font-size-small);
 }
 
 :root[data-theme="openmpt"] table.mini th {
-    font-size: 11.5px;
+    font-size: var(--font-size-small);
 }
 
 :root[data-theme="openmpt"] table.data th.sorted {
@@ -1570,7 +1613,7 @@ table.data td .annotation-editor-input {
 
 :root[data-theme="openmpt"] .cell-primary {
     font-weight: 400;
-    font-size: 12px;
+    font-size: var(--font-size-body);
 }
 
 :root[data-theme="openmpt"] .dv-react-part,
@@ -1615,9 +1658,9 @@ table.data td .annotation-editor-input {
 .morph-panel {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--space-5);
     height: 100%;
-    padding: 10px 12px;
+    padding: var(--space-5) var(--space-6);
 }
 
 /* The waveform takes whatever height the rows above it leave, down to the frame's own minimum. */
@@ -1637,7 +1680,7 @@ table.data td .annotation-editor-input {
     display: grid;
     grid-template-columns: 1fr auto 1fr auto;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-4);
 }
 
 .morph-gap {
@@ -1662,18 +1705,18 @@ table.data td .annotation-editor-input {
 .morph-endpoint {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-4);
     min-width: 0;
 }
 
 .morph-endpoint-identity {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-4);
     min-width: 0;
     padding: 2px 4px;
     margin: -2px -4px;
-    border-radius: 4px;
+    border-radius: var(--radius-1);
     color: inherit;
     text-decoration: none;
 }
@@ -1691,7 +1734,7 @@ table.data td .annotation-editor-input {
 .morph-weight {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-5);
 }
 
 .morph-weight-track {
@@ -1706,7 +1749,7 @@ table.data td .annotation-editor-input {
 .morph-weight input[type="range"] {
     flex: 1 1 auto;
     min-width: 0;
-    height: 24px;
+    height: var(--control-height);
     margin: 0;
     appearance: none;
     background: transparent;
@@ -1746,7 +1789,7 @@ table.data td .annotation-editor-input {
     position: absolute;
     top: 0;
     transform: translateX(-50%);
-    font-size: 11px;
+    font-size: var(--font-size-small);
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -1755,7 +1798,7 @@ table.data td .annotation-editor-input {
 
 .morph-distance {
     margin: 0;
-    font-size: 11px;
+    font-size: var(--font-size-small);
     color: var(--text-muted);
     white-space: nowrap;
 }
@@ -1763,9 +1806,9 @@ table.data td .annotation-editor-input {
 .morph-offline {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-4);
     margin: 0;
-    border-radius: 6px;
+    border-radius: var(--radius-3);
     border: 1px solid var(--border);
 }
 
@@ -1881,24 +1924,24 @@ table.data td .annotation-editor-input {
     display: grid;
     place-content: center;
     gap: 0.5rem;
-    min-height: 100vh;
+    min-height: 100dvh;
     text-align: center;
 }
 
 .error-boundary {
     display: grid;
-    gap: 6px;
+    gap: var(--space-3);
     justify-items: center;
-    padding: 12px;
+    padding: var(--space-6);
 }
 
 .error-boundary-retry {
     border: 1px solid var(--border);
     background: var(--surface-0);
-    border-radius: 5px;
-    height: 22px;
-    padding: 0 8px;
-    font-size: 11.5px;
+    border-radius: var(--radius-2);
+    height: var(--control-height-compact);
+    padding: 0 var(--space-4);
+    font-size: var(--font-size-small);
     cursor: pointer;
     color: var(--text-muted);
 }
