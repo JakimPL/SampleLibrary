@@ -43,10 +43,13 @@ class ServiceSettings:
     reads files from, the settings it renders under as its selection file names them, and its limits.
 
     A request names the file a sample found in a sample directory is read from, and the process reads
-    only files inside the directories named here, which are the ones its configuration lists.
+    only files inside the directories named here, which are the ones its configuration lists. The
+    filter it hands over is read under a selection of its own, since a filter holds for a path whose
+    harmonics stay put while the morph the process renders may glide them.
     """
 
     library_root: Path
     sample_directories: tuple[Path, ...]
     selection: RouteSelection
+    filter_selection: RouteSelection
     limits: RenderLimits = field(default_factory=RenderLimits)

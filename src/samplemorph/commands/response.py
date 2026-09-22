@@ -18,7 +18,7 @@ from samplemorph.envelope.response import EnvelopeResponse, ResponseReading, bui
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.heard import HeardSample, SampleNotCataloged, common_rate, read_heard_sample, require_sample
 from samplemorph.routes.route import hear_in_frame
-from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, read_route_selection
+from samplemorph.routes.selection import DEFAULT_FILTER_SELECTION_PATH, read_filter_selection
 from samplemorph.transport.analysis import analyze
 from samplemorph.transport.settings import TransportSettings
 
@@ -37,7 +37,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     parser.add_argument(
         "--selection",
         type=Path,
-        default=DEFAULT_SELECTION_PATH,
+        default=DEFAULT_FILTER_SELECTION_PATH,
         help="The YAML file naming the envelope settings the response is read under.",
     )
 
@@ -56,12 +56,7 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     """
     audio = SampleAudio.from_catalog(connection, config.library_root)
     try:
-        selection = read_route_selection(Path(arguments.selection))
-        if selection.glide is not None:
-            raise ValueError(
-                "a response filters one sample toward another under a moving envelope, and a glide moves "
-                f"its harmonics as well, which no filter holds; this selection glides by {selection.glide}"
-            )
+        selection = read_filter_selection(Path(arguments.selection))
         first = read_heard_sample(connection, audio, require_sample(connection, arguments.first))
         second = read_heard_sample(connection, audio, require_sample(connection, arguments.second))
     except (SampleNotCataloged, SampleUnavailableError, ValueError) as error:

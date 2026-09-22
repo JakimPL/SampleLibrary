@@ -10,7 +10,12 @@ from fastapi import FastAPI
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, InferenceConfig
 from samplecore.exit_status import ExitStatus
 from samplemorph.cli import MorphCommand, main
-from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, read_route_selection
+from samplemorph.routes.selection import (
+    DEFAULT_FILTER_SELECTION_PATH,
+    DEFAULT_SELECTION_PATH,
+    read_filter_selection,
+    read_route_selection,
+)
 from samplemorph.service import renderer as renderer_module
 from samplemorph.service.renderer import load_renderer
 from samplemorph.service.settings import ServiceSettings
@@ -97,8 +102,27 @@ def test_a_selection_file_the_process_cannot_read_ends_it_with_one_message_befor
     assert not bound
 
 
-def test_the_repository_s_selection_file_is_one_the_process_can_serve() -> None:
+def test_a_filter_selection_that_glides_ends_the_process_before_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A filter holds only where the harmonics stay put, so the process says so instead of handing over one that cannot."""
+    bound: list[str] = []
+    monkeypatch.setattr(uvicorn, "run", lambda *arguments, **options: bound.append("bound"))
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, inference_url=None)))
+    gliding = tmp_path / "morph-filter.yaml"
+    gliding.write_text("glide: subharmonic\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main([MorphCommand.SERVE, "--filter-selection", str(gliding)], prog=PROGRAM)
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert "glides by subharmonic" in capsys.readouterr().err
+    assert not bound
+
+
+def test_the_repository_s_selection_files_are_ones_the_process_can_serve() -> None:
     assert read_route_selection(DEFAULT_SELECTION_PATH).envelope is not None
+    assert read_filter_selection(DEFAULT_FILTER_SELECTION_PATH).glide is None
 
 
 def test_a_missing_configuration_ends_the_process(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

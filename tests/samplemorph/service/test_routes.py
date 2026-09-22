@@ -16,7 +16,6 @@ from samplemorph.canonicalizers.common import analysis_transform
 from samplemorph.envelope.filtering import filtered_waveform
 from samplemorph.envelope.payload import response_from_payload
 from samplemorph.envelope.response import HeldEnd
-from samplemorph.envelope.settings import EnvelopeSettings, Timeline
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.rendering import FULL_SCALE_CEILING
 from samplemorph.routes.route import hear_in_frame
@@ -24,7 +23,7 @@ from samplemorph.routes.selection import Glide
 from samplemorph.service.app import create_app
 from samplemorph.service.renderer import MorphRenderer, load_renderer
 from samplemorph.service.settings import RESPONSE_MEDIA_TYPE, ServiceSettings
-from tests.samplemorph.service.conftest import StoredLibrary
+from tests.samplemorph.service.conftest import FILTER_COEFFICIENT_COUNT, StoredLibrary
 
 AUDIO_PATH = "/morph/audio"
 RESPONSE_PATH = "/morph/response"
@@ -226,9 +225,10 @@ def test_a_pair_answers_with_the_filter_between_its_two_samples(
         assert response.second.held is HeldEnd.SECOND
 
 
-def test_a_gliding_envelope_route_renders_morphs_and_hands_over_no_filter(
+def test_a_gliding_envelope_route_renders_morphs_and_hands_over_the_filter_beside_them(
     gliding_settings: ServiceSettings, library: StoredLibrary
 ) -> None:
+    """The filter is read under the process's filter selection, which holds every pitch while its renders glide."""
     with TestClient(create_app(load_renderer(gliding_settings))) as client:
         status = client.get(STATUS_PATH).json()
         rendered = client.get(AUDIO_PATH, params=_params(library, 0.5))
@@ -237,7 +237,8 @@ def test_a_gliding_envelope_route_renders_morphs_and_hands_over_no_filter(
     assert status["name"].endswith(f"-glide-{Glide.SUBHARMONIC.value}")
     assert status["description"]["pitch_reader"]["reader"] == Glide.SUBHARMONIC.value
     assert rendered.status_code == HTTPStatus.OK
-    assert answered.status_code == HTTPStatus.CONFLICT
+    assert answered.status_code == HTTPStatus.OK
+    assert response_from_payload(answered.content).description.coefficient_count == FILTER_COEFFICIENT_COUNT
 
 
 def test_a_pair_asked_for_twice_is_read_once(settings: ServiceSettings, library: StoredLibrary) -> None:
@@ -272,11 +273,7 @@ def test_a_pair_naming_a_sample_the_store_lacks_is_refused(settings: ServiceSett
 def test_the_filter_a_pair_answers_with_returns_that_sample_as_the_pair_hears_it(
     settings: ServiceSettings, library: StoredLibrary
 ) -> None:
-    held_to_first = replace(
-        settings,
-        selection=settings.selection.model_copy(update={"envelope": EnvelopeSettings(timeline=Timeline.FIRST)}),
-    )
-    with TestClient(create_app(load_renderer(held_to_first))) as client:
+    with TestClient(create_app(load_renderer(settings))) as client:
         response = response_from_payload(client.get(RESPONSE_PATH, params=_pair_params(library)).content)
 
     heard = hear_in_frame(
@@ -392,7 +389,7 @@ def test_uploads_heard_too_far_apart_in_rate_are_refused(settings: ServiceSettin
     assert answered.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
 
-def test_uploads_to_a_process_serving_a_gliding_route_are_told_it_holds_no_filter(
+def test_uploads_to_a_process_serving_a_gliding_route_are_answered_with_the_filter(
     gliding_settings: ServiceSettings, library: StoredLibrary
 ) -> None:
     with TestClient(create_app(load_renderer(gliding_settings))) as client:
@@ -400,4 +397,5 @@ def test_uploads_to_a_process_serving_a_gliding_route_are_told_it_holds_no_filte
             RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
         )
 
-    assert answered.status_code == HTTPStatus.CONFLICT
+    assert answered.status_code == HTTPStatus.OK
+    assert response_from_payload(answered.content).description.coefficient_count == FILTER_COEFFICIENT_COUNT

@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
-from samplemorph.routes.selection import DEFAULT_SELECTION_PATH, Glide, read_route_selection
+from samplemorph.routes.selection import (
+    DEFAULT_FILTER_SELECTION_PATH,
+    DEFAULT_SELECTION_PATH,
+    Glide,
+    read_filter_selection,
+    read_route_selection,
+)
 
 FULL_SELECTION = """
 envelope:
@@ -72,6 +78,12 @@ def test_the_committed_filter_selection_is_one_a_response_can_answer() -> None:
     A response is the envelope route's filter, and it holds for a path whose harmonics stand where
     they stood, so this property is what the file is for rather than a default it happens to carry.
     """
-    selection = read_route_selection(DEFAULT_SELECTION_PATH.with_name("morph-filter.yaml"))
+    selection = read_filter_selection(DEFAULT_FILTER_SELECTION_PATH)
 
     assert selection.glide is None
+    assert DEFAULT_FILTER_SELECTION_PATH.parent == DEFAULT_SELECTION_PATH.parent
+
+
+def test_a_selection_read_for_a_filter_is_refused_where_it_glides(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="glides by subharmonic"):
+        read_filter_selection(_written(tmp_path, FULL_SELECTION))
