@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from samplecloud.modules.distance import chamfer_distances, nearest_distances_to_modules
+from samplecloud.modules.distance import BATCH_MEMBER_COUNT, chamfer_distances
 from samplecloud.modules.membership import ModuleSampleSets, module_sample_sets
 from samplecore.spectral_distance import SpectralVectors
 
@@ -22,7 +22,7 @@ SPECTRAL = SpectralVectors(
 
 def _distances(members: dict[str, frozenset[str]]) -> tuple[ModuleSampleSets, NDArray[np.float32]]:
     sets = module_sample_sets(members, SPECTRAL)
-    return sets, chamfer_distances(sets, nearest_distances_to_modules(sets))
+    return sets, chamfer_distances(sets)
 
 
 def _distance_between(members: dict[str, frozenset[str]], first: str, second: str) -> float:
@@ -83,13 +83,24 @@ def test_distances_are_symmetric_with_a_zero_diagonal() -> None:
     np.testing.assert_array_equal(np.diag(distances), np.zeros(3))
 
 
-def test_a_module_holding_a_sample_lies_exactly_zero_from_it() -> None:
-    sets = module_sample_sets({"1" * 64: frozenset({BELL, PAD}), "2" * 64: frozenset({BELL})}, SPECTRAL)
+def test_batches_measure_as_one_whole() -> None:
+    generator = np.random.default_rng(0)
+    hashes = tuple(format(index + 1, "064x") for index in range(BATCH_MEMBER_COUNT + 40))
+    spectral = SpectralVectors(hashes=hashes, matrix=generator.normal(size=(len(hashes), 3)))
+    members = {
+        format(module, "064x"): frozenset(hashes[module * 7 : module * 7 + 1 + module % 9])
+        for module in range(len(hashes) // 7)
+    }
+    sets = module_sample_sets(members, spectral)
 
-    nearest = nearest_distances_to_modules(sets)
+    distances = chamfer_distances(sets)
 
-    for column, rows in enumerate(sets.member_rows):
-        np.testing.assert_array_equal(nearest[rows, column], np.zeros(len(rows)))
+    first, second = 3, len(sets.module_hashes) - 2
+    first_vectors = sets.vectors[sets.member_rows[first]].astype(np.float64)
+    second_vectors = sets.vectors[sets.member_rows[second]].astype(np.float64)
+    pairwise = np.linalg.norm(first_vectors[:, None, :] - second_vectors[None, :, :], axis=2)
+    expected = 0.5 * (pairwise.min(axis=1).mean() + pairwise.min(axis=0).mean())
+    assert distances[first, second] == pytest.approx(expected, rel=1e-4)
 
 
 def test_a_distant_sample_moves_a_module_farther_than_a_close_one() -> None:

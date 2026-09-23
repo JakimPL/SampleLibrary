@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import Connection
 
-from samplecloud.modules.distance import chamfer_distances, nearest_distances_to_modules
+from samplecloud.modules.distance import chamfer_distances
 from samplecloud.modules.layout import LayoutPreservation, fit_module_plane, preservation
 from samplecloud.modules.membership import load_module_sample_sets
 from samplecloud.reduce import MINIMUM_SAMPLES_FOR_REDUCTION, neighbor_count
@@ -52,7 +52,7 @@ def lay_out_and_persist_modules(connection: Connection) -> ModuleCloudSummary:
         return ModuleCloudSummary(modules_placed=0, preservation=None)
 
     _logger.info("Measuring %d modules over %d distinct samples...", module_count, len(sets.vectors))
-    distances = chamfer_distances(sets, nearest_distances_to_modules(sets))
+    distances = chamfer_distances(sets)
     _logger.info("Fitting UMAP over %d module distances...", module_count)
     coordinates = fit_module_plane(distances, n_neighbors=neighbor_count(module_count))
 
