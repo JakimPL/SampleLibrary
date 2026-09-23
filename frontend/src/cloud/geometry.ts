@@ -8,10 +8,9 @@ export interface CloudEntityPoint {
     readonly playbackRateHz?: number;
 }
 
-const NORMALIZED_MIN = -1;
-const NORMALIZED_MAX = 1;
-const NORMALIZED_SPAN = NORMALIZED_MAX - NORMALIZED_MIN;
 const FALLBACK_RANGE = 1;
+const BULK_QUANTILE = 0.01;
+const HALF = 0.5;
 
 export interface Bounds {
     readonly minimum: number;
@@ -36,26 +35,50 @@ export function boundsOf<Point>(points: readonly Point[], coordinateOf: (point: 
     return { minimum, maximum };
 }
 
+/** Where one coordinate of a set of points is centered and how far it reaches from that center. */
+interface AxisFrame {
+    readonly center: number;
+    readonly halfExtent: number;
+}
+
 /**
- * Maps a set of points' bounding box onto regl-scatterplot's own [-1, 1] coordinate space.
+ * Frames one coordinate on its bulk: centered midway between the `BULK_QUANTILE` and
+ * 1 - `BULK_QUANTILE` quantiles, and reaching the point farthest from that center on either side.
+ * A few far-flung points then sit at the edge of the view while the bulk of the cloud stays in its middle.
+ */
+function axisFrameOf(
+    points: readonly CloudEntityPoint[],
+    coordinateOf: (point: CloudEntityPoint) => number,
+): AxisFrame {
+    const sorted = Float64Array.from(points, coordinateOf).sort();
+    const last = sorted.length - 1;
+    const low = sorted[Math.floor(BULK_QUANTILE * last)] ?? 0;
+    const high = sorted[Math.ceil((1 - BULK_QUANTILE) * last)] ?? 0;
+    const center = (low + high) * HALF;
+    const halfExtent = Math.max(center - (sorted[0] ?? 0), (sorted[last] ?? 0) - center);
+    return { center, halfExtent: halfExtent || FALLBACK_RANGE };
+}
+
+/**
+ * Maps a set of points onto regl-scatterplot's own [-1, 1] coordinate space, each axis centered on
+ * the bulk of the points.
  *
  * A shared coordinate range across every render keeps the plot centered and fully visible
- * regardless of the arbitrary scale a UMAP fit or a placeholder embedding happens to produce.
+ * regardless of the arbitrary scale a UMAP fit happens to produce, and centering on the bulk keeps
+ * a few distant islands from pushing the main cloud toward one side of the opening view.
  */
 export function normalizePoints(points: readonly CloudEntityPoint[]): readonly CloudEntityPoint[] {
     if (points.length === 0) {
         return [];
     }
 
-    const horizontal = boundsOf(points, (point) => point.x);
-    const vertical = boundsOf(points, (point) => point.y);
-    const rangeX = horizontal.maximum - horizontal.minimum || FALLBACK_RANGE;
-    const rangeY = vertical.maximum - vertical.minimum || FALLBACK_RANGE;
+    const horizontal = axisFrameOf(points, (point) => point.x);
+    const vertical = axisFrameOf(points, (point) => point.y);
 
     return points.map((point) => ({
         ref: point.ref,
-        x: NORMALIZED_MIN + ((point.x - horizontal.minimum) / rangeX) * NORMALIZED_SPAN,
-        y: NORMALIZED_MIN + ((point.y - vertical.minimum) / rangeY) * NORMALIZED_SPAN,
+        x: (point.x - horizontal.center) / horizontal.halfExtent,
+        y: (point.y - vertical.center) / vertical.halfExtent,
         // exactOptionalPropertyTypes requires an absent optional field to be omitted.
         ...(point.playbackRateHz !== undefined && { playbackRateHz: point.playbackRateHz }),
     }));
