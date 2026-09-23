@@ -400,7 +400,7 @@ steps, one at a time and each in a process of its own: the catalog passes (`labe
 `sample-files`, `notes`, `thumbnails`, `equivalence`, `relink`), the listening model's two readings
 and its categories (`teacher`, `hearing-teacher`, `categories`), the descriptor from its grid cache
 to the cloud (`grid-cache`, `descriptor`, `embedding`, `completion`, `evaluation`,
-`module-evaluation`, `cloud`, `module-placeholders`). The targets `catalog`, `cloud` and `all` name groups of them,
+`module-evaluation`, `cloud`, `module-cloud`). The targets `catalog`, `cloud` and `all` name groups of them,
 and a run takes every step its targets need, in the order `steps/library.py` declares them.
 
 **A step decides from what exists.** Progress lives with the outputs themselves. Just before it
@@ -732,6 +732,26 @@ is the one place that reads the report into a run.
 This lives in `samplecloud` because it judges embeddings, which is what `samplecloud` owns. A learned
 descriptor's vectors reach it as an ordinary experiment through the database, with no import in either
 direction.
+
+## Module cloud
+
+`samplelibrary cloud modules` (`samplecloud.modules`) lays modules out by the sounds of their
+samples, read through the promoted experiment's standardized spectral vectors. A module stands for
+the set of distinct samples it holds that carry a vector (`samplecloud.modules.membership`); a
+module with none of them gets no coordinate. Two modules lie apart by the symmetric Chamfer distance
+between their sets (`samplecloud.modules.distance`): each sample's distance to the other module's
+closest sample, averaged over its own module, and the two directions averaged. Modules holding the
+same samples lie exactly 0 apart, shared samples add nothing, and one extra sample moves a module by
+its distance to the rest divided by twice the module's size, so a longer module sits beside the
+shorter one it extends. Every sample's distance to every module is measured once, one module at a
+time, and each pair's distance averages those rows.
+
+UMAP lays the pairwise distances out directly (`samplecloud.modules.layout`, the `precomputed`
+metric, with the seed and neighbor count the sample cloud uses), and each run reports how faithful
+the plane is: the rank correlation between module distances and plane distances for the global
+arrangement, and trustworthiness for the local one. Every run replaces every module coordinate in
+one transaction. The pipeline's `module-cloud` step runs after `cloud`, since the vectors it reads
+are the ones `cloud` promotes.
 
 ## Labels on a sample
 

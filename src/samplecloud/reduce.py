@@ -40,6 +40,11 @@ class CloudSummary:
     samples_reduced: int
 
 
+def neighbor_count(point_count: int) -> int:
+    """How many neighbors a UMAP fit over ``point_count`` points weighs, bounded by the points it has."""
+    return max(MINIMUM_N_NEIGHBORS, min(DEFAULT_N_NEIGHBORS, point_count - 1))
+
+
 def fit_plane(standardized: NDArray[np.float64], *, n_neighbors: int) -> NDArray[np.float64]:
     """Lay standardized feature vectors out on a plane with UMAP: two coordinates per vector, in the order given."""
     # UMAP compiles its kernels as it is imported, which a pass extracting features and laying out
@@ -82,7 +87,7 @@ def reduce_and_persist_coordinates(connection: Connection, experiment_id: int) -
     sample_hashes = [vector.sample_hash for vector in feature_vectors]
     feature_matrix = np.stack([np.array(vector.vector, dtype=np.float64) for vector in feature_vectors])
     standardized = standardize(feature_matrix)
-    n_neighbors = max(MINIMUM_N_NEIGHBORS, min(DEFAULT_N_NEIGHBORS, len(sample_hashes) - 1))
+    n_neighbors = neighbor_count(len(sample_hashes))
     _logger.info("Fitting UMAP over %d feature vectors...", len(sample_hashes))
     coordinates = fit_plane(standardized, n_neighbors=n_neighbors)
     _logger.info("UMAP fit complete.")

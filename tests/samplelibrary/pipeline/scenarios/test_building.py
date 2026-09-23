@@ -29,9 +29,9 @@ EVERY_STEP = (
     "evaluation",
     "module-evaluation",
     "cloud",
-    "module-placeholders",
+    "module-cloud",
 )
-PASSES = ("modules", "sample-files", "notes", "thumbnails", "equivalence", "relink", "module-placeholders")
+PASSES = ("modules", "sample-files", "notes", "thumbnails", "equivalence", "relink", "module-cloud")
 SETTLED = Expect.completed(EVERY_STEP, StepVerdict.SATISFIED).with_steps(
     **{step.replace("-", "_"): StepVerdict.RAN for step in PASSES}
 )

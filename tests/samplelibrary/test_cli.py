@@ -70,9 +70,7 @@ ROUTE_CASES = (
         ["--backend", "clap", "--label", "heard at the playback rate"],
         "samplelibrary cloud embed",
     ),
-    RouteCase(
-        ["cloud", "placeholders"], "samplecloud.placeholder_modules.main", [], "samplelibrary cloud placeholders"
-    ),
+    RouteCase(["cloud", "modules"], "samplecloud.modules.run.main", [], "samplelibrary cloud modules"),
     RouteCase(
         ["cloud", "evaluate", "--experiment-id", "4", "--help"],
         "samplecloud.evaluation.cli.main",
