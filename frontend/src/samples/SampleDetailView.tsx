@@ -10,7 +10,7 @@ import { OCCURRENCE_COLUMN_LABELS, SampleOccurrenceRow } from "./SampleOccurrenc
 import { RELATION_COLUMN_LABELS, SampleRelationRow } from "./SampleRelationRow";
 import { SIMILAR_COLUMN_LABELS, SimilarSampleRow } from "./SimilarSampleRow";
 
-export type DetailTab = "occurrences" | "relations" | "similar" | "cooccurrence";
+export type DetailTab = "info" | "similar" | "occurrences" | "relations" | "cooccurrence";
 
 interface SampleDetailViewProps {
     readonly sample: SampleDetail;
@@ -115,7 +115,7 @@ function SimilarSection({ similar }: { readonly similar: readonly SimilarSample[
         );
     }
     return (
-        <table className="mini">
+        <table className="mini is-columnar">
             <thead>
                 <HeaderRow labels={SIMILAR_COLUMN_LABELS} />
             </thead>
@@ -132,10 +132,30 @@ function CooccurrenceSection(): ReactElement {
     return <p className="placeholder-box">Awaits a co-occurrence analysis across the catalog.</p>;
 }
 
+/** The sample's own facts: its label and what is decided about it, the categories heard in it, and the properties of its audio. */
+function InfoSection({ sample }: { readonly sample: SampleDetail }): ReactElement {
+    return (
+        <dl className="kv">
+            <AnnotationRows key={sample.hash} sample={sample} />
+            <dt>Size</dt>
+            <dd className="mono">{formatBytes(sample.size_bytes)}</dd>
+            <dt>Duration</dt>
+            <dd className="mono">{formatDuration(sample.duration_seconds)}</dd>
+            <dt>Depth</dt>
+            <dd className="mono">{sample.depth}-bit</dd>
+            <dt>Channels</dt>
+            <dd className="mono">{sample.channels}</dd>
+            <dt>Frames</dt>
+            <dd className="mono">{sample.frames}</dd>
+        </dl>
+    );
+}
+
 /**
- * One sample in full: its name, identity and properties above, and beneath them one of four
- * listings at a time, chosen by a tab that carries its count. The tab is the caller's, so the
- * choice outlives the sample in view: a person walking a sample's neighbors keeps seeing neighbors.
+ * One sample in full: its name and identity above, and beneath them one view at a time, chosen by
+ * a tab: the sample's own facts, or one of four listings, each tab carrying its count. The tab is
+ * the caller's, so the choice outlives the sample in view: a person walking a sample's neighbors
+ * keeps seeing neighbors.
  */
 export function SampleDetailView({
     sample,
@@ -145,14 +165,17 @@ export function SampleDetailView({
     onTabChange,
 }: SampleDetailViewProps): ReactElement {
     const choices: readonly DetailTabChoice[] = [
+        { id: "info", label: "Info" },
+        { id: "similar", label: `Similar (${String(similar.length)})` },
         { id: "occurrences", label: `Occurrences (${String(sample.occurrences.length + sample.files.length)})` },
         { id: "relations", label: `Relations (${String(relations.length)})` },
-        { id: "similar", label: `Similar (${String(similar.length)})` },
         { id: "cooccurrence", label: "Co-occurs" },
     ];
 
     function section(): ReactElement {
         switch (tab) {
+            case "info":
+                return <InfoSection sample={sample} />;
             case "occurrences":
                 return <OccurrencesSection sample={sample} />;
             case "relations":
@@ -167,19 +190,6 @@ export function SampleDetailView({
     return (
         <section className="detail-scroll">
             <DetailHeader name={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} hash={sample.hash} />
-            <dl className="kv">
-                <AnnotationRows key={sample.hash} sample={sample} />
-                <dt>Size</dt>
-                <dd className="mono">{formatBytes(sample.size_bytes)}</dd>
-                <dt>Duration</dt>
-                <dd className="mono">{formatDuration(sample.duration_seconds)}</dd>
-                <dt>Depth</dt>
-                <dd className="mono">{sample.depth}-bit</dd>
-                <dt>Channels</dt>
-                <dd className="mono">{sample.channels}</dd>
-                <dt>Frames</dt>
-                <dd className="mono">{sample.frames}</dd>
-            </dl>
             <div className="detail-tabs">
                 {choices.map((choice) => (
                     <button

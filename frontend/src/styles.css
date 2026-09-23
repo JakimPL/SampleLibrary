@@ -27,6 +27,7 @@
     --tab-strip-height: 26px;
     --phone-header-height: 44px;
     --tab-bar-height: 56px;
+    --sample-transport-height: 160px;
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
     --surface-0: #f4f5f7;
@@ -128,12 +129,14 @@
     }
 }
 
-/* A phone reads at the size its browser sets body text to, a step above the workspace's. */
+/* A phone reads at the size its browser sets body text to, a step above the workspace's, and
+   holds a sample's player to one row, the play button beside the waveform. */
 :root[data-layout="phone"] {
     --font-size-body: 14px;
     --font-size-small: 12px;
     --font-size-caption: 11px;
     --font-size-label: 10.5px;
+    --sample-transport-height: 80px;
 }
 
 /* Browsers paint native controls and scrollbars from `color-scheme`, so a hand-picked theme names
@@ -606,6 +609,11 @@ table.data tbody tr {
     height: var(--row-height);
 }
 
+/* A columnar mini table lists samples the way the listing does, so its rows take the listing's height. */
+table.mini.is-columnar tbody tr {
+    height: var(--row-height);
+}
+
 table.data tbody tr:hover,
 table.mini tbody tr:hover {
     background: var(--surface-2);
@@ -731,10 +739,11 @@ tr:focus-within .row-open,
     border: 1px solid var(--border-strong);
 }
 
-/* A free-text label shrinks to the cell holding it, so its end is cut by an ellipsis inside the border. */
+/* A free-text label shrinks to the cell or the row holding it, so its end is cut by an ellipsis inside the border. */
 .badge-hand-label,
 .badge-category {
     max-width: 100%;
+    min-width: 0;
 }
 
 .badge-text {
@@ -885,6 +894,13 @@ tr:focus-within .row-open,
 .cell-numeric,
 .cell-verdict {
     text-overflow: clip;
+}
+
+/* The neighbors' distance: a narrow column of figures read from the right. */
+.cell-distance {
+    width: 64px;
+    text-align: right;
+    white-space: nowrap;
 }
 
 /* A fixed slot per glyph keeps the Rating column six slots wide, whichever font draws the star
@@ -1190,6 +1206,7 @@ table.data td .annotation-editor-input {
 /* `:where` keeps the star and heart exception out of this selector's specificity. */
 .panel-filter button,
 .detail-tabs button,
+.legend-sheet-mode button,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
 .morph-offline button {
     border: 1px solid var(--border);
@@ -1212,13 +1229,15 @@ table.data td .annotation-editor-input {
 
 .panel-filter button:hover:enabled,
 .detail-tabs button:hover:enabled,
+.legend-sheet-mode button:hover:enabled,
 .annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled {
     color: var(--text-primary);
     border-color: var(--border-strong);
 }
 
 .panel-filter button[aria-pressed="true"],
-.detail-tabs button[aria-pressed="true"] {
+.detail-tabs button[aria-pressed="true"],
+.legend-sheet-mode button[aria-pressed="true"] {
     background: var(--accent-soft);
     color: var(--accent);
     border-color: var(--accent);
@@ -1422,11 +1441,12 @@ table.data td .annotation-editor-input {
     background: var(--border);
 }
 
-/* In a narrow panel the cloud's toolbar scrolls sideways, every control keeping its size. */
+/* In a narrow panel the cloud's toolbar keeps to one slim row, every control keeping its size. */
 @container panel (width <= 480px) {
     .cloud-toolbar {
         overflow: auto hidden;
         scrollbar-width: none;
+        padding-block: var(--space-2);
     }
 
     .cloud-toolbar > * {
@@ -1525,6 +1545,31 @@ table.data td .annotation-editor-input {
 
 .legend-sheet-chips .tag-legend-entry {
     min-height: var(--tap-target);
+}
+
+/* The sheet's choice of what paints the points, above the chips it paints. */
+.legend-sheet-mode {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.legend-sheet-mode legend {
+    padding: 0;
+    margin-bottom: var(--space-3);
+    font-size: var(--font-size-small);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.legend-sheet-empty {
+    margin: 0;
+    font-size: var(--font-size-small);
+    color: var(--text-muted);
 }
 
 .cloud-empty {
@@ -1692,6 +1737,24 @@ table.data td .annotation-editor-input {
     height: 100%;
 }
 
+/* On a phone the player is one row: the play button beside the frame, the readout in the frame's corner. */
+.wave-panel-compact {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-4);
+    padding-left: var(--space-4);
+}
+
+/* The frame the corner readout is positioned against; it carries the wrap in either form. */
+.wave-panel-frame {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    align-self: stretch;
+    display: flex;
+}
+
 .wave-empty {
     flex: 1 1 auto;
     display: flex;
@@ -1791,8 +1854,10 @@ table.data td .annotation-editor-input {
 }
 
 .play-btn {
-    width: max(26px, var(--tap-target));
-    height: max(26px, var(--tap-target));
+    --play-button-size: max(26px, var(--tap-target));
+
+    width: var(--play-button-size);
+    height: var(--play-button-size);
     border-radius: 50%;
     background: var(--accent);
     color: var(--accent-ink);
@@ -1806,6 +1871,11 @@ table.data td .annotation-editor-input {
 
 .play-btn:hover {
     background: var(--accent-strong);
+}
+
+/* On a phone the play button is a control's height: the row it heads holds nothing taller. */
+:root[data-layout="phone"] .play-btn {
+    --play-button-size: max(26px, var(--control-height));
 }
 
 .transport .download-link {
@@ -1830,11 +1900,23 @@ table.data td .annotation-editor-input {
     border-color: var(--border-strong);
 }
 
-.transport .time {
+.time {
     font-family: var(--font-mono);
     font-size: var(--font-size-small);
     color: var(--text-muted);
     white-space: nowrap;
+}
+
+/* The readout in the frame's corner, on a sliver of the frame's own ground so the contour stays readable. */
+.wave-time {
+    position: absolute;
+    right: var(--space-3);
+    bottom: var(--space-2);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-1);
+    background: var(--wave-bg);
+    font-size: var(--font-size-caption);
+    pointer-events: none;
 }
 
 .transport select {
@@ -1856,7 +1938,7 @@ table.data td .annotation-editor-input {
 
 .sample-panel-transport {
     flex: 0 0 auto;
-    height: 160px;
+    height: var(--sample-transport-height);
     border-bottom: 1px solid var(--border);
 }
 
@@ -1923,20 +2005,21 @@ table.data td .annotation-editor-input {
     margin-bottom: var(--space-7);
 }
 
-/* A narrow panel: stacked mini tables that name each value, one-column property lists, a strip of
-   tabs that scrolls, and the stats and the morph's ends one under the other. */
+/* A narrow panel: stacked mini tables that name each value, but for a table marked columnar, which
+   keeps its columns at every width; one-column property lists, a strip of tabs that scrolls, and
+   the stats and the morph's ends one under the other. */
 @container panel (width <= 480px) {
-    table.mini thead {
+    table.mini:not(.is-columnar) thead {
         display: none;
     }
 
-    table.mini tbody tr {
+    table.mini:not(.is-columnar) tbody tr {
         display: block;
         padding: var(--space-2) 0;
         border-bottom: 1px solid var(--border);
     }
 
-    table.mini td {
+    table.mini:not(.is-columnar) td {
         display: flex;
         gap: var(--space-4);
         align-items: baseline;
@@ -1944,7 +2027,7 @@ table.data td .annotation-editor-input {
         border-bottom: none;
     }
 
-    table.mini td::before {
+    table.mini:not(.is-columnar) td::before {
         content: attr(data-label);
         flex: 0 0 76px;
         font-family: var(--font-mono);
@@ -1954,11 +2037,11 @@ table.data td .annotation-editor-input {
         color: var(--text-faint);
     }
 
-    table.mini td:empty {
+    table.mini:not(.is-columnar) td:empty {
         display: none;
     }
 
-    table.mini .cell-name {
+    table.mini:not(.is-columnar) .cell-name {
         max-width: none;
     }
 
@@ -2339,6 +2422,11 @@ table.data td .annotation-editor-input {
 .morph-strip-wave {
     flex: 0 0 auto;
     height: 160px;
+}
+
+/* A lone end's own player takes the height it has over a sample's detail: one row on a phone. */
+.morph-strip-wave-lone {
+    height: var(--sample-transport-height);
 }
 
 .morph-wave .transport {

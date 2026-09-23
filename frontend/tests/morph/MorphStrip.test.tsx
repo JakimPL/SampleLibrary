@@ -7,6 +7,7 @@ import { PHONE_MEDIA_QUERY } from "../../src/layout/layoutMode";
 import { DEFAULT_WEIGHT, useMorphStore } from "../../src/morph/morphStore";
 import { MorphStrip } from "../../src/morph/MorphStrip";
 import type * as AudioPreview from "../../src/samples/useAudioPreview";
+import { shortHash } from "../../src/shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../../src/shared/labels";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 import { stubMatchMedia } from "../support/matchMedia";
@@ -200,18 +201,18 @@ describe("MorphStrip while the pair is open", () => {
     it("opens a lone chosen end's own player from the waveform button, and the morph's once both are chosen", async () => {
         serveMorph(true);
         serveSamples();
-        useMorphStore.getState().setFirst(FIRST);
+        useMorphStore.getState().setEnd("first", FIRST);
         render(<MorphStrip />);
         await screen.findByText("kick_808");
         expect(screen.getByRole("button", { name: "Waveform" })).toBeEnabled();
 
         openWaveform();
 
-        expect(screen.getByText(`player ${FIRST}`)).toBeInTheDocument();
+        expect(screen.getByText(`player ${FIRST}`).closest(".morph-strip-wave")).toHaveClass("morph-strip-wave-lone");
         expect(slider()).not.toBeInTheDocument();
 
         act(() => {
-            useMorphStore.getState().setSecond(SECOND);
+            useMorphStore.getState().setEnd("second", SECOND);
         });
 
         expect(screen.queryByText(`player ${FIRST}`)).not.toBeInTheDocument();
@@ -243,6 +244,44 @@ describe("MorphStrip while the pair is open", () => {
         expect(useMorphStore.getState().selectedEnd).toBe("second");
         expect(slot("A")).toHaveAttribute("aria-pressed", "false");
         expect(slot("B")).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("offers the sample in hand to an empty slot, which takes it and rests", async () => {
+        showEmpty();
+        act(() => {
+            useSelectionStore.getState().highlightEntity({ kind: "sample", hash: FIRST });
+        });
+
+        fireEvent.click(await screen.findByRole("button", { name: "A: take kick_808" }));
+
+        expect(useMorphStore.getState()).toMatchObject({ first: FIRST, second: null, selectedEnd: null });
+        expect(await screen.findByRole("button", { name: "A: kick_808" })).toHaveAttribute("aria-pressed", "false");
+        expect(screen.getByRole("button", { name: "B: click, then a sample" })).toBeInTheDocument();
+    });
+
+    it("offers the sample in hand by its short hash until the catalog names it", () => {
+        useSelectionStore.getState().highlightEntity({ kind: "sample", hash: FIRST });
+
+        showEmpty();
+
+        expect(slot("A")).toHaveAccessibleName(`A: take ${shortHash(FIRST)}`);
+    });
+
+    it("keeps a selected empty slot waiting whatever is in hand, and lets go on the tap", async () => {
+        showEmpty();
+        fireEvent.click(slot("A"));
+        act(() => {
+            useSelectionStore.getState().highlightEntity({ kind: "sample", hash: FIRST });
+        });
+        expect(screen.getByRole("button", { name: "A: now click a sample" })).toHaveAttribute("aria-pressed", "true");
+
+        fireEvent.click(slot("A"));
+
+        expect(await screen.findByRole("button", { name: "A: take kick_808" })).toHaveAttribute(
+            "aria-pressed",
+            "false",
+        );
+        expect(useMorphStore.getState().selectedEnd).toBeNull();
     });
 
     it("shows the sample the selected end took, still waiting for the next", async () => {

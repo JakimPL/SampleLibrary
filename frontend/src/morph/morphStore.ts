@@ -19,7 +19,7 @@ export function snapWeight(weight: number): number {
     return Math.round(clamped * WEIGHT_STEPS) / WEIGHT_STEPS;
 }
 
-interface MorphPair {
+export interface MorphPair {
     readonly first: string | null;
     readonly second: string | null;
     /** The weight of the render on screen, or `null` while no point of this pair's path has been asked for yet. */
@@ -34,10 +34,8 @@ interface MorphState extends MorphPair {
 
 interface MorphActions {
     readonly join: (anchor: string | null, hash: string) => void;
-    /** Makes `hash` the first end by name, letting go of the second when it is the same sample. */
-    readonly setFirst: (hash: string) => void;
-    /** Makes `hash` the second end by name, letting go of the first when it is the same sample. */
-    readonly setSecond: (hash: string) => void;
+    /** Makes `hash` the sample at `end` by name, letting go of the other end when it holds the same sample. */
+    readonly setEnd: (end: MorphEnd, hash: string) => void;
     /** Lets one end go and keeps the other. */
     readonly clearEnd: (end: MorphEnd) => void;
     readonly swap: () => void;
@@ -70,7 +68,7 @@ function pairOf(state: MorphPair, first: string | null, second: string | null): 
 }
 
 /** The sample at the end opposite `end`. */
-function otherEndOf(state: MorphPair, end: MorphEnd): string | null {
+export function otherEndOf(state: MorphPair, end: MorphEnd): string | null {
     return end === "first" ? state.second : state.first;
 }
 
@@ -84,10 +82,10 @@ function otherEndOf(state: MorphPair, end: MorphEnd): string | null {
  * A selected end takes every sample tapped in a list or on the cloud, through `takeSample`, until
  * it is deselected; `join` is the gestures' way: the anchor, the sample already in view, becomes
  * the first end and the newly chosen one the second; with no anchor the chosen sample opens a
- * pair, or closes one that has a first end waiting. `setFirst` and `setSecond` name one end
- * outright, and `clearEnd` lets one go. `swap` mirrors the weight along with the ends, so the
- * audible point stays where it was, and keeps the selected letter. A render belongs to the pair it
- * was drawn for, so any change of the ends drops it.
+ * pair, or closes one that has a first end waiting. `setEnd` names one end outright, which is how
+ * an empty slot at rest takes the sample in hand, and `clearEnd` lets one go. `swap` mirrors the
+ * weight along with the ends, so the audible point stays where it was, and keeps the selected
+ * letter. A render belongs to the pair it was drawn for, so any change of the ends drops it.
  */
 export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
     ...INITIAL_MORPH_STATE,
@@ -104,13 +102,10 @@ export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
             state.first === null || state.first === hash ? pairOf(state, hash, null) : pairOf(state, state.first, hash),
         );
     },
-    setFirst: (hash) => {
+    setEnd: (end, hash) => {
         const state = get();
-        set(pairOf(state, hash, state.second === hash ? null : state.second));
-    },
-    setSecond: (hash) => {
-        const state = get();
-        set(pairOf(state, state.first === hash ? null : state.first, hash));
+        const other = otherEndOf(state, end) === hash ? null : otherEndOf(state, end);
+        set(end === "first" ? pairOf(state, hash, other) : pairOf(state, other, hash));
     },
     clearEnd: (end) => {
         const state = get();
@@ -144,10 +139,6 @@ export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
             state.swap();
             return;
         }
-        if (state.selectedEnd === "first") {
-            state.setFirst(hash);
-        } else {
-            state.setSecond(hash);
-        }
+        state.setEnd(state.selectedEnd, hash);
     },
 }));

@@ -5,11 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 import type * as CloudApi from "../../../src/api/cloud";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as SamplesApi from "../../../src/api/samples";
+import { PHONE_MEDIA_QUERY } from "../../../src/layout/layoutMode";
 import { PageBody, PageHeaderFor } from "../../../src/shell/phone/PageLayer";
 import { usePhoneShellStore } from "../../../src/shell/phone/phoneShellStore";
 import type { PhonePage } from "../../../src/shell/phone/phoneView";
 import { useListingOrderStore } from "../../../src/workspace/listingOrderStore";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
+import { stubMatchMedia } from "../../support/matchMedia";
 
 const { getSample, getSampleRelations, getSimilarSamples, getModule } = vi.hoisted(() => ({
     getSample: vi.fn(),
@@ -186,10 +188,12 @@ describe("PageHeaderFor", () => {
 });
 
 describe("PageBody", () => {
-    it("puts the sample's transport over its detail", async () => {
+    it("puts the sample's one-row transport over its detail", async () => {
+        stubMatchMedia(new Set([PHONE_MEDIA_QUERY]));
         useSelectionStore.getState().focusSample("b");
         renderHeaderAt(["/samples/b"], { kind: "sample", sampleHash: "b" }, true);
 
         expect(await screen.findByRole("button", { name: "▶" })).toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "Save this sample" })).not.toBeInTheDocument();
     });
 });

@@ -10,6 +10,7 @@ import { useLongPress } from "../shared/gestures/useLongPress";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { RowOpenLink } from "../workspace/RowOpenLink";
+import { tapPlays } from "../workspace/rowTap";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
 import { annotationKeyChange } from "./annotationKeys";
 import { decisionsOf, useSampleAnnotation } from "./annotationStore";
@@ -23,16 +24,6 @@ import type { SampleColumnId } from "./sampleColumns";
 import { Thumbnail } from "./Thumbnail";
 import { useAnnotationWriter } from "./useAnnotationWriter";
 import { samplePreview, useAudioPreview } from "./useAudioPreview";
-
-/** Whether a tap landed on one of the row's own controls, which answer to the tap themselves. */
-function isOwnControl(target: EventTarget | null): boolean {
-    return target instanceof Element && target.closest("button") !== null;
-}
-
-/** Whether the row's click rule took the click as a highlight, which it marks by preventing the click's default. */
-function highlightedTheRow(event: MouseEvent<HTMLTableRowElement>): boolean {
-    return event.defaultPrevented;
-}
 
 interface SampleRowProps {
     readonly sample: SampleSummary;
@@ -80,7 +71,7 @@ export function SampleRow({ sample, groupByEquivalence, visibleColumns, input }:
             return;
         }
         onClick(event);
-        if (input === "touch" && highlightedTheRow(event) && !isOwnControl(event.target)) {
+        if (tapPlays(input, event)) {
             play(samplePreview(sample.hash, sample.playback_rate_hz));
         }
     }

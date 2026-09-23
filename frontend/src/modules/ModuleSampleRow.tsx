@@ -1,14 +1,17 @@
-import type { ReactElement } from "react";
+import type { MouseEvent, ReactElement } from "react";
 import { Link } from "react-router-dom";
 
 import type { ModuleDetail } from "../api/modules";
+import { useLayoutMode } from "../layout/useLayoutMode";
 import { formatLoop } from "../samples/occurrenceFormat";
 import { Thumbnail } from "../samples/Thumbnail";
+import { samplePreview, useAudioPreview } from "../samples/useAudioPreview";
 import { classNames } from "../shared/classNames";
 import { formatBytes } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 import { OptionalLabel } from "../shared/OptionalLabel";
 import { RowOpenLink } from "../workspace/RowOpenLink";
+import { tapPlays } from "../workspace/rowTap";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
 
 type ModuleOccurrence = ModuleDetail["occurrences"][number];
@@ -31,16 +34,30 @@ interface ModuleSampleRowProps {
     readonly occurrence: ModuleOccurrence;
 }
 
+/**
+ * One sample of a module as its detail lists it: its waveform to play it by at the rate the slot
+ * sets, its name, and what the slot says of it. A finger's tap on the row takes the sample in hand
+ * and plays it at that rate; a double-click opens it.
+ */
 export function ModuleSampleRow({ occurrence }: ModuleSampleRowProps): ReactElement {
     const { href, isHighlighted, isFocused, onClick, onDoubleClick } = useEntityRowInteractions({
         kind: "sample",
         hash: occurrence.sample.hash,
     });
+    const { input } = useLayoutMode();
+    const { play } = useAudioPreview();
+
+    function handleClickCapture(event: MouseEvent<HTMLTableRowElement>): void {
+        onClick(event);
+        if (tapPlays(input, event)) {
+            play(samplePreview(occurrence.sample.hash, occurrence.properties.rate));
+        }
+    }
 
     return (
         <tr
             className={classNames(isHighlighted && "is-highlighted", isFocused && "is-focused")}
-            onClickCapture={onClick}
+            onClickCapture={handleClickCapture}
             onDoubleClick={onDoubleClick}
         >
             <td data-label={MODULE_SAMPLE_COLUMN_LABELS.waveform}>

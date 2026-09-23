@@ -49,6 +49,7 @@ const TOUCH_GUIDE: readonly GuideSection[] = [
                 gesture: "A or B under the cloud",
                 meaning: "plays that end and selects it: every sample tapped next becomes it, until it is tapped again",
             },
+            { gesture: "A or B while empty, with a sample in hand", meaning: "takes that sample as that end" },
             { gesture: "× beside A or B", meaning: "lets that end go" },
             { gesture: "⇄", meaning: "swaps the ends and mirrors the weight" },
             {
@@ -91,6 +92,7 @@ const POINTER_GUIDE: readonly GuideSection[] = [
                 meaning:
                     "plays that end and selects it: every sample clicked next becomes it, until it is clicked again",
             },
+            { gesture: "A or B while empty, with a sample in hand", meaning: "takes that sample as that end" },
             { gesture: "× beside A or B", meaning: "lets that end go" },
             { gesture: "⇄", meaning: "swaps the ends and mirrors the weight" },
             {

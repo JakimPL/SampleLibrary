@@ -125,10 +125,34 @@ describe("SampleDetailPanel", () => {
             "Categories",
         ]);
         expect(screen.queryByText("Category")).not.toBeInTheDocument();
-        expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/module-1");
-        expect(screen.getByRole("button", { name: "Occurrences (1)" })).toHaveAttribute("aria-pressed", "true");
+        expect(screen.getByRole("button", { name: "Info" })).toHaveAttribute("aria-pressed", "true");
+        expect(screen.getByRole("button", { name: "Occurrences (1)" })).toHaveAttribute("aria-pressed", "false");
         expect(screen.getByRole("button", { name: "Similar (0)" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Co-occurs" })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("button", { name: "Occurrences (1)" }));
+
+        expect(screen.getByRole("link", { name: "A Song" })).toHaveAttribute("href", "/modules/module-1");
+    });
+
+    it("opens on the sample's own facts, its listings in tabs beside them", async () => {
+        getSample.mockResolvedValue(SAMPLE_DETAIL);
+        getSampleRelations.mockResolvedValue([]);
+        getSimilarSamples.mockResolvedValue([]);
+        useSelectionStore.getState().focusSample("abc");
+
+        const { container } = renderPanel();
+
+        await screen.findByRole("heading", { name: "kick" });
+        expect([...container.querySelectorAll(".detail-tabs button")].map((button) => button.textContent)).toEqual([
+            "Info",
+            "Similar (0)",
+            "Occurrences (1)",
+            "Relations (0)",
+            "Co-occurs",
+        ]);
+        expect(screen.getByText("Label")).toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
     });
 
     it("lists the sample files a sample was found in beside its module slots, marking a file gone since its scan", async () => {
@@ -150,7 +174,8 @@ describe("SampleDetailPanel", () => {
 
         renderPanel();
 
-        expect(await screen.findByRole("button", { name: "Occurrences (2)" })).toHaveAttribute("aria-pressed", "true");
+        fireEvent.click(await screen.findByRole("button", { name: "Occurrences (2)" }));
+
         expect(screen.getByText("Kicks/Kick 01.wav")).toBeInTheDocument();
         expect(screen.getAllByText("unavailable")).toHaveLength(1);
         expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
@@ -179,6 +204,8 @@ describe("SampleDetailPanel", () => {
         expect(screen.getByText("snare_909")).toBeInTheDocument();
         expect(screen.getByText("SNARE")).toBeInTheDocument();
         expect(screen.getByText("1.500")).toBeInTheDocument();
+        expect(screen.getByRole("columnheader", { name: "Distance" })).toBeInTheDocument();
+        expect(screen.queryByRole("columnheader", { name: "Category" })).not.toBeInTheDocument();
         expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
     });
 
@@ -230,6 +257,7 @@ describe("SampleDetailPanel", () => {
         getSimilarSamples.mockResolvedValue([]);
         useSelectionStore.getState().focusSample("abc");
         renderPanel();
+        fireEvent.click(await screen.findByRole("button", { name: "Occurrences (1)" }));
         const row = await waitFor(() => screen.getByRole("row", { name: /A Song/ }));
 
         fireEvent.click(row, { detail: 1 });

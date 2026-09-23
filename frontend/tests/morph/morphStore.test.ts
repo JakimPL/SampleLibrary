@@ -68,21 +68,27 @@ describe("naming an end outright", () => {
     it("makes a sample the first end and keeps the second unless it is the same sample", () => {
         useMorphStore.getState().join("a", "b");
 
-        useMorphStore.getState().setFirst("c");
+        useMorphStore.getState().setEnd("first", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "c", second: "b" });
 
-        useMorphStore.getState().setFirst("b");
+        useMorphStore.getState().setEnd("first", "b");
         expect(useMorphStore.getState()).toMatchObject({ first: "b", second: null });
     });
 
     it("makes a sample the second end and keeps the first unless it is the same sample", () => {
         useMorphStore.getState().join("a", "b");
 
-        useMorphStore.getState().setSecond("c");
+        useMorphStore.getState().setEnd("second", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "a", second: "c" });
 
-        useMorphStore.getState().setSecond("a");
+        useMorphStore.getState().setEnd("second", "a");
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: "a" });
+    });
+
+    it("names an end with the selection left where it was", () => {
+        useMorphStore.getState().setEnd("second", A);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: A, selectedEnd: null });
     });
 
     it("lets one end go and keeps the other", () => {
@@ -91,7 +97,7 @@ describe("naming an end outright", () => {
         useMorphStore.getState().clearEnd("first");
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: B });
 
-        useMorphStore.getState().setFirst(A);
+        useMorphStore.getState().setEnd("first", A);
         useMorphStore.getState().clearEnd("second");
         expect(useMorphStore.getState()).toMatchObject({ first: A, second: null });
     });
@@ -106,7 +112,7 @@ describe("the render on screen", () => {
         expect(useMorphStore.getState().renderedWeight).toBe(0.25);
 
         useMorphStore.getState().setWeight(0.75);
-        useMorphStore.getState().setFirst(A);
+        useMorphStore.getState().setEnd("first", A);
         expect(useMorphStore.getState().renderedWeight).toBe(0.25);
     });
 
@@ -119,7 +125,7 @@ describe("the render on screen", () => {
         {
             name: "another end is named",
             change: () => {
-                useMorphStore.getState().setSecond(C);
+                useMorphStore.getState().setEnd("second", C);
             },
         },
         {

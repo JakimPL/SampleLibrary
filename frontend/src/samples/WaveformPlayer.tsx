@@ -2,11 +2,13 @@ import type { ChangeEvent, ReactElement } from "react";
 import { useEffect } from "react";
 
 import { sampleAudioUrl } from "../api/samples";
+import { useLayoutMode } from "../layout/useLayoutMode";
+import { classNames } from "../shared/classNames";
 import { DownloadLink } from "../shared/DownloadLink";
 import { formatDuration } from "../shared/format";
 import { useAudioPreview } from "./useAudioPreview";
 import { useWaveformPlayer } from "./useWaveformPlayer";
-import { NO_TRACES, WaveformView } from "./WaveformView";
+import { NO_TRACES, type WaveformNotice, WaveformView } from "./WaveformView";
 
 export interface RateOption {
     readonly rateHz: number;
@@ -22,6 +24,11 @@ interface WaveformPlayerProps {
     readonly onRateChange: (rateHz: number) => void;
 }
 
+const AUDIO_UNAVAILABLE_NOTICE: WaveformNotice = {
+    text: "Audio unavailable: the file this sample is read from may be gone or changed since its scan.",
+    failed: true,
+};
+
 function describeRateOption(option: RateOption): string {
     const timeWord = option.eventCount === 1 ? "time" : "times";
     return `${String(option.rateHz)} Hz · played ${String(option.eventCount)} ${timeWord}`;
@@ -29,8 +36,10 @@ function describeRateOption(option: RateOption): string {
 
 /**
  * The full player of one sample: its decoded waveform over a transport, the rate it is heard at,
- * and a way to save it. It keeps to one voice with the shared preview element: playing here
- * silences a preview, and a preview starting anywhere pauses this player.
+ * and a way to save it. On a phone it is one row instead: the play button beside the waveform,
+ * the time in the frame's corner, the sample heard at the rate the library plays it. It keeps to
+ * one voice with the shared preview element: playing here silences a preview, and a preview
+ * starting anywhere pauses this player.
  */
 export function WaveformPlayer({
     sampleHash,
@@ -41,6 +50,7 @@ export function WaveformPlayer({
 }: WaveformPlayerProps): ReactElement {
     const player = useWaveformPlayer(sampleAudioUrl(sampleHash), rateHz);
     const { playingKey, stop } = useAudioPreview();
+    const compact = useLayoutMode().layout === "phone";
 
     useEffect(() => {
         if (playingKey !== null) {
@@ -65,42 +75,49 @@ export function WaveformPlayer({
         player.setRateHz(nextRateHz);
     }
 
+    const readout = `${formatDuration(player.currentTimeSeconds)} / ${formatDuration(player.durationSeconds)}`;
+    const playButton = (
+        <button type="button" className="play-btn" onClick={handleTogglePlay} disabled={!player.isReady}>
+            {player.isPlaying ? "⏸" : "▶"}
+        </button>
+    );
+
     return (
-        <div className="wave-panel">
-            <WaveformView
-                containerRef={player.containerRef}
-                isPlaying={player.isPlaying}
-                traces={NO_TRACES}
-                playheadFraction={null}
-                notice={null}
-            />
-            <div className="transport">
-                <button type="button" className="play-btn" onClick={handleTogglePlay} disabled={!player.isReady}>
-                    {player.isPlaying ? "⏸" : "▶"}
-                </button>
-                {player.hasFailed ? (
-                    <span className="cell-muted">
-                        Audio unavailable: the file this sample is read from may be gone or changed since its scan.
-                    </span>
-                ) : (
-                    <span className="time">
-                        {formatDuration(player.currentTimeSeconds)} / {formatDuration(player.durationSeconds)}
-                    </span>
-                )}
-                {rateOptions.length > 1 && (
-                    <label>
-                        Rate
-                        <select value={rateHz} onChange={handleRateChange}>
-                            {rateOptions.map((option) => (
-                                <option key={option.rateHz} value={option.rateHz}>
-                                    {describeRateOption(option)}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                )}
-                <DownloadLink href={sampleAudioUrl(sampleHash)} fileName={fileName} label="Save this sample" />
+        <div className={classNames("wave-panel", compact && "wave-panel-compact")}>
+            {compact && playButton}
+            <div className="wave-panel-frame">
+                <WaveformView
+                    containerRef={player.containerRef}
+                    isPlaying={player.isPlaying}
+                    traces={NO_TRACES}
+                    playheadFraction={null}
+                    notice={compact && player.hasFailed ? AUDIO_UNAVAILABLE_NOTICE : null}
+                />
+                {compact && !player.hasFailed && <span className="time wave-time">{readout}</span>}
             </div>
+            {!compact && (
+                <div className="transport">
+                    {playButton}
+                    {player.hasFailed ? (
+                        <span className="cell-muted">{AUDIO_UNAVAILABLE_NOTICE.text}</span>
+                    ) : (
+                        <span className="time">{readout}</span>
+                    )}
+                    {rateOptions.length > 1 && (
+                        <label>
+                            Rate
+                            <select value={rateHz} onChange={handleRateChange}>
+                                {rateOptions.map((option) => (
+                                    <option key={option.rateHz} value={option.rateHz}>
+                                        {describeRateOption(option)}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    )}
+                    <DownloadLink href={sampleAudioUrl(sampleHash)} fileName={fileName} label="Save this sample" />
+                </div>
+            )}
         </div>
     );
 }

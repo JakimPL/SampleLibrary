@@ -763,8 +763,10 @@ one takes the next hue; the legend is the picker, painting the most used top-lev
 person chooses their own, listing the painted ones with the rest behind a toggle inside a strip of at
 most three rows, and a sample carrying several painted tags takes the first it was given
 (`labelColoring.ts`). The Cloud panel opens in the category mode, painted from the categories, with
-the labels one click away. Every point outside the painted tags joins the substrate, on its
-recessive tone, and while a mode's sources load every point waits there.
+the labels one click away; a panel narrower than 480 pixels, a phone's among them, keeps its
+toolbar to the tabs and a Legend button, whose sheet holds that choice above the painted tags.
+Every point outside the painted tags joins the substrate, on its recessive tone, and while a
+mode's sources load every point waits there.
 
 A sample's detail lists every category of the scoring on show (`SampleDetail.categories`, closest
 first), each a dashed badge with its score beneath the label editor: a click writes the tag into the
@@ -800,8 +802,13 @@ container its stylesheet rules query, so a panel fits the width it was given rat
 The Sample Detail panel stands the focused sample's transport
 (`frontend/src/samples/SampleTransport.tsx`, the wavesurfer player over the one detail request
 the panel reads) at one fixed height over the detail, which scrolls beneath it, the same
-composition the phone's sample page shows, so the workspace's frame holds still while a sample or
-a morph sounds.
+composition the phone's sample page shows at half that height, where the player is one row, the
+play button beside the waveform with the time in its corner, while the workspace's player keeps
+the rate choice and the file beneath the waveform; the morph strip's lone-end player takes the
+same height. Either way the frame holds still while a sample or a morph sounds. The detail opens
+on an Info tab, the sample's label, categories and properties,
+with its spectral neighbors, occurrences, relations and co-occurrences each a tab beside it; the
+panel holds the tab, so it outlives a change of sample.
 
 Two shells mount that one registry. `frontend/src/layout/` reads the viewport as a layout mode,
 `phone` below 768 pixels of width or 560 of height and `workspace` otherwise, and the primary
@@ -815,7 +822,10 @@ a page pushes one, so the back button always leaves a page for the tab it came f
 began on a page returns to the tab last remembered in `phoneShellStore`. The tray above the tabs is
 the rendering of the highlight: it names whatever is in hand, the highlighted entity or the focused
 sample, and offers play, the stars, the heart and the way to open it on one row, the label being
-written on the page or from a held row. Each
+written on the page or from a held row. A finger's tap on any sample row, in the listing, among a
+sample's neighbors or in a module's samples, takes it in hand and plays it by the one rule in
+`frontend/src/workspace/rowTap.ts`; the neighbors keep their columns in a narrow panel, where the
+other mini tables stack each cell under its label. Each
 listing publishes the order of the rows it shows to `frontend/src/workspace/listingOrderStore.ts`,
 which a page's ‹ and › and the workspace's Alt+arrows step through, replacing the address each time.
 
@@ -925,7 +935,9 @@ shows the same pair as two slots, A and B. Tapping a slot selects it (`selectedE
 a chosen end plays and is taken in hand, and the selected end takes every sample tapped next
 through `takeSample`, called from the two places a tap takes a sample in hand, the plain click of
 `frontend/src/workspace/useEntityRowInteractions.ts` and `CloudPanel.handleSelect`, until the
-slot is tapped again; a sample already at the other end trades places. Once both ends are chosen a
+slot is tapped again; a sample already at the other end trades places. An empty slot at rest
+offers the sample in hand by name, read through the same `morphAnchorOf`, and one tap makes it that
+end through `setEnd`, the slot staying at rest. Once both ends are chosen a
 slider mirroring the knob's weight stands under the row, with the distance between the ends on a
 desktop, and the waveform button opens a waveform beneath it: the render drawn over both ends'
 traces, or with one end chosen that sample's own player. Every point is heard through
