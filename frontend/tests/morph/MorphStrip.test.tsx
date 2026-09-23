@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, type Mock, onTestFinished, vi } from "vitest";
 
 import type * as MorphApi from "../../src/api/morph";
 import type * as SamplesApi from "../../src/api/samples";
@@ -7,6 +7,7 @@ import { PHONE_MEDIA_QUERY } from "../../src/layout/layoutMode";
 import { DEFAULT_WEIGHT, useMorphStore } from "../../src/morph/morphStore";
 import { MorphStrip } from "../../src/morph/MorphStrip";
 import type * as AudioPreview from "../../src/samples/useAudioPreview";
+import { shortHash } from "../../src/shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../../src/shared/labels";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 import { stubMatchMedia } from "../support/matchMedia";
@@ -130,6 +131,41 @@ function slot(letter: "A" | "B"): HTMLElement {
     return screen.getByRole("button", { name: new RegExp(`^${letter}: `) });
 }
 
+/** A decoder that never gets to decode: the stubbed fetch answers nothing before it is asked. */
+class SilentDecoder {
+    decodeAudioData(): Promise<AudioBuffer> {
+        return Promise.reject(new Error("nothing to decode in a test"));
+    }
+}
+
+/**
+ * Stands in for the browser's fetch and its audio decoder, answering nothing, so a test can read
+ * what the waveform asked for; without a decoder the peaks hook asks for nothing at all.
+ */
+function watchFetches(): Mock<typeof fetch> {
+    const previousFetch = globalThis.fetch;
+    const previousContext = globalThis.AudioContext;
+    const fetching = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("no network in a test"));
+    vi.stubGlobal("fetch", fetching);
+    vi.stubGlobal("AudioContext", SilentDecoder);
+    onTestFinished(() => {
+        vi.stubGlobal("fetch", previousFetch);
+        vi.stubGlobal("AudioContext", previousContext);
+    });
+    return fetching;
+}
+
+function urlOf(input: RequestInfo | URL): string {
+    if (typeof input === "string") {
+        return input;
+    }
+    return input instanceof URL ? input.href : input.url;
+}
+
+function askedForARender(fetching: Mock<typeof fetch>): boolean {
+    return fetching.mock.calls.some(([input]) => urlOf(input).includes("/morph/audio"));
+}
+
 function letTheSliderGo(weight: number): void {
     const slider = screen.getByRole("slider", { name: "Point along the morph" });
     fireEvent.change(slider, { target: { value: String(weight) } });
@@ -161,11 +197,11 @@ interface WaveformCase {
 
 const WAVEFORM_CASES: readonly WaveformCase[] = [
     {
-        name: "asks for a weight to be let go before it draws anything",
+        name: "draws the slider's point as soon as both ends are chosen, and plays nothing",
         available: true,
         released: false,
-        drawn: false,
-        hint: /Let the slider go/,
+        drawn: true,
+        hint: null,
     },
     {
         name: "draws the render once a weight has been let go",
@@ -175,7 +211,7 @@ const WAVEFORM_CASES: readonly WaveformCase[] = [
         hint: null,
     },
     {
-        name: "says what it waits on while no inference process answers",
+        name: "says what it waits on while no inference process answers, and asks it for nothing",
         available: false,
         released: true,
         drawn: false,
@@ -200,18 +236,18 @@ describe("MorphStrip while the pair is open", () => {
     it("opens a lone chosen end's own player from the waveform button, and the morph's once both are chosen", async () => {
         serveMorph(true);
         serveSamples();
-        useMorphStore.getState().setFirst(FIRST);
+        useMorphStore.getState().setEnd("first", FIRST);
         render(<MorphStrip />);
         await screen.findByText("kick_808");
         expect(screen.getByRole("button", { name: "Waveform" })).toBeEnabled();
 
         openWaveform();
 
-        expect(screen.getByText(`player ${FIRST}`)).toBeInTheDocument();
+        expect(screen.getByText(`player ${FIRST}`).closest(".morph-strip-wave")).toHaveClass("morph-strip-wave-lone");
         expect(slider()).not.toBeInTheDocument();
 
         act(() => {
-            useMorphStore.getState().setSecond(SECOND);
+            useMorphStore.getState().setEnd("second", SECOND);
         });
 
         expect(screen.queryByText(`player ${FIRST}`)).not.toBeInTheDocument();
@@ -243,6 +279,44 @@ describe("MorphStrip while the pair is open", () => {
         expect(useMorphStore.getState().selectedEnd).toBe("second");
         expect(slot("A")).toHaveAttribute("aria-pressed", "false");
         expect(slot("B")).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("offers the sample in hand to an empty slot, which takes it and rests", async () => {
+        showEmpty();
+        act(() => {
+            useSelectionStore.getState().highlightEntity({ kind: "sample", hash: FIRST });
+        });
+
+        fireEvent.click(await screen.findByRole("button", { name: "A: take kick_808" }));
+
+        expect(useMorphStore.getState()).toMatchObject({ first: FIRST, second: null, selectedEnd: null });
+        expect(await screen.findByRole("button", { name: "A: kick_808" })).toHaveAttribute("aria-pressed", "false");
+        expect(screen.getByRole("button", { name: "B: click, then a sample" })).toBeInTheDocument();
+    });
+
+    it("offers the sample in hand by its short hash until the catalog names it", () => {
+        useSelectionStore.getState().highlightEntity({ kind: "sample", hash: FIRST });
+
+        showEmpty();
+
+        expect(slot("A")).toHaveAccessibleName(`A: take ${shortHash(FIRST)}`);
+    });
+
+    it("keeps a selected empty slot waiting whatever is in hand, and lets go on the tap", async () => {
+        showEmpty();
+        fireEvent.click(slot("A"));
+        act(() => {
+            useSelectionStore.getState().highlightEntity({ kind: "sample", hash: FIRST });
+        });
+        expect(screen.getByRole("button", { name: "A: now click a sample" })).toHaveAttribute("aria-pressed", "true");
+
+        fireEvent.click(slot("A"));
+
+        expect(await screen.findByRole("button", { name: "A: take kick_808" })).toHaveAttribute(
+            "aria-pressed",
+            "false",
+        );
+        expect(useMorphStore.getState().selectedEnd).toBeNull();
     });
 
     it("shows the sample the selected end took, still waiting for the next", async () => {
@@ -386,6 +460,7 @@ describe("MorphStrip opened out", () => {
     });
 
     it.each(WAVEFORM_CASES)("$name", async ({ available, released, drawn, hint }: WaveformCase) => {
+        const fetching = watchFetches();
         await showPairOpened(available);
         if (released) {
             letTheSliderGo(MOVED_WEIGHT);
@@ -396,10 +471,12 @@ describe("MorphStrip opened out", () => {
             drawn ? expect.anything() : null,
         );
         if (hint === null) {
-            expect(screen.queryByText(/Let the slider go|inference process answers/)).not.toBeInTheDocument();
+            expect(screen.queryByText(/inference process answers/)).not.toBeInTheDocument();
         } else {
             expect(screen.getByText(hint)).toBeInTheDocument();
         }
+        expect(play).toHaveBeenCalledTimes(released && available ? 1 : 0);
+        expect(askedForARender(fetching)).toBe(available);
     });
 
     it("draws the point the marker on the cloud let go at", async () => {

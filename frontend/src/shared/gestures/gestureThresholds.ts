@@ -6,3 +6,7 @@ export const LONG_PRESS_HOLD_MS = 500;
 export const TOUCH_HIT_RADIUS_PX = 22;
 /** How far apart two fingers must stand before their spread reads as a pinch. */
 export const PINCH_MINIMUM_DISTANCE_PX = 8;
+/** How long after one tap a second still pairs with it. */
+export const DOUBLE_TAP_INTERVAL_MS = 350;
+/** The click count a key press's click is reported with, which tells it from a pointer's. */
+export const KEYBOARD_CLICK_DETAIL = 0;

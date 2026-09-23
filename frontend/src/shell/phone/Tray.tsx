@@ -1,6 +1,6 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { NO_DECISIONS } from "../../api/curation";
 import { ModuleGlance } from "../../modules/ModuleGlance";
@@ -17,6 +17,7 @@ import { useSampleDetail } from "../../samples/useSampleDetail";
 import { useSamplePreview } from "../../samples/useSamplePreview";
 import { classNames } from "../../shared/classNames";
 import { shortHash } from "../../shared/format";
+import { useDoubleTap } from "../../shared/gestures/useDoubleTap";
 import { Icon } from "../../shared/icons/Icon";
 import { UNNAMED_SAMPLE_LABEL } from "../../shared/labels";
 import { OptionalLabel } from "../../shared/OptionalLabel";
@@ -39,6 +40,25 @@ export function useEntityInHand(): EntityRef | null {
     return useMemo(
         () => highlighted ?? (focusedSampleHash === null ? null : { kind: "sample", hash: focusedSampleHash }),
         [highlighted, focusedSampleHash],
+    );
+}
+
+interface TrayIdentityProps {
+    readonly entity: EntityRef;
+    readonly children: ReactNode;
+}
+
+/** The tray's name column, which a double tap opens as a page, as › does. */
+function TrayIdentity({ entity, children }: TrayIdentityProps): ReactElement {
+    const navigate = useNavigate();
+    const { onClick } = useDoubleTap(() => {
+        void navigate(entityRoute(entity));
+    });
+
+    return (
+        <button type="button" className="tray-identity" onClick={onClick}>
+            {children}
+        </button>
     );
 }
 
@@ -80,7 +100,7 @@ function SampleTray({ hash }: EntityTrayProps): ReactElement {
                         <span aria-hidden>▶</span>
                     )}
                 </button>
-                <div className="tray-identity">
+                <TrayIdentity entity={{ kind: "sample", hash }}>
                     <span className="tray-name">
                         {name === null ? (
                             <span className="mono">{shortHash(hash)}</span>
@@ -101,7 +121,7 @@ function SampleTray({ hash }: EntityTrayProps): ReactElement {
                             />
                         )}
                     </span>
-                </div>
+                </TrayIdentity>
                 {sample !== null && (
                     <>
                         <RatingStars
@@ -140,13 +160,13 @@ function ModuleTray({ hash }: EntityTrayProps): ReactElement {
                 <span className="tray-glyph">
                     <Icon name="modules" label={null} />
                 </span>
-                <div className="tray-identity">
+                <TrayIdentity entity={{ kind: "module", hash }}>
                     {state.status === "success" ? (
                         <ModuleGlance hash={hash} module={state.data} />
                     ) : (
                         <span className="tray-name mono">{shortHash(hash)}</span>
                     )}
-                </div>
+                </TrayIdentity>
                 <Link to={entityRoute({ kind: "module", hash })} className="tray-open" aria-label="Open module">
                     ›
                 </Link>
@@ -163,8 +183,9 @@ interface TrayProps {
 /**
  * The strip above the tabs naming the entity in hand, where the highlight a row or a cloud point
  * gets becomes something to act on, all on one row: a sample plays and pauses from its thumbnail,
- * takes its stars and its heart, and opens from ›; a module names itself and opens. The label is
- * written on the sample's page or from a held row. With nothing in hand the strip shows
+ * takes its stars and its heart, and opens from › or from a double tap on its name; a module names
+ * itself and opens the same two ways. The label is written on the sample's page or from a held
+ * row. With nothing in hand the strip shows
  * `idleHint`, or takes no room at all: the cloud keeps its slot, so a tap that fills the tray
  * leaves the points where they were.
  */

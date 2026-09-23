@@ -68,21 +68,27 @@ describe("naming an end outright", () => {
     it("makes a sample the first end and keeps the second unless it is the same sample", () => {
         useMorphStore.getState().join("a", "b");
 
-        useMorphStore.getState().setFirst("c");
+        useMorphStore.getState().setEnd("first", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "c", second: "b" });
 
-        useMorphStore.getState().setFirst("b");
+        useMorphStore.getState().setEnd("first", "b");
         expect(useMorphStore.getState()).toMatchObject({ first: "b", second: null });
     });
 
     it("makes a sample the second end and keeps the first unless it is the same sample", () => {
         useMorphStore.getState().join("a", "b");
 
-        useMorphStore.getState().setSecond("c");
+        useMorphStore.getState().setEnd("second", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "a", second: "c" });
 
-        useMorphStore.getState().setSecond("a");
+        useMorphStore.getState().setEnd("second", "a");
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: "a" });
+    });
+
+    it("names an end with the selection left where it was", () => {
+        useMorphStore.getState().setEnd("second", A);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: A, selectedEnd: null });
     });
 
     it("lets one end go and keeps the other", () => {
@@ -91,13 +97,26 @@ describe("naming an end outright", () => {
         useMorphStore.getState().clearEnd("first");
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: B });
 
-        useMorphStore.getState().setFirst(A);
+        useMorphStore.getState().setEnd("first", A);
         useMorphStore.getState().clearEnd("second");
         expect(useMorphStore.getState()).toMatchObject({ first: A, second: null });
     });
 });
 
 describe("the render on screen", () => {
+    const HEARD_WEIGHT = 0.1;
+    const SLIDER_WEIGHT = 0.75;
+    const MIRRORED_SLIDER_WEIGHT = 0.25;
+
+    it("draws the slider's point as soon as the second end is chosen", () => {
+        useMorphStore.getState().join(null, A);
+        expect(useMorphStore.getState().renderedWeight).toBeNull();
+
+        useMorphStore.getState().join(null, B);
+
+        expect(useMorphStore.getState().renderedWeight).toBe(DEFAULT_WEIGHT);
+    });
+
     it("records the weight a point was heard at, and keeps it while the pair stays", () => {
         useMorphStore.getState().join(A, B);
         useMorphStore.getState().setWeight(0.25);
@@ -106,45 +125,52 @@ describe("the render on screen", () => {
         expect(useMorphStore.getState().renderedWeight).toBe(0.25);
 
         useMorphStore.getState().setWeight(0.75);
-        useMorphStore.getState().setFirst(A);
+        useMorphStore.getState().setEnd("first", A);
         expect(useMorphStore.getState().renderedWeight).toBe(0.25);
     });
 
+    /** One change to the pair, and the point drawn once it has happened: the slider's own, or none. */
     interface PairChange {
         readonly name: string;
         readonly change: () => void;
+        readonly drawnAt: number | null;
     }
 
     const PAIR_CHANGES: readonly PairChange[] = [
         {
             name: "another end is named",
             change: () => {
-                useMorphStore.getState().setSecond(C);
+                useMorphStore.getState().setEnd("second", C);
             },
+            drawnAt: SLIDER_WEIGHT,
         },
         {
             name: "the anchor joins a new sample",
             change: () => {
                 useMorphStore.getState().join(A, C);
             },
+            drawnAt: SLIDER_WEIGHT,
         },
         {
             name: "the ends swap",
             change: () => {
                 useMorphStore.getState().swap();
             },
+            drawnAt: MIRRORED_SLIDER_WEIGHT,
         },
         {
             name: "an end is let go",
             change: () => {
                 useMorphStore.getState().clearEnd("first");
             },
+            drawnAt: null,
         },
         {
             name: "the pair clears",
             change: () => {
                 useMorphStore.getState().clear();
             },
+            drawnAt: null,
         },
         {
             name: "the selected end takes a sample",
@@ -152,17 +178,23 @@ describe("the render on screen", () => {
                 useMorphStore.getState().toggleSelectedEnd("second");
                 useMorphStore.getState().takeSample(C);
             },
+            drawnAt: SLIDER_WEIGHT,
         },
     ];
 
-    it.each(PAIR_CHANGES)("drops the render once $name", ({ change }: PairChange) => {
-        useMorphStore.getState().join(A, B);
-        useMorphStore.getState().markRendered();
+    it.each(PAIR_CHANGES)(
+        "draws the slider's point afresh, or nothing, once $name",
+        ({ change, drawnAt }: PairChange) => {
+            useMorphStore.getState().join(A, B);
+            useMorphStore.getState().setWeight(HEARD_WEIGHT);
+            useMorphStore.getState().markRendered();
+            useMorphStore.getState().setWeight(SLIDER_WEIGHT);
 
-        change();
+            change();
 
-        expect(useMorphStore.getState().renderedWeight).toBeNull();
-    });
+            expect(useMorphStore.getState().renderedWeight).toBe(drawnAt);
+        },
+    );
 });
 
 describe("the selected end", () => {

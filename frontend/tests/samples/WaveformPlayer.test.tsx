@@ -1,10 +1,12 @@
 import { act, fireEvent, render, renderHook, type RenderResult, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PHONE_MEDIA_QUERY } from "../../src/layout/layoutMode";
 import { NOMINAL_WAV_RATE_HZ } from "../../src/samples/nominalRate";
 import { samplePreview, useAudioPreview } from "../../src/samples/useAudioPreview";
 import type { RateOption } from "../../src/samples/WaveformPlayer";
 import { WaveformPlayer } from "../../src/samples/WaveformPlayer";
+import { stubMatchMedia } from "../support/matchMedia";
 
 const { instances, createMock } = vi.hoisted(() => {
     class FakeWaveSurfer {
@@ -209,5 +211,69 @@ describe("WaveformPlayer", () => {
             latestInstance().emit("finish");
         });
         expect(canvas).not.toHaveClass("is-playing");
+    });
+});
+
+describe("WaveformPlayer on a phone", () => {
+    beforeEach(() => {
+        stubMatchMedia(new Set([PHONE_MEDIA_QUERY]));
+    });
+
+    it("plays from one row, at the rate the library plays it, with neither a rate to choose nor a file to save", () => {
+        const { container } = renderPlayer({
+            rateOptions: [
+                { rateHz: 8363, eventCount: 1 },
+                { rateHz: NOMINAL_WAV_RATE_HZ, eventCount: 2 },
+            ],
+        });
+
+        expect(container.querySelector(".wave-panel")).toHaveClass("wave-panel-compact");
+        expect(screen.queryByLabelText("Rate")).not.toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "Save this sample" })).not.toBeInTheDocument();
+        act(() => {
+            latestInstance().emit("ready", 1.0);
+        });
+        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / NOMINAL_WAV_RATE_HZ, false);
+    });
+
+    it("reads the time in the frame's corner", () => {
+        const { container } = renderPlayer();
+
+        act(() => {
+            latestInstance().emit("ready", 0.93);
+        });
+        expect(container.querySelector(".wave-panel-frame .wave-time")).toHaveTextContent("0.00 s / 0.93 s");
+
+        act(() => {
+            latestInstance().emit("timeupdate", 0.5);
+        });
+        expect(container.querySelector(".wave-time")).toHaveTextContent("0.50 s / 0.93 s");
+    });
+
+    it("plays and pauses from its one button", () => {
+        renderPlayer();
+        act(() => {
+            latestInstance().emit("ready", 1.0);
+        });
+
+        fireEvent.click(screen.getByRole("button"));
+        expect(latestInstance().play).toHaveBeenCalled();
+
+        act(() => {
+            latestInstance().emit("play");
+        });
+        expect(screen.getByRole("button")).toHaveTextContent("⏸");
+    });
+
+    it("says in the frame itself when the audio cannot be loaded", () => {
+        const { container } = renderPlayer();
+
+        act(() => {
+            latestInstance().emit("error", new Error("404"));
+        });
+
+        expect(screen.getByRole("status")).toHaveTextContent(/Audio unavailable/);
+        expect(container.querySelector(".wave-time")).not.toBeInTheDocument();
+        expect(screen.getByRole("button")).toBeDisabled();
     });
 });

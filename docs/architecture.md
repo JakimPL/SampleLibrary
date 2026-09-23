@@ -612,7 +612,8 @@ The trims: gzip on every response past a kilobyte; the audio route answering fro
 an immutable cache lifetime and no catalog round trip; the category tags counted in SQL; the
 cloud's points without the hand label a viewer never read and with coordinates rounded to four
 decimals; the module points without a timestamp each; the categories as each sample's top one
-alone; a hover served by one preview route reading the stored thumbnail; the points cached for
+alone; a hover served by one preview route reading the stored thumbnail, drawn at the card's size
+and the screen's density; the points cached for
 the session in the browser and the label and category sources fetched only in the mode that
 paints by them. The classification term in the build belonged to the keyword categories the points
 carried then; the points now carry coordinates and rates alone, and the Cloud panel opens painted
@@ -783,8 +784,10 @@ one takes the next hue; the legend is the picker, painting the most used top-lev
 person chooses their own, listing the painted ones with the rest behind a toggle inside a strip of at
 most three rows, and a sample carrying several painted tags takes the first it was given
 (`labelColoring.ts`). The Cloud panel opens in the category mode, painted from the categories, with
-the labels one click away. Every point outside the painted tags joins the substrate, on its
-recessive tone, and while a mode's sources load every point waits there.
+the labels one click away; a panel narrower than 480 pixels, a phone's among them, keeps its
+toolbar to the tabs and a Legend button, whose sheet holds that choice above the painted tags.
+Every point outside the painted tags joins the substrate, on its recessive tone, and while a
+mode's sources load every point waits there.
 
 A sample's detail lists every category of the scoring on show (`SampleDetail.categories`, closest
 first), each a dashed badge with its score beneath the label editor: a click writes the tag into the
@@ -820,13 +823,19 @@ container its stylesheet rules query, so a panel fits the width it was given rat
 The Sample Detail panel stands the focused sample's transport
 (`frontend/src/samples/SampleTransport.tsx`, the wavesurfer player over the one detail request
 the panel reads) at one fixed height over the detail, which scrolls beneath it, the same
-composition the phone's sample page shows, so the workspace's frame holds still while a sample or
-a morph sounds.
+composition the phone's sample page shows at half that height, where the player is one row, the
+play button beside the waveform with the time in its corner, while the workspace's player keeps
+the rate choice and the file beneath the waveform; the morph strip's lone-end player takes the
+same height. Either way the frame holds still while a sample or a morph sounds. The detail opens
+on an Info tab, the sample's label, categories and properties,
+with its spectral neighbors, occurrences, relations and co-occurrences each a tab beside it; the
+panel holds the tab, so it outlives a change of sample.
 
 Two shells mount that one registry. `frontend/src/layout/` reads the viewport as a layout mode,
 `phone` below 768 pixels of width or 560 of height and `workspace` otherwise, and the primary
 pointer as an input mode, `touch` when it is coarse; both are mirrored to `<html data-layout
-data-input>` for the stylesheet. `AppShell` mounts `frontend/src/shell/phone/PhoneShell.tsx` for
+data-input>` for the stylesheet. The viewport meta and `touch-action: pan-x pan-y` on the root
+keep the page at one size, so a pinch and a double tap are the app's own to read. `AppShell` mounts `frontend/src/shell/phone/PhoneShell.tsx` for
 the phone: every panel registered as a tab gets a surface, mounted on its first visit and kept
 mounted out of sight (hidden and inert, never unmounted, so the cloud's canvas keeps its size and a
 list its scroll offset), while a sample, a module or a panel with no tab opens as a page over the
@@ -834,8 +843,12 @@ tabs in the same frame, with the shell's header carrying its name. The tabs repl
 a page pushes one, so the back button always leaves a page for the tab it came from; a visit that
 began on a page returns to the tab last remembered in `phoneShellStore`. The tray above the tabs is
 the rendering of the highlight: it names whatever is in hand, the highlighted entity or the focused
-sample, and offers play, the stars, the heart and the way to open it on one row, the label being
-written on the page or from a held row. Each
+sample, and offers play, the stars, the heart and the way to open it on one row, › or a double tap
+on the name, which `frontend/src/shared/gestures/doubleTap.ts` counts from the taps themselves,
+the label being written on the page or from a held row. A finger's tap on any sample row, in the listing, among a
+sample's neighbors or in a module's samples, takes it in hand and plays it by the one rule in
+`frontend/src/workspace/rowTap.ts`; the neighbors keep their columns in a narrow panel, where the
+other mini tables stack each cell under its label. Each
 listing publishes the order of the rows it shows to `frontend/src/workspace/listingOrderStore.ts`,
 which a page's ‹ and › and the workspace's Alt+arrows step through, replacing the address each time.
 
@@ -945,14 +958,17 @@ shows the same pair as two slots, A and B. Tapping a slot selects it (`selectedE
 a chosen end plays and is taken in hand, and the selected end takes every sample tapped next
 through `takeSample`, called from the two places a tap takes a sample in hand, the plain click of
 `frontend/src/workspace/useEntityRowInteractions.ts` and `CloudPanel.handleSelect`, until the
-slot is tapped again; a sample already at the other end trades places. Once both ends are chosen a
+slot is tapped again; a sample already at the other end trades places. An empty slot at rest
+offers the sample in hand by name, read through the same `morphAnchorOf`, and one tap makes it that
+end through `setEnd`, the slot staying at rest. Once both ends are chosen a
 slider mirroring the knob's weight stands under the row, with the distance between the ends on a
 desktop, and the waveform button opens a waveform beneath it: the render drawn over both ends'
 traces, or with one end chosen that sample's own player. Every point is heard through
 `frontend/src/morph/useMorphPlayback.ts`, which plays the render through the one preview element
 every sample plays through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is
 keyed by its own render's address) and records the weight in `morphStore`, so the waveform draws
-whichever control let go last. The opened strip states how far apart the two ends sit
+whichever control let go last; a pair just completed is drawn at the slider's point by the store's
+`pairOf` before any point of it is heard, so the ends are heard first. The opened strip states how far apart the two ends sit
 (`frontend/src/morph/MorphDistance.tsx`, over `GET /samples/{hash}/distance/{other}`), so the length
 of the path is read where the path is traveled. Both ends are carried into one frame before they blend: the API resolves the
 rate each is heard at by the one rule every reader of the catalog applies and hands both to the

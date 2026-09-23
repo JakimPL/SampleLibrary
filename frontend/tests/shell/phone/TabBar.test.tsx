@@ -55,12 +55,12 @@ describe("TabBar", () => {
         expect(screen.queryByTestId("morph-pair-dot")).not.toBeInTheDocument();
 
         act(() => {
-            useMorphStore.getState().setFirst("a");
+            useMorphStore.getState().setEnd("first", "a");
         });
         expect(screen.getByTestId("morph-pair-dot")).toHaveClass("is-half");
 
         act(() => {
-            useMorphStore.getState().setSecond("b");
+            useMorphStore.getState().setEnd("second", "b");
         });
         expect(screen.getByTestId("morph-pair-dot")).not.toHaveClass("is-half");
         expect(screen.getByRole("link", { name: "Cloud" })).toContainElement(screen.getByTestId("morph-pair-dot"));
@@ -74,7 +74,7 @@ describe("TabBar", () => {
         );
 
         act(() => {
-            useMorphStore.getState().setFirst("a");
+            useMorphStore.getState().setEnd("first", "a");
             useMorphStore.getState().toggleSelectedEnd("second");
         });
         expect(screen.getByTestId("morph-selected-end")).toHaveTextContent("B");

@@ -23,7 +23,6 @@ import type { EndpointReading } from "./useEndpoint";
 const TRACE_BUCKET_COUNT = 2048;
 const AT_THE_FIRST_END = 0;
 const WHOLE_FRAME = 1;
-const NOTHING_DRAWN_HINT = "Let the slider go to hear a point on the path and see it drawn.";
 const WAV_EXTENSION = ".wav";
 const OFFLINE_HINT = "The path is drawn once an inference process answers for it.";
 
@@ -32,7 +31,7 @@ interface MorphWaveformProps {
     readonly second: string;
     readonly firstReading: EndpointReading;
     readonly secondReading: EndpointReading;
-    /** The weight of the render on screen, or `null` while no point of the path has been asked for yet. */
+    /** The weight of the render on screen, or `null` while an end is missing. */
     readonly renderedWeight: number | null;
     readonly available: boolean;
 }
@@ -59,11 +58,13 @@ function traceOf(
  * really falls in time, all three decoded in the browser at the same detail, so a render reads
  * against its ends as one drawing rather than against a coarser sketch of them.
  *
- * The render sounds through the one preview element every sample plays through, which is what the
- * cloud's own marker plays as well, so a weight let go in either place is heard once. The waveform
- * follows that sound rather than making it, and the play button sounds the point already drawn
- * again. Where a point is refused or cannot be read, the frame says so in the server's own words,
- * in the place the contour would have stood.
+ * A pair just completed is drawn at the slider's point before it is heard, so the ends themselves
+ * are heard first. The render sounds through the one preview element every sample plays through,
+ * which is what the cloud's own marker plays as well, so a weight let go in either place is heard
+ * once. The waveform follows that sound rather than making it, and the play button sounds the
+ * point drawn. Where a point is refused or cannot be read, the frame says so in the server's own
+ * words, in the place the contour would have stood, and while no inference process answers the
+ * frame says what it waits on and asks for nothing.
  */
 export function MorphWaveform({
     first,
@@ -79,7 +80,7 @@ export function MorphWaveform({
 
     const longestSeconds = Math.max(firstReading.heardSeconds ?? 0, secondReading.heardSeconds ?? 0);
     const axisSeconds = longestSeconds > 0 ? longestSeconds : null;
-    const renderUrl = renderedWeight === null ? null : morphAudioUrl(first, second, renderedWeight);
+    const renderUrl = renderedWeight === null || !available ? null : morphAudioUrl(first, second, renderedWeight);
     const colors = useMemo(
         () => readMorphColors(renderedWeight ?? AT_THE_FIRST_END),
         // eslint-disable-next-line react-hooks/exhaustive-deps -- the theme signal is what changes the colors read
@@ -105,7 +106,7 @@ export function MorphWaveform({
     const playheadFraction =
         sounding && axisSeconds !== null ? Math.min(WHOLE_FRAME, progress.currentTimeSeconds / axisSeconds) : null;
     const playFailure = failure?.key === renderUrl ? failure.message : null;
-    const notice = noticeOf(render.refusal ?? playFailure, renderedWeight, available);
+    const notice = noticeOf(render.refusal ?? playFailure, available);
     const canPlay = renderedWeight !== null && available && render.refusal === null;
 
     function replay(): void {
@@ -154,12 +155,9 @@ function renderFileName(first: string, second: string, weight: number): string {
 }
 
 /** What stands where the render would: why it was refused, or what is waited on before there is one. */
-function noticeOf(failed: string | null, renderedWeight: number | null, available: boolean): WaveformNotice | null {
+function noticeOf(failed: string | null, available: boolean): WaveformNotice | null {
     if (failed !== null) {
         return { text: failed, failed: true };
     }
-    if (renderedWeight !== null) {
-        return null;
-    }
-    return { text: available ? NOTHING_DRAWN_HINT : OFFLINE_HINT, failed: false };
+    return available ? null : { text: OFFLINE_HINT, failed: false };
 }

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { CloudCategory, CloudLabel, CloudPoint, ModuleCloudPoint } from "../../api/cloud";
 import { type CloudAction, type CloudCommand, type CloudLink, CloudView } from "../../cloud/CloudView";
+import { type ColoringMode, ColoringModeChoice } from "../../cloud/ColoringModeChoice";
 import type { CloudEntityPoint } from "../../cloud/geometry";
 import {
     defaultPaintedTags,
@@ -37,7 +38,6 @@ import { CloudPointMenu } from "./CloudPointMenu";
 import { CloudTapCard } from "./CloudTapCard";
 
 type CloudTab = "samples" | "modules";
-type ColoringMode = "category" | "label";
 
 const NO_TAGS: readonly TopLevelTag[] = [];
 const EMPTY_CAPTIONS: Readonly<Record<ColoringMode, string>> = {
@@ -164,8 +164,9 @@ function useSampleColoring(mode: ColoringMode): {
 }
 
 /**
- * The cloud with its controls: the tab and the coloring, the legend as a row or as a sheet when
- * the panel is narrow, and the tools that move the view. Under touch a tapped point shows a card
+ * The cloud with its controls: the tab and the coloring, with the legend as a row, or, when the
+ * panel is narrow, the coloring and the legend together in a sheet behind one Legend button, and
+ * the tools that move the view. Under touch a tapped point shows a card
  * in place of the hover tooltip, except on a phone, where the tray names it; a held point opens
  * its menu. The strip along the bottom holds the morph's two ends: a selected end takes every
  * tapped point, and the slider and the waveform open under the row once the pair is whole.
@@ -295,26 +296,7 @@ export function CloudPanel(): ReactElement {
                 {tab === "samples" && (
                     <>
                         <span className="panel-filter-separator" aria-hidden />
-                        <span className="panel-filter-caption">Color by</span>
-                        <button
-                            type="button"
-                            aria-pressed={mode === "category"}
-                            onClick={() => {
-                                setMode("category");
-                            }}
-                        >
-                            Category
-                        </button>
-                        <button
-                            type="button"
-                            aria-pressed={mode === "label"}
-                            onClick={() => {
-                                setMode("label");
-                            }}
-                        >
-                            Labels
-                        </button>
-                        {legendAsSheet && tags.length > 0 && (
+                        {legendAsSheet ? (
                             <button
                                 type="button"
                                 aria-expanded={legendOpen}
@@ -324,6 +306,11 @@ export function CloudPanel(): ReactElement {
                             >
                                 Legend
                             </button>
+                        ) : (
+                            <>
+                                <span className="panel-filter-caption">Color by</span>
+                                <ColoringModeChoice mode={mode} onModeChange={setMode} />
+                            </>
                         )}
                     </>
                 )}
@@ -421,9 +408,12 @@ export function CloudPanel(): ReactElement {
             )}
             {legendOpen && (
                 <LegendSheet
+                    mode={mode}
+                    onModeChange={setMode}
                     tags={tags}
                     painted={painted}
                     onToggle={togglePainted}
+                    emptyCaption={EMPTY_CAPTIONS[mode]}
                     onClose={() => {
                         setLegendOpen(false);
                     }}

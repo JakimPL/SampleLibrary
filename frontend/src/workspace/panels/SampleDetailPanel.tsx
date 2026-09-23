@@ -11,7 +11,7 @@ import { hintFor } from "../../shared/hints";
 import { Loading } from "../../shared/Loading";
 import { useSelectionStore } from "../selectionStore";
 
-const DEFAULT_DETAIL_TAB: DetailTab = "occurrences";
+const DEFAULT_DETAIL_TAB: DetailTab = "info";
 
 interface FocusedSampleDetailProps {
     readonly sampleHash: string;
@@ -49,10 +49,11 @@ function FocusedSampleDetail({ sampleHash, tab, onTabChange }: FocusedSampleDeta
 }
 
 /**
- * The focused sample in full, from one detail request: its transport at one fixed height over its
- * detail, which scrolls beneath it, the same in the workspace's panel and on the phone's page. The
- * transport keeps a boundary of its own, so a player that fails leaves the detail readable, and
- * the listing tab is held here so it outlives each sample's own load.
+ * The focused sample in full, from one detail request: its transport at one fixed height, a row's
+ * on a phone, over its detail, which scrolls beneath it, the same in the workspace's panel and on
+ * the phone's page. The transport keeps a boundary of its own, so a player that fails leaves the
+ * detail readable. The detail opens on the sample's own facts, its listings in tabs beside them,
+ * and the tab is held here so it outlives each sample's own load.
  */
 export function SampleDetailPanel(): ReactElement {
     const focusedSampleHash = useSelectionStore((state) => state.focusedSampleHash);

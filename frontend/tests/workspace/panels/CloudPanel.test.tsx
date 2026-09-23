@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type * as CloudApi from "../../../src/api/cloud";
 import type * as CurationApi from "../../../src/api/curation";
@@ -131,6 +131,31 @@ vi.mock("../../../src/api/modules", async () => {
 const RIGHT_BUTTON = 2;
 /** Room for the legend's two requests to land while the whole suite runs at once. */
 const LEGEND_WAIT_MS = 4000;
+const NARROW_PANEL_WIDTH_PX = 300;
+const NARROW_PANEL_HEIGHT_PX = 600;
+const NARROW_RECT: DOMRect = {
+    x: 0,
+    y: 0,
+    width: NARROW_PANEL_WIDTH_PX,
+    height: NARROW_PANEL_HEIGHT_PX,
+    top: 0,
+    right: NARROW_PANEL_WIDTH_PX,
+    bottom: NARROW_PANEL_HEIGHT_PX,
+    left: 0,
+    toJSON: () => ({}),
+};
+
+/** The panel measured at a phone's width for the rest of the test, the setup's wide box back after it. */
+function narrowThePanel(): void {
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
+    const wide = spy.getMockImplementation();
+    spy.mockReturnValue(NARROW_RECT);
+    onTestFinished(() => {
+        if (wide !== undefined) {
+            spy.mockImplementation(wide);
+        }
+    });
+}
 
 /** What every test starts from: a renderer that answers, and a catalog that names any sample the strip offers. */
 beforeEach(() => {
@@ -311,6 +336,7 @@ describe("CloudPanel", () => {
         renderPanel();
 
         expect(screen.getByRole("button", { name: "Category" })).toHaveAttribute("aria-pressed", "true");
+        expect(screen.queryByRole("button", { name: "Legend" })).not.toBeInTheDocument();
         expect(await screen.findByRole("button", { name: /BASS DRUM/ }, { timeout: LEGEND_WAIT_MS })).toHaveAttribute(
             "aria-pressed",
             "true",
@@ -595,30 +621,41 @@ describe("CloudPanel on touch", () => {
         expect(await screen.findByText("sample route")).toBeInTheDocument();
     });
 
-    it("moves the legend into a sheet in a narrow panel", async () => {
-        vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-            x: 0,
-            y: 0,
-            width: 300,
-            height: 600,
-            top: 0,
-            right: 300,
-            bottom: 600,
-            left: 0,
-            toJSON: () => ({}),
-        });
+    it("moves the legend and the coloring's choice into a sheet in a narrow panel", async () => {
+        narrowThePanel();
         getCloudCategories.mockResolvedValue([{ sample_hash: FIRST_HASH, path: ["BASS DRUM"], score: 0.8 }]);
         getCategoryTags.mockResolvedValue([{ path: ["BASS DRUM"], sample_count: 1, rank: 0 }]);
         await renderedPanel();
 
+        expect(screen.queryByRole("button", { name: "Category" })).not.toBeInTheDocument();
         fireEvent.click(await screen.findByRole("button", { name: "Legend" }));
 
-        const sheet = screen.getByRole("dialog", { name: "Painted tags" });
+        const sheet = screen.getByRole("dialog", { name: "Legend" });
+        expect(within(sheet).getByRole("group", { name: "Color by" })).toBeInTheDocument();
+        expect(within(sheet).getByRole("button", { name: "Category" })).toHaveAttribute("aria-pressed", "true");
         expect(screen.queryByRole("group", { name: "Painted tags", hidden: false })).toBe(
             within(sheet).getByRole("group", { name: "Painted tags" }),
         );
         fireEvent.click(within(sheet).getByRole("button", { name: /BASS DRUM/ }));
         expect(within(sheet).getByRole("button", { name: /BASS DRUM/ })).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("keeps the coloring's choice in the sheet before any tag is painted", async () => {
+        narrowThePanel();
+        getCloudCategories.mockResolvedValue([]);
+        getCategoryTags.mockResolvedValue([]);
+        await renderedPanel();
+
+        fireEvent.click(screen.getByRole("button", { name: "Legend" }));
+
+        const sheet = screen.getByRole("dialog", { name: "Legend" });
+        expect(within(sheet).getByText(/No sample carries a category yet/)).toBeInTheDocument();
+        fireEvent.click(within(sheet).getByRole("button", { name: "Labels" }));
+        expect(within(sheet).getByRole("button", { name: "Labels" })).toHaveAttribute("aria-pressed", "true");
+        expect(await within(sheet).findByText(/No sample carries a label yet/)).toBeInTheDocument();
+        await waitFor(() => {
+            expect(getCloudLabels).toHaveBeenCalled();
+        });
     });
 
     it("steps the zoom and centers on the point in hand from the tools", async () => {
