@@ -78,6 +78,8 @@ class SamplePropertiesRepository(Protocol):
 
     def cataloged_slots(self, module_id: int) -> frozenset[tuple[int, int]]: ...
 
+    def sample_hashes_by_module(self) -> dict[str, frozenset[str]]: ...
+
 
 class PostgresSamplePropertiesRepository:
     """A SamplePropertiesRepository backed by class-table inheritance: a shared base table plus one
@@ -125,6 +127,18 @@ class PostgresSamplePropertiesRepository:
         )
         rows = self._connection.execute(statement).fetchall()
         return frozenset((int(row.instrument_index), int(row.sample_slot)) for row in rows)
+
+    def sample_hashes_by_module(self) -> dict[str, frozenset[str]]:
+        """The distinct samples each module holds, keyed by module hash, read in one query.
+
+        A module that uses a sample in several slots lists it once, which is what a comparison
+        between whole sets of samples wants.
+        """
+        statement = select(module.c.hash, sample_properties.c.sample_hash).select_from(_MOD_JOIN).distinct()
+        members: dict[str, set[str]] = {}
+        for row in self._connection.execute(statement):
+            members.setdefault(row.hash, set()).add(row.sample_hash)
+        return {module_hash: frozenset(sample_hashes) for module_hash, sample_hashes in members.items()}
 
     def _list_by(self, condition: ColumnElement[bool]) -> tuple[TrackerSampleProperties, ...]:
         xm_statement = (
