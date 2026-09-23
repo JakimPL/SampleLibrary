@@ -116,7 +116,7 @@ class PostgresModuleCloudCoordinateRepository:
     """A ModuleCloudCoordinateRepository backed by the catalog's ``module_cloud_coordinates`` table.
 
     Mirrors PostgresCloudCoordinateRepository's replace-outright upsert: a position comes from a
-    whole embedding run's fit, placeholder or genuine, so the latest run's value always wins.
+    whole embedding run's fit, so the latest run's value always wins.
     """
 
     def __init__(self, connection: Connection) -> None:

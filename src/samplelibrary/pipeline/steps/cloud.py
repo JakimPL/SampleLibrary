@@ -12,11 +12,11 @@ from samplelibrary.pipeline.steps.kinds import Inputs, PassStep, PointerStep, St
 from samplelibrary.pipeline.steps.shared import operational_flags, vectors_digest
 
 CLOUD: Final[str] = "cloud"
-MODULE_PLACEHOLDERS: Final[str] = "module-placeholders"
+MODULE_CLOUD: Final[str] = "module-cloud"
 
 
 def cloud_steps() -> tuple[Step, ...]:
-    """The cloud a viewer sees, laid out from the learned experiment, and the modules placed beside it."""
+    """The cloud a viewer sees, laid out from the learned experiment, and the modules laid out from its vectors."""
     return (
         PointerStep(
             name=CLOUD,
@@ -27,7 +27,7 @@ def cloud_steps() -> tuple[Step, ...]:
             + operational_flags(context, workers=False, device=True),
             outputs=_shown,
         ),
-        PassStep(name=MODULE_PLACEHOLDERS, requires=(MODULES,), command=lambda context: ("cloud", "placeholders")),
+        PassStep(name=MODULE_CLOUD, requires=(MODULES, CLOUD), command=lambda context: ("cloud", "modules")),
     )
 
 

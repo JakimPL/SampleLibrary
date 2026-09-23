@@ -87,8 +87,8 @@ def _cloud_embed(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
-def _cloud_placeholders(argv: list[str], *, prog: str) -> None:
-    from samplecloud.placeholder_modules import main
+def _cloud_modules(argv: list[str], *, prog: str) -> None:
+    from samplecloud.modules.run import main
 
     main(argv, prog=prog)
 
@@ -172,9 +172,9 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
                 name="embed", summary="Extract sample features and reduce them to cloud coordinates.", run=_cloud_embed
             ),
             Command(
-                name="placeholders",
-                summary="Place every cataloged module at a placeholder cloud coordinate.",
-                run=_cloud_placeholders,
+                name="modules",
+                summary="Lay the cataloged modules out on the cloud by the sounds of their samples.",
+                run=_cloud_modules,
             ),
             Command(
                 name="evaluate",

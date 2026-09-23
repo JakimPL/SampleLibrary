@@ -225,3 +225,17 @@ def test_cataloged_slots_for_a_module_with_no_occurrences_returns_nothing(
 
 def test_list_for_sample_finds_nothing_for_an_unreferenced_sample(connection: Connection, sample_hash_b: str) -> None:
     assert PostgresSamplePropertiesRepository(connection).list_for_sample(sample_hash_b) == ()
+
+
+def test_sample_hashes_by_module_lists_each_sample_once_per_module(
+    connection: Connection, stored_module: Module, stored_sample: Sample
+) -> None:
+    repository = PostgresSamplePropertiesRepository(connection)
+    repository.upsert(_xm_properties(stored_module.hash, stored_sample.hash, sample_slot=0))
+    repository.upsert(_xm_properties(stored_module.hash, stored_sample.hash, sample_slot=1))
+
+    assert repository.sample_hashes_by_module() == {stored_module.hash: frozenset({stored_sample.hash})}
+
+
+def test_sample_hashes_by_module_is_empty_for_an_empty_catalog(connection: Connection) -> None:
+    assert not PostgresSamplePropertiesRepository(connection).sample_hashes_by_module()

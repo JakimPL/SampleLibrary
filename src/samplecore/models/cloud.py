@@ -27,10 +27,9 @@ class SampleCloudCoordinate(BaseModel):
 class ModuleCloudCoordinate(BaseModel):
     """Where one Module sits in the library's 2D embedding space, as of one embedding run.
 
-    Today's positions come from `samplecloud.placeholder_modules`, seeded from a module's own hash
-    rather than a genuine similarity fit -- standing in until a spectral-distance metric makes a
-    real per-module embedding possible. A later run's coordinate for a given hash entirely replaces
-    an earlier one, mirroring SampleCloudCoordinate's own replacement semantics.
+    Positions come from a UMAP fit over the distances between modules' sets of samples, so modules
+    holding similar sounds sit close together. A later run's coordinate for a given hash entirely
+    replaces an earlier one, mirroring SampleCloudCoordinate's own replacement semantics.
     """
 
     model_config = FROZEN

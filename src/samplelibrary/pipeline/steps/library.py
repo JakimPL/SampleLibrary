@@ -16,7 +16,7 @@ from samplelibrary.pipeline.steps.catalog import (
     THUMBNAILS,
     catalog_steps,
 )
-from samplelibrary.pipeline.steps.cloud import CLOUD, MODULE_PLACEHOLDERS, cloud_steps
+from samplelibrary.pipeline.steps.cloud import CLOUD, MODULE_CLOUD, cloud_steps
 from samplelibrary.pipeline.steps.descriptor import (
     DESCRIPTOR,
     EVALUATION,
@@ -40,7 +40,7 @@ CATALOG_STEPS: Final[tuple[str, ...]] = (
     EQUIVALENCE,
     RELINK,
 )
-CLOUD_STEPS: Final[tuple[str, ...]] = (CATEGORIES, EVALUATION, MODULE_EVALUATION, CLOUD, MODULE_PLACEHOLDERS)
+CLOUD_STEPS: Final[tuple[str, ...]] = (CATEGORIES, EVALUATION, MODULE_EVALUATION, CLOUD, MODULE_CLOUD)
 STEP_SETTINGS: Final[Mapping[str, type[StepSettings]]] = {
     CATEGORIES: CategorySettings,
     GRID_CACHE: GridCacheSettings,

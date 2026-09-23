@@ -365,10 +365,7 @@ export interface paths {
         };
         /**
          * Get Module Cloud
-         * @description Every module's placeholder position in the library's 2D embedding space.
-         *
-         *     Placeholder until a spectral-distance-based per-module embedding replaces it -- see
-         *     `samplecloud.placeholder_modules`.
+         * @description Every module's position in the library's 2D embedding space, placed by the sounds of its samples.
          */
         readonly get: operations["get_module_cloud_api_cloud_modules_get"];
         readonly put?: never;

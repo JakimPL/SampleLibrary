@@ -46,6 +46,18 @@ describe("normalizePoints", () => {
         expect(normalized[normalized.length - 1]).toEqual({ ref: sampleA, x: 1, y: 1 });
     });
 
+    it("centers the bulk of the points and keeps a distant island in view", () => {
+        const bulk = Array.from({ length: 200 }, (_, index) => point(sampleA, 10 + (index % 20), 10 + (index % 20)));
+        const island = Array.from({ length: 2 }, () => point(sampleB, -30, 19.5));
+
+        const normalized = normalizePoints([...bulk, ...island]);
+
+        const bulkXs = normalized.slice(0, bulk.length).map((entry) => entry.x);
+        expect((Math.min(...bulkXs) + Math.max(...bulkXs)) / 2).toBeCloseTo(0);
+        expect(normalized.every((entry) => Math.abs(entry.x) <= 1 && Math.abs(entry.y) <= 1)).toBe(true);
+        expect(normalized[normalized.length - 1]?.x).toBe(-1);
+    });
+
     it("does not divide by zero when every point shares a coordinate", () => {
         const points = [point(sampleA, 5, 5), point(sampleB, 5, 5)];
 

@@ -261,11 +261,7 @@ def _tags(connection: Connection, experiment_id: int | None) -> tuple[TagSummary
 
 @router.get("/modules")
 def get_module_cloud(connection: Connection = Depends(get_connection)) -> tuple[ModuleCloudPoint, ...]:
-    """Every module's placeholder position in the library's 2D embedding space.
-
-    Placeholder until a spectral-distance-based per-module embedding replaces it -- see
-    `samplecloud.placeholder_modules`.
-    """
+    """Every module's position in the library's 2D embedding space, placed by the sounds of its samples."""
     return tuple(
         ModuleCloudPoint(
             module_hash=coordinate.module_hash,
