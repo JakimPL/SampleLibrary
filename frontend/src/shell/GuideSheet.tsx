@@ -28,6 +28,7 @@ const TOUCH_GUIDE: readonly GuideSection[] = [
         entries: [
             { gesture: "Tap the waveform", meaning: "plays or pauses the sample in hand" },
             { gesture: "Tap a star or the heart", meaning: "rates the sample in hand, or keeps it close" },
+            { gesture: "Double-tap the name", meaning: "opens the sample or module as a page, as › does" },
         ],
     },
     {

@@ -612,7 +612,8 @@ The trims: gzip on every response past a kilobyte; the audio route answering fro
 an immutable cache lifetime and no catalog round trip; the category tags counted in SQL; the
 cloud's points without the hand label a viewer never read and with coordinates rounded to four
 decimals; the module points without a timestamp each; the categories as each sample's top one
-alone; a hover served by one preview route reading the stored thumbnail; the points cached for
+alone; a hover served by one preview route reading the stored thumbnail, drawn at the card's size
+and the screen's density; the points cached for
 the session in the browser and the label and category sources fetched only in the mode that
 paints by them. The classification term in the build belonged to the keyword categories the points
 carried then; the points now carry coordinates and rates alone, and the Cloud panel opens painted
@@ -813,7 +814,8 @@ panel holds the tab, so it outlives a change of sample.
 Two shells mount that one registry. `frontend/src/layout/` reads the viewport as a layout mode,
 `phone` below 768 pixels of width or 560 of height and `workspace` otherwise, and the primary
 pointer as an input mode, `touch` when it is coarse; both are mirrored to `<html data-layout
-data-input>` for the stylesheet. `AppShell` mounts `frontend/src/shell/phone/PhoneShell.tsx` for
+data-input>` for the stylesheet. The viewport meta and `touch-action: pan-x pan-y` on the root
+keep the page at one size, so a pinch and a double tap are the app's own to read. `AppShell` mounts `frontend/src/shell/phone/PhoneShell.tsx` for
 the phone: every panel registered as a tab gets a surface, mounted on its first visit and kept
 mounted out of sight (hidden and inert, never unmounted, so the cloud's canvas keeps its size and a
 list its scroll offset), while a sample, a module or a panel with no tab opens as a page over the
@@ -821,8 +823,9 @@ tabs in the same frame, with the shell's header carrying its name. The tabs repl
 a page pushes one, so the back button always leaves a page for the tab it came from; a visit that
 began on a page returns to the tab last remembered in `phoneShellStore`. The tray above the tabs is
 the rendering of the highlight: it names whatever is in hand, the highlighted entity or the focused
-sample, and offers play, the stars, the heart and the way to open it on one row, the label being
-written on the page or from a held row. A finger's tap on any sample row, in the listing, among a
+sample, and offers play, the stars, the heart and the way to open it on one row, › or a double tap
+on the name, which `frontend/src/shared/gestures/doubleTap.ts` counts from the taps themselves,
+the label being written on the page or from a held row. A finger's tap on any sample row, in the listing, among a
 sample's neighbors or in a module's samples, takes it in hand and plays it by the one rule in
 `frontend/src/workspace/rowTap.ts`; the neighbors keep their columns in a narrow panel, where the
 other mini tables stack each cell under its label. Each
@@ -944,7 +947,8 @@ traces, or with one end chosen that sample's own player. Every point is heard th
 `frontend/src/morph/useMorphPlayback.ts`, which plays the render through the one preview element
 every sample plays through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is
 keyed by its own render's address) and records the weight in `morphStore`, so the waveform draws
-whichever control let go last. The opened strip states how far apart the two ends sit
+whichever control let go last; a pair just completed is drawn at the slider's point by the store's
+`pairOf` before any point of it is heard, so the ends are heard first. The opened strip states how far apart the two ends sit
 (`frontend/src/morph/MorphDistance.tsx`, over `GET /samples/{hash}/distance/{other}`), so the length
 of the path is read where the path is traveled. Both ends are carried into one frame before they blend: the API resolves the
 rate each is heard at by the one rule every reader of the catalog applies and hands both to the

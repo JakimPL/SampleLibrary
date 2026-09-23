@@ -2,6 +2,7 @@ import type { KeyboardEvent, MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useMorphStore } from "../morph/morphStore";
+import { KEYBOARD_CLICK_DETAIL } from "../shared/gestures/gestureThresholds";
 import { OPENS_ENTITY_ATTRIBUTE } from "./RowOpenLink";
 import { type EntityRef, morphAnchorOf, useSelectionStore } from "./selectionStore";
 import { useIsHighlighted } from "./useIsHighlighted";
@@ -11,8 +12,6 @@ const ENTITY_ROUTE_PREFIX: Record<EntityRef["kind"], string> = {
     module: "/modules/",
 };
 
-/** A click a key press raised, which the browser reports with no click count. */
-const KEYBOARD_CLICK_DETAIL = 0;
 const PAIR_KEY = "m";
 
 export interface EntityRowInteractions {

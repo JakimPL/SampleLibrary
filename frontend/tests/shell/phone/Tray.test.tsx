@@ -1,5 +1,5 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as CloudApi from "../../../src/api/cloud";
@@ -102,8 +102,12 @@ function catalogAnswers(): void {
 function renderTray(idleHint: string | null = null): ReturnType<typeof render> {
     catalogAnswers();
     return render(
-        <MemoryRouter>
-            <Tray idleHint={idleHint} />
+        <MemoryRouter initialEntries={["/"]}>
+            <Routes>
+                <Route path="/" element={<Tray idleHint={idleHint} />} />
+                <Route path="/samples/:sampleHash" element={<p>sample page</p>} />
+                <Route path="/modules/:moduleHash" element={<p>module page</p>} />
+            </Routes>
         </MemoryRouter>,
     );
 }
@@ -152,6 +156,27 @@ describe("Tray", () => {
         expect(screen.getByRole("region", { name: "Sample in hand" })).toBeInTheDocument();
         expect(screen.getByRole("link", { name: "Open sample" })).toHaveAttribute("href", `/samples/${SAMPLE_HASH}`);
         expect(await screen.findByText("×3")).toBeInTheDocument();
+    });
+
+    it("opens the sample from a double tap on its name, and leaves a single tap alone", async () => {
+        useSelectionStore.getState().highlightEntity({ kind: "sample", hash: SAMPLE_HASH });
+        renderTray();
+        const name = await screen.findByText("kick");
+
+        fireEvent.click(name, { detail: 1, clientX: 10, clientY: 10 });
+        expect(screen.queryByText("sample page")).not.toBeInTheDocument();
+
+        fireEvent.click(name, { detail: 1, clientX: 12, clientY: 9 });
+        expect(await screen.findByText("sample page")).toBeInTheDocument();
+    });
+
+    it("opens the sample from one key press on its name", async () => {
+        useSelectionStore.getState().highlightEntity({ kind: "sample", hash: SAMPLE_HASH });
+        renderTray();
+
+        fireEvent.click(await screen.findByText("kick"), { detail: 0 });
+
+        expect(await screen.findByText("sample page")).toBeInTheDocument();
     });
 
     it("plays the sample at its library rate, pauses it and takes it up again", async () => {
@@ -205,5 +230,16 @@ describe("Tray", () => {
         expect(await screen.findByText("A Song")).toBeInTheDocument();
         expect(screen.getByRole("region", { name: "Module in hand" })).toBeInTheDocument();
         expect(screen.getByRole("link", { name: "Open module" })).toHaveAttribute("href", `/modules/${MODULE_HASH}`);
+    });
+
+    it("opens the module from a double tap on its name", async () => {
+        useSelectionStore.getState().highlightEntity({ kind: "module", hash: MODULE_HASH });
+        renderTray();
+        const title = await screen.findByText("A Song");
+
+        fireEvent.click(title, { detail: 1 });
+        fireEvent.click(title, { detail: 1 });
+
+        expect(await screen.findByText("module page")).toBeInTheDocument();
     });
 });

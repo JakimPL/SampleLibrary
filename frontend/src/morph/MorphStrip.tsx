@@ -121,9 +121,11 @@ function MorphPairWaveform({ first, second, playback }: PairProps): ReactElement
  * takes every sample tapped next until the slot is tapped again; an empty slot at rest takes the
  * sample in hand outright; × lets an end go and ⇄ swaps the ends. Once both ends are chosen the
  * slider stands under the row, and the waveform button opens a waveform beneath it: the morph
- * drawn over both ends, or a lone chosen end's own player. Letting the slider go sounds the render
- * through the shared preview element, the way the marker on the cloud does, and the waveform
- * draws whichever point was let go last. The selection lets go when the strip leaves the screen.
+ * drawn over both ends, or a lone chosen end's own player. The morph is drawn at the slider's
+ * point as soon as both ends are chosen, unheard, so the ends themselves are heard first; letting
+ * the slider go sounds a point through the shared preview element, the way the marker on the
+ * cloud does, and the waveform draws whichever point was let go last. The selection lets go when
+ * the strip leaves the screen.
  */
 export function MorphStrip(): ReactElement {
     const first = useMorphStore((state) => state.first);

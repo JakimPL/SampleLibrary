@@ -311,6 +311,11 @@ body,
     height: 100%;
 }
 
+/* The page keeps its size under a finger, so a pinch or a double tap reaches the cloud or the tray. */
+html {
+    touch-action: pan-x pan-y;
+}
+
 body {
     margin: 0;
     background: var(--surface-0);
@@ -1643,6 +1648,35 @@ table.data td .annotation-editor-input {
     gap: var(--space-3);
 }
 
+/* The canvas lies over its box out of the flow, so its bitmap never sizes the box it is drawn for. */
+.mini-waveform {
+    position: relative;
+    display: block;
+    width: 96px;
+    height: 28px;
+}
+
+.mini-waveform canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* The card's wave spans the card, as wide as its name, in the proportion its stored bitmap had. */
+.cloud-hover-tooltip .mini-waveform {
+    width: 100%;
+    min-width: 96px;
+    height: auto;
+    aspect-ratio: 96 / 28;
+}
+
+.thumbnail-button .mini-waveform {
+    width: 64px;
+    height: 20px;
+}
+
 .cloud-tap-card .glance {
     flex: 1 1 auto;
     min-width: 0;
@@ -2833,7 +2867,7 @@ table.data td .annotation-editor-input {
     color: var(--accent);
 }
 
-.tray-play canvas {
+.tray-play .mini-waveform {
     width: 48px;
     height: 20px;
 }
@@ -2855,6 +2889,19 @@ table.data td .annotation-editor-input {
     display: flex;
     flex-direction: column;
     gap: 1px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+/* A double tap opens the name, so it offers no word to select and no callout. */
+:root[data-input="touch"] .tray-identity {
+    user-select: none;
+    -webkit-touch-callout: none;
 }
 
 .tray-name {

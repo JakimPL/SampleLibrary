@@ -1,7 +1,8 @@
 import type { ReactElement, RefObject } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import type { WaveformPeak } from "../api/samples";
+import { bitmapOf, useCanvasBox } from "../layout/useCanvasBox";
 import { classNames } from "../shared/classNames";
 import { useThemeSignal } from "../theme/useThemeSignal";
 import { layoutWaveformBars, type WaveformBar } from "./waveformLayout";
@@ -27,14 +28,6 @@ export interface WaveformNotice {
     readonly failed: boolean;
 }
 
-interface CanvasSize {
-    readonly width: number;
-    readonly height: number;
-    /** Device pixels per CSS pixel, which the canvas is backed at so its contours stay as sharp as the screen allows. */
-    readonly ratio: number;
-}
-
-const UNMEASURED: CanvasSize = { width: 0, height: 0, ratio: 1 };
 const WHOLE_RATIO = 1;
 
 /**
@@ -104,37 +97,9 @@ export function WaveformView({
 }: WaveformViewProps): ReactElement {
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const traceCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const [size, setSize] = useState<CanvasSize>(UNMEASURED);
+    const size = useCanvasBox(wrapRef);
+    const bitmap = bitmapOf(size);
     const themeSignal = useThemeSignal();
-
-    useEffect(() => {
-        const wrap = wrapRef.current;
-        if (wrap === null) {
-            return undefined;
-        }
-
-        function apply(width: number, height: number): void {
-            const ratio = window.devicePixelRatio || WHOLE_RATIO;
-            setSize((current) =>
-                current.width === width && current.height === height && current.ratio === ratio
-                    ? current
-                    : { width, height, ratio },
-            );
-        }
-
-        const bounds = wrap.getBoundingClientRect();
-        apply(bounds.width, bounds.height);
-        const observer = new ResizeObserver((entries) => {
-            const entry = entries[0];
-            if (entry !== undefined) {
-                apply(entry.contentRect.width, entry.contentRect.height);
-            }
-        });
-        observer.observe(wrap);
-        return (): void => {
-            observer.disconnect();
-        };
-    }, []);
 
     useEffect(() => {
         const context = traceCanvasRef.current?.getContext("2d");
@@ -161,8 +126,8 @@ export function WaveformView({
                 <canvas
                     className="wave-traces"
                     ref={traceCanvasRef}
-                    width={size.width * size.ratio}
-                    height={size.height * size.ratio}
+                    width={bitmap.width}
+                    height={bitmap.height}
                     aria-hidden
                 />
             )}

@@ -22,7 +22,10 @@ export function snapWeight(weight: number): number {
 export interface MorphPair {
     readonly first: string | null;
     readonly second: string | null;
-    /** The weight of the render on screen, or `null` while no point of this pair's path has been asked for yet. */
+    /**
+     * The weight of the render on screen: the slider's point once both ends are chosen, then whichever
+     * point was let go last; `null` while an end is missing.
+     */
     readonly renderedWeight: number | null;
 }
 
@@ -61,10 +64,15 @@ export const INITIAL_MORPH_STATE: MorphState = {
     selectedEnd: null,
 };
 
-/** The ends as chosen, keeping the drawn render only while the pair it was drawn for stays. */
-function pairOf(state: MorphPair, first: string | null, second: string | null): MorphPair {
-    const unchanged = first === state.first && second === state.second;
-    return { first, second, renderedWeight: unchanged ? state.renderedWeight : null };
+/**
+ * The ends as chosen: a pair that stays keeps the render drawn for it, a pair just completed is
+ * drawn at `weight` before any point of it is heard, and a pair missing an end has nothing drawn.
+ */
+function pairOf(state: MorphPair, first: string | null, second: string | null, weight: number): MorphPair {
+    if (first === state.first && second === state.second) {
+        return { first, second, renderedWeight: state.renderedWeight };
+    }
+    return { first, second, renderedWeight: first !== null && second !== null ? weight : null };
 }
 
 /** The sample at the end opposite `end`. */
@@ -95,25 +103,32 @@ export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
         }
         const state = get();
         if (anchor !== null) {
-            set(pairOf(state, anchor, hash));
+            set(pairOf(state, anchor, hash, state.weight));
             return;
         }
         set(
-            state.first === null || state.first === hash ? pairOf(state, hash, null) : pairOf(state, state.first, hash),
+            state.first === null || state.first === hash
+                ? pairOf(state, hash, null, state.weight)
+                : pairOf(state, state.first, hash, state.weight),
         );
     },
     setEnd: (end, hash) => {
         const state = get();
         const other = otherEndOf(state, end) === hash ? null : otherEndOf(state, end);
-        set(end === "first" ? pairOf(state, hash, other) : pairOf(state, other, hash));
+        set(end === "first" ? pairOf(state, hash, other, state.weight) : pairOf(state, other, hash, state.weight));
     },
     clearEnd: (end) => {
         const state = get();
-        set(end === "first" ? pairOf(state, null, state.second) : pairOf(state, state.first, null));
+        set(
+            end === "first"
+                ? pairOf(state, null, state.second, state.weight)
+                : pairOf(state, state.first, null, state.weight),
+        );
     },
     swap: () => {
         const state = get();
-        set({ ...pairOf(state, state.second, state.first), weight: snapWeight(1 - state.weight) });
+        const weight = snapWeight(1 - state.weight);
+        set({ ...pairOf(state, state.second, state.first, weight), weight });
     },
     setWeight: (weight) => {
         set({ weight: snapWeight(weight) });
