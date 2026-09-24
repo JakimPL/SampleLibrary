@@ -219,7 +219,7 @@ describe("WaveformPlayer on a phone", () => {
         stubMatchMedia(new Set([PHONE_MEDIA_QUERY]));
     });
 
-    it("plays from one row, at the rate the library plays it, with neither a rate to choose nor a file to save", () => {
+    it("plays from one row, at the rate the library plays it, the file to save at the row's end and no rate to choose", () => {
         const { container } = renderPlayer({
             rateOptions: [
                 { rateHz: 8363, eventCount: 1 },
@@ -229,7 +229,9 @@ describe("WaveformPlayer on a phone", () => {
 
         expect(container.querySelector(".wave-panel")).toHaveClass("wave-panel-compact");
         expect(screen.queryByLabelText("Rate")).not.toBeInTheDocument();
-        expect(screen.queryByRole("link", { name: "Save this sample" })).not.toBeInTheDocument();
+        expect(container.querySelector(".wave-panel > :last-child")).toBe(
+            screen.getByRole("link", { name: "Save this sample" }),
+        );
         act(() => {
             latestInstance().emit("ready", 1.0);
         });

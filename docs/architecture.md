@@ -824,9 +824,10 @@ The Sample Detail panel stands the focused sample's transport
 (`frontend/src/samples/SampleTransport.tsx`, the wavesurfer player over the one detail request
 the panel reads) at one fixed height over the detail, which scrolls beneath it, the same
 composition the phone's sample page shows at half that height, where the player is one row, the
-play button beside the waveform with the time in its corner, while the workspace's player keeps
-the rate choice and the file beneath the waveform; the morph strip's lone-end player takes the
-same height. Either way the frame holds still while a sample or a morph sounds. The detail opens
+play button and the file to save at either side of the waveform with the time in its corner, while
+the workspace's player keeps the rate choice and the file beneath the waveform; both forms are
+`frontend/src/samples/WavePanel.tsx`, which the morph strip's waveform takes as well, at the same
+height. Either way the frame holds still while a sample or a morph sounds. The detail opens
 on an Info tab, the sample's label, categories and properties,
 with its spectral neighbors, occurrences, relations and co-occurrences each a tab beside it; the
 panel holds the tab, so it outlives a change of sample.

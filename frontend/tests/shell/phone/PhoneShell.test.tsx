@@ -91,15 +91,16 @@ describe("PhoneShell", () => {
         expect(screen.getByRole("link", { name: "Samples" })).toHaveAttribute("aria-current", "page");
     });
 
-    it("keeps the tray's slot on the Cloud tab, spelling the gestures out while nothing is in hand", async () => {
+    it("leaves the Cloud tab the whole height while nothing is in hand", async () => {
         renderShellAt("/cloud");
 
-        expect(await screen.findByText(/Click a point to hear it/)).toHaveClass("tray-hint");
+        expect(await screen.findByRole("heading", { level: 1, name: "Cloud" })).toBeInTheDocument();
         expect(document.querySelector(".phone-shell")).toHaveAttribute("data-tab", "cloud");
+        expect(document.querySelector(".tray")).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole("link", { name: "Samples" }));
         await screen.findByRole("heading", { level: 1, name: "Samples" });
 
-        expect(screen.queryByText(/Click a point to hear it/)).not.toBeInTheDocument();
+        expect(document.querySelector(".tray")).not.toBeInTheDocument();
     });
 
     it("keeps a tab mounted out of sight once it has been visited", async () => {

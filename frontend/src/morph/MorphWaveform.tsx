@@ -3,6 +3,7 @@ import { useMemo } from "react";
 
 import { morphAudioUrl } from "../api/morph";
 import { sampleAudioUrl } from "../api/samples";
+import { useLayoutMode } from "../layout/useLayoutMode";
 import { type AudioReading, useAudioPeaks } from "../samples/audioPeaks";
 import { useAudioPreview, usePreviewProgress } from "../samples/useAudioPreview";
 import {
@@ -12,6 +13,7 @@ import {
     type WaveformTrace,
     WaveformView,
 } from "../samples/WaveformView";
+import { WavePanel } from "../samples/WavePanel";
 import { DownloadLink } from "../shared/DownloadLink";
 import { formatDuration, shortHash } from "../shared/format";
 import { useThemeSignal } from "../theme/useThemeSignal";
@@ -50,7 +52,8 @@ function traceOf(
 }
 
 /**
- * The morph as a waveform, over the traces of the two samples it runs between.
+ * The morph as a waveform, over the traces of the two samples it runs between, laid out as a
+ * sample's player is: one row on a phone, the frame over a transport elsewhere.
  *
  * The frame spans the longer end, which holds still as the weight moves: a render lasts the
  * geometric path between the two ends' own lengths, so it always falls between them, and each end
@@ -77,6 +80,7 @@ export function MorphWaveform({
     const { play, failure } = useAudioPreview();
     const progress = usePreviewProgress();
     const themeSignal = useThemeSignal();
+    const compact = useLayoutMode().layout === "phone";
 
     const longestSeconds = Math.max(firstReading.heardSeconds ?? 0, secondReading.heardSeconds ?? 0);
     const axisSeconds = longestSeconds > 0 ? longestSeconds : null;
@@ -115,16 +119,12 @@ export function MorphWaveform({
         }
     }
 
+    const readout = `${formatDuration(sounding ? progress.currentTimeSeconds : 0)} / ${formatDuration(render.seconds ?? 0)}`;
+
     return (
-        <div className="wave-panel morph-wave">
-            <WaveformView
-                containerRef={null}
-                isPlaying={sounding}
-                traces={traces}
-                playheadFraction={playheadFraction}
-                notice={notice}
-            />
-            <div className="transport">
+        <WavePanel
+            compact={compact}
+            playButton={
                 <button
                     type="button"
                     className="play-btn"
@@ -134,18 +134,29 @@ export function MorphWaveform({
                 >
                     ▶
                 </button>
-                <span className="time">
-                    {formatDuration(sounding ? progress.currentTimeSeconds : 0)} / {formatDuration(render.seconds ?? 0)}
-                </span>
-                {renderUrl !== null && renderedWeight !== null && render.refusal === null && (
+            }
+            view={
+                <WaveformView
+                    containerRef={null}
+                    isPlaying={sounding}
+                    traces={traces}
+                    playheadFraction={playheadFraction}
+                    notice={notice}
+                />
+            }
+            readout={readout}
+            failure={null}
+            controls={null}
+            download={
+                renderUrl !== null && renderedWeight !== null && render.refusal === null ? (
                     <DownloadLink
                         href={renderUrl}
                         fileName={renderFileName(first, second, renderedWeight)}
                         label="Save this render"
                     />
-                )}
-            </div>
-        </div>
+                ) : null
+            }
+        />
     );
 }
 

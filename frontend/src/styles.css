@@ -1771,12 +1771,18 @@ table.data td .annotation-editor-input {
     height: 100%;
 }
 
-/* On a phone the player is one row: the play button beside the frame, the readout in the frame's corner. */
+/* On a phone the player is one row: the play button and the file at either side of the frame, the readout in its corner. */
 .wave-panel-compact {
     flex-direction: row;
     align-items: center;
     gap: var(--space-4);
-    padding-left: var(--space-4);
+    padding: 0 var(--space-4);
+}
+
+/* Where there is no file to save, the file's room stays, so the frame keeps its center. */
+.wave-panel-slot {
+    flex: 0 0 auto;
+    width: var(--control-height);
 }
 
 /* The frame the corner readout is positioned against; it carries the wrap in either form. */
@@ -1853,6 +1859,13 @@ table.data td .annotation-editor-input {
     color: var(--critical);
 }
 
+/* The words on a sliver of the frame's own ground, so they read over whatever contour lies behind them. */
+.wave-notice-text {
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-1);
+    background: var(--wave-bg);
+}
+
 .wave-playhead {
     position: absolute;
     top: 0;
@@ -1912,12 +1925,11 @@ table.data td .annotation-editor-input {
     --play-button-size: max(26px, var(--control-height));
 }
 
-.transport .download-link {
+.download-link {
     display: flex;
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    margin-left: auto;
     width: max(26px, var(--tap-target));
     height: max(26px, var(--tap-target));
     border: 1px solid var(--border);
@@ -1929,7 +1941,17 @@ table.data td .annotation-editor-input {
     text-decoration: none;
 }
 
-.transport .download-link:hover {
+.transport .download-link {
+    margin-left: auto;
+}
+
+/* In the row form the file matches the play button, so the frame stands between two controls of one size. */
+.wave-panel-compact .download-link {
+    width: var(--control-height);
+    height: var(--control-height);
+}
+
+.download-link:hover {
     color: var(--text-primary);
     border-color: var(--border-strong);
 }
@@ -2451,22 +2473,10 @@ table.data td .annotation-editor-input {
     gap: var(--space-3);
 }
 
-/* A waveform takes one fixed height under the slider, so opening it costs the cloud the same every time. */
-.morph-wave,
+/* A waveform takes the height a sample's player has over its detail, so opening it costs the cloud the same every time. */
 .morph-strip-wave {
     flex: 0 0 auto;
-    height: 160px;
-}
-
-/* A lone end's own player takes the height it has over a sample's detail: one row on a phone. */
-.morph-strip-wave-lone {
     height: var(--sample-transport-height);
-}
-
-.morph-wave .transport {
-    padding: 6px 0 0;
-    border-top: none;
-    background: transparent;
 }
 
 .morph-weight {
@@ -2812,15 +2822,6 @@ table.data td .annotation-editor-input {
     flex: 0 0 auto;
     border-top: 1px solid var(--border);
     background: var(--surface-2);
-}
-
-.tray-hint {
-    display: flex;
-    align-items: center;
-    min-height: 56px;
-    padding: 0 var(--space-6);
-    color: var(--text-muted);
-    font-size: var(--font-size-small);
 }
 
 /* A short viewport keeps the morph strip to its row and gives the cloud the tray's room: the strip

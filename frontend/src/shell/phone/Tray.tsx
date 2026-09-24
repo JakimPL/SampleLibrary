@@ -175,24 +175,17 @@ function ModuleTray({ hash }: EntityTrayProps): ReactElement {
     );
 }
 
-interface TrayProps {
-    /** What the tray says while nothing is in hand, or `null` to take no room then. */
-    readonly idleHint: string | null;
-}
-
 /**
  * The strip above the tabs naming the entity in hand, where the highlight a row or a cloud point
  * gets becomes something to act on, all on one row: a sample plays and pauses from its thumbnail,
  * takes its stars and its heart, and opens from › or from a double tap on its name; a module names
  * itself and opens the same two ways. The label is written on the sample's page or from a held
- * row. With nothing in hand the strip shows
- * `idleHint`, or takes no room at all: the cloud keeps its slot, so a tap that fills the tray
- * leaves the points where they were.
+ * row. With nothing in hand the strip takes no room, and the surface above has the whole height.
  */
-export function Tray({ idleHint }: TrayProps): ReactElement | null {
+export function Tray(): ReactElement | null {
     const entity = useEntityInHand();
     if (entity === null) {
-        return idleHint === null ? null : <div className="tray tray-hint">{idleHint}</div>;
+        return null;
     }
     return entity.kind === "sample" ? (
         <SampleTray key={entity.hash} hash={entity.hash} />

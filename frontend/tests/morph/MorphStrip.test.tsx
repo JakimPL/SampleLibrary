@@ -243,7 +243,7 @@ describe("MorphStrip while the pair is open", () => {
 
         openWaveform();
 
-        expect(screen.getByText(`player ${FIRST}`).closest(".morph-strip-wave")).toHaveClass("morph-strip-wave-lone");
+        expect(screen.getByText(`player ${FIRST}`).closest(".morph-strip-wave")).toBeInTheDocument();
         expect(slider()).not.toBeInTheDocument();
 
         act(() => {
@@ -405,6 +405,16 @@ describe("MorphStrip with a whole pair", () => {
 
         expect(await screen.findByText("distance 25.247")).toBeInTheDocument();
         expect(getSampleDistance).toHaveBeenCalledWith(FIRST, SECOND);
+    });
+
+    it("lays the morph's waveform out as one row on a phone, like a sample's player", async () => {
+        stubMatchMedia(new Set([PHONE_MEDIA_QUERY]));
+        await showPairOpened(true);
+
+        const panel = document.querySelector(".morph-strip-wave .wave-panel");
+        expect(panel).toHaveClass("wave-panel-compact");
+        expect(panel?.querySelector(".wave-panel-frame .wave-time")).toHaveTextContent("0.00 s / 0.00 s");
+        expect(panel?.lastElementChild).toBe(screen.getByRole("link", { name: "Save this render" }));
     });
 
     it("leaves the distance out on a phone", async () => {

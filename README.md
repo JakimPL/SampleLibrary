@@ -179,7 +179,7 @@ opens it, all on one row; a double tap on its name opens it as well. A tap on a 
 sample in hand and plays it; a held row offers
 its label. A sample or a module opens as a page of its own, whose ‹ and › walk the listing, so
 labeling a run of samples is one page after another; a sample's page plays it from one row over
-its detail, at the rate the library plays it. On the cloud, a tap plays a point, a drag moves, a
+its detail, at the rate the library plays it, with the file to save at the row's end. On the cloud, a tap plays a point, a drag moves, a
 pinch zooms, a hold opens a point's actions, and the Legend button opens the legend with the
 choice of what colors the points, categories or labels. The page itself keeps its size under a
 finger, so a pinch and a double tap always reach the cloud and the tray. The morph lives under the cloud as two
@@ -273,7 +273,8 @@ these rules:
    through both.
 4. Once both ends are chosen, the slider stands under the row, and the morph is drawn at the
    slider's point right away, unheard, so the ends themselves are heard first. The waveform button
-   opens a waveform beneath it: the morph drawn over both ends, or a lone chosen end's own player.
+   opens a waveform beneath it, laid out as a sample's player is and at its height: the morph drawn
+   over both ends, or a lone chosen end's own player.
 5. The marker on the cloud and the slider are one weight: let either go and that point plays and
    is drawn over both originals, with the distance between the two samples stated on a desktop.
 6. On a desktop, the right mouse button pressed on one point and released on another, a right-click
