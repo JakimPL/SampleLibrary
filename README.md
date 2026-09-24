@@ -100,6 +100,10 @@ just serve           # start the API
 just frontend-dev    # start the frontend in a second terminal, then open http://localhost:5173
 ```
 
+`just app` runs everything in one process instead: the library's database, the API with the built
+frontend (`just frontend-build`), and the morph renderer, opened in your browser. Without a config
+file it opens on pages that ask for your folders and write the config for you.
+
 `just rebuild` builds the whole library in one command: it reads your modules and sample folders
 into the catalog, finds near-duplicates, draws thumbnails, hears every sample with the listening
 model and gives it a category, teaches the descriptor, and lays out the cloud. Run it again whenever you add modules or samples: every step checks what it
@@ -208,6 +212,7 @@ so anyone on your network who reaches it can change your labels.
 | `just database` | Creates the role and the library, sandbox and test databases on the configured server, wherever they are missing |
 | `just rebuild [targets]` | Builds the library, or the `catalog` or `cloud` part of it, running only the steps whose inputs changed |
 | `just status [targets]` | Says what each step of the library would do now, and why |
+| `just app` | Runs the library's database, the API with the built frontend, and the morph renderer, and opens them in a browser |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
 | `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |

@@ -46,6 +46,7 @@ class RecordedCall:
 
 
 ROUTE_CASES = (
+    RouteCase(["app", "--no-browser"], "samplelibrary.app.cli.main", ["--no-browser"], "samplelibrary app"),
     RouteCase(["setup", "database"], "samplelibrary.setup.main", ["database"], "samplelibrary setup"),
     RouteCase(["reset", "--confirm"], "samplelibrary.reset.main", ["--confirm"], "samplelibrary reset"),
     RouteCase(["extract", "--workers", "2"], "sampleextract.cli.main", ["--workers", "2"], "samplelibrary extract"),

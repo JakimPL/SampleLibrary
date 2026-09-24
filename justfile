@@ -51,6 +51,10 @@ coverage:
 check: format lint test frontend-check
 
 [group("library")]
+app:
+    uv run samplelibrary app
+
+[group("library")]
 serve:
     uv run samplelibrary serve --reload
 
