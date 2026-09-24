@@ -1,0 +1,122 @@
+name: Application
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.inputs.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/package.json
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: extractions/setup-just@v4
+      - name: Read the release inputs
+        id: inputs
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: uv run --no-project python scripts/release_inputs.py --output "$GITHUB_OUTPUT" ${TAG:+--tag "$TAG"}
+      - name: Install the frontend's packages
+        run: npm ci --prefix frontend
+      - name: Build the wheel and its pinned requirements
+        env:
+          TRACKMOD: ${{ steps.inputs.outputs.trackmod }}
+        run: just package "$TRACKMOD"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: |
+            dist/samplelibrary-*.whl
+            dist/app-requirements.txt
+          if-no-files-found: error
+
+  executable:
+    name: Executable (${{ matrix.platform }})
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-22.04
+            extension: ""
+          - platform: windows-x64
+            runner: windows-latest
+            extension: .exe
+          - platform: macos-arm64
+            runner: macos-latest
+            extension: ""
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      EXECUTABLE: dist/SampleLibrary-${{ needs.package.outputs.version }}-${{ matrix.platform }}${{ matrix.extension }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: extractions/setup-just@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v8
+        with:
+          name: package
+          path: dist
+      - name: Build the executable
+        run: |
+          just executable
+          mv "dist/SampleLibrary${{ matrix.extension }}" "$EXECUTABLE"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.EXECUTABLE }}
+          archive: false
+          if-no-files-found: error
+      - name: Install and run the executable
+        run: uv run --no-project python scripts/smoke_test_app.py --executable "$EXECUTABLE" --work "$RUNNER_TEMP/smoke"
+      - name: Keep the smoke test's logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-test-logs-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/smoke/library/**/*.log
+            ${{ runner.temp }}/smoke/library/**/*.jsonl
+          if-no-files-found: ignore
+
+  release:
+    name: Draft the release
+    if: github.ref_type == 'tag'
+    needs: [package, executable]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: SampleLibrary-*
+          path: release
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          name: SampleLibrary ${{ needs.package.outputs.version }}
+          draft: true
+          files: release/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

@@ -1,0 +1,210 @@
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from collections.abc import Callable
+from pathlib import Path
+from typing import Final
+
+PORT: Final[int] = 8000
+ADDRESS: Final[str] = f"http://127.0.0.1:{PORT}"
+SETUP_ROUTE: Final[str] = f"{ADDRESS}/api/setup"
+STATS_ROUTE: Final[str] = f"{ADDRESS}/api/stats"
+POLL_SECONDS: Final[float] = 2.0
+REQUEST_SECONDS: Final[float] = 10.0
+INSTALL_SECONDS: Final[float] = 1800.0
+OPEN_SECONDS: Final[float] = 300.0
+BUILD_SECONDS: Final[float] = 900.0
+QUIT_SECONDS: Final[float] = 120.0
+MODULES_DIRECTORY_NAME: Final[str] = "modules"
+LIBRARY_DIRECTORY_NAME: Final[str] = "library"
+SERVER_PID_FILE: Final[Path] = Path("postgres") / "data" / "postmaster.pid"
+BUILD_TARGET: Final[str] = "catalog"
+WRITE_MODULES: Final[str] = """
+import sys
+from pathlib import Path
+from samplelibrary.sandbox.modules import sandbox_modules
+target = Path(sys.argv[1])
+target.mkdir(parents=True, exist_ok=True)
+for name, content in sandbox_modules().items():
+    (target / name).write_bytes(content)
+"""
+
+State = dict[str, object]
+
+
+class SmokeTestError(Exception):
+    """Raised when the application misses one step of the smoke test."""
+
+
+def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Start a built executable, build a small library in it through the setup pages' API, and quit it."
+    )
+    parser.add_argument("--executable", type=Path, required=True, help="The executable `just executable` built.")
+    parser.add_argument("--work", type=Path, required=True, help="An empty folder for the modules and the library.")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Walk a fresh installation through a person's first session: install, choose folders, build, quit.
+
+    The executable installs itself on its first start, so the first wait covers the download of
+    Python and every package. The library is built from the sandbox's generated modules, written by
+    the Python the executable installed, and its catalog must list them before the application quits
+    and stops its database.
+
+    Raises:
+        SystemExit: the application missed a step, with what it reported.
+    """
+    arguments = _parse_arguments(argv)
+    executable = arguments.executable.resolve()
+    work = arguments.work.resolve()
+    launch = subprocess.Popen([executable, "--no-browser", "--port", str(PORT)])  # pylint: disable=consider-using-with
+    try:
+        _first_session(executable, work, launch)
+    except SmokeTestError as error:
+        _stop(launch)
+        sys.exit(f"Smoke test failed: {error}")
+    print("Smoke test passed.")
+
+
+def _first_session(executable: Path, work: Path, launch: subprocess.Popen[bytes]) -> None:
+    modules = work / MODULES_DIRECTORY_NAME
+    library_root = work / LIBRARY_DIRECTORY_NAME
+    state = _wait_for_state(lambda state: "status" in state, seconds=INSTALL_SECONDS, launch=launch)
+    _step(f"The application answers with status {state['status']}.")
+    _write_modules(executable, modules)
+    _step(f"Wrote the sandbox modules into {modules}.")
+    _request("PUT", f"{SETUP_ROUTE}/sources", _sources(library_root, modules))
+    state = _wait_for_state(lambda state: state["status"] in ("ready", "failed"), seconds=OPEN_SECONDS)
+    if state["status"] != "ready":
+        raise SmokeTestError(f"the library did not open: {state['problem']}")
+    _step("The library is open.")
+    _request("POST", f"{SETUP_ROUTE}/builds", {"target": BUILD_TARGET})
+    _check_build(_wait_for_state(_build_ended, seconds=BUILD_SECONDS))
+    _check_catalog()
+    _request("POST", f"{SETUP_ROUTE}/quit", None)
+    _wait_until_closed()
+    launch.wait(timeout=QUIT_SECONDS)
+    _step("The application quit.")
+    if (library_root / SERVER_PID_FILE).exists():
+        raise SmokeTestError("the library's database is still running after the application quit")
+    _step("The library's database stopped.")
+
+
+def _write_modules(executable: Path, directory: Path) -> None:
+    """Write the sandbox's modules with the installed interpreter, which PyApp's `self python-path` names."""
+    python = subprocess.run(
+        [executable, "self", "python-path"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    subprocess.run([python, "-c", WRITE_MODULES, str(directory)], check=True)
+
+
+def _sources(library_root: Path, modules: Path) -> dict[str, object]:
+    return {
+        "library_root": str(library_root),
+        "module_source_directory": str(modules),
+        "sample_directories": [],
+        "sample_exclusions": [],
+    }
+
+
+def _build_ended(state: State) -> bool:
+    build = state["build"]
+    return isinstance(build, dict) and build["status"] != "running"
+
+
+def _check_build(state: State) -> None:
+    build = state["build"]
+    assert isinstance(build, dict)
+    if build["status"] != "completed":
+        log_tail = "\n".join(build["log_tail"])
+        raise SmokeTestError(f"the build ended {build['status']}: {build['problem']}\n{log_tail}")
+    _step(f"The {BUILD_TARGET} build completed.")
+
+
+def _check_catalog() -> None:
+    stats = _request("GET", STATS_ROUTE, None)
+    if not isinstance(stats, dict) or not stats["module_count"]:
+        raise SmokeTestError(f"the catalog lists no modules: {stats}")
+    _step(f"The catalog lists {stats['module_count']} modules and {stats['sample_count']} samples.")
+
+
+def _wait_for_state(
+    accept: Callable[[State], bool], *, seconds: float, launch: subprocess.Popen[bytes] | None = None
+) -> State:
+    """Poll the setup state until it passes ``accept``.
+
+    The executable may hand the application over to a process of its own and end, so only a failed
+    ending of ``launch`` stops the wait early.
+    """
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if launch is not None and launch.poll() not in (None, 0):
+            raise SmokeTestError(f"the executable ended with exit code {launch.returncode}")
+        state = _answered_state()
+        if state is not None and accept(state):
+            return state
+        time.sleep(POLL_SECONDS)
+    raise SmokeTestError(f"no expected answer within {seconds:.0f} seconds")
+
+
+def _wait_until_closed() -> None:
+    deadline = time.monotonic() + QUIT_SECONDS
+    while time.monotonic() < deadline:
+        if _answered_state() is None:
+            return
+        time.sleep(POLL_SECONDS)
+    raise SmokeTestError(f"the application still answers {QUIT_SECONDS:.0f} seconds after Quit")
+
+
+def _answered_state() -> State | None:
+    """The setup state, or None while nothing answers at the application's address."""
+    try:
+        state = _request("GET", f"{SETUP_ROUTE}/state", None)
+    except OSError:
+        return None
+    assert isinstance(state, dict)
+    return state
+
+
+def _stop(launch: subprocess.Popen[bytes]) -> None:
+    """Ask a running application to quit after a failed step, and end the executable if it still runs."""
+    if _answered_state() is not None:
+        _request("POST", f"{SETUP_ROUTE}/quit", None)
+    try:
+        launch.wait(timeout=QUIT_SECONDS)
+    except subprocess.TimeoutExpired:
+        launch.kill()
+
+
+def _request(method: str, url: str, body: dict[str, object] | None) -> object:
+    """Send one request, and return its decoded JSON answer.
+
+    Raises:
+        SmokeTestError: the application answers with an error.
+        OSError: nothing answers at the address.
+    """
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=REQUEST_SECONDS) as response:
+            content = response.read()
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise SmokeTestError(f"{method} {url} answered {error.code}: {detail}") from error
+    return json.loads(content) if content else None
+
+
+def _step(message: str) -> None:
+    print(f"==> {message}", flush=True)
+
+
+if __name__ == "__main__":
+    main()

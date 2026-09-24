@@ -345,3 +345,10 @@ no Node, no PostgreSQL and no checkout.
 trackmod has to be on PyPI for the executable to install; `just publish-trackmod` uploads it (uv asks
 for a PyPI token). To try an executable before that, `just executable --find-links dist` lets its
 first start install trackmod from the wheel in `dist/`.
+
+The Application workflow (`.github/workflows/app.yml`) builds the executable on GitHub for Linux,
+Windows and macOS. Each one is then installed on a fresh machine, builds a small library through the
+setup API (`scripts/smoke_test_app.py`) and quits. Start it from the Actions tab to try a build. To
+publish one, push a tag that names the project's version, such as `v0.1.0`: the workflow then drafts
+a release carrying the executables. Give every release a new version, because an executable installs
+its packages once per version.
