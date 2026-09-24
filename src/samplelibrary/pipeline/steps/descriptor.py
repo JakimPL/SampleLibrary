@@ -20,6 +20,7 @@ from sampledescriptor.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE
 from sampledescriptor.descriptors.shape import DEFAULT_WIDTH
 from sampledescriptor.geometry import DEFAULT_ANCHOR, Anchor
 from sampledescriptor.model_paths import descriptor_path
+from sampledescriptor.pretrained import PretrainedDescriptor, PretrainedDescriptorMissingError, pretrained_descriptor
 from sampledescriptor.registries import DEFAULT_CANONICALIZER_NAME
 from sampledescriptor.training.descriptor.cache import (
     DEFAULT_RETUNED_VIEW_COUNT,
@@ -41,7 +42,7 @@ from sampledescriptor.training.run.paths import RunFamily, finished_record_path,
 from sampledescriptor.training.run.settings import DEFAULT_RANDOM_SEED
 from samplelibrary.pipeline.context import PipelineContext
 from samplelibrary.pipeline.results import input_digest
-from samplelibrary.pipeline.settings import StepSettings
+from samplelibrary.pipeline.settings import DescriptorSource, StepSettings
 from samplelibrary.pipeline.steps.catalog import EQUIVALENCE, MODULES, NOTES, RELINK, SAMPLE_FILES
 from samplelibrary.pipeline.steps.kinds import (
     DerivedExperimentStep,
@@ -49,6 +50,7 @@ from samplelibrary.pipeline.steps.kinds import (
     GrowingExperimentStep,
     Inputs,
     Step,
+    StepRefused,
     TrainingRecords,
     directory_artifact_is_complete,
     local_artifact_is_complete,
@@ -79,6 +81,7 @@ LEARNED_KEY_PREFIX: Final[str] = "learned"
 SEALED_CHARACTERS: Final[int] = 16
 GRID_CACHE_INPUT: Final[str] = "grid cache"
 TEACHER_VECTORS: Final[str] = "teacher vectors"
+PRETRAINED_INPUT: Final[str] = "pretrained descriptor"
 DESCRIPTOR_INPUT: Final[str] = "descriptor"
 EXPERIMENT: Final[str] = "experiment"
 VECTORS: Final[str] = "vectors"
@@ -123,12 +126,14 @@ class EvaluationStepSettings(StepSettings):
     seed: int = DEFAULT_EVALUATION_SEED
 
 
-def descriptor_steps() -> tuple[Step, ...]:
+def descriptor_steps(source: DescriptorSource) -> tuple[Step, ...]:
     """The learned descriptor from its grid cache to the experiment describing every readable sample, and its scores.
 
     The cache and the training run are named by what they were built from, the finished model is
     kept under its own content, and the experiment is named by that model and the cache it
     described, so a library that stands still rebuilds none of them and one that grew rebuilds each.
+    A library taking the bundled descriptor stores that model in place of training one, under the
+    name its bytes give it.
     """
     return (
         FileArtifactStep(
@@ -139,16 +144,7 @@ def descriptor_steps() -> tuple[Step, ...]:
             command=_cache_command,
             complete=directory_artifact_is_complete(DESCRIPTION_FILE_NAME),
         ),
-        FileArtifactStep(
-            name=DESCRIPTOR,
-            requires=(GRID_CACHE, TEACHER, RELINK),
-            inputs=_descriptor_inputs,
-            artifact=_descriptor_run_model,
-            command=_train_command,
-            complete=local_artifact_is_complete,
-            training=_descriptor_training,
-            sealed_as=_sealed_descriptor,
-        ),
+        _descriptor_step(source),
         DerivedExperimentStep(
             name=EMBEDDING,
             requires=(DESCRIPTOR, GRID_CACHE),
@@ -173,13 +169,53 @@ def descriptor_steps() -> tuple[Step, ...]:
     )
 
 
+def _descriptor_step(source: DescriptorSource) -> FileArtifactStep:
+    match source:
+        case DescriptorSource.TRAINED:
+            return FileArtifactStep(
+                name=DESCRIPTOR,
+                requires=(GRID_CACHE, TEACHER, RELINK),
+                inputs=_descriptor_inputs,
+                artifact=_descriptor_run_model,
+                command=_train_command,
+                complete=local_artifact_is_complete,
+                training=_descriptor_training,
+                sealed_as=_sealed_descriptor,
+            )
+        case DescriptorSource.PRETRAINED:
+            return FileArtifactStep(
+                name=DESCRIPTOR,
+                requires=(),
+                inputs=_descriptor_inputs,
+                artifact=_descriptor_run_model,
+                command=_adopt_command,
+                complete=local_artifact_is_complete,
+                sealed_as=_sealed_descriptor,
+            )
+
+
 def learned_key(context: PipelineContext) -> ExperimentKey:
     """The key of the experiment the descriptor and the cache it read make together."""
     return f"{LEARNED_KEY_PREFIX}-{input_digest(_embedding_inputs(context))}"
 
 
 def _grid_cache_settings(context: PipelineContext) -> GridCacheSettings:
-    return context.settings.settings_for(GRID_CACHE, GridCacheSettings)
+    """The grid cache's settings: the configured ones, or for the bundled descriptor the axis it reads.
+
+    The bundled descriptor describes only the stored grid of each sample, so its cache keeps no
+    retuned views, which only training reads.
+    """
+    match context.settings.descriptor_source:
+        case DescriptorSource.TRAINED:
+            return context.settings.settings_for(GRID_CACHE, GridCacheSettings)
+        case DescriptorSource.PRETRAINED:
+            manifest = _pretrained().manifest
+            return GridCacheSettings(
+                canonicalizer=manifest.canonicalizer,
+                anchor=manifest.anchor,
+                bands_per_semitone=manifest.bands_per_semitone,
+                views=0,
+            )
 
 
 def _grid_cache_inputs(context: PipelineContext) -> Inputs:
@@ -230,12 +266,34 @@ def _descriptor_settings(context: PipelineContext) -> DescriptorSettings:
 
 
 def _descriptor_inputs(context: PipelineContext) -> Inputs:
-    return {
-        GRID_CACHE_INPUT: sealed_content(_current_grid_cache(context)),
-        TEACHER_VECTORS: vectors_digest(context, TEACHER_KEY),
-        LABELS: PostgresSampleAnnotationRepository(context.connection).label_digest(),
-        PARAMETERS: _descriptor_settings(context).parameters_digest,
-    }
+    """What the descriptor is built from: what training reads, or the bundled model's own bytes."""
+    match context.settings.descriptor_source:
+        case DescriptorSource.TRAINED:
+            return {
+                GRID_CACHE_INPUT: sealed_content(_current_grid_cache(context)),
+                TEACHER_VECTORS: vectors_digest(context, TEACHER_KEY),
+                LABELS: PostgresSampleAnnotationRepository(context.connection).label_digest(),
+                PARAMETERS: _descriptor_settings(context).parameters_digest,
+            }
+        case DescriptorSource.PRETRAINED:
+            return {PRETRAINED_INPUT: _pretrained().content}
+
+
+def _pretrained() -> PretrainedDescriptor:
+    """The bundled descriptor.
+
+    Raises:
+        StepRefused: this installation carries no bundled descriptor.
+    """
+    try:
+        return pretrained_descriptor()
+    except PretrainedDescriptorMissingError as error:
+        raise StepRefused(str(error)) from error
+
+
+# pylint: disable-next=unused-argument
+def _adopt_command(context: PipelineContext, artifact: Path, resume: bool) -> tuple[str, ...]:
+    return ("descriptor", "adopt", "--descriptor", artifact.stem)
 
 
 def _descriptor_run_name(digest: str) -> str:

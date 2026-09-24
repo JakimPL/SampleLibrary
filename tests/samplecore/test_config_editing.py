@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 import pytest
 
 from samplecore.config import DATABASE_URL_ENVIRONMENT_VARIABLE, ConfigurationError, load_config
-from samplecore.config_editing import LibrarySources, write_library_sources
+from samplecore.config_editing import LibrarySources, write_library_sources, write_pipeline_values
 
 
 @pytest.fixture
@@ -75,3 +76,14 @@ def test_sources_that_fail_validation_leave_the_file_as_it_was(tmp_path: Path, s
         write_library_sources(path, overlapping)
 
     assert path.read_bytes() == before
+
+
+def test_pipeline_values_join_the_pipeline_table_beside_what_it_holds(tmp_path: Path, sources: LibrarySources) -> None:
+    path = tmp_path / "config.toml"
+    write_library_sources(path, sources)
+    path.write_text(path.read_text(encoding="utf-8") + "\n[pipeline]\nworkers = 4\n", encoding="utf-8")
+
+    write_pipeline_values(path, {"descriptor_source": "pretrained"})
+
+    pipeline = tomllib.loads(path.read_text(encoding="utf-8"))["pipeline"]
+    assert pipeline == {"workers": 4, "descriptor_source": "pretrained"}

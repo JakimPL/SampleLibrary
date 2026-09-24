@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from samplelibrary.app.asgi import create_application
 from samplelibrary.app.launcher import Launcher, LibraryStatus
+from samplelibrary.pipeline.settings import DescriptorSource, read_pipeline_settings
 
 LOCAL_CLIENT: Final[tuple[str, int]] = ("127.0.0.1", 50000)
 LOCAL_BASE_URL: Final[str] = "http://localhost"
@@ -99,6 +100,39 @@ def test_chosen_folders_are_written_and_the_library_opens_under_them(
     assert response.status_code == 200
     assert _wait_until_settled(configured)["status"] == LibraryStatus.READY
     assert "*loop*" in config_path.read_text(encoding="utf-8")
+
+
+def test_a_library_the_application_creates_takes_the_bundled_descriptor(
+    unconfigured: TestClient, tmp_path: Path
+) -> None:
+    packs = tmp_path / "packs"
+    packs.mkdir()
+    sources = {
+        "library_root": str(tmp_path / "library"),
+        "module_source_directory": None,
+        "sample_directories": [str(packs)],
+        "sample_exclusions": [],
+    }
+
+    unconfigured.put("/api/setup/sources", json=sources)
+
+    config_path = Path(unconfigured.get("/api/setup/state").json()["config_path"])
+    assert read_pipeline_settings(config_path).descriptor_source is DescriptorSource.PRETRAINED
+
+
+def test_a_library_already_configured_keeps_its_pipeline_settings(
+    configured: TestClient, config_path: Path, tmp_path: Path
+) -> None:
+    sources = {
+        "library_root": str(tmp_path / "library"),
+        "module_source_directory": None,
+        "sample_directories": [],
+        "sample_exclusions": [],
+    }
+
+    configured.put("/api/setup/sources", json={**sources, "module_source_directory": str(tmp_path)})
+
+    assert read_pipeline_settings(config_path).descriptor_source is DescriptorSource.TRAINED
 
 
 def test_folders_the_config_refuses_are_answered_with_the_reason(configured: TestClient, tmp_path: Path) -> None:

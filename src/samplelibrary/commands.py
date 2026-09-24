@@ -208,7 +208,8 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
     ),
     Command(
         name="descriptor",
-        summary="Cache the sounds' grids, teach the learned descriptor, and describe every sample with it.",
+        summary="Cache the sounds' grids, teach the learned descriptor or adopt the bundled one, "
+        "and describe every sample with it.",
         run=_descriptor,
     ),
     Command(name="morph", summary="Serve morphs between two samples over HTTP, and write morph filters.", run=_morph),

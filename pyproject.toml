@@ -81,6 +81,10 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+# The bundled descriptor stays out of git and still ships in every wheel built after `just bundle-descriptor`.
+artifacts = ["src/sampledescriptor/pretrained/*"]
+
 [tool.hatch.build.targets.wheel]
 packages = [
     "src/samplecore",

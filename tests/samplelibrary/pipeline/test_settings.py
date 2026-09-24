@@ -11,7 +11,12 @@ from samplecloud.categories.cli import parse_arguments as parse_category_argumen
 from samplecloud.evaluation.cli import parse_arguments as parse_evaluation_arguments
 from samplecore.config import ConfigurationError
 from sampledescriptor.cli import parse_arguments as parse_descriptor_arguments
-from samplelibrary.pipeline.settings import OPERATIONAL_STEP_SETTINGS, StepSettings, read_pipeline_settings
+from samplelibrary.pipeline.settings import (
+    OPERATIONAL_STEP_SETTINGS,
+    DescriptorSource,
+    StepSettings,
+    read_pipeline_settings,
+)
 from samplelibrary.pipeline.steps.descriptor import DESCRIPTOR, EVALUATION, GRID_CACHE, MODULE_EVALUATION
 from samplelibrary.pipeline.steps.library import settings_model
 from samplelibrary.pipeline.steps.listening import CATEGORIES
@@ -44,6 +49,18 @@ def test_a_configuration_naming_no_pipeline_reads_as_the_defaults(tmp_path: Path
     assert settings.workers is None
     assert settings.labels is None
     assert not settings.ceiling.enforced
+
+
+@pytest.mark.parametrize("source", list(DescriptorSource))
+def test_the_pipeline_table_names_where_the_descriptor_comes_from(tmp_path: Path, source: DescriptorSource) -> None:
+    settings = read_pipeline_settings(_config(tmp_path, f'[pipeline]\ndescriptor_source = "{source.value}"\n'))
+
+    assert settings.descriptor_source is source
+
+
+def test_a_descriptor_source_this_pipeline_does_not_know_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ConfigurationError, match="descriptor_source"):
+        read_pipeline_settings(_config(tmp_path, '[pipeline]\ndescriptor_source = "borrowed"\n'))
 
 
 def test_the_pipeline_table_reads_its_limits_and_a_table_per_step(tmp_path: Path) -> None:

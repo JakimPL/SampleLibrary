@@ -55,6 +55,10 @@ app:
     uv run samplelibrary app
 
 [group("library")]
+bundle-descriptor *arguments:
+    uv run python scripts/bundle_descriptor.py {{ arguments }}
+
+[group("library")]
 serve:
     uv run samplelibrary serve --reload
 

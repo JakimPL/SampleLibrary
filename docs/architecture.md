@@ -427,6 +427,12 @@ producing the same bytes leaves everything after it satisfied. Parameters digest
 values of a step's settings model (`settings.py`), so a default written out, `40.0` for `40` and
 reordered keys name the same outputs, and the digest reads the parameters alone, apart from the
 ceiling, the device and the worker count.
+`descriptor_source = "pretrained"` builds the graph without the steps only training reads (the
+`teacher` reading and both evaluations): the `descriptor` step then copies the descriptor bundled
+under `sampledescriptor/pretrained/` into the library (`descriptor adopt`), named by the bundle's
+bytes, and the grid cache takes the bundled model's axis from its manifest and keeps no retuned
+views. `just bundle-descriptor` writes the bundle from a library's current descriptor; the directory
+stays out of git and ships in the wheel as a build artifact.
 `pipeline status` evaluates the same decisions without running anything, naming the components that
 moved since a step's last record under `pipeline/steps`.
 

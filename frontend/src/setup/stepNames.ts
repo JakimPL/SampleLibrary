@@ -11,7 +11,7 @@ const STEP_NAMES: Readonly<Record<string, string>> = {
     "hearing-teacher": "Analyzing samples at their played pitch",
     categories: "Suggesting categories",
     "grid-cache": "Preparing spectrograms",
-    descriptor: "Training the descriptor",
+    descriptor: "Preparing the descriptor",
     embedding: "Describing samples",
     completion: "Describing new samples",
     evaluation: "Checking descriptor quality",

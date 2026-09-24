@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tomllib
 from collections.abc import Mapping
+from enum import StrEnum, unique
 from pathlib import Path
 from typing import Any, Final
 
@@ -11,10 +12,23 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from samplecore.config import PIPELINE_TABLE, ConfigurationError, resolve_config_path
 from samplecore.digests import digest_of_rows
 from samplelibrary.limits.ceiling import MalformedCeiling, MemoryCeiling
+from samplelibrary.pipeline.devices import AUTOMATIC_DEVICE
 
 DEFAULT_MEMORY_CAP: Final[str] = "none"
 OPERATIONAL_STEP_SETTINGS: Final[set[str]] = {"memory_cap"}
-DEFAULT_DEVICE: Final[str] = "cuda"
+DEFAULT_DEVICE: Final[str] = AUTOMATIC_DEVICE
+DESCRIPTOR_SOURCE_SETTING: Final[str] = "descriptor_source"
+
+
+@unique
+class DescriptorSource(StrEnum):
+    """Where the library's descriptor comes from: trained on the library itself, or bundled with the application."""
+
+    TRAINED = "trained"
+    PRETRAINED = "pretrained"
+
+
+DEFAULT_DESCRIPTOR_SOURCE: Final[DescriptorSource] = DescriptorSource.TRAINED
 
 
 class StepSettings(BaseModel):
@@ -40,8 +54,10 @@ class PipelineSettings(BaseModel):
     """What the `[pipeline]` table says: the machine's own limits, and a table per step that takes parameters.
 
     `memory_cap` and `device` are facts about this machine rather than about the library, so they
-    stay out of what a step's outputs are named from. `labels` names the file a fresh catalog reads
-    its hand labels from.
+    stay out of what a step's outputs are named from; `device` is `auto` for an NVIDIA card where
+    one is usable and the processor otherwise. `labels` names the file a fresh catalog reads its hand
+    labels from. `descriptor_source` says whether the library trains its own descriptor or takes the
+    one bundled with the application, which spares it the training and everything only training reads.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -50,6 +66,7 @@ class PipelineSettings(BaseModel):
     device: str = DEFAULT_DEVICE
     workers: int | None = Field(default=None, ge=1)
     labels: Path | None = None
+    descriptor_source: DescriptorSource = DEFAULT_DESCRIPTOR_SOURCE
     steps: Mapping[str, Mapping[str, Any]] = Field(default_factory=dict)
 
     @property

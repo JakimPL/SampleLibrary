@@ -33,8 +33,12 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # memory_cap = "16G"
 
 # The device training and learned descriptors run on, and how many processes a pass spreads over.
-# device = "cuda"
+# "auto" picks an NVIDIA card when there is one and the processor otherwise.
+# device = "auto"
 # workers = 8
+
+# "trained" teaches the descriptor on this library; "pretrained" takes the one bundled with the application.
+# descriptor_source = "trained"
 
 # A file of hand labels a fresh catalog reads in, as `samplelibrary annotations export` writes it.
 # labels = "/path/to/annotations.jsonl"

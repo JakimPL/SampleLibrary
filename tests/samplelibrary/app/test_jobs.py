@@ -10,6 +10,7 @@ import pytest
 
 from samplecore.config import LibraryConfig
 from samplelibrary.app.jobs import BuildTarget, JobAlreadyRunningError, JobRunner, JobStatus, JobView, StepState
+from samplelibrary.pipeline.settings import DescriptorSource
 from samplelibrary.pipeline.steps.library import library_graph
 
 STAND_IN_PIPELINE: Final[tuple[str, ...]] = (sys.executable, str(Path(__file__).with_name("stand_in_pipeline.py")))
@@ -87,6 +88,7 @@ def test_one_build_runs_at_a_time_and_a_canceled_one_says_so(tmp_path: Path, con
     assert view is not None and view.status is JobStatus.CANCELED
 
 
+@pytest.mark.parametrize("source", list(DescriptorSource))
 @pytest.mark.parametrize("target", list(BuildTarget))
-def test_every_build_target_is_one_the_pipeline_knows(target: BuildTarget) -> None:
-    library_graph().order((target.value,))
+def test_every_build_target_is_one_the_pipeline_knows(target: BuildTarget, source: DescriptorSource) -> None:
+    library_graph(source).order((target.value,))

@@ -12,6 +12,7 @@ from typing import Final
 from samplecore.config import ConfigurationError
 from samplelibrary.pipeline.graph import StepGraph
 from samplelibrary.pipeline.results import RunOutcome
+from samplelibrary.pipeline.settings import DescriptorSource
 from samplelibrary.pipeline.status import StepStatus, read_status
 from samplelibrary.pipeline.steps.library import library_graph
 from tests.samplelibrary.pipeline.scenarios.harness.expect import Expect
@@ -161,7 +162,7 @@ class ScenarioRunner:
 
     world: World
     stands_in: bool = True
-    graph: StepGraph = field(default_factory=library_graph)
+    graph: StepGraph = field(default_factory=lambda: library_graph(DescriptorSource.TRAINED))
     acts: int = field(default=0, init=False)
     hosts: list[Host] = field(default_factory=list, init=False)
 

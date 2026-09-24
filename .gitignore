@@ -43,3 +43,6 @@ Thumbs.db
 
 .uvicorn.log
 .samplenotes.log
+
+# The trained descriptor `just bundle-descriptor` copies in; wheels carry it, the repository does not.
+src/sampledescriptor/pretrained/

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -87,17 +88,43 @@ def load_descriptor(path: Path, *, device: torch.device) -> LearnedDescriptor:
     Raises:
         FileNotFoundError: no descriptor is stored at that path.
     """
-    if not path.exists():
-        raise FileNotFoundError(f"no descriptor is stored at {path}")
-
-    stored = torch.load(path, map_location=device, weights_only=True)
-    description = DescriptorDescription.model_validate_json(str(stored["description"]))
+    stored = _load_stored(path, device=device)
+    description = stored.description
     model = GridDescriptor(description.shape).to(device)
-    model.load_state_dict(stored["state"])
+    model.load_state_dict(stored.state)
     model.eval()
     return LearnedDescriptor(
         model=model,
         description=description,
         canonicalizer=canonicalizer_for_geometry(description.geometry),
         device=device,
+    )
+
+
+def read_description(path: Path) -> DescriptorDescription:
+    """What a stored descriptor says about itself, read without building its network.
+
+    Raises:
+        FileNotFoundError: no descriptor is stored at that path.
+    """
+    return _load_stored(path, device=torch.device("cpu")).description
+
+
+@dataclass(frozen=True)
+class _StoredDescriptor:
+    description: DescriptorDescription
+    state: Mapping[str, torch.Tensor]
+
+
+def _load_stored(path: Path, *, device: torch.device) -> _StoredDescriptor:
+    """The description and the weights a descriptor file holds.
+
+    Raises:
+        FileNotFoundError: no descriptor is stored at that path.
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"no descriptor is stored at {path}")
+    stored = torch.load(path, map_location=device, weights_only=True)
+    return _StoredDescriptor(
+        description=DescriptorDescription.model_validate_json(str(stored["description"])), state=stored["state"]
     )

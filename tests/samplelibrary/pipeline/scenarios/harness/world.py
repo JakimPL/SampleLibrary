@@ -39,7 +39,7 @@ from samplelibrary.pipeline.context import PipelineContext
 from samplelibrary.pipeline.layout import PipelineLayout
 from samplelibrary.pipeline.locks import pipeline_lock_name, step_is_running
 from samplelibrary.pipeline.scratch import RESET_STEP
-from samplelibrary.pipeline.settings import PipelineSettings, read_pipeline_settings
+from samplelibrary.pipeline.settings import DescriptorSource, PipelineSettings, read_pipeline_settings
 from samplelibrary.pipeline.steps.library import library_graph
 from samplelibrary.sandbox.modules import sandbox_modules
 from samplelibrary.sandbox.sample_pack import sample_pack
@@ -308,7 +308,8 @@ class World:
             layout=self.layout,
         )
         names = {
-            name: context.scope_name(name) for name in (RESET_STEP, *(step.name for step in library_graph().steps))
+            name: context.scope_name(name)
+            for name in (RESET_STEP, *(step.name for step in library_graph(DescriptorSource.TRAINED).steps))
         }
         names["pipeline"] = pipeline_lock_name(context.library_identity)
         held = tuple(

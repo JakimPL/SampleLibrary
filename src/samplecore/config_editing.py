@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Final
 
@@ -7,7 +8,7 @@ import tomlkit
 from pydantic import BaseModel
 from tomlkit.items import Table
 
-from samplecore.config import LIBRARY_TABLE, LibraryConfig, parse_config
+from samplecore.config import LIBRARY_TABLE, PIPELINE_TABLE, LibraryConfig, parse_config
 from samplecore.models.base import FROZEN
 from samplecore.storage.atomic import write_bytes_atomically
 
@@ -62,6 +63,22 @@ def write_library_sources(path: Path, sources: LibrarySources) -> LibraryConfig:
     path.parent.mkdir(parents=True, exist_ok=True)
     write_bytes_atomically(path, content.encode("utf-8"))
     return config
+
+
+def write_pipeline_values(path: Path, values: Mapping[str, str]) -> None:
+    """Set plain values in the config file's `[pipeline]` table, keeping every other setting and comment it holds.
+
+    Raises:
+        FileNotFoundError: no config file is at ``path``.
+    """
+    document = tomlkit.parse(path.read_text(encoding="utf-8"))
+    pipeline = document.get(PIPELINE_TABLE)
+    if not isinstance(pipeline, Table):
+        pipeline = tomlkit.table()
+        document[PIPELINE_TABLE] = pipeline
+    for name, value in values.items():
+        pipeline[name] = value
+    write_bytes_atomically(path, tomlkit.dumps(document).encode("utf-8"))
 
 
 def _set_sources(library: Table, sources: LibrarySources) -> None:
