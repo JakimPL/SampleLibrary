@@ -6,12 +6,12 @@ from datetime import UTC, datetime
 from typing import Final
 
 from sqlalchemy import Connection
-from tqdm import tqdm
 
 from samplecloud.backends import FeatureExtractor
 from samplecloud.hearing import Hearing
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.models.sample import Sample
+from samplecore.progress import tracked
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError, readable_sample_hashes
@@ -128,7 +128,7 @@ def extract_features(
     pending_vectors: list[SampleFeatureVector] = []
     newly_extracted_count = 0
     unavailable_count = 0
-    for sample in tqdm(pending.samples, desc="Extracting features"):
+    for sample in tracked(pending.samples, total=len(pending.samples), label="Extracting features"):
         try:
             sample_pcm = audio.read(sample)
         except SampleUnavailableError:

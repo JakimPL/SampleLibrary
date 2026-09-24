@@ -41,7 +41,9 @@ def configured(config_path: Path) -> Iterator[TestClient]:
 
 def _client(config_path: Path) -> Iterator[TestClient]:
     application = create_application(
-        Launcher(config_path, renderer_command=IDLE_RENDERER), frontend_directory=None, on_ready=lambda: None
+        Launcher(config_path, renderer_command=IDLE_RENDERER, pipeline_command=IDLE_RENDERER),
+        frontend_directory=None,
+        on_ready=lambda: None,
     )
     application.state.request_quit = lambda: None
     with TestClient(application, base_url=LOCAL_BASE_URL, client=LOCAL_CLIENT) as client:
@@ -72,6 +74,12 @@ def test_an_application_opens_the_library_its_config_names(configured: TestClien
     assert state["status"] == LibraryStatus.READY
     assert state["manages_database"] is False
     assert configured.get("/api/stats").json()["sample_count"] == 0
+
+
+def test_a_build_waits_for_the_library_to_open(unconfigured: TestClient) -> None:
+    response = unconfigured.post("/api/setup/builds", json={"target": "catalog"})
+
+    assert response.status_code == 409
 
 
 def test_chosen_folders_are_written_and_the_library_opens_under_them(
@@ -129,7 +137,7 @@ def test_setup_answers_a_page_on_this_machine_alone(
     tmp_path: Path, client_address: tuple[str, int], base_url: str, origin: str | None
 ) -> None:
     application = create_application(
-        Launcher(tmp_path / "config.toml", renderer_command=IDLE_RENDERER),
+        Launcher(tmp_path / "config.toml", renderer_command=IDLE_RENDERER, pipeline_command=IDLE_RENDERER),
         frontend_directory=None,
         on_ready=lambda: None,
     )

@@ -18,6 +18,7 @@ from samplecore.models.base import FROZEN
 from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster, EmbeddedClusterError
 from samplecore.storage.database import connect
+from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView
 from samplelibrary.app.processes import ChildProcess
 from sampleserver.app import create_app
 
@@ -32,6 +33,10 @@ ACTIVATION_FAILURES: Final[tuple[type[Exception], ...]] = (
 )
 
 _logger = logging.getLogger(__name__)
+
+
+class LibraryClosedError(Exception):
+    """Raised when a build is asked for before the library is open."""
 
 
 @unique
@@ -55,6 +60,7 @@ class SetupState(BaseModel):
     suggested_library_root: str
     manages_database: bool | None
     problem: str | None
+    build: JobView | None
 
 
 class Launcher:
@@ -65,9 +71,12 @@ class Launcher:
     the config file and open the library again under them.
     """
 
-    def __init__(self, config_path: Path, *, renderer_command: tuple[str, ...]) -> None:
+    def __init__(
+        self, config_path: Path, *, renderer_command: tuple[str, ...], pipeline_command: tuple[str, ...]
+    ) -> None:
         self._config_path = config_path
         self._renderer_command = renderer_command
+        self._builds = JobRunner(config_path=config_path, pipeline_command=pipeline_command)
         self._config: LibraryConfig | None = None
         self._catalog: FastAPI | None = None
         self._catalog_stack = AsyncExitStack()
@@ -98,6 +107,7 @@ class Launcher:
             suggested_library_root=str(default_library_root()),
             manages_database=self._config.manages_database if self._config is not None else None,
             problem=self._problem,
+            build=self._builds.view(),
         )
 
     def start(self) -> None:
@@ -120,8 +130,23 @@ class Launcher:
         self._config = write_library_sources(self._config_path, sources)
         self._schedule_activation(self._config)
 
+    def build(self, target: BuildTarget) -> None:
+        """Start building the open library.
+
+        Raises:
+            LibraryClosedError: the library is not open.
+            JobAlreadyRunningError: a build already runs.
+        """
+        if self._config is None or self._catalog is None:
+            raise LibraryClosedError("Open the library before building it.")
+        self._builds.start(self._config, target)
+
+    def cancel_build(self) -> None:
+        self._builds.cancel()
+
     async def stop(self) -> None:
-        """Close the library, stop the renderer and the managed database, and wait for all of them."""
+        """Stop a running build, close the library, and stop the renderer and the managed database."""
+        await run_in_threadpool(self._builds.stop)
         if self._activation is not None:
             await asyncio.gather(self._activation, return_exceptions=True)
         async with self._lock:

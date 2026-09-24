@@ -17,6 +17,7 @@ ATTEMPTS_FILE_NAME: Final[str] = "attempts.jsonl"
 CONFIG_SNAPSHOT_NAME: Final[str] = "config.toml"
 RUN_STAMP_FORMAT: Final[str] = "%Y-%m-%dT%H-%M-%S"
 RUN_ID_CHARACTERS: Final[int] = 8
+PROGRESS_SUFFIX: Final[str] = ".progress.json"
 
 
 @dataclass(frozen=True)
@@ -84,3 +85,7 @@ class RunPaths:
     def log(self, step: str) -> Path:
         """Where one step's own output goes, which a person follows while it runs."""
         return self.directory / f"{step}.log"
+
+    def progress(self, step: str) -> Path:
+        """Where one step's pass writes how far it has come, which the application reads while it runs."""
+        return self.directory / f"{step}{PROGRESS_SUFFIX}"

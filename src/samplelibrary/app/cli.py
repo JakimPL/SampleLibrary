@@ -26,6 +26,7 @@ DEFAULT_PORT: Final[int] = 8000
 BROWSER_DELAY_SECONDS: Final[float] = 0.5
 INSTANCE_PROBE_SECONDS: Final[float] = 2.0
 RENDERER_COMMAND: Final[tuple[str, ...]] = ("morph", "serve")
+PIPELINE_COMMAND: Final[tuple[str, ...]] = ("pipeline", "run")
 
 _logger = logging.getLogger(__name__)
 
@@ -53,7 +54,11 @@ def main(argv: list[str], *, prog: str) -> None:
         case False:
             pass
 
-    launcher = Launcher(resolve_config_path(), renderer_command=samplelibrary_command(*RENDERER_COMMAND))
+    launcher = Launcher(
+        resolve_config_path(),
+        renderer_command=samplelibrary_command(*RENDERER_COMMAND),
+        pipeline_command=samplelibrary_command(*PIPELINE_COMMAND),
+    )
     frontend = arguments.frontend or bundled_frontend()
     if frontend is None:
         _logger.warning("No built frontend found; serving the API alone. `just frontend-build` builds one.")

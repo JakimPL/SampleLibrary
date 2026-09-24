@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from samplecore.exit_status import ExitStatus
 from samplecore.models.base import FROZEN
+from samplecore.progress import PROGRESS_FILE_ENVIRONMENT_VARIABLE
 from samplelibrary.environment import (
     CONFIG_OPTION,
     MEMORY_CAP_OPTION,
@@ -171,7 +172,7 @@ def run_step_command(session: RunSession, *, step: str, command: tuple[str, ...]
             argv,
             stdout=stream,
             stderr=subprocess.STDOUT,
-            env=_child_environment(step_lock=scope_name),
+            env=_child_environment(step_lock=scope_name, progress_file=session.run.progress(step)),
             start_new_session=sys.platform != "win32",
         )
         interrupts.watch(process)
@@ -237,13 +238,17 @@ def _outcome_of(status: int, *, interrupted: bool, capped: bool) -> AttemptOutco
     return AttemptOutcome.FAILED
 
 
-def _child_environment(*, step_lock: str) -> dict[str, str]:
-    """What a step's process starts with: this environment, cleared of what would point it elsewhere."""
+def _child_environment(*, step_lock: str, progress_file: Path) -> dict[str, str]:
+    """What a step's process starts with: this environment, cleared of what would point it elsewhere.
+
+    It names the step's lock and the file its pass reports its progress to.
+    """
     environment = {
         name: value for name, value in os.environ.items() if not name.startswith(CLEARED_ENVIRONMENT_PREFIXES)
     }
     environment.update(CHILD_ENVIRONMENT)
     environment[STEP_LOCK_ENVIRONMENT_VARIABLE] = step_lock
+    environment[PROGRESS_FILE_ENVIRONMENT_VARIABLE] = str(progress_file)
     return environment
 
 

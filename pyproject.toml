@@ -187,7 +187,7 @@ forbidden_modules = ["samplelibrary"]
 name = "the application runs the pipelines and the renderer as programs of their own, and stays light"
 type = "forbidden"
 source_modules = ["samplelibrary.app"]
-forbidden_modules = ["samplecloud", "sampledescriptor", "samplemorph", "samplelibrary.pipeline", "torch", "librosa"]
+forbidden_modules = ["samplecloud", "sampledescriptor", "samplemorph", "torch", "librosa"]
 
 [[tool.importlinter.contracts]]
 name = "the memory ceiling boundary reaches the core alone"

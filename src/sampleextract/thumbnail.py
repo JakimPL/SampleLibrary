@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sqlalchemy import Connection
-from tqdm import tqdm
 
+from samplecore.progress import tracked
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, SampleThumbnailRepository
@@ -42,7 +42,7 @@ def compute_missing_thumbnails(connection: Connection, audio: SampleAudio, *, fo
     computed = 0
     unavailable = 0
     with start_batch(connection):
-        for sample in tqdm(samples, desc="Computing thumbnails"):
+        for sample in tracked(samples, total=len(samples), label="Computing thumbnails"):
             if not force and thumbnail_repository.get(sample.hash) is not None:
                 already_thumbnailed += 1
                 continue

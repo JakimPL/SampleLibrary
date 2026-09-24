@@ -5,11 +5,14 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
 
 from samplecore.config import ConfigurationError
 from samplecore.config_editing import LibrarySources
+from samplecore.models.base import FROZEN
 from samplelibrary.app.folders import FolderListing, FolderUnreadableError, Place, list_folder, places
-from samplelibrary.app.launcher import Launcher, SetupState
+from samplelibrary.app.jobs import BuildTarget, JobAlreadyRunningError
+from samplelibrary.app.launcher import Launcher, LibraryClosedError, SetupState
 from samplelibrary.app.routes.guard import launcher_of, require_local_person
 
 router = APIRouter(dependencies=[Depends(require_local_person)], tags=["setup"])
@@ -33,6 +36,32 @@ async def choose_sources(sources: LibrarySources, launcher: LauncherDependency) 
         launcher.choose_sources(sources)
     except ConfigurationError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
+    return launcher.state()
+
+
+class BuildRequest(BaseModel):
+    model_config = FROZEN
+
+    target: BuildTarget
+
+
+@router.post("/builds", status_code=status.HTTP_202_ACCEPTED)
+def start_build(build_request: BuildRequest, launcher: LauncherDependency) -> SetupState:
+    """Start building the library, and answer with the state the build shows in.
+
+    Raises:
+        HTTPException: 409 while the library is closed or another build runs.
+    """
+    try:
+        launcher.build(build_request.target)
+    except (LibraryClosedError, JobAlreadyRunningError) as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    return launcher.state()
+
+
+@router.post("/builds/cancel")
+def cancel_build(launcher: LauncherDependency) -> SetupState:
+    launcher.cancel_build()
     return launcher.state()
 
 

@@ -8,11 +8,11 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 from sqlalchemy import Connection
-from tqdm import tqdm
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
+from samplecore.progress import tracked
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository, SampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
@@ -152,7 +152,7 @@ def detect_equivalences(
     for fingerprints in _fingerprints_by_layout(samples, waveforms, tally=tally):
         blocks = candidate_blocks(fingerprints, block_rows=NEIGHBOR_BLOCK_ROWS)
         block_count = -(-len(fingerprints.samples) // NEIGHBOR_BLOCK_ROWS)
-        for block in tqdm(blocks, total=block_count, desc="Scoring candidate blocks"):
+        for block in tracked(blocks, total=block_count, label="Scoring candidate blocks"):
             with start_batch(connection):
                 _record_block(relation_repository, block, waveforms, tally=tally)
 
@@ -174,7 +174,7 @@ def _fingerprints_by_layout(
 ) -> tuple[Fingerprints, ...]:
     """Every sample holding sound that can be read now, fingerprinted and grouped by channel layout, which relations never cross."""
     kept: dict[ChannelLayout, list[_Fingerprinted]] = {layout: [] for layout in ChannelLayout}
-    for sample in tqdm(samples, desc="Fingerprinting samples"):
+    for sample in tracked(samples, total=len(samples), label="Fingerprinting samples"):
         try:
             waveform = waveforms.get(sample)
         except SampleUnavailableError:

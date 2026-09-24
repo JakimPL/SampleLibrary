@@ -5,8 +5,8 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import TypeVar
 
 from threadpoolctl import threadpool_limits
-from tqdm import tqdm
 
+from samplecore.progress import ProgressBar
 from sampledescriptor.training import WORKER_START_METHOD
 
 Item = TypeVar("Item")
@@ -31,16 +31,15 @@ def mapped_in_processes(
     `work` is sent to every process once, so it carries whatever each item needs; every process is
     held to one thread. Progress is drawn under `description`, one step per item.
     """
-    progress = tqdm(total=len(items), desc=description, unit="item")
-    if worker_count == 0:
-        for item in items:
-            yield work(item)
-            progress.update()
-    else:
-        with multiprocessing.get_context(WORKER_START_METHOD).Pool(
-            worker_count, initializer=limit_process_threads
-        ) as pool:
-            for result in pool.imap(work, items, chunksize=chunk_size):
-                yield result
-                progress.update()
-    progress.close()
+    with ProgressBar(total=len(items), label=description) as progress:
+        if worker_count == 0:
+            for item in items:
+                yield work(item)
+                progress.update(1)
+        else:
+            with multiprocessing.get_context(WORKER_START_METHOD).Pool(
+                worker_count, initializer=limit_process_threads
+            ) as pool:
+                for result in pool.imap(work, items, chunksize=chunk_size):
+                    yield result
+                    progress.update(1)

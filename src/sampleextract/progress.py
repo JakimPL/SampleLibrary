@@ -4,9 +4,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from queue import Queue
-from typing import Any, Protocol
+from typing import Protocol
 
-from tqdm import tqdm
+from samplecore.progress import ProgressBar
 
 
 class ProgressSink(Protocol):
@@ -23,19 +23,19 @@ class ProgressSink(Protocol):
 
 @dataclass(frozen=True)
 class BarProgress:
-    """A ProgressSink drawing the count onto a tqdm bar."""
+    """A ProgressSink drawing the count onto the pass's progress bar."""
 
-    progress_bar: Any  # tqdm ships no annotations of its own, so its type arrives untyped.
+    bar: ProgressBar
 
     def advance(self, count: int) -> None:
-        self.progress_bar.update(count)
+        self.bar.update(count)
 
 
 @contextmanager
 def progress_bar(total: int, *, description: str) -> Iterator[BarProgress]:
     """One bar covering a whole pass, closed once the pass ends."""
-    with tqdm(total=total, desc=description) as tqdm_bar:
-        yield BarProgress(tqdm_bar)
+    with ProgressBar(total=total, label=description) as bar:
+        yield BarProgress(bar)
 
 
 @dataclass(frozen=True)

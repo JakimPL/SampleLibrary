@@ -6,12 +6,12 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 from sqlalchemy import Connection
-from tqdm import tqdm
 
 from samplecloud.backends import FeatureExtractor
 from samplecloud.evaluation.corpus import EvaluationCorpus
 from samplecloud.evaluation.settings import EvaluationSettings
 from samplecloud.hearing import Hearing
+from samplecore.progress import tracked
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
 from samplecore.waveform import resample_by_semitones
@@ -94,7 +94,7 @@ def transposition_retrieval(
     targets: list[int] = []
     query_offsets: list[float] = []
     unavailable_probe_count = 0
-    for position in tqdm(positions, desc="Retuning probes"):
+    for position in tracked(positions, total=len(positions), label="Retuning probes"):
         sample = samples.get(corpus.sample_hashes[position])
         if sample is None:
             continue
