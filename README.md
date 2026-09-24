@@ -53,10 +53,12 @@ database names belong to someone else, create your library's database alone with
 
 ## Configuration
 
-`config.toml` holds your own machine's settings and stays out of the repository. These keys sit
+`config.toml` holds your own machine's settings and stays out of the repository. An installed copy of
+the application keeps it in your user settings folder instead, and writes it for you. These keys sit
 under its `[library]` table:
 
-- `module_source_directory`: your module collection, read with every folder inside it.
+- `module_source_directory`: your module collection, read with every folder inside it. A library of
+  sample folders alone leaves it out.
 - `library_root`: where extracted audio, the trained descriptor and recorded runs are kept.
 - `database_url`: the PostgreSQL connection. The `SAMPLELIBRARY_DATABASE_URL` environment variable
   takes precedence over it, except for a command given `--config`, which reads everything from the

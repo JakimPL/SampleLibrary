@@ -37,7 +37,7 @@ def main(argv: list[str], *, prog: str) -> None:
     config = bootstrap_cli()
     config.library_root.mkdir(parents=True, exist_ok=True)
     discovery = _discovery_or_exit(config)
-    collection_digest = stat_digest(config.module_source_directory, discovery.paths)
+    collection_digest = _collection_digest(config, discovery)
     if not _goes_ahead(config, collection_digest, force=arguments.force):
         _logger.info("The module collection is as the last complete pass left it, so there is nothing to extract.")
         return
@@ -63,6 +63,11 @@ def _discovery_or_exit(config: LibraryConfig) -> Discovery:
         sys.exit(ExitStatus.REFUSED)
 
 
+def _collection_digest(config: LibraryConfig, discovery: Discovery) -> str:
+    """The digest of the module collection's files; a library without a collection digests an empty listing."""
+    return stat_digest(config.module_source_directory or config.library_root, discovery.paths)
+
+
 def _goes_ahead(config: LibraryConfig, collection_digest: str, *, force: bool) -> bool:
     """Whether the pass has anything to do, dropping the record of the last complete pass when it does."""
     with open_catalog_connection(config.catalog_url()) as connection:
@@ -76,7 +81,7 @@ def _goes_ahead(config: LibraryConfig, collection_digest: str, *, force: bool) -
 
 def _record_the_complete_pass(config: LibraryConfig, collection_digest: str) -> None:
     """Record the collection a pruned pass mirrors, once a second listing finds it as the pass found it."""
-    if stat_digest(config.module_source_directory, _discovery_or_exit(config).paths) != collection_digest:
+    if _collection_digest(config, _discovery_or_exit(config)) != collection_digest:
         _logger.info("The collection changed while the pass read it, so the next pass reads it again.")
         return
     with open_catalog_connection(config.catalog_url()) as connection, start_batch(connection):

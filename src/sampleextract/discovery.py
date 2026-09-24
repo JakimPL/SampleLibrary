@@ -22,8 +22,10 @@ class Discovery:
     unreadable_directories: tuple[Path, ...]
 
 
-def discover_modules(module_source_directory: Path) -> Discovery:
+def discover_modules(module_source_directory: Path | None) -> Discovery:
     """Every module file under the source directory, sorted for a stable run order.
+
+    A library built from sample folders alone names no source directory and discovers no modules.
 
     Folders reached through a symbolic link are walked like any other, since a collection gathered
     from several drives is often linked together; a folder reached a second time, through a link
@@ -34,6 +36,8 @@ def discover_modules(module_source_directory: Path) -> Discovery:
         FileNotFoundError: the source directory does not exist.
         NotADirectoryError: the source directory names a file.
     """
+    if module_source_directory is None:
+        return Discovery(paths=(), unreadable_directories=())
     if not module_source_directory.exists():
         raise FileNotFoundError(f"the module source directory {module_source_directory} does not exist")
     if not module_source_directory.is_dir():

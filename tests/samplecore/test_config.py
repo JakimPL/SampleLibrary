@@ -10,20 +10,20 @@ import pytest
 from samplecore.config import (
     CONFIG_PATH_ENVIRONMENT_VARIABLE,
     DATABASE_URL_ENVIRONMENT_VARIABLE,
-    DEFAULT_CONFIG_PATH,
     EXAMPLE_CONFIG_PATH,
     ConfigurationError,
     InferenceConfig,
     LibraryConfig,
     create_config_file,
+    default_config_path,
     load_config,
 )
 from samplecore.storage.cluster.embedded.state import ManagedClusterMissingError, create_cluster_state
 
 
-def test_the_default_config_path_sits_next_to_the_committed_example_template() -> None:
-    assert DEFAULT_CONFIG_PATH.name == "config.toml"
-    assert (DEFAULT_CONFIG_PATH.parent / "config.example.toml").is_file()
+def test_a_source_checkout_reads_the_config_beside_the_committed_example_template() -> None:
+    assert default_config_path().name == "config.toml"
+    assert (default_config_path().parent / "config.example.toml").is_file()
 
 
 def test_a_config_file_round_trips_through_load_config(tmp_path: Path) -> None:

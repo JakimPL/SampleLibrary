@@ -8,12 +8,14 @@ authors = [{ name = "Jakim" }]
 
 dependencies = [
     "numpy>=2.1",
+    "platformdirs>=4.4",
     "psycopg[binary]>=3.2",
     "pydantic>=2.13.4",
     "pytz>=2025.2",
     "scipy>=1.16",
     "soundfile>=0.14",
     "sqlalchemy>=2.0",
+    "tomlkit>=0.13",
     "tqdm>=4.67",
     "trackmod",
 ]

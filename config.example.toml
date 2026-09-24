@@ -1,7 +1,7 @@
 # Paths take forward slashes on every system; a Windows backslash is written twice: "C:\\Modules".
 
 [library]
-# Your tracker module collection, folders inside it included.
+# Your tracker module collection, folders inside it included. Leave it out for a library of sample folders alone.
 module_source_directory = "/path/to/your/module/collection"
 
 # Where the library keeps its extracted samples, trained models and recorded runs.

@@ -82,3 +82,10 @@ def test_a_folder_that_cannot_be_listed_is_named(tmp_path: Path) -> None:
 def test_a_missing_source_directory_is_reported(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="does not exist"):
         discover_modules(tmp_path / "unmounted")
+
+
+def test_a_library_without_a_module_collection_discovers_no_modules() -> None:
+    discovered = discover_modules(None)
+
+    assert discovered.paths == ()
+    assert discovered.unreadable_directories == ()

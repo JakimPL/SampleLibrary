@@ -7,12 +7,16 @@ from pathlib import Path
 from typing import Final
 from urllib.parse import SplitResult, urlsplit
 
+from platformdirs import user_config_path, user_music_path
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from samplecore.storage.cluster.embedded.state import managed_catalog_url
 
-DEFAULT_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config.toml"
-EXAMPLE_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config.example.toml"
+APPLICATION_NAME: Final[str] = "SampleLibrary"
+CONFIG_FILE_NAME: Final[str] = "config.toml"
+SOURCE_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
+EXAMPLE_CONFIG_PATH: Final[Path] = SOURCE_ROOT / "config.example.toml"
+LIBRARY_DIRECTORY_NAME: Final[str] = "SampleLibrary"
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
 DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_DATABASE_URL"
 DEFAULT_MINIMUM_SAMPLE_FRAMES: Final[int] = 512
@@ -75,9 +79,10 @@ class InferenceConfig(BaseModel):
 class LibraryConfig(BaseModel):
     """Local, machine-specific configuration this project reads at startup.
 
-    Nothing here is checked into the repository. ``module_source_directory`` and ``library_root`` are
-    required with no default, since fabricating a plausible-looking value would point the library at
-    the wrong place silently rather than failing loudly when configuration is missing.
+    Nothing here is checked into the repository. ``library_root`` is required with no default, since
+    fabricating a plausible-looking value would point the library at the wrong place silently rather
+    than failing loudly when configuration is missing. ``module_source_directory`` names the tracker
+    module collection, and a library built from sample folders alone leaves it out.
     ``database_url`` names a Postgres server of a person's own; left out, the library keeps a managed
     server inside its library root, which the application creates and runs. The inference address
     has a default, since one machine running both processes is the common case and the port is free
@@ -92,7 +97,7 @@ class LibraryConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    module_source_directory: Path
+    module_source_directory: Path | None = None
     library_root: Path
     database_url: str | None = None
     minimum_sample_frames: int = DEFAULT_MINIMUM_SAMPLE_FRAMES
@@ -161,7 +166,7 @@ def load_config(path: Path | None = None) -> LibraryConfig:
     """Load and validate the local library configuration.
 
     The lookup order is an explicit ``path``, then the ``SAMPLELIBRARY_CONFIG`` environment
-    variable, then ``config.toml`` at the repository root — the first of these that is actually
+    variable, then `default_config_path` — the first of these that is actually
     provided wins, so a caller (a test, a CLI flag) can always be explicit about where to read
     from without an environment variable silently overriding it. ``database_url`` follows the same
     precedence separately: the ``SAMPLELIBRARY_DATABASE_URL`` environment variable, when set to a
@@ -180,23 +185,51 @@ def load_config(path: Path | None = None) -> LibraryConfig:
             f"No config file at {resolved_path}. Run `samplelibrary setup config` to put one there, or copy "
             "config.example.toml to config.toml yourself, and fill in your paths."
         )
-    data = _read_tables(resolved_path)
-    library_data = _anchored_paths(_table(data, LIBRARY_TABLE, resolved_path), resolved_path.parent.resolve())
+    return parse_config(resolved_path.read_text(encoding="utf-8"), resolved_path)
+
+
+def parse_config(content: str, config_path: Path) -> LibraryConfig:
+    """Validate a config file's content as `load_config` reads the file at ``config_path``.
+
+    For a writer checking what it is about to put in place, and for `load_config` itself.
+
+    Raises:
+        ConfigurationError: the content is not valid TOML, holds a table or setting this project does
+            not read, fails validation, or still carries the example's stand-in paths.
+    """
+    data = _read_tables(content, config_path)
+    library_data = _anchored_paths(_table(data, LIBRARY_TABLE, config_path), config_path.parent.resolve())
     database_url_from_environment = os.environ.get(DATABASE_URL_ENVIRONMENT_VARIABLE)
     if database_url_from_environment:
         library_data["database_url"] = database_url_from_environment
-    library_data[INFERENCE_TABLE] = _table(data, INFERENCE_TABLE, resolved_path)
+    library_data[INFERENCE_TABLE] = _table(data, INFERENCE_TABLE, config_path)
     try:
         config = LibraryConfig.model_validate(library_data)
     except ValidationError as error:
-        raise ConfigurationError(_describe_invalid_fields(error, resolved_path)) from error
-    _reject_placeholder_paths(config, resolved_path)
+        raise ConfigurationError(_describe_invalid_fields(error, config_path)) from error
+    _reject_placeholder_paths(config, config_path)
     return config
 
 
 def resolve_config_path(path: Path | None = None) -> Path:
     """The config file a command reads: ``path`` when given, then ``SAMPLELIBRARY_CONFIG``, then the default."""
-    return path or _config_path_from_environment() or DEFAULT_CONFIG_PATH
+    return path or _config_path_from_environment() or default_config_path()
+
+
+def default_config_path() -> Path:
+    """The config file read when nothing names one: a source checkout's own, or the one in the user's settings folder.
+
+    A checkout holds the committed example beside the file a developer fills in, and an installed
+    application keeps its file where the system keeps each user's settings.
+    """
+    if EXAMPLE_CONFIG_PATH.is_file():
+        return SOURCE_ROOT / CONFIG_FILE_NAME
+    return user_config_path(APPLICATION_NAME, appauthor=False) / CONFIG_FILE_NAME
+
+
+def default_library_root() -> Path:
+    """The library root the application suggests to a person choosing one: a folder in their music folder."""
+    return user_music_path() / LIBRARY_DIRECTORY_NAME
 
 
 def create_config_file(path: Path) -> bool:
@@ -220,7 +253,7 @@ def create_config_file(path: Path) -> bool:
     return True
 
 
-def _read_tables(config_path: Path) -> dict[str, object]:
+def _read_tables(content: str, config_path: Path) -> dict[str, object]:
     """The file's top-level tables, each of them one this project reads.
 
     The pipeline's own table is read by the pipeline rather than here, since the steps it names
@@ -230,8 +263,7 @@ def _read_tables(config_path: Path) -> dict[str, object]:
         ConfigurationError: the file is not valid TOML, or it holds a table this project does not read.
     """
     try:
-        with config_path.open("rb") as config_file:
-            data = tomllib.load(config_file)
+        data = tomllib.loads(content)
     except tomllib.TOMLDecodeError as error:
         raise ConfigurationError(f"{config_path} is not valid TOML: {error}") from error
 
@@ -313,7 +345,7 @@ def _reject_placeholder_paths(config: LibraryConfig, resolved_path: Path) -> Non
     placeholders = dict.fromkeys(
         name
         for name, value in (
-            ("module_source_directory", config.module_source_directory),
+            *((("module_source_directory", config.module_source_directory),) if config.module_source_directory else ()),
             ("library_root", config.library_root),
             *(("sample_directories", directory) for directory in config.sample_directories),
         )
