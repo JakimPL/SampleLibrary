@@ -274,7 +274,7 @@ describe("CloudPanel", () => {
         expect(await screen.findByText("sample route")).toBeInTheDocument();
     });
 
-    it("switches to the Modules tab, showing its placeholder caption and points", async () => {
+    it("switches to the Modules tab, showing its points", async () => {
         getCloud.mockResolvedValue([]);
         const moduleHash = "d".repeat(64);
         getModuleCloud.mockResolvedValue([{ module_hash: moduleHash, x: 0, y: 0 }]);
@@ -282,7 +282,6 @@ describe("CloudPanel", () => {
 
         fireEvent.click(screen.getByRole("button", { name: "Modules" }));
 
-        expect(screen.getByText(/spectral-distance embedding/)).toBeInTheDocument();
         await waitFor(() => {
             expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });

@@ -51,8 +51,6 @@ interface HoveredPoint {
     readonly y: number;
 }
 
-const MODULE_TAB_CAPTION = "Preliminary layout — real positions await a spectral-distance embedding.";
-
 /** Below this panel width the legend leaves its row for a sheet. */
 const LEGEND_SHEET_WIDTH_PX = 480;
 const ZOOM_STEP_FACTOR = 1.5;
@@ -315,7 +313,6 @@ export function CloudPanel(): ReactElement {
                     </>
                 )}
             </div>
-            {tab === "modules" && <p className="cloud-caption">{MODULE_TAB_CAPTION}</p>}
             {tab === "samples" && !legendAsSheet && (
                 <TagLegend tags={tags} painted={painted} onToggle={togglePainted} emptyCaption={EMPTY_CAPTIONS[mode]} />
             )}
