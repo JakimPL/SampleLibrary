@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Final
 from samplecore.cli_parsing import command_parser
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplecore.exit_status import ExitStatus
+from samplecore.storage.cluster.embedded.state import ManagedClusterMissingError
 from samplelibrary.commands import COMMANDS, Command, CommandGroup
 from samplelibrary.environment import (
     CONFIG_OPTION,
@@ -69,7 +70,8 @@ def _run_reporting_an_unreachable_catalog(
     outgrew its ceiling where anything under it was stopped for holding too much.
 
     Raises:
-        SystemExit: no connection to the configured database could be opened, or the memory ceiling was reached.
+        SystemExit: no connection to the configured database could be opened, the managed database has
+            not been created yet, or the memory ceiling was reached.
     """
     # pylint: disable=import-outside-toplevel
     from sqlalchemy.exc import OperationalError
@@ -79,6 +81,9 @@ def _run_reporting_an_unreachable_catalog(
         command.run(argv, prog=prog)
         if step_lock is not None:
             step_lock.close()
+    except ManagedClusterMissingError as error:
+        _logger.error("%s", error)
+        sys.exit(ExitStatus.REFUSED)
     except MemoryError:
         _logger.error("Ran out of memory%s.", " under the memory ceiling" if scope is not None else "")
         sys.exit(ExitStatus.MEMORY_CAP_REACHED)

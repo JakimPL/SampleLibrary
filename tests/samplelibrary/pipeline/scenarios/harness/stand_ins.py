@@ -188,7 +188,7 @@ def _cache_grids(argv: list[str], stand_in: StandIn) -> None:
 
     arguments = _descriptor_arguments([COMMAND_NAME, *argv])
     config = load_config_or_exit()
-    with connect(config.database_url) as connection:
+    with connect(config.catalog_url()) as connection:
         hashes = sorted(readable_sample_hashes(connection))
     directory = grid_cache_directory(config.library_root, name=arguments.cache)  # type: ignore[attr-defined]
     staging = directory.with_name(directory.name + STAGING_SUFFIX)
@@ -264,7 +264,7 @@ def _embed_cache(argv: list[str]) -> None:
         sys.exit(ExitStatus.FAILED)
     cache = grid_cache_directory(config.library_root, name=arguments.cache)  # type: ignore[attr-defined]
     hashes = (cache / HASHES_FILE_NAME).read_text(encoding="utf-8").split("\n")
-    with connect(config.database_url) as connection:
+    with connect(config.catalog_url()) as connection:
         experiments = PostgresExperimentRepository(connection)
         if experiments.get_by_key(arguments.key) is not None:  # type: ignore[attr-defined]
             return

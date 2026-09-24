@@ -33,7 +33,7 @@ class PipelineContext:
     @property
     def library_identity(self) -> str:
         """What tells this library from another on the same machine, which names the scopes its steps run under."""
-        return digest_of_rows([(self.config.database_url, self.config.library_root.as_posix())])[:DIGEST_CHARACTERS]
+        return digest_of_rows([(self.config.catalog_url(), self.config.library_root.as_posix())])[:DIGEST_CHARACTERS]
 
     def scope_name(self, step: str) -> str:
         """The name one step's process runs under, which another run finds it still running by."""

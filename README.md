@@ -9,7 +9,8 @@ label and rate them — including a visual "cloud" of the whole library.
 
 - Python 3.12 or later
 - [uv](https://docs.astral.sh/uv/)
-- PostgreSQL 17 or later, or Docker to run one in a container
+- PostgreSQL 17 or later, Docker to run one in a container, or neither: the `app` extra carries a
+  server the library runs by itself
 - Node.js 25.9 or later, and npm, for the frontend
 - [just](https://just.systems/) 1.56 or later, which runs the setup and everyday recipes;
   `uv tool install rust-just` installs it
@@ -30,7 +31,9 @@ just install
 where extracted samples should go. Folders of sample packs are optional and can be added at any time
 (see [Configuration](#configuration)).
 
-No PostgreSQL on the machine? `docker compose up -d postgres` starts one on port 5432. If that port is
+No PostgreSQL on the machine? Delete the `database_url` line from `config.toml`, and `just database`
+creates a server of the library's own inside `library_root` and starts it. Alternatively,
+`docker compose up -d postgres` starts one on port 5432. If that port is
 taken, put another in a file named `.env` beside `docker-compose.yml`, such as `POSTGRES_PORT=5433`:
 compose reads it every time it starts the container, so the port stays the same. Set the same port in
 `database_url` in `config.toml`. Then create the databases:
@@ -57,7 +60,8 @@ under its `[library]` table:
 - `library_root`: where extracted audio, the trained descriptor and recorded runs are kept.
 - `database_url`: the PostgreSQL connection. The `SAMPLELIBRARY_DATABASE_URL` environment variable
   takes precedence over it, except for a command given `--config`, which reads everything from the
-  file it names.
+  file it names. Left out, the library keeps its own server in `library_root/postgres`, listening on
+  this machine alone.
 - `minimum_sample_frames`: the shortest sample extraction keeps, 512 frames by default.
 - `sample_directories`: folders of WAV, AIFF and FLAC files to add to the library, such as
   `["/home/you/Samples/Packs"]`. Their files are read where they are, so they keep taking up disk

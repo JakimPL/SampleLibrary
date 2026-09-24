@@ -65,7 +65,7 @@ def _discovery_or_exit(config: LibraryConfig) -> Discovery:
 
 def _goes_ahead(config: LibraryConfig, collection_digest: str, *, force: bool) -> bool:
     """Whether the pass has anything to do, dropping the record of the last complete pass when it does."""
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         passes = PostgresPassCompletionRepository(connection)
         if not force and passes.finished_over(PassKind.MODULES, collection_digest):
             return False
@@ -79,7 +79,7 @@ def _record_the_complete_pass(config: LibraryConfig, collection_digest: str) -> 
     if stat_digest(config.module_source_directory, _discovery_or_exit(config).paths) != collection_digest:
         _logger.info("The collection changed while the pass read it, so the next pass reads it again.")
         return
-    with open_catalog_connection(config.database_url) as connection, start_batch(connection):
+    with open_catalog_connection(config.catalog_url()) as connection, start_batch(connection):
         PostgresPassCompletionRepository(connection).record(
             PassCompletion(kind=PassKind.MODULES, digest=collection_digest, completed_at=datetime.now(UTC))
         )
@@ -104,7 +104,7 @@ def _report(summary: ExtractionSummary) -> None:
 
 
 def _prune(config: LibraryConfig, outcome: CorpusOutcome) -> None:
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         try:
             summary = prune_gone_modules(config, connection, outcome)
         except PruneRefused as error:

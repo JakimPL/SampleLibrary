@@ -168,7 +168,7 @@ def test_the_named_configuration_supplies_the_database_over_an_exported_one(
     monkeypatch.setenv(DATABASE_URL_ENVIRONMENT_VARIABLE, EXPORTED_DATABASE_URL)
     database_urls: list[str] = []
     monkeypatch.setattr(
-        "sampleextract.notes.cli.main", lambda argv, *, prog: database_urls.append(load_config().database_url)
+        "sampleextract.notes.cli.main", lambda argv, *, prog: database_urls.append(load_config().catalog_url())
     )
 
     dispatch(["--config", str(_write_sandbox_config(tmp_path)), "notes"])

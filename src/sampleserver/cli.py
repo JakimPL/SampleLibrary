@@ -34,7 +34,7 @@ def main(argv: list[str], *, prog: str) -> None:
     if arguments.frontend is not None:
         os.environ[FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE] = str(arguments.frontend)
     config = bootstrap_cli()
-    with open_catalog_connection(config.database_url):
+    with open_catalog_connection(config.catalog_url()):
         pass
 
     uvicorn.run(

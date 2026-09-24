@@ -39,6 +39,7 @@ descriptor = [
 ]
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]
+app = ["postgresql-binaries>=18.6"]
 
 [project.scripts]
 samplelibrary = "samplelibrary.cli:main"

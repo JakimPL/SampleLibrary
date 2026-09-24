@@ -40,14 +40,14 @@ def main(argv: list[str], *, prog: str) -> None:
     """Empty the configured library once `--confirm` is given, and name what that would empty otherwise."""
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
-    target = f"the library at {config.library_root} (database: {redact_database_url(config.database_url)})"
+    target = f"the library at {config.library_root} (database: {redact_database_url(config.catalog_url())})"
     if not arguments.confirm:
         report_dry_run(f"This would permanently delete {EMPTIED} for {target}; {KEPT} stay.")
         return
 
     _logger.info("Resetting %s...", target)
     with (
-        open_catalog_connection(config.database_url) as connection,
+        open_catalog_connection(config.catalog_url()) as connection,
         ending_in_one_line("Reset nothing", (ResetRefused,)),
     ):
         reset_library(connection, config.library_root)

@@ -59,7 +59,7 @@ def run_pipeline_command(
     with ending_in_one_line("Ran nothing", REFUSALS):
         graph.order(targets)
 
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         context = PipelineContext(
             config=config,
             settings=settings,
@@ -124,7 +124,7 @@ def _run(
         redo=tuple(arguments.redo),
         follow=arguments.follow,
     )
-    with open_catalog_connection(session.context.config.database_url) as lock_connection:
+    with open_catalog_connection(session.context.config.catalog_url()) as lock_connection:
         lock = claim_pipeline_lock(lock_connection, session.context.library_identity)
         with ending_in_one_line("Ran nothing", REFUSALS):
             report = run_pipeline(session, graph, request, sinks, lock)

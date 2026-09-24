@@ -144,7 +144,7 @@ def open_catalog_audio(config: LibraryConfig) -> Iterator[tuple[Connection, Samp
     The reader learns every sample file the catalog lists as the pass opens, so a pass reads each
     sample from the store or from the files cataloged when it started.
     """
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         yield connection, SampleAudio.from_catalog(connection, config.library_root)
 
 

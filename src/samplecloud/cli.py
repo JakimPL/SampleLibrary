@@ -38,7 +38,7 @@ def main(argv: list[str], *, prog: str) -> None:
     arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     with (
-        open_catalog_connection(config.database_url) as connection,
+        open_catalog_connection(config.catalog_url()) as connection,
         ending_in_one_line("Embedded nothing", (ExperimentRefused,)),
     ):
         summary = _embed(config, connection, arguments)

@@ -3104,6 +3104,18 @@ wheels = [
 ]
 
 [[package]]
+name = "postgresql-binaries"
+version = "18.6.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/96/75f71bedbd08645d57f635249fa2b25a385b2336c7523177147b4d511ab0/postgresql_binaries-18.6.0-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:3a9d64f002462e8e595db242eebf9dde44d4cf90ceba982878326eefbceda2af", size = 13263859, upload-time = "2026-09-20T15:24:26.769Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/9f/bf0a4e197be35fed95ed4ea346fd35f665f6dba6169fc4d71df62e3030fa/postgresql_binaries-18.6.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:79a3c84ca214d3c52aa1d4960fc9befc9354f0334b03c4bbd6a44207bbfeb143", size = 12894905, upload-time = "2026-09-20T14:54:19.13Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/7e/59acdc480bad19a8122790453ec4b6de3eda230d034a0190c16250cd3fcc/postgresql_binaries-18.6.0-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:3ebed8ab6f48450e1af1c991273dd438d559f692a38fad765f75ce52ca44c398", size = 11749069, upload-time = "2026-09-20T15:24:29.415Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/d6/5bf88efbd89c599506a141e547ecb5607384dc3fa706360b971cd9bdd530/postgresql_binaries-18.6.0-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:e25217097466f049d4b577b4e980f2ef5fbc6fb0a71f7260a2ef5ca247af0477", size = 11980958, upload-time = "2026-09-20T15:24:27.573Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/5e/4b09b624f88fb3b61c6520c69acdaa5da55227853cc6bcba40771130f33f/postgresql_binaries-18.6.0-py3-none-win_amd64.whl", hash = "sha256:075f493fd899a5aeef1aea47dbd6b662e6b634c0b904e4e754fdaf6fef2db343", size = 53687377, upload-time = "2026-09-20T14:54:28.419Z" },
+]
+
+[[package]]
 name = "pre-commit"
 version = "4.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4001,6 +4013,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+app = [
+    { name = "postgresql-binaries" },
+]
 cloud = [
     { name = "librosa" },
     { name = "mlflow" },
@@ -4072,6 +4087,7 @@ requires-dist = [
     { name = "mlflow", marker = "extra == 'tracking'", specifier = ">=3.6" },
     { name = "numpy", specifier = ">=2.1" },
     { name = "pghipy", marker = "extra == 'morph'", specifier = ">=0.1" },
+    { name = "postgresql-binaries", marker = "extra == 'app'", specifier = ">=18.6" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "python-multipart", marker = "extra == 'morph'", specifier = ">=0.0.20" },
@@ -4094,7 +4110,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'morph'", specifier = ">=0.35" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.35" },
 ]
-provides-extras = ["server", "cloud", "morph", "descriptor", "tracking", "teacher"]
+provides-extras = ["server", "cloud", "morph", "descriptor", "tracking", "teacher", "app"]
 
 [package.metadata.requires-dev]
 dev = [

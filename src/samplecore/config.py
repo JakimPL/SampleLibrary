@@ -9,6 +9,8 @@ from urllib.parse import SplitResult, urlsplit
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
+from samplecore.storage.cluster.embedded.state import managed_catalog_url
+
 DEFAULT_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config.toml"
 EXAMPLE_CONFIG_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "config.example.toml"
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
@@ -73,11 +75,13 @@ class InferenceConfig(BaseModel):
 class LibraryConfig(BaseModel):
     """Local, machine-specific configuration this project reads at startup.
 
-    Nothing here is checked into the repository. ``module_source_directory``, ``library_root``, and
-    ``database_url`` are required with no default, since fabricating a plausible-looking value would
-    point the library at the wrong place, or the wrong database, silently rather than failing loudly
-    when configuration is missing. The inference address has a default, since one machine running
-    both processes is the common case and the port is free to choose.
+    Nothing here is checked into the repository. ``module_source_directory`` and ``library_root`` are
+    required with no default, since fabricating a plausible-looking value would point the library at
+    the wrong place silently rather than failing loudly when configuration is missing.
+    ``database_url`` names a Postgres server of a person's own; left out, the library keeps a managed
+    server inside its library root, which the application creates and runs. The inference address
+    has a default, since one machine running both processes is the common case and the port is free
+    to choose.
 
     ``sample_directories`` names folders of plain audio files the library reads in place, beside the
     samples it extracts from modules, and ``sample_exclusions`` holds the patterns naming what inside
@@ -90,7 +94,7 @@ class LibraryConfig(BaseModel):
 
     module_source_directory: Path
     library_root: Path
-    database_url: str
+    database_url: str | None = None
     minimum_sample_frames: int = DEFAULT_MINIMUM_SAMPLE_FRAMES
     sample_directories: tuple[Path, ...] = DEFAULT_SAMPLE_DIRECTORIES
     sample_exclusions: tuple[str, ...] = DEFAULT_SAMPLE_EXCLUSIONS
@@ -117,7 +121,7 @@ class LibraryConfig(BaseModel):
 
     @field_validator("database_url")
     @classmethod
-    def _parses_as_a_database_url(cls, database_url: str) -> str:
+    def _parses_as_a_database_url(cls, database_url: str | None) -> str | None:
         """Read the URL the way every connection will, importing the database stack only once a config loads.
 
         The command line imports this module to list its commands, and that listing stays as light as
@@ -127,6 +131,8 @@ class LibraryConfig(BaseModel):
         from sqlalchemy.engine import make_url
         from sqlalchemy.exc import ArgumentError
 
+        if database_url is None:
+            return None
         try:
             make_url(database_url)
         except ArgumentError as error:
@@ -134,6 +140,21 @@ class LibraryConfig(BaseModel):
                 "must be a URL such as postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"
             ) from error
         return database_url
+
+    @property
+    def manages_database(self) -> bool:
+        """Whether the library keeps its own Postgres server inside its library root."""
+        return self.database_url is None
+
+    def catalog_url(self) -> str:
+        """The URL every connection to the catalog opens: the configured server's, or the managed one's.
+
+        Raises:
+            ManagedClusterMissingError: the library manages its database and has not created it yet.
+        """
+        if self.database_url is not None:
+            return self.database_url
+        return managed_catalog_url(self.library_root)
 
 
 def load_config(path: Path | None = None) -> LibraryConfig:

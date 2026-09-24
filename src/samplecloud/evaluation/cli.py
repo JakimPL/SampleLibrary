@@ -38,7 +38,7 @@ def main(argv: list[str], *, prog: str) -> None:
     """Score one experiment's descriptor, record the pass, and report what it measured."""
     arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         with ending_in_one_line("Scored nothing", (ExperimentRefused,)):
             experiment = experiment_named(connection, arguments.experiment_id)
             describer = _describer(connection, experiment, config=config, arguments=arguments)

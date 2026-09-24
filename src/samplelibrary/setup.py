@@ -4,11 +4,14 @@ import argparse
 import logging
 import sys
 from enum import StrEnum, unique
+from pathlib import Path
 
 from samplecore.cli_parsing import add_subcommand, command_parser
 from samplecore.cli_support import bootstrap_cli, configure_console_output_encoding, configure_logging
 from samplecore.config import ConfigurationError, create_config_file, resolve_config_path
 from samplecore.exit_status import ExitStatus
+from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
+from samplecore.storage.cluster.embedded.server import EmbeddedCluster, EmbeddedClusterError
 from samplecore.storage.cluster.provisioning import ProvisioningError, ProvisioningSummary, provision
 
 _logger = logging.getLogger(__name__)
@@ -56,20 +59,42 @@ def _run_config() -> None:
 
 
 def _run_database() -> None:
-    """Create the role and databases the configuration expects, then report what that took.
+    """Prepare the database the configuration names, then report what that took.
+
+    A library managing its own database gets its cluster created and started, and the server keeps
+    running for the commands that follow until the app or `pg_ctl` stops it. A configured server
+    gets the role and the databases this project expects.
 
     Raises:
         SystemExit: the server refused a connection or a statement, in which case the steps that
-            would let it succeed have been reported.
+            would let it succeed have been reported, or the managed cluster failed to start.
     """
     config = bootstrap_cli()
+    if config.manages_database:
+        _run_managed_database(config.library_root)
+        return
     try:
-        summary = provision(config.database_url)
+        summary = provision(config.catalog_url())
     except ProvisioningError as error:
         _report_obstacle(error)
         sys.exit(ExitStatus.FAILED)
 
     _report(summary)
+
+
+def _run_managed_database(library_root: Path) -> None:
+    """Create and start the library's own Postgres server.
+
+    Raises:
+        SystemExit: the bundled Postgres is missing, or one of its programs failed.
+    """
+    cluster = EmbeddedCluster(library_root)
+    try:
+        cluster.ensure_running()
+    except (EmbeddedClusterError, PostgresBinariesUnavailableError) as error:
+        _logger.error("%s", error)
+        sys.exit(ExitStatus.FAILED)
+    _logger.info("The library's database runs from %s.", cluster.directory)
 
 
 def _report(summary: ProvisioningSummary) -> None:

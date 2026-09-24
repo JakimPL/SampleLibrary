@@ -72,7 +72,7 @@ def main(argv: list[str], *, prog: str) -> None:
     """Lay the cataloged modules out on the cloud and report how faithfully the plane keeps their distances."""
     _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         summary = lay_out_and_persist_modules(connection)
 
     _logger.info("Placed %d module(s) on the cloud.", summary.modules_placed)

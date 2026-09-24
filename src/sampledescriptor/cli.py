@@ -22,7 +22,7 @@ def main(argv: list[str], *, prog: str) -> None:
     arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
     command = DescriptorCommand(arguments.command)
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         match command:
             case DescriptorCommand.CACHE_GRIDS:
                 cache_grids.run(connection, config, arguments)

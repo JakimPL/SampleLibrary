@@ -18,6 +18,7 @@ from samplecore.config import (
     create_config_file,
     load_config,
 )
+from samplecore.storage.cluster.embedded.state import ManagedClusterMissingError, create_cluster_state
 
 
 def test_the_default_config_path_sits_next_to_the_committed_example_template() -> None:
@@ -71,12 +72,7 @@ def test_the_inference_address_has_a_default_when_the_table_is_absent(tmp_path: 
     assert load_config(config_path).inference == InferenceConfig()
 
 
-def test_database_url_is_required(tmp_path: Path) -> None:
-    with pytest.raises(pydantic.ValidationError):
-        LibraryConfig(module_source_directory=tmp_path / "modules", library_root=tmp_path / "library")
-
-
-def test_a_config_missing_a_setting_names_it_in_a_configuration_error(
+def test_a_config_leaving_out_the_database_url_manages_its_own_database(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "config.toml"
@@ -88,10 +84,39 @@ def test_a_config_missing_a_setting_names_it_in_a_configuration_error(
     )
     monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
 
-    with pytest.raises(ConfigurationError, match="database_url") as raised:
-        load_config(config_path)
+    config = load_config(config_path)
 
-    assert DATABASE_URL_ENVIRONMENT_VARIABLE in str(raised.value)
+    assert config.manages_database
+    with pytest.raises(ManagedClusterMissingError):
+        config.catalog_url()
+
+
+def test_a_managed_database_is_reached_at_the_address_its_cluster_recorded(tmp_path: Path) -> None:
+    config = LibraryConfig(module_source_directory=tmp_path / "modules", library_root=tmp_path / "library")
+    state = create_cluster_state(config.library_root)
+
+    assert config.catalog_url() == state.catalog_url
+
+
+def test_a_configured_database_url_is_the_catalog_url(tmp_path: Path) -> None:
+    config = LibraryConfig(
+        module_source_directory=tmp_path / "modules",
+        library_root=tmp_path / "library",
+        database_url="postgresql+psycopg://user:pass@host/db",
+    )
+
+    assert not config.manages_database
+    assert config.catalog_url() == "postgresql+psycopg://user:pass@host/db"
+
+
+def test_a_config_missing_a_setting_names_it_in_a_configuration_error(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nmodule_source_directory = "{(tmp_path / "modules").as_posix()}"\n', encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigurationError, match="library_root"):
+        load_config(config_path)
 
 
 def test_loading_a_missing_config_file_raises_a_configuration_error(tmp_path: Path) -> None:

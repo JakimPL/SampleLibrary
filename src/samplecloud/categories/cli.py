@@ -49,7 +49,7 @@ def main(argv: list[str], *, prog: str) -> None:
     """
     arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         with ending_in_one_line("Scored nothing", (ExperimentRefused, VocabularyRefused, ScoringConflict)):
             source = _listening_experiment(connection, arguments.experiment_id)
             recipe = ScoringRecipe(

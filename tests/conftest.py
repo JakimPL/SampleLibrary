@@ -67,6 +67,8 @@ def _server_url() -> str:
         configured = load_config().database_url
     except ConfigurationError:
         return DEFAULT_SERVER_URL
+    if configured is None:
+        return DEFAULT_SERVER_URL
     return make_url(configured).set(database=TEST_DATABASE_NAME).render_as_string(hide_password=False)
 
 

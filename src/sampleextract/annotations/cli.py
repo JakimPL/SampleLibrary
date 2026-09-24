@@ -50,7 +50,7 @@ def main(argv: list[str], *, prog: str) -> None:
     command = AnnotationCommand(arguments.command)
     config = bootstrap_cli()
     open_catalog = open_catalog_reader if command.reads_only else open_catalog_connection
-    with open_catalog(config.database_url) as connection:
+    with open_catalog(config.catalog_url()) as connection:
         try:
             _run(command, arguments, connection)
         except AnnotationFileRefused as error:

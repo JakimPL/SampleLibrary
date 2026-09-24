@@ -7,7 +7,8 @@ module_source_directory = "/path/to/your/module/collection"
 # Where the library keeps its extracted samples, trained models and recorded runs.
 library_root = "/path/to/your/sample/library"
 
-# The PostgreSQL database holding the catalog. `just database` creates it with this user and password.
+# A PostgreSQL server of your own holding the catalog. `just database` creates it with this user and password.
+# Left out, the library keeps its own server inside library_root, which `just database` creates and starts.
 database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"
 
 # The library keeps samples at least this many frames long.
