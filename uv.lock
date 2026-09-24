@@ -4016,7 +4016,22 @@ dependencies = [
 
 [package.optional-dependencies]
 app = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "librosa" },
+    { name = "lightning" },
+    { name = "mlflow" },
+    { name = "pghipy" },
     { name = "postgresql-binaries" },
+    { name = "python-multipart" },
+    { name = "pyyaml" },
+    { name = "scikit-learn" },
+    { name = "threadpoolctl" },
+    { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform != 'darwin'" },
+    { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
+    { name = "transformers" },
+    { name = "umap-learn" },
+    { name = "uvicorn" },
 ]
 cloud = [
     { name = "librosa" },
@@ -4096,6 +4111,7 @@ requires-dist = [
     { name = "python-multipart", marker = "extra == 'morph'", specifier = ">=0.0.20" },
     { name = "pytz", specifier = ">=2025.2" },
     { name = "pyyaml", marker = "extra == 'morph'", specifier = ">=6.0" },
+    { name = "samplelibrary", extras = ["server", "morph", "cloud", "descriptor", "teacher"], marker = "extra == 'app'" },
     { name = "scikit-learn", marker = "extra == 'cloud'", specifier = ">=1.9" },
     { name = "scikit-learn", marker = "extra == 'descriptor'", specifier = ">=1.9" },
     { name = "scipy", specifier = ">=1.16" },

@@ -308,3 +308,10 @@ Read `docs/guidelines.md` before making changes. `just check` runs formatting, l
 `just frontend-check` does the same for the frontend. The tests run against the `samplelibrary_test`
 database on the server `config.toml` names; `SAMPLELIBRARY_TEST_DATABASE_URL` names another one. `docs/architecture.md` describes the package
 layout and how the project uses its databases.
+
+`just package <trackmod>` prepares what the packaged application installs, in `dist/`: the
+samplelibrary wheel with the built frontend and the bundled descriptor inside, the trackmod wheel,
+and `app-requirements.txt`, the locked versions of the `app` extra with torch's processor build.
+`<trackmod>` names where an installation takes trackmod from, such as `trackmod==0.2.0`. Installing
+the wheel with its `app` extra over those requirements, with `--index-strategy unsafe-best-match`,
+gives a complete application: `samplelibrary app` then needs no Node, no PostgreSQL and no checkout.

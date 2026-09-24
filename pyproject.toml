@@ -41,7 +41,10 @@ descriptor = [
 ]
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]
-app = ["postgresql-binaries>=18.6"]
+app = [
+    "samplelibrary[server,morph,cloud,descriptor,teacher]",
+    "postgresql-binaries>=18.6",
+]
 
 [project.scripts]
 samplelibrary = "samplelibrary.cli:main"
@@ -95,6 +98,8 @@ packages = [
     "src/sampledescriptor",
     "src/samplelibrary",
 ]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/samplecore/py.typed" = "samplecore/py.typed"

@@ -170,6 +170,13 @@ frontend-types:
     uv run samplelibrary setup-schema --output setup-openapi.json
     npm run types
 
+[group("release")]
+package trackmod:
+    npm --prefix frontend run build
+    uv build --wheel --out-dir dist
+    uv build --wheel --project trackmod --out-dir dist
+    uv run python scripts/app_requirements.py --output dist/app-requirements.txt --trackmod "{{ trackmod }}"
+
 [group("docker")]
 docker-build:
     docker build -t samplelibrary-server .
