@@ -28,7 +28,10 @@ from samplelibrary.pipeline.context import RunSession
 from samplelibrary.pipeline.results import AttemptOutcome
 
 INTERRUPT_STATUSES: Final[frozenset[int]] = frozenset({130, -signal.SIGINT, -signal.SIGTERM, 143, -1073741510})
-KILLED_STATUSES: Final[frozenset[int]] = frozenset({137, -signal.SIGKILL})
+if sys.platform == "win32":
+    KILLED_STATUSES: Final[frozenset[int]] = frozenset({137})
+else:
+    KILLED_STATUSES: Final[frozenset[int]] = frozenset({137, -signal.SIGKILL})
 RECORDED_PACKAGES: Final[tuple[str, ...]] = ("torch", "transformers", "librosa", "trackmod", "numpy")
 TQDM_INTERVAL_SECONDS: Final[str] = "30"
 CHILD_ENVIRONMENT: Final[Mapping[str, str]] = {

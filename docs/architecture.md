@@ -480,8 +480,8 @@ whose catalog answers. The config mounted into it names `module_source_directory
 as paths inside the container, and `database_url` unless the environment supplies it.
 
 The inference process (`samplelibrary morph serve`) installs the `morph` extra alone, reads the library
-root and the sample directories its configuration lists, renders under the settings `morph.yaml` at the
-repository root names, as committed the envelope morph whose excitation crossfades both ends and
+root and the sample directories its configuration lists, renders under the settings `morph.yaml` in
+`samplemorph/routes/selections/` names, as committed the envelope morph whose excitation crossfades both ends and
 glides between their read pitches, reads `morph-filter.yaml` beside it for the filters it hands over, and opens no database: a
 morph names two samples and a weight, and the API, which knows the catalog, reads each sample's
 playback rate the way it does everywhere else, together with the file an end found only in sample

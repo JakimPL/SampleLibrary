@@ -69,7 +69,7 @@ under its `[library]` table:
 The `[inference]` table holds one key, `url`: the address the morph renderer listens on and the API
 reaches it at, `http://127.0.0.1:8010` by default. It names a port of its own.
 
-`morph.yaml`, beside `config.toml`, is committed and names the morph the renderer plays, and
+`morph.yaml`, in `src/samplemorph/routes/selections/`, is committed and names the morph the renderer plays, and
 `morph-filter.yaml` beside it names the one the morph filter is read under. The renderer reads both,
 so one process plays the morph and hands over the filter; see
 [Morphing two samples](#morphing-two-samples).
@@ -232,7 +232,7 @@ The app can play a sound between any two samples, through a morph renderer runni
 uv run samplelibrary morph serve                      # the renderer, in a terminal of its own
 ```
 
-`morph.yaml` at the repository root says what the renderer plays; edit it and start the renderer
+`src/samplemorph/routes/selections/morph.yaml` says what the renderer plays; edit it and start the renderer
 again. Every morph moves the spectral envelope from one sample's to the other's through the samples'
 own spectral analyses, and nothing needs fitting. As committed, both samples' harmonics sound under
 the moving envelope and slide from the first sample's pitch to the second's (`excitation: both` with
@@ -248,7 +248,7 @@ samples fits in a few numbers per frame that a caller applies at any weight:
 
 ```sh
 uv run samplelibrary morph response --first <hash> --second <hash> \
-  --selection morph-filter.yaml --output pair.bin
+  --selection src/samplemorph/routes/selections/morph-filter.yaml --output pair.bin
 ```
 
 `morph-filter.yaml` is the settings file both that command and the renderer read a filter under. A
