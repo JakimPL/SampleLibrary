@@ -220,6 +220,7 @@ so anyone on your network who reaches it can change your labels.
 | `just status [targets]` | Says what each step of the library would do now, and why |
 | `just app` | Runs the library's database, the API with the built frontend, and the morph renderer, and opens them in a browser |
 | `just bundle-descriptor` | Copies the configured library's trained descriptor into the package, as the one new libraries take |
+| `just package <trackmod>`, `just executable`, `just publish-trackmod` | Prepare the wheels and pinned requirements, build the PyApp executable, and upload trackmod to PyPI (see [Development](#development)) |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
 | `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
@@ -309,9 +310,20 @@ Read `docs/guidelines.md` before making changes. `just check` runs formatting, l
 database on the server `config.toml` names; `SAMPLELIBRARY_TEST_DATABASE_URL` names another one. `docs/architecture.md` describes the package
 layout and how the project uses its databases.
 
-`just package <trackmod>` prepares what the packaged application installs, in `dist/`: the
-samplelibrary wheel with the built frontend and the bundled descriptor inside, the trackmod wheel,
-and `app-requirements.txt`, the locked versions of the `app` extra with torch's processor build.
-`<trackmod>` names where an installation takes trackmod from, such as `trackmod==0.2.0`. Installing
-the wheel with its `app` extra over those requirements, with `--index-strategy unsafe-best-match`,
-gives a complete application: `samplelibrary app` then needs no Node, no PostgreSQL and no checkout.
+Packaging the application takes two recipes, run on each system it is built for:
+
+```sh
+just package "trackmod==0.2.0"   # dist/: both wheels, the frontend inside, and app-requirements.txt
+just executable                  # dist/SampleLibrary(.exe), built with PyApp; needs Rust (rustup)
+```
+
+`just package` builds the frontend into the samplelibrary wheel, beside the descriptor
+`just bundle-descriptor` put in place, and writes the locked versions of the `app` extra with
+torch's processor build. `just executable` pins those versions into a copy of the wheel and compiles
+a PyApp launcher around it. On first start the executable downloads Python and installs the pinned
+application with uv, which takes several minutes; later starts take seconds. The installed app needs
+no Node, no PostgreSQL and no checkout.
+
+trackmod has to be on PyPI for the executable to install; `just publish-trackmod` uploads it (uv asks
+for a PyPI token). To try an executable before that, `just executable --find-links dist` lets its
+first start install trackmod from the wheel in `dist/`.

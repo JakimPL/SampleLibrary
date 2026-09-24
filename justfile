@@ -177,6 +177,15 @@ package trackmod:
     uv build --wheel --project trackmod --out-dir dist
     uv run python scripts/app_requirements.py --output dist/app-requirements.txt --trackmod "{{ trackmod }}"
 
+[group("release")]
+executable *arguments:
+    uv run python scripts/build_app.py --dist dist {{ arguments }}
+
+[group("release")]
+publish-trackmod:
+    uv build --project trackmod --out-dir dist/trackmod
+    uv publish dist/trackmod/*
+
 [group("docker")]
 docker-build:
     docker build -t samplelibrary-server .
