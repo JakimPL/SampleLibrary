@@ -15,7 +15,7 @@ export class ApiError extends Error {
     }
 }
 
-export type WriteMethod = "PATCH";
+export type WriteMethod = "PATCH" | "PUT" | "POST";
 
 export interface JsonRequest {
     readonly method: WriteMethod;

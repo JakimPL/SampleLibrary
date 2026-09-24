@@ -163,6 +163,7 @@ frontend-check:
 [working-directory("frontend")]
 frontend-types:
     uv run samplelibrary schema --output openapi.json
+    uv run samplelibrary setup-schema --output setup-openapi.json
     npm run types
 
 [group("docker")]

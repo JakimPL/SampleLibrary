@@ -46,6 +46,12 @@ class RecordedCall:
 
 
 ROUTE_CASES = (
+    RouteCase(
+        ["setup-schema", "--output", "setup.json"],
+        "samplelibrary.app.openapi_export.main",
+        ["--output", "setup.json"],
+        "samplelibrary setup-schema",
+    ),
     RouteCase(["app", "--no-browser"], "samplelibrary.app.cli.main", ["--no-browser"], "samplelibrary app"),
     RouteCase(["setup", "database"], "samplelibrary.setup.main", ["database"], "samplelibrary setup"),
     RouteCase(["reset", "--confirm"], "samplelibrary.reset.main", ["--confirm"], "samplelibrary reset"),

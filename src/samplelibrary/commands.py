@@ -129,6 +129,12 @@ def _app(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _setup_schema(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.app.openapi_export import main
+
+    main(argv, prog=prog)
+
+
 def _serve(argv: list[str], *, prog: str) -> None:
     from sampleserver.cli import main
 
@@ -208,6 +214,11 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
     Command(name="morph", summary="Serve morphs between two samples over HTTP, and write morph filters.", run=_morph),
     Command(name="serve", summary="Serve the library's API, and the built frontend when named, over HTTP.", run=_serve),
     Command(name="schema", summary="Print the API's OpenAPI schema as JSON, or write it to a file.", run=_schema),
+    Command(
+        name="setup-schema",
+        summary="Print the setup pages' OpenAPI schema as JSON, or write it to a file.",
+        run=_setup_schema,
+    ),
     CommandGroup(
         name="tracking",
         summary="Find the run store every training and evaluation pass records to.",

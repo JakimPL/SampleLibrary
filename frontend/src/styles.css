@@ -3123,3 +3123,279 @@ table.data td .annotation-editor-input {
     width: 100%;
     margin-left: 0;
 }
+
+/* The setup page: a column of cards on the page's own background, readable at a phone's width. */
+.setup-page {
+    display: grid;
+    gap: var(--space-7);
+    align-content: start;
+    width: min(100%, 720px);
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: calc(var(--space-7) + var(--safe-top)) var(--space-7) calc(var(--space-7) + var(--safe-bottom));
+    box-sizing: border-box;
+    font-size: 14px;
+}
+
+.setup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+}
+
+.setup-header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.setup-intro {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+.setup-card {
+    display: grid;
+    gap: var(--space-6);
+    padding: var(--space-7);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-4);
+    background: var(--surface-1);
+}
+
+.setup-card h1,
+.setup-card h2 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.setup-field {
+    display: grid;
+    gap: var(--space-4);
+    justify-items: start;
+}
+
+.setup-field-title {
+    margin: 0;
+    font-size: 14px;
+}
+
+.setup-hint,
+.folder-note {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.setup-label {
+    display: grid;
+    gap: var(--space-2);
+    width: 100%;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.setup-input {
+    min-height: 32px;
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+}
+
+.setup-button {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 var(--space-6);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-size: 13px;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.setup-button:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.setup-button-primary {
+    border-color: var(--accent-strong);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+}
+
+.setup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.setup-folder {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+    max-width: 100%;
+}
+
+.setup-folder .mono {
+    overflow-wrap: anywhere;
+}
+
+.setup-folder-list {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.folder-places {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+}
+
+.folder-place {
+    min-height: var(--tap-target);
+    padding: 0 var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--surface-0);
+    cursor: pointer;
+}
+
+.folder-place[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.folder-current {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.folder-up {
+    flex: none;
+    min-height: var(--tap-target);
+    padding: 0 var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    cursor: pointer;
+}
+
+.folder-path {
+    overflow-wrap: anywhere;
+}
+
+.folder-list {
+    display: grid;
+    max-height: 45dvh;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    list-style: none;
+}
+
+.folder-item + .folder-item {
+    border-top: 1px solid var(--border);
+}
+
+.folder-list .folder-note {
+    padding: var(--space-4);
+}
+
+.folder-entry {
+    width: 100%;
+    min-height: var(--tap-target);
+    padding: var(--space-3) var(--space-4);
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+.folder-entry:hover {
+    background: var(--surface-2);
+}
+
+.build-choices {
+    display: grid;
+    gap: var(--space-6);
+}
+
+.build-choice {
+    display: grid;
+    gap: var(--space-3);
+    justify-items: start;
+}
+
+.build-steps {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.build-step {
+    display: grid;
+    grid-template-columns: 1.25em 1fr auto;
+    gap: var(--space-2) var(--space-4);
+    align-items: center;
+}
+
+.build-step-mark {
+    text-align: center;
+}
+
+.build-step[data-state="done"] .build-step-mark,
+.build-step[data-state="up to date"] .build-step-mark {
+    color: var(--good);
+}
+
+.build-step[data-state="running"] .build-step-mark {
+    color: var(--accent);
+}
+
+.build-step[data-state="failed"] .build-step-mark {
+    color: var(--critical);
+}
+
+.build-step[data-state="waiting"],
+.build-step[data-state="skipped"] {
+    color: var(--text-faint);
+}
+
+.build-step-note {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.build-step-bar {
+    grid-column: 2 / -1;
+    width: 100%;
+    height: 6px;
+    accent-color: var(--accent);
+}
+
+.build-log pre {
+    max-height: 240px;
+    margin: var(--space-3) 0 0;
+    padding: var(--space-4);
+    overflow: auto;
+    border-radius: var(--radius-2);
+    background: var(--surface-2);
+    font-size: 12px;
+    white-space: pre-wrap;
+}
