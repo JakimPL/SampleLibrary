@@ -5,6 +5,24 @@ folders of plain audio files beside them. It collects every sample from your mod
 your sample folders, drops exact duplicates, groups near-duplicates together, and lets you browse,
 label and rate them — including a visual "cloud" of the whole library.
 
+## Running the app
+
+Start the `SampleLibrary` program. The first start downloads Python and everything the app needs,
+which takes several minutes; later starts take a few seconds. Your browser then opens on the setup
+page:
+
+1. Choose your module folder, your sample folders, or both.
+2. Choose where the library stores its files. Pick a drive with free space: a large collection
+   takes several gigabytes.
+3. Click **Save and open the library**, then **Scan my folders**. **Scan and build the cloud** also
+   analyzes every sample and builds the cloud, which can take hours.
+
+You can close the browser tab while a scan runs; it keeps going. Open the program again to get back
+to it. **Quit** on the setup page stops SampleLibrary. To add folders or scan again later, open
+**View → Library setup**.
+
+The rest of this README is for running SampleLibrary from its source code.
+
 ## Requirements
 
 - Python 3.12 or later
