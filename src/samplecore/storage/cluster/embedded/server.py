@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
 
+from samplecore.processes import HIDDEN_CONSOLE_FLAGS
 from samplecore.storage.cluster.embedded.binaries import PostgresProgram, program_path
 from samplecore.storage.cluster.embedded.state import (
     DATA_DIRECTORY_NAME,
@@ -78,6 +79,7 @@ class EmbeddedCluster:
             [program_path(PostgresProgram.PG_CTL), "status", "-D", self.data_directory],
             capture_output=True,
             check=False,
+            creationflags=HIDDEN_CONSOLE_FLAGS,
         )
         return status.returncode == 0
 
@@ -176,6 +178,7 @@ class EmbeddedCluster:
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 check=False,
+                creationflags=HIDDEN_CONSOLE_FLAGS,
             )
         if completed.returncode != 0:
             raise EmbeddedClusterError(

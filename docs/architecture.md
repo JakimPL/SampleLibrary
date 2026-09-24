@@ -497,7 +497,11 @@ the built frontend. The `Launcher` owns what the library needs:
 The packaged application is a PyApp executable (`just package`, `just executable`): it embeds the
 samplelibrary wheel, which carries the built frontend and the bundled descriptor, with the `app`
 extra pinned to the lock and torch's processor build. On first start it installs Python and that
-wheel with uv.
+wheel with uv. PyApp runs it as a GUI, in a process of its own: on Windows through pythonw,
+windowless, with its output in `app.log` in the user's log folder
+(`samplelibrary.app.console`), and every console program it starts, such as `pg_ctl`, starts
+hidden (`samplecore.processes`). The Application workflow builds the executable for Linux, Windows
+and macOS and smoke-tests each one on a fresh runner.
 
 ## Deployment
 

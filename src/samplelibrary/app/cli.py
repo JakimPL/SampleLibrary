@@ -16,6 +16,7 @@ from samplecore.cli_support import configure_console_output_encoding, configure_
 from samplecore.config import resolve_config_path
 from samplecore.exit_status import ExitStatus
 from samplelibrary.app.asgi import SETUP_PREFIX, create_application
+from samplelibrary.app.console import log_without_console
 from samplelibrary.app.frontend import bundled_frontend
 from samplelibrary.app.launcher import Launcher
 from samplelibrary.app.processes import samplelibrary_command
@@ -34,7 +35,8 @@ _logger = logging.getLogger(__name__)
 def main(argv: list[str], *, prog: str) -> None:
     """Run the application: the library, everything it needs, and the pages that set it up, opened in a browser.
 
-    A second start while the application already runs opens the browser on the running one.
+    A second start while the application already runs opens the browser on the running one. A
+    windowless start, which Windows gives the packaged application, writes its output to a log file.
 
     Raises:
         SystemExit: another program holds the port the application listens on.
@@ -43,16 +45,16 @@ def main(argv: list[str], *, prog: str) -> None:
     configure_console_output_encoding()
     configure_logging()
     address = f"http://{_browser_host(arguments.host)}:{arguments.port}/"
-    match _running_instance(address):
-        case True:
-            _logger.info("SampleLibrary is already running at %s. Opening it.", address)
-            _open_browser(address, enabled=arguments.open_browser)
-            return
-        case None:
-            _logger.error("Port %d is already in use. Try another one with --port.", arguments.port)
-            sys.exit(ExitStatus.REFUSED)
-        case False:
-            pass
+    instance = _running_instance(address)
+    if instance is True:
+        _logger.info("SampleLibrary is already running at %s. Opening it.", address)
+        _open_browser(address, enabled=arguments.open_browser)
+        return
+    if log_without_console() is not None:
+        configure_logging()
+    if instance is None:
+        _logger.error("Port %d is already in use. Try another one with --port.", arguments.port)
+        sys.exit(ExitStatus.REFUSED)
 
     launcher = Launcher(
         resolve_config_path(),

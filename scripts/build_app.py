@@ -80,7 +80,9 @@ def _pyapp_settings(wheel: Path, find_links: Path | None) -> dict[str, str]:
     """What PyApp embeds: the wheel and its app extra, the Python it installs, and how uv reaches CPU torch.
 
     uv consults every index for each package under `unsafe-best-match`, which is what lets torch come
-    from PyTorch's processor index while everything else comes from PyPI.
+    from PyTorch's processor index while everything else comes from PyPI. As a GUI, the application
+    runs in a process of its own once installed, windowless through pythonw on Windows; the first
+    start shows the installation's progress in a console.
     """
     installer_arguments = ["--index-strategy", "unsafe-best-match", "--extra-index-url", CPU_TORCH_INDEX]
     if find_links is not None:
@@ -91,6 +93,7 @@ def _pyapp_settings(wheel: Path, find_links: Path | None) -> dict[str, str]:
         "PYAPP_EXEC_MODULE": APP_MODULE,
         "PYAPP_PYTHON_VERSION": PYTHON_VERSION,
         "PYAPP_UV_ENABLED": "1",
+        "PYAPP_IS_GUI": "1",
         "PYAPP_PIP_EXTRA_ARGS": " ".join(installer_arguments),
     }
 

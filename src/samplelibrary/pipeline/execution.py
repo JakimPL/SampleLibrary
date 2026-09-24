@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from samplecore.exit_status import ExitStatus
 from samplecore.models.base import FROZEN
+from samplecore.processes import HIDDEN_CONSOLE_FLAGS
 from samplecore.progress import PROGRESS_FILE_ENVIRONMENT_VARIABLE
 from samplelibrary.environment import (
     CONFIG_OPTION,
@@ -272,6 +273,7 @@ def _repository_revision() -> str | None:
             capture_output=True,
             text=True,
             cwd=Path(__file__).resolve().parent,
+            creationflags=HIDDEN_CONSOLE_FLAGS,
         )
     except OSError:
         return None
