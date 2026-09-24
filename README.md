@@ -7,9 +7,20 @@ label and rate them — including a visual "cloud" of the whole library.
 
 ## Running the app
 
-Start the `SampleLibrary` program. The first start downloads Python and everything the app needs,
-which takes several minutes; later starts take a few seconds. Your browser then opens on the setup
-page:
+Download the file for your system from the
+[Releases](https://github.com/JakimPL/SampleLibrary/releases) page and open it:
+
+- **Windows:** `SampleLibrary-<version>-windows-x64-setup.exe` installs SampleLibrary for you and
+  adds it to the Start menu. If Windows warns about an unrecognized app, click **More info**, then
+  **Run anyway**.
+- **macOS** (Apple silicon): open `SampleLibrary-<version>-macos-arm64.dmg` and drag SampleLibrary
+  into Applications. The first time you open it, macOS asks you to confirm an app from outside the
+  App Store: go to **System Settings → Privacy & Security** and click **Open Anyway**.
+- **Linux:** allow `SampleLibrary-<version>-linux-x64.AppImage` to run as a program (in its file
+  properties, or with `chmod +x`), then open it.
+
+The first start downloads Python and everything the app needs, which takes several minutes; later
+starts take a few seconds. Your browser then opens on the setup page:
 
 1. Choose your module folder, your sample folders, or both.
 2. Choose where the library stores its files. Pick a drive with free space: a large collection
@@ -20,6 +31,10 @@ page:
 You can close the browser tab while a scan runs; it keeps going. Open the program again to get back
 to it. **Quit** on the setup page stops SampleLibrary. To add folders or scan again later, open
 **View → Library setup**.
+
+Uninstalling SampleLibrary on Windows removes the program and what it downloaded; your library stays.
+If something goes wrong, the app's log is in `%LOCALAPPDATA%\SampleLibrary\Logs` on Windows,
+`~/Library/Logs/SampleLibrary` on macOS, and `~/.local/state/SampleLibrary/log` on Linux.
 
 The rest of this README is for running SampleLibrary from its source code.
 
@@ -238,7 +253,7 @@ so anyone on your network who reaches it can change your labels.
 | `just status [targets]` | Says what each step of the library would do now, and why |
 | `just app` | Runs the library's database, the API with the built frontend, and the morph renderer, and opens them in a browser |
 | `just bundle-descriptor` | Copies the configured library's trained descriptor into the package, as the one new libraries take |
-| `just package <trackmod>`, `just executable`, `just publish-trackmod` | Prepare the wheels and pinned requirements, build the PyApp executable, and upload trackmod to PyPI (see [Development](#development)) |
+| `just package <trackmod>`, `just executable`, `just installer`, `just publish-trackmod` | Prepare the wheels and pinned requirements, build the PyApp executable and this system's installer, and upload trackmod to PyPI (see [Development](#development)) |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
 | `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
@@ -328,11 +343,12 @@ Read `docs/guidelines.md` before making changes. `just check` runs formatting, l
 database on the server `config.toml` names; `SAMPLELIBRARY_TEST_DATABASE_URL` names another one. `docs/architecture.md` describes the package
 layout and how the project uses its databases.
 
-Packaging the application takes two recipes, run on each system it is built for:
+Packaging the application takes three recipes, run on each system it is built for:
 
 ```sh
 just package "trackmod==0.2.0"   # dist/: both wheels, the frontend inside, and app-requirements.txt
 just executable                  # dist/SampleLibrary(.exe), built with PyApp; needs Rust (rustup)
+just installer                   # dist/: the Windows installer (needs Inno Setup), macOS disk image or Linux AppImage
 ```
 
 `just package` builds the frontend into the samplelibrary wheel, beside the descriptor
@@ -340,7 +356,10 @@ just executable                  # dist/SampleLibrary(.exe), built with PyApp; n
 torch's processor build. `just executable` pins those versions into a copy of the wheel and compiles
 a PyApp launcher around it. On first start the executable downloads Python and installs the pinned
 application with uv, which takes several minutes; later starts take seconds. The installed app needs
-no Node, no PostgreSQL and no checkout.
+no Node, no PostgreSQL and no checkout. `just installer` wraps the executable into this system's
+installer from the files in `packaging/`, with icons drawn from the web app's. On macOS and Linux a
+launcher script starts the executable with its output in the log folder and announces the first
+start.
 
 trackmod has to be on PyPI for the executable to install; `just publish-trackmod` uploads it (uv asks
 for a PyPI token). To try an executable before that, `just executable --find-links dist` lets its
@@ -348,7 +367,7 @@ first start install trackmod from the wheel in `dist/`.
 
 The Application workflow (`.github/workflows/app.yml`) builds the executable on GitHub for Linux,
 Windows and macOS. Each one is then installed on a fresh machine, builds a small library through the
-setup API (`scripts/smoke_test_app.py`) and quits. Start it from the Actions tab to try a build. To
-publish one, push a tag that names the project's version, such as `v0.1.0`: the workflow then drafts
-a release carrying the executables. Give every release a new version, because an executable installs
-its packages once per version.
+setup API (`scripts/smoke_test_app.py`) and quits, and then wrapped into its installer. Start the
+workflow from the Actions tab to try a build. To publish one, push a tag that names the project's
+version, such as `v0.1.0`: the workflow then drafts a release carrying the installers. Give every
+release a new version, because an executable installs its packages once per version.

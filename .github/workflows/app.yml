@@ -49,8 +49,8 @@ jobs:
             dist/app-requirements.txt
           if-no-files-found: error
 
-  executable:
-    name: Executable (${{ matrix.platform }})
+  installer:
+    name: Installer (${{ matrix.platform }})
     needs: package
     strategy:
       fail-fast: false
@@ -68,24 +68,21 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     env:
-      EXECUTABLE: dist/SampleLibrary-${{ needs.package.outputs.version }}-${{ matrix.platform }}${{ matrix.extension }}
+      EXECUTABLE: dist/SampleLibrary${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - uses: extractions/setup-just@v4
-      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/download-artifact@v8
         with:
           name: package
           path: dist
       - name: Build the executable
-        run: |
-          just executable
-          mv "dist/SampleLibrary${{ matrix.extension }}" "$EXECUTABLE"
+        run: just executable
       - uses: actions/upload-artifact@v7
         with:
+          name: executable-${{ matrix.platform }}
           path: ${{ env.EXECUTABLE }}
-          archive: false
           if-no-files-found: error
       - name: Install and run the executable
         run: uv run --no-project python scripts/smoke_test_app.py --executable "$EXECUTABLE" --work "$RUNNER_TEMP/smoke"
@@ -98,11 +95,18 @@ jobs:
             ${{ runner.temp }}/smoke/library/**/*.log
             ${{ runner.temp }}/smoke/library/**/*.jsonl
           if-no-files-found: ignore
+      - name: Build the installer
+        run: just installer
+      - uses: actions/upload-artifact@v7
+        with:
+          path: dist/SampleLibrary-*-${{ matrix.platform }}*
+          archive: false
+          if-no-files-found: error
 
   release:
     name: Draft the release
     if: github.ref_type == 'tag'
-    needs: [package, executable]
+    needs: [package, installer]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

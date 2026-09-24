@@ -50,10 +50,10 @@ def main(argv: list[str] | None = None) -> None:
             release build finds no bundled descriptor.
     """
     arguments = _parse_arguments(argv)
-    version = _project_version(PROJECT_FILE)
+    version = project_version(PROJECT_FILE)
     if arguments.tag is not None and arguments.tag != f"{TAG_PREFIX}{version}":
         sys.exit(f"The tag {arguments.tag} doesn't match the project version {version}. Tag {TAG_PREFIX}{version}.")
-    trackmod_version = _project_version(TRACKMOD_PROJECT_FILE)
+    trackmod_version = project_version(TRACKMOD_PROJECT_FILE)
     if not _published(TRACKMOD_PACKAGE, trackmod_version):
         sys.exit(f"trackmod {trackmod_version} isn't on PyPI yet. Publish it with `just publish-trackmod`.")
     missing = [name for name in PRETRAINED_FILES if not (PRETRAINED_DIRECTORY / name).is_file()]
@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> None:
         output.write(f"trackmod={TRACKMOD_PACKAGE}=={trackmod_version}\n")
 
 
-def _project_version(project_file: Path) -> str:
+def project_version(project_file: Path) -> str:
     with project_file.open("rb") as file:
         return str(tomllib.load(file)["project"]["version"])
 

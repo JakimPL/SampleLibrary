@@ -182,6 +182,10 @@ executable *arguments:
     uv run --no-project python scripts/build_app.py --dist dist {{ arguments }}
 
 [group("release")]
+installer:
+    uv run --no-project --with pillow python scripts/build_installer.py --dist dist
+
+[group("release")]
 publish-trackmod:
     uv build --project trackmod --out-dir dist/trackmod
     uv publish dist/trackmod/*

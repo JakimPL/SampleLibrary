@@ -1,0 +1,17 @@
+#!/bin/sh
+application="$(dirname "$0")/SampleLibrary"
+log_directory="$HOME/Library/Logs/SampleLibrary"
+log="$log_directory/app.log"
+log_limit_bytes=10000000
+
+mkdir -p "$log_directory"
+if [ -f "$log" ] && [ "$(wc -c <"$log")" -gt "$log_limit_bytes" ]; then
+    mv "$log" "$log_directory/app.previous.log"
+fi
+if [ -z "$("$application" self metadata)" ]; then
+    osascript -e 'display alert "Preparing SampleLibrary" message "The first start takes a few minutes. SampleLibrary opens in your browser when it is ready." giving up after 60' >/dev/null 2>&1 &
+fi
+if ! "$application" >>"$log" 2>&1; then
+    osascript -e "display alert \"SampleLibrary couldn't start\" message \"Details are in $log.\" as critical" >/dev/null 2>&1
+    exit 1
+fi

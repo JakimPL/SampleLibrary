@@ -1,0 +1,28 @@
+#!/bin/sh
+here="$(dirname "$(readlink -f "$0")")"
+application="$here/usr/bin/SampleLibrary"
+if [ -t 1 ]; then
+    exec "$application" "$@"
+fi
+
+log_directory="${XDG_STATE_HOME:-$HOME/.local/state}/SampleLibrary/log"
+log="$log_directory/app.log"
+log_limit_bytes=10000000
+
+notify() {
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send --app-name=SampleLibrary "$@"
+    fi
+}
+
+mkdir -p "$log_directory"
+if [ -f "$log" ] && [ "$(wc -c <"$log")" -gt "$log_limit_bytes" ]; then
+    mv "$log" "$log_directory/app.previous.log"
+fi
+if [ -z "$("$application" self metadata)" ]; then
+    notify "Preparing SampleLibrary" "The first start takes a few minutes. SampleLibrary opens in your browser when it is ready."
+fi
+if ! "$application" "$@" >>"$log" 2>&1; then
+    notify --urgency=critical "SampleLibrary couldn't start" "Details are in $log."
+    exit 1
+fi

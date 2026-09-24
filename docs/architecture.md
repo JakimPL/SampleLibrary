@@ -500,8 +500,9 @@ extra pinned to the lock and torch's processor build. On first start it installs
 wheel with uv. PyApp runs it as a GUI, in a process of its own: on Windows through pythonw,
 windowless, with its output in `app.log` in the user's log folder
 (`samplelibrary.app.console`), and every console program it starts, such as `pg_ctl`, starts
-hidden (`samplecore.processes`). The Application workflow builds the executable for Linux, Windows
-and macOS and smoke-tests each one on a fresh runner.
+hidden (`samplecore.processes`). `just installer` (`scripts/installers`, `packaging/`) wraps the
+executable into an Inno Setup installer, a disk image holding an app bundle, or an AppImage. The
+Application workflow builds all three, smoke-testing each executable on a fresh runner first.
 
 ## Deployment
 
