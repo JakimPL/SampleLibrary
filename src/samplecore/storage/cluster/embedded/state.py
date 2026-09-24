@@ -64,8 +64,8 @@ def read_cluster_state(library_root: Path) -> ClusterState:
     path = state_path(library_root)
     if not path.is_file():
         raise ManagedClusterMissingError(
-            f"The library at {library_root} has no database yet. Open the SampleLibrary app, "
-            "or run `samplelibrary setup database`, to create it."
+            f"The library at {library_root} has no database yet. "
+            "Start the SampleLibrary app or run `samplelibrary setup database` to create one."
         )
     return ClusterState.model_validate_json(path.read_text(encoding="utf-8"))
 

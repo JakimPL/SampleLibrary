@@ -138,7 +138,7 @@ class Launcher:
             JobAlreadyRunningError: a build already runs.
         """
         if self._config is None or self._catalog is None:
-            raise LibraryClosedError("Open the library before building it.")
+            raise LibraryClosedError("The library isn't open yet.")
         self._builds.start(self._config, target)
 
     def cancel_build(self) -> None:
@@ -175,7 +175,7 @@ class Launcher:
             try:
                 await self._open_library(config)
             except ACTIVATION_FAILURES as error:
-                _logger.error("The library failed to open: %s", error)
+                _logger.error("Could not open the library: %s", error)
                 self._problem = str(error)
                 await self._close_library()
 

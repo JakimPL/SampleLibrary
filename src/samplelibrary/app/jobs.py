@@ -175,7 +175,7 @@ class JobRunner:
             JobAlreadyRunningError: a build already runs.
         """
         if self._job is not None and self._job.is_running:
-            raise JobAlreadyRunningError("A build is already running; wait for it or cancel it first.")
+            raise JobAlreadyRunningError("A build is already running. Wait for it to finish or cancel it.")
         layout = PipelineLayout(config.library_root)
         known_runs = set(layout.runs.iterdir()) if layout.runs.is_dir() else set()
         self._log_path = config.library_root / LOGS_DIRECTORY_NAME / JOB_LOG_NAME
@@ -258,7 +258,7 @@ def _problem(events: tuple[PipelineEvent, ...]) -> str | None:
             case RunRefused():
                 return event.reason
             case AttemptEnded() if event.outcome is not AttemptOutcome.COMPLETED:
-                return f"The step {event.step} ended as {event.outcome.value}."
+                return f"Step '{event.step}' ended: {event.outcome.value}."
             case _:
                 pass
     return None

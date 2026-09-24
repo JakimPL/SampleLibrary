@@ -179,7 +179,7 @@ class EmbeddedCluster:
             )
         if completed.returncode != 0:
             raise EmbeddedClusterError(
-                f"{program.value} failed with status {completed.returncode}; {self.log_path} tells why."
+                f"{program.value} failed (exit code {completed.returncode}). See {self.log_path}."
             )
 
 

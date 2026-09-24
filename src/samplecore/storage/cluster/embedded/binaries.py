@@ -28,7 +28,7 @@ def program_path(program: PostgresProgram) -> Path:
     """
     path = _binary_directory() / f"{program.value}{EXECUTABLE_SUFFIX}"
     if not path.is_file():
-        raise PostgresBinariesUnavailableError(f"The bundled Postgres holds no {program.value} at {path}.")
+        raise PostgresBinariesUnavailableError(f"The built-in database is missing {program.value} at {path}.")
     return path
 
 
@@ -45,7 +45,7 @@ def _binary_directory() -> Path:
         import postgresql_binaries  # pylint: disable=import-outside-toplevel
     except ImportError as error:
         raise PostgresBinariesUnavailableError(
-            "The bundled Postgres is not installed. Install the `app` extra, or name a server of your own "
-            "with database_url in the config."
+            "The built-in database is not installed. Install the `app` extra, or set database_url "
+            "in the config to use your own PostgreSQL server."
         ) from error
     return postgresql_binaries.bin()

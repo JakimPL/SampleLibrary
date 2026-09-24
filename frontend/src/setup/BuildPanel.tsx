@@ -88,9 +88,7 @@ export function BuildPanel({ state, onChanged }: BuildPanelProps): ReactElement 
         <section className="setup-card" aria-labelledby="setup-build-title">
             <h2 id="setup-build-title">{build === null ? "Build your library" : BUILD_HEADINGS[build.status]}</h2>
             {state.status === "starting" && (
-                <p className="setup-hint">
-                    Opening your library. The first time takes a moment while its database is created.
-                </p>
+                <p className="setup-hint">Opening your library. The first time can take a moment.</p>
             )}
             {state.status === "failed" && state.problem !== null && (
                 <p className="error-notice" role="alert">
@@ -112,8 +110,8 @@ export function BuildPanel({ state, onChanged }: BuildPanelProps): ReactElement 
                             Scan my folders
                         </button>
                         <p className="setup-hint">
-                            Reads every module and sample, draws their waveforms and finds near-duplicates. Run it again
-                            whenever you add files; only what changed is read.
+                            Reads your modules and samples and finds duplicates. Run it again after adding files; only
+                            new files are read.
                         </p>
                     </div>
                     <div className="build-choice">
@@ -127,8 +125,8 @@ export function BuildPanel({ state, onChanged }: BuildPanelProps): ReactElement 
                             Scan and build the cloud
                         </button>
                         <p className="setup-hint">
-                            Also listens to every sample, suggests categories and lays out the cloud. This takes hours
-                            on a large collection and runs best with an NVIDIA graphics card.
+                            Also analyzes every sample, suggests categories and builds the cloud. This can take hours
+                            for a large collection, and it is faster with an NVIDIA graphics card.
                         </p>
                     </div>
                 </div>
@@ -139,7 +137,7 @@ export function BuildPanel({ state, onChanged }: BuildPanelProps): ReactElement 
                         {build.steps.map((step) => (
                             <StepRow key={step.name} step={step} />
                         ))}
-                        {build.steps.length === 0 && <li className="setup-hint">Preparing the build…</li>}
+                        {build.steps.length === 0 && <li className="setup-hint">Getting ready…</li>}
                     </ol>
                     {build.problem !== null && (
                         <p className="error-notice" role="alert">
@@ -148,7 +146,7 @@ export function BuildPanel({ state, onChanged }: BuildPanelProps): ReactElement 
                     )}
                     {build.status === "failed" && build.log_tail.length > 0 && (
                         <details className="build-log">
-                            <summary>What the step wrote last</summary>
+                            <summary>Show details</summary>
                             <pre className="mono">{build.log_tail.join("\n")}</pre>
                         </details>
                     )}

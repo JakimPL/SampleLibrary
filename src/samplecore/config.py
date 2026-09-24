@@ -114,7 +114,7 @@ class LibraryConfig(BaseModel):
         for index, directory in enumerate(directories):
             for other in directories[index + 1 :]:
                 if directory.is_relative_to(other) or other.is_relative_to(directory):
-                    raise ValueError(f"{directory} and {other} overlap; name each folder of samples once")
+                    raise ValueError(f"{directory} and {other} overlap. Choose each folder only once.")
         return directories
 
     @field_validator("sample_exclusions")
@@ -368,7 +368,7 @@ def _describe_invalid_fields(error: ValidationError, config_path: Path) -> str:
         if any(detail["loc"][:1] == ("database_url",) for detail in error.errors())
         else ""
     )
-    return f"{config_path} needs correcting: {problems}.{database_hint}"
+    return f"Invalid settings in {config_path}: {problems}.{database_hint}"
 
 
 def _config_path_from_environment() -> Path | None:

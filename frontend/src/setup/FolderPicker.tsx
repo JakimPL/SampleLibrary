@@ -22,9 +22,7 @@ function describeContents(listing: FolderListing): string {
         listing.module_files > 0 ? `${String(listing.module_files)} modules` : null,
         listing.audio_files > 0 ? `${String(listing.audio_files)} audio files` : null,
     ].filter((part): part is string => part !== null);
-    return parts.length > 0
-        ? `This folder holds ${parts.join(" and ")}.`
-        : "No modules or audio files sit directly in this folder.";
+    return parts.length > 0 ? `Found ${parts.join(" and ")} here.` : "No modules or audio files here.";
 }
 
 /**
@@ -96,7 +94,7 @@ export function FolderPicker({ title, initialPath, onChoose, onClose }: FolderPi
                     </button>
                 ))}
             </nav>
-            {listing.status === "loading" && <p className="folder-note">Opening the folder…</p>}
+            {listing.status === "loading" && <p className="folder-note">Loading…</p>}
             {listing.status === "error" && (
                 <p className="error-notice" role="alert">
                     {listing.message}
@@ -133,7 +131,7 @@ export function FolderPicker({ title, initialPath, onChoose, onClose }: FolderPi
                             </li>
                         ))}
                         {listing.listing.folders.length === 0 && (
-                            <li className="folder-item folder-note">No folders inside.</li>
+                            <li className="folder-item folder-note">No subfolders.</li>
                         )}
                     </ul>
                     <div className="setup-actions">

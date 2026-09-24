@@ -75,11 +75,11 @@ def list_folder(path: Path) -> FolderListing:
     """
     folder = path.expanduser().resolve()
     if not folder.is_dir():
-        raise FolderUnreadableError(f"{folder} is no folder")
+        raise FolderUnreadableError(f"{folder} is not a folder")
     try:
         entries = sorted(_visible_entries(folder), key=lambda entry: entry.name.casefold())
     except OSError as error:
-        raise FolderUnreadableError(f"{folder} cannot be opened: {error.strerror}") from error
+        raise FolderUnreadableError(f"Can't open {folder}: {error.strerror}") from error
     files = [entry for entry in entries if entry.is_file()]
     return FolderListing(
         path=str(folder),

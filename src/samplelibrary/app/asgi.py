@@ -18,7 +18,7 @@ from sampleserver.app import API_PREFIX
 from sampleserver.frontend import FrontendMount
 
 SETUP_PREFIX: Final[str] = f"{API_PREFIX}/setup"
-CLOSED_LIBRARY_DETAIL: Final[str] = "The library is not open yet; the setup pages say why."
+CLOSED_LIBRARY_DETAIL: Final[str] = "The library isn't open yet. Check the setup page."
 
 
 class CatalogRoute(BaseRoute):

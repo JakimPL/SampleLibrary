@@ -12,9 +12,9 @@ interface SourcesFormProps {
 type PickerTarget = "modules" | "samples" | "library";
 
 const PICKER_TITLES: Readonly<Record<PickerTarget, string>> = {
-    modules: "Choose your module collection",
-    samples: "Add a folder of samples",
-    library: "Choose where the library keeps its files",
+    modules: "Choose your module folder",
+    samples: "Add a sample folder",
+    library: "Choose where to store the library",
 };
 const EXCLUSION_SEPARATOR = ",";
 
@@ -86,16 +86,11 @@ export function SourcesForm({ state, onSaved }: SourcesFormProps): ReactElement 
     return (
         <section className="setup-card" aria-labelledby="setup-sources-title">
             <h2 id="setup-sources-title">Your folders</h2>
-            <p className="setup-hint">
-                Pick where your tracker modules and your sample packs are. You can add either or both, and change them
-                later.
-            </p>
+            <p className="setup-hint">Choose where your tracker modules and sample packs are. You need at least one.</p>
 
             <div className="setup-field">
                 <h3 className="setup-field-title">Tracker modules</h3>
-                <p className="setup-hint">
-                    One folder holding your XM, IT, MOD and S3M files, with any folders inside it.
-                </p>
+                <p className="setup-hint">A folder with your XM, IT, MOD and S3M files. Subfolders are included.</p>
                 {sources.module_source_directory === null ? (
                     <button
                         type="button"
@@ -133,7 +128,7 @@ export function SourcesForm({ state, onSaved }: SourcesFormProps): ReactElement 
 
             <div className="setup-field">
                 <h3 className="setup-field-title">Sample folders</h3>
-                <p className="setup-hint">Folders of WAV, AIFF and FLAC files. They stay where they are.</p>
+                <p className="setup-hint">Folders with WAV, AIFF or FLAC files. The files stay where they are.</p>
                 {sources.sample_directories.length > 0 && (
                     <ul className="setup-folder-list">
                         {sources.sample_directories.map((directory) => (
@@ -167,7 +162,7 @@ export function SourcesForm({ state, onSaved }: SourcesFormProps): ReactElement 
                     Add a folder…
                 </button>
                 <label className="setup-label">
-                    Leave out files whose path matches, separated by commas
+                    Skip files matching these patterns (separated by commas)
                     <input
                         type="text"
                         className="setup-input"
@@ -183,8 +178,8 @@ export function SourcesForm({ state, onSaved }: SourcesFormProps): ReactElement 
             <div className="setup-field">
                 <h3 className="setup-field-title">Library location</h3>
                 <p className="setup-hint">
-                    Where the library keeps its database, the audio it takes out of modules and everything it builds.
-                    Pick a drive with room to spare.
+                    Where SampleLibrary stores its database and everything it creates. Choose a drive with plenty of
+                    free space.
                 </p>
                 <div className="setup-folder">
                     <span className="mono">{sources.library_root}</span>
@@ -216,7 +211,7 @@ export function SourcesForm({ state, onSaved }: SourcesFormProps): ReactElement 
                 >
                     {saving ? "Saving…" : state.sources === null ? "Save and open the library" : "Save changes"}
                 </button>
-                {!hasSources && <span className="setup-hint">Choose a module folder or a sample folder first.</span>}
+                {!hasSources && <span className="setup-hint">Choose at least one folder first.</span>}
             </div>
 
             {picker !== null && (

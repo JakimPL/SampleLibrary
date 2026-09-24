@@ -31,7 +31,7 @@ def require_local_person(request: Request) -> None:
         or request.url.hostname not in LOCAL_HOST_NAMES
         or (origin is not None and urlsplit(origin).hostname not in LOCAL_HOST_NAMES)
     ):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Setting up the library is open to this machine alone.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Setup is only available on this computer.")
 
 
 def launcher_of(request: Request) -> Launcher:

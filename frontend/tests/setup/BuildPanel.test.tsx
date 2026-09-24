@@ -71,7 +71,7 @@ describe("BuildPanel", () => {
             stateWith({
                 ...RUNNING_BUILD,
                 status: "failed",
-                problem: "The step thumbnails ended as failed.",
+                problem: "Step 'thumbnails' ended: failed.",
                 log_tail: ["the disk is full"],
             }),
         );

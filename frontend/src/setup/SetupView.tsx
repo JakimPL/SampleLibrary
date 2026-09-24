@@ -30,7 +30,7 @@ export function SetupView(): ReactElement {
             <main className="setup-page">
                 <section className="setup-card">
                     <h1>SampleLibrary has closed</h1>
-                    <p className="setup-hint">You can close this tab. Start SampleLibrary again to come back.</p>
+                    <p className="setup-hint">You can close this tab.</p>
                 </section>
             </main>
         );
@@ -60,15 +60,15 @@ export function SetupView(): ReactElement {
             {source.status === "loading" && <Loading />}
             {source.status === "error" && (
                 <p className="error-notice" role="alert">
-                    SampleLibrary does not answer: {source.message}
+                    Can&apos;t reach SampleLibrary: {source.message}
                 </p>
             )}
             {source.status === "absent" && (
                 <section className="setup-card">
-                    <h2>Setup runs in the SampleLibrary app</h2>
+                    <h2>Setup isn&apos;t available here</h2>
                     <p className="setup-hint">
-                        This server shows the library alone. Start SampleLibrary as an app (`samplelibrary app`) to
-                        choose folders and build the library from here.
+                        This server only shows the library. To choose folders and build the library, start SampleLibrary
+                        with `samplelibrary app`.
                     </p>
                 </section>
             )}
@@ -76,8 +76,8 @@ export function SetupView(): ReactElement {
                 <>
                     {source.state.sources === null && (
                         <p className="setup-intro">
-                            Welcome. Tell SampleLibrary where your modules and samples are, and it builds a library you
-                            can browse, label and play.
+                            Welcome! Tell SampleLibrary where your modules and samples are, and it will build a library
+                            you can browse and play.
                         </p>
                     )}
                     <SourcesForm key={source.state.config_path} state={source.state} onSaved={accept} />

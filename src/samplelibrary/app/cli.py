@@ -45,11 +45,11 @@ def main(argv: list[str], *, prog: str) -> None:
     address = f"http://{_browser_host(arguments.host)}:{arguments.port}/"
     match _running_instance(address):
         case True:
-            _logger.info("SampleLibrary already runs at %s; opening it.", address)
+            _logger.info("SampleLibrary is already running at %s. Opening it.", address)
             _open_browser(address, enabled=arguments.open_browser)
             return
         case None:
-            _logger.error("Another program listens on port %d; start SampleLibrary with --port.", arguments.port)
+            _logger.error("Port %d is already in use. Try another one with --port.", arguments.port)
             sys.exit(ExitStatus.REFUSED)
         case False:
             pass
@@ -61,7 +61,7 @@ def main(argv: list[str], *, prog: str) -> None:
     )
     frontend = arguments.frontend or bundled_frontend()
     if frontend is None:
-        _logger.warning("No built frontend found; serving the API alone. `just frontend-build` builds one.")
+        _logger.warning("No built frontend found. Run `just frontend-build` first.")
 
     def schedule_browser() -> None:
         asyncio.get_running_loop().call_later(BROWSER_DELAY_SECONDS, _open_browser, address, arguments.open_browser)
@@ -69,7 +69,7 @@ def main(argv: list[str], *, prog: str) -> None:
     application = create_application(launcher, frontend_directory=frontend, on_ready=schedule_browser)
     server = uvicorn.Server(uvicorn.Config(application, host=arguments.host, port=arguments.port))
     application.state.request_quit = lambda: setattr(server, "should_exit", True)
-    _logger.info("SampleLibrary runs at %s; close it with Ctrl+C or Quit in its menu.", address)
+    _logger.info("SampleLibrary is running at %s. Press Ctrl+C or click Quit to stop it.", address)
     server.run()
 
 
