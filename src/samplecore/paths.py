@@ -13,7 +13,7 @@ PACKAGES_DIRECTORY: Final[Path] = Path(__file__).resolve().parents[1]
 CHECKOUT_DIRECTORY: Final[Path] = PACKAGES_DIRECTORY.parent
 CHECKOUT_CONFIG_PATH: Final[Path] = CHECKOUT_DIRECTORY / CONFIG_FILE_NAME
 EXAMPLE_CONFIG_PATH: Final[Path] = CHECKOUT_DIRECTORY / "config.example.toml"
-FRONTEND_BUILD_DIRECTORY: Final[Path] = CHECKOUT_DIRECTORY / "frontend" / "dist"
+FRONTEND_BUILD_DIRECTORY: Final[Path] = CHECKOUT_DIRECTORY / "build" / "frontend"
 
 
 def runs_from_checkout() -> bool:

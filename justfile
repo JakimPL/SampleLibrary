@@ -7,6 +7,7 @@ set shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "By
 MEMORY_CAP := "16G"
 DEV_CONFIG := "dev-library/config.toml"
 DEV_PORT := "8001"
+SCHEMAS := "build/schemas"
 CAPPED_SAMPLELIBRARY := "uv run samplelibrary --memory-cap " + MEMORY_CAP
 
 [group("setup")]
@@ -160,35 +161,34 @@ frontend-check:
     npm test
 
 [group("frontend")]
-[working-directory("frontend")]
-frontend-types:
-    uv run samplelibrary schema --output openapi.json
-    uv run samplelibrary setup-schema --output setup-openapi.json
-    npm run types
+frontend-types: (_directory SCHEMAS)
+    uv run samplelibrary schema --output {{ SCHEMAS }}/openapi.json
+    uv run samplelibrary setup-schema --output {{ SCHEMAS }}/setup-openapi.json
+    npm --prefix frontend run types
 
 [group("release")]
-package trackmod:
-    npm --prefix frontend run build
-    uv build --wheel --out-dir dist
-    uv build --wheel --project trackmod --out-dir dist
-    uv run --no-project python scripts/app_requirements.py --output dist/app-requirements.txt --trackmod "{{ trackmod }}"
+package:
+    uv run --no-project python scripts/build_package.py
 
 [group("release")]
-executable *arguments:
-    uv run --no-project python scripts/build_app.py --dist dist {{ arguments }}
+executable:
+    uv run --no-project python scripts/build_app.py
 
 [group("release")]
 installer:
-    uv run --no-project --with pillow python scripts/build_installer.py --dist dist
+    uv run --no-project --with pillow python scripts/build_installer.py
 
 [group("release")]
 release-descriptor tag *arguments:
     uv run python scripts/release_descriptor.py --tag {{ tag }} {{ arguments }}
 
-[group("release")]
-publish-trackmod:
-    uv build --project trackmod --out-dir dist/trackmod
-    uv publish dist/trackmod/*
+[unix]
+_directory path:
+    mkdir -p "{{ path }}"
+
+[windows]
+_directory path:
+    New-Item -ItemType Directory -Force -Path "{{ path }}" | Out-Null
 
 [group("docker")]
 docker-build:

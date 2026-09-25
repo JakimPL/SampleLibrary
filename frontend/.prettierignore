@@ -1,4 +1,2 @@
-dist/
 src/api/schema.ts
-openapi.json
-setup-openapi.json
+src/api/setupSchema.ts

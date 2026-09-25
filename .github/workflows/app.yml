@@ -38,15 +38,13 @@ jobs:
       - name: Install the frontend's packages
         run: npm ci --prefix frontend
       - name: Build the wheel and its pinned requirements
-        env:
-          TRACKMOD: ${{ steps.inputs.outputs.trackmod }}
-        run: just package "$TRACKMOD"
+        run: just package
       - uses: actions/upload-artifact@v7
         with:
           name: package
           path: |
-            dist/samplelibrary-*.whl
-            dist/app-requirements.txt
+            build/package/samplelibrary-*.whl
+            build/package/app-requirements.txt
           if-no-files-found: error
 
   installer:
@@ -68,7 +66,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     env:
-      EXECUTABLE: dist/SampleLibrary${{ matrix.extension }}
+      EXECUTABLE: bin/SampleLibrary${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -76,7 +74,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: package
-          path: dist
+          path: build/package
       - name: Build the executable
         run: just executable
       - uses: actions/upload-artifact@v7

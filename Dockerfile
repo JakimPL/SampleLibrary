@@ -18,7 +18,7 @@ COPY pyproject.toml uv.lock ./
 COPY trackmod ./trackmod
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --extra server --no-dev --no-editable --frozen --no-install-project
-COPY README.md ./
+COPY README.md hatch_build.py ./
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --extra server --no-dev --no-editable --frozen
@@ -28,7 +28,7 @@ FROM python:3.13-slim-bookworm AS runtime
 RUN useradd --create-home samplelibrary
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=frontend /frontend/dist /app/frontend
+COPY --from=frontend /build/frontend /app/frontend
 ENV PATH="/app/.venv/bin:${PATH}" \
     SAMPLELIBRARY_CONFIG=/app/config.toml \
     SAMPLELIBRARY_FRONTEND_DIRECTORY=/app/frontend \

@@ -28,7 +28,7 @@ TAG_PREFIX: Final[str] = "v"
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check what a build of the application takes in, and write its version and trackmod as step outputs."
+        description="Check what a build of the application takes in, and write its version as a step output."
     )
     parser.add_argument(
         "--output",
@@ -46,10 +46,10 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Write `version=` and `trackmod=` step outputs, the trackmod pinned to the submodule's version.
+    """Check a build's inputs and write its `version=` step output.
 
-    The application installs trackmod from PyPI on its first start, so every build needs that
-    version published. A release also needs the published descriptor new libraries download to
+    The application installs the submodule's trackmod version from PyPI on its first start, so every
+    build needs that version published. A release also needs the published descriptor new libraries download to
     build their cloud; a build for trying out carries on with a warning.
 
     Raises:
@@ -62,7 +62,9 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(f"The tag {arguments.tag} doesn't match the project version {version}. Tag {TAG_PREFIX}{version}.")
     trackmod_version = project_version(TRACKMOD_PROJECT_FILE)
     if not _published(TRACKMOD_PACKAGE, trackmod_version):
-        sys.exit(f"trackmod {trackmod_version} isn't on PyPI yet. Publish it with `just publish-trackmod`.")
+        sys.exit(
+            f"trackmod {trackmod_version} isn't on PyPI yet. Push TrackMod's v{trackmod_version} tag to publish it."
+        )
     problem = _pretrained_problem()
     if problem is not None:
         if arguments.tag is not None:
@@ -70,7 +72,6 @@ def main(argv: list[str] | None = None) -> None:
         print(f"::warning::{problem} New libraries can build their catalog, but not their cloud.")
     with arguments.output.open("a", encoding="utf-8") as output:
         output.write(f"version={version}\n")
-        output.write(f"trackmod={TRACKMOD_PACKAGE}=={trackmod_version}\n")
 
 
 def _pretrained_problem() -> str | None:

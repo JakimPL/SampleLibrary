@@ -9,18 +9,12 @@ from build_app import APP_NAME, EXECUTABLE_SUFFIX
 from installers.linux import linux_appimage
 from installers.macos import macos_disk_image
 from installers.windows import windows_installer
-from paths import PROJECT_FILE
+from paths import BIN_DIRECTORY, DIST_DIRECTORY, PROJECT_FILE
 from versions import project_version
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Wrap the SampleLibrary executable into this system's installer.")
-    parser.add_argument(
-        "--dist",
-        type=Path,
-        required=True,
-        help="The folder `just executable` built into; the installer is written there too.",
-    )
     return parser.parse_args(argv)
 
 
@@ -31,15 +25,16 @@ def main(argv: list[str] | None = None) -> None:
     AppImage, each named after the project's version and the platform.
 
     Raises:
-        SystemExit: the folder holds no built executable.
+        SystemExit: `just executable` has not built the executable.
     """
-    arguments = _parse_arguments(argv)
-    executable = arguments.dist / f"{APP_NAME}{EXECUTABLE_SUFFIX}"
+    _parse_arguments(argv)
+    executable = BIN_DIRECTORY / f"{APP_NAME}{EXECUTABLE_SUFFIX}"
     if not executable.is_file():
-        sys.exit(f"No executable in {arguments.dist}. Run `just executable` first.")
+        sys.exit(f"No executable in {BIN_DIRECTORY}. Run `just executable` first.")
     version = project_version(PROJECT_FILE)
+    DIST_DIRECTORY.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as work:
-        installer = _build(executable, version=version, output_directory=arguments.dist, work=Path(work))
+        installer = _build(executable, version=version, output_directory=DIST_DIRECTORY, work=Path(work))
     print(f"Built {installer}.")
 
 

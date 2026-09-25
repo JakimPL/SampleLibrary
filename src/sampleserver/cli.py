@@ -67,7 +67,7 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         "--frontend",
         type=Path,
         default=None,
-        help="The built frontend to serve beside the API, such as frontend/dist after `npm run build`.",
+        help="The built frontend to serve beside the API, such as build/frontend after `just frontend-build`.",
     )
     arguments = parser.parse_args(argv)
     try:

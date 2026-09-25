@@ -208,7 +208,7 @@ no embedding yet is laid out from its own samples, a cluster per category, so th
 `VITE_CLOUD_DENSIFY_MODULES` does the same for the Modules tab.
 
 `just frontend-build` builds the frontend for production, and
-`uv run samplelibrary serve --frontend frontend/dist`, run in place of `just serve`, serves it
+`uv run samplelibrary serve --frontend build/frontend`, run in place of `just serve`, serves it
 together with the API at `http://127.0.0.1:8000`. The Docker image does the same;
 `docs/architecture.md` describes running it. The API describes its own routes at
 `http://127.0.0.1:8000/api/docs`.
@@ -253,7 +253,7 @@ so anyone on your network who reaches it can change your labels.
 | `just status [targets]` | Says what each step of the library would do now, and why |
 | `just app` | Runs the library's database, the API with the built frontend, and the morph renderer, and opens them in a browser |
 | `just release-descriptor <tag>` | Prepares the configured library's trained descriptor for a GitHub release, as the one new libraries download |
-| `just package <trackmod>`, `just executable`, `just installer`, `just publish-trackmod` | Prepare the wheels and pinned requirements, build the PyApp executable and this system's installer, and upload trackmod to PyPI (see [Development](#development)) |
+| `just package`, `just executable`, `just installer` | Build the wheel and its pinned requirements, the PyApp executable, and this system's installer (see [Development](#development)) |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
 | `just tracking-ui` | Opens MLflow over the runs every training and evaluation pass recorded |
@@ -346,9 +346,9 @@ layout and how the project uses its databases.
 Packaging the application takes three recipes, run on each system it is built for:
 
 ```sh
-just package "trackmod==0.2.0"   # dist/: both wheels, the frontend inside, and app-requirements.txt
-just executable                  # dist/SampleLibrary(.exe), built with PyApp; needs Rust (rustup)
-just installer                   # dist/: the Windows installer (needs Inno Setup), macOS disk image or Linux AppImage
+just package      # build/: the frontend, the wheel carrying it, and app-requirements.txt
+just executable   # bin/SampleLibrary(.exe), built with PyApp; needs Rust (rustup)
+just installer    # dist/: the Windows installer (needs Inno Setup), macOS disk image or Linux AppImage
 ```
 
 `just package` builds the frontend into the samplelibrary wheel and writes the locked versions of
@@ -359,10 +359,6 @@ The installed app needs no Node, no PostgreSQL and no checkout. `just installer`
 executable into this system's installer from the files in `packaging/`, with icons drawn from the
 web app's. On macOS and Linux a launcher script starts the executable with its output in the log
 folder and announces the first start.
-
-trackmod has to be on PyPI for the executable to install; `just publish-trackmod` uploads it (uv asks
-for a PyPI token). To try an executable before that, `just executable --find-links dist` lets its
-first start install trackmod from the wheel in `dist/`.
 
 The Application workflow (`.github/workflows/app.yml`) builds the executable on GitHub for Linux,
 Windows and macOS. Each one is then installed on a fresh machine, builds a small library through the

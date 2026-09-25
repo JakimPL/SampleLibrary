@@ -6,7 +6,15 @@ import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-    { ignores: ["dist/", "src/api/schema.ts", "vite.config.ts", "eslint.config.js", "stylelint.config.js"] },
+    {
+        ignores: [
+            "src/api/schema.ts",
+            "src/api/setupSchema.ts",
+            "vite.config.ts",
+            "eslint.config.js",
+            "stylelint.config.js",
+        ],
+    },
     js.configs.recommended,
     ...tseslint.configs.strictTypeChecked,
     ...tseslint.configs.stylisticTypeChecked,

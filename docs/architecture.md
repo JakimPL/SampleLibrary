@@ -498,11 +498,13 @@ the built frontend. The `Launcher` owns what the library needs:
 
 The packaged application is a PyApp executable (`just package`, `just executable`): it embeds the
 samplelibrary wheel, which carries the built frontend, with the `app` extra pinned to the lock and
-torch's processor build. On first start it installs Python and that wheel with uv. PyApp runs it as
+torch's processor build. The wheel, its pinned requirements and the frontend bundle are built into
+`build/`, the executable into `bin/`, and the installers into `dist/`. On first start it installs Python and that wheel with uv. PyApp runs it as
 a GUI, in a process of its own: on Windows through pythonw, windowless, with its output in `app.log`
 in the user's log folder (`samplelibrary.app.console`), and every console program it starts, such
-as `pg_ctl`, starts hidden (`samplecore.processes`). `just installer` (`scripts/installers`, `packaging/`) wraps the
-executable into an Inno Setup installer, a disk image holding an app bundle, or an AppImage. The
+as `pg_ctl`, starts hidden (`samplecore.processes`). `just installer` (`scripts/installers`,
+`packaging/`) wraps the executable into an Inno Setup installer, a disk image holding an app bundle,
+or an AppImage. The
 Application workflow builds all three, smoke-testing each executable on a fresh runner first.
 
 ## Deployment
@@ -560,7 +562,7 @@ Every route the API serves sits under `/api` (`sampleserver.app.API_PREFIX`), so
 names one thing: the frontend reaches `/api/samples` while a person's browser holds `/samples/{hash}`
 as a client route of its own. That is what lets the Vite dev server forward a single prefix to the
 backend and answer everything else with the application itself, so reloading a sample's own URL
-brings back the dashboard. `samplelibrary serve --frontend <dist>` does the same without Vite:
+brings back the dashboard. `samplelibrary serve --frontend build/frontend` does the same without Vite:
 `sampleserver.frontend.SinglePageApplication` serves the built files and answers every other path
 outside `/api` with `index.html`, and the image serves its own build this way. It is mounted through
 `FrontendMount`, which takes no path under `/api`, so the API answers a wrong method with 405 and
