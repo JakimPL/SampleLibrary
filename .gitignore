@@ -1,11 +1,20 @@
+__marimo__/
 __pycache__/
 *.py[oc]
+
+.claude/
+.idea/
+.vscode/
+
+.grimp_cache/
+.import_linter_cache/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
-.import_linter_cache/
+
 .coverage
 .coverage.*
+
 htmlcov/
 build/
 dist/
@@ -14,10 +23,7 @@ wheels/
 .venv/
 
 /config.toml
-# Compose reads the port a local PostgreSQL publishes on from here.
 .env
-
-notebooks/__marimo__/
 
 dev-library/
 /library/
@@ -25,7 +31,6 @@ dev-library/
 *.npz
 
 annotations.jsonl
-# The export's earlier name.
 labels.jsonl
 
 frontend/node_modules/
@@ -34,12 +39,8 @@ frontend/.vite/
 frontend/openapi.json
 frontend/setup-openapi.json
 
-.vscode/
-.idea/
 Thumbs.db
 .DS_Store
-
-.claude/scheduled_tasks.lock
 
 .uvicorn.log
 .samplenotes.log
