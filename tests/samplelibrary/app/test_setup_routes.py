@@ -164,7 +164,9 @@ def test_folders_the_config_refuses_are_answered_with_the_reason(configured: Tes
     response = configured.put("/api/setup/sources", json=sources)
 
     assert response.status_code == 422
-    assert "overlap" in response.json()["detail"]
+    assert response.json()["detail"] == (
+        f"{tmp_path / 'packs'} and {tmp_path / 'packs' / 'drums'} overlap. Choose each folder only once."
+    )
 
 
 def test_the_folder_browser_lists_a_folder_and_refuses_a_missing_one(unconfigured: TestClient, tmp_path: Path) -> None:

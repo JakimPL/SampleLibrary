@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 
-from samplecore.config import ConfigurationError
+from samplecore.config import ConfigurationError, InvalidSettingsError
 from samplecore.config_editing import LibrarySources
 from samplecore.models.base import FROZEN
 from samplelibrary.app.folders import FolderListing, FolderUnreadableError, Place, list_folder, places
@@ -30,12 +30,15 @@ async def choose_sources(sources: LibrarySources, launcher: LauncherDependency) 
     """Write the library's folders into the config file and open the library under them.
 
     Raises:
-        HTTPException: 409 while a build runs, and 422 when the folders fail validation, naming what to change.
+        HTTPException: 409 while a build runs, and 422 when the folders fail validation, naming what to change
+            in the validators' own sentences.
     """
     try:
         launcher.choose_sources(sources)
     except BuildInProgressError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    except InvalidSettingsError as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, " ".join(error.problems)) from error
     except ConfigurationError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
     return launcher.state()

@@ -8,6 +8,7 @@ from typing import Final
 from urllib.parse import SplitResult, urlsplit
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic_core import ErrorDetails
 
 from samplecore.paths import CHECKOUT_CONFIG_PATH, EXAMPLE_CONFIG_PATH, runs_from_checkout, user_config_file
 from samplecore.storage.cluster.embedded.state import managed_catalog_url
@@ -35,6 +36,14 @@ PLACEHOLDER_PATH_PREFIX: Final[str] = "/path/to/your"
 
 class ConfigurationError(Exception):
     """Raised when the local library configuration cannot be found or does not validate."""
+
+
+class InvalidSettingsError(ConfigurationError):
+    """Raised when a config's settings fail validation; `problems` holds each one as a sentence a person reads."""
+
+    def __init__(self, message: str, *, problems: tuple[str, ...]) -> None:
+        super().__init__(message)
+        self.problems = problems
 
 
 class InferenceConfig(BaseModel):
@@ -201,7 +210,10 @@ def parse_config(content: str, config_path: Path) -> LibraryConfig:
     try:
         config = LibraryConfig.model_validate(library_data)
     except ValidationError as error:
-        raise ConfigurationError(_describe_invalid_fields(error, config_path)) from error
+        raise InvalidSettingsError(
+            _describe_invalid_fields(error, config_path),
+            problems=tuple(_problem(detail) for detail in error.errors()),
+        ) from error
     _reject_placeholder_paths(config, config_path)
     return config
 
@@ -348,17 +360,24 @@ def _reject_placeholder_paths(config: LibraryConfig, resolved_path: Path) -> Non
         )
 
 
+def _problem(detail: ErrorDetails) -> str:
+    """One failed setting's problem as a sentence, in its validator's own words where the validator raised it."""
+    raised = detail.get("ctx", {}).get("error")
+    text = str(raised) if isinstance(raised, ValueError) else detail["msg"]
+    return text if text.endswith(".") else f"{text}."
+
+
 def _describe_invalid_fields(error: ValidationError, config_path: Path) -> str:
     """Name every setting that failed validation, and where the database can come from besides the file."""
-    problems = "; ".join(
-        f"{'.'.join(str(part) for part in detail['loc'])}: {detail['msg']}" for detail in error.errors()
+    problems = " ".join(
+        f"{'.'.join(str(part) for part in detail['loc'])}: {_problem(detail)}" for detail in error.errors()
     )
     database_hint = (
         f" A command run without --config also reads the database from {DATABASE_URL_ENVIRONMENT_VARIABLE}."
         if any(detail["loc"][:1] == ("database_url",) for detail in error.errors())
         else ""
     )
-    return f"Invalid settings in {config_path}: {problems}.{database_hint}"
+    return f"Invalid settings in {config_path}: {problems}{database_hint}"
 
 
 def _config_path_from_environment() -> Path | None:

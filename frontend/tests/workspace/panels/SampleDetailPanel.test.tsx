@@ -212,7 +212,7 @@ describe("SampleDetailPanel", () => {
     it("shows an honest empty state when the sample has no spectral neighbors yet", async () => {
         getSample.mockResolvedValue(SAMPLE_DETAIL);
         getSampleRelations.mockResolvedValue([]);
-        getSimilarSamples.mockRejectedValue(new ApiError(404, "not found"));
+        getSimilarSamples.mockRejectedValue(new ApiError(404, "not found", null));
         useSelectionStore.getState().focusSample("abc");
         renderPanel();
 

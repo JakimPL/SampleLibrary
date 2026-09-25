@@ -25,10 +25,13 @@ The first start downloads Python and the packages SampleLibrary runs on, about 2
 takes several minutes. Later starts take a few seconds. SampleLibrary then opens in your browser on
 its setup page:
 
-1. Choose your module folder, your sample folders, or both.
+1. Under **Your folders**, choose your module folder, your sample folders, or both.
 2. Choose where the library keeps its files. Pick a drive with free space: a large collection takes
    several gigabytes.
-3. Click **Save and open the library**, then **Scan my folders**.
+3. Click **Save and open the library**.
+4. Under **Your library**, click **Scan my folders**. The scan lists its steps with the time each
+   took, and a long step shows the time it has left. Once it finishes, click **Open the library**
+   at the top.
 
 **Scan and build the cloud** also listens to every sample and lays out the cloud. The first time,
 it downloads a listening model of about 1 GB, and on a large collection it takes hours.

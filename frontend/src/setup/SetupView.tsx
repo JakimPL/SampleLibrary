@@ -1,33 +1,95 @@
 import { type ReactElement, useState } from "react";
+import { Link } from "react-router-dom";
 
-import { quitApplication } from "../api/setup";
-import { describeError } from "../shared/fetchState";
+import { quitApplication, type SetupState } from "../api/setup";
 import { Loading } from "../shared/Loading";
-import { BuildPanel } from "./BuildPanel";
+import { LibraryPanel } from "./LibraryPanel";
+import { describeRefusal } from "./refusal";
+import { SetupMessage } from "./SetupMessage";
 import { SourcesForm } from "./SourcesForm";
-import { useSetupState } from "./useSetupState";
+import { lastKnownState, type SetupSource, useSetupState } from "./useSetupState";
+import { useSourcesDraft } from "./useSourcesDraft";
+
+interface SetupPanesProps {
+    readonly state: SetupState;
+    readonly onChanged: (state: SetupState) => void;
+}
+
+/** The folders beside the library, sharing the folders being edited so the library holds its builds while they differ. */
+function SetupPanes({ state, onChanged }: SetupPanesProps): ReactElement {
+    const draft = useSourcesDraft(state);
+    return (
+        <div className="setup-panes">
+            <SourcesForm state={state} draft={draft} onSaved={onChanged} />
+            <LibraryPanel state={state} unsavedChanges={draft.unsaved} onChanged={onChanged} />
+        </div>
+    );
+}
+
+function OpenLibraryButton({ state }: { readonly state: SetupState | null }): ReactElement {
+    if (state?.status !== "ready") {
+        return (
+            <button type="button" className="setup-button" disabled>
+                Open the library
+            </button>
+        );
+    }
+    return (
+        <Link
+            className={state.build?.status === "completed" ? "setup-button setup-button-primary" : "setup-button"}
+            to="/"
+        >
+            Open the library
+        </Link>
+    );
+}
+
+function SetupPlaceholder({ source }: { readonly source: SetupSource }): ReactElement | null {
+    switch (source.status) {
+        case "loading":
+            return <Loading />;
+        case "absent":
+            return (
+                <section className="setup-card">
+                    <h2>Setup isn&apos;t available here</h2>
+                    <p className="setup-hint">
+                        This server only shows the library. To choose folders and build the library, start SampleLibrary
+                        with `samplelibrary app`.
+                    </p>
+                </section>
+            );
+        case "unreachable":
+        case "ready":
+            return null;
+    }
+}
 
 /**
  * The application's own page: where a person names their folders, opens the library, builds it and
- * closes the application, all without a terminal or a config file.
+ * closes the application, all without a terminal or a config file. On a desktop the folders and the
+ * library sit side by side and fill the window; every control keeps its place in every state.
  */
 export function SetupView(): ReactElement {
     const { source, accept } = useSetupState();
     const [closed, setClosed] = useState(false);
     const [quitRefusal, setQuitRefusal] = useState<string | null>(null);
+    const state = lastKnownState(source);
+    const notice =
+        quitRefusal ?? (source.status === "unreachable" ? `Can't reach SampleLibrary: ${source.message}` : null);
 
     async function handleQuit(): Promise<void> {
+        setQuitRefusal(null);
         try {
             await quitApplication();
             setClosed(true);
         } catch (error: unknown) {
-            setQuitRefusal(describeError(error));
+            setQuitRefusal(describeRefusal(error));
         }
     }
 
     if (closed) {
         return (
-            <main className="setup-page">
+            <main className="setup-page setup-page-closed">
                 <section className="setup-card">
                     <h1>SampleLibrary has closed</h1>
                     <p className="setup-hint">You can close this tab.</p>
@@ -40,49 +102,28 @@ export function SetupView(): ReactElement {
         <main className="setup-page">
             <header className="setup-header">
                 <h1>SampleLibrary</h1>
-                {source.status === "ready" && (
+                <SetupMessage
+                    message={notice === null ? null : { text: notice, tone: "error" }}
+                    className="setup-notice"
+                />
+                <div className="setup-header-actions">
+                    <OpenLibraryButton state={state} />
                     <button
                         type="button"
                         className="setup-button"
+                        disabled={state === null}
                         onClick={() => {
                             void handleQuit();
                         }}
                     >
                         Quit
                     </button>
-                )}
+                </div>
             </header>
-            {quitRefusal !== null && (
-                <p className="error-notice" role="alert">
-                    {quitRefusal}
-                </p>
-            )}
-            {source.status === "loading" && <Loading />}
-            {source.status === "error" && (
-                <p className="error-notice" role="alert">
-                    Can&apos;t reach SampleLibrary: {source.message}
-                </p>
-            )}
-            {source.status === "absent" && (
-                <section className="setup-card">
-                    <h2>Setup isn&apos;t available here</h2>
-                    <p className="setup-hint">
-                        This server only shows the library. To choose folders and build the library, start SampleLibrary
-                        with `samplelibrary app`.
-                    </p>
-                </section>
-            )}
-            {source.status === "ready" && (
-                <>
-                    {source.state.sources === null && (
-                        <p className="setup-intro">
-                            Welcome! Tell SampleLibrary where your modules and samples are, and it will build a library
-                            you can browse and play.
-                        </p>
-                    )}
-                    <SourcesForm key={source.state.config_path} state={source.state} onSaved={accept} />
-                    {source.state.sources !== null && <BuildPanel state={source.state} onChanged={accept} />}
-                </>
+            {state === null ? (
+                <SetupPlaceholder source={source} />
+            ) : (
+                <SetupPanes key={state.config_path} state={state} onChanged={accept} />
             )}
         </main>
     );

@@ -480,7 +480,8 @@ the built frontend. The `Launcher` owns what the library needs:
 - **Config.** Outside a checkout the config file lives in the user's settings folder
   (`platformdirs`), and the setup routes write it through `samplecore.config_editing`, which
   validates the new content the way `load_config` reads it before replacing the file. A config the
-  application creates names no `database_url` and takes the pretrained descriptor.
+  application creates names no `database_url` and takes the pretrained descriptor. The file stays
+  as it is while a build runs.
 - **Database.** A config naming no `database_url` manages its own Postgres
   (`samplecore.storage.cluster.embedded`): `initdb` and `pg_ctl` from the `postgresql-binaries`
   wheel create and run a cluster in `library_root/postgres`, listening on the loopback address
@@ -493,7 +494,9 @@ the built frontend. The `Launcher` owns what the library needs:
 - **Renderer and builds.** `morph serve` runs as a child process. A build runs `samplelibrary
   pipeline run catalog|all` as a child process, and `samplelibrary.app.jobs` reads the run's
   `events.jsonl` and the progress file each step's pass writes (`samplecore.progress`, named by
-  `SAMPLELIBRARY_PROGRESS_FILE`).
+  `SAMPLELIBRARY_PROGRESS_FILE`). A step's times come from its attempt's events, and a pass's
+  report carries the moment the pass started, from which the setup page estimates the time it has
+  left.
 - **Setup routes.** They list folders and write the config file, so they answer a request from the
   loopback address, addressed to a local name, and sent by a page from a local name.
 

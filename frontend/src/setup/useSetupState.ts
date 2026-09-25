@@ -9,10 +9,11 @@ const BUSY_POLL_MS = 1000;
 const IDLE_POLL_MS = 5000;
 const MISSING_STATUS = 404;
 
+/** Where the page stands with the application; while it is out of reach, the last state it answered with stays on screen. */
 export type SetupSource =
     | { readonly status: "loading" }
     | { readonly status: "absent" }
-    | { readonly status: "error"; readonly message: string }
+    | { readonly status: "unreachable"; readonly message: string; readonly state: SetupState | null }
     | { readonly status: "ready"; readonly state: SetupState };
 
 export interface SetupStateHandle {
@@ -23,6 +24,17 @@ export interface SetupStateHandle {
 
 function isBusy(state: SetupState): boolean {
     return state.status === "starting" || state.build?.status === "running";
+}
+
+export function lastKnownState(source: SetupSource): SetupState | null {
+    switch (source.status) {
+        case "ready":
+        case "unreachable":
+            return source.state;
+        case "loading":
+        case "absent":
+            return null;
+    }
 }
 
 /**
@@ -61,7 +73,8 @@ export function useSetupState(): SetupStateHandle {
                     setSource({ status: "absent" });
                     return;
                 }
-                setSource({ status: "error", message: describeError(error) });
+                const message = describeError(error);
+                setSource((current) => ({ status: "unreachable", message, state: lastKnownState(current) }));
                 schedule(IDLE_POLL_MS);
             }
         }

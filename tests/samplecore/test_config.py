@@ -12,10 +12,12 @@ from samplecore.config import (
     DATABASE_URL_ENVIRONMENT_VARIABLE,
     ConfigurationError,
     InferenceConfig,
+    InvalidSettingsError,
     LibraryConfig,
     create_config_file,
     default_config_path,
     load_config,
+    parse_config,
 )
 from samplecore.paths import EXAMPLE_CONFIG_PATH
 from samplecore.storage.cluster.embedded.state import ManagedClusterMissingError, create_cluster_state
@@ -364,6 +366,17 @@ def test_sample_directories_the_catalog_cannot_place_a_file_under_once_are_refus
             database_url="postgresql+psycopg://user:pass@host/db",
             sample_directories=tuple(Path(directory) for directory in case.directories),
         )
+
+
+def test_a_refused_setting_is_named_with_its_validators_own_sentence(tmp_path: Path) -> None:
+    content = _library_table(tmp_path) + 'sample_directories = ["/samples", "/samples/drums"]\n'
+
+    with pytest.raises(InvalidSettingsError) as refusal:
+        parse_config(content, tmp_path / "config.toml")
+
+    sentence = f"{Path('/samples')} and {Path('/samples/drums')} overlap. Choose each folder only once."
+    assert refusal.value.problems == (sentence,)
+    assert str(refusal.value).endswith(f"sample_directories: {sentence}")
 
 
 def test_a_blank_sample_exclusion_is_refused() -> None:

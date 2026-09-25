@@ -8,6 +8,7 @@ export type BuildView = components["schemas"]["JobView"];
 export type BuildTarget = BuildView["target"];
 export type BuildStep = components["schemas"]["StepView"];
 export type StepState = BuildStep["state"];
+export type ProgressReport = components["schemas"]["ProgressReport"];
 export type FolderListing = components["schemas"]["FolderListing"];
 export type Place = components["schemas"]["Place"];
 
