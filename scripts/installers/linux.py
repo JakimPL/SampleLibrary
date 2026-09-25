@@ -10,11 +10,10 @@ from typing import Final
 from build_app import APP_NAME
 from installers.common import PROGRAM_MODE, copy_program, release_name
 from installers.icons import linux_icon
+from paths import LINUX_APP_RUN, LINUX_DESKTOP_ENTRY
 
 PLATFORM: Final[str] = "linux-x64"
 ARCHITECTURE: Final[str] = "x86_64"
-APP_RUN: Final[Path] = Path("packaging") / "linux" / "AppRun"
-DESKTOP_ENTRY: Final[Path] = Path("packaging") / "linux" / f"{APP_NAME}.desktop"
 DESKTOP_ICON_NAME: Final[str] = "samplelibrary.png"
 APPIMAGETOOL_URL: Final[str] = (
     "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
@@ -31,9 +30,9 @@ def linux_appimage(executable: Path, *, version: str, output_directory: Path, wo
     app_directory = work / f"{APP_NAME}.AppDir"
     programs = app_directory / "usr" / "bin"
     programs.mkdir(parents=True)
-    copy_program(APP_RUN, app_directory / APP_RUN.name)
+    copy_program(LINUX_APP_RUN, app_directory / LINUX_APP_RUN.name)
     copy_program(executable, programs / APP_NAME)
-    shutil.copy2(DESKTOP_ENTRY, app_directory / DESKTOP_ENTRY.name)
+    shutil.copy2(LINUX_DESKTOP_ENTRY, app_directory / LINUX_DESKTOP_ENTRY.name)
     linux_icon(app_directory / DESKTOP_ICON_NAME)
     target = output_directory / f"{release_name(version, PLATFORM)}.AppImage"
     subprocess.run(

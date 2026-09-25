@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import Final
 
+from paths import DESCRIPTOR_UPLOAD_DIRECTORY
+
 from samplecore.cli_support import load_config_or_exit
 from samplecore.storage.atomic import copy_atomically
 from sampledescriptor.model_paths import descriptor_path
@@ -16,7 +18,6 @@ from samplelibrary.pipeline.layout import PipelineLayout
 from samplelibrary.pipeline.steps.descriptor import DESCRIPTOR
 
 SEALED_OUTPUT: Final[str] = "sealed"
-UPLOAD_DIRECTORY: Final[Path] = Path("dist") / "descriptor"
 RELEASE_DOWNLOAD_URL: Final[str] = "https://github.com/JakimPL/SampleLibrary/releases/download/{tag}/{name}"
 
 
@@ -44,7 +45,7 @@ def main(argv: list[str] | None = None) -> None:
     """
     arguments = _parse_arguments(argv)
     model = arguments.descriptor or _current_descriptor(load_config_or_exit().library_root)
-    upload = UPLOAD_DIRECTORY / model.name
+    upload = DESCRIPTOR_UPLOAD_DIRECTORY / model.name
     copy_atomically(model, upload)
     release = release_of(model, url=RELEASE_DOWNLOAD_URL.format(tag=arguments.tag, name=model.name))
     write_pretrained_release(release, PRETRAINED_RELEASE_PATH)

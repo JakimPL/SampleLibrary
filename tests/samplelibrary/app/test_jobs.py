@@ -12,8 +12,9 @@ from samplecore.config import LibraryConfig
 from samplelibrary.app.jobs import BuildTarget, JobAlreadyRunningError, JobRunner, JobStatus, JobView, StepState
 from samplelibrary.pipeline.settings import DescriptorSource
 from samplelibrary.pipeline.steps.library import library_graph
+from tests.paths import STAND_IN_PIPELINE_SCRIPT
 
-STAND_IN_PIPELINE: Final[tuple[str, ...]] = (sys.executable, str(Path(__file__).with_name("stand_in_pipeline.py")))
+STAND_IN_PIPELINE: Final[tuple[str, ...]] = (sys.executable, str(STAND_IN_PIPELINE_SCRIPT))
 IDLE_PIPELINE: Final[tuple[str, ...]] = (sys.executable, "-c", "import time; time.sleep(60)")
 FINISH_TIMEOUT_SECONDS: Final[float] = 30.0
 

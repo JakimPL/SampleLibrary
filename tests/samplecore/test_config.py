@@ -10,7 +10,6 @@ import pytest
 from samplecore.config import (
     CONFIG_PATH_ENVIRONMENT_VARIABLE,
     DATABASE_URL_ENVIRONMENT_VARIABLE,
-    EXAMPLE_CONFIG_PATH,
     ConfigurationError,
     InferenceConfig,
     LibraryConfig,
@@ -18,6 +17,7 @@ from samplecore.config import (
     default_config_path,
     load_config,
 )
+from samplecore.paths import EXAMPLE_CONFIG_PATH
 from samplecore.storage.cluster.embedded.state import ManagedClusterMissingError, create_cluster_state
 
 

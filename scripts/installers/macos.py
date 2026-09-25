@@ -8,9 +8,9 @@ from typing import Final
 from build_app import APP_NAME
 from installers.common import copy_program, release_name
 from installers.icons import macos_icon
+from paths import MACOS_LAUNCHER
 
 PLATFORM: Final[str] = "macos-arm64"
-LAUNCHER: Final[Path] = Path("packaging") / "macos" / "launch"
 BUNDLE_IDENTIFIER: Final[str] = "io.github.jakimpl.samplelibrary"
 MINIMUM_SYSTEM_VERSION: Final[str] = "11.0"
 APPLICATIONS_FOLDER: Final[Path] = Path("/Applications")
@@ -41,7 +41,7 @@ def _bundle(executable: Path, *, version: str, root: Path) -> Path:
     contents = bundle / "Contents"
     (contents / "MacOS").mkdir(parents=True)
     (contents / "Resources").mkdir()
-    copy_program(LAUNCHER, contents / "MacOS" / LAUNCHER.name)
+    copy_program(MACOS_LAUNCHER, contents / "MacOS" / MACOS_LAUNCHER.name)
     copy_program(executable, contents / "MacOS" / APP_NAME)
     macos_icon(contents / "Resources" / f"{APP_NAME}.icns")
     with (contents / "Info.plist").open("wb") as file:
@@ -57,7 +57,7 @@ def _bundle_information(version: str) -> dict[str, str | bool]:
         "CFBundleIdentifier": BUNDLE_IDENTIFIER,
         "CFBundleVersion": version,
         "CFBundleShortVersionString": version,
-        "CFBundleExecutable": LAUNCHER.name,
+        "CFBundleExecutable": MACOS_LAUNCHER.name,
         "CFBundleIconFile": APP_NAME,
         "CFBundlePackageType": "APPL",
         "LSMinimumSystemVersion": MINIMUM_SYSTEM_VERSION,

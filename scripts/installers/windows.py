@@ -9,10 +9,9 @@ from typing import Final
 from build_app import APP_NAME
 from installers.common import release_name
 from installers.icons import windows_icon
+from paths import WINDOWS_INSTALLER_SCRIPT, WINDOWS_QUIT_SCRIPT
 
 PLATFORM: Final[str] = "windows-x64"
-INSTALLER_SCRIPT: Final[Path] = Path("packaging") / "windows" / f"{APP_NAME}.iss"
-QUIT_SCRIPT: Final[Path] = Path("packaging") / "windows" / "quit.ps1"
 INNO_SETUP_COMPILER: Final[str] = "ISCC"
 INNO_SETUP_DEFAULT: Final[Path] = Path("C:/Program Files (x86)/Inno Setup 6/ISCC.exe")
 INSTALLER_SUFFIX: Final[str] = "-setup"
@@ -34,10 +33,10 @@ def windows_installer(executable: Path, *, version: str, output_directory: Path,
             f"/DVersion={version}",
             f"/DExecutable={executable.resolve()}",
             f"/DIcon={windows_icon(work / f'{APP_NAME}.ico')}",
-            f"/DQuitScript={QUIT_SCRIPT.resolve()}",
+            f"/DQuitScript={WINDOWS_QUIT_SCRIPT}",
             f"/DOutputDirectory={output_directory.resolve()}",
             f"/DOutputName={output_name}",
-            INSTALLER_SCRIPT,
+            WINDOWS_INSTALLER_SCRIPT,
         ],
         check=True,
     )

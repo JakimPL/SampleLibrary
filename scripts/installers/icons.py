@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
+from paths import APP_ICON
 from PIL import Image, ImageDraw
 
-SOURCE_ICON: Final[Path] = Path("frontend") / "public" / "icons" / "icon-512.png"
 CORNER_RADIUS_FRACTION: Final[float] = 7 / 32
 MASK_SUPERSAMPLING: Final[int] = 4
 WINDOWS_ICON_SIZES: Final[tuple[tuple[int, int], ...]] = (
@@ -43,7 +43,7 @@ def _desktop_icon() -> Image.Image:
     color; the rounded square's radius comes from `favicon.svg`, and the mask is drawn at a larger
     size and scaled down for smooth edges.
     """
-    with Image.open(SOURCE_ICON) as image:
+    with Image.open(APP_ICON) as image:
         icon = image.convert("RGBA")
     mask_size = icon.width * MASK_SUPERSAMPLING
     mask = Image.new("L", (mask_size, mask_size), 0)

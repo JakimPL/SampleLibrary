@@ -12,9 +12,10 @@ from pydantic import BaseModel
 from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
-from samplecore.config import ConfigurationError, LibraryConfig, default_library_root, load_config
+from samplecore.config import ConfigurationError, LibraryConfig, load_config
 from samplecore.config_editing import LibrarySources, write_library_sources, write_pipeline_values
 from samplecore.models.base import FROZEN
+from samplecore.paths import default_library_root
 from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster, EmbeddedClusterError
 from samplecore.storage.database import connect

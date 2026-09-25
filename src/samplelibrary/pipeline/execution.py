@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from samplecore.exit_status import ExitStatus
 from samplecore.models.base import FROZEN
+from samplecore.paths import CHECKOUT_DIRECTORY, runs_from_checkout
 from samplecore.processes import HIDDEN_CONSOLE_FLAGS
 from samplecore.progress import PROGRESS_FILE_ENVIRONMENT_VARIABLE
 from samplelibrary.environment import (
@@ -266,13 +267,15 @@ def _package_versions() -> dict[str, str]:
 
 def _repository_revision() -> str | None:
     """The commit this project runs from, where it runs from a checkout at all."""
+    if not runs_from_checkout():
+        return None
     try:
         finished = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             check=False,
             capture_output=True,
             text=True,
-            cwd=Path(__file__).resolve().parent,
+            cwd=CHECKOUT_DIRECTORY,
             creationflags=HIDDEN_CONSOLE_FLAGS,
         )
     except OSError:

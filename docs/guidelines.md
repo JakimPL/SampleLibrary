@@ -23,6 +23,7 @@
 
 1. Refer to [`architecture.md`](architecture.md) for the package ownership map (which package owns what).
 1. General-purpose helpers that are not model-specific belong in `samplecore`, not inside a feature package.
+1. Each package names its files in its own `paths.py`, which holds the package's single `Path(__file__)` anchor. `samplecore/paths.py` also names the source checkout's files and the application's folders for the user, and `scripts/paths.py` and `tests/paths.py` name the repository's. Every other module imports its paths from these.
 1. Do not create delegated imports or re-export modules just so other modules can import through them.
 1. Import shared helpers directly from the module that owns their implementation.
 1. Before adding a helper, search the repository for existing logic with `rg`.

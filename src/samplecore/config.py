@@ -7,16 +7,11 @@ from pathlib import Path
 from typing import Final
 from urllib.parse import SplitResult, urlsplit
 
-from platformdirs import user_config_path, user_music_path
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
+from samplecore.paths import CHECKOUT_CONFIG_PATH, EXAMPLE_CONFIG_PATH, runs_from_checkout, user_config_file
 from samplecore.storage.cluster.embedded.state import managed_catalog_url
 
-APPLICATION_NAME: Final[str] = "SampleLibrary"
-CONFIG_FILE_NAME: Final[str] = "config.toml"
-SOURCE_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
-EXAMPLE_CONFIG_PATH: Final[Path] = SOURCE_ROOT / "config.example.toml"
-LIBRARY_DIRECTORY_NAME: Final[str] = "SampleLibrary"
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
 DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_DATABASE_URL"
 DEFAULT_MINIMUM_SAMPLE_FRAMES: Final[int] = 512
@@ -222,14 +217,9 @@ def default_config_path() -> Path:
     A checkout holds the committed example beside the file a developer fills in, and an installed
     application keeps its file where the system keeps each user's settings.
     """
-    if EXAMPLE_CONFIG_PATH.is_file():
-        return SOURCE_ROOT / CONFIG_FILE_NAME
-    return user_config_path(APPLICATION_NAME, appauthor=False) / CONFIG_FILE_NAME
-
-
-def default_library_root() -> Path:
-    """The library root the application suggests to a person choosing one: a folder in their music folder."""
-    return user_music_path() / LIBRARY_DIRECTORY_NAME
+    if runs_from_checkout():
+        return CHECKOUT_CONFIG_PATH
+    return user_config_file()
 
 
 def create_config_file(path: Path) -> bool:

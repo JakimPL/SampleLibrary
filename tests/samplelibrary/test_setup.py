@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, EXAMPLE_CONFIG_PATH
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.exit_status import ExitStatus
+from samplecore.paths import EXAMPLE_CONFIG_PATH
 from samplelibrary import setup
 from samplelibrary.cli import dispatch
 

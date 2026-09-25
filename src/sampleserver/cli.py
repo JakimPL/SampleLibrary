@@ -9,6 +9,7 @@ import uvicorn
 
 from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_connection, port_number, positive_integer
+from samplecore.paths import PACKAGES_DIRECTORY
 from sampleserver.frontend import (
     FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE,
     built_frontend,
@@ -16,7 +17,6 @@ from sampleserver.frontend import (
 )
 
 APPLICATION_PATH: Final[str] = "sampleserver.main:app"
-SOURCE_DIRECTORY: Final[Path] = Path(__file__).resolve().parents[1]
 DEFAULT_HOST: Final[str] = "127.0.0.1"
 DEFAULT_PORT: Final[int] = 8000
 WORKER_COUNT_ENVIRONMENT_VARIABLE: Final[str] = "WEB_CONCURRENCY"
@@ -42,7 +42,7 @@ def main(argv: list[str], *, prog: str) -> None:
         host=arguments.host,
         port=arguments.port,
         reload=arguments.reload,
-        reload_dirs=[str(SOURCE_DIRECTORY)] if arguments.reload else None,
+        reload_dirs=[str(PACKAGES_DIRECTORY)] if arguments.reload else None,
         workers=arguments.workers,
     )
 

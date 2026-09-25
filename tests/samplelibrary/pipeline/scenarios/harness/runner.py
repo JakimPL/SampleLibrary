@@ -15,6 +15,7 @@ from samplelibrary.pipeline.results import RunOutcome
 from samplelibrary.pipeline.settings import DescriptorSource
 from samplelibrary.pipeline.status import StepStatus, read_status
 from samplelibrary.pipeline.steps.library import library_graph
+from tests.paths import REPOSITORY_DIRECTORY
 from tests.samplelibrary.pipeline.scenarios.harness.expect import Expect
 from tests.samplelibrary.pipeline.scenarios.harness.observe import RunObservation, observe_run, read_evidence
 from tests.samplelibrary.pipeline.scenarios.harness.oracles import (
@@ -37,7 +38,6 @@ from tests.samplelibrary.pipeline.scenarios.harness.plans import (
 from tests.samplelibrary.pipeline.scenarios.harness.world import CATALOG_PARTS, World
 
 HOST_MODULE: Final[str] = "tests.samplelibrary.pipeline.scenarios.harness.host"
-REPOSITORY_ROOT: Final[Path] = Path(__file__).resolve().parents[5]
 RUN_DEADLINE_SECONDS: Final[float] = 7200.0
 GATE_DEADLINE_SECONDS: Final[float] = 300.0
 POLL_SECONDS: Final[float] = 0.02
@@ -197,8 +197,8 @@ class ScenarioRunner:
                 [sys.executable, "-m", HOST_MODULE, str(plan_path)],
                 stdout=output,
                 stderr=subprocess.STDOUT,
-                cwd=REPOSITORY_ROOT,
-                env={**os.environ, "PYTHONPATH": str(REPOSITORY_ROOT)},
+                cwd=REPOSITORY_DIRECTORY,
+                env={**os.environ, "PYTHONPATH": str(REPOSITORY_DIRECTORY)},
                 start_new_session=True,
             )
         host = Host(process=process, request=request, act=act, before=before, statuses=statuses)

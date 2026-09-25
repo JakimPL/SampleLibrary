@@ -5,13 +5,8 @@ from pathlib import Path
 import pytest
 
 from samplemorph.envelope.settings import EnvelopeSettings, Excitation
-from samplemorph.routes.selection import (
-    DEFAULT_FILTER_SELECTION_PATH,
-    DEFAULT_SELECTION_PATH,
-    Glide,
-    read_filter_selection,
-    read_route_selection,
-)
+from samplemorph.paths import DEFAULT_FILTER_SELECTION_PATH, DEFAULT_SELECTION_PATH
+from samplemorph.routes.selection import Glide, read_filter_selection, read_route_selection
 
 FULL_SELECTION = """
 envelope:

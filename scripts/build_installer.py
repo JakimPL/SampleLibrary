@@ -9,7 +9,8 @@ from build_app import APP_NAME, EXECUTABLE_SUFFIX
 from installers.linux import linux_appimage
 from installers.macos import macos_disk_image
 from installers.windows import windows_installer
-from release_inputs import PROJECT_FILE, project_version
+from paths import PROJECT_FILE
+from versions import project_version
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:

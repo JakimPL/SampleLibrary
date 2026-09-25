@@ -6,9 +6,8 @@ from typing import Final
 
 import pytest
 
-import samplelibrary.pipeline.scheduler
+from tests.paths import PIPELINE_SOURCE_DIRECTORY
 
-PIPELINE_ROOT: Final[Path] = Path(samplelibrary.pipeline.scheduler.__file__).parent
 CORE_MODULES: Final[tuple[str, ...]] = ("scheduler.py", "execution.py", "scratch.py", "artifacts.py", "events.py")
 # A file opened for appending closes as the block ends, and the interrupt watch puts the signal
 # handlers back: neither writes anything a later run reads.
@@ -18,7 +17,7 @@ ALLOWED_EXITS: Final[frozenset[str]] = frozenset({"InterruptWatch"})
 
 
 def _tree(module: str) -> ast.Module:
-    return ast.parse((PIPELINE_ROOT / module).read_text(encoding="utf-8"))
+    return ast.parse((PIPELINE_SOURCE_DIRECTORY / module).read_text(encoding="utf-8"))
 
 
 def _called_name(expression: ast.expr) -> str:

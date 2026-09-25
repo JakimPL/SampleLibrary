@@ -34,7 +34,7 @@ jobs:
         id: inputs
         env:
           TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
-        run: uv run --no-project python scripts/release_inputs.py --output "$GITHUB_OUTPUT" ${TAG:+--tag "$TAG"}
+        run: uv run --no-dev --extra morph python scripts/release_inputs.py --output "$GITHUB_OUTPUT" ${TAG:+--tag "$TAG"}
       - name: Install the frontend's packages
         run: npm ci --prefix frontend
       - name: Build the wheel and its pinned requirements

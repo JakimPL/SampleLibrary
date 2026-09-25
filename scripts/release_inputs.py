@@ -1,22 +1,28 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import sys
-import tomllib
+import tempfile
 import urllib.error
 import urllib.request
 from http import HTTPStatus
 from pathlib import Path
 from typing import Final
 
-PROJECT_FILE: Final[Path] = Path("pyproject.toml")
-TRACKMOD_PROJECT_FILE: Final[Path] = Path("trackmod") / "pyproject.toml"
+from paths import PROJECT_FILE, TRACKMOD_PROJECT_FILE
+from versions import project_version
+
+from sampledescriptor.pretrained import (
+    PretrainedDescriptorMissingError,
+    PretrainedDownloadError,
+    download_pretrained,
+    pretrained_release,
+)
+
 TRACKMOD_PACKAGE: Final[str] = "trackmod"
-PRETRAINED_RELEASE_FILE: Final[Path] = Path("src") / "sampledescriptor" / "pretrained.toml"
 PYPI_RELEASE_URL: Final[str] = "https://pypi.org/pypi/{package}/{version}/json"
 PYPI_TIMEOUT_SECONDS: Final[float] = 30.0
-DOWNLOAD_TIMEOUT_SECONDS: Final[float] = 120.0
+DOWNLOADED_DESCRIPTOR_NAME: Final[str] = "descriptor.pt"
 TAG_PREFIX: Final[str] = "v"
 
 
@@ -67,24 +73,20 @@ def main(argv: list[str] | None = None) -> None:
         output.write(f"trackmod={TRACKMOD_PACKAGE}=={trackmod_version}\n")
 
 
-def project_version(project_file: Path) -> str:
-    with project_file.open("rb") as file:
-        return str(tomllib.load(file)["project"]["version"])
-
-
 def _pretrained_problem() -> str | None:
-    """What keeps new libraries from downloading the published descriptor, or None when it downloads intact."""
-    if not PRETRAINED_RELEASE_FILE.is_file():
-        return "No pretrained descriptor is published. Run `just release-descriptor <tag>` first."
-    with PRETRAINED_RELEASE_FILE.open("rb") as file:
-        release = tomllib.load(file)
+    """What keeps new libraries from getting the published descriptor, or None when it downloads intact.
+
+    The check downloads it the way a library's build does, verifying its bytes against the release.
+    """
     try:
-        with urllib.request.urlopen(release["url"], timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
-            content = response.read()
-    except urllib.error.URLError as error:
-        return f"The pretrained descriptor at {release['url']} doesn't download: {error.reason}."
-    if hashlib.sha256(content).hexdigest() != release["sha256"]:
-        return f"The pretrained descriptor at {release['url']} doesn't match its release record."
+        release = pretrained_release()
+    except PretrainedDescriptorMissingError as error:
+        return str(error)
+    with tempfile.TemporaryDirectory() as directory:
+        try:
+            download_pretrained(release, Path(directory) / DOWNLOADED_DESCRIPTOR_NAME)
+        except PretrainedDownloadError as error:
+            return str(error)
     return None
 
 

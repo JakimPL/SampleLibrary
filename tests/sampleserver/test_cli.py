@@ -9,6 +9,7 @@ from sqlalchemy.exc import OperationalError
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplecore.exit_status import ExitStatus
+from samplecore.paths import PACKAGES_DIRECTORY
 from sampleserver import cli
 from sampleserver.frontend import (
     FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE,
@@ -78,8 +79,8 @@ def test_reloading_watches_the_source_packages_alone(recorded: RecordedRun) -> N
 
     options = recorded.only
     assert options["reload"] is True
-    assert options["reload_dirs"] == [str(cli.SOURCE_DIRECTORY)]
-    assert (cli.SOURCE_DIRECTORY / "sampleserver").is_dir()
+    assert options["reload_dirs"] == [str(PACKAGES_DIRECTORY)]
+    assert (PACKAGES_DIRECTORY / "sampleserver").is_dir()
 
 
 def test_reloading_and_several_workers_are_a_usage_error(
