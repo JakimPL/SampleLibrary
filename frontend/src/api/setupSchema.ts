@@ -34,7 +34,7 @@ export interface paths {
          * @description Write the library's folders into the config file and open the library under them.
          *
          *     Raises:
-         *         HTTPException: 422 when the folders fail validation, naming what to change.
+         *         HTTPException: 409 while a build runs, and 422 when the folders fail validation, naming what to change.
          */
         readonly put: operations["choose_sources_api_setup_sources_put"];
         readonly post?: never;
@@ -251,6 +251,9 @@ export interface components {
         /**
          * ProgressReport
          * @description How far one pass has come, as the program watching it reads it: what it counts, how many are done, of how many.
+         *
+         *     The pass's start and the moment of its count give the pace the watching program estimates the
+         *     pass's remaining time from.
          */
         readonly ProgressReport: {
             /** Label */
@@ -259,6 +262,11 @@ export interface components {
             readonly done: number;
             /** Total */
             readonly total: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            readonly started_at: string;
             /**
              * Updated At
              * Format: date-time
@@ -288,11 +296,18 @@ export interface components {
          * @enum {string}
          */
         readonly StepState: "waiting" | "up to date" | "running" | "done" | "failed" | "skipped";
-        /** StepView */
+        /**
+         * StepView
+         * @description One step of a build: where it stands, when its latest attempt started and ended, and its running pass's count.
+         */
         readonly StepView: {
             /** Name */
             readonly name: string;
             readonly state: components["schemas"]["StepState"];
+            /** Started At */
+            readonly started_at: string | null;
+            /** Ended At */
+            readonly ended_at: string | null;
             readonly progress: components["schemas"]["ProgressReport"] | null;
         };
         /** ValidationError */

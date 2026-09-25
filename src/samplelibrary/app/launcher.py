@@ -42,6 +42,10 @@ class LibraryClosedError(Exception):
     """Raised when a build is asked for before the library is open."""
 
 
+class BuildInProgressError(Exception):
+    """Raised when new folders are chosen while a build runs over the library the current ones opened."""
+
+
 @unique
 class LibraryStatus(StrEnum):
     """Where the application stands with its library: waiting for a person's choices, opening it, open, or stuck."""
@@ -131,8 +135,11 @@ class Launcher:
         building its cloud trains nothing.
 
         Raises:
+            BuildInProgressError: a build runs, and the config file stays as it was.
             ConfigurationError: the choices fail validation, and the config file stays as it was.
         """
+        if self._builds.is_running:
+            raise BuildInProgressError("Wait for the build to finish or cancel it.")
         creating = not self._config_path.is_file()
         self._config = write_library_sources(self._config_path, sources)
         if creating:

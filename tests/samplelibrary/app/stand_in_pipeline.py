@@ -30,10 +30,9 @@ def main() -> None:
     events.emit(StepDecided(step="modules", verdict=StepVerdict.SATISFIED, reasons=()))
     events.emit(StepDecided(step="thumbnails", verdict=StepVerdict.RAN, reasons=("readable samples",)))
     events.emit(AttemptStarted(step="thumbnails", argv=("thumbnails",), log=str(run.log("thumbnails")), scope="s"))
-    run.progress("thumbnails").write_text(
-        ProgressReport(label="Computing thumbnails", done=7, total=7, updated_at=datetime.now(UTC)).model_dump_json(),
-        encoding="utf-8",
-    )
+    now = datetime.now(UTC)
+    report = ProgressReport(label="Computing thumbnails", done=7, total=7, started_at=now, updated_at=now)
+    run.progress("thumbnails").write_text(report.model_dump_json(), encoding="utf-8")
     failing = target == FAILING_TARGET
     run.log("thumbnails").write_text("Computing thumbnails\nthe disk is full\n", encoding="utf-8")
     outcome = AttemptOutcome.FAILED if failing else AttemptOutcome.COMPLETED

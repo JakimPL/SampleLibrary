@@ -32,6 +32,20 @@ def test_a_bar_reports_its_start_before_any_item_finishes(tmp_path: Path, monkey
     assert (report.done, report.total) == (0, 3)
 
 
+def test_every_report_of_a_pass_carries_the_moment_it_started(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    report_path = tmp_path / "step.progress.json"
+    monkeypatch.setenv(PROGRESS_FILE_ENVIRONMENT_VARIABLE, str(report_path))
+
+    with ProgressBar(total=2, label="Reading") as progress:
+        first = read_progress(report_path)
+        progress.update(2)
+    last = read_progress(report_path)
+
+    assert first is not None and last is not None
+    assert first.started_at == last.started_at
+    assert last.started_at <= last.updated_at
+
+
 def test_a_pass_run_by_hand_writes_no_report(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(PROGRESS_FILE_ENVIRONMENT_VARIABLE, raising=False)
 

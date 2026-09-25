@@ -69,10 +69,14 @@ class StepState(StrEnum):
 
 
 class StepView(BaseModel):
+    """One step of a build: where it stands, when its latest attempt started and ended, and its running pass's count."""
+
     model_config = FROZEN
 
     name: str
     state: StepState
+    started_at: datetime | None
+    ended_at: datetime | None
     progress: ProgressReport | None
 
 
@@ -174,7 +178,7 @@ class JobRunner:
         Raises:
             JobAlreadyRunningError: a build already runs.
         """
-        if self._job is not None and self._job.is_running:
+        if self.is_running:
             raise JobAlreadyRunningError("A build is already running. Wait for it to finish or cancel it.")
         layout = PipelineLayout(config.library_root)
         known_runs = set(layout.runs.iterdir()) if layout.runs.is_dir() else set()
@@ -190,6 +194,10 @@ class JobRunner:
                 env=child_environment(self._config_path),
             )
         self._job = Job(target=target, process=process, layout=layout, known_runs=known_runs)
+
+    @property
+    def is_running(self) -> bool:
+        return self._job is not None and self._job.is_running
 
     def cancel(self) -> None:
         if self._job is not None:
@@ -208,17 +216,22 @@ class JobRunner:
 
 
 def _step_views(events: tuple[PipelineEvent, ...], run: RunPaths | None) -> tuple[StepView, ...]:
-    """Each step of the run in its order, in the state its latest event puts it."""
+    """Each step of the run in its order, in the state its latest event puts it, timed by its latest attempt."""
     order: tuple[str, ...] = ()
     states: dict[str, StepState] = {}
+    starts: dict[str, datetime] = {}
+    ends: dict[str, datetime] = {}
     for event in events:
         match event:
             case RunStarted():
                 order = event.steps
             case AttemptStarted():
                 states[event.step] = StepState.RUNNING
+                starts[event.step] = event.at
+                ends.pop(event.step, None)
             case AttemptEnded():
                 states[event.step] = StepState.DONE if event.outcome is AttemptOutcome.COMPLETED else StepState.FAILED
+                ends[event.step] = event.at
             case StepDecided():
                 states[event.step] = _decided_state(event.verdict)
             case _:
@@ -227,6 +240,8 @@ def _step_views(events: tuple[PipelineEvent, ...], run: RunPaths | None) -> tupl
         StepView(
             name=step,
             state=states.get(step, StepState.WAITING),
+            started_at=starts.get(step),
+            ended_at=ends.get(step),
             progress=(
                 read_progress(run.progress(step))
                 if run is not None and states.get(step) in (StepState.RUNNING, StepState.DONE, StepState.FAILED)

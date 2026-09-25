@@ -135,6 +135,24 @@ def test_a_library_already_configured_keeps_its_pipeline_settings(
     assert read_pipeline_settings(config_path).descriptor_source is DescriptorSource.TRAINED
 
 
+def test_folders_stay_as_they_are_while_a_build_runs(configured: TestClient, config_path: Path, tmp_path: Path) -> None:
+    _wait_until_settled(configured)
+    written = config_path.read_text(encoding="utf-8")
+    sources = {
+        "library_root": str(tmp_path / "elsewhere"),
+        "module_source_directory": str(tmp_path),
+        "sample_directories": [],
+        "sample_exclusions": [],
+    }
+
+    build = configured.post("/api/setup/builds", json={"target": "catalog"})
+    response = configured.put("/api/setup/sources", json=sources)
+
+    assert build.status_code == 202
+    assert response.status_code == 409
+    assert config_path.read_text(encoding="utf-8") == written
+
+
 def test_folders_the_config_refuses_are_answered_with_the_reason(configured: TestClient, tmp_path: Path) -> None:
     sources = {
         "library_root": str(tmp_path / "library"),

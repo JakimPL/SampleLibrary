@@ -67,6 +67,19 @@ def test_a_build_reports_each_step_as_the_run_recorded_it(
     assert view.steps[1].progress.done == 7
 
 
+def test_a_step_that_ran_carries_its_attempts_times_and_one_up_to_date_carries_none(
+    tmp_path: Path, config: LibraryConfig
+) -> None:
+    runner = JobRunner(config_path=tmp_path / "config.toml", pipeline_command=STAND_IN_PIPELINE)
+
+    runner.start(config, BuildTarget.CATALOG)
+    modules, thumbnails, _ = _finished(runner).steps
+
+    assert (modules.started_at, modules.ended_at) == (None, None)
+    assert thumbnails.started_at is not None and thumbnails.ended_at is not None
+    assert thumbnails.started_at <= thumbnails.ended_at
+
+
 def test_a_failed_build_names_the_step_and_shows_the_end_of_its_log(tmp_path: Path, config: LibraryConfig) -> None:
     runner = JobRunner(config_path=tmp_path / "config.toml", pipeline_command=STAND_IN_PIPELINE)
 
@@ -83,9 +96,11 @@ def test_one_build_runs_at_a_time_and_a_canceled_one_says_so(tmp_path: Path, con
 
     with pytest.raises(JobAlreadyRunningError):
         runner.start(config, BuildTarget.CATALOG)
+    assert runner.is_running
     runner.stop()
 
     view = runner.view()
+    assert not runner.is_running
     assert view is not None and view.status is JobStatus.CANCELED
 
 

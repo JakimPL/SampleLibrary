@@ -20,13 +20,18 @@ REPORT_INTERVAL_SECONDS: Final[float] = 1.0
 
 
 class ProgressReport(BaseModel):
-    """How far one pass has come, as the program watching it reads it: what it counts, how many are done, of how many."""
+    """How far one pass has come, as the program watching it reads it: what it counts, how many are done, of how many.
+
+    The pass's start and the moment of its count give the pace the watching program estimates the
+    pass's remaining time from.
+    """
 
     model_config = FROZEN
 
     label: str
     done: int = Field(ge=0)
     total: int = Field(ge=0)
+    started_at: datetime
     updated_at: datetime
 
 
@@ -42,6 +47,7 @@ class ProgressBar:
         self._label = label
         self._total = total
         self._done = 0
+        self._started_at = datetime.now(UTC)
         self._reported_at = -math.inf
         self._report_path = progress_file_from_environment()
         self._bar = tqdm(total=total, desc=label)
@@ -70,7 +76,13 @@ class ProgressBar:
         self._reported_at = time.monotonic()
         if self._report_path is None:
             return
-        report = ProgressReport(label=self._label, done=self._done, total=self._total, updated_at=datetime.now(UTC))
+        report = ProgressReport(
+            label=self._label,
+            done=self._done,
+            total=self._total,
+            started_at=self._started_at,
+            updated_at=datetime.now(UTC),
+        )
         write_bytes_atomically(self._report_path, report.model_dump_json().encode("utf-8"))
 
 

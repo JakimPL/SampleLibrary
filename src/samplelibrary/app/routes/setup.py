@@ -12,7 +12,7 @@ from samplecore.config_editing import LibrarySources
 from samplecore.models.base import FROZEN
 from samplelibrary.app.folders import FolderListing, FolderUnreadableError, Place, list_folder, places
 from samplelibrary.app.jobs import BuildTarget, JobAlreadyRunningError
-from samplelibrary.app.launcher import Launcher, LibraryClosedError, SetupState
+from samplelibrary.app.launcher import BuildInProgressError, Launcher, LibraryClosedError, SetupState
 from samplelibrary.app.routes.guard import launcher_of, require_local_person
 
 router = APIRouter(dependencies=[Depends(require_local_person)], tags=["setup"])
@@ -30,10 +30,12 @@ async def choose_sources(sources: LibrarySources, launcher: LauncherDependency) 
     """Write the library's folders into the config file and open the library under them.
 
     Raises:
-        HTTPException: 422 when the folders fail validation, naming what to change.
+        HTTPException: 409 while a build runs, and 422 when the folders fail validation, naming what to change.
     """
     try:
         launcher.choose_sources(sources)
+    except BuildInProgressError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     except ConfigurationError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
     return launcher.state()
