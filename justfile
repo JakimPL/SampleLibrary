@@ -197,8 +197,6 @@ docker-build:
 LIBRARY_MOUNT := "type=bind,target=/library,readonly,source="
 CONFIG_MOUNT := "type=bind,target=/app/config.toml,readonly,source="
 
-# Both paths are read from where the recipe was run, and a mount of a path that is not there fails
-# rather than leaving an empty directory in its place.
 [group("docker")]
 [linux]
 docker-run library_root config_path:
