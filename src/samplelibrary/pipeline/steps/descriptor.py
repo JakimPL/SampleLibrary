@@ -20,7 +20,7 @@ from sampledescriptor.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE
 from sampledescriptor.descriptors.shape import DEFAULT_WIDTH
 from sampledescriptor.geometry import DEFAULT_ANCHOR, Anchor
 from sampledescriptor.model_paths import descriptor_path
-from sampledescriptor.pretrained import PretrainedDescriptor, PretrainedDescriptorMissingError, pretrained_descriptor
+from sampledescriptor.pretrained import PretrainedDescriptorMissingError, PretrainedRelease, pretrained_release
 from sampledescriptor.registries import DEFAULT_CANONICALIZER_NAME
 from sampledescriptor.training.descriptor.cache import (
     DEFAULT_RETUNED_VIEW_COUNT,
@@ -132,8 +132,8 @@ def descriptor_steps(source: DescriptorSource) -> tuple[Step, ...]:
     The cache and the training run are named by what they were built from, the finished model is
     kept under its own content, and the experiment is named by that model and the cache it
     described, so a library that stands still rebuilds none of them and one that grew rebuilds each.
-    A library taking the bundled descriptor stores that model in place of training one, under the
-    name its bytes give it.
+    A library taking the pretrained descriptor downloads the published model in place of training
+    one, named by the digest its release records.
     """
     return (
         FileArtifactStep(
@@ -200,20 +200,20 @@ def learned_key(context: PipelineContext) -> ExperimentKey:
 
 
 def _grid_cache_settings(context: PipelineContext) -> GridCacheSettings:
-    """The grid cache's settings: the configured ones, or for the bundled descriptor the axis it reads.
+    """The grid cache's settings: the configured ones, or for the pretrained descriptor the axis it reads.
 
-    The bundled descriptor describes only the stored grid of each sample, so its cache keeps no
+    The pretrained descriptor describes only the stored grid of each sample, so its cache keeps no
     retuned views, which only training reads.
     """
     match context.settings.descriptor_source:
         case DescriptorSource.TRAINED:
             return context.settings.settings_for(GRID_CACHE, GridCacheSettings)
         case DescriptorSource.PRETRAINED:
-            manifest = _pretrained().manifest
+            grid = _pretrained().grid
             return GridCacheSettings(
-                canonicalizer=manifest.canonicalizer,
-                anchor=manifest.anchor,
-                bands_per_semitone=manifest.bands_per_semitone,
+                canonicalizer=grid.canonicalizer,
+                anchor=grid.anchor,
+                bands_per_semitone=grid.bands_per_semitone,
                 views=0,
             )
 
@@ -266,7 +266,7 @@ def _descriptor_settings(context: PipelineContext) -> DescriptorSettings:
 
 
 def _descriptor_inputs(context: PipelineContext) -> Inputs:
-    """What the descriptor is built from: what training reads, or the bundled model's own bytes."""
+    """What the descriptor is built from: what training reads, or the digest the pretrained model's release records."""
     match context.settings.descriptor_source:
         case DescriptorSource.TRAINED:
             return {
@@ -276,17 +276,17 @@ def _descriptor_inputs(context: PipelineContext) -> Inputs:
                 PARAMETERS: _descriptor_settings(context).parameters_digest,
             }
         case DescriptorSource.PRETRAINED:
-            return {PRETRAINED_INPUT: _pretrained().content}
+            return {PRETRAINED_INPUT: _pretrained().sha256}
 
 
-def _pretrained() -> PretrainedDescriptor:
-    """The bundled descriptor.
+def _pretrained() -> PretrainedRelease:
+    """The release of the pretrained descriptor this version takes.
 
     Raises:
-        StepRefused: this installation carries no bundled descriptor.
+        StepRefused: no descriptor is published for this version.
     """
     try:
-        return pretrained_descriptor()
+        return pretrained_release()
     except PretrainedDescriptorMissingError as error:
         raise StepRefused(str(error)) from error
 

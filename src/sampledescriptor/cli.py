@@ -12,7 +12,7 @@ from samplecore.cli_support import bootstrap_cli, open_catalog_connection
 from samplecore.config import LibraryConfig
 from samplecore.exit_status import ExitStatus
 from sampledescriptor.commands import adopt, cache_grids, embed, train_descriptor
-from sampledescriptor.pretrained import PretrainedDescriptorMissingError
+from sampledescriptor.pretrained import PretrainedDescriptorMissingError, PretrainedDownloadError
 
 _logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def main(argv: list[str], *, prog: str) -> None:
     """Run one descriptor command and report the result, with the catalog open for the commands that read it.
 
     Raises:
-        SystemExit: the bundled descriptor was asked for and this installation carries none.
+        SystemExit: the pretrained descriptor was asked for and none downloads for this version.
     """
     arguments = parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
@@ -57,14 +57,14 @@ def _run_on_catalog(
 
 
 def _adopt(config: LibraryConfig, arguments: argparse.Namespace) -> None:
-    """Store the bundled descriptor in the library.
+    """Download the published pretrained descriptor into the library.
 
     Raises:
-        SystemExit: this installation carries no bundled descriptor.
+        SystemExit: no descriptor is published for this version, or its download failed.
     """
     try:
         adopt.run(config, arguments)
-    except PretrainedDescriptorMissingError as error:
+    except (PretrainedDescriptorMissingError, PretrainedDownloadError) as error:
         _logger.error("%s", error)
         sys.exit(ExitStatus.REFUSED)
 
@@ -72,7 +72,7 @@ def _adopt(config: LibraryConfig, arguments: argparse.Namespace) -> None:
 def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser = command_parser(
         prog=prog,
-        description="Cache the sounds' grids, teach the learned descriptor or adopt the bundled one, "
+        description="Cache the sounds' grids, teach the learned descriptor or download the pretrained one, "
         "and describe every sample with it.",
     )
     commands = parser.add_subparsers(dest="command", required=True)

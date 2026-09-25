@@ -22,7 +22,7 @@ DESCRIPTOR_SOURCE_SETTING: Final[str] = "descriptor_source"
 
 @unique
 class DescriptorSource(StrEnum):
-    """Where the library's descriptor comes from: trained on the library itself, or bundled with the application."""
+    """Where the library's descriptor comes from: trained on the library itself, or the published pretrained one."""
 
     TRAINED = "trained"
     PRETRAINED = "pretrained"
@@ -56,8 +56,8 @@ class PipelineSettings(BaseModel):
     `memory_cap` and `device` are facts about this machine rather than about the library, so they
     stay out of what a step's outputs are named from; `device` is `auto` for an NVIDIA card where
     one is usable and the processor otherwise. `labels` names the file a fresh catalog reads its hand
-    labels from. `descriptor_source` says whether the library trains its own descriptor or takes the
-    one bundled with the application, which spares it the training and everything only training reads.
+    labels from. `descriptor_source` says whether the library trains its own descriptor or downloads
+    the published pretrained one, which spares it the training and everything only training reads.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")

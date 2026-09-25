@@ -54,7 +54,7 @@ STEP_SETTINGS: Final[Mapping[str, type[StepSettings]]] = {
 def library_graph(source: DescriptorSource) -> StepGraph:
     """Every step that builds this library, the targets a run names them by, and the outputs they own.
 
-    A library taking the bundled descriptor holds no step that only training reads: the listening
+    A library taking the pretrained descriptor holds no step that only training reads: the listening
     model's nominal reading the descriptor is taught from, and the scores of a descriptor trained here.
     """
     steps = tuple(

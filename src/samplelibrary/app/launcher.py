@@ -126,8 +126,8 @@ class Launcher:
     def choose_sources(self, sources: LibrarySources) -> None:
         """Write a person's choices into the config file and open the library under them in the background.
 
-        A library the application creates takes the descriptor bundled with it, so building its
-        cloud trains nothing.
+        A library the application creates downloads the published pretrained descriptor, so
+        building its cloud trains nothing.
 
         Raises:
             ConfigurationError: the choices fail validation, and the config file stays as it was.

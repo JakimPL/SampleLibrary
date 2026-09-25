@@ -55,10 +55,6 @@ app:
     uv run samplelibrary app
 
 [group("library")]
-bundle-descriptor *arguments:
-    uv run python scripts/bundle_descriptor.py {{ arguments }}
-
-[group("library")]
 serve:
     uv run samplelibrary serve --reload
 
@@ -184,6 +180,10 @@ executable *arguments:
 [group("release")]
 installer:
     uv run --no-project --with pillow python scripts/build_installer.py --dist dist
+
+[group("release")]
+release-descriptor tag *arguments:
+    uv run python scripts/release_descriptor.py --tag {{ tag }} {{ arguments }}
 
 [group("release")]
 publish-trackmod:

@@ -47,7 +47,7 @@ The rest of this README is for running SampleLibrary from its source code.
 - Node.js 25.9 or later, and npm, for the frontend
 - [just](https://just.systems/) 1.56 or later, which runs the setup and everyday recipes;
   `uv tool install rust-just` installs it
-- An NVIDIA GPU, to train the descriptor that lays out the cloud. A library that takes the bundled
+- An NVIDIA GPU, to train the descriptor that lays out the cloud. A library that takes the pretrained
   descriptor instead (see `descriptor_source` below) runs on the processor alone, only more slowly.
 - About a gigabyte of disk for the pretrained listening model the `clap` cloud backend downloads
   on first use. `just install` installs every extra, this one included.
@@ -120,10 +120,10 @@ The optional `[pipeline]` table holds the settings `just rebuild` builds the lib
   pass spreads over. `"auto"`, the default, picks an NVIDIA card when there is one and the processor
   otherwise.
 - `descriptor_source`: `"trained"` (the default) trains the descriptor on your own library;
-  `"pretrained"` takes the one bundled with the application and skips the training, together with
+  `"pretrained"` downloads the published one (about 2 MB) and skips the training, together with
   the listening pass and the scores only training needs. Libraries the app creates start with
-  `"pretrained"`. `just bundle-descriptor` bundles your library's current descriptor, so the next
-  build of the app ships it.
+  `"pretrained"`. `just release-descriptor <tag>` publishes your library's current descriptor:
+  upload the file it names to that GitHub release, then commit `src/sampledescriptor/pretrained.toml`.
 - `labels`: a file of hand labels, as `annotations export` writes it, read into a fresh library.
 - A table per step, such as `[pipeline.descriptor]`, sets that step's parameters (`epochs = 40`) and
   its own `memory_cap`. `config.example.toml` shows the shape.
@@ -252,7 +252,7 @@ so anyone on your network who reaches it can change your labels.
 | `just rebuild [targets]` | Builds the library, or the `catalog` or `cloud` part of it, running only the steps whose inputs changed |
 | `just status [targets]` | Says what each step of the library would do now, and why |
 | `just app` | Runs the library's database, the API with the built frontend, and the morph renderer, and opens them in a browser |
-| `just bundle-descriptor` | Copies the configured library's trained descriptor into the package, as the one new libraries take |
+| `just release-descriptor <tag>` | Prepares the configured library's trained descriptor for a GitHub release, as the one new libraries download |
 | `just package <trackmod>`, `just executable`, `just installer`, `just publish-trackmod` | Prepare the wheels and pinned requirements, build the PyApp executable and this system's installer, and upload trackmod to PyPI (see [Development](#development)) |
 | `just serve` | Starts the API, restarting it whenever the code changes |
 | `just serve-inference` | Starts the morph renderer the API reaches for morphs (see [Morphing two samples](#morphing-two-samples)) |
@@ -351,15 +351,14 @@ just executable                  # dist/SampleLibrary(.exe), built with PyApp; n
 just installer                   # dist/: the Windows installer (needs Inno Setup), macOS disk image or Linux AppImage
 ```
 
-`just package` builds the frontend into the samplelibrary wheel, beside the descriptor
-`just bundle-descriptor` put in place, and writes the locked versions of the `app` extra with
-torch's processor build. `just executable` pins those versions into a copy of the wheel and compiles
-a PyApp launcher around it. On first start the executable downloads Python and installs the pinned
-application with uv, which takes several minutes; later starts take seconds. The installed app needs
-no Node, no PostgreSQL and no checkout. `just installer` wraps the executable into this system's
-installer from the files in `packaging/`, with icons drawn from the web app's. On macOS and Linux a
-launcher script starts the executable with its output in the log folder and announces the first
-start.
+`just package` builds the frontend into the samplelibrary wheel and writes the locked versions of
+the `app` extra with torch's processor build. `just executable` pins those versions into a copy of
+the wheel and compiles a PyApp launcher around it. On first start the executable downloads Python
+and installs the pinned application with uv, which takes several minutes; later starts take seconds.
+The installed app needs no Node, no PostgreSQL and no checkout. `just installer` wraps the
+executable into this system's installer from the files in `packaging/`, with icons drawn from the
+web app's. On macOS and Linux a launcher script starts the executable with its output in the log
+folder and announces the first start.
 
 trackmod has to be on PyPI for the executable to install; `just publish-trackmod` uploads it (uv asks
 for a PyPI token). To try an executable before that, `just executable --find-links dist` lets its

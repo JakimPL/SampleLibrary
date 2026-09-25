@@ -7,10 +7,9 @@ import pytest
 from sqlalchemy import Connection
 
 from samplecore.config import LibraryConfig
-from samplecore.hashing import file_sha256
 from sampledescriptor import pretrained
 from sampledescriptor.geometry import Anchor
-from sampledescriptor.pretrained import PRETRAINED_MANIFEST_NAME, PRETRAINED_MODEL_NAME, PretrainedManifest
+from sampledescriptor.pretrained import PretrainedGrid, PretrainedRelease, write_pretrained_release
 from samplelibrary.pipeline.context import PipelineContext
 from samplelibrary.pipeline.layout import PipelineLayout
 from samplelibrary.pipeline.results import StepAction
@@ -19,8 +18,10 @@ from samplelibrary.pipeline.steps.descriptor import DESCRIPTOR, GRID_CACHE, PRET
 from samplelibrary.pipeline.steps.kinds import StepRefused
 from samplelibrary.pipeline.steps.library import library_graph
 
-BUNDLED_MANIFEST: Final[PretrainedManifest] = PretrainedManifest(
-    canonicalizer="log_frequency", anchor=Anchor.NONE, bands_per_semitone=3
+PUBLISHED: Final[PretrainedRelease] = PretrainedRelease(
+    url="https://example.com/descriptor.pt",
+    sha256="ab" * 32,
+    grid=PretrainedGrid(canonicalizer="log_frequency", anchor=Anchor.NONE, bands_per_semitone=3),
 )
 
 
@@ -35,30 +36,28 @@ def context(tmp_path: Path, connection: Connection) -> PipelineContext:
     )
 
 
-@pytest.fixture
-def bundled_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """An installation's bundle: the pipeline reads the manifest and the model's bytes, never the network."""
-    directory = tmp_path / "bundle"
-    directory.mkdir()
-    (directory / PRETRAINED_MODEL_NAME).write_bytes(b"weights")
-    (directory / PRETRAINED_MANIFEST_NAME).write_text(BUNDLED_MANIFEST.model_dump_json(), encoding="utf-8")
-    monkeypatch.setattr(pretrained, "PRETRAINED_DIRECTORY", directory)
-    return directory / PRETRAINED_MODEL_NAME
+@pytest.fixture(name="published")
+def fixture_published(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> PretrainedRelease:
+    """The installation's release record: the pipeline plans from it alone, before any download."""
+    path = tmp_path / "pretrained.toml"
+    write_pretrained_release(PUBLISHED, path)
+    monkeypatch.setattr(pretrained, "PRETRAINED_RELEASE_PATH", path)
+    return PUBLISHED
 
 
-def test_the_bundled_descriptor_is_adopted_sealed_and_then_left_as_it_stands(
-    context: PipelineContext, bundled_model: Path
+def test_the_pretrained_descriptor_is_adopted_sealed_and_then_left_as_it_stands(
+    context: PipelineContext, published: PretrainedRelease
 ) -> None:
     step = library_graph(DescriptorSource.PRETRAINED).step(DESCRIPTOR)
 
     adopting = step.evaluate(context)
     assert adopting.action is StepAction.RUN
-    assert adopting.inputs == {PRETRAINED_INPUT: file_sha256(bundled_model)}
+    assert adopting.inputs == {PRETRAINED_INPUT: published.sha256}
     assert adopting.argv[:2] == ("descriptor", "adopt")
 
     adopted = context.config.library_root / "models" / "descriptors" / f"{adopting.argv[-1]}.pt"
     adopted.parent.mkdir(parents=True)
-    adopted.write_bytes(bundled_model.read_bytes())
+    adopted.write_bytes(b"weights")
     sealing = step.evaluate(context)
     assert sealing.action is StepAction.SEAL
     step.seal(context, sealing)
@@ -66,21 +65,21 @@ def test_the_bundled_descriptor_is_adopted_sealed_and_then_left_as_it_stands(
     assert step.evaluate(context).action is StepAction.SKIP
 
 
-def test_the_grid_cache_is_read_on_the_bundled_descriptors_axis_without_retuned_views(
-    context: PipelineContext, bundled_model: Path  # pylint: disable=unused-argument
+def test_the_grid_cache_is_read_on_the_pretrained_descriptors_axis_without_retuned_views(
+    context: PipelineContext, published: PretrainedRelease
 ) -> None:
     plan = library_graph(DescriptorSource.PRETRAINED).step(GRID_CACHE).evaluate(context)
 
     flags = dict(zip(plan.argv[::2], plan.argv[1::2], strict=False))
-    assert flags["--canonicalizer"] == BUNDLED_MANIFEST.canonicalizer
-    assert flags["--bands-per-semitone"] == str(BUNDLED_MANIFEST.bands_per_semitone)
+    assert flags["--canonicalizer"] == published.grid.canonicalizer
+    assert flags["--bands-per-semitone"] == str(published.grid.bands_per_semitone)
     assert flags["--views"] == "0"
 
 
-def test_an_installation_without_a_bundled_descriptor_refuses_the_step(
+def test_a_version_without_a_published_descriptor_refuses_the_step(
     context: PipelineContext, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(pretrained, "PRETRAINED_DIRECTORY", tmp_path / "no-bundle")
+    monkeypatch.setattr(pretrained, "PRETRAINED_RELEASE_PATH", tmp_path / "missing.toml")
 
-    with pytest.raises(StepRefused, match="bundle-descriptor"):
+    with pytest.raises(StepRefused, match="release-descriptor"):
         library_graph(DescriptorSource.PRETRAINED).step(DESCRIPTOR).evaluate(context)

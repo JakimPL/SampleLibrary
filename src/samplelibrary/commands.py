@@ -208,7 +208,7 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
     ),
     Command(
         name="descriptor",
-        summary="Cache the sounds' grids, teach the learned descriptor or adopt the bundled one, "
+        summary="Cache the sounds' grids, teach the learned descriptor or download the pretrained one, "
         "and describe every sample with it.",
         run=_descriptor,
     ),

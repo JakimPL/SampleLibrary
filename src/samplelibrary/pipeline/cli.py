@@ -81,7 +81,7 @@ def run_pipeline_command(
 def _require_readable_step_tables(settings: PipelineSettings) -> None:
     """Refuse a step table naming a step this pipeline does not hold, or holding a setting its step does not read.
 
-    A table stays readable whichever descriptor the library takes, so switching to the bundled one
+    A table stays readable whichever descriptor the library takes, so switching to the pretrained one
     keeps the tables of the steps only training reads.
 
     Raises:

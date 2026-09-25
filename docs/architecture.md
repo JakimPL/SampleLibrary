@@ -430,11 +430,13 @@ values of a step's settings model (`settings.py`), so a default written out, `40
 reordered keys name the same outputs, and the digest reads the parameters alone, apart from the
 ceiling, the device and the worker count.
 `descriptor_source = "pretrained"` builds the graph without the steps only training reads (the
-`teacher` reading and both evaluations): the `descriptor` step then copies the descriptor bundled
-under `sampledescriptor/pretrained/` into the library (`descriptor adopt`), named by the bundle's
-bytes, and the grid cache takes the bundled model's axis from its manifest and keeps no retuned
-views. `just bundle-descriptor` writes the bundle from a library's current descriptor; the directory
-stays out of git and ships in the wheel as a build artifact.
+`teacher` reading and both evaluations): the `descriptor` step then downloads the published
+descriptor into the library (`descriptor adopt`), keeping it only when its bytes match the digest
+its release records, and the grid cache takes the model's axis from that release and keeps no
+retuned views. The release record, `sampledescriptor/pretrained.toml`, is committed with the code:
+it names the download URL, the digest and the grid, so planning a build needs no download.
+`just release-descriptor <tag>` writes it and the file to upload to that GitHub release, from a
+library's current descriptor.
 `pipeline status` evaluates the same decisions without running anything, naming the components that
 moved since a step's last record under `pipeline/steps`.
 
@@ -477,7 +479,7 @@ the built frontend. The `Launcher` owns what the library needs:
 - **Config.** Outside a checkout the config file lives in the user's settings folder
   (`platformdirs`), and the setup routes write it through `samplecore.config_editing`, which
   validates the new content the way `load_config` reads it before replacing the file. A config the
-  application creates names no `database_url` and takes the bundled descriptor.
+  application creates names no `database_url` and takes the pretrained descriptor.
 - **Database.** A config naming no `database_url` manages its own Postgres
   (`samplecore.storage.cluster.embedded`): `initdb` and `pg_ctl` from the `postgresql-binaries`
   wheel create and run a cluster in `library_root/postgres`, listening on the loopback address
@@ -495,12 +497,11 @@ the built frontend. The `Launcher` owns what the library needs:
   loopback address, addressed to a local name, and sent by a page from a local name.
 
 The packaged application is a PyApp executable (`just package`, `just executable`): it embeds the
-samplelibrary wheel, which carries the built frontend and the bundled descriptor, with the `app`
-extra pinned to the lock and torch's processor build. On first start it installs Python and that
-wheel with uv. PyApp runs it as a GUI, in a process of its own: on Windows through pythonw,
-windowless, with its output in `app.log` in the user's log folder
-(`samplelibrary.app.console`), and every console program it starts, such as `pg_ctl`, starts
-hidden (`samplecore.processes`). `just installer` (`scripts/installers`, `packaging/`) wraps the
+samplelibrary wheel, which carries the built frontend, with the `app` extra pinned to the lock and
+torch's processor build. On first start it installs Python and that wheel with uv. PyApp runs it as
+a GUI, in a process of its own: on Windows through pythonw, windowless, with its output in `app.log`
+in the user's log folder (`samplelibrary.app.console`), and every console program it starts, such
+as `pg_ctl`, starts hidden (`samplecore.processes`). `just installer` (`scripts/installers`, `packaging/`) wraps the
 executable into an Inno Setup installer, a disk image holding an app bundle, or an AppImage. The
 Application workflow builds all three, smoke-testing each executable on a fresh runner first.
 
