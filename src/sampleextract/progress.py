@@ -25,17 +25,17 @@ class ProgressSink(Protocol):
 class BarProgress:
     """A ProgressSink drawing the count onto the pass's progress bar."""
 
-    bar: ProgressBar
+    progress_bar: ProgressBar
 
     def advance(self, count: int) -> None:
-        self.bar.update(count)
+        self.progress_bar.update(count)
 
 
 @contextmanager
 def progress_bar(total: int, *, description: str) -> Iterator[BarProgress]:
     """One bar covering a whole pass, closed once the pass ends."""
-    with ProgressBar(total=total, label=description) as bar:
-        yield BarProgress(bar)
+    with ProgressBar(total=total, label=description) as progress:
+        yield BarProgress(progress)
 
 
 @dataclass(frozen=True)

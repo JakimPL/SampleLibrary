@@ -76,10 +76,10 @@ class ProgressBar:
 
 def tracked[T](items: Iterable[T], *, total: int, label: str) -> Iterator[T]:
     """Each of ``items`` in turn, counted on a `ProgressBar` as the caller finishes with it."""
-    with ProgressBar(total=total, label=label) as bar:
+    with ProgressBar(total=total, label=label) as progress:
         for item in items:
             yield item
-            bar.update(1)
+            progress.update(1)
 
 
 def progress_file_from_environment() -> Path | None:
