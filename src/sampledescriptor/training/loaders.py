@@ -7,7 +7,7 @@ import torch
 from threadpoolctl import threadpool_limits
 from torch.utils.data import DataLoader, Dataset, Sampler
 
-from sampledescriptor.training import WORKER_START_METHOD
+from samplecore.process_pool import WORKER_START_METHOD
 from sampledescriptor.training.refusals import TrainingDataShortfall
 
 PREFETCH_BATCHES: Final[int] = 2

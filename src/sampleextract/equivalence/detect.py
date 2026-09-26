@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum, unique
 from typing import Final
 
 import numpy as np
@@ -12,6 +13,7 @@ from sqlalchemy import Connection
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
+from samplecore.process_pool import IN_PROCESS_WORKERS, mapped_in_processes
 from samplecore.progress import tracked
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository, SampleRelationRepository
@@ -34,6 +36,7 @@ BIT_DEPTH_METHOD: Final[str] = "bit_depth_variant/gain_lstsq_v1"
 AMPLIFICATION_METHOD: Final[str] = "amplification_variant/gain_lstsq_v1"
 RESAMPLED_METHOD: Final[str] = "resampled_variant/xcorr_v1"
 WAVEFORM_CACHE_BYTES: Final[int] = 1 << 30
+FINGERPRINT_CHUNK_SIZE: Final[int] = 64
 
 
 @dataclass(frozen=True)
@@ -61,8 +64,8 @@ class EquivalenceSummary:
 class _WaveformCache:
     """Reads a Sample's trailing-silence-trimmed waveform once while the pairs it joins are scored.
 
-    Trimming here, rather than in each scorer, means every detector -- and the fingerprints the
-    candidates come from -- compares the same trimmed content. The cache keeps the waveforms read
+    Trimming here, rather than in each scorer, means every detector compares the same trimmed
+    content, the content the candidates' fingerprints were read from. The cache keeps the waveforms read
     most recently, up to ``byte_budget``: candidate pairs arrive grouped by their first sample, so
     the one waveform most pairs share stays on hand while a pass over a whole catalog holds a
     bounded amount of audio.
@@ -99,12 +102,50 @@ class _WaveformCache:
         self._held_bytes += waveform.nbytes
 
 
+@unique
+class _Unfingerprinted(StrEnum):
+    """Why a sample has no fingerprint: nothing in it rises above the silence threshold, or no file holds it now."""
+
+    SILENT = "silent"
+    UNAVAILABLE = "unavailable"
+
+
 @dataclass(frozen=True)
-class _Fingerprinted:
-    sample: Sample
+class _SampleFingerprint:
     shape: NDArray[np.float64]
     rate: NDArray[np.float64]
     trimmed_frames: int
+
+
+@dataclass(frozen=True)
+class _Fingerprinted:
+    sample: Sample
+    fingerprint: _SampleFingerprint
+
+
+@dataclass(frozen=True)
+class _FingerprintReader:
+    """Reads a sample and fingerprints its content trimmed of trailing silence, sent once to every worker process.
+
+    Trimming here, as the waveforms the scoring reads are trimmed, makes the fingerprints the
+    candidates come from describe the content every detector compares.
+    """
+
+    audio: SampleAudio
+
+    def __call__(self, sample: Sample) -> _SampleFingerprint | _Unfingerprinted:
+        try:
+            pcm = self.audio.read(sample).pcm
+        except SampleUnavailableError:
+            return _Unfingerprinted.UNAVAILABLE
+        waveform = trim_trailing_silence(pcm, threshold=TRAILING_SILENCE_THRESHOLD)
+        if waveform.shape[0] == 0:
+            return _Unfingerprinted.SILENT
+        return _SampleFingerprint(
+            shape=compute_shape_fingerprint(waveform),
+            rate=compute_rate_fingerprint(waveform),
+            trimmed_frames=waveform.shape[0],
+        )
 
 
 @dataclass
@@ -120,11 +161,12 @@ class _Tally:
 
 
 def detect_equivalences(
-    connection: Connection, audio: SampleAudio, *, sample_limit: int | None = None
+    connection: Connection, audio: SampleAudio, *, sample_limit: int | None = None, workers: int = IN_PROCESS_WORKERS
 ) -> EquivalenceSummary:
     """Find and persist every equivalence-class link the current catalog's samples support.
 
-    Every sample is fingerprinted first, one waveform at a time, and the candidate pairs then come
+    Every sample is fingerprinted first, spread over ``workers`` processes, or in this one where it
+    names none, and the candidate pairs then come
     block by block out of a search over those fingerprints (see ``candidate_blocks``). Each block's
     relations are committed as the block finishes, so an interrupted pass keeps what it found and a
     rerun takes up the rest. Reruns are idempotent: the relation repository upserts on the same
@@ -149,7 +191,7 @@ def detect_equivalences(
     waveforms = _WaveformCache(audio, byte_budget=WAVEFORM_CACHE_BYTES)
     tally = _Tally()
 
-    for fingerprints in _fingerprints_by_layout(samples, waveforms, tally=tally):
+    for fingerprints in _fingerprints_by_layout(samples, audio, workers=workers, tally=tally):
         blocks = candidate_blocks(fingerprints, block_rows=NEIGHBOR_BLOCK_ROWS)
         block_count = -(-len(fingerprints.samples) // NEIGHBOR_BLOCK_ROWS)
         for block in tracked(blocks, total=block_count, label="Scoring candidate blocks"):
@@ -170,34 +212,32 @@ def detect_equivalences(
 
 
 def _fingerprints_by_layout(
-    samples: tuple[Sample, ...], waveforms: _WaveformCache, *, tally: _Tally
+    samples: tuple[Sample, ...], audio: SampleAudio, *, workers: int, tally: _Tally
 ) -> tuple[Fingerprints, ...]:
     """Every sample holding sound that can be read now, fingerprinted and grouped by channel layout, which relations never cross."""
     kept: dict[ChannelLayout, list[_Fingerprinted]] = {layout: [] for layout in ChannelLayout}
-    for sample in tracked(samples, total=len(samples), label="Fingerprinting samples"):
-        try:
-            waveform = waveforms.get(sample)
-        except SampleUnavailableError:
-            tally.unavailable_samples += 1
-            continue
-        if waveform.shape[0] == 0:
-            tally.silent_samples += 1
-            continue
-        kept[sample.channels].append(
-            _Fingerprinted(
-                sample=sample,
-                shape=compute_shape_fingerprint(waveform),
-                rate=compute_rate_fingerprint(waveform),
-                trimmed_frames=waveform.shape[0],
-            )
-        )
+    readings = mapped_in_processes(
+        _FingerprintReader(audio),
+        samples,
+        worker_count=workers,
+        chunk_size=FINGERPRINT_CHUNK_SIZE,
+        description="Fingerprinting samples",
+    )
+    for sample, reading in zip(samples, readings, strict=True):
+        match reading:
+            case _Unfingerprinted.UNAVAILABLE:
+                tally.unavailable_samples += 1
+            case _Unfingerprinted.SILENT:
+                tally.silent_samples += 1
+            case _SampleFingerprint():
+                kept[sample.channels].append(_Fingerprinted(sample=sample, fingerprint=reading))
 
     return tuple(
         Fingerprints(
             samples=tuple(row.sample for row in rows),
-            shapes=np.array([row.shape for row in rows], dtype=np.float32).reshape(-1, FINGERPRINT_SIZE),
-            rates=np.array([row.rate for row in rows], dtype=np.float32).reshape(-1, FINGERPRINT_SIZE),
-            trimmed_frames=np.array([row.trimmed_frames for row in rows], dtype=np.int64),
+            shapes=np.array([row.fingerprint.shape for row in rows], dtype=np.float32).reshape(-1, FINGERPRINT_SIZE),
+            rates=np.array([row.fingerprint.rate for row in rows], dtype=np.float32).reshape(-1, FINGERPRINT_SIZE),
+            trimmed_frames=np.array([row.fingerprint.trimmed_frames for row in rows], dtype=np.int64),
         )
         for rows in kept.values()
         if rows

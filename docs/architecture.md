@@ -372,8 +372,9 @@ point of an unplugged drive looks like. Hand annotations stay;
 ## Detecting near-duplicates
 
 `samplelibrary equivalence` finds pairs of samples that are one sound stored twice: at another bit
-depth, at another level, or read at another rate. It streams the catalog once, trimming each
-waveform's trailing silence and reducing it to two short fingerprints (`sampleextract.equivalence.fingerprint`):
+depth, at another level, or read at another rate. It reads the catalog once over `--workers`
+processes (`samplecore.process_pool`), trimming each waveform's trailing silence and reducing it to
+two short fingerprints (`sampleextract.equivalence.fingerprint`):
 one over bands relative to the waveform's own length, which a change of depth or level leaves alone,
 and one over cycle-count octave bands, which a resampling leaves alone. A blockwise dot product
 finds each fingerprint's close neighbors (`candidates.py`), the shape fingerprint proposing gain
@@ -381,8 +382,8 @@ pairs of nearly equal trimmed length and the rate fingerprint proposing resample
 apart, and only those pairs are read again and scored on the waveforms themselves (`scoring.py`),
 through a cache that keeps the most recently read waveforms. Each block of pairs is scored and written in its own
 transaction, so an interrupted run keeps the blocks it finished and a rerun writes the same rows.
-Silent samples take no part. Over a catalog of 127,588 samples, a run took two and a quarter hours on
-one core, in under three gigabytes of memory.
+Silent samples take no part. Over a catalog of 127,588 samples, a run fingerprinting in one process
+took two and a quarter hours, of which scoring took five minutes, in under three gigabytes of memory.
 
 `pass_completion` holds one row per kind of whole-library pass that finished completely, naming a
 digest of what it had in front of it (`samplecore.digests`), so a pass finding the same digest again

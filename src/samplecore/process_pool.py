@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import multiprocessing
 from collections.abc import Callable, Iterator, Sequence
-from typing import TypeVar
+from typing import Final
 
 from threadpoolctl import threadpool_limits
 
 from samplecore.progress import ProgressBar
-from sampledescriptor.training import WORKER_START_METHOD
 
-Item = TypeVar("Item")
-Result = TypeVar("Result")
+# Every worker process a pass starts is a fresh interpreter, which keeps a worker's memory its own
+# rather than a copy of a process holding a catalog connection or the GPU.
+WORKER_START_METHOD: Final[str] = "spawn"
+IN_PROCESS_WORKERS: Final[int] = 0
 
 
 def limit_process_threads() -> None:
@@ -18,7 +19,7 @@ def limit_process_threads() -> None:
     threadpool_limits(limits=1)
 
 
-def mapped_in_processes(
+def mapped_in_processes[Item, Result](
     work: Callable[[Item], Result],
     items: Sequence[Item],
     *,
@@ -26,13 +27,13 @@ def mapped_in_processes(
     chunk_size: int,
     description: str,
 ) -> Iterator[Result]:
-    """Each item's result in order, from a pool of fresh processes or, with none asked for, in this one.
+    """Each item's result in order, from a pool of fresh processes or, with `IN_PROCESS_WORKERS` asked for, in this one.
 
     `work` is sent to every process once, so it carries whatever each item needs; every process is
     held to one thread. Progress is drawn under `description`, one step per item.
     """
     with ProgressBar(total=len(items), label=description) as progress:
-        if worker_count == 0:
+        if worker_count == IN_PROCESS_WORKERS:
             for item in items:
                 yield work(item)
                 progress.update(1)

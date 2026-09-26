@@ -11,6 +11,7 @@ from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.pass_completion import PostgresPassCompletionRepository
 from samplecore.storage.sample_audio import readable_membership_digest
 from sampleextract.equivalence.detect import detect_equivalences
+from sampleextract.parallel.cli import add_workers_argument
 
 _logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ def main(argv: list[str], *, prog: str) -> None:
             return
         with start_batch(connection):
             passes.forget(PassKind.EQUIVALENCE)
-        summary = detect_equivalences(connection, audio, sample_limit=arguments.limit)
+        summary = detect_equivalences(connection, audio, sample_limit=arguments.limit, workers=arguments.workers)
         after = readable_membership_digest(connection)
         if arguments.limit is None and after == readable:
             with start_batch(connection):
@@ -68,6 +69,7 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         default=None,
         help="Consider only the first N cataloged samples, for a quick run over a small slice.",
     )
+    add_workers_argument(parser, work="fingerprinting")
     parser.add_argument(
         "--force",
         action="store_true",

@@ -4009,6 +4009,7 @@ dependencies = [
     { name = "scipy" },
     { name = "soundfile" },
     { name = "sqlalchemy" },
+    { name = "threadpoolctl" },
     { name = "tomlkit" },
     { name = "tqdm" },
     { name = "trackmod" },
@@ -4026,7 +4027,6 @@ app = [
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
-    { name = "threadpoolctl" },
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform != 'darwin'" },
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
     { name = "transformers" },
@@ -4044,7 +4044,6 @@ descriptor = [
     { name = "lightning" },
     { name = "mlflow" },
     { name = "scikit-learn" },
-    { name = "threadpoolctl" },
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform != 'darwin'" },
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
 ]
@@ -4086,7 +4085,6 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
-    { name = "threadpoolctl" },
     { name = "types-pyyaml" },
 ]
 
@@ -4117,7 +4115,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.16" },
     { name = "soundfile", specifier = ">=0.14" },
     { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "threadpoolctl", marker = "extra == 'descriptor'", specifier = ">=3.6" },
+    { name = "threadpoolctl", specifier = ">=3.6" },
     { name = "tomlkit", specifier = ">=0.13" },
     { name = "torch", marker = "sys_platform == 'darwin' and extra == 'descriptor'", specifier = ">=2.9" },
     { name = "torch", marker = "sys_platform == 'darwin' and extra == 'teacher'", specifier = ">=2.9" },
@@ -4148,7 +4146,6 @@ dev = [
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-cov", specifier = "==7.1.0" },
     { name = "pytest-xdist", specifier = "==3.8.0" },
-    { name = "threadpoolctl", specifier = ">=3.6" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260906" },
 ]
 

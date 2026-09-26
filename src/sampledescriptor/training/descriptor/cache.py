@@ -10,13 +10,13 @@ from pydantic import BaseModel
 
 from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
+from samplecore.process_pool import mapped_in_processes
 from samplecore.storage.sample_audio import SampleAudio
 from sampledescriptor.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
 from sampledescriptor.descriptors.views import retuned_view
 from sampledescriptor.geometry import Anchor, GridGeometry
 from sampledescriptor.registries import CANONICALIZER_REGISTRY, canonicalizer_for_geometry
 from sampledescriptor.training.cache_staging import CACHE_DIRECTORY_NAME, fresh_staging, publish_staged
-from sampledescriptor.training.processes import mapped_in_processes
 from samplemorph.canonicalizers.common import prepare_mono
 
 GRID_CACHE_DIRECTORY_NAME: Final[str] = "grids"

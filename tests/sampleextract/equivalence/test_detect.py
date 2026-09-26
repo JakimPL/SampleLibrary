@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 import pytest
@@ -18,6 +18,7 @@ from samplecore.models.relation import RelationType
 from samplecore.models.sample import Sample
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.models.sample_pcm import SamplePCM
+from samplecore.process_pool import IN_PROCESS_WORKERS
 from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
@@ -28,6 +29,9 @@ from sampleextract.equivalence.detect import EquivalenceSummary, detect_equivale
 from sampleextract.files.ingest import ingest_sample_file
 
 SAMPLE_RATE = 44100
+TWO_WORKERS: Final[int] = 2
+WORKER_COUNTS: Final[tuple[int, ...]] = (IN_PROCESS_WORKERS, TWO_WORKERS)
+WORKER_COUNT_IDS: Final[tuple[str, ...]] = ("in process", "two workers")
 
 
 def _tonal_waveform(frames: int) -> NDArray[np.float64]:
@@ -97,10 +101,13 @@ def _seed_catalog(connection: Connection, library_root: Path) -> tuple[Sample, S
     return original_16, quantized_8, original_44k, resampled_22k, louder_original
 
 
-def test_detect_equivalences_records_exactly_the_genuine_pairs(connection: Connection, tmp_path: Path) -> None:
+@pytest.mark.parametrize("workers", WORKER_COUNTS, ids=WORKER_COUNT_IDS)
+def test_detect_equivalences_records_exactly_the_genuine_pairs(
+    connection: Connection, tmp_path: Path, workers: int
+) -> None:
     original_16, quantized_8, original_44k, resampled_22k, louder_original = _seed_catalog(connection, tmp_path)
 
-    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path), workers=workers)
 
     relations = PostgresSampleRelationRepository(connection).list_all()
     assert summary.samples_considered == 8
@@ -249,12 +256,13 @@ def test_detect_equivalences_finds_a_pair_differing_only_by_a_trimmed_silent_tai
     assert relation.evidence["gain"] == pytest.approx(1.0)
 
 
+@pytest.mark.parametrize("workers", WORKER_COUNTS, ids=WORKER_COUNT_IDS)
 def test_a_sample_whose_file_is_gone_is_counted_and_the_rest_are_still_compared(
-    connection: Connection, tmp_path: Path, vanished_sample_file: SampleFile
+    connection: Connection, tmp_path: Path, vanished_sample_file: SampleFile, workers: int
 ) -> None:
     _seed_catalog(connection, tmp_path)
 
-    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path), workers=workers)
 
     assert summary.unavailable_samples == 1
     assert summary.bit_depth_relations + summary.amplification_relations + summary.resampled_relations > 0
@@ -279,7 +287,6 @@ def test_a_pair_whose_file_goes_missing_while_the_pass_runs_is_left_for_a_later_
 
     def unplug_once_fingerprinted(*arguments: Any, **keywords: Any) -> tuple[Fingerprints, ...]:
         fingerprints = fingerprint_layouts(*arguments, **keywords)
-        arguments[1]._waveforms.clear()
         quiet.unlink()
         return fingerprints
 
