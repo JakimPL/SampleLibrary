@@ -34,9 +34,33 @@ export interface paths {
          * @description Write the library's folders into the config file and open the library under them.
          *
          *     Raises:
-         *         HTTPException: 409 while a build runs, and 422 when the folders fail validation, naming what to change.
+         *         HTTPException: 409 while a build runs, and 422 when the folders fail validation, naming what to change
+         *             in the validators' own sentences.
          */
         readonly put: operations["choose_sources_api_setup_sources_put"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/setup/options": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        /**
+         * Choose Options
+         * @description Write how the library is built into the config file, which the next build reads.
+         *
+         *     Raises:
+         *         HTTPException: 409 before any folders are saved, and 422 when the config file fails validation.
+         */
+        readonly put: operations["choose_options_api_setup_options_put"];
         readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
@@ -145,6 +169,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * BuildDevice
+         * @description What a build's steps compute on: an NVIDIA card by name, or the processor where `card` is None.
+         */
+        readonly BuildDevice: {
+            /** Card */
+            readonly card: string | null;
+        };
         /** BuildRequest */
         readonly BuildRequest: {
             readonly target: components["schemas"]["BuildTarget"];
@@ -213,6 +245,14 @@ export interface components {
             readonly log_tail: readonly string[];
         };
         /**
+         * LibraryOptions
+         * @description How the application builds a person's library: whether its builds go on past the catalog to the cloud.
+         */
+        readonly LibraryOptions: {
+            /** Build Cloud */
+            readonly build_cloud: boolean;
+        };
+        /**
          * LibrarySources
          * @description What a person chooses for their library: where it lives, and the folders it reads modules and samples from.
          *
@@ -276,12 +316,16 @@ export interface components {
         /**
          * SetupState
          * @description What the setup pages show: the library's status, the sources chosen for it, and what went wrong if anything did.
+         *
+         *     `build_device` stays None until the application has asked which device builds compute on.
          */
         readonly SetupState: {
             readonly status: components["schemas"]["LibraryStatus"];
             /** Config Path */
             readonly config_path: string;
             readonly sources: components["schemas"]["LibrarySources"] | null;
+            readonly options: components["schemas"]["LibraryOptions"] | null;
+            readonly build_device: components["schemas"]["BuildDevice"] | null;
             /** Suggested Library Root */
             readonly suggested_library_root: string;
             /** Manages Database */
@@ -362,6 +406,39 @@ export interface operations {
         readonly requestBody: {
             readonly content: {
                 readonly "application/json": components["schemas"]["LibrarySources"];
+            };
+        };
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["SetupState"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    readonly choose_options_api_setup_options_put: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["LibraryOptions"];
             };
         };
         readonly responses: {

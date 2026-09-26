@@ -1,7 +1,15 @@
 import { type ReactElement, useState } from "react";
 
-import { type BuildTarget, cancelBuild, type SetupState, startBuild } from "../api/setup";
+import {
+    type BuildDevice,
+    type BuildTarget,
+    cancelBuild,
+    chooseOptions,
+    type SetupState,
+    startBuild,
+} from "../api/setup";
 import type { LibraryStats } from "../api/stats";
+import { ActionSheet } from "../shared/overlay/ActionSheet";
 import { BuildProgress } from "./BuildProgress";
 import { describeRefusal } from "./refusal";
 import { SetupMessage, type SetupMessageText } from "./SetupMessage";
@@ -14,24 +22,14 @@ interface LibraryPanelProps {
     readonly onChanged: (state: SetupState) => void;
 }
 
-interface BuildChoice {
-    readonly target: BuildTarget;
-    readonly title: string;
-    readonly note: string;
-}
-
-const BUILD_CHOICES: readonly BuildChoice[] = [
-    {
-        target: "catalog",
-        title: "Scan my folders",
-        note: "Reads your modules and samples and finds duplicates. Run it again after adding files; only new files are read.",
-    },
-    {
-        target: "all",
-        title: "Scan and build the cloud",
-        note: "Also analyzes every sample, suggests categories and builds the cloud. This can take hours for a large collection, and it is faster with an NVIDIA graphics card.",
-    },
-];
+const BUILD_TITLE = "Build my library";
+const BUILD_NOTE =
+    "Reads your modules and samples and finds duplicates. Run it again after adding files; only new files are read.";
+const CLOUD_NOTE = "Analyzes every sample, suggests categories and lays out the cloud.";
+const CONFIRMATION_TITLE = "Build the cloud without an NVIDIA graphics card?";
+const CONFIRMATION_NOTE =
+    "On the processor, analyzing a large collection can take a day or more. You can build the cloud later.";
+const DEFAULT_BUILD_CLOUD = true;
 
 function countOf(count: number, noun: string): string {
     return `${count.toLocaleString()} ${noun}${count === 1 ? "" : "s"}`;
@@ -42,7 +40,7 @@ function describeStats(stats: LibraryStats | null, building: boolean): string {
         return "Your library is open.";
     }
     if (stats.sample_count === 0) {
-        return building ? "Your library is empty so far." : "Your library is empty. Scan your folders to fill it.";
+        return building ? "Your library is empty so far." : "Your library is empty. Build it to fill it.";
     }
     const modules = stats.module_count > 0 ? ` and ${countOf(stats.module_count, "module")}` : "";
     return `Your library holds ${countOf(stats.sample_count, "sample")}${modules}.`;
@@ -64,15 +62,29 @@ function libraryStatus(state: SetupState, unsavedChanges: boolean, stats: Librar
     }
 }
 
+function describeDevice(device: BuildDevice | null): string {
+    if (device === null) {
+        return "Checking for an NVIDIA graphics card…";
+    }
+    return device.card === null
+        ? "Builds use the processor, so building the cloud takes a long time."
+        : `Builds use your ${device.card}.`;
+}
+
 /**
- * Where a person builds the open library and watches it happen: the library's status and size, the
- * two builds on cards that keep their place in every state, and the latest build's progress.
+ * Where a person builds the open library and watches it happen: the library's status and size, one
+ * build whose cloud a switch includes, the device builds compute on, and the latest build's
+ * progress. A build going on to the cloud without an NVIDIA card asks first, since the processor
+ * takes many hours over a large collection.
  */
 export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelProps): ReactElement {
     const [refusal, setRefusal] = useState<string | null>(null);
+    const [confirming, setConfirming] = useState(false);
     const build = state.build;
     const running = build?.status === "running";
-    const canStart = state.status === "ready" && !running && !unsavedChanges;
+    const device = state.build_device;
+    const buildCloud = state.options?.build_cloud ?? DEFAULT_BUILD_CLOUD;
+    const canStart = state.status === "ready" && !running && !unsavedChanges && device !== null;
     const stats = useLibraryStats(state.status === "ready", `${build?.started_at ?? ""} ${build?.status ?? ""}`);
     const status =
         refusal !== null ? { text: refusal, tone: "error" as const } : libraryStatus(state, unsavedChanges, stats);
@@ -86,6 +98,20 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
         }
     }
 
+    function start(target: BuildTarget): void {
+        void act(() => startBuild(target));
+    }
+
+    function handleBuild(): void {
+        if (!buildCloud) {
+            start("catalog");
+        } else if (device?.card === null) {
+            setConfirming(true);
+        } else {
+            start("all");
+        }
+    }
+
     return (
         <section className="setup-pane" aria-labelledby="setup-library-title">
             <header className="setup-pane-header">
@@ -95,25 +121,43 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
 
             <div className="setup-pane-body setup-pane-body-tall">
                 <div className="build-choices">
-                    {BUILD_CHOICES.map((choice) => (
-                        <button
-                            key={choice.target}
-                            type="button"
-                            className="build-choice"
-                            disabled={!canStart}
-                            data-running={running && build.target === choice.target}
-                            aria-label={choice.title}
-                            aria-describedby={`build-choice-${choice.target}`}
-                            onClick={() => {
-                                void act(() => startBuild(choice.target));
+                    <button
+                        type="button"
+                        className="build-choice"
+                        disabled={!canStart}
+                        data-running={running}
+                        aria-label={BUILD_TITLE}
+                        aria-describedby="build-choice-note"
+                        onClick={handleBuild}
+                    >
+                        <span className="build-choice-title">{BUILD_TITLE}</span>
+                        <span id="build-choice-note" className="build-choice-note">
+                            {BUILD_NOTE}
+                        </span>
+                    </button>
+                    <div className="build-option">
+                        <input
+                            id="build-cloud"
+                            className="build-option-check"
+                            type="checkbox"
+                            aria-describedby="build-cloud-note"
+                            checked={buildCloud}
+                            disabled={state.options === null || running}
+                            onChange={(event) => {
+                                const chosen = event.target.checked;
+                                void act(() => chooseOptions({ build_cloud: chosen }));
                             }}
-                        >
-                            <span className="build-choice-title">{choice.title}</span>
-                            <span id={`build-choice-${choice.target}`} className="build-choice-note">
-                                {choice.note}
+                        />
+                        <span className="build-option-text">
+                            <label htmlFor="build-cloud" className="build-option-title">
+                                Build the cloud
+                            </label>
+                            <span id="build-cloud-note" className="setup-hint">
+                                {CLOUD_NOTE}
                             </span>
-                        </button>
-                    ))}
+                        </span>
+                    </div>
+                    <p className="setup-hint build-device">{describeDevice(device)}</p>
                 </div>
                 <BuildProgress
                     build={build}
@@ -122,6 +166,35 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
                     }}
                 />
             </div>
+            {confirming && (
+                <ActionSheet
+                    title={CONFIRMATION_TITLE}
+                    actions={[
+                        {
+                            id: "cloud",
+                            label: "Build with the cloud",
+                            disabled: false,
+                            run: () => {
+                                start("all");
+                            },
+                        },
+                        {
+                            id: "catalog",
+                            label: "Build without the cloud",
+                            disabled: false,
+                            run: () => {
+                                start("catalog");
+                            },
+                        },
+                        { id: "cancel", label: "Cancel", disabled: false, run: () => undefined },
+                    ]}
+                    onClose={() => {
+                        setConfirming(false);
+                    }}
+                >
+                    <p className="setup-hint">{CONFIRMATION_NOTE}</p>
+                </ActionSheet>
+            )}
         </section>
     );
 }

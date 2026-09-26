@@ -10,7 +10,7 @@ from typing import Final
 import pytest
 from fastapi.testclient import TestClient
 
-from samplecore.config import PIPELINE_TABLE
+from samplecore.config import PIPELINE_TABLE, load_config
 from samplelibrary.app.asgi import create_application
 from samplelibrary.app.launcher import Launcher, LibraryStatus
 from samplelibrary.pipeline.settings import DescriptorSource, read_pipeline_settings
@@ -18,6 +18,9 @@ from samplelibrary.pipeline.settings import DescriptorSource, read_pipeline_sett
 LOCAL_CLIENT: Final[tuple[str, int]] = ("127.0.0.1", 50000)
 LOCAL_BASE_URL: Final[str] = "http://localhost"
 IDLE_RENDERER: Final[tuple[str, ...]] = (sys.executable, "-c", "import time; time.sleep(60)")
+TEST_CARD: Final[str] = "Test Card"
+REPORTED_DEVICE: Final[tuple[str, ...]] = (sys.executable, "-c", f'print(\'{{"card": "{TEST_CARD}"}}\')')
+SILENT_DEVICE: Final[tuple[str, ...]] = (sys.executable, "-c", "raise SystemExit(1)")
 OPENING_TIMEOUT_SECONDS: Final[float] = 30.0
 
 
@@ -34,17 +37,19 @@ def config_path(tmp_path: Path, _database_url: str) -> Path:
 
 @pytest.fixture
 def unconfigured(tmp_path: Path) -> Iterator[TestClient]:
-    yield from _client(tmp_path / "absent" / "config.toml")
+    yield from _client(tmp_path / "absent" / "config.toml", device_command=REPORTED_DEVICE)
 
 
 @pytest.fixture
 def configured(config_path: Path) -> Iterator[TestClient]:
-    yield from _client(config_path)
+    yield from _client(config_path, device_command=REPORTED_DEVICE)
 
 
-def _client(config_path: Path) -> Iterator[TestClient]:
+def _client(config_path: Path, *, device_command: tuple[str, ...]) -> Iterator[TestClient]:
     application = create_application(
-        Launcher(config_path, renderer_command=IDLE_RENDERER, pipeline_command=IDLE_RENDERER),
+        Launcher(
+            config_path, renderer_command=IDLE_RENDERER, pipeline_command=IDLE_RENDERER, device_command=device_command
+        ),
         frontend_directory=None,
         on_ready=lambda: None,
     )
@@ -77,6 +82,40 @@ def test_an_application_opens_the_library_its_config_names(configured: TestClien
     assert state["status"] == LibraryStatus.READY
     assert state["manages_database"] is False
     assert configured.get("/api/stats").json()["sample_count"] == 0
+
+
+def _build_device(client: TestClient) -> dict[str, object]:
+    deadline = time.monotonic() + OPENING_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        device: dict[str, object] | None = client.get("/api/setup/state").json()["build_device"]
+        if device is not None:
+            return device
+        time.sleep(0.1)
+    raise AssertionError("the application never named the device builds use")
+
+
+def test_the_application_names_the_card_builds_compute_on(unconfigured: TestClient) -> None:
+    assert _build_device(unconfigured) == {"card": TEST_CARD}
+
+
+def test_a_device_the_application_cannot_ask_about_leaves_builds_on_the_processor(tmp_path: Path) -> None:
+    for client in _client(tmp_path / "config.toml", device_command=SILENT_DEVICE):
+        assert _build_device(client) == {"card": None}
+
+
+def test_the_cloud_option_is_written_for_the_next_build(configured: TestClient, config_path: Path) -> None:
+    _wait_until_settled(configured)
+
+    response = configured.put("/api/setup/options", json={"build_cloud": False})
+
+    assert response.json()["options"] == {"build_cloud": False}
+    assert not load_config(config_path).build_cloud
+
+
+def test_the_cloud_option_waits_for_the_folders(unconfigured: TestClient) -> None:
+    response = unconfigured.put("/api/setup/options", json={"build_cloud": False})
+
+    assert response.status_code == 409
 
 
 def test_a_build_waits_for_the_library_to_open(unconfigured: TestClient) -> None:
@@ -199,7 +238,12 @@ def test_setup_answers_a_page_on_this_machine_alone(
     tmp_path: Path, client_address: tuple[str, int], base_url: str, origin: str | None
 ) -> None:
     application = create_application(
-        Launcher(tmp_path / "config.toml", renderer_command=IDLE_RENDERER, pipeline_command=IDLE_RENDERER),
+        Launcher(
+            tmp_path / "config.toml",
+            renderer_command=IDLE_RENDERER,
+            pipeline_command=IDLE_RENDERER,
+            device_command=REPORTED_DEVICE,
+        ),
         frontend_directory=None,
         on_ready=lambda: None,
     )

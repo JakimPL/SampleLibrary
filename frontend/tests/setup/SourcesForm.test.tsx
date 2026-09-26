@@ -10,6 +10,8 @@ const UNCONFIGURED: SetupState = {
     status: "unconfigured",
     config_path: "/home/person/.config/SampleLibrary/config.toml",
     sources: null,
+    options: null,
+    build_device: null,
     suggested_library_root: "/home/person/Music/SampleLibrary",
     manages_database: null,
     problem: null,

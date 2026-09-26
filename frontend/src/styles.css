@@ -3479,6 +3479,37 @@ table.data td .annotation-editor-input {
     font-size: 13px;
 }
 
+.build-option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-5);
+    padding: 0 var(--space-7);
+}
+
+.build-option-check {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin: 2px 0 0;
+    accent-color: var(--accent);
+}
+
+.build-option-text {
+    display: grid;
+    gap: var(--space-1);
+}
+
+.build-option-title {
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.build-device {
+    min-height: 1.45em;
+    padding: 0 var(--space-7);
+}
+
 .build-placeholder {
     padding: var(--space-6) 0;
 }

@@ -18,6 +18,7 @@ DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_DATABASE_URL"
 DEFAULT_MINIMUM_SAMPLE_FRAMES: Final[int] = 512
 DEFAULT_SAMPLE_DIRECTORIES: Final[tuple[Path, ...]] = ()
 DEFAULT_SAMPLE_EXCLUSIONS: Final[tuple[str, ...]] = ()
+DEFAULT_BUILD_CLOUD: Final[bool] = True
 DEFAULT_INFERENCE_URL: Final[str] = "http://127.0.0.1:8010"
 LIBRARY_TABLE: Final[str] = "library"
 INFERENCE_TABLE: Final[str] = "inference"
@@ -97,6 +98,9 @@ class LibraryConfig(BaseModel):
     them stays out of the library. The catalog records each file by its directory and its path within
     it, so every directory is absolute and stands apart from the others, which gives one file exactly
     one place in the catalog.
+
+    ``build_cloud`` says whether the application's builds go on past the catalog to the cloud, which
+    a person turns off on the setup page.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -107,6 +111,7 @@ class LibraryConfig(BaseModel):
     minimum_sample_frames: int = DEFAULT_MINIMUM_SAMPLE_FRAMES
     sample_directories: tuple[Path, ...] = DEFAULT_SAMPLE_DIRECTORIES
     sample_exclusions: tuple[str, ...] = DEFAULT_SAMPLE_EXCLUSIONS
+    build_cloud: bool = DEFAULT_BUILD_CLOUD
     inference: InferenceConfig = InferenceConfig()
 
     @field_validator("sample_directories")

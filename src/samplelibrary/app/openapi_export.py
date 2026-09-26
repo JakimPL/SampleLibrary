@@ -21,6 +21,11 @@ def main(argv: list[str], *, prog: str) -> None:
         SystemExit: the output file cannot be written, with one line saying why.
     """
     arguments = parse_schema_arguments(argv, prog=prog, description=DESCRIPTION)
-    launcher = Launcher(UNUSED_CONFIG_PATH, renderer_command=UNUSED_COMMAND, pipeline_command=UNUSED_COMMAND)
+    launcher = Launcher(
+        UNUSED_CONFIG_PATH,
+        renderer_command=UNUSED_COMMAND,
+        pipeline_command=UNUSED_COMMAND,
+        device_command=UNUSED_COMMAND,
+    )
     application = create_application(launcher, frontend_directory=None, on_ready=lambda: None)
     export_schema(application.openapi(), arguments.output)

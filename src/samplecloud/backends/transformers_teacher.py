@@ -8,6 +8,8 @@ import torch
 from numpy.typing import NDArray
 from transformers import AutoTokenizer, ClapFeatureExtractor, ClapModel
 
+from samplecore.devices import usable_cuda_card
+
 # The audio tower reads a fixed picture: a ten-second window at the model's rate, as a log-mel
 # spectrogram of this many frames. A shorter clip is repeated to fill the window and padded with
 # silence, which is the model's own reading of a short sound; a longer one is read from its start.
@@ -16,8 +18,8 @@ LOG_MEL_FLOOR: Final[float] = 1e-10
 
 
 def preferred_device() -> str:
-    """The GPU when the machine has one, the processor otherwise."""
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    """The GPU where torch computes on a card here, the processor otherwise."""
+    return "cuda" if usable_cuda_card() is not None else "cpu"
 
 
 class TransformersTeacher:

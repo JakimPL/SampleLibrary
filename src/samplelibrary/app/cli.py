@@ -28,6 +28,7 @@ BROWSER_DELAY_SECONDS: Final[float] = 0.5
 INSTANCE_PROBE_SECONDS: Final[float] = 2.0
 RENDERER_COMMAND: Final[tuple[str, ...]] = ("morph", "serve")
 PIPELINE_COMMAND: Final[tuple[str, ...]] = ("pipeline", "run")
+DEVICE_COMMAND: Final[tuple[str, ...]] = ("device",)
 
 _logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ def main(argv: list[str], *, prog: str) -> None:
         resolve_config_path(),
         renderer_command=samplelibrary_command(*RENDERER_COMMAND),
         pipeline_command=samplelibrary_command(*PIPELINE_COMMAND),
+        device_command=samplelibrary_command(*DEVICE_COMMAND),
     )
     frontend = arguments.frontend or bundled_frontend()
     if frontend is None:

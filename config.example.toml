@@ -22,6 +22,9 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # against each path relative to its folder, where * also crosses folders.
 # sample_exclusions = ["*loop*", "*.aif"]
 
+# Whether the application's builds go on to analyze every sample and lay out the cloud.
+# build_cloud = true
+
 [inference]
 # Where the morph renderer listens, and where the app reaches it.
 # url = "http://127.0.0.1:8010"

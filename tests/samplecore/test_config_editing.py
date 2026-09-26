@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from samplecore.config import DATABASE_URL_ENVIRONMENT_VARIABLE, ConfigurationError, load_config
-from samplecore.config_editing import LibrarySources, write_library_sources
+from samplecore.config_editing import LibraryOptions, LibrarySources, write_library_options, write_library_sources
 
 
 @pytest.fixture
@@ -75,3 +75,16 @@ def test_sources_that_fail_validation_leave_the_file_as_it_was(tmp_path: Path, s
         write_library_sources(path, overlapping)
 
     assert path.read_bytes() == before
+
+
+def test_options_written_beside_the_sources_leave_them_as_chosen(
+    tmp_path: Path, sources: LibrarySources, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
+    path = tmp_path / "config.toml"
+    write_library_sources(path, sources)
+
+    written = write_library_options(path, LibraryOptions(build_cloud=False))
+
+    assert LibraryOptions.of(load_config(path)) == LibraryOptions.of(written) == LibraryOptions(build_cloud=False)
+    assert LibrarySources.of(load_config(path)) == sources

@@ -29,19 +29,21 @@ its setup page:
 2. Choose where the library keeps its files. Pick a drive with free space: a large collection takes
    several gigabytes.
 3. Click **Save and open the library**.
-4. Under **Your library**, click **Scan my folders**. The scan lists its steps with the time each
-   took, and a long step shows the time it has left. Once it finishes, click **Open the library**
-   at the top.
+4. Under **Your library**, click **Build my library**. The build lists its steps with the time
+   each took, and a long step shows the time it has left. Once it finishes, click **Open the
+   library** at the top.
 
-**Scan and build the cloud** also listens to every sample and lays out the cloud. The first time,
-it downloads a listening model of about 1 GB, and on a large collection it takes hours.
+**Build the cloud**, on until you switch it off, has the build listen to every sample and lay out
+the cloud. The first time, it downloads a listening model of about 1 GB. An NVIDIA graphics card
+makes this much faster, and the setup page names the card it uses. Without one, a large collection
+takes a day or more, so the page asks before it starts.
 
 ## Everyday use
 
 - Open SampleLibrary from the Start menu, from Applications, or from its AppImage. A start while it
   already runs opens it in your browser again.
-- A scan keeps going when you close the browser tab.
-- To add folders, or to scan again after your collection grows, open **View → Library setup**.
+- A build keeps going when you close the browser tab.
+- To add folders, or to build again after your collection grows, open **View → Library setup**.
 - **Quit** on the setup page stops SampleLibrary.
 
 [Using SampleLibrary](docs/using.md) explains the cloud, the morph, every click and key, and using

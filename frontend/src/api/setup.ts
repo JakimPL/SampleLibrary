@@ -4,6 +4,8 @@ import type { components } from "./setupSchema";
 export type SetupState = components["schemas"]["SetupState"];
 export type LibraryStatus = SetupState["status"];
 export type LibrarySources = components["schemas"]["LibrarySources"];
+export type LibraryOptions = components["schemas"]["LibraryOptions"];
+export type BuildDevice = components["schemas"]["BuildDevice"];
 export type BuildView = components["schemas"]["JobView"];
 export type BuildTarget = BuildView["target"];
 export type BuildStep = components["schemas"]["StepView"];
@@ -21,6 +23,10 @@ export async function getSetupState(): Promise<SetupState> {
 
 export async function chooseSources(sources: LibrarySources): Promise<SetupState> {
     return sendJson<SetupState>(`${SETUP_PATH}/sources`, { method: "PUT", body: sources });
+}
+
+export async function chooseOptions(options: LibraryOptions): Promise<SetupState> {
+    return sendJson<SetupState>(`${SETUP_PATH}/options`, { method: "PUT", body: options });
 }
 
 export async function startBuild(target: BuildTarget): Promise<SetupState> {

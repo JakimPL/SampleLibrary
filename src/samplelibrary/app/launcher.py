@@ -13,14 +13,15 @@ from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
 from samplecore.config import ConfigurationError, LibraryConfig, load_config
-from samplecore.config_editing import LibrarySources, write_library_sources
+from samplecore.config_editing import LibraryOptions, LibrarySources, write_library_options, write_library_sources
 from samplecore.models.base import FROZEN
 from samplecore.paths import default_library_root
 from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster, EmbeddedClusterError
 from samplecore.storage.database import connect
 from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView
-from samplelibrary.app.processes import ChildProcess
+from samplelibrary.app.processes import ChildProcess, probe_build_device
+from samplelibrary.pipeline.devices import BuildDevice
 from sampleserver.app import create_app
 
 LOGS_DIRECTORY_NAME: Final[str] = "logs"
@@ -37,7 +38,7 @@ _logger = logging.getLogger(__name__)
 
 
 class LibraryClosedError(Exception):
-    """Raised when a build is asked for before the library is open."""
+    """Raised when a build or a build option is asked for before the library is open."""
 
 
 class BuildInProgressError(Exception):
@@ -55,13 +56,18 @@ class LibraryStatus(StrEnum):
 
 
 class SetupState(BaseModel):
-    """What the setup pages show: the library's status, the sources chosen for it, and what went wrong if anything did."""
+    """What the setup pages show: the library's status, the sources chosen for it, and what went wrong if anything did.
+
+    `build_device` stays None until the application has asked which device builds compute on.
+    """
 
     model_config = FROZEN
 
     status: LibraryStatus
     config_path: str
     sources: LibrarySources | None
+    options: LibraryOptions | None
+    build_device: BuildDevice | None
     suggested_library_root: str
     manages_database: bool | None
     problem: str | None
@@ -77,10 +83,18 @@ class Launcher:
     """
 
     def __init__(
-        self, config_path: Path, *, renderer_command: tuple[str, ...], pipeline_command: tuple[str, ...]
+        self,
+        config_path: Path,
+        *,
+        renderer_command: tuple[str, ...],
+        pipeline_command: tuple[str, ...],
+        device_command: tuple[str, ...],
     ) -> None:
         self._config_path = config_path
         self._renderer_command = renderer_command
+        self._device_command = device_command
+        self._build_device: BuildDevice | None = None
+        self._device_probe: asyncio.Task[None] | None = None
         self._builds = JobRunner(config_path=config_path, pipeline_command=pipeline_command)
         self._config: LibraryConfig | None = None
         self._catalog: FastAPI | None = None
@@ -109,6 +123,8 @@ class Launcher:
             status=self._status(),
             config_path=str(self._config_path),
             sources=LibrarySources.of(self._config) if self._config is not None else None,
+            options=LibraryOptions.of(self._config) if self._config is not None else None,
+            build_device=self._build_device,
             suggested_library_root=str(default_library_root()),
             manages_database=self._config.manages_database if self._config is not None else None,
             problem=self._problem,
@@ -116,7 +132,8 @@ class Launcher:
         )
 
     def start(self) -> None:
-        """Open the library the config file names, in the background, where a config file is there to read."""
+        """Ask which device builds compute on, and open the library the config file names, both in the background."""
+        self._device_probe = asyncio.get_running_loop().create_task(self._probe_build_device())
         if not self._config_path.is_file():
             return
         try:
@@ -138,6 +155,17 @@ class Launcher:
         self._config = write_library_sources(self._config_path, sources)
         self._schedule_activation(self._config)
 
+    def choose_options(self, options: LibraryOptions) -> None:
+        """Write how the library is built into the config file; the next build reads them.
+
+        Raises:
+            LibraryClosedError: no folders have been chosen yet, so no config file holds the library.
+            ConfigurationError: the config file, with the options in it, fails validation.
+        """
+        if self._config is None:
+            raise LibraryClosedError("Save your folders first.")
+        self._config = write_library_options(self._config_path, options)
+
     def build(self, target: BuildTarget) -> None:
         """Start building the open library.
 
@@ -155,6 +183,8 @@ class Launcher:
     async def stop(self) -> None:
         """Stop a running build, close the library, and stop the renderer and the managed database."""
         await run_in_threadpool(self._builds.stop)
+        if self._device_probe is not None:
+            await asyncio.gather(self._device_probe, return_exceptions=True)
         if self._activation is not None:
             await asyncio.gather(self._activation, return_exceptions=True)
         async with self._lock:
@@ -162,6 +192,11 @@ class Launcher:
             if self._cluster is not None:
                 await run_in_threadpool(self._cluster.stop)
                 self._cluster = None
+
+    async def _probe_build_device(self) -> None:
+        self._build_device = await run_in_threadpool(
+            probe_build_device, self._device_command, config_path=self._config_path
+        )
 
     def _status(self) -> LibraryStatus:
         if self._activation is not None and not self._activation.done():

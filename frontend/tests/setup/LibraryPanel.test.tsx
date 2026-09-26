@@ -1,13 +1,25 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { BuildView, SetupState } from "../../src/api/setup";
+import type * as SetupApi from "../../src/api/setup";
+import type { BuildDevice, BuildView, SetupState } from "../../src/api/setup";
 import type { LibraryStats } from "../../src/api/stats";
 import { LibraryPanel } from "../../src/setup/LibraryPanel";
 
-const { getStats } = vi.hoisted(() => ({ getStats: vi.fn() }));
+const { getStats, startBuild, chooseOptions } = vi.hoisted(() => ({
+    getStats: vi.fn(),
+    startBuild: vi.fn(),
+    chooseOptions: vi.fn(),
+}));
 
 vi.mock("../../src/api/stats", () => ({ getStats }));
+vi.mock("../../src/api/setup", async () => {
+    const actual = await vi.importActual<typeof SetupApi>("../../src/api/setup");
+    return { ...actual, startBuild, chooseOptions };
+});
+
+const CARD: BuildDevice = { card: "NVIDIA GeForce RTX 5070 Ti" };
+const PROCESSOR: BuildDevice = { card: null };
 
 const LIBRARY_STATS: LibraryStats = {
     module_count: 30,
@@ -60,7 +72,7 @@ const FINISHED_BUILD: BuildView = {
     ],
 };
 
-function stateWith(build: BuildView | null): SetupState {
+function stateWith(build: BuildView | null, device: BuildDevice | null = CARD, buildCloud = true): SetupState {
     return {
         status: "ready",
         config_path: "/home/person/.config/SampleLibrary/config.toml",
@@ -70,6 +82,8 @@ function stateWith(build: BuildView | null): SetupState {
             sample_directories: [],
             sample_exclusions: [],
         },
+        options: { build_cloud: buildCloud },
+        build_device: device,
         suggested_library_root: "/home/person/Music/SampleLibrary",
         manages_database: true,
         problem: null,
@@ -79,23 +93,69 @@ function stateWith(build: BuildView | null): SetupState {
 
 function renderPanel(state: SetupState, unsavedChanges = false): void {
     getStats.mockResolvedValue(LIBRARY_STATS);
+    startBuild.mockResolvedValue(state);
+    chooseOptions.mockResolvedValue(state);
     render(<LibraryPanel state={state} unsavedChanges={unsavedChanges} onChanged={() => undefined} />);
 }
 
 describe("LibraryPanel", () => {
-    it("offers both builds while none runs, and reports the library's size", async () => {
+    it("offers the build with its cloud, names the card, and reports the library's size", async () => {
         renderPanel(stateWith(null));
 
-        expect(screen.getByRole("button", { name: "Scan my folders" })).toBeEnabled();
-        expect(screen.getByRole("button", { name: "Scan and build the cloud" })).toBeEnabled();
+        expect(screen.getByRole("button", { name: "Build my library" })).toBeEnabled();
+        expect(screen.getByRole("checkbox", { name: /Build the cloud/ })).toBeChecked();
+        expect(screen.getByText("Builds use your NVIDIA GeForce RTX 5070 Ti.")).toBeInTheDocument();
         expect(await screen.findByText("Your library holds 300 samples and 30 modules.")).toBeInTheDocument();
     });
 
-    it("keeps both builds in place while one runs, with the running step's count, estimate and a way to cancel", () => {
+    it("builds the cloud at once on a card", () => {
+        renderPanel(stateWith(null));
+
+        fireEvent.click(screen.getByRole("button", { name: "Build my library" }));
+
+        expect(startBuild).toHaveBeenCalledWith("all");
+    });
+
+    it("asks before building the cloud on the processor, and takes the answer", () => {
+        renderPanel(stateWith(null, PROCESSOR));
+
+        fireEvent.click(screen.getByRole("button", { name: "Build my library" }));
+
+        expect(startBuild).not.toHaveBeenCalled();
+        expect(screen.getByRole("dialog", { name: "Build the cloud without an NVIDIA graphics card?" })).toBeVisible();
+        fireEvent.click(screen.getByRole("button", { name: "Build without the cloud" }));
+        expect(startBuild).toHaveBeenCalledWith("catalog");
+    });
+
+    it("builds the catalog alone once the cloud is switched off, asking nothing", () => {
+        renderPanel(stateWith(null, PROCESSOR, false));
+
+        fireEvent.click(screen.getByRole("button", { name: "Build my library" }));
+
+        expect(startBuild).toHaveBeenCalledWith("catalog");
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("saves the cloud switch for the library", () => {
+        renderPanel(stateWith(null));
+
+        fireEvent.click(screen.getByRole("checkbox", { name: /Build the cloud/ }));
+
+        expect(chooseOptions).toHaveBeenCalledWith({ build_cloud: false });
+    });
+
+    it("waits to build until it knows the device", () => {
+        renderPanel(stateWith(null, null));
+
+        expect(screen.getByRole("button", { name: "Build my library" })).toBeDisabled();
+        expect(screen.getByText("Checking for an NVIDIA graphics card…")).toBeInTheDocument();
+    });
+
+    it("keeps the build in place while one runs, with the running step's count, estimate and a way to cancel", () => {
         renderPanel(stateWith(RUNNING_BUILD));
 
-        expect(screen.getByRole("button", { name: "Scan my folders" })).toBeDisabled();
-        expect(screen.getByRole("button", { name: "Scan and build the cloud" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Build my library" })).toBeDisabled();
+        expect(screen.getByRole("checkbox", { name: /Build the cloud/ })).toBeDisabled();
         expect(screen.getByText("Reading your modules")).toBeInTheDocument();
         expect(screen.getByText("40 of 160 · about 2 min left")).toBeInTheDocument();
         expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
@@ -106,7 +166,7 @@ describe("LibraryPanel", () => {
         renderPanel(stateWith(null), true);
 
         expect(screen.getByText("Save your folder changes first.")).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Scan my folders" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Build my library" })).toBeDisabled();
     });
 
     it("shows how long the build and each of its steps took", () => {
