@@ -328,7 +328,10 @@ while the pass runs), feature extraction (the sample stays pending), transpositi
 reproducibility probe of a resumed experiment (which compares the first samples it can read), and
 the descriptor's training sets. A grid cache or a training run sized to its samples first keeps the
 samples `readable_samples` finds, and a file vanishing mid-build stops that build with the previous
-cache left in place. A missing stored object is a damaged store and still raises
+cache left in place. A grid cache build writes its rows into its partial and checkpoints them every
+ten seconds and on the way out (`samplecore/storage/staged_rows.py`), so a build of the same samples
+on the same recipe that was interrupted, killed or cut off continues after its last checkpoint. A
+missing stored object is a damaged store and still raises
 `FileNotFoundError`. The API serves such a sample's audio as the WAV the store would hold for it,
 with the same nominal header rate and the same year-long cache lifetime, and answers 404 naming the
 file when none can be read; the sample detail lists its files, each with whether it is available now.

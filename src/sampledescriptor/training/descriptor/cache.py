@@ -8,12 +8,14 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel
 
+from samplecore.digests import digest_of_rows
 from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
 from samplecore.process_pool import mapped_in_processes
 from samplecore.progress import ProgressBar
 from samplecore.storage.sample_audio import SampleAudio
-from samplecore.storage.staging import fresh_staging, publish_staged
+from samplecore.storage.staged_rows import RowArray, StagedRows
+from samplecore.storage.staging import publish_staged
 from sampledescriptor.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
 from sampledescriptor.descriptors.views import retuned_view
 from sampledescriptor.geometry import Anchor, GridGeometry
@@ -165,10 +167,13 @@ def build_grid_cache(
     trainer measured as the one that shares the machine's cores rather than fighting over them.
     Rows are written as they arrive, so memory stays flat however large the draw.
 
-    The cache is built beside `directory` and moved into place once its description is written,
-    through `publish_staged`. The rows are sized to `samples`, so a caller passes the samples whose
-    audio can be read now; a sample file going missing while the build runs stops the build the same
-    way.
+    The cache is built in its partial beside `directory` and moved into place once its description
+    is written, through `publish_staged`. The rows written stand checkpointed there, so a build of
+    the same samples on the same recipe stopped partway -- interrupted, killed, or out of power --
+    continues after its last checkpoint: the samples come in hash order and each one's retunings
+    from one seeded draw, so the rows it goes on to write are the ones a single pass would. The rows
+    are sized to `samples`, so a caller passes the samples whose audio can be read now; a sample file
+    going missing while the build runs stops the build the same way.
 
     Raises:
         ValueError: the draw is empty.
@@ -189,16 +194,31 @@ def build_grid_cache(
         view_range_semitones=recipe.view_range_semitones,
         random_seed=recipe.random_seed,
     )
-    staging = fresh_staging(directory)
-    grids = np.lib.format.open_memmap(
-        staging / GRIDS_FILE_NAME,
-        mode="w+",
-        dtype=np.float16,
-        shape=(len(samples), 1 + recipe.view_count, band_count, geometry.time_columns),
+    views = 1 + recipe.view_count
+    rows = StagedRows.open(
+        directory,
+        identity=digest_of_rows(((description.model_dump_json(),), *((sample.hash,) for sample in samples))),
+        arrays=(
+            RowArray(GRIDS_FILE_NAME, np.float16, (len(samples), views, band_count, geometry.time_columns)),
+            RowArray(DURATIONS_FILE_NAME, np.float32, (len(samples), views)),
+        ),
     )
-    durations = np.zeros((len(samples), 1 + recipe.view_count), dtype=np.float32)
+    _canonicalize_into(
+        rows, jobs=_jobs(samples, recipe=recipe), audio=audio, geometry=geometry, worker_count=worker_count
+    )
+    staging = rows.complete()
+    (staging / HASHES_FILE_NAME).write_text("\n".join(sample.hash for sample in samples), encoding="utf-8")
+    (staging / DESCRIPTION_FILE_NAME).write_text(description.model_dump_json(indent=2), encoding="utf-8")
+    publish_staged(
+        staging, directory, file_names=(GRIDS_FILE_NAME, DURATIONS_FILE_NAME, HASHES_FILE_NAME, DESCRIPTION_FILE_NAME)
+    )
+    return open_grid_cache(directory)
+
+
+def _jobs(samples: tuple[Sample, ...], *, recipe: GridCacheRecipe) -> list[_Job]:
+    """Every sample's job, its retunings drawn in sample order from the recipe's seed, so every build draws them alike."""
     generator = np.random.default_rng(recipe.random_seed)
-    jobs = [
+    return [
         _Job(
             sample=sample,
             offsets=tuple(
@@ -207,23 +227,26 @@ def build_grid_cache(
         )
         for sample in samples
     ]
-    worker = _Worker(audio=audio, geometry=geometry, band_count=band_count)
-    with ProgressBar(total=len(jobs), label=CANONICALIZING_LABEL) as progress:
+
+
+def _canonicalize_into(
+    rows: StagedRows, *, jobs: list[_Job], audio: SampleAudio, geometry: GridGeometry, worker_count: int
+) -> None:
+    """Write the rows of every job a stopped build left unwritten, checkpointing as they arrive and on the way out."""
+    grids = rows.array(GRIDS_FILE_NAME)
+    durations = rows.array(DURATIONS_FILE_NAME)
+    worker = _Worker(audio=audio, geometry=geometry, band_count=grids.shape[2])
+    with ProgressBar(total=len(jobs), label=CANONICALIZING_LABEL, resumed=rows.resumed_rows) as progress:
         derived = mapped_in_processes(
-            worker, jobs, worker_count=worker_count, chunk_size=JOB_CHUNK_SIZE, progress=progress
+            worker, jobs[rows.resumed_rows :], worker_count=worker_count, chunk_size=JOB_CHUNK_SIZE, progress=progress
         )
-        for position, (job_grids, job_durations) in enumerate(derived):
-            grids[position] = job_grids
-            durations[position] = job_durations
-    grids.flush()
-    del grids
-    np.save(staging / DURATIONS_FILE_NAME, durations)
-    (staging / HASHES_FILE_NAME).write_text("\n".join(sample.hash for sample in samples), encoding="utf-8")
-    (staging / DESCRIPTION_FILE_NAME).write_text(description.model_dump_json(indent=2), encoding="utf-8")
-    publish_staged(
-        staging, directory, file_names=(GRIDS_FILE_NAME, DURATIONS_FILE_NAME, HASHES_FILE_NAME, DESCRIPTION_FILE_NAME)
-    )
-    return open_grid_cache(directory)
+        try:
+            for position, (job_grids, job_durations) in enumerate(derived, start=rows.resumed_rows):
+                grids[position] = job_grids
+                durations[position] = job_durations
+                rows.advance_to(position + 1)
+        finally:
+            rows.checkpoint()
 
 
 def open_grid_cache(directory: Path) -> GridCache:
