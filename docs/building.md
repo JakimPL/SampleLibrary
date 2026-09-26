@@ -1,6 +1,6 @@
 # Building and releasing
 
-This guide is for building the SampleLibrary executable and its installers, and for publishing a
+This guide is for building the SampleLibrary executables and their installers, and for publishing a
 release. Running the app from a checkout takes [Running from source](source.md) alone.
 
 ## What gets built
@@ -8,8 +8,10 @@ release. Running the app from a checkout takes [Running from source](source.md) 
 ```
 build/
   frontend/               the built web app
-  package/                the samplelibrary wheel, which carries the web app, and its pinned requirements
-bin/SampleLibrary         the executable (SampleLibrary.exe on Windows)
+  package/                the samplelibrary wheel, which carries the web app, and each launcher's requirements
+bin/
+  SampleLibrary           the processor launcher (SampleLibrary.exe on Windows)
+  SampleLibrary-nvidia    the NVIDIA launcher, on Windows and Linux
 dist/                     what a release publishes
   SampleLibrary-<version>-windows-x64-setup.exe
   SampleLibrary-<version>-macos-arm64.dmg
@@ -17,7 +19,7 @@ dist/                     what a release publishes
   descriptor/             the pretrained descriptor, when you publish a new one
 ```
 
-Each system builds its own executable and installer: build on Windows for Windows, on a Mac with
+Each system builds its own executables and installer: build on Windows for Windows, on a Mac with
 Apple silicon for macOS, and on Linux for Linux. The Application workflow builds all three on GitHub
 (see [Continuous integration](#continuous-integration)).
 
@@ -28,39 +30,47 @@ Everything [Running from source](source.md#requirements) lists, and for each ste
 | Step | Needs |
 |---|---|
 | `just package` | Node.js and npm, and uv |
-| `just executable` | Rust, installed with [rustup](https://rustup.rs): cargo compiles the launcher |
-| `just installer` on Windows | [Inno Setup 6](https://jrsoftware.org/isinfo.php) |
+| `just executable` | Rust, installed with [rustup](https://rustup.rs): cargo compiles the launchers |
+| `just installer` on Windows | [Inno Setup](https://jrsoftware.org/isinfo.php) 6.3 or later |
 | `just installer` on macOS | `codesign` and `hdiutil`, which come with macOS |
 | `just installer` on Linux | appimagetool, which the build downloads itself |
 
 ## Building
 
 ```sh
-just package      # build/: the web app, the wheel carrying it, and its pinned requirements
-just executable   # bin/: the executable for this system
+just package      # build/: the web app, the wheel carrying it, and each launcher's requirements
+just executable   # bin/: the launchers for this system
 just installer    # dist/: the installer for this system
 ```
 
 - `just package` builds the web app and the samplelibrary wheel. It also writes the exact versions
-  the app installs, taken from `uv.lock`, with torch's processor build, which spares every
-  installation gigabytes of NVIDIA libraries. trackmod is pinned to the submodule's version, which
-  installations take from PyPI.
+  the app installs, taken from `uv.lock`, twice: with torch's processor build, which runs on every
+  machine, and with its CUDA build and NVIDIA libraries, several gigabytes more, for a machine with
+  an NVIDIA card. trackmod is pinned to the submodule's version, which installations take from PyPI.
 - `just executable` compiles a [PyApp](https://ofek.dev/pyapp/) launcher around a copy of the wheel
-  that carries those versions. On its first start, the executable downloads Python and installs the
-  app with uv, which takes several minutes; later starts take seconds.
-- `just installer` wraps the executable for its system:
-  - The Windows installer puts it in the person's own programs folder, with a Start menu shortcut
-    and an optional desktop one. Upgrading and uninstalling first quit the running app and remove the packages the
-    earlier version installed; the library stays.
+  carrying each set of versions: `SampleLibrary` everywhere, and `SampleLibrary-nvidia` on Windows
+  and Linux, where PyTorch publishes CUDA builds. The NVIDIA wheel's version carries the label
+  `+cu128`, which gives its installation a folder of its own. On its first start, a launcher
+  downloads Python and installs the app with uv, which takes several minutes; later starts take
+  seconds.
+- `just installer` wraps the launchers for its system:
+  - The Windows installer carries both launchers and installs the NVIDIA one where `nvidia-smi`
+    reports a driver for CUDA 12 or newer. It puts the app in the person's own programs folder,
+    with a Start menu shortcut and an optional desktop one. Upgrading and uninstalling first quit
+    the running app and remove the packages the earlier version installed; the library stays.
   - The macOS disk image holds an app bundle whose launcher sends the app's output to the log
     folder and announces the first start. The bundle carries an ad hoc signature.
-  - The Linux AppImage's launcher does the same with a desktop notification.
+  - The Linux AppImage carries both launchers too. Its AppRun picks one on the first start by the
+    same `nvidia-smi` check, and records the choice in `~/.config/SampleLibrary/launcher`, which
+    every later start follows. It sends the app's output to the log folder and announces the first
+    start with a desktop notification.
 
 ## Trying a build
 
-Run `bin/SampleLibrary`: it installs itself, starts, and opens your browser, as an installed copy
-does. An executable installs its packages once per version, and a new build of the same version
-starts on the packages the first one installed. `bin/SampleLibrary self remove` deletes that
+Run `bin/SampleLibrary`, or `bin/SampleLibrary-nvidia` on a machine with an NVIDIA card: it
+installs itself, starts, and opens your browser, as an installed copy does. A launcher installs its
+packages once per version, and a new build of the same version starts on the packages the first one
+installed. `self remove`, such as `bin/SampleLibrary self remove`, deletes that launcher's
 installation, so the next start installs afresh. The installations live in PyApp's data folder:
 `~/.local/share/pyapp` on Linux, `~/Library/Application Support/pyapp` on macOS and
 `%LOCALAPPDATA%\pyapp\data` on Windows.
@@ -70,10 +80,12 @@ installation, so the next start installs afresh. The installations live in PyApp
 The Application workflow (`.github/workflows/app.yml`) builds everything on GitHub:
 
 1. It checks the inputs of the build (see [Releasing](#releasing)) and runs `just package` once.
-2. On Linux, Windows and macOS, it runs `just executable`, then installs the executable on the fresh
+2. On Linux, Windows and macOS, it runs `just executable`, then installs each launcher on the fresh
    machine and walks it through a first session (`scripts/smoke_test_app.py`). The session writes 30
    generated modules, opens a library on the built-in database, builds its catalog, quits, and
-   checks that the database stopped. Then it runs `just installer`.
+   checks that the database stopped. The runners have no NVIDIA card, so the NVIDIA launcher's
+   session runs on the processor, which shows that its packages install and start. Then it runs
+   `just installer`.
 3. Each run keeps the executables and installers it built, to download from the run's page. A run
    whose smoke test fails keeps the library's logs as well.
 

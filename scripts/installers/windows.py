@@ -10,6 +10,7 @@ from build_app import APP_NAME
 from installers.common import release_name
 from installers.icons import windows_icon
 from paths import WINDOWS_INSTALLER_SCRIPT, WINDOWS_QUIT_SCRIPT
+from torch_builds import MINIMUM_DRIVER_CUDA_MAJOR
 
 PLATFORM: Final[str] = "windows-x64"
 INNO_SETUP_COMPILER: Final[str] = "ISCC"
@@ -17,11 +18,15 @@ INNO_SETUP_DEFAULT: Final[Path] = Path("C:/Program Files (x86)/Inno Setup 6/ISCC
 INSTALLER_SUFFIX: Final[str] = "-setup"
 
 
-def windows_installer(executable: Path, *, version: str, output_directory: Path, work: Path) -> Path:
+def windows_installer(
+    executable: Path, *, nvidia_executable: Path, version: str, output_directory: Path, work: Path
+) -> Path:
     """An Inno Setup installer putting the app in the person's own programs folder, with Start menu and desktop shortcuts.
 
-    Installing over an earlier version, and uninstalling, first quit the running application and
-    remove the packages the earlier executable installed; the library and its settings stay.
+    It carries both launchers and installs the NVIDIA one where `nvidia-smi` reports a driver for
+    CUDA `MINIMUM_DRIVER_CUDA_MAJOR` or newer, the processor one elsewhere. Installing over an
+    earlier version, and uninstalling, first quit the running application and remove the packages
+    the earlier executable installed; the library and its settings stay.
 
     Raises:
         SystemExit: Inno Setup is not installed.
@@ -32,6 +37,8 @@ def windows_installer(executable: Path, *, version: str, output_directory: Path,
             _inno_setup_compiler(),
             f"/DVersion={version}",
             f"/DExecutable={executable.resolve()}",
+            f"/DNvidiaExecutable={nvidia_executable.resolve()}",
+            f"/DMinimumCudaMajor={MINIMUM_DRIVER_CUDA_MAJOR}",
             f"/DIcon={windows_icon(work / f'{APP_NAME}.ico')}",
             f"/DQuitScript={WINDOWS_QUIT_SCRIPT}",
             f"/DOutputDirectory={output_directory.resolve()}",

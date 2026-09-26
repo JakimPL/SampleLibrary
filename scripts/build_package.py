@@ -5,20 +5,22 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 from typing import Final
 
 from paths import (
     APP_REQUIREMENTS_FILE,
     FRONTEND_DIRECTORY,
+    NVIDIA_REQUIREMENTS_FILE,
     PACKAGE_BUILD_DIRECTORY,
     REPOSITORY_DIRECTORY,
     TRACKMOD_PROJECT_FILE,
 )
+from torch_builds import CPU_TORCH_INDEX, CUDA_TORCH_INDEX
 from versions import project_version
 
 APP_EXTRA: Final[str] = "app"
 TRACKMOD_PACKAGE: Final[str] = "trackmod"
-CPU_TORCH_INDEX: Final[str] = "https://download.pytorch.org/whl/cpu"
 CUDA_BUILD: Final[re.Pattern[str]] = re.compile(r"^(torch==[^+\s;]+)\+cu\d+")
 CUDA_ONLY_PACKAGES: Final[tuple[str, ...]] = ("nvidia-", "triton==")
 LOCAL_SOURCE_PREFIXES: Final[tuple[str, ...]] = ("-e ", "./", "../")
@@ -32,7 +34,7 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Build what `just executable` wraps: the frontend, the wheel carrying it, and the app extra's locked versions.
+    """Build what `just executable` wraps: the frontend, the wheel carrying it, and each launcher's locked versions.
 
     Raises:
         SystemExit: npm or uv is not installed.
@@ -46,8 +48,11 @@ def main(argv: list[str] | None = None) -> None:
         check=True,
         cwd=REPOSITORY_DIRECTORY,
     )
-    count = _write_requirements(uv)
-    print(f"Built the wheel and {count} pinned requirements in {PACKAGE_BUILD_DIRECTORY}.")
+    processor_count, nvidia_count = _write_requirements(uv)
+    print(
+        f"Built the wheel and the pinned requirements in {PACKAGE_BUILD_DIRECTORY}: "
+        f"{processor_count} for the processor launcher, {nvidia_count} for the NVIDIA one."
+    )
 
 
 def _program(name: str, advice: str) -> str:
@@ -62,13 +67,13 @@ def _program(name: str, advice: str) -> str:
     return found
 
 
-def _write_requirements(uv: str) -> int:
+def _write_requirements(uv: str) -> tuple[int, int]:
     """Write the locked versions of the app extra as the requirements a fresh installation reads.
 
-    The lock pins the CUDA build of torch, which carries gigabytes of NVIDIA libraries; the packaged
-    application takes the processor build of the same version from PyTorch's own index, which covers
-    every machine, a card included. trackmod is a local path in a checkout, so an installation takes
-    the submodule's version from PyPI.
+    The lock pins the CUDA build of torch, which carries gigabytes of NVIDIA libraries. The processor
+    launcher takes the processor build of the same version from PyTorch's own index, which runs on
+    every machine; the NVIDIA launcher keeps the CUDA build and its libraries. trackmod is a local
+    path in a checkout, so an installation takes the submodule's version from PyPI.
     """
     exported = subprocess.run(
         [
@@ -88,23 +93,31 @@ def _write_requirements(uv: str) -> int:
         cwd=REPOSITORY_DIRECTORY,
     ).stdout
     trackmod = f"{TRACKMOD_PACKAGE}=={project_version(TRACKMOD_PROJECT_FILE)}"
-    requirements = [trackmod, *_processor_requirements(exported)]
-    lines = [f"--extra-index-url {CPU_TORCH_INDEX}", *requirements]
-    APP_REQUIREMENTS_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return len(requirements)
+    locked = _locked_requirements(exported)
+    processor = [trackmod, *_processor_requirements(locked)]
+    nvidia = [trackmod, *locked]
+    _write_requirement_file(APP_REQUIREMENTS_FILE, CPU_TORCH_INDEX, processor)
+    _write_requirement_file(NVIDIA_REQUIREMENTS_FILE, CUDA_TORCH_INDEX, nvidia)
+    return len(processor), len(nvidia)
 
 
-def _processor_requirements(exported: str) -> list[str]:
-    """The exported pins with torch's CUDA build swapped for its processor build, and the CUDA-only packages left out."""
-    kept: list[str] = []
-    for line in exported.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or stripped.startswith(LOCAL_SOURCE_PREFIXES):
-            continue
-        if stripped.startswith(CUDA_ONLY_PACKAGES):
-            continue
-        kept.append(CUDA_BUILD.sub(r"\1+cpu", stripped))
-    return kept
+def _locked_requirements(exported: str) -> list[str]:
+    """The exported pins, leaving out comments and the packages a checkout takes from a local path."""
+    return [
+        stripped
+        for stripped in (line.strip() for line in exported.splitlines())
+        if stripped and not stripped.startswith("#") and not stripped.startswith(LOCAL_SOURCE_PREFIXES)
+    ]
+
+
+def _processor_requirements(locked: list[str]) -> list[str]:
+    """The pins with torch's CUDA build swapped for its processor build, and the CUDA-only packages left out."""
+    return [CUDA_BUILD.sub(r"\1+cpu", pin) for pin in locked if not pin.startswith(CUDA_ONLY_PACKAGES)]
+
+
+def _write_requirement_file(path: Path, torch_index: str, requirements: list[str]) -> None:
+    lines = [f"--extra-index-url {torch_index}", *requirements]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

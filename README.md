@@ -22,8 +22,9 @@ Download the file for your system from the
 ## First start
 
 The first start downloads Python and the packages SampleLibrary runs on, about 2 GB on disk, which
-takes several minutes. Later starts take a few seconds. SampleLibrary then opens in your browser on
-its setup page:
+takes several minutes. On Windows and Linux with an NVIDIA graphics card, it takes the packages that
+let the card do the heavy listening instead, several gigabytes more. Later starts take a few
+seconds. SampleLibrary then opens in your browser on its setup page:
 
 1. Under **Your folders**, choose your module folder, your sample folders, or both.
 2. Choose where the library keeps its files. Pick a drive with free space: a large collection takes

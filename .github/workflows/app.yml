@@ -45,6 +45,7 @@ jobs:
           path: |
             build/package/samplelibrary-*.whl
             build/package/app-requirements.txt
+            build/package/app-requirements-nvidia.txt
           if-no-files-found: error
 
   installer:
@@ -57,16 +58,20 @@ jobs:
           - platform: linux-x64
             runner: ubuntu-22.04
             extension: ""
+            nvidia: true
           - platform: windows-x64
             runner: windows-latest
             extension: .exe
+            nvidia: true
           - platform: macos-arm64
             runner: macos-latest
             extension: ""
+            nvidia: false
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 120
     env:
       EXECUTABLE: bin/SampleLibrary${{ matrix.extension }}
+      NVIDIA_EXECUTABLE: bin/SampleLibrary-nvidia${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -75,23 +80,29 @@ jobs:
         with:
           name: package
           path: build/package
-      - name: Build the executable
+      - name: Build the executables
         run: just executable
       - uses: actions/upload-artifact@v7
         with:
           name: executable-${{ matrix.platform }}
-          path: ${{ env.EXECUTABLE }}
+          path: bin/SampleLibrary*
           if-no-files-found: error
       - name: Install and run the executable
         run: uv run --no-project python scripts/smoke_test_app.py --executable "$EXECUTABLE" --work "$RUNNER_TEMP/smoke"
+      # The runners have no NVIDIA card, so the NVIDIA launcher's packages install and run on the processor.
+      - name: Install and run the NVIDIA executable
+        if: matrix.nvidia
+        run: >-
+          uv run --no-project python scripts/smoke_test_app.py
+          --executable "$NVIDIA_EXECUTABLE" --work "$RUNNER_TEMP/smoke-nvidia"
       - name: Keep the smoke test's logs
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: smoke-test-logs-${{ matrix.platform }}
           path: |
-            ${{ runner.temp }}/smoke/library/**/*.log
-            ${{ runner.temp }}/smoke/library/**/*.jsonl
+            ${{ runner.temp }}/smoke*/library/**/*.log
+            ${{ runner.temp }}/smoke*/library/**/*.jsonl
           if-no-files-found: ignore
       - name: Build the installer
         run: just installer

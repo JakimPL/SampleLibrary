@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -17,12 +18,14 @@ SETUP_ROUTE: Final[str] = f"{ADDRESS}/api/setup"
 STATS_ROUTE: Final[str] = f"{ADDRESS}/api/stats"
 POLL_SECONDS: Final[float] = 2.0
 REQUEST_SECONDS: Final[float] = 10.0
-INSTALL_SECONDS: Final[float] = 1800.0
+INSTALL_SECONDS: Final[float] = 3600.0
 OPEN_SECONDS: Final[float] = 300.0
 BUILD_SECONDS: Final[float] = 900.0
 QUIT_SECONDS: Final[float] = 120.0
 MODULES_DIRECTORY_NAME: Final[str] = "modules"
 LIBRARY_DIRECTORY_NAME: Final[str] = "library"
+CONFIG_FILE_NAME: Final[str] = "config.toml"
+CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
 SERVER_PID_FILE: Final[Path] = Path("postgres") / "data" / "postmaster.pid"
 BUILD_TARGET: Final[str] = "catalog"
 WRITE_MODULES: Final[str] = """
@@ -65,7 +68,11 @@ def main(argv: list[str] | None = None) -> None:
     arguments = _parse_arguments(argv)
     executable = arguments.executable.resolve()
     work = arguments.work.resolve()
-    launch = subprocess.Popen([executable, "--no-browser", "--port", str(PORT)])  # pylint: disable=consider-using-with
+    # A config file of its own in the work folder, so each run starts a fresh library of its own.
+    environment = {**os.environ, CONFIG_PATH_ENVIRONMENT_VARIABLE: str(work / CONFIG_FILE_NAME)}
+    launch = subprocess.Popen(  # pylint: disable=consider-using-with
+        [executable, "--no-browser", "--port", str(PORT)], env=environment
+    )
     try:
         _first_session(executable, work, launch)
     except SmokeTestError as error:
