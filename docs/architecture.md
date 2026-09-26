@@ -496,7 +496,9 @@ the built frontend. The `Launcher` owns what the library needs:
 - **Catalog API.** Once the config validates and the database answers, the launcher builds
   `sampleserver.app.create_app` in process and runs its lifespan; `CatalogRoute` forwards every
   `/api` path outside the setup routes to it, and answers 503 while the library is closed.
-- **Renderer and builds.** `morph serve` runs as a child process. A build runs `samplelibrary
+- **Renderer and builds.** `morph serve` runs as a child process, on the configured `[inference]`
+  address or, when another program holds that port, on a free one of the same host
+  (`samplecore.ports`), which the catalog API then dials. A build runs `samplelibrary
   pipeline run catalog|all` as a child process, and `samplelibrary.app.jobs` reads the run's
   `events.jsonl` and the progress file each step's pass writes (`samplecore.progress`, named by
   `SAMPLELIBRARY_PROGRESS_FILE`). A step's times come from its attempt's events, and a pass's

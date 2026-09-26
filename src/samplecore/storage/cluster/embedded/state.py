@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import secrets
-import socket
 import sys
 from pathlib import Path
 from typing import Final
@@ -9,6 +8,7 @@ from typing import Final
 from pydantic import BaseModel, Field
 
 from samplecore.models.base import FROZEN
+from samplecore.ports import MAXIMUM_PORT, MINIMUM_PORT, free_port, port_is_free
 from samplecore.storage.atomic import write_bytes_atomically
 
 CLUSTER_DIRECTORY_NAME: Final[str] = "postgres"
@@ -21,7 +21,6 @@ MANAGED_HOST: Final[str] = "127.0.0.1"
 PREFERRED_MANAGED_PORT: Final[int] = 54329
 PASSWORD_BYTES: Final[int] = 24
 PRIVATE_FILE_MODE: Final[int] = 0o600
-MAXIMUM_PORT: Final[int] = 65535
 
 
 class ManagedClusterMissingError(Exception):
@@ -37,7 +36,7 @@ class ClusterState(BaseModel):
 
     model_config = FROZEN
 
-    port: int = Field(ge=1, le=MAXIMUM_PORT)
+    port: int = Field(ge=MINIMUM_PORT, le=MAXIMUM_PORT)
     password: str = Field(min_length=1)
 
     @property
@@ -85,16 +84,16 @@ def create_cluster_state(library_root: Path) -> ClusterState:
     The preferred port keeps a library's address stable from one machine to the next, and a free one
     the system hands out takes its place when another program already listens there.
     """
-    state = ClusterState(port=_free_port(), password=secrets.token_urlsafe(PASSWORD_BYTES))
+    state = ClusterState(port=_managed_port(), password=secrets.token_urlsafe(PASSWORD_BYTES))
     _write_cluster_state(library_root, state)
     return state
 
 
 def claim_port(library_root: Path, state: ClusterState) -> ClusterState:
     """The state a stopped cluster starts under: its recorded port while that is free, a new one recorded otherwise."""
-    if _port_is_free(state.port):
+    if port_is_free(MANAGED_HOST, state.port):
         return state
-    moved = state.model_copy(update={"port": _free_port()})
+    moved = state.model_copy(update={"port": _managed_port()})
     _write_cluster_state(library_root, moved)
     return moved
 
@@ -106,19 +105,5 @@ def _write_cluster_state(library_root: Path, state: ClusterState) -> None:
         path.chmod(PRIVATE_FILE_MODE)
 
 
-def _free_port() -> int:
-    if _port_is_free(PREFERRED_MANAGED_PORT):
-        return PREFERRED_MANAGED_PORT
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        probe.bind((MANAGED_HOST, 0))
-        port: int = probe.getsockname()[1]
-        return port
-
-
-def _port_is_free(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        try:
-            probe.bind((MANAGED_HOST, port))
-        except OSError:
-            return False
-        return True
+def _managed_port() -> int:
+    return free_port(MANAGED_HOST, preferred=(PREFERRED_MANAGED_PORT,))

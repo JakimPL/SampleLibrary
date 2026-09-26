@@ -12,10 +12,11 @@ from pydantic import BaseModel
 from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
-from samplecore.config import ConfigurationError, LibraryConfig, load_config
+from samplecore.config import ConfigurationError, InferenceConfig, LibraryConfig, load_config
 from samplecore.config_editing import LibraryOptions, LibrarySources, write_library_options, write_library_sources
 from samplecore.models.base import FROZEN
 from samplecore.paths import default_library_root
+from samplecore.ports import PortUnavailableError, free_port
 from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster, EmbeddedClusterError
 from samplecore.storage.database import connect
@@ -27,10 +28,13 @@ from sampleserver.app import create_app
 LOGS_DIRECTORY_NAME: Final[str] = "logs"
 RENDERER_LOG_NAME: Final[str] = "renderer.log"
 RENDERER_NAME: Final[str] = "morph renderer"
+RENDERER_HOST_OPTION: Final[str] = "--host"
+RENDERER_PORT_OPTION: Final[str] = "--port"
 ACTIVATION_FAILURES: Final[tuple[type[Exception], ...]] = (
     ConfigurationError,
     EmbeddedClusterError,
     PostgresBinariesUnavailableError,
+    PortUnavailableError,
     OperationalError,
 )
 
@@ -224,12 +228,13 @@ class Launcher:
 
     async def _open_library(self, config: LibraryConfig) -> None:
         await run_in_threadpool(self._prepare_database, config)
-        catalog = create_app(config.catalog_url(), config.library_root, config.inference.url, frontend_directory=None)
+        inference = _free_inference_address(config.inference)
+        catalog = create_app(config.catalog_url(), config.library_root, inference.url, frontend_directory=None)
         await self._catalog_stack.enter_async_context(catalog.router.lifespan_context(catalog))
         self._catalog = catalog
         self._renderer = ChildProcess(
             RENDERER_NAME,
-            self._renderer_command,
+            (*self._renderer_command, RENDERER_HOST_OPTION, inference.host, RENDERER_PORT_OPTION, str(inference.port)),
             config_path=self._config_path,
             log_path=config.library_root / LOGS_DIRECTORY_NAME / RENDERER_LOG_NAME,
         )
@@ -259,3 +264,12 @@ class Launcher:
         self._catalog = None
         await self._catalog_stack.aclose()
         self._catalog_stack = AsyncExitStack()
+
+
+def _free_inference_address(configured: InferenceConfig) -> InferenceConfig:
+    """The address the library's renderer listens on: the configured one while its port is free, another port otherwise.
+
+    Raises:
+        PortUnavailableError: the configured host is no address of this machine.
+    """
+    return configured.at_port(free_port(configured.host, preferred=(configured.port,)))

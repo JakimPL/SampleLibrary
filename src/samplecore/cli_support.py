@@ -15,6 +15,7 @@ from sqlalchemy.engine import make_url
 from samplecore.config import ConfigurationError, LibraryConfig, load_config
 from samplecore.exit_status import ExitStatus
 from samplecore.models.experiment import EXPERIMENT_KEY_PATTERN
+from samplecore.ports import MAXIMUM_PORT, MINIMUM_PORT
 from samplecore.storage.database import connect
 from samplecore.storage.sample_audio import SampleAudio
 
@@ -22,8 +23,6 @@ _LOG_FORMAT: Final[str] = "%(asctime)s  %(message)s"
 _LOG_DATE_FORMAT: Final[str] = "%H:%M:%S"
 _CONFIRM_FLAG_HINT: Final[str] = "Nothing has been changed. Pass --confirm to carry it out."
 
-MINIMUM_PORT: Final[int] = 1
-MAXIMUM_PORT: Final[int] = 65_535
 
 _logger = logging.getLogger(__name__)
 

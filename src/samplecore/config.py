@@ -80,6 +80,11 @@ class InferenceConfig(BaseModel):
         """The port the inference process binds and the API dials."""
         return _required_port(urlsplit(self.url))
 
+    def at_port(self, port: int) -> InferenceConfig:
+        """The same host on ``port``, where the application runs its own renderer when the configured port is taken."""
+        host = f"[{self.host}]" if ":" in self.host else self.host
+        return InferenceConfig(url=f"{INFERENCE_SCHEME}://{host}:{port}")
+
 
 class LibraryConfig(BaseModel):
     """Local, machine-specific configuration this project reads at startup.

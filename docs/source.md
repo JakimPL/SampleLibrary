@@ -75,7 +75,8 @@ The `[library]` table:
   `*` also matches across folders.
 
 The `[inference]` table holds `url`: the address the morph renderer listens on and the API reaches
-it at, `http://127.0.0.1:8010` by default.
+it at, `http://127.0.0.1:8010` by default. The SampleLibrary app starts its own renderer on this
+address, or on another port of the same host when a program already holds this one.
 
 The `[pipeline]` table holds what `just rebuild` builds the library with, every key optional:
 

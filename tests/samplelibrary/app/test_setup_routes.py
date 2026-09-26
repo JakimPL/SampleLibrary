@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import socket
 import sys
 import time
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
@@ -104,6 +106,38 @@ def test_quitting_closes_the_library_before_the_server_stops(config_path: Path) 
         assert client.post("/api/setup/quit").status_code == 202
 
     assert library_open_at_quit == [False]
+
+
+def test_a_renderer_whose_port_is_taken_listens_on_another_one(config_path: Path, tmp_path: Path) -> None:
+    arguments_path = tmp_path / "renderer-arguments.txt"
+    recording_renderer = (
+        sys.executable,
+        "-c",
+        "import pathlib, sys, time; pathlib.Path(sys.argv[1]).write_text(' '.join(sys.argv[2:])); time.sleep(60)",
+        str(arguments_path),
+    )
+    with socket.create_server(("127.0.0.1", 0)) as holder:
+        taken_port: int = holder.getsockname()[1]
+        with config_path.open("a", encoding="utf-8") as config:
+            config.write(f'\n[inference]\nurl = "http://127.0.0.1:{taken_port}"\n')
+        launcher = Launcher(
+            config_path,
+            renderer_command=recording_renderer,
+            pipeline_command=IDLE_RENDERER,
+            device_command=REPORTED_DEVICE,
+        )
+        application = create_application(launcher, frontend_directory=None, on_ready=lambda: None)
+        application.state.request_quit = lambda: None
+        with TestClient(application, base_url=LOCAL_BASE_URL, client=LOCAL_CLIENT) as client:
+            assert _wait_until_settled(client)["status"] == LibraryStatus.READY
+            assert launcher.catalog is not None
+            renderer_url = urlsplit(launcher.catalog.state.inference_url)
+            deadline = time.monotonic() + OPENING_TIMEOUT_SECONDS
+            while not arguments_path.is_file() and time.monotonic() < deadline:
+                time.sleep(0.1)
+
+    assert renderer_url.port not in (None, taken_port)
+    assert arguments_path.read_text(encoding="utf-8") == f"--host 127.0.0.1 --port {renderer_url.port}"
 
 
 def _build_device(client: TestClient) -> dict[str, object]:

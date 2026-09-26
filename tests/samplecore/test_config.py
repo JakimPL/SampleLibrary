@@ -326,6 +326,22 @@ def test_the_inference_address_names_its_host_and_port() -> None:
     assert (inference.host, inference.port) == ("render.local", 9000)
 
 
+@pytest.mark.parametrize(
+    ("url", "moved_url"),
+    [
+        ("http://127.0.0.1:8010", "http://127.0.0.1:9000"),
+        ("http://render.local:8010/", "http://render.local:9000"),
+        ("http://[::1]:8010", "http://[::1]:9000"),
+    ],
+    ids=("an address", "a name", "an IPv6 address"),
+)
+def test_the_inference_address_moves_to_another_port_on_its_host(url: str, moved_url: str) -> None:
+    moved = InferenceConfig(url=url).at_port(9000)
+
+    assert moved.url == moved_url
+    assert (moved.host, moved.port) == (InferenceConfig(url=url).host, 9000)
+
+
 def test_sample_directories_and_exclusions_are_read_with_relative_directories_anchored(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
