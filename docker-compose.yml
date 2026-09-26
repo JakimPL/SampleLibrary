@@ -42,8 +42,11 @@ services:
       #   source: /home/you/Samples/Packs
       #   target: /home/you/Samples/Packs
       #   read_only: true
+    # The server connects as the role that reads alone, which `samplelibrary setup database` creates
+    # from server_database_url in your config.toml; put the same password in a file named `.env`
+    # beside this one, as SAMPLELIBRARY_READER_PASSWORD=... An empty password fails the start.
     environment:
-      SAMPLELIBRARY_DATABASE_URL: postgresql+psycopg://samplelibrary:samplelibrary@postgres:5432/samplelibrary
+      SAMPLELIBRARY_SERVER_DATABASE_URL: postgresql+psycopg://samplelibrary_reader:${SAMPLELIBRARY_READER_PASSWORD:-}@postgres:5432/samplelibrary
     # Lets `[inference] url = "http://host.docker.internal:8010"` reach a renderer on the host.
     extra_hosts:
       - "host.docker.internal:host-gateway"

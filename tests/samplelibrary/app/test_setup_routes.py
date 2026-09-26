@@ -28,13 +28,11 @@ OPENING_TIMEOUT_SECONDS: Final[float] = 30.0
 
 
 @pytest.fixture
-def config_path(tmp_path: Path, _database_url: str) -> Path:
+def config_path(tmp_path: Path, worker_cluster_port: None) -> Path:
+    """A config naming a library that keeps its own database, the way the SampleLibrary app creates one."""
     path = tmp_path / "settings" / "config.toml"
     path.parent.mkdir()
-    path.write_text(
-        f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\ndatabase_url = "{_database_url}"\n',
-        encoding="utf-8",
-    )
+    path.write_text(f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\n', encoding="utf-8")
     return path
 
 
@@ -83,7 +81,7 @@ def test_an_application_opens_the_library_its_config_names(configured: TestClien
     state = _wait_until_settled(configured)
 
     assert state["status"] == LibraryStatus.READY
-    assert state["manages_database"] is False
+    assert state["manages_database"] is True
     assert configured.get("/api/stats").json()["sample_count"] == 0
 
 
@@ -149,6 +147,23 @@ def test_a_library_another_application_holds_open_stays_with_it(config_path: Pat
             assert state["status"] == LibraryStatus.FAILED
             assert state["problem"] == "Another SampleLibrary has this library open. Quit that one, then try again."
         assert first.get("/api/stats").status_code == 200
+
+
+def test_a_library_whose_curator_may_do_more_than_record_labels_stays_closed(
+    tmp_path: Path, _database_url: str
+) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text(
+        f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\n'
+        f'database_url = "{_database_url}"\ncuration_database_url = "{_database_url}"\n',
+        encoding="utf-8",
+    )
+    for client in _client(path, device_command=REPORTED_DEVICE):
+        state = _wait_until_settled(client)
+
+        assert state["status"] == LibraryStatus.FAILED
+        assert "doesn't fit a curator" in str(state["problem"])
+        assert client.get("/api/stats").status_code == 503
 
 
 def _build_device(client: TestClient) -> dict[str, object]:

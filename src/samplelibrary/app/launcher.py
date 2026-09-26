@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, closing
 from dataclasses import dataclass
 from enum import StrEnum, unique
 from pathlib import Path
@@ -10,6 +10,7 @@ from typing import Final
 
 from fastapi import FastAPI
 from pydantic import BaseModel
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
@@ -22,6 +23,7 @@ from samplecore.ports import PortUnavailableError, free_port
 from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster, EmbeddedClusterError
 from samplecore.storage.database import connect
+from samplecore.storage.service_roles import ServiceRoleRefusedError, check_service_role, grant_service_role
 from samplelibrary.app.instance.lock import HeldLock, LockUnavailableError, try_lock
 from samplelibrary.app.instance.place import library_lock_path
 from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView
@@ -48,6 +50,7 @@ ACTIVATION_FAILURES: Final[tuple[type[Exception], ...]] = (
     OperationalError,
     LibraryInUseError,
     LockUnavailableError,
+    ServiceRoleRefusedError,
 )
 
 _logger = logging.getLogger(__name__)
@@ -252,9 +255,10 @@ class Launcher:
 
     async def _open_library(self, config: LibraryConfig) -> None:
         await run_in_threadpool(self._prepare_database, config)
+        curator_url = await run_in_threadpool(_curator_url, config)
         inference = _free_inference_address(config.inference)
         catalog = create_app(
-            config.catalog_url(),
+            curator_url,
             config.library_root,
             inference.url,
             role=ServiceRole.CURATOR,
@@ -275,7 +279,9 @@ class Launcher:
         """Hold the library and start its managed database, stopping the one of a library held before and letting it go.
 
         The catalog's tables are then brought into existence, so a library opened on an empty
-        database of a person's own serves its pages at once, empty until the first scan.
+        database of a person's own serves its pages at once, empty until the first scan, and the
+        curator role the catalog API connects as is granted its rights on them, a managed database
+        granting them as it starts.
         """
         previous = self._hold_library(config.library_root)
         if self._cluster is not None and (
@@ -288,7 +294,11 @@ class Launcher:
         if config.manages_database:
             self._cluster = self._cluster or EmbeddedCluster(config.library_root)
             self._cluster.ensure_running()
-        connect(config.catalog_url()).close()
+        with closing(connect(config.catalog_url())) as connection:
+            if not config.manages_database:
+                curator = make_url(config.service_url(ServiceRole.CURATOR)).username or ""
+                grant_service_role(connection, service=ServiceRole.CURATOR, role=curator)
+                connection.commit()
 
     def _hold_library(self, library_root: Path) -> HeldLibrary | None:
         """Take the lock of ``library_root``, and return the library held before, still locked.
@@ -317,6 +327,19 @@ class Launcher:
         self._catalog = None
         await self._catalog_stack.aclose()
         self._catalog_stack = AsyncExitStack()
+
+
+def _curator_url(config: LibraryConfig) -> str:
+    """The URL the library's catalog API connects with, once its role is confirmed to be a curator's and nothing more.
+
+    Raises:
+        ServiceRoleUnconfiguredError: the library's own server has no curator named in the config.
+        ServiceRoleRefusedError: the role named may do more, or less, than record labels.
+    """
+    url = config.service_url(ServiceRole.CURATOR)
+    with closing(connect(url, read_only=True)) as connection:
+        check_service_role(connection, ServiceRole.CURATOR)
+    return url
 
 
 def _free_inference_address(configured: InferenceConfig) -> InferenceConfig:

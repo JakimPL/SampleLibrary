@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import os
-from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
 
 import pytest
 from sqlalchemy import Connection, select
@@ -18,8 +15,6 @@ from samplecore.models.sample_file import FileFingerprint
 from samplecore.models.spectral import SampleSpectralFeature
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.sample_files.decoding import decode_sample_file
-from samplecore.storage.cluster.embedded import state as cluster_state
-from samplecore.storage.cluster.embedded.server import EmbeddedCluster
 from samplecore.storage.database import metadata
 from samplecore.storage.repositories.cloud import (
     PostgresCloudCoordinateRepository,
@@ -45,11 +40,6 @@ from sampleextract.ingest import ingest_module
 from sampleextract.notes.playback_rates import record_playback_rates
 from sampleextract.parsing import parse_module
 from samplelibrary.sandbox.build import SAMPLE_PACK_DIRECTORY_NAME, build_sandbox
-
-WORKER_ENVIRONMENT_VARIABLE: Final[str] = "PYTEST_XDIST_WORKER"
-WORKER_PREFIX: Final[str] = "gw"
-FIRST_WORKER: Final[str] = "gw0"
-WORKER_PORT_BASE: Final[int] = 25432
 
 SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
 
@@ -148,23 +138,3 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
     connection.commit()
 
     return library_root
-
-
-@pytest.fixture(scope="module")
-def module_cluster_root(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
-    """A library root whose own Postgres server runs for one test module, its owner a superuser.
-
-    The service roles a served catalog API connects as are created by a superuser, which the
-    library's own server has and a shared test server need not, so the tests of those roles run
-    here. The server prefers a port of the test worker's own, as `test_embedded` explains.
-    """
-    root = tmp_path_factory.mktemp("library")
-    worker = int(os.environ.get(WORKER_ENVIRONMENT_VARIABLE, FIRST_WORKER).removeprefix(WORKER_PREFIX))
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(cluster_state, "PREFERRED_MANAGED_PORT", WORKER_PORT_BASE + worker)
-        cluster = EmbeddedCluster(root)
-        cluster.ensure_running()
-    try:
-        yield root
-    finally:
-        cluster.stop()

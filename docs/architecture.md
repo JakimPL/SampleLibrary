@@ -5,7 +5,7 @@ beside it, into a browsable, deduplicated sample library: a Postgres catalog of 
 their tracker-specific properties and the sample files they were found in; a content-addressable
 store of extracted audio; detected equivalence classes between near-duplicate samples; and a web
 application for navigating and visualizing all of it. The project has two
-natures — an offline, batch-oriented extraction/analysis tool, and a served read-only web app —
+natures — an offline, batch-oriented extraction/analysis tool, and a served web app, read-only wherever it is deployed —
 kept as seven packages under one `pyproject.toml` so each keeps its own dependency footprint and
 its own write/read boundary, enforced by the `[tool.importlinter]` contracts in `pyproject.toml`.
 
@@ -18,7 +18,7 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `sampledescriptor` trains, and through its text tower gives every sample a category from a vocabulary of prompts (`samplecloud.categories`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. The module layout (`samplecloud.modules`) places each module by the distance between its set of samples and every other module's, over those same vectors. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the note events say the library plays alike, and whether it groups what a person labeled alike. Depends on `samplecore`, and on `sampledescriptor` inside its `learned` backend's factory, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sampledescriptor` (the `learned` backend), `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn`, `mlflow` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
 | `samplemorph` | The morph renderer: the envelope route, which moves the spectral envelope from one sample's analysis to the other's and sounds an excitation under it. `samplemorph.transport` analyzes a sound into the Gaussian spectrogram the route reads and maps two sounds' courses through time onto each other; `samplemorph.envelope` splits each frame into its cepstral envelope and its excitation and blends the envelopes in decibels, while the excitation sounds as the first sound's, the second's or the two crossfaded with the weight, so a chord stays one chord at every point of the path while its timbre travels. `samplemorph.coordinates` reads a sound's pitch by Hermes's subharmonic summation over constant-Q frames, and the envelope route can glide the excitation from the first sound's pitch to the second's; `samplemorph.vocoders.pghi` makes the magnitude audible by phase gradient heap integration. Held to one sound's course through time, the route is a filter on that sound: its whole path is the cepstral coefficients of the ratio between the two envelopes, which `samplemorph.envelope.response` measures and `samplemorph.envelope.filtering` applies at any weight, so a caller reads a pair once and moves its own weight. `samplemorph.routes` builds the route a selection names (`morph.yaml`: the excitation, the timeline, the envelope drawing and the glide; `morph-filter.yaml` beside it, the drawing a filter is read under) and names it for a status. `samplemorph.service` is the morph inference process (`samplelibrary morph serve`), which renders any point between two cataloged samples on request, reading a sample found in a sample directory from the file the request names inside the directories its own configuration lists, and is what the web API dials for a morph; it also hands over the filter between two samples, which holds for every point between them, so a caller rendering its own audio asks once per pair. `morph response` writes that filter from the shell. Depends on `samplecore` only. | `samplecore`, `librosa`, `pghipy`, `fastapi`, `uvicorn`, `pyyaml` (the `morph` extra) |
 | `sampledescriptor` | The learned descriptor the cloud embeds with: a log-frequency canonicalizer (`sampledescriptor.geometry` lays the grid over the analysis `samplemorph` reads) that turns a sample into a fixed-size sound image on a frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a `Descriptor` (`sampledescriptor.descriptors`) that reads the grid as one vector: distilled from the pretrained listening model, taught by retuned views that a retuning changes nothing, and by the hand labels what the listener calls alike. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner. Training (`sampledescriptor.training`) runs under a run tracker and reads a grid cache canonicalized once under the library root; `sampledescriptor.commands` holds the three shell commands (`cache-grids`, `train`, `embed`), and the ones that train import the trainer only when they run. Depends on `samplecore` and on the analysis kernels of `samplemorph`. | `samplecore`, `samplemorph`, `torch`, `lightning`, `threadpoolctl`, `mlflow`, `scikit-learn`, `librosa` (the `descriptor` extra) |
-| `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples, and the morph routes, which relay renders from the inference process over HTTP. `create_app` takes a `ServiceRole`: a reader, what `samplelibrary serve` and a deployed site run, serves no route that writes, and a curator, what the SampleLibrary app runs, also serves the label write, to the person at the computer it runs on alone (`sampleserver.local_person`). `GET /api/curation/access` tells a page which of the two it talks to. Every route is served under `API_PREFIX` (`/api`), which keeps the whole API inside one path segment and leaves every other path to the single-page application's own routes. Every catalog read opens its Postgres connection read-only, so a bug in a route handler cannot corrupt the library; the curation routes hold the one writable connection, and it reaches only the `curation` schema's own tables. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn`, `httpx` (the `server` extra) |
+| `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples, and the morph routes, which relay renders from the inference process over HTTP. `create_app` takes a `ServiceRole`: a reader, what `samplelibrary serve` and a deployed site run, serves no route that writes, and a curator, what the SampleLibrary app runs, also serves the label write, to the person at the computer it runs on alone (`sampleserver.local_person`). `GET /api/curation/access` tells a page which of the two it talks to. Every route is served under `API_PREFIX` (`/api`), which keeps the whole API inside one path segment and leaves every other path to the single-page application's own routes. The app connects as a service role (see [The three databases](#the-three-databases)): a reader may write nothing at all, and a curator may write labels and nothing else, which Postgres itself enforces. Every catalog read also opens its connection read-only, so a route handler reading the catalog writes nothing under either role. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn`, `httpx` (the `server` extra) |
 | `samplelibrary` | The `samplelibrary` command line: one parser naming every operation on the library, which hands the rest of a command line to the module owning that command and imports that module as the command runs, so listing the commands stays instant and each command needs its own package's extras alone. A global `--config` sets `SAMPLELIBRARY_CONFIG` and drops any exported `SAMPLELIBRARY_DATABASE_URL`, so the file it names supplies the database too, and every process a command starts inherits both -- uvicorn's workers and a pipeline's worker processes included. The dispatcher accepts a command's own arguments only after its name. It also holds the commands that belong to no pipeline: `setup` (the config file and the databases), `reset`, and `tracking uri` / `tracking ui`, and the sandbox's synthetic modules and sample pack (`samplelibrary.sandbox`). Every command ends with one of the statuses `samplecore.exit_status.ExitStatus` names: 0 once its work is committed, per-item failures included as warnings, 1 when something broke, 2 for a malformed command line, 3 for a request it refuses, and 4 for a process that outgrew its memory ceiling. `--memory-cap 16G` holds the command and everything it starts to a memory ceiling before it loads anything of its own (`samplelibrary.limits`): on Linux the process starts again inside a systemd user scope with swap closed off and reads the ceiling back from its own control group, on Windows it assigns itself to a job object of that name, and a system offering neither refuses a ceiling rather than running uncapped. `--memory-scope` names the scope, which is what another process finds a running step by. When `SAMPLELIBRARY_STEP_LOCK` names a lock, the dispatcher holds that Postgres advisory lock for the life of the command, which is how a pipeline recognizes a step still running. It also holds `samplelibrary.app`, the application a person runs without a terminal (see [The application](#the-application)). It sits over every other package. | every package above |
 
 ## Boundaries the import-linter contracts enforce
@@ -201,9 +201,9 @@ sample hash, which is that table's primary key — so the join cannot fan out an
 consistent with the page it describes. `favorites_only` and `minimum_rating` therefore narrow the
 whole catalog rather than one loaded window, which is what makes a collection scattered across a
 hundred thousand samples browsable as a collection. Since every listing request now reaches that
-schema, `create_app`'s startup prepares it once: the read-only connection every route uses can create
-nothing, so a database the offline pipelines have never written to would otherwise fail to serve a
-listing at all.
+schema, the catalog's owner prepares it before any API serves the catalog -- `samplelibrary setup
+database`, any pipeline run, or the SampleLibrary app opening its library -- since the roles the API
+connects as may create nothing.
 
 Every one of these decisions is made where a sample is met: the samples listing edits the label
 behind a sample's category, a rating and a favorite mark in the row itself, and the detail panel
@@ -647,25 +647,27 @@ embedding has yet to run is laid out from its own listing first, one cluster per
 names -- the hand label, else the category, else the first word of its name -- which keeps
 every point on a real hash. The plugin runs under `vite` serve alone.
 
-`samplelibrary serve` loads the configuration and opens the catalog once before uvicorn starts, so a
-missing or incomplete config ends the start with one message and exit status 3, a database that
-cannot be reached within ten seconds with one message and exit status 1, and
-the catalog's schema is prepared once, under the schema lock, before any worker runs. Each worker's
-own start prepares the curation schema under the same lock (`connect_for_curation`), so workers
-starting together take turns.
+`samplelibrary serve` loads the configuration and logs in as the reader role `server_database_url`
+names before uvicorn starts, checking it with `check_service_role`. A missing or incomplete config,
+a config naming no reader, a role that may change anything, and a catalog nobody has prepared each
+end the start with one message and exit status 3, and a database that cannot be reached within ten
+seconds with one message and exit status 1. Every worker connects as that reader, and creates
+nothing.
 
 `docker-compose.yml` adds a `postgres` service alongside it (a named volume for persistence), as a
 worked example of the two running together. Its `sampleserver` mounts `LIBRARY_ROOT` (default
 `./library`) at `/library` and `CONFIG_PATH` (default `docker/config.toml`, whose paths are the
-container's own) at `/app/config.toml`, both read-only, supplies the database through
-`SAMPLELIBRARY_DATABASE_URL`, and publishes the app on `127.0.0.1:8000`. A path either names that is
+container's own) at `/app/config.toml`, both read-only, connects as the reader through
+`SAMPLELIBRARY_SERVER_DATABASE_URL`, whose password it reads from `SAMPLELIBRARY_READER_PASSWORD` in
+`.env`, and publishes the app on `127.0.0.1:8000`. `samplelibrary setup database`, run once from the
+host with a config naming that role, creates it. A path either names that is
 not there fails the start rather than mounting an empty directory. Its `extra_hosts` entry lets the
 container reach a renderer running on the host at `http://host.docker.internal:8010`, the commented
 `[inference]` table in `docker/config.toml`. A real deployment points
-`database_url`/`SAMPLELIBRARY_DATABASE_URL` at whatever Postgres instance it actually runs against,
-container or otherwise. `just docker-run <library> <config>` runs the image alone against a config
-written for the container, which names its `database_url` and, for morphs, an `[inference] url` the
-container reaches. On Linux the recipe shares the host's network and binds `127.0.0.1:8000`, so
+`server_database_url`/`SAMPLELIBRARY_SERVER_DATABASE_URL` at whatever Postgres instance it actually
+runs against, container or otherwise. `just docker-run <library> <config>` runs the image alone against a config
+written for the container, which names its `server_database_url` and, for morphs, an `[inference]
+url` the container reaches. On Linux the recipe shares the host's network and binds `127.0.0.1:8000`, so
 `localhost` in that config means the host itself; on macOS and Windows it publishes
 `127.0.0.1:8000`, and Docker Desktop names the host `host.docker.internal`. The recipe reads both
 paths from the directory it was run in, and mounts them so that a path that is not there fails the
@@ -673,8 +675,8 @@ run. Local development runs
 against a Postgres installed on the machine directly, which the test suite and both library
 databases share. The container runs
 `samplelibrary serve` with several worker processes (`WEB_CONCURRENCY`), where `just serve` starts the one
-reloading process development uses: each worker holds a small pool of read-only Postgres
-connections, checked out per request (`sampleserver.dependencies.get_connection`), which Postgres's
+reloading process development uses: each worker holds a small pool of Postgres connections as the
+reader, checked out per request (`sampleserver.dependencies.get_connection`), which Postgres's
 own concurrent-connection handling supports natively, so multiple people browsing the library
 through one deployed server works correctly with no shared state between workers. The library's data
 directory and a `config.toml` pointing at its in-container path are supplied at `docker run` time as

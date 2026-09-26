@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
+import sys
 from pathlib import Path
 from typing import Final
 
 import uvicorn
 
 from samplecore.cli_parsing import command_parser
-from samplecore.cli_support import bootstrap_cli, open_catalog_connection, port_number, positive_integer
+from samplecore.cli_support import bootstrap_cli, open_catalog_reader, port_number, positive_integer
+from samplecore.config import LibraryConfig, ServiceRoleUnconfiguredError
+from samplecore.exit_status import ExitStatus
+from samplecore.models.service_role import ServiceRole
 from samplecore.paths import PACKAGES_DIRECTORY
+from samplecore.storage.cluster.embedded.state import ManagedClusterMissingError
+from samplecore.storage.service_roles import ServiceRoleRefusedError, check_service_role
 from sampleserver.frontend import (
     FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE,
     built_frontend,
@@ -21,21 +28,24 @@ DEFAULT_HOST: Final[str] = "127.0.0.1"
 DEFAULT_PORT: Final[int] = 8000
 WORKER_COUNT_ENVIRONMENT_VARIABLE: Final[str] = "WEB_CONCURRENCY"
 
+_logger = logging.getLogger(__name__)
+
 
 def main(argv: list[str], *, prog: str) -> None:
-    """Serve the API, and the built frontend when named, over HTTP once the configuration loads and the catalog answers.
+    """Serve the API read-only, and the built frontend when named, once the catalog answers to a reader's role.
 
     uvicorn imports the app by its path in every process it starts, so each worker, and each
     restart under `--reload`, reads the configuration afresh and finds the frontend through the
-    environment. Checking the configuration and the catalog here first stops a broken start before
-    any worker runs, and prepares the catalog's schema once, under its lock.
+    environment. Checking the reader's role here first stops a start before any worker runs, when the
+    role is missing, may change anything, or finds no catalog prepared.
+
+    Raises:
+        SystemExit: the config names no reader, or the role it names is refused.
     """
     arguments = _parse_arguments(argv, prog=prog)
     if arguments.frontend is not None:
         os.environ[FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE] = str(arguments.frontend)
-    config = bootstrap_cli()
-    with open_catalog_connection(config.catalog_url()):
-        pass
+    _admit_reader(bootstrap_cli())
 
     uvicorn.run(
         APPLICATION_PATH,
@@ -45,6 +55,28 @@ def main(argv: list[str], *, prog: str) -> None:
         reload_dirs=[str(PACKAGES_DIRECTORY)] if arguments.reload else None,
         workers=arguments.workers,
     )
+
+
+def _admit_reader(config: LibraryConfig) -> None:
+    """Insist that the role the served API connects as reads the catalog and may change nothing.
+
+    Raises:
+        SystemExit: the config names no reader, or the role it names is refused.
+    """
+    try:
+        reader_url = config.service_url(ServiceRole.READER)
+    except (ServiceRoleUnconfiguredError, ManagedClusterMissingError) as error:
+        _logger.error("%s", error)
+        sys.exit(ExitStatus.REFUSED)
+    with open_catalog_reader(reader_url) as connection:
+        try:
+            check_service_role(connection, ServiceRole.READER)
+        except ServiceRoleRefusedError as error:
+            _logger.error(
+                "%s Name a role that reads alone in server_database_url, then run `samplelibrary setup database`.",
+                error,
+            )
+            sys.exit(ExitStatus.REFUSED)
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:

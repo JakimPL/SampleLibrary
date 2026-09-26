@@ -17,7 +17,6 @@ from samplecore.storage.database import (
     chunks,
     claim_named_lock,
     connect,
-    connect_for_curation,
     create_pooled_engine,
     create_schema,
     module,
@@ -71,35 +70,6 @@ def test_a_read_only_connection_never_creates_the_schema(fresh_database_url: str
 
 def test_hand_labels_get_a_schema_of_their_own(connection: Connection) -> None:
     assert "sample_annotation" in set(inspect(connection).get_table_names(schema=CURATION_SCHEMA))
-
-
-def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alone(
-    fresh_database_url: str,
-) -> None:
-    """The served application owns the labels it records; the offline pipelines own the catalog."""
-    connection = connect_for_curation(fresh_database_url)
-    try:
-        catalog_tables = set(inspect(connection).get_table_names())
-        curation_tables = set(inspect(connection).get_table_names(schema=CURATION_SCHEMA))
-    finally:
-        connection.close()
-
-    assert catalog_tables == set()
-    assert curation_tables == {"sample_annotation", "tag_rank", "annotation_import", "annotation_history"}
-
-
-def test_a_curation_connection_waits_for_the_schema_claim(connection: Connection, _database_url: str) -> None:
-    """Workers starting together each prepare the curation schema, one after another.
-
-    The other run asks with a short lock timeout, so the test reports the wait instead of blocking on it.
-    """
-    impatient_url = make_url(_database_url).update_query_dict({"options": "-c lock_timeout=200"})
-    connection.execute(select(func.pg_advisory_xact_lock(SCHEMA_LOCK_KEY)))
-    try:
-        with pytest.raises(DBAPIError, match="lock timeout"):
-            connect_for_curation(impatient_url.render_as_string(hide_password=False))
-    finally:
-        connection.rollback()
 
 
 def test_creating_the_schema_holds_a_claim_no_other_run_can_take(connection: Connection, _database_url: str) -> None:

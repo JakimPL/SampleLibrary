@@ -155,6 +155,9 @@ just serve-inference   # the morph renderer
 just frontend-dev      # the web app; open http://localhost:5173
 ```
 
+`just serve` serves the library read-only, as a published copy does, connecting as the role
+`server_database_url` names; labels are changed in `just app` or, on the sandbox, `just app-dev`.
+
 | Service | Address | To change it |
 |---|---|---|
 | API | `127.0.0.1:8000` | `uv run samplelibrary serve --port <port>` |
@@ -214,7 +217,9 @@ it at another file, as `--filter-selection` does for the filter. The renderer ne
 `just docker-run <library> <config>` runs it over a library folder and a config written for the
 container, both read from where you run the recipe. `docker compose up` runs the image beside a
 PostgreSQL container, with `LIBRARY_ROOT` and `CONFIG_PATH` naming the library folder and the config
-it mounts. The architecture's [Deployment](architecture.md#deployment) section describes what
+it mounts. The image serves the library read-only, connecting as the reader role: run `just
+database` once with a config naming `server_database_url` on that server, and put the role's
+password in `.env` as `SAMPLELIBRARY_READER_PASSWORD`. The architecture's [Deployment](architecture.md#deployment) section describes what
 the image holds and what to mount.
 
 ## Recipes

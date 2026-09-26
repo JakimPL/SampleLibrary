@@ -485,20 +485,6 @@ def connect(database_url: str, *, read_only: bool = False) -> Connection:
     return connection
 
 
-def connect_for_curation(database_url: str) -> Connection:
-    """Open a writable connection for hand-curated work, preparing only the curation schema.
-
-    The served application reads the catalog read-only and writes nothing but a person's own
-    labels, so this prepares the one schema it owns and leaves bringing a catalog into existence to
-    the pipelines that build one. The caller owns the transaction and commits its own work.
-    """
-    connection = _open(database_url)
-    claim_schema_creation(connection)
-    create_curation_schema(connection)
-    connection.commit()
-    return connection
-
-
 def _open(database_url: str) -> Connection:
     return create_engine(
         database_url, poolclass=NullPool, connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS}

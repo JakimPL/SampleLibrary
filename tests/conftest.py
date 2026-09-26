@@ -17,6 +17,8 @@ from threadpoolctl import threadpool_limits
 from samplecore.config import ConfigurationError, load_config
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.sample_files.decoding import decode_sample_file
+from samplecore.storage.cluster.embedded import state as cluster_state
+from samplecore.storage.cluster.embedded.server import EmbeddedCluster
 from samplecore.storage.curation import CURATION_SCHEMA, curation_metadata
 from samplecore.storage.database import connect, metadata
 from samplecore.storage.repositories.sample import PostgresSampleRepository
@@ -28,6 +30,10 @@ DEFAULT_SERVER_URL: Final[str] = f"postgresql+psycopg://samplelibrary:samplelibr
 VANISHED_SAMPLE_FRAMES: Final[int] = 2048
 VANISHED_SAMPLE_RATE: Final[int] = 44100
 SINGLE_THREAD: Final[int] = 1
+WORKER_ENVIRONMENT_VARIABLE: Final[str] = "PYTEST_XDIST_WORKER"
+WORKER_PREFIX: Final[str] = "gw"
+FIRST_WORKER: Final[str] = "gw0"
+WORKER_PORT_BASE: Final[int] = 25432
 _EMPTY_CURATION_TABLES: Final = text(
     f"TRUNCATE {', '.join(f'{CURATION_SCHEMA}.{table.name}' for table in curation_metadata.sorted_tables)} RESTART IDENTITY"
 )
@@ -173,3 +179,38 @@ def vanished_sample_file(connection: Connection, tmp_path: Path) -> SampleFile:
     connection.commit()
     path.unlink()
     return sample_file
+
+
+def _worker_cluster_port() -> int:
+    """A port of this test worker's own for the clusters it starts, below the range systems hand out on their own.
+
+    Clusters that workers start side by side each listen on theirs, and the database connections
+    the tests open never take it between a cluster's port check and its start.
+    """
+    worker = int(os.environ.get(WORKER_ENVIRONMENT_VARIABLE, FIRST_WORKER).removeprefix(WORKER_PREFIX))
+    return WORKER_PORT_BASE + worker
+
+
+@pytest.fixture
+def worker_cluster_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Have every library's own server a test starts prefer this worker's port."""
+    monkeypatch.setattr(cluster_state, "PREFERRED_MANAGED_PORT", _worker_cluster_port())
+
+
+@pytest.fixture(scope="module")
+def module_cluster_root(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    """A library root whose own Postgres server runs for one test module, its owner a superuser.
+
+    The service roles a served catalog API connects as are created by a superuser, which the
+    library's own server has and a shared test server need not, so the tests of those roles run
+    here. The server prefers a port of the test worker's own, as `_worker_cluster_port` explains.
+    """
+    root = tmp_path_factory.mktemp("library")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(cluster_state, "PREFERRED_MANAGED_PORT", _worker_cluster_port())
+        cluster = EmbeddedCluster(root)
+        cluster.ensure_running()
+    try:
+        yield root
+    finally:
+        cluster.stop()

@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
 from samplecore.models.service_role import ServiceRole
-from samplecore.storage.database import connect_for_curation, create_pooled_engine
+from samplecore.storage.database import create_pooled_engine
 from sampleserver.frontend import FrontendMount
 from sampleserver.inference_client import build_inference_client
 from sampleserver.response_cache import RevisionedJsonCache
@@ -56,15 +56,13 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-        """Prepare the curation schema, the catalog's pool and the inference client before the first request.
+        """Open the catalog's pool and the inference client before the first request.
 
-        The samples listing reads a sample's hand annotation as part of its own query, and the
-        read-only connection every route uses can create nothing. Preparing the schema once at
-        startup is what lets a database the offline pipelines have never written to still serve a
-        listing. The pool and the inference client live as long as the app, so their connections
-        are reused across requests, and both are closed when the app stops.
+        The app creates nothing: its role may read and, for a curator, write labels, so the schema
+        it reads is prepared beforehand by the catalog's owner. The pool and the inference client
+        live as long as the app, so their connections are reused across requests, and both are
+        closed when the app stops.
         """
-        connect_for_curation(application.state.database_url).close()
         application.state.engine = create_pooled_engine(application.state.database_url, pool_size=READ_POOL_SIZE)
         application.state.inference_client = build_inference_client(application.state.inference_url)
         try:

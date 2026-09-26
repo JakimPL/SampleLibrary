@@ -9,7 +9,9 @@ from sqlalchemy.exc import OperationalError
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplecore.exit_status import ExitStatus
+from samplecore.models.service_role import ServiceRole
 from samplecore.paths import PACKAGES_DIRECTORY
+from samplecore.storage.service_roles import ServiceRoleRefusedError
 from sampleserver import cli
 from sampleserver.frontend import (
     FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE,
@@ -34,13 +36,15 @@ class RecordedRun:
         return self.calls[0]
 
 
-def _write_config(tmp_path: Path, *, database_url: str) -> Path:
+def _write_config(tmp_path: Path, *, database_url: str, server_database_url: str | None = None) -> Path:
     config_path = tmp_path / "config.toml"
+    reader = f'server_database_url = "{server_database_url}"\n' if server_database_url is not None else ""
     config_path.write_text(
         "[library]\n"
         f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
         f'library_root = "{(tmp_path / "library").as_posix()}"\n'
-        f'database_url = "{database_url}"\n',
+        f'database_url = "{database_url}"\n'
+        f"{reader}",
         encoding="utf-8",
     )
     return config_path
@@ -54,7 +58,7 @@ def recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RecordedRun:
         str(_write_config(tmp_path, database_url="postgresql+psycopg://unused@localhost/unused")),
     )
     monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
-    monkeypatch.setattr(cli, "open_catalog_connection", lambda database_url: nullcontext())
+    monkeypatch.setattr(cli, "_admit_reader", lambda config: None)
     run = RecordedRun()
     monkeypatch.setattr(cli.uvicorn, "run", lambda application_path, **options: run.calls.append(options))
     return run
@@ -132,7 +136,9 @@ def test_a_missing_configuration_ends_the_start_before_uvicorn(tmp_path: Path, m
 
 
 def test_an_unreachable_catalog_stops_the_start_before_uvicorn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    config_path = _write_config(tmp_path, database_url=UNREACHABLE_DATABASE_URL)
+    config_path = _write_config(
+        tmp_path, database_url=UNREACHABLE_DATABASE_URL, server_database_url=UNREACHABLE_DATABASE_URL
+    )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
     monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
     starts: list[str] = []
@@ -141,6 +147,47 @@ def test_an_unreachable_catalog_stops_the_start_before_uvicorn(tmp_path: Path, m
     with pytest.raises(OperationalError):
         cli.main([], prog=PROGRAM)
 
+    assert not starts
+
+
+def test_a_config_naming_no_reader_ends_the_start_before_uvicorn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(
+        CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, database_url=UNREACHABLE_DATABASE_URL))
+    )
+    monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
+    starts: list[str] = []
+    monkeypatch.setattr(cli.uvicorn, "run", lambda application_path, **options: starts.append(application_path))
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main([], prog=PROGRAM)
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert not starts
+
+
+def test_a_reader_that_may_change_the_catalog_ends_the_start_before_uvicorn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config_path = _write_config(
+        tmp_path, database_url=UNREACHABLE_DATABASE_URL, server_database_url=UNREACHABLE_DATABASE_URL
+    )
+    monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
+    monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
+    monkeypatch.setattr(cli, "open_catalog_reader", lambda database_url: nullcontext())
+
+    def refuse(connection: object, service: ServiceRole) -> None:
+        raise ServiceRoleRefusedError(service, "samplelibrary", ("it owns table public.sample",))
+
+    monkeypatch.setattr(cli, "check_service_role", refuse)
+    starts: list[str] = []
+    monkeypatch.setattr(cli.uvicorn, "run", lambda application_path, **options: starts.append(application_path))
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main([], prog=PROGRAM)
+
+    assert raised.value.code == ExitStatus.REFUSED
     assert not starts
 
 

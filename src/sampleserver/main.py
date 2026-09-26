@@ -8,7 +8,7 @@ from sampleserver.frontend import frontend_directory_from_environment
 _config = load_config()
 
 app = create_app(
-    _config.catalog_url(),
+    _config.service_url(ServiceRole.READER),
     _config.library_root,
     _config.inference.url,
     role=ServiceRole.READER,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import socket
 import stat
 import sys
@@ -14,7 +13,6 @@ import pytest
 from sqlalchemy import inspect
 
 from samplecore.models.service_role import ServiceRole
-from samplecore.storage.cluster.embedded import state as cluster_state
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster
 from samplecore.storage.cluster.embedded.state import (
     PRIVATE_FILE_MODE,
@@ -31,22 +29,9 @@ from samplecore.storage.cluster.embedded.state import (
 from samplecore.storage.curation import CURATION_SCHEMA
 from samplecore.storage.database import connect
 
-WORKER_ENVIRONMENT_VARIABLE: Final[str] = "PYTEST_XDIST_WORKER"
-WORKER_PREFIX: Final[str] = "gw"
-FIRST_WORKER: Final[str] = "gw0"
-WORKER_PORT_BASE: Final[int] = 25432
 LOOPBACK: Final[str] = "127.0.0.1"
 
-
-@pytest.fixture(autouse=True)
-def worker_port(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Give each test worker a preferred port of its own, so clusters that workers start side by side each listen on theirs.
-
-    The ports sit below the range Linux, macOS and Windows hand out to outgoing connections, which
-    keeps the database connections the tests open off them between a cluster's port check and its start.
-    """
-    worker = int(os.environ.get(WORKER_ENVIRONMENT_VARIABLE, FIRST_WORKER).removeprefix(WORKER_PREFIX))
-    monkeypatch.setattr(cluster_state, "PREFERRED_MANAGED_PORT", WORKER_PORT_BASE + worker)
+pytestmark = pytest.mark.usefixtures("worker_cluster_port")
 
 
 @pytest.fixture
