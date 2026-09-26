@@ -527,6 +527,11 @@ the built frontend. The `Launcher` owns what the library needs:
   27440 to 27449, then any port the system assigns, or exactly the port `--port` names. The server
   listens on 127.0.0.1 alone and reads no forwarding headers. `--quit` ends the running one the same
   way and starts nothing.
+- **One application per library.** The launcher holds a second lock, in the instances folder's
+  `libraries/`, named by a hash of the library root, from the moment it opens a library until the
+  library's managed database has stopped. An application under another config naming the same
+  library, such as a checkout's beside the installed one, shows it as failed, so the one quitting
+  never stops the database under the other.
 
 The packaged application is a PyApp executable (`just package`, `just executable`): it embeds the
 samplelibrary wheel, which carries the built frontend, with the `app` extra pinned to the lock and

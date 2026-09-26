@@ -14,8 +14,10 @@ from typing import Final
 import httpx
 import pytest
 
+from samplelibrary.app.instance import place
 from samplelibrary.app.instance.place import InstancePlace, instance_place
 from samplelibrary.app.instance.record import InstanceRecord, read_record
+from samplelibrary.paths import instances_directory
 
 START_SECONDS: Final[float] = 60.0
 TAKEOVER_SECONDS: Final[float] = 120.0
@@ -59,6 +61,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[AppWorld]
     config_path = tmp_path / "settings" / "config.toml"
     monkeypatch.setenv("SAMPLELIBRARY_CONFIG", str(config_path))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setattr(place, "instances_directory", instances_directory)
     with socket.create_server(("127.0.0.1", 0)) as probe:
         port: int = probe.getsockname()[1]
     yield AppWorld(environment=dict(os.environ), place=instance_place(config_path), port=port)

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from samplelibrary.app.instance import place
-from samplelibrary.app.instance.place import config_key, instance_place
+from samplelibrary.app.instance.place import instance_place, path_key
 
 
 def test_one_config_file_keeps_one_key_however_its_path_is_spelled(
@@ -14,8 +14,8 @@ def test_one_config_file_keeps_one_key_however_its_path_is_spelled(
     config_path = tmp_path / "settings" / "config.toml"
     monkeypatch.chdir(tmp_path)
 
-    assert config_key(Path("settings") / "config.toml") == config_key(config_path)
-    assert config_key(config_path.parent / ".." / "settings" / "config.toml") == config_key(config_path)
+    assert path_key(Path("settings") / "config.toml") == path_key(config_path)
+    assert path_key(config_path.parent / ".." / "settings" / "config.toml") == path_key(config_path)
 
 
 def test_two_config_files_get_places_of_their_own(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

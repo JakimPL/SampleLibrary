@@ -12,6 +12,8 @@ PACKAGED_FRONTEND_DIRECTORY: Final[Path] = PACKAGE_DIRECTORY / "app" / "frontend
 INSTANCES_DIRECTORY_NAME: Final[str] = "instances"
 INSTANCE_LOCK_NAME: Final[str] = "instance.lock"
 INSTANCE_RECORD_NAME: Final[str] = "instance.json"
+LIBRARY_LOCKS_DIRECTORY_NAME: Final[str] = "libraries"
+LIBRARY_LOCK_SUFFIX: Final[str] = ".lock"
 
 
 def application_log_path(key: str) -> Path:

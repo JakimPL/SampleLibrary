@@ -9,6 +9,8 @@ from typing import Final
 from samplelibrary.paths import (
     INSTANCE_LOCK_NAME,
     INSTANCE_RECORD_NAME,
+    LIBRARY_LOCK_SUFFIX,
+    LIBRARY_LOCKS_DIRECTORY_NAME,
     application_log_path,
     instances_directory,
     previous_application_log_path,
@@ -39,22 +41,27 @@ class InstancePlace:
         return self.directory / INSTANCE_RECORD_NAME
 
 
-def config_key(config_path: Path) -> str:
-    """A short name for a config file, the same for every spelling of its path.
+def path_key(path: Path) -> str:
+    """A short name for a file or folder, the same for every spelling of its path.
 
     Windows compares paths regardless of case, so the key reads the path the same way there.
     """
-    resolved = str(config_path.resolve())
+    resolved = str(path.resolve())
     if sys.platform == "win32":
         resolved = resolved.casefold()
     return hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:KEY_LENGTH]
 
 
 def instance_place(config_path: Path) -> InstancePlace:
-    key = config_key(config_path)
+    key = path_key(config_path)
     return InstancePlace(
         key=key,
         directory=instances_directory() / key,
         log=application_log_path(key),
         previous_log=previous_application_log_path(key),
     )
+
+
+def library_lock_path(library_root: Path) -> Path:
+    """The lock an application holds while a library is open under it, whichever config names the library."""
+    return instances_directory() / LIBRARY_LOCKS_DIRECTORY_NAME / f"{path_key(library_root)}{LIBRARY_LOCK_SUFFIX}"

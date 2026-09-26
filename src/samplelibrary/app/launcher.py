@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import AsyncExitStack
+from dataclasses import dataclass
 from enum import StrEnum, unique
 from pathlib import Path
 from typing import Final
@@ -20,6 +21,8 @@ from samplecore.ports import PortUnavailableError, free_port
 from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster, EmbeddedClusterError
 from samplecore.storage.database import connect
+from samplelibrary.app.instance.lock import HeldLock, LockUnavailableError, try_lock
+from samplelibrary.app.instance.place import library_lock_path
 from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView
 from samplelibrary.app.processes import ChildProcess, probe_build_device
 from samplelibrary.pipeline.devices import BuildDevice
@@ -30,12 +33,20 @@ RENDERER_LOG_NAME: Final[str] = "renderer.log"
 RENDERER_NAME: Final[str] = "morph renderer"
 RENDERER_HOST_OPTION: Final[str] = "--host"
 RENDERER_PORT_OPTION: Final[str] = "--port"
+
+
+class LibraryInUseError(Exception):
+    """Raised when another application, run under another config, holds the library open."""
+
+
 ACTIVATION_FAILURES: Final[tuple[type[Exception], ...]] = (
     ConfigurationError,
     EmbeddedClusterError,
     PostgresBinariesUnavailableError,
     PortUnavailableError,
     OperationalError,
+    LibraryInUseError,
+    LockUnavailableError,
 )
 
 _logger = logging.getLogger(__name__)
@@ -78,6 +89,14 @@ class SetupState(BaseModel):
     build: JobView | None
 
 
+@dataclass(frozen=True)
+class HeldLibrary:
+    """The library an application holds open, and the lock that keeps other applications from it."""
+
+    root: Path
+    lock: HeldLock
+
+
 class Launcher:
     """The application's own process: it opens the library its config file names and runs what the library needs.
 
@@ -104,6 +123,7 @@ class Launcher:
         self._catalog: FastAPI | None = None
         self._catalog_stack = AsyncExitStack()
         self._cluster: EmbeddedCluster | None = None
+        self._held_library: HeldLibrary | None = None
         self._renderer: ChildProcess | None = None
         self._activation: asyncio.Task[None] | None = None
         self._problem: str | None = None
@@ -196,6 +216,9 @@ class Launcher:
             if self._cluster is not None:
                 await run_in_threadpool(self._cluster.stop)
                 self._cluster = None
+            if self._held_library is not None:
+                self._held_library.lock.release()
+                self._held_library = None
 
     async def _probe_build_device(self) -> None:
         self._build_device = await run_in_threadpool(
@@ -242,20 +265,43 @@ class Launcher:
         _logger.info("The library at %s is open.", config.library_root)
 
     def _prepare_database(self, config: LibraryConfig) -> None:
-        """Start the library's managed database, stopping the one of a library the application held before.
+        """Hold the library and start its managed database, stopping the one of a library held before and letting it go.
 
         The catalog's tables are then brought into existence, so a library opened on an empty
         database of a person's own serves its pages at once, empty until the first scan.
         """
+        previous = self._hold_library(config.library_root)
         if self._cluster is not None and (
             not config.manages_database or self._cluster.directory.parent != config.library_root
         ):
             self._cluster.stop()
             self._cluster = None
+        if previous is not None:
+            previous.lock.release()
         if config.manages_database:
             self._cluster = self._cluster or EmbeddedCluster(config.library_root)
             self._cluster.ensure_running()
         connect(config.catalog_url()).close()
+
+    def _hold_library(self, library_root: Path) -> HeldLibrary | None:
+        """Take the lock of ``library_root``, and return the library held before, still locked.
+
+        One application at a time holds a library, whichever config names it, so an application run
+        from a source checkout and the installed one never share a managed database, where the one
+        quitting would stop it under the other. The library held before keeps its lock until its
+        database has stopped.
+
+        Raises:
+            LibraryInUseError: another application holds the library.
+        """
+        root = library_root.resolve()
+        if self._held_library is not None and self._held_library.root == root:
+            return None
+        lock = try_lock(library_lock_path(root))
+        if lock is None:
+            raise LibraryInUseError("Another SampleLibrary has this library open. Quit that one, then try again.")
+        previous, self._held_library = self._held_library, HeldLibrary(root=root, lock=lock)
+        return previous
 
     async def _close_library(self) -> None:
         if self._renderer is not None:

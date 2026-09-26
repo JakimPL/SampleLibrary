@@ -140,6 +140,17 @@ def test_a_renderer_whose_port_is_taken_listens_on_another_one(config_path: Path
     assert arguments_path.read_text(encoding="utf-8") == f"--host 127.0.0.1 --port {renderer_url.port}"
 
 
+def test_a_library_another_application_holds_open_stays_with_it(config_path: Path) -> None:
+    for first in _client(config_path, device_command=REPORTED_DEVICE):
+        assert _wait_until_settled(first)["status"] == LibraryStatus.READY
+        for second in _client(config_path, device_command=REPORTED_DEVICE):
+            state = _wait_until_settled(second)
+
+            assert state["status"] == LibraryStatus.FAILED
+            assert state["problem"] == "Another SampleLibrary has this library open. Quit that one, then try again."
+        assert first.get("/api/stats").status_code == 200
+
+
 def _build_device(client: TestClient) -> dict[str, object]:
     deadline = time.monotonic() + OPENING_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
