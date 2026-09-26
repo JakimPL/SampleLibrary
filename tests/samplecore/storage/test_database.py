@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import time
-import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import Connection, create_engine, func, inspect, select, text
+from sqlalchemy import Connection, func, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
@@ -37,29 +36,6 @@ EXPECTED_TABLES = frozenset(
         "sample_category",
     }
 )
-
-
-@pytest.fixture
-def fresh_database_url(_database_url: str) -> Iterator[str]:
-    """A brand-new, empty database on the shared test server, with no schema created yet.
-
-    The shared ``connection`` fixture's database always already has its schema in place (only its
-    rows are emptied between tests), so it cannot exercise ``connect()``'s own first-use schema
-    creation -- this creates and drops a genuinely fresh database on the same server for exactly
-    that. ``CREATE DATABASE``/``DROP DATABASE`` cannot run inside a transaction block, hence the
-    ``AUTOCOMMIT`` isolation level.
-    """
-    admin_url = make_url(_database_url)
-    database_name = f"fresh_{uuid.uuid4().hex}"
-    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
-    with admin_engine.connect() as admin_connection:
-        admin_connection.execute(text(f'CREATE DATABASE "{database_name}"'))
-        try:
-            # str() on a URL renders its password as "***"; the yielded URL has to carry the real one.
-            yield admin_url.set(database=database_name).render_as_string(hide_password=False)
-        finally:
-            admin_connection.execute(text(f'DROP DATABASE "{database_name}" WITH (FORCE)'))
-    admin_engine.dispose()
 
 
 def test_create_schema_creates_every_expected_table(connection: Connection) -> None:
@@ -109,7 +85,7 @@ def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alo
         connection.close()
 
     assert catalog_tables == set()
-    assert curation_tables == {"sample_annotation", "tag_rank", "annotation_import"}
+    assert curation_tables == {"sample_annotation", "tag_rank", "annotation_import", "annotation_history"}
 
 
 def test_a_curation_connection_waits_for_the_schema_claim(connection: Connection, _database_url: str) -> None:

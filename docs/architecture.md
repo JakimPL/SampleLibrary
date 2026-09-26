@@ -215,6 +215,18 @@ the listing groups near-duplicates together, and the one sample otherwise. `useA
 the single path all of them write through, so every row, badge and panel showing that sample follows
 one write at once.
 
+Every change to an annotation is kept in `curation.annotation_history`, whichever process makes
+it: a row trigger on `sample_annotation` records the operation, the whole row before and after as
+JSONB, the transaction's moment and the login role. The trigger's function runs with its owner's
+rights (`SECURITY DEFINER`, with a pinned search path), so a role allowed to write annotations
+needs, and holds, no privilege on the history, and cannot edit or erase it. The history begins
+the moment its table is created, with a baseline entry for every annotation standing then.
+`samplelibrary annotations history` lists the latest entries, and `annotations restore --at
+<moment>` brings every annotation back to how it stood at that moment, a dry run until `--confirm`:
+it writes whole rows back from the history, anchors included, through the table, so the history
+records the restore too and restoring to the moment before it undoes it. A moment before the
+history begins is refused.
+
 `samplelibrary annotations export` writes every annotation to JSONL as the copy that outlives the
 database, and `import` merges a file back without clearing anything, in one transaction under the
 same lock; a file naming one sample on two lines is refused whole, naming the lines. `relink` leaves

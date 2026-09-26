@@ -7,6 +7,7 @@ import re
 import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Final
 
 from sqlalchemy import Connection
@@ -222,6 +223,19 @@ def non_negative_integer(raw_value: str) -> int:
 def port_number(raw_value: str) -> int:
     """An argparse type reading a TCP port."""
     return _bounded_integer(raw_value, minimum=MINIMUM_PORT, maximum=MAXIMUM_PORT)
+
+
+def moment(raw_value: str) -> datetime:
+    """An argparse type reading a moment in ISO 8601, a moment without a time zone read as this machine's local time.
+
+    Raises:
+        argparse.ArgumentTypeError: the value is no moment ISO 8601 spells.
+    """
+    try:
+        read = datetime.fromisoformat(raw_value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"{raw_value!r} is no moment, as in 2026-09-26 21:30") from error
+    return read if read.tzinfo is not None else read.astimezone()
 
 
 def _bounded_integer(raw_value: str, *, minimum: int, maximum: int | None) -> int:

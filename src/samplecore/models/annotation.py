@@ -18,6 +18,20 @@ LabelText = Annotated[str, AfterValidator(canonical_label)]
 
 
 @unique
+class HistoryOperation(StrEnum):
+    """What one entry of the label history records.
+
+    A baseline entry holds an annotation as it stood when the history began; the others follow the
+    row each write inserted, updated or deleted.
+    """
+
+    BASELINE = "baseline"
+    INSERT = "insert"
+    UPDATE = "update"
+    DELETE = "delete"
+
+
+@unique
 class AnnotationSource(StrEnum):
     """Whether an annotation was made for one sample or applied to a whole equivalence class."""
 

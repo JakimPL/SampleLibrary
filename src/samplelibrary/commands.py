@@ -181,7 +181,9 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
         name="notes", summary="Read the notes each module plays, and the rate each sample is heard at.", run=_notes
     ),
     Command(
-        name="annotations", summary="Move hand-made sample annotations in and out of the catalog.", run=_annotations
+        name="annotations",
+        summary="Move hand-made sample annotations in and out of the catalog, list their history, restore them.",
+        run=_annotations,
     ),
     CommandGroup(
         name="cloud",

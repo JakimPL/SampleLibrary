@@ -4,11 +4,14 @@ from collections.abc import Iterable
 from typing import Final
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
     Connection,
     DateTime,
+    Identity,
+    Index,
     Integer,
     MetaData,
     String,
@@ -18,11 +21,13 @@ from sqlalchemy import (
     func,
     insert,
     select,
+    text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.schema import CreateSchema
 
 from samplecore.labeling.labels import LEVEL_SEPARATOR, LabelPath, first_use_ranks, format_path
-from samplecore.models.annotation import AnnotationSource
+from samplecore.models.annotation import AnnotationSource, HistoryOperation
 from samplecore.models.scalars import MAXIMUM_RATING, MINIMUM_RATING
 from samplecore.storage.constraints import all_null_together, non_negative
 from samplecore.storage.types import USmallInt, UTinyInt
@@ -32,6 +37,12 @@ CURATION_SCHEMA: Final[str] = "curation"
 ANNOTATION_WRITE_LOCK_KEY: Final[int] = 4_120_559_871_306_442_117
 
 _ANNOTATION_SOURCE_VALUES: Final[tuple[str, ...]] = tuple(source.value for source in AnnotationSource)
+_HISTORY_OPERATION_VALUES: Final[tuple[str, ...]] = tuple(operation.value for operation in HistoryOperation)
+_OPERATIONS_WITHOUT_PREVIOUS_ROW: Final[tuple[str, ...]] = (
+    HistoryOperation.BASELINE.value,
+    HistoryOperation.INSERT.value,
+)
+ANNOTATION_HISTORY_TABLE: Final[str] = "annotation_history"
 MODULE_SLOT_ANCHOR_COLUMNS: Final[tuple[str, ...]] = (
     "module_hash",
     "module_filename",
@@ -106,6 +117,67 @@ annotation_import = Table(
     CheckConstraint(non_negative("annotation_count"), name="annotation_import_annotation_count_check"),
 )
 
+# Every change to an annotation, written by the trigger `_begin_annotation_history` installs rather
+# than by any writer, so a write through whatever connection lands here, and the one serving label
+# edits holds no privilege on this table at all. `previous` and `current` are the whole row before
+# and after, which is what a restore writes back.
+annotation_history = Table(
+    ANNOTATION_HISTORY_TABLE,
+    curation_metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
+    Column("sample_hash", String(64), nullable=False),
+    Column("operation", String, nullable=False),
+    Column("recorded_at", DateTime(timezone=True), nullable=False, server_default=func.transaction_timestamp()),
+    Column("role", String, nullable=False, server_default=text("session_user")),
+    Column("previous", JSONB, nullable=True),
+    Column("current", JSONB, nullable=True),
+    CheckConstraint(column("operation").in_(_HISTORY_OPERATION_VALUES), name="annotation_history_operation_check"),
+    CheckConstraint(
+        column("operation").in_(_OPERATIONS_WITHOUT_PREVIOUS_ROW) == column("previous").is_(None),
+        name="annotation_history_previous_check",
+    ),
+    CheckConstraint(
+        (column("operation") == HistoryOperation.DELETE.value) == column("current").is_(None),
+        name="annotation_history_current_check",
+    ),
+    Index("annotation_history_sample_hash_id_index", "sample_hash", "id"),
+    Index("annotation_history_recorded_at_index", "recorded_at"),
+)
+
+# The trigger function runs with its owner's rights, which are the ones that write the history,
+# and a pinned search path, so no role invoking it can reach anything else through it.
+_RECORDING_FUNCTION: Final[str] = f"""
+CREATE FUNCTION {CURATION_SCHEMA}.record_annotation_change() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND OLD IS NOT DISTINCT FROM NEW THEN
+        RETURN NULL;
+    END IF;
+    INSERT INTO {CURATION_SCHEMA}.{ANNOTATION_HISTORY_TABLE} (sample_hash, operation, previous, current)
+    VALUES (
+        CASE WHEN TG_OP = 'DELETE' THEN OLD.sample_hash ELSE NEW.sample_hash END,
+        lower(TG_OP),
+        CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END,
+        CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END
+    );
+    RETURN NULL;
+END
+$$
+"""
+_RECORDING_FUNCTION_PRIVILEGES: Final[str] = (
+    f"REVOKE ALL ON FUNCTION {CURATION_SCHEMA}.record_annotation_change() FROM PUBLIC"
+)
+_RECORDING_TRIGGER: Final[str] = (
+    f"CREATE TRIGGER sample_annotation_history AFTER INSERT OR UPDATE OR DELETE "
+    f"ON {CURATION_SCHEMA}.sample_annotation FOR EACH ROW "
+    f"EXECUTE FUNCTION {CURATION_SCHEMA}.record_annotation_change()"
+)
+_BASELINE: Final[str] = (
+    f"INSERT INTO {CURATION_SCHEMA}.{ANNOTATION_HISTORY_TABLE} (sample_hash, operation, current) "
+    f"SELECT sample_hash, '{HistoryOperation.BASELINE.value}', to_jsonb(annotation) "
+    f"FROM {CURATION_SCHEMA}.sample_annotation AS annotation"
+)
+
 # SQLAlchemy creates tables but never the schema qualifying them, so the CREATE SCHEMA is attached
 # as the event that runs first on this metadata's own create_all.
 event.listen(curation_metadata, "before_create", CreateSchema(CURATION_SCHEMA, if_not_exists=True))
@@ -115,9 +187,13 @@ def create_curation_schema(connection: Connection) -> None:
     """Create the curation schema and its tables where they are missing, and rank the tags already in use.
 
     A library whose labels predate the rank table gets ranks in the order its tags were first used,
-    which is the order it was colored in until then.
+    which is the order it was colored in until then. The label history begins the moment its table
+    is created, with every annotation standing then.
     """
+    history_begins = not connection.dialect.has_table(connection, ANNOTATION_HISTORY_TABLE, schema=CURATION_SCHEMA)
     curation_metadata.create_all(connection)
+    if history_begins:
+        _begin_annotation_history(connection)
     claim_annotation_writes(connection)
     if not read_tag_ranks(connection):
         labels = connection.execute(
@@ -126,6 +202,17 @@ def create_curation_schema(connection: Connection) -> None:
             .order_by(sample_annotation.c.annotated_at, sample_annotation.c.sample_hash)
         ).scalars()
         register_tag_ranks(connection, labels)
+
+
+def _begin_annotation_history(connection: Connection) -> None:
+    """Install the trigger recording every change to an annotation, and record the annotations standing now.
+
+    The table's creation and this run in one transaction under the schema lock, and creating the
+    trigger waits for writes in flight to end, so every annotation is either in the baseline or
+    recorded by the trigger, never missed between the two.
+    """
+    for statement in (_RECORDING_FUNCTION, _RECORDING_FUNCTION_PRIVILEGES, _RECORDING_TRIGGER, _BASELINE):
+        connection.execute(text(statement))
 
 
 def claim_annotation_writes(connection: Connection) -> None:

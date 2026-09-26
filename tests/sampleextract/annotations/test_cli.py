@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -138,3 +139,37 @@ def test_the_vocabulary_prints_its_lines_as_data(
 
     first_line = capsys.readouterr().out.splitlines()[0]
     assert re.match(r"^\s*1\s+KICK$", first_line)
+
+
+def test_the_history_lists_each_change_with_the_moment_it_was_made(
+    connection: Connection, stored_annotation: SampleAnnotation, configured: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    main(["history"], prog=PROGRAM)
+
+    line = capsys.readouterr().out.strip()
+    assert "insert" in line
+    assert stored_annotation.sample_hash in line
+    assert "nothing -> 'WARM PAD', rated 4, favorite" in line
+
+
+def test_a_restore_waits_for_its_confirmation(
+    connection: Connection, stored_annotation: SampleAnnotation, configured: Path
+) -> None:
+    moment = datetime.now(UTC).isoformat()
+    PostgresSampleAnnotationRepository(connection).delete_many((stored_annotation.sample_hash,))
+    connection.commit()
+
+    main(["restore", "--at", moment], prog=PROGRAM)
+    assert PostgresSampleAnnotationRepository(connection).count() == 0
+
+    main(["restore", "--at", moment, "--confirm"], prog=PROGRAM)
+    assert PostgresSampleAnnotationRepository(connection).get(stored_annotation.sample_hash) == stored_annotation
+
+
+def test_a_restore_before_the_history_begins_is_refused(
+    connection: Connection, stored_annotation: SampleAnnotation, configured: Path
+) -> None:
+    with pytest.raises(SystemExit) as refusal:
+        main(["restore", "--at", "2000-01-01 00:00", "--confirm"], prog=PROGRAM)
+
+    assert refusal.value.code == ExitStatus.REFUSED

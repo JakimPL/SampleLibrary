@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
@@ -16,7 +17,7 @@ from threadpoolctl import threadpool_limits
 from samplecore.config import ConfigurationError, load_config
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
 from samplecore.sample_files.decoding import decode_sample_file
-from samplecore.storage.curation import curation_metadata
+from samplecore.storage.curation import CURATION_SCHEMA, curation_metadata
 from samplecore.storage.database import connect, metadata
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
@@ -27,6 +28,9 @@ DEFAULT_SERVER_URL: Final[str] = f"postgresql+psycopg://samplelibrary:samplelibr
 VANISHED_SAMPLE_FRAMES: Final[int] = 2048
 VANISHED_SAMPLE_RATE: Final[int] = 44100
 SINGLE_THREAD: Final[int] = 1
+_EMPTY_CURATION_TABLES: Final = text(
+    f"TRUNCATE {', '.join(f'{CURATION_SCHEMA}.{table.name}' for table in curation_metadata.sorted_tables)} RESTART IDENTITY"
+)
 SINGLE_THREADED_MATH: Final[dict[str, str]] = {
     "OPENBLAS_NUM_THREADS": str(SINGLE_THREAD),
     "OMP_NUM_THREADS": str(SINGLE_THREAD),
@@ -98,6 +102,29 @@ def _database_url(_server_url: str, worker_id: str) -> Iterator[str]:
 
 
 @pytest.fixture
+def fresh_database_url(_database_url: str) -> Iterator[str]:
+    """A brand-new, empty database on the shared test server, with no schema created yet.
+
+    The shared ``connection`` fixture's database always already has its schema in place (only its
+    rows are emptied between tests), so it cannot exercise ``connect()``'s own first-use schema
+    creation -- this creates and drops a genuinely fresh database on the same server for exactly
+    that. ``CREATE DATABASE``/``DROP DATABASE`` cannot run inside a transaction block, hence the
+    ``AUTOCOMMIT`` isolation level.
+    """
+    admin_url = make_url(_database_url)
+    database_name = f"fresh_{uuid.uuid4().hex}"
+    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    with admin_engine.connect() as admin_connection:
+        admin_connection.execute(text(f'CREATE DATABASE "{database_name}"'))
+        try:
+            # str() on a URL renders its password as "***"; the yielded URL has to carry the real one.
+            yield admin_url.set(database=database_name).render_as_string(hide_password=False)
+        finally:
+            admin_connection.execute(text(f'DROP DATABASE "{database_name}" WITH (FORCE)'))
+    admin_engine.dispose()
+
+
+@pytest.fixture
 def connection(_database_url: str) -> Iterator[Connection]:
     """A catalog connection to this worker's database, with an empty schema on every test.
 
@@ -107,15 +134,18 @@ def connection(_database_url: str) -> Iterator[Connection]:
 
     The curation tables are named here deliberately, since they live on a metadata of their own that
     ``reset_library`` has no reach into. A test wants them cleared between cases; a real library
-    wants them kept, and that difference is exactly what the separate metadata buys.
+    wants them kept, and that difference is exactly what the separate metadata buys. They are
+    truncated in one statement, which fires no row trigger, so the label history a test wrote goes
+    with them rather than recording the cleanup.
     """
     open_connection = connect(_database_url)
     try:
         yield open_connection
     finally:
         open_connection.rollback()
-        for table in [*reversed(metadata.sorted_tables), *reversed(curation_metadata.sorted_tables)]:
+        for table in reversed(metadata.sorted_tables):
             open_connection.execute(table.delete())
+        open_connection.execute(_EMPTY_CURATION_TABLES)
         open_connection.commit()
         open_connection.close()
 
