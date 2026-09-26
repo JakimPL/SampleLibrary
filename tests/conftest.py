@@ -216,7 +216,7 @@ def module_cluster_root(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Pa
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(cluster_state, "PREFERRED_MANAGED_PORT", _worker_cluster_port())
         cluster = EmbeddedCluster(root)
-        cluster.ensure_running()
+        cluster.ensure_running(own_programs=True)
     try:
         yield root
     finally:

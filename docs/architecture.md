@@ -523,7 +523,10 @@ the built frontend. The `Launcher` owns what the library needs:
   under one owner role, with the port and password in `cluster.json`, and the two service roles'
   passwords in `roles.json`. Every process reaches it through `LibraryConfig.catalog_url()`, and a
   served API through `LibraryConfig.service_url()`, which read those files; a port another program
-  has taken moves to a free one on the next start.
+  has taken moves to a free one on the next start. A server the application finds running on another
+  installation's programs, as the server of an installation since removed keeps running, is
+  restarted on its own programs as it opens the library: a running server loads parts of itself,
+  such as its procedural language, from its program folder as it needs them.
 - **Catalog API.** Once the config validates and the database answers, the launcher builds
   `sampleserver.app.create_app` in process and runs its lifespan; `CatalogRoute` forwards every
   `/api` path outside the setup routes to it, and answers 503 while the library is closed.

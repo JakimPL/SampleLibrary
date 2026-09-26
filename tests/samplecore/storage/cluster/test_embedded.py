@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import socket
 import stat
 import sys
@@ -10,9 +11,11 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import DBAPIError
 
 from samplecore.models.service_role import ServiceRole
+from samplecore.storage.cluster.embedded import binaries
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster
 from samplecore.storage.cluster.embedded.state import (
     PRIVATE_FILE_MODE,
@@ -37,7 +40,7 @@ pytestmark = pytest.mark.usefixtures("worker_cluster_port")
 @pytest.fixture
 def running_cluster(tmp_path: Path) -> Iterator[EmbeddedCluster]:
     cluster = EmbeddedCluster(tmp_path)
-    cluster.ensure_running()
+    cluster.ensure_running(own_programs=True)
     try:
         yield cluster
     finally:
@@ -80,7 +83,7 @@ def test_a_cluster_starts_again_after_it_stops_at_the_address_it_records(running
     running_cluster.stop()
     assert not running_cluster.is_running
 
-    assert running_cluster.ensure_running() == managed_catalog_url(running_cluster.directory.parent)
+    assert running_cluster.ensure_running(own_programs=True) == managed_catalog_url(running_cluster.directory.parent)
     assert running_cluster.is_running
 
 
@@ -94,3 +97,32 @@ def test_a_cluster_whose_port_another_program_holds_moves_to_a_free_one(tmp_path
 
     assert moved.port != held.port
     assert read_cluster_state(tmp_path) == moved
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows keeps a running program's files from being deleted")
+def test_a_server_left_running_on_a_removed_installations_programs_is_restarted_on_these(tmp_path: Path) -> None:
+    """The server an earlier installation started keeps running after that installation is removed, and fails
+    the moment it loads a part of itself from the folder that is gone, a procedural language among them."""
+    these_programs = binaries.program_path(binaries.PostgresProgram.PG_CTL).parent
+    removed_installation = tmp_path / "removed-installation" / these_programs.parent.name
+    shutil.copytree(these_programs.parent, removed_installation)
+    cluster = EmbeddedCluster(tmp_path / "library")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(binaries, "_binary_directory", lambda: removed_installation / these_programs.name)
+        cluster.ensure_running(own_programs=True)
+    shutil.rmtree(removed_installation)
+    owner_url = managed_catalog_url(cluster.directory.parent)
+    try:
+        with closing(connect(owner_url, read_only=True)) as connection, pytest.raises(DBAPIError):
+            connection.execute(text("DO $$ BEGIN END $$"))
+
+        cluster.ensure_running(own_programs=True)
+
+        with closing(connect(owner_url, read_only=True)) as connection:
+            connection.execute(text("DO $$ BEGIN END $$"))
+            server_programs = connection.execute(
+                text("SELECT setting FROM pg_catalog.pg_config WHERE name = 'BINDIR'")
+            ).scalar_one()
+        assert Path(server_programs).resolve() == these_programs.resolve()
+    finally:
+        cluster.stop()

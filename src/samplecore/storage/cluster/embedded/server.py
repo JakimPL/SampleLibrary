@@ -7,7 +7,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Final
 
-from sqlalchemy import Connection, create_engine
+from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
 
@@ -94,17 +94,26 @@ class EmbeddedCluster:
         )
         return status.returncode == 0
 
-    def ensure_running(self) -> str:
+    def ensure_running(self, *, own_programs: bool) -> str:
         """Create the cluster where it is missing, start its server, and return the catalog's URL.
 
         The catalog's database and schemas are prepared on every start, which costs a few lookups on
         a cluster that holds them and completes one that stopped partway through its creation.
+
+        A server can outlive the application that started it, and keep running after that
+        installation is removed, while it loads parts of itself from its program folder as it needs
+        them, a procedural language among them. With ``own_programs``, which the application holding
+        the library asks for, a server running on another installation's programs is restarted on
+        this one's. A command run beside that application leaves the server as it runs.
 
         Raises:
             EmbeddedClusterError: a Postgres program failed, as its output and the server log describe.
             PostgresBinariesUnavailableError: the bundled Postgres is not installed.
         """
         state = read_cluster_state(self._library_root) if self.exists else self._create()
+        if own_programs and self.is_running and not _runs_on(state, program_path(PostgresProgram.PG_CTL).parent):
+            _logger.info("Restarting the library's database, which runs on another installation's programs.")
+            self.stop()
         if not self.is_running:
             state = claim_port(self._library_root, state)
             self._start(state)
@@ -235,6 +244,20 @@ def _prepare_catalog(state: ClusterState, *, library_root: Path) -> None:
         for service in ServiceRole:
             grant_service_role(connection, service=service, role=managed_role_name(service))
         connection.commit()
+
+
+def _runs_on(state: ClusterState, programs: Path) -> bool:
+    """Whether the cluster's server runs on the programs in ``programs``, as the server itself reports its own folder."""
+    maintenance_url = make_url(state.catalog_url).set(database=MAINTENANCE_DATABASE)
+    engine = create_engine(maintenance_url, poolclass=NullPool)
+    try:
+        with engine.connect() as connection:
+            server_programs = connection.execute(
+                text("SELECT setting FROM pg_catalog.pg_config WHERE name = 'BINDIR'")
+            ).scalar_one()
+    finally:
+        engine.dispose()
+    return Path(str(server_programs)).resolve() == programs.resolve()
 
 
 def _claim_service_role(connection: Connection, *, role: str, password: str) -> None:

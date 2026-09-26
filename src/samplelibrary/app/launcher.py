@@ -293,7 +293,7 @@ class Launcher:
             previous.lock.release()
         if config.manages_database:
             self._cluster = self._cluster or EmbeddedCluster(config.library_root)
-            self._cluster.ensure_running()
+            self._cluster.ensure_running(own_programs=True)
         with closing(connect(config.catalog_url())) as connection:
             if not config.manages_database:
                 curator = make_url(config.service_url(ServiceRole.CURATOR)).username or ""

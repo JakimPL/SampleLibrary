@@ -90,7 +90,7 @@ def _run_managed_database(library_root: Path) -> None:
     """
     cluster = EmbeddedCluster(library_root)
     try:
-        cluster.ensure_running()
+        cluster.ensure_running(own_programs=False)
     except (EmbeddedClusterError, PostgresBinariesUnavailableError) as error:
         _logger.error("%s", error)
         sys.exit(ExitStatus.FAILED)
