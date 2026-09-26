@@ -6,8 +6,9 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
+from samplecore.waveform import average_to_fraction_points
 from sampledescriptor.canonicalizers import Canonicalizer
-from sampledescriptor.canonicalizers.log_frequency import band_weights, to_sound_image
+from sampledescriptor.canonicalizers.log_frequency import LogFrequencyCanonicalizer, band_weights, to_sound_image
 from sampledescriptor.geometry import Anchor, grid_geometry
 from sampledescriptor.registries import CANONICALIZER_REGISTRY
 from samplemorph.canonicalizers.common import analysis_transform, prepare_mono
@@ -17,6 +18,23 @@ from tests.samplemorph.conftest import TEST_FRAME_COUNT, harmonic_tone, noise_bu
 GAIN_FACTOR = 0.25
 GAIN_FACTOR_IN_OCTAVES = -2.0
 RESAMPLING_INVARIANT_TOLERANCE_SEMITONES = 1.0
+READING_ORDER_TOLERANCE = 1e-12
+
+
+@dataclass(frozen=True)
+class ReadingOrderCase:
+    """A waveform length against the grid's 64 columns, read with or without moving the picture."""
+
+    frames: int
+    anchor: Anchor
+
+
+READING_ORDER_CASES = tuple(
+    ReadingOrderCase(frames=frames, anchor=anchor)
+    # One analysis frame, fewer frames than columns, and many more.
+    for frames in (100, 2048, 16 * TEST_FRAME_COUNT)
+    for anchor in (Anchor.NONE, Anchor.FUNDAMENTAL)
+)
 
 
 @dataclass(frozen=True)
@@ -121,15 +139,25 @@ def test_a_transposed_tone_lands_closer_than_unrelated_content(case: Canonicaliz
     assert transposed_distance < unrelated_distance
 
 
-def test_the_log_frequency_axis_reads_prepared_frames_as_they_are() -> None:
-    """The subsonic band leaves once, where audio comes in, so canonicalizing filters nothing further."""
-    geometry = grid_geometry()
-    mono = prepare_mono(harmonic_tone(TEST_FRAME_COUNT, frequency=55.0))
-    bands = band_weights(geometry) @ np.abs(analysis_transform(mono, geometry=geometry))
+@pytest.mark.parametrize("case", READING_ORDER_CASES, ids=lambda case: f"{case.frames}-frames-{case.anchor.value}")
+def test_reading_time_before_frequency_draws_the_picture_bands_first_would(case: ReadingOrderCase) -> None:
+    """The frames and the bins are both averaged, so the order they are read in leaves the picture as it is.
 
-    image = CANONICALIZER_REGISTRY["log_frequency"]().canonicalize(mono)
+    The reference reads every frame onto the bands through the whole weight matrix, then the bands
+    onto the time columns, from the prepared frames as they come in.
+    """
+    geometry = grid_geometry(anchor=case.anchor)
+    mono = prepare_mono(harmonic_tone(case.frames, frequency=55.0))
+    bands = band_weights(geometry).toarray() @ np.abs(analysis_transform(mono, geometry=geometry))
+    columns = average_to_fraction_points(bands, point_count=geometry.time_columns, axis=1)
+    reference = to_sound_image(columns, geometry=geometry, frame_count=mono.shape[0])
 
-    np.testing.assert_allclose(image.grid, to_sound_image(bands, geometry=geometry, frame_count=mono.shape[0]).grid)
+    image = LogFrequencyCanonicalizer(geometry).canonicalize(mono)
+
+    np.testing.assert_allclose(image.grid, reference.grid, rtol=0.0, atol=READING_ORDER_TOLERANCE)
+    assert image.conditioners.translation_semitones == reference.conditioners.translation_semitones
+    assert image.conditioners.log_duration == reference.conditioners.log_duration
+    assert image.conditioners.log_gain == pytest.approx(reference.conditioners.log_gain, abs=READING_ORDER_TOLERANCE)
 
 
 def test_the_band_weights_are_built_once_per_geometry_and_shared_read_only() -> None:
@@ -137,4 +165,4 @@ def test_the_band_weights_are_built_once_per_geometry_and_shared_read_only() -> 
 
     assert band_weights(geometry) is band_weights(geometry)
     with pytest.raises(ValueError, match="read-only"):
-        band_weights(geometry)[0, 0] = 1.0
+        band_weights(geometry).data[0] = 1.0
