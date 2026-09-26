@@ -4018,12 +4018,14 @@ dependencies = [
 [package.optional-dependencies]
 app = [
     { name = "fastapi" },
+    { name = "filelock" },
     { name = "httpx" },
     { name = "librosa" },
     { name = "lightning" },
     { name = "mlflow" },
     { name = "pghipy" },
     { name = "postgresql-binaries" },
+    { name = "psutil" },
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "scikit-learn" },
@@ -4085,6 +4087,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
+    { name = "types-psutil" },
     { name = "types-pyyaml" },
 ]
 
@@ -4092,6 +4095,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", marker = "extra == 'morph'", specifier = ">=0.120" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.120" },
+    { name = "filelock", marker = "extra == 'app'", specifier = ">=3.32" },
     { name = "httpx", marker = "extra == 'server'", specifier = ">=0.28" },
     { name = "librosa", marker = "extra == 'cloud'", specifier = ">=0.11" },
     { name = "librosa", marker = "extra == 'descriptor'", specifier = ">=0.11" },
@@ -4104,6 +4108,7 @@ requires-dist = [
     { name = "pghipy", marker = "extra == 'morph'", specifier = ">=0.1" },
     { name = "platformdirs", specifier = ">=4.4" },
     { name = "postgresql-binaries", marker = "extra == 'app'", specifier = ">=18.6" },
+    { name = "psutil", marker = "extra == 'app'", specifier = ">=7.2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "python-multipart", marker = "extra == 'morph'", specifier = ">=0.0.20" },
@@ -4146,6 +4151,7 @@ dev = [
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-cov", specifier = "==7.1.0" },
     { name = "pytest-xdist", specifier = "==3.8.0" },
+    { name = "types-psutil", specifier = "==7.2.2.20260906" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260906" },
 ]
 
@@ -4657,6 +4663,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/16/f7/57713ba479fd405eb76de31404b2c744c289e336b2d999511ebf51e496f7/typer-0.27.2.tar.gz", hash = "sha256:269b7eb9d3c202ca84b4bc9618cb04ebb43d3d4d1e567e4c768607232c05f945", size = 204045, upload-time = "2026-08-28T10:26:55.046Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/bf/205d0004930ede8f542fb58f601526fccf4ae7626075ca1e6c4de5d3d652/typer-0.27.2-py3-none-any.whl", hash = "sha256:b3a5fc4342d5fc8fda8fc3010b1cf117e9249aab7fae800c2eff62fd3842d97d", size = 123130, upload-time = "2026-08-28T10:26:53.752Z" },
+]
+
+[[package]]
+name = "types-psutil"
+version = "7.2.2.20260906"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/97/0a/f48b9b0ab5ba8599fd117309e345152bf82c756c72be2ff0f635780c2792/types_psutil-7.2.2.20260906.tar.gz", hash = "sha256:93abf22cf9a62b915f724e433bde702995ac274865425fd4a76d1d9b5828da1a", size = 27396, upload-time = "2026-09-06T06:35:24.499Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/8d/81a86107486e1c23f5ca21bea1e9e5b18a50754242e7a0b82f41f9ae8384/types_psutil-7.2.2.20260906-py3-none-any.whl", hash = "sha256:db00baf7f96c3f63421c4d3d68d373923094a0dfddf13e922c5c5fbc42488159", size = 33383, upload-time = "2026-09-06T06:35:23.575Z" },
 ]
 
 [[package]]
