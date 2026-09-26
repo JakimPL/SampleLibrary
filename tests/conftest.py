@@ -16,6 +16,7 @@ from threadpoolctl import threadpool_limits
 
 from samplecore.config import ConfigurationError, load_config
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
+from samplecore.process_pool import SINGLE_THREAD, SINGLE_THREAD_ENVIRONMENT
 from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage.cluster.embedded import state as cluster_state
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster
@@ -29,7 +30,6 @@ TEST_DATABASE_NAME: Final[str] = "samplelibrary_test"
 DEFAULT_SERVER_URL: Final[str] = f"postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/{TEST_DATABASE_NAME}"
 VANISHED_SAMPLE_FRAMES: Final[int] = 2048
 VANISHED_SAMPLE_RATE: Final[int] = 44100
-SINGLE_THREAD: Final[int] = 1
 WORKER_ENVIRONMENT_VARIABLE: Final[str] = "PYTEST_XDIST_WORKER"
 WORKER_PREFIX: Final[str] = "gw"
 FIRST_WORKER: Final[str] = "gw0"
@@ -44,12 +44,6 @@ _EMPTY_CURATION_TABLES: Final = text(
     )
     + " RESTART IDENTITY"
 )
-SINGLE_THREADED_MATH: Final[dict[str, str]] = {
-    "OPENBLAS_NUM_THREADS": str(SINGLE_THREAD),
-    "OMP_NUM_THREADS": str(SINGLE_THREAD),
-    "MKL_NUM_THREADS": str(SINGLE_THREAD),
-    "NUMBA_NUM_THREADS": str(SINGLE_THREAD),
-}
 
 
 def pytest_configure() -> None:
@@ -62,7 +56,7 @@ def pytest_configure() -> None:
     library in the processes a scenario starts, since those inherit the environment. numpy is loaded
     by the time this hook runs, so its pool is resized in place.
     """
-    os.environ.update(SINGLE_THREADED_MATH)
+    os.environ.update(SINGLE_THREAD_ENVIRONMENT)
     threadpool_limits(limits=SINGLE_THREAD)
 
 

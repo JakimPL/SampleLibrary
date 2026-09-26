@@ -4,10 +4,9 @@ from collections.abc import Callable
 from typing import Final, TypedDict, TypeVar
 
 import torch
-from threadpoolctl import threadpool_limits
 from torch.utils.data import DataLoader, Dataset, Sampler
 
-from samplecore.process_pool import WORKER_START_METHOD
+from samplecore.process_pool import SINGLE_THREAD, WORKER_START_METHOD, limit_process_threads
 from sampledescriptor.training.refusals import TrainingDataShortfall
 
 PREFETCH_BATCHES: Final[int] = 2
@@ -25,9 +24,15 @@ def limit_worker_threads(_worker_id: int) -> None:
     workers doing that at once spend most of their time contending rather than computing: measured
     here, one example costs 96 ms with one thread and the pool as a whole managed 31 examples a
     second across twelve workers, where one thread each reaches four times that.
+
+    A limit reaches only the libraries loaded when it is set, so scipy's linear algebra, which
+    loads with the first function that needs it, is loaded first.
     """
-    threadpool_limits(limits=1)
-    torch.set_num_threads(1)
+    # pylint: disable-next=import-outside-toplevel,unused-import
+    import scipy.linalg  # noqa: F401
+
+    limit_process_threads()
+    torch.set_num_threads(SINGLE_THREAD)
 
 
 def require_full_batch(sample_count: int, *, batch_size: int, flags: str) -> None:
