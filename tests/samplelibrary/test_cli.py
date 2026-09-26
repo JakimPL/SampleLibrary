@@ -96,6 +96,7 @@ ROUTE_CASES = (
         ["run", "catalog"],
         "samplelibrary pipeline",
     ),
+    RouteCase(["device"], "samplelibrary.pipeline.devices.main", [], "samplelibrary device"),
     RouteCase(
         ["descriptor", "cache-grids", "--cache", "grids", "--views", "0"],
         "sampledescriptor.cli.main",
