@@ -1,11 +1,14 @@
 import type { ReactElement } from "react";
 
 import type { InputMode } from "../layout/layoutMode";
+import { useLabelEditing } from "../samples/useLabelEditing";
 import { BottomSheet } from "../shared/overlay/BottomSheet";
 
 interface GuideEntry {
     readonly gesture: string;
     readonly meaning: string;
+    /** Shown only where the person here may change labels (true), or only where they may not (false). */
+    readonly whenEditing?: boolean;
 }
 
 interface GuideSection {
@@ -18,16 +21,21 @@ const TOUCH_GUIDE: readonly GuideSection[] = [
         title: "Lists",
         entries: [
             { gesture: "Tap a row", meaning: "takes the sample in hand and plays it" },
-            { gesture: "Hold a row", meaning: "opens its stars, heart and label" },
+            { gesture: "Hold a row", meaning: "opens its stars, heart and label", whenEditing: true },
+            { gesture: "Hold a row", meaning: "opens its actions", whenEditing: false },
             { gesture: "Tap ›", meaning: "opens the sample or module as a page" },
-            { gesture: "Tap the heart", meaning: "keeps the sample close" },
+            { gesture: "Tap the heart", meaning: "keeps the sample close", whenEditing: true },
         ],
     },
     {
         title: "The tray",
         entries: [
             { gesture: "Tap the waveform", meaning: "plays or pauses the sample in hand" },
-            { gesture: "Tap a star or the heart", meaning: "rates the sample in hand, or keeps it close" },
+            {
+                gesture: "Tap a star or the heart",
+                meaning: "rates the sample in hand, or keeps it close",
+                whenEditing: true,
+            },
             { gesture: "Double-tap the name", meaning: "opens the sample or module as a page, as › does" },
         ],
     },
@@ -71,8 +79,8 @@ const POINTER_GUIDE: readonly GuideSection[] = [
             { gesture: "Shift-click", meaning: "joins the sample to the one in hand as a morph pair" },
             { gesture: "↑ ↓", meaning: "move between rows" },
             { gesture: "Space", meaning: "plays the sample" },
-            { gesture: "F", meaning: "keeps the sample close" },
-            { gesture: "1 to 5", meaning: "rate the sample" },
+            { gesture: "F", meaning: "keeps the sample close", whenEditing: true },
+            { gesture: "1 to 5", meaning: "rate the sample", whenEditing: true },
             { gesture: "M", meaning: "joins the sample to the one in hand as a morph pair" },
         ],
     },
@@ -112,8 +120,9 @@ interface GuideSheetProps {
     readonly onClose: () => void;
 }
 
-/** What each gesture, click and key does, worded for the input the person has. */
+/** What each gesture, click and key does, worded for the input the person has and what they may change here. */
 export function GuideSheet({ input, onClose }: GuideSheetProps): ReactElement {
+    const labelEditing = useLabelEditing();
     const sections = input === "touch" ? TOUCH_GUIDE : POINTER_GUIDE;
     return (
         <BottomSheet title={TITLES[input]} onClose={onClose}>
@@ -121,12 +130,14 @@ export function GuideSheet({ input, onClose }: GuideSheetProps): ReactElement {
                 <section key={section.title} className="guide-section">
                     <h3 className="guide-title">{section.title}</h3>
                     <dl className="guide">
-                        {section.entries.map((entry) => (
-                            <div key={entry.gesture} className="guide-entry">
-                                <dt className="guide-gesture">{entry.gesture}</dt>
-                                <dd className="guide-meaning">{entry.meaning}</dd>
-                            </div>
-                        ))}
+                        {section.entries
+                            .filter((entry) => entry.whenEditing === undefined || entry.whenEditing === labelEditing)
+                            .map((entry) => (
+                                <div key={entry.gesture} className="guide-entry">
+                                    <dt className="guide-gesture">{entry.gesture}</dt>
+                                    <dd className="guide-meaning">{entry.meaning}</dd>
+                                </div>
+                            ))}
                     </dl>
                 </section>
             ))}

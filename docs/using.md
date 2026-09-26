@@ -22,6 +22,9 @@ Every sample takes a rating from one to five stars, a heart that keeps it close,
 own. The listening model gives each sample a category when the library is built with its cloud; a
 label you write stands in its place.
 
+You give them in the SampleLibrary app, on the computer it runs on. Anywhere else, such as a phone
+or a copy of the library published as a website, they show as they are.
+
 ## The cloud
 
 The cloud shows every sample as a point, laid out by how it sounds, so similar sounds land near each
@@ -74,14 +77,14 @@ way and glide from the first sample's pitch to the second's; drums and noise kee
 Below 768 pixels of width the app shows three tabs along the bottom, **Samples**, **Cloud** and
 **Modules**. The tray above them names the sample or module in hand, with its stars, its heart and
 the › that opens it. A sample or module opens as a page of its own, and its ‹ and › walk the listing,
-so labeling a run of samples is one page after another. The **More** menu on each tab holds the
+so going through a run of samples is one page after another. The **More** menu on each tab holds the
 statistics, the theme, **Gestures** and **Diagnostics**. A tablet keeps the computer's panels, with
 controls sized for a finger. Your browser's "Add to Home Screen" installs the app with its own icon.
 
 | Where | Gesture | What it does |
 |---|---|---|
 | Lists | Tap a row | Takes the sample in hand and plays it |
-| Lists | Hold a row | Opens its stars, heart and label |
+| Lists | Hold a row | Opens its actions |
 | Lists | Tap › | Opens the sample or module as a page |
 | Tray | Tap the waveform | Plays or pauses the sample in hand |
 | Tray | Double-tap the name | Opens the sample or module as a page |

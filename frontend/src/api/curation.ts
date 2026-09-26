@@ -6,6 +6,8 @@ export type AnnotationsWritten = components["schemas"]["AnnotationsWritten"];
 
 /** How far one gesture reaches: this sample alone, or every near-duplicate grouped with it. */
 export type AnnotationScope = components["schemas"]["AnnotationSource"];
+/** Whether the person asking may change labels here: only at the computer the SampleLibrary app runs on. */
+export type LabelEditing = components["schemas"]["LabelEditing"];
 /** One tag in use: its path, how many samples carry it, and the rank that stays with it. */
 export type TagSummary = components["schemas"]["TagSummary"];
 /** The decisions one gesture changes; a decision left out stays as the sample holds it. */
@@ -40,4 +42,8 @@ export async function getLabelVocabulary(): Promise<readonly string[]> {
 /** Every tag inside the labels, as a tree with a count at each node, most used first. */
 export async function getLabelTags(): Promise<readonly TagSummary[]> {
     return requestJson<readonly TagSummary[]>("/curation/annotations/tags");
+}
+
+export async function getLabelEditing(): Promise<LabelEditing> {
+    return requestJson<LabelEditing>("/curation/access");
 }

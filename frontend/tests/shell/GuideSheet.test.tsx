@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { useLabelEditing } from "../../src/samples/useLabelEditing";
 import { GuideSheet } from "../../src/shell/GuideSheet";
 
 describe("GuideSheet", () => {
@@ -22,5 +23,23 @@ describe("GuideSheet", () => {
         expect(screen.queryByText("Pinch")).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Close" }));
         expect(onClose).toHaveBeenCalled();
+    });
+
+    it("leaves out the keys and gestures that change labels where they may only be seen", () => {
+        vi.mocked(useLabelEditing).mockReturnValue(false);
+        render(<GuideSheet input="pointer" onClose={vi.fn()} />);
+
+        expect(screen.queryByText("1 to 5")).not.toBeInTheDocument();
+        expect(screen.queryByText("F")).not.toBeInTheDocument();
+        expect(screen.getByText("Space")).toBeInTheDocument();
+    });
+
+    it("says a held row opens its actions where labels may only be seen", () => {
+        vi.mocked(useLabelEditing).mockReturnValue(false);
+        render(<GuideSheet input="touch" onClose={vi.fn()} />);
+
+        expect(screen.getAllByText("opens its actions")).toHaveLength(2);
+        expect(screen.queryByText("opens its stars, heart and label")).not.toBeInTheDocument();
+        expect(screen.queryByText("Tap the heart")).not.toBeInTheDocument();
     });
 });

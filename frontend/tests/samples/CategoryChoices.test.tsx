@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type * as CurationApi from "../../src/api/curation";
 import type { SampleDetail } from "../../src/api/samples";
 import { CategoryChoices, NO_CATEGORIES } from "../../src/samples/CategoryChoices";
+import { useLabelEditing } from "../../src/samples/useLabelEditing";
 
 const { changeSampleAnnotation } = vi.hoisted(() => ({
     changeSampleAnnotation: vi.fn(),
@@ -149,5 +150,13 @@ describe("CategoryChoices", () => {
         render(<CategoryChoices sample={buildSample({ categories: [] })} scope="sample" />);
 
         expect(screen.getByText(NO_CATEGORIES)).toBeInTheDocument();
+    });
+
+    it("shows the categories with their scores alone where labels may only be seen", () => {
+        vi.mocked(useLabelEditing).mockReturnValue(false);
+        render(<CategoryChoices sample={buildSample()} scope="sample" />);
+
+        expect(screen.getByRole("group", { name: "Categories" })).toHaveTextContent("BASS DRUM");
+        expect(screen.queryAllByRole("button")).toHaveLength(0);
     });
 });

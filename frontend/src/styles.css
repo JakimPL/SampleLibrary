@@ -896,7 +896,9 @@ tr:focus-within .row-open,
 }
 
 .rating-star:disabled,
-.favorite-toggle:disabled {
+.favorite-toggle:disabled,
+.rating-star.is-read-only,
+.favorite-toggle.is-read-only {
     cursor: default;
 }
 

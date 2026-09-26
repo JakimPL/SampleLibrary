@@ -126,15 +126,23 @@ function SampleTray({ hash }: EntityTrayProps): ReactElement {
                     <>
                         <RatingStars
                             rating={decisions.rating}
-                            onRatingChange={(rating) => {
-                                change({ rating });
-                            }}
+                            onRatingChange={
+                                change === null
+                                    ? null
+                                    : (rating) => {
+                                          change({ rating });
+                                      }
+                            }
                         />
                         <FavoriteToggle
                             favorite={decisions.favorite}
-                            onFavoriteChange={(favorite) => {
-                                change({ favorite });
-                            }}
+                            onFavoriteChange={
+                                change === null
+                                    ? null
+                                    : (favorite) => {
+                                          change({ favorite });
+                                      }
+                            }
                         />
                     </>
                 )}

@@ -47,7 +47,8 @@ interface SampleRowProps {
  * answers to. A finger's tap on the row takes the sample in hand and plays it in one gesture, its
  * own buttons and chevron keeping their own meaning; a finger held on the row opens a sheet of the
  * same decisions and actions at a tap's size, in place of the modifier clicks and the inline
- * editors a pointer has.
+ * editors a pointer has. Where the person here may change nothing, the row shows the decisions as
+ * they stand and its keys and sheet leave them alone.
  */
 export function SampleRow({ sample, groupByEquivalence, visibleColumns, input }: SampleRowProps): ReactElement {
     const { href, isHighlighted, isFocused, onClick, onDoubleClick, onKeyDown } = useEntityRowInteractions({
@@ -81,8 +82,8 @@ export function SampleRow({ sample, groupByEquivalence, visibleColumns, input }:
         if (event.defaultPrevented || playOnSpace(event, samplePreview(sample.hash, sample.playback_rate_hz), play)) {
             return;
         }
-        const keyed = annotationKeyChange(event.key, decisions);
-        if (keyed !== null) {
+        const keyed = change === null ? null : annotationKeyChange(event.key, decisions);
+        if (change !== null && keyed !== null) {
             event.preventDefault();
             change(keyed);
         }
@@ -134,14 +135,22 @@ export function SampleRow({ sample, groupByEquivalence, visibleColumns, input }:
             </td>
             {categoryInColumn && (
                 <td className="cell-muted cell-stamp">
-                    <CategoryCell
-                        sample={sample}
-                        label={decisions.label}
-                        onCommit={(label) => {
-                            change({ label });
-                        }}
-                        input={input}
-                    />
+                    {change === null ? (
+                        <CategoryBadge
+                            sampleHash={sample.hash}
+                            category={sample.category}
+                            handLabel={decisions.label}
+                        />
+                    ) : (
+                        <CategoryCell
+                            sample={sample}
+                            label={decisions.label}
+                            onCommit={(label) => {
+                                change({ label });
+                            }}
+                            input={input}
+                        />
+                    )}
                 </td>
             )}
             {visibleColumns.has("verdict") && (
@@ -149,16 +158,24 @@ export function SampleRow({ sample, groupByEquivalence, visibleColumns, input }:
                     {input === "pointer" && (
                         <RatingStars
                             rating={decisions.rating}
-                            onRatingChange={(rating) => {
-                                change({ rating });
-                            }}
+                            onRatingChange={
+                                change === null
+                                    ? null
+                                    : (rating) => {
+                                          change({ rating });
+                                      }
+                            }
                         />
                     )}
                     <FavoriteToggle
                         favorite={decisions.favorite}
-                        onFavoriteChange={(favorite) => {
-                            change({ favorite });
-                        }}
+                        onFavoriteChange={
+                            change === null
+                                ? null
+                                : (favorite) => {
+                                      change({ favorite });
+                                  }
+                        }
                     />
                     {message !== null && (
                         <span className="annotation-row-message" role="alert" title={message}>

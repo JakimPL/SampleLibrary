@@ -24,6 +24,7 @@ interface CategoryChoicesProps {
  * reaches as far as the editor's near-duplicates checkbox says and changes the label alone. A
  * category the label already asserts shows as taken, a broad one included once a specification
  * under it is written; a category more detailed than one the label names takes its place there.
+ * Where the person here may change nothing, the categories are shown with their scores alone.
  */
 export function CategoryChoices({ sample, scope }: CategoryChoicesProps): ReactElement {
     const current = useSampleAnnotation(sample.hash, decisionsOf(sample));
@@ -38,6 +39,19 @@ export function CategoryChoices({ sample, scope }: CategoryChoicesProps): ReactE
         <div className="category-choices">
             <div className="category-choices-row" role="group" aria-label="Categories">
                 {sample.categories.map((category) => {
+                    const content = (
+                        <>
+                            {category.label}
+                            <span className="category-score">{category.score.toFixed(SCORE_DECIMAL_PLACES)}</span>
+                        </>
+                    );
+                    if (change === null) {
+                        return (
+                            <span key={category.label} className="badge badge-category-choice">
+                                {content}
+                            </span>
+                        );
+                    }
                     const taken = assertsTag(label, category.label);
                     return (
                         <button
@@ -50,8 +64,7 @@ export function CategoryChoices({ sample, scope }: CategoryChoicesProps): ReactE
                                 change({ label: withTag(label, category.label) });
                             }}
                         >
-                            {category.label}
-                            <span className="category-score">{category.score.toFixed(SCORE_DECIMAL_PLACES)}</span>
+                            {content}
                         </button>
                     );
                 })}

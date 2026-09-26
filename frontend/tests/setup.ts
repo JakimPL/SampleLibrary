@@ -17,6 +17,18 @@ afterEach(() => {
     cleanup();
 });
 
+// Most tests stand where the SampleLibrary app runs, where labels may be changed; a test of the
+// read-only page says otherwise for itself, and goes back to this after.
+vi.mock("../src/samples/useLabelEditing", () => ({
+    LABEL_EDITING_CACHE_KEY: "label-editing",
+    useLabelEditing: vi.fn(() => true),
+}));
+
+afterEach(async () => {
+    const { useLabelEditing } = await import("../src/samples/useLabelEditing");
+    vi.mocked(useLabelEditing).mockReturnValue(true);
+});
+
 // Module-level stores and caches outlive a test, so each one returns to its initial state here.
 afterEach(() => {
     useSelectionStore.setState(INITIAL_SELECTION_STATE);

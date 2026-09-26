@@ -15,7 +15,8 @@ import { samplePreview, useAudioPreview } from "./useAudioPreview";
 interface RowActionSheetProps {
     readonly sample: SampleSummary;
     readonly decisions: AnnotationDecisions;
-    readonly onChange: (changes: AnnotationChanges) => void;
+    /** Records a change; null where the person here may change nothing, which leaves the sheet its actions alone. */
+    readonly onChange: ((changes: AnnotationChanges) => void) | null;
     readonly onClose: () => void;
 }
 
@@ -30,7 +31,7 @@ export function RowActionSheet({ sample, decisions, onChange, onClose }: RowActi
     const { play } = useAudioPreview();
     const title = sample.display_name.trim() === "" ? UNNAMED_SAMPLE_LABEL : sample.display_name;
 
-    if (editingLabel) {
+    if (editingLabel && onChange !== null) {
         return (
             <LabelSheet
                 label={decisions.label}
@@ -71,30 +72,34 @@ export function RowActionSheet({ sample, decisions, onChange, onClose }: RowActi
 
     return (
         <ActionSheet title={title} actions={actions} onClose={onClose}>
-            <div className="sheet-verdict">
-                <RatingStars
-                    rating={decisions.rating}
-                    onRatingChange={(rating) => {
-                        onChange({ rating });
-                    }}
-                />
-                <FavoriteToggle
-                    favorite={decisions.favorite}
-                    onFavoriteChange={(favorite) => {
-                        onChange({ favorite });
-                    }}
-                />
-            </div>
-            <div className="sheet-actions">
-                <button
-                    type="button"
-                    onClick={() => {
-                        setEditingLabel(true);
-                    }}
-                >
-                    Label…
-                </button>
-            </div>
+            {onChange !== null && (
+                <>
+                    <div className="sheet-verdict">
+                        <RatingStars
+                            rating={decisions.rating}
+                            onRatingChange={(rating) => {
+                                onChange({ rating });
+                            }}
+                        />
+                        <FavoriteToggle
+                            favorite={decisions.favorite}
+                            onFavoriteChange={(favorite) => {
+                                onChange({ favorite });
+                            }}
+                        />
+                    </div>
+                    <div className="sheet-actions">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEditingLabel(true);
+                            }}
+                        >
+                            Label…
+                        </button>
+                    </div>
+                </>
+            )}
         </ActionSheet>
     );
 }

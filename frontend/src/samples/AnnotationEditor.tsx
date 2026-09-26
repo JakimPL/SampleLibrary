@@ -30,7 +30,8 @@ export function defaultScopeFor(sample: SampleDetail): AnnotationScope {
  * habit works wherever a sample is met. Each gesture changes the one decision it is about and keeps
  * the others. Where the sample has near-duplicates a decision reaches all of them by default, which
  * is how the listing already groups them; each one is recorded on its own, so the group boundary
- * moving later leaves every decision standing.
+ * moving later leaves every decision standing. Where the person here may change nothing, the editor
+ * shows the decisions as they stand.
  */
 export function AnnotationEditor({ sample, scope, onScopeChange }: AnnotationEditorProps): ReactElement {
     const current = useSampleAnnotation(sample.hash, decisionsOf(sample));
@@ -39,6 +40,20 @@ export function AnnotationEditor({ sample, scope, onScopeChange }: AnnotationEdi
     const label = current?.label ?? null;
     const rating = current?.rating ?? null;
     const favorite = current?.favorite ?? false;
+
+    if (change === null) {
+        return (
+            <div className="annotation-editor">
+                <div className="annotation-editor-row">
+                    <span className="annotation-editor-label">{label ?? "No label"}</span>
+                </div>
+                <div className="annotation-editor-row">
+                    <RatingStars rating={rating} onRatingChange={null} />
+                    <FavoriteToggle favorite={favorite} onFavoriteChange={null} />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="annotation-editor">

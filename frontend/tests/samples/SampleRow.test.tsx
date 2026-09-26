@@ -10,6 +10,7 @@ import type { InputMode } from "../../src/layout/layoutMode";
 import { type SampleColumnId, sampleColumnSpec } from "../../src/samples/sampleColumns";
 import { SampleRow } from "../../src/samples/SampleRow";
 import { useAudioPreview } from "../../src/samples/useAudioPreview";
+import { useLabelEditing } from "../../src/samples/useLabelEditing";
 import { LONG_PRESS_HOLD_MS } from "../../src/shared/gestures/gestureThresholds";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 
@@ -324,5 +325,24 @@ describe("SampleRow", () => {
         expect(screen.getByRole("button", { name: "Rate 1" })).toHaveClass("is-filled");
         expect(screen.getByRole("button", { name: "Rate 4" })).toHaveClass("is-filled");
         expect(screen.getByRole("button", { name: "Rate 5" })).not.toHaveClass("is-filled");
+    });
+});
+
+describe("SampleRow where labels may only be seen", () => {
+    it("shows the decisions as they stand, and its keys write nothing", () => {
+        vi.mocked(useLabelEditing).mockReturnValue(false);
+        renderRow({ sample: buildSample({ hand_label: "KICK", rating: 3, favorite: true }) });
+
+        expect(screen.getByRole("img", { name: "Rated 3 of 5" })).toBeInTheDocument();
+        expect(screen.getByRole("img", { name: "Favorite" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Rate 1" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Favorite" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Edit category" })).not.toBeInTheDocument();
+
+        const name = screen.getByRole("link", { name: /kick/ });
+        fireEvent.keyDown(name, { key: "4" });
+        fireEvent.keyDown(name, { key: "f" });
+
+        expect(changeSampleAnnotation).not.toHaveBeenCalled();
     });
 });
