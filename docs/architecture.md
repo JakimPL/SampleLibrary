@@ -873,8 +873,10 @@ left, the cloud in the middle, and an inspector of the details and the statistic
 `frontend/src/workspace/dockviewPersistence.ts` saves every change under
 a versioned record; a record of another version is discarded once and the default drawn again,
 which is how a new arrangement reaches a browser that saved an older one. The top bar's View menu
-opens and closes panels at their registered placement and resets the arrangement; the theme select
-sits beside it. Each panel renders inside a `PanelHost`, the scroll container that is also the
+opens and closes panels at their registered placement and resets the arrangement. Its Library menu
+opens the setup page and quits the application, and appears where the setup routes answer, on the
+machine the application runs on; its Help menu holds the guide and the diagnostics. The theme select
+sits beside them. Each panel renders inside a `PanelHost`, the scroll container that is also the
 container its stylesheet rules query, so a panel fits the width it was given rather than the window's.
 The Sample Detail panel stands the focused sample's transport
 (`frontend/src/samples/SampleTransport.tsx`, the wavesurfer player over the one detail request
@@ -929,7 +931,7 @@ plain dots in the diagnostics (`frontend/src/cloud/cloudDotsStore.ts`), the node
 point as a filled dot in the scatterplot's place (`frontend/src/cloud/plainDots.ts`), at the
 theme's point size and growing with the zoom by the theme's scale mode as the scatterplot's points
 would (`frontend/src/cloud/pointGrowth.ts`), the scatterplot keeping the camera and the hit-testing. The diagnostics sheet
-(`frontend/src/shell/DiagnosticsSheet.tsx`), reached from the View menu and the phone's More menu,
+(`frontend/src/shell/DiagnosticsSheet.tsx`), reached from the Help menu and the phone's More menu,
 shows the probe's findings with the screen and the layout, for a phone with no console to read.
 
 The dots' canvas takes the mouse through regl-scatterplot itself, which pans, zooms, hit-tests and

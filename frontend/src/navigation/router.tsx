@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
 
+import { CLOSED_PATH, ClosedView } from "../setup/ClosedView";
 import { SETUP_PATH, SetupGate } from "../setup/SetupGate";
 import { SetupView } from "../setup/SetupView";
 import { AppShell } from "../shell/AppShell";
@@ -34,6 +35,7 @@ export const routes: RouteObject[] = [
         errorElement: <RouteErrorView />,
         children: [
             { path: SETUP_PATH, element: <SetupView /> },
+            { path: CLOSED_PATH, element: <ClosedView /> },
             {
                 element: <SetupGate />,
                 children: [

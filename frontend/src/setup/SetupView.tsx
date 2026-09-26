@@ -1,8 +1,9 @@
 import { type ReactElement, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { quitApplication, type SetupState } from "../api/setup";
 import { Loading } from "../shared/Loading";
+import { CLOSED_PATH } from "./ClosedView";
 import { LibraryPanel } from "./LibraryPanel";
 import { describeRefusal } from "./refusal";
 import { SetupMessage } from "./SetupMessage";
@@ -71,7 +72,7 @@ function SetupPlaceholder({ source }: { readonly source: SetupSource }): ReactEl
  */
 export function SetupView(): ReactElement {
     const { source, accept } = useSetupState();
-    const [closed, setClosed] = useState(false);
+    const navigate = useNavigate();
     const [quitRefusal, setQuitRefusal] = useState<string | null>(null);
     const state = lastKnownState(source);
     const notice =
@@ -81,21 +82,10 @@ export function SetupView(): ReactElement {
         setQuitRefusal(null);
         try {
             await quitApplication();
-            setClosed(true);
+            void navigate(CLOSED_PATH, { replace: true });
         } catch (error: unknown) {
             setQuitRefusal(describeRefusal(error));
         }
-    }
-
-    if (closed) {
-        return (
-            <main className="setup-page setup-page-closed">
-                <section className="setup-card">
-                    <h1>SampleLibrary has closed</h1>
-                    <p className="setup-hint">You can close this tab.</p>
-                </section>
-            </main>
-        );
     }
 
     return (

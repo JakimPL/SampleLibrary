@@ -452,7 +452,8 @@ select:focus-visible,
     cursor: pointer;
 }
 
-.view-menu-reset {
+.menu-action {
+    display: block;
     width: 100%;
     margin-top: var(--space-3);
     border: 1px solid var(--border);
@@ -463,6 +464,17 @@ select:focus-visible,
     font-size: var(--font-size-small);
     cursor: pointer;
     color: var(--text-muted);
+}
+
+.menu-action:first-child {
+    margin-top: 0;
+}
+
+.menu-note {
+    max-width: 240px;
+    margin: var(--space-3) 0 0;
+    color: var(--critical);
+    font-size: var(--font-size-small);
 }
 
 /* Two classes outrank dockview.css's single-class theme rule whatever the load order. */

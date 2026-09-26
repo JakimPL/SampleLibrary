@@ -44,11 +44,11 @@ takes a day or more, so the page asks before it starts.
 - Open SampleLibrary from the Start menu, from Applications, or from its AppImage. A start while it
   already runs opens it in your browser again.
 - A build keeps going when you close the browser tab.
-- To add folders, or to build again after your collection grows, open **View → Library setup**.
-- **Quit** on the setup page stops SampleLibrary.
+- To add folders, or to build again after your collection grows, open **Library → Setup**.
+- **Library → Quit SampleLibrary**, or **Quit** on the setup page, stops SampleLibrary.
 
 [Using SampleLibrary](docs/using.md) explains the cloud, the morph, every click and key, and using
-the app on a phone or tablet. The app shows the same list under **View → Keyboard and mouse**.
+the app on a phone or tablet. The app shows the same list under **Help → Keyboard and mouse**.
 
 ## When something goes wrong
 

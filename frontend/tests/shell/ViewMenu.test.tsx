@@ -24,26 +24,6 @@ function openMenu(): void {
 }
 
 describe("ViewMenu", () => {
-    it("opens the guide to the keys and clicks", () => {
-        renderMenu(null);
-        openMenu();
-
-        fireEvent.click(screen.getByRole("button", { name: "Keyboard and mouse" }));
-
-        expect(screen.getByRole("dialog", { name: "Keyboard and mouse" })).toBeInTheDocument();
-        expect(screen.getByText("Shift-click")).toBeInTheDocument();
-    });
-
-    it("opens the diagnostics", () => {
-        renderMenu(null);
-        openMenu();
-
-        fireEvent.click(screen.getByRole("button", { name: "Diagnostics" }));
-
-        expect(screen.getByRole("dialog", { name: "Diagnostics" })).toBeInTheDocument();
-        expect(screen.getByRole("radio", { name: "Plain dots" })).toBeInTheDocument();
-    });
-
     it("lists every registered panel, ticked when it is open", () => {
         const api = new FakeDockviewApi(OPEN_EXCEPT_STATS);
         renderMenu(api.asApi());

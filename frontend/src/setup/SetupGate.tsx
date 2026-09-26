@@ -1,7 +1,7 @@
-import { type ReactElement, useEffect, useState } from "react";
+import type { ReactElement } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 
-import { getSetupState } from "../api/setup";
+import { useSetupProbe } from "./useSetupProbe";
 
 export const SETUP_PATH = "/setup";
 
@@ -11,21 +11,6 @@ export const SETUP_PATH = "/setup";
  * workspace as it always has.
  */
 export function SetupGate(): ReactElement {
-    const [unconfigured, setUnconfigured] = useState(false);
-
-    useEffect(() => {
-        let active = true;
-        getSetupState()
-            .then((state) => {
-                if (active && state.sources === null) {
-                    setUnconfigured(true);
-                }
-            })
-            .catch(() => undefined);
-        return (): void => {
-            active = false;
-        };
-    }, []);
-
-    return unconfigured ? <Navigate to={SETUP_PATH} replace /> : <Outlet />;
+    const setup = useSetupProbe();
+    return setup?.sources === null ? <Navigate to={SETUP_PATH} replace /> : <Outlet />;
 }

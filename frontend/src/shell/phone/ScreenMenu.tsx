@@ -4,15 +4,21 @@ import { Link } from "react-router-dom";
 
 import { floatRenderingSupport } from "../../cloud/floatRendering";
 import { useLayoutMode } from "../../layout/useLayoutMode";
+import { SETUP_PATH } from "../../setup/SetupGate";
+import { useSetupProbe } from "../../setup/useSetupProbe";
 import { DisclosureMenu } from "../../shared/overlay/DisclosureMenu";
 import { ThemeMenu } from "../../theme/ThemeMenu";
 import { DIAGNOSTICS_TITLE, DiagnosticsSheet } from "../DiagnosticsSheet";
 import { GUIDE_TITLES, GuideSheet } from "../GuideSheet";
 import { overflowPanels } from "./phoneView";
 
-/** The menu at a tab's far end: the panels with no tab of their own, the guide to the gestures, the diagnostics, and the theme. */
+/**
+ * The menu at a tab's far end: the panels with no tab of their own, the library's setup where the
+ * setup routes answer this browser, the guide to the gestures, the diagnostics, and the theme.
+ */
 export function ScreenMenu(): ReactElement {
     const { input } = useLayoutMode();
+    const setup = useSetupProbe();
     const [guideOpen, setGuideOpen] = useState(false);
     const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
 
@@ -27,6 +33,13 @@ export function ScreenMenu(): ReactElement {
                             </Link>
                         </li>
                     ))}
+                    {setup !== null && (
+                        <li>
+                            <Link to={SETUP_PATH} className="screen-menu-link">
+                                Library setup
+                            </Link>
+                        </li>
+                    )}
                     <li>
                         <button
                             type="button"
