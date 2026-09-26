@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Final
 
+PYPI_INDEX: Final[str] = "https://pypi.org/simple"
 CPU_TORCH_INDEX: Final[str] = "https://download.pytorch.org/whl/cpu"
 CUDA_TORCH_INDEX: Final[str] = "https://download.pytorch.org/whl/cu128"
 # The NVIDIA launcher's wheel carries this local version label, which gives its installation a

@@ -18,7 +18,7 @@ from paths import (
     PACKAGE_BUILD_DIRECTORY,
     PINNED_WHEEL_DIRECTORY,
 )
-from torch_builds import CPU_TORCH_INDEX, CUDA_LOCAL_VERSION, CUDA_TORCH_INDEX
+from torch_builds import CPU_TORCH_INDEX, CUDA_LOCAL_VERSION, CUDA_TORCH_INDEX, PYPI_INDEX
 from wheel_pins import write_pinned_wheel
 
 PYAPP_VERSION: Final[str] = "0.29.0"
@@ -120,12 +120,22 @@ def _built_wheel() -> Path:
 def _pyapp_settings(wheel: Path, *, torch_index: str) -> dict[str, str]:
     """What PyApp embeds: the wheel and its app extra, the Python it installs, and the index uv takes torch from.
 
-    uv consults every index for each package under `unsafe-best-match`, which is what lets torch come
-    from PyTorch's own index while everything else comes from PyPI. As a GUI, the application runs
-    in a process of its own once installed, windowless through pythonw on Windows; the first start
-    shows the installation's progress in a console.
+    uv consults every index for each package under `unsafe-best-match`, and takes a version several
+    indexes serve from the first of them. PyPI comes first, so every package it serves downloads
+    from its own servers, and torch's CUDA or processor build, which PyPI lacks, from PyTorch's
+    index. PyTorch's index links the NVIDIA libraries to NVIDIA's own server, which PyPI's copies
+    of the same files spare the first start. As a GUI, the application runs in a process of its own
+    once installed, windowless through pythonw on Windows; the first start shows the installation's
+    progress in a console.
     """
-    installer_arguments = ["--index-strategy", "unsafe-best-match", "--extra-index-url", torch_index]
+    installer_arguments = [
+        "--index-strategy",
+        "unsafe-best-match",
+        "--extra-index-url",
+        PYPI_INDEX,
+        "--extra-index-url",
+        torch_index,
+    ]
     return {
         "PYAPP_PROJECT_PATH": str(wheel),
         "PYAPP_PROJECT_FEATURES": APP_EXTRA,

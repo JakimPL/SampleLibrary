@@ -52,6 +52,9 @@ the app on a phone or tablet. The app shows the same list under **Help → Keybo
 
 ## When something goes wrong
 
+If the first start stops before SampleLibrary opens, a download was interrupted. Start SampleLibrary
+again: it reuses every file it finished downloading.
+
 SampleLibrary keeps a log you can read or attach to a report:
 
 | System | Log folder |
