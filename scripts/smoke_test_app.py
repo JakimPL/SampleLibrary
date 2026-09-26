@@ -3,19 +3,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-PORT: Final[int] = 8000
-ADDRESS: Final[str] = f"http://127.0.0.1:{PORT}"
-SETUP_ROUTE: Final[str] = f"{ADDRESS}/api/setup"
-STATS_ROUTE: Final[str] = f"{ADDRESS}/api/stats"
+LOOPBACK: Final[str] = "127.0.0.1"
 POLL_SECONDS: Final[float] = 2.0
 REQUEST_SECONDS: Final[float] = 10.0
 INSTALL_SECONDS: Final[float] = 3600.0
@@ -45,6 +44,25 @@ class SmokeTestError(Exception):
     """Raised when the application misses one step of the smoke test."""
 
 
+@dataclass(frozen=True)
+class Application:
+    """Where the application under test answers.
+
+    The port is one no program held as the test began, so an application already running on this
+    machine keeps its own port and stays out of the test.
+    """
+
+    port: int
+
+    @property
+    def setup_route(self) -> str:
+        return f"http://{LOOPBACK}:{self.port}/api/setup"
+
+    @property
+    def stats_route(self) -> str:
+        return f"http://{LOOPBACK}:{self.port}/api/stats"
+
+
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Start a built executable, build a small library in it through the setup pages' API, and quit it."
@@ -70,34 +88,43 @@ def main(argv: list[str] | None = None) -> None:
     work = arguments.work.resolve()
     # A config file of its own in the work folder, so each run starts a fresh library of its own.
     environment = {**os.environ, CONFIG_PATH_ENVIRONMENT_VARIABLE: str(work / CONFIG_FILE_NAME)}
+    application = Application(port=_free_port())
     launch = subprocess.Popen(  # pylint: disable=consider-using-with
-        [executable, "--no-browser", "--port", str(PORT)], env=environment
+        [executable, "--no-browser", "--port", str(application.port)], env=environment
     )
     try:
-        _first_session(executable, work, launch)
+        _first_session(executable, work, launch, application)
     except SmokeTestError as error:
-        _stop(launch)
         sys.exit(f"Smoke test failed: {error}")
+    finally:
+        _stop(application, launch)
     print("Smoke test passed.")
 
 
-def _first_session(executable: Path, work: Path, launch: subprocess.Popen[bytes]) -> None:
+def _free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((LOOPBACK, 0))
+        port: int = probe.getsockname()[1]
+    return port
+
+
+def _first_session(executable: Path, work: Path, launch: subprocess.Popen[bytes], application: Application) -> None:
     modules = work / MODULES_DIRECTORY_NAME
     library_root = work / LIBRARY_DIRECTORY_NAME
-    state = _wait_for_state(lambda state: "status" in state, seconds=INSTALL_SECONDS, launch=launch)
+    state = _wait_for_state(application, lambda state: "status" in state, seconds=INSTALL_SECONDS, launch=launch)
     _step(f"The application answers with status {state['status']}.")
     _write_modules(executable, modules)
     _step(f"Wrote the sandbox modules into {modules}.")
-    _request("PUT", f"{SETUP_ROUTE}/sources", _sources(library_root, modules))
-    state = _wait_for_state(lambda state: state["status"] in ("ready", "failed"), seconds=OPEN_SECONDS)
+    _request("PUT", f"{application.setup_route}/sources", _sources(library_root, modules))
+    state = _wait_for_state(application, lambda state: state["status"] in ("ready", "failed"), seconds=OPEN_SECONDS)
     if state["status"] != "ready":
         raise SmokeTestError(f"the library did not open: {state['problem']}")
     _step("The library is open.")
-    _request("POST", f"{SETUP_ROUTE}/builds", {"target": BUILD_TARGET})
-    _check_build(_wait_for_state(_build_ended, seconds=BUILD_SECONDS))
-    _check_catalog()
-    _request("POST", f"{SETUP_ROUTE}/quit", None)
-    _wait_until_closed()
+    _request("POST", f"{application.setup_route}/builds", {"target": BUILD_TARGET})
+    _check_build(_wait_for_state(application, _build_ended, seconds=BUILD_SECONDS))
+    _check_catalog(application)
+    _request("POST", f"{application.setup_route}/quit", None)
+    _wait_until_closed(application)
     launch.wait(timeout=QUIT_SECONDS)
     _step("The application quit.")
     if (library_root / SERVER_PID_FILE).exists():
@@ -136,15 +163,19 @@ def _check_build(state: State) -> None:
     _step(f"The {BUILD_TARGET} build completed.")
 
 
-def _check_catalog() -> None:
-    stats = _request("GET", STATS_ROUTE, None)
+def _check_catalog(application: Application) -> None:
+    stats = _request("GET", application.stats_route, None)
     if not isinstance(stats, dict) or not stats["module_count"]:
         raise SmokeTestError(f"the catalog lists no modules: {stats}")
     _step(f"The catalog lists {stats['module_count']} modules and {stats['sample_count']} samples.")
 
 
 def _wait_for_state(
-    accept: Callable[[State], bool], *, seconds: float, launch: subprocess.Popen[bytes] | None = None
+    application: Application,
+    accept: Callable[[State], bool],
+    *,
+    seconds: float,
+    launch: subprocess.Popen[bytes] | None = None,
 ) -> State:
     """Poll the setup state until it passes ``accept``.
 
@@ -155,36 +186,36 @@ def _wait_for_state(
     while time.monotonic() < deadline:
         if launch is not None and launch.poll() not in (None, 0):
             raise SmokeTestError(f"the executable ended with exit code {launch.returncode}")
-        state = _answered_state()
+        state = _answered_state(application)
         if state is not None and accept(state):
             return state
         time.sleep(POLL_SECONDS)
     raise SmokeTestError(f"no expected answer within {seconds:.0f} seconds")
 
 
-def _wait_until_closed() -> None:
+def _wait_until_closed(application: Application) -> None:
     deadline = time.monotonic() + QUIT_SECONDS
     while time.monotonic() < deadline:
-        if _answered_state() is None:
+        if _answered_state(application) is None:
             return
         time.sleep(POLL_SECONDS)
     raise SmokeTestError(f"the application still answers {QUIT_SECONDS:.0f} seconds after Quit")
 
 
-def _answered_state() -> State | None:
+def _answered_state(application: Application) -> State | None:
     """The setup state, or None while nothing answers at the application's address."""
     try:
-        state = _request("GET", f"{SETUP_ROUTE}/state", None)
+        state = _request("GET", f"{application.setup_route}/state", None)
     except OSError:
         return None
     assert isinstance(state, dict)
     return state
 
 
-def _stop(launch: subprocess.Popen[bytes]) -> None:
-    """Ask a running application to quit after a failed step, and end the executable if it still runs."""
-    if _answered_state() is not None:
-        _request("POST", f"{SETUP_ROUTE}/quit", None)
+def _stop(application: Application, launch: subprocess.Popen[bytes]) -> None:
+    """Ask the application to quit where it still answers, and end the executable if it still runs."""
+    if _answered_state(application) is not None:
+        _request("POST", f"{application.setup_route}/quit", None)
     try:
         launch.wait(timeout=QUIT_SECONDS)
     except subprocess.TimeoutExpired:
