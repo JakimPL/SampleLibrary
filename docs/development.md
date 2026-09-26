@@ -38,8 +38,11 @@ The tests run against the `samplelibrary_test` database on the server `config.to
 
 `just dev-build` writes a sandbox of 30 modules, 300 one-shots and ten labels into `dev-library/`
 and builds it, in the `samplelibrary_dev` database on your configured server. `just dev <command>`
-runs a `samplelibrary` command on it, `just serve-dev` serves it on port 8001, and `just dev-reset`
-empties its database and deletes its files.
+runs a `samplelibrary` command on it, `just serve-dev` serves it read-only on port 8001, `just
+app-dev` runs the SampleLibrary app on it, which records labels, and `just dev-reset` empties its
+database and deletes its files. Both serve through the roles `config.toml` names in
+`server_database_url` and `curation_database_url`, on the sandbox's database; run `just database`
+once after naming them.
 
 To browse it, start the web app with `VITE_BACKEND_DEV_URL=http://127.0.0.1:8001 just frontend-dev`.
 The sandbox holds a few dozen samples; `VITE_CLOUD_DENSIFY=100000` added to that command grows its

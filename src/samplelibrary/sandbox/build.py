@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -9,8 +10,10 @@ from typing import Final
 
 import soundfile
 
+from samplecore.config import SERVICE_URL_SETTINGS
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation, SampleFileAnchor
 from samplecore.models.sample_file import SampleFileLocation
+from samplecore.models.service_role import ServiceRole
 from samplecore.sample_files.decoding import decode_sample_file
 from samplelibrary.sandbox.modules import TARGET_MODULE_COUNT, sandbox_modules
 from samplelibrary.sandbox.one_shots import labeled_one_shots, one_shots
@@ -55,14 +58,18 @@ class SandboxPaths:
         return self.output / LABELS_FILE_NAME
 
 
-def _write_config(paths: SandboxPaths, *, database_url: str) -> None:
+def _write_config(paths: SandboxPaths, *, database_url: str, service_urls: Mapping[ServiceRole, str]) -> None:
     config_path = paths.output / "config.toml"
     exclusions = ", ".join(_toml_string(pattern) for pattern in SAMPLE_PACK_EXCLUSIONS)
+    service_lines = "".join(
+        f"{SERVICE_URL_SETTINGS[service]} = {_toml_string(url)}\n" for service, url in sorted(service_urls.items())
+    )
     config_path.write_text(
         "[library]\n"
         f"module_source_directory = {_toml_string(paths.modules.resolve().as_posix())}\n"
         f"library_root = {_toml_string(paths.catalog.resolve().as_posix())}\n"
         f"database_url = {_toml_string(database_url)}\n"
+        f"{service_lines}"
         f"sample_directories = [{_toml_string(paths.sample_pack.resolve().as_posix())}]\n"
         f"sample_exclusions = [{exclusions}]\n"
         "\n"
@@ -82,12 +89,17 @@ def _toml_string(value: str) -> str:
 
 
 def build_sandbox(
-    output_directory: Path, *, database_url: str, target_module_count: int = TARGET_MODULE_COUNT
+    output_directory: Path,
+    *,
+    database_url: str,
+    service_urls: Mapping[ServiceRole, str],
+    target_module_count: int = TARGET_MODULE_COUNT,
 ) -> tuple[Path, ...]:
     """(Re)generates the deterministic dev-module corpus and its own ready-to-use ``config.toml``.
 
-    The config names ``database_url`` and an inference address of the sandbox's own, so passing it
-    with `--config` points every command at the sandbox alone.
+    The config names ``database_url``, the service roles' URLs on the sandbox's database, and an
+    inference address of the sandbox's own, so passing it with `--config` points every command, the
+    served API and the SampleLibrary app included, at the sandbox alone.
 
     The sample pack holds a few hundred one-shots, a labels file names one of every kind, and the
     pipeline table keeps the models small, so `samplelibrary pipeline run` builds the whole sandbox.
@@ -111,7 +123,7 @@ def build_sandbox(
         path.write_bytes(data)
         written_paths.append(path)
 
-    _write_config(paths, database_url=database_url)
+    _write_config(paths, database_url=database_url, service_urls=service_urls)
     return tuple(written_paths)
 
 

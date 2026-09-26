@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 
-from samplecore.storage.service_roles import ServiceRole
+from samplecore.models.service_role import ServiceRole
 from sampleserver.app import API_PREFIX, create_app
 from sampleserver.dependencies import get_connection, get_connection_opener, get_curation_connection
 

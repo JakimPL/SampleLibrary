@@ -13,6 +13,8 @@ from sqlalchemy.engine import URL, make_url
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.sample_properties import SampleOccurrence
+from samplecore.models.service_role import ServiceRole
+from samplecore.storage.cluster.embedded.state import managed_catalog_url
 from samplecore.storage.cluster.provisioning import (
     ADMIN_URL_ENVIRONMENT_VARIABLE,
     DEVELOPMENT_DATABASE,
@@ -29,6 +31,7 @@ from samplecore.storage.cluster.provisioning import (
     development_database_url,
     library_databases,
     login_role,
+    provision,
     server_address,
     statement_value,
 )
@@ -342,3 +345,27 @@ def test_advice_for_a_url_without_a_port_names_a_connection_url_that_parses() ->
 
     admin_line = next(line.strip() for line in remedy if "<password>@" in line)
     assert make_url(admin_line).port == 5432
+
+
+def test_provisioning_creates_service_roles_that_log_in_holding_what_their_service_needs(
+    module_cluster_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A server of a person's own, played by a library's own cluster, whose owner is the superuser `provision` asks."""
+    superuser = make_url(managed_catalog_url(module_cluster_root))
+    monkeypatch.setenv(
+        ADMIN_URL_ENVIRONMENT_VARIABLE,
+        superuser.set(database=MAINTENANCE_DATABASES[0]).render_as_string(hide_password=False),
+    )
+    owner = superuser.set(username="provisioned_owner", password="owner-secret", database="provisioned")
+    service_urls = {
+        ServiceRole.READER: owner.set(username="provisioned_reader", password="reader-secret"),
+        ServiceRole.CURATOR: owner.set(username="provisioned_curator", password="curator-secret"),
+    }
+    rendered = {service: url.render_as_string(hide_password=False) for service, url in service_urls.items()}
+
+    first = provision(owner.render_as_string(hide_password=False), service_urls=rendered)
+    again = provision(owner.render_as_string(hide_password=False), service_urls=rendered)
+
+    assert first.service_roles_created == ("provisioned_reader", "provisioned_curator")
+    assert again.service_roles_created == ()
+    assert again.service_roles == ("provisioned_reader", "provisioned_curator")

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from samplecore.cli_parsing import command_parser
-from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_SETTINGS
 from samplecore.exit_status import ExitStatus
 from samplecore.storage.cluster.embedded.state import ManagedClusterMissingError
 from samplelibrary.commands import COMMANDS, Command, CommandGroup
@@ -42,8 +42,8 @@ def dispatch(argv: list[str]) -> None:
 
     The command parses those arguments with its own parser, so its help and its errors are its own.
     `--config` reaches the command through the environment, which every process the command starts
-    inherits along with it. The file it names supplies the database too, so a sandbox config keeps
-    every command on the sandbox whatever `SAMPLELIBRARY_DATABASE_URL` holds. `--memory-cap` holds
+    inherits along with it. The file it names supplies the database and its service roles too, so a
+    sandbox config keeps every command on the sandbox whatever the database URL variables hold. `--memory-cap` holds
     the command, and everything it starts, to a memory ceiling before it loads anything of its own.
     """
     parser = _build_parser()
@@ -54,7 +54,8 @@ def dispatch(argv: list[str]) -> None:
     )
     if arguments.config is not None:
         os.environ[CONFIG_PATH_ENVIRONMENT_VARIABLE] = str(arguments.config.resolve())
-        os.environ.pop(DATABASE_URL_ENVIRONMENT_VARIABLE, None)
+        for variable in DATABASE_URL_SETTINGS.values():
+            os.environ.pop(variable, None)
 
     scope = _entered_memory_scope(arguments.memory_cap, arguments.memory_scope, argv)
     _run_reporting_an_unreachable_catalog(command, command_arguments, prog=arguments.program, scope=scope)

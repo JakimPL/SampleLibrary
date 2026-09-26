@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 
-from samplecore.storage.service_roles import ServiceRole
+from samplecore.models.service_role import ServiceRole
 from sampleserver.app import API_PREFIX, create_app
 from sampleserver.frontend import INDEX_DOCUMENT
 from tests.sampleserver.conftest import INFERENCE_URL

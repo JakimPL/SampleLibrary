@@ -45,8 +45,10 @@ just database
 ```
 
 It makes sure the server holds your library's database, `samplelibrary_dev` for the development
-sandbox and `samplelibrary_test` for the tests, all owned by one role. It creates whatever is
-missing and keeps every row already there, so it is safe to run at any time. When a step needs a
+sandbox and `samplelibrary_test` for the tests, all owned by one role. It also creates the two roles
+the API connects as, one that reads and one that also records your labels, each allowed nothing
+more. It creates whatever is missing and keeps every row already there, so it is safe to run at any
+time. When a step needs a
 PostgreSQL superuser, it prints the statement to run; run `just database` again afterwards. On a
 server where those names belong to someone else, create your library's database alone with
 `createdb -O <role> <name>`: the first scan adds its tables.
@@ -66,6 +68,12 @@ The `[library]` table:
   takes its place, except for a command given `--config`, which reads everything from the file it
   names. Left out, the library runs its own server in `library_root/postgres`, listening on this
   machine alone.
+- `server_database_url` and `curation_database_url`: on a server of your own, the roles
+  `samplelibrary serve` and the SampleLibrary app connect as. The first reads the library, the second
+  also records your labels, and neither may change anything else; `just database` creates both with
+  the names and passwords these URLs hold. `SAMPLELIBRARY_SERVER_DATABASE_URL` and
+  `SAMPLELIBRARY_CURATION_DATABASE_URL` take their places. A library running its own server creates
+  its roles itself.
 - `minimum_sample_frames`: the shortest sample the library keeps, 512 frames by default.
 - `sample_directories`: folders of WAV, AIFF and FLAC files to add, such as
   `["/home/you/Samples/Packs"]`. Their files are read where they are, and each folder stands apart
@@ -214,7 +222,7 @@ the image holds and what to mount.
 | Recipe | What it does |
 |---|---|
 | `just install` | Installs the Python and web dependencies and the git hooks, and puts `config.toml` in place |
-| `just database` | Creates the role and the library, sandbox and test databases wherever they are missing |
+| `just database` | Creates the roles and the library, sandbox and test databases wherever they are missing |
 | `just rebuild [targets]` | Builds the library, or its `catalog` or `cloud` part, running only the steps whose inputs changed |
 | `just status [targets]` | Says what each step would do now, and why |
 | `just app` | Runs the database, the API with the built web app and the morph renderer, opened in a browser |

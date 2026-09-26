@@ -493,7 +493,7 @@ def connect_for_curation(database_url: str) -> Connection:
     the pipelines that build one. The caller owns the transaction and commits its own work.
     """
     connection = _open(database_url)
-    _claim_schema_creation(connection)
+    claim_schema_creation(connection)
     create_curation_schema(connection)
     connection.commit()
     return connection
@@ -533,14 +533,14 @@ def create_schema(connection: Connection) -> None:
     while staying outside the metadata every rebuild and purge iterates.
 
     Safe to call from several processes opening the same fresh catalog at once: each waits its turn
-    on `_claim_schema_creation`, and every one after the first finds the tables already standing.
+    on `claim_schema_creation`, and every one after the first finds the tables already standing.
     """
-    _claim_schema_creation(connection)
+    claim_schema_creation(connection)
     metadata.create_all(connection)
     create_curation_schema(connection)
 
 
-def _claim_schema_creation(connection: Connection) -> None:
+def claim_schema_creation(connection: Connection) -> None:
     """Hold the catalog's creation lock until the caller's transaction ends.
 
     ``CREATE TABLE IF NOT EXISTS`` still races: two processes can both find a table missing and both

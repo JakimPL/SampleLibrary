@@ -10,17 +10,24 @@ import pytest
 from samplecore.config import (
     CONFIG_PATH_ENVIRONMENT_VARIABLE,
     DATABASE_URL_ENVIRONMENT_VARIABLE,
+    SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE,
     ConfigurationError,
     InferenceConfig,
     InvalidSettingsError,
     LibraryConfig,
+    ServiceRoleUnconfiguredError,
     create_config_file,
     default_config_path,
     load_config,
     parse_config,
 )
+from samplecore.models.service_role import ServiceRole
 from samplecore.paths import EXAMPLE_CONFIG_PATH
-from samplecore.storage.cluster.embedded.state import ManagedClusterMissingError, create_cluster_state
+from samplecore.storage.cluster.embedded.state import (
+    ManagedClusterMissingError,
+    claim_service_roles,
+    create_cluster_state,
+)
 
 
 def test_a_source_checkout_reads_the_config_beside_the_committed_example_template() -> None:
@@ -413,3 +420,48 @@ def test_a_sample_directory_still_naming_the_stand_in_path_is_rejected(tmp_path:
 
     with pytest.raises(ConfigurationError, match="sample_directories"):
         load_config(config_path)
+
+
+def _library_config(tmp_path: Path, extra: str) -> LibraryConfig:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\n{extra}', encoding="utf-8"
+    )
+    return load_config(config_path)
+
+
+def test_a_named_service_url_is_the_one_a_served_api_connects_with(tmp_path: Path) -> None:
+    config = _library_config(
+        tmp_path,
+        'database_url = "postgresql+psycopg://owner:secret@db.local/library"\n'
+        'server_database_url = "postgresql+psycopg://reader:secret@db.local/library"\n',
+    )
+
+    assert config.service_url(ServiceRole.READER) == "postgresql+psycopg://reader:secret@db.local/library"
+    assert config.service_urls() == {ServiceRole.READER: "postgresql+psycopg://reader:secret@db.local/library"}
+
+
+def test_a_library_on_a_server_of_its_own_names_the_setting_a_missing_role_needs(tmp_path: Path) -> None:
+    config = _library_config(tmp_path, 'database_url = "postgresql+psycopg://owner:secret@db.local/library"\n')
+
+    with pytest.raises(ServiceRoleUnconfiguredError, match="curation_database_url"):
+        config.service_url(ServiceRole.CURATOR)
+
+
+def test_a_managed_library_connects_its_service_roles_to_its_own_cluster(tmp_path: Path) -> None:
+    config = _library_config(tmp_path, "")
+    state = create_cluster_state(config.library_root)
+    roles = claim_service_roles(config.library_root)
+
+    assert config.service_url(ServiceRole.READER) == (
+        f"postgresql+psycopg://samplelibrary_reader:{roles.reader_password}@127.0.0.1:{state.port}/samplelibrary"
+    )
+
+
+def test_a_service_url_in_the_environment_takes_the_configs_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE, "postgresql+psycopg://reader:other@db.local/library")
+    config = _library_config(tmp_path, 'server_database_url = "postgresql+psycopg://reader:secret@db.local/library"\n')
+
+    assert config.server_database_url == "postgresql+psycopg://reader:other@db.local/library"

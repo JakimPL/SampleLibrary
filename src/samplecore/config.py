@@ -10,11 +10,24 @@ from urllib.parse import SplitResult, urlsplit
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from pydantic_core import ErrorDetails
 
+from samplecore.models.service_role import ServiceRole
 from samplecore.paths import CHECKOUT_CONFIG_PATH, EXAMPLE_CONFIG_PATH, runs_from_checkout, user_config_file
-from samplecore.storage.cluster.embedded.state import managed_catalog_url
+from samplecore.storage.cluster.embedded.state import managed_catalog_url, managed_service_url
 
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
 DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_DATABASE_URL"
+SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_SERVER_DATABASE_URL"
+CURATION_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CURATION_DATABASE_URL"
+# Each setting naming a database URL, beside the environment variable that overrides it.
+DATABASE_URL_SETTINGS: Final[dict[str, str]] = {
+    "database_url": DATABASE_URL_ENVIRONMENT_VARIABLE,
+    "server_database_url": SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE,
+    "curation_database_url": CURATION_DATABASE_URL_ENVIRONMENT_VARIABLE,
+}
+SERVICE_URL_SETTINGS: Final[dict[ServiceRole, str]] = {
+    ServiceRole.READER: "server_database_url",
+    ServiceRole.CURATOR: "curation_database_url",
+}
 DEFAULT_MINIMUM_SAMPLE_FRAMES: Final[int] = 512
 DEFAULT_SAMPLE_DIRECTORIES: Final[tuple[Path, ...]] = ()
 DEFAULT_SAMPLE_EXCLUSIONS: Final[tuple[str, ...]] = ()
@@ -37,6 +50,10 @@ PLACEHOLDER_PATH_PREFIX: Final[str] = "/path/to/your"
 
 class ConfigurationError(Exception):
     """Raised when the local library configuration cannot be found or does not validate."""
+
+
+class ServiceRoleUnconfiguredError(ConfigurationError):
+    """Raised when a served catalog API needs a role the config names no URL for."""
 
 
 class InvalidSettingsError(ConfigurationError):
@@ -113,6 +130,8 @@ class LibraryConfig(BaseModel):
     module_source_directory: Path | None = None
     library_root: Path
     database_url: str | None = None
+    server_database_url: str | None = None
+    curation_database_url: str | None = None
     minimum_sample_frames: int = DEFAULT_MINIMUM_SAMPLE_FRAMES
     sample_directories: tuple[Path, ...] = DEFAULT_SAMPLE_DIRECTORIES
     sample_exclusions: tuple[str, ...] = DEFAULT_SAMPLE_EXCLUSIONS
@@ -138,7 +157,7 @@ class LibraryConfig(BaseModel):
             raise ValueError("an exclusion must be a pattern such as *loop*")
         return exclusions
 
-    @field_validator("database_url")
+    @field_validator("database_url", "server_database_url", "curation_database_url")
     @classmethod
     def _parses_as_a_database_url(cls, database_url: str | None) -> str | None:
         """Read the URL the way every connection will, importing the database stack only once a config loads.
@@ -174,6 +193,30 @@ class LibraryConfig(BaseModel):
         if self.database_url is not None:
             return self.database_url
         return managed_catalog_url(self.library_root)
+
+    def service_url(self, service: ServiceRole) -> str:
+        """The URL a served catalog API of ``service`` connects with: the configured one, or the managed cluster's.
+
+        Raises:
+            ServiceRoleUnconfiguredError: the library keeps its database on a server of its own, and
+                the config names no URL for the role.
+            ManagedClusterMissingError: the library manages its database and has not created it yet.
+        """
+        setting = SERVICE_URL_SETTINGS[service]
+        configured = self.service_urls().get(service)
+        if configured is not None:
+            return configured
+        if self.manages_database:
+            return managed_service_url(self.library_root, service)
+        raise ServiceRoleUnconfiguredError(
+            f"The config names no {setting}, the role a served {service.value} connects as. Set it in the "
+            f"[{LIBRARY_TABLE}] table, then run `samplelibrary setup database` to create the role."
+        )
+
+    def service_urls(self) -> dict[ServiceRole, str]:
+        """The service role URLs the config names, for creating those roles on a server of a person's own."""
+        named = {ServiceRole.READER: self.server_database_url, ServiceRole.CURATOR: self.curation_database_url}
+        return {service: url for service, url in named.items() if url is not None}
 
 
 def load_config(path: Path | None = None) -> LibraryConfig:
@@ -213,9 +256,10 @@ def parse_config(content: str, config_path: Path) -> LibraryConfig:
     """
     data = _read_tables(content, config_path)
     library_data = _anchored_paths(_table(data, LIBRARY_TABLE, config_path), config_path.parent.resolve())
-    database_url_from_environment = os.environ.get(DATABASE_URL_ENVIRONMENT_VARIABLE)
-    if database_url_from_environment:
-        library_data["database_url"] = database_url_from_environment
+    for setting, variable in DATABASE_URL_SETTINGS.items():
+        from_environment = os.environ.get(variable)
+        if from_environment:
+            library_data[setting] = from_environment
     library_data[INFERENCE_TABLE] = _table(data, INFERENCE_TABLE, config_path)
     try:
         config = LibraryConfig.model_validate(library_data)

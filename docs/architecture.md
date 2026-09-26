@@ -263,9 +263,22 @@ library (`provisioning.development_database_url`), and an inference address of i
 sandbox's API never dials the real library's renderer. One role, named by `config.toml`'s `database_url`, owns all
 three.
 
-`samplelibrary setup database` (`just database`) creates whichever of the role and the databases
+Two more roles serve the catalog over HTTP (`samplecore.storage.service_roles`), each with no power
+over the server and owning nothing. The reader, named by `server_database_url`, is what `samplelibrary
+serve` and a deployed site connect as: it reads every catalog table and the labels, and writes
+nothing. The curator, named by `curation_database_url`, is what the SampleLibrary app's catalog
+connects as: it also inserts, updates and deletes rows of `curation.sample_annotation` and adds tag
+ranks, and holds nothing on the label history, which its trigger writes with the owner's rights.
+`grant_service_role` grants exactly that, idempotently, and `check_service_role` logs in as a role and
+insists on it: no superuser or other power, no ownership, no `CREATE`, every table the API reads
+readable, and exactly its service's writes, naming each difference. A library keeping its own
+server creates `samplelibrary_reader` and `samplelibrary_curator` itself on every start, with
+passwords in `library_root/postgres/roles.json`, readable by its owner alone.
+
+`samplelibrary setup database` (`just database`) creates whichever of the roles and the databases
 are missing and adds any missing tables to the library and the sandbox, leaving every row in place,
-so it is safe against a populated library. `samplecore.storage.cluster`
+so it is safe against a populated library. It grants each service role its rights in both, then
+logs in as it to confirm its password and its rights. `samplecore.storage.cluster`
 owns that work: `quoting` turns a name or a password into a fragment of SQL and rejects what quoting
 cannot carry (an empty identifier, or a NUL byte, which the driver would otherwise cut a name
 short at), `statements` holds every statement this project runs against the cluster rather than
@@ -274,12 +287,15 @@ which `SAMPLELIBRARY_ADMIN_DATABASE_URL` supplies where the library's own creden
 without it the command reports the statement to run by hand.
 
 Which database a run reaches is `database_url`, overridden by `SAMPLELIBRARY_DATABASE_URL`, which
-is how a deployment supplies credentials that never live in a file. `--config` wins over both: the
+is how a deployment supplies credentials that never live in a file; the service roles' URLs follow
+`SAMPLELIBRARY_SERVER_DATABASE_URL` and `SAMPLELIBRARY_CURATION_DATABASE_URL` the same way. `--config` wins over both: the
 `dev` recipes pass the sandbox's config, and the file's database is the one they reach whatever the
 environment holds. The suite reads `SAMPLELIBRARY_TEST_DATABASE_URL`, then the server the
 configuration names under the `samplelibrary_test` database, then `samplelibrary_test` on localhost,
 and gives each `pytest -n` worker a database of its own, created and dropped around the run: that is
-what the role's `CREATEDB` grant is for, and why `samplelibrary_test` itself stays empty.
+what the role's `CREATEDB` grant is for, and why `samplelibrary_test` itself stays empty. The tests of
+the service roles create them in a library's own server, whose owner is a superuser, so the shared
+test server needs no right to create roles.
 
 ## Samples read in place
 
@@ -502,9 +518,10 @@ the built frontend. The `Launcher` owns what the library needs:
 - **Database.** A config naming no `database_url` manages its own Postgres
   (`samplecore.storage.cluster.embedded`): `initdb` and `pg_ctl` from the `postgresql-binaries`
   wheel create and run a cluster in `library_root/postgres`, listening on the loopback address
-  under one role, with the port and password in `cluster.json`. Every process reaches it through
-  `LibraryConfig.catalog_url()`, which reads that file; a port another program has taken moves to a
-  free one on the next start.
+  under one owner role, with the port and password in `cluster.json`, and the two service roles'
+  passwords in `roles.json`. Every process reaches it through `LibraryConfig.catalog_url()`, and a
+  served API through `LibraryConfig.service_url()`, which read those files; a port another program
+  has taken moves to a free one on the next start.
 - **Catalog API.** Once the config validates and the database answers, the launcher builds
   `sampleserver.app.create_app` in process and runs its lifespan; `CatalogRoute` forwards every
   `/api` path outside the setup routes to it, and answers 503 while the library is closed.

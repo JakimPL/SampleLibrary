@@ -8,12 +8,14 @@ from typing import Final
 from pydantic import BaseModel, Field
 
 from samplecore.models.base import FROZEN
+from samplecore.models.service_role import ServiceRole
 from samplecore.ports import MAXIMUM_PORT, MINIMUM_PORT, free_port, port_is_free
 from samplecore.storage.atomic import write_bytes_atomically
 
 CLUSTER_DIRECTORY_NAME: Final[str] = "postgres"
 DATA_DIRECTORY_NAME: Final[str] = "data"
 STATE_FILE_NAME: Final[str] = "cluster.json"
+ROLES_FILE_NAME: Final[str] = "roles.json"
 LOG_FILE_NAME: Final[str] = "server.log"
 MANAGED_ROLE: Final[str] = "samplelibrary"
 MANAGED_DATABASE: Final[str] = "samplelibrary"
@@ -43,6 +45,31 @@ class ClusterState(BaseModel):
     def catalog_url(self) -> str:
         """The URL every connection to the library's catalog opens."""
         return f"postgresql+psycopg://{MANAGED_ROLE}:{self.password}@{MANAGED_HOST}:{self.port}/{MANAGED_DATABASE}"
+
+
+class ServiceRoleState(BaseModel):
+    """The passwords the library's two service roles log in with, readable by their owner alone.
+
+    Kept beside the cluster's own state, in a file of their own, which a library created before the
+    roles existed gains on its next start.
+    """
+
+    model_config = FROZEN
+
+    reader_password: str = Field(min_length=1)
+    curator_password: str = Field(min_length=1)
+
+    def password(self, service: ServiceRole) -> str:
+        match service:
+            case ServiceRole.READER:
+                return self.reader_password
+            case ServiceRole.CURATOR:
+                return self.curator_password
+
+
+def managed_role_name(service: ServiceRole) -> str:
+    """The name of the role a served catalog API of ``service`` logs in as, in a library's own cluster."""
+    return f"{MANAGED_ROLE}_{service.value}"
 
 
 def cluster_directory(library_root: Path) -> Path:
@@ -78,6 +105,43 @@ def managed_catalog_url(library_root: Path) -> str:
     return read_cluster_state(library_root).catalog_url
 
 
+def roles_path(library_root: Path) -> Path:
+    return cluster_directory(library_root) / ROLES_FILE_NAME
+
+
+def claim_service_roles(library_root: Path) -> ServiceRoleState:
+    """The service roles' passwords as recorded, chosen and recorded first where the library has none yet."""
+    path = roles_path(library_root)
+    if path.is_file():
+        return ServiceRoleState.model_validate_json(path.read_text(encoding="utf-8"))
+    roles = ServiceRoleState(
+        reader_password=secrets.token_urlsafe(PASSWORD_BYTES), curator_password=secrets.token_urlsafe(PASSWORD_BYTES)
+    )
+    _write_private(path, roles.model_dump_json().encode("utf-8"))
+    return roles
+
+
+def managed_service_url(library_root: Path, service: ServiceRole) -> str:
+    """The URL a served catalog API of ``service`` connects to a library's own cluster with.
+
+    Raises:
+        ManagedClusterMissingError: the library holds no managed cluster yet, or its service roles
+            have not been set up.
+    """
+    state = read_cluster_state(library_root)
+    path = roles_path(library_root)
+    if not path.is_file():
+        raise ManagedClusterMissingError(
+            f"The database of the library at {library_root} has no service roles yet. "
+            "Start the SampleLibrary app or run `samplelibrary setup database` to create them."
+        )
+    roles = ServiceRoleState.model_validate_json(path.read_text(encoding="utf-8"))
+    return (
+        f"postgresql+psycopg://{managed_role_name(service)}:{roles.password(service)}"
+        f"@{MANAGED_HOST}:{state.port}/{MANAGED_DATABASE}"
+    )
+
+
 def create_cluster_state(library_root: Path) -> ClusterState:
     """Choose the port and the password of a new cluster and record them, readable by their owner alone.
 
@@ -99,8 +163,11 @@ def claim_port(library_root: Path, state: ClusterState) -> ClusterState:
 
 
 def _write_cluster_state(library_root: Path, state: ClusterState) -> None:
-    path = state_path(library_root)
-    write_bytes_atomically(path, state.model_dump_json().encode("utf-8"))
+    _write_private(state_path(library_root), state.model_dump_json().encode("utf-8"))
+
+
+def _write_private(path: Path, content: bytes) -> None:
+    write_bytes_atomically(path, content)
     if sys.platform != "win32":
         path.chmod(PRIVATE_FILE_MODE)
 

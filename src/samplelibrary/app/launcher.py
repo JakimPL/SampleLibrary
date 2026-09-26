@@ -16,12 +16,12 @@ from starlette.concurrency import run_in_threadpool
 from samplecore.config import ConfigurationError, InferenceConfig, LibraryConfig, load_config
 from samplecore.config_editing import LibraryOptions, LibrarySources, write_library_options, write_library_sources
 from samplecore.models.base import FROZEN
+from samplecore.models.service_role import ServiceRole
 from samplecore.paths import default_library_root
 from samplecore.ports import PortUnavailableError, free_port
 from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster, EmbeddedClusterError
 from samplecore.storage.database import connect
-from samplecore.storage.service_roles import ServiceRole
 from samplelibrary.app.instance.lock import HeldLock, LockUnavailableError, try_lock
 from samplelibrary.app.instance.place import library_lock_path
 from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView

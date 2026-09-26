@@ -3,13 +3,15 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+from contextlib import closing
 from pathlib import Path
 from typing import Final
 
-from sqlalchemy import create_engine
+from sqlalchemy import Connection, create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.pool import NullPool
 
+from samplecore.models.service_role import ServiceRole
 from samplecore.processes import HIDDEN_CONSOLE_FLAGS
 from samplecore.storage.cluster.embedded.binaries import PostgresProgram, program_path
 from samplecore.storage.cluster.embedded.state import (
@@ -20,13 +22,22 @@ from samplecore.storage.cluster.embedded.state import (
     MANAGED_ROLE,
     ClusterState,
     claim_port,
+    claim_service_roles,
     cluster_directory,
     create_cluster_state,
+    managed_role_name,
     read_cluster_state,
     state_path,
 )
-from samplecore.storage.cluster.statements import create_database, database_owner
-from samplecore.storage.database import connect, connect_for_curation
+from samplecore.storage.cluster.statements import (
+    create_database,
+    create_service_role,
+    database_owner,
+    role_attributes,
+    set_role_password,
+)
+from samplecore.storage.database import connect
+from samplecore.storage.service_roles import grant_service_role
 
 VERSION_FILE_NAME: Final[str] = "PG_VERSION"
 CONFIGURATION_FILE_NAME: Final[str] = "postgresql.conf"
@@ -97,7 +108,7 @@ class EmbeddedCluster:
         if not self.is_running:
             state = claim_port(self._library_root, state)
             self._start(state)
-        _prepare_catalog(state)
+        _prepare_catalog(state, library_root=self._library_root)
         return state.catalog_url
 
     def stop(self) -> None:
@@ -202,15 +213,33 @@ def _server_settings() -> str:
     )
 
 
-def _prepare_catalog(state: ClusterState) -> None:
-    """Create the catalog's database where it is missing, then its tables and the curation schema."""
+def _prepare_catalog(state: ClusterState, *, library_root: Path) -> None:
+    """Create the catalog's database where it is missing, its tables and the curation schema, and its service roles.
+
+    Each service role is created where the cluster lacks it and logs in with the password recorded
+    for it, then is granted exactly what its service needs, on every start, so a table a new
+    version adds is covered too.
+    """
+    roles = claim_service_roles(library_root)
     maintenance_url = make_url(state.catalog_url).set(database=MAINTENANCE_DATABASE)
     engine = create_engine(maintenance_url, poolclass=NullPool, isolation_level="AUTOCOMMIT")
     try:
         with engine.connect() as connection:
             if database_owner(connection, name=MANAGED_DATABASE) is None:
                 create_database(connection, name=MANAGED_DATABASE, owner=MANAGED_ROLE)
+            for service in ServiceRole:
+                _claim_service_role(connection, role=managed_role_name(service), password=roles.password(service))
     finally:
         engine.dispose()
-    connect(state.catalog_url).close()
-    connect_for_curation(state.catalog_url).close()
+    with closing(connect(state.catalog_url)) as connection:
+        for service in ServiceRole:
+            grant_service_role(connection, service=service, role=managed_role_name(service))
+        connection.commit()
+
+
+def _claim_service_role(connection: Connection, *, role: str, password: str) -> None:
+    """Create the role where the cluster lacks it, and have it log in with ``password`` either way."""
+    if role_attributes(connection, role=role) is None:
+        create_service_role(connection, role=role, password=password)
+    else:
+        set_role_password(connection, role=role, password=password)

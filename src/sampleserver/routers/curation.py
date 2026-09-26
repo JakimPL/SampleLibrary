@@ -25,11 +25,11 @@ from samplecore.models.annotation import (
 )
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import Rating, SampleHash
+from samplecore.models.service_role import ServiceRole
 from samplecore.storage.annotation_writes import AnnotationWrite, write_annotation_changes
 from samplecore.storage.curation import read_tag_ranks
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from samplecore.storage.service_roles import ServiceRole
 from sampleserver.dependencies import get_connection, get_curation_connection
 from sampleserver.equivalence import equivalence_class_members
 from sampleserver.local_person import is_local_person, require_local_person

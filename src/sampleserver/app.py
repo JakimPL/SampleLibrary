@@ -8,8 +8,8 @@ from typing import Final
 from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
+from samplecore.models.service_role import ServiceRole
 from samplecore.storage.database import connect_for_curation, create_pooled_engine
-from samplecore.storage.service_roles import ServiceRole
 from sampleserver.frontend import FrontendMount
 from sampleserver.inference_client import build_inference_client
 from sampleserver.response_cache import RevisionedJsonCache

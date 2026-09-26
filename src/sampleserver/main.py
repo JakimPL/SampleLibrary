@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from samplecore.config import load_config
-from samplecore.storage.service_roles import ServiceRole
+from samplecore.models.service_role import ServiceRole
 from sampleserver.app import create_app
 from sampleserver.frontend import frontend_directory_from_environment
 

@@ -69,6 +69,36 @@ def create_role(connection: Connection, *, role: str, password: str) -> None:
     )
 
 
+def create_service_role(connection: Connection, *, role: str, password: str) -> None:
+    """Create a login role with no power over the server, which a served catalog API connects as.
+
+    Raises:
+        UnsafeValueError: the name or the password stands for something else once composed.
+        psycopg.Error: the server refused the statement, a duplicate name and an insufficient
+            privilege among the reasons it may.
+    """
+    _execute(
+        connection,
+        sql.SQL(
+            "CREATE ROLE {role} WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS "
+            "PASSWORD {password}"
+        ).format(role=identifier(role), password=literal(password)),
+    )
+
+
+def set_role_password(connection: Connection, *, role: str, password: str) -> None:
+    """Make the role log in with ``password``.
+
+    Raises:
+        UnsafeValueError: the name or the password stands for something else once composed.
+        psycopg.Error: the server refused the statement.
+    """
+    _execute(
+        connection,
+        sql.SQL("ALTER ROLE {role} WITH PASSWORD {password}").format(role=identifier(role), password=literal(password)),
+    )
+
+
 def create_database(connection: Connection, *, name: str, owner: str) -> None:
     """Create a database belonging to the named role.
 

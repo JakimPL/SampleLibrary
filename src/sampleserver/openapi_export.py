@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
+from samplecore.models.service_role import ServiceRole
 from samplecore.schema_export import export_schema, parse_schema_arguments
-from samplecore.storage.service_roles import ServiceRole
 from sampleserver.app import create_app
 
 UNUSED_DATABASE_URL: Final[str] = "postgresql+psycopg://unused/unused"

@@ -61,9 +61,9 @@ def _run_config() -> None:
 def _run_database() -> None:
     """Prepare the database the configuration names, then report what that took.
 
-    A library managing its own database gets its cluster created and started, and the server keeps
-    running for the commands that follow until the app or `pg_ctl` stops it. A configured server
-    gets the role and the databases this project expects.
+    A library managing its own database gets its cluster created and started, with its service roles,
+    and the server keeps running for the commands that follow until the app or `pg_ctl` stops it. A
+    configured server gets the roles and the databases this project expects.
 
     Raises:
         SystemExit: the server refused a connection or a statement, in which case the steps that
@@ -74,7 +74,7 @@ def _run_database() -> None:
         _run_managed_database(config.library_root)
         return
     try:
-        summary = provision(config.catalog_url())
+        summary = provision(config.catalog_url(), service_urls=config.service_urls())
     except ProvisioningError as error:
         _report_obstacle(error)
         sys.exit(ExitStatus.FAILED)
@@ -105,6 +105,20 @@ def _report(summary: ProvisioningSummary) -> None:
         _logger.info("Created database %r." if outcome.created else "Database %r was already there.", outcome.name)
 
     _logger.info("Catalog and curation schemas are ready in %s.", " and ".join(summary.schemas_prepared))
+    for service_role in summary.service_roles:
+        _logger.info(
+            (
+                "Created role %r, which reads the catalog and nothing more than its service needs."
+                if service_role in summary.service_roles_created
+                else "Role %r was already there, and holds what its service needs."
+            ),
+            service_role,
+        )
+    if not summary.service_roles:
+        _logger.warning(
+            "The config names no server_database_url or curation_database_url, so `samplelibrary serve` and the "
+            "SampleLibrary app have no role to connect as. Name them in the [library] table, then run this again."
+        )
     if not summary.role_creates_databases:
         _logger.warning(
             "Role %r may not create databases, which the test suite needs for a database per worker. Grant it that:",
@@ -112,7 +126,11 @@ def _report(summary: ProvisioningSummary) -> None:
         )
         _logger.warning('    sudo -u postgres psql -c "ALTER ROLE %s CREATEDB"', summary.role)
 
-    added = summary.role_created or any(outcome.created for outcome in summary.databases)
+    added = (
+        summary.role_created
+        or bool(summary.service_roles_created)
+        or any(outcome.created for outcome in summary.databases)
+    )
     _logger.info("Done." if added else "Done. Everything was already in place, so the server is as it was.")
 
 

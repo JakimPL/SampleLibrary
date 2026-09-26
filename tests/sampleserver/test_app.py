@@ -6,8 +6,8 @@ from typing import Final
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, text
 
+from samplecore.models.service_role import ServiceRole
 from samplecore.storage.curation import CURATION_SCHEMA
-from samplecore.storage.service_roles import ServiceRole
 from sampleserver.app import API_PREFIX, create_app
 from tests.sampleserver.conftest import INFERENCE_URL
 
