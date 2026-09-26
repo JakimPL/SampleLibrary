@@ -121,6 +121,9 @@ def run_pipeline(
     redo_refusal = _redo_refusal(graph, request)
     if redo_refusal is not None:
         return refuse_run(sinks, redo_refusal)
+    unavailable = graph.unavailable_reason(request.targets)
+    if unavailable is not None:
+        return refuse_run(sinks, unavailable)
 
     if request.from_scratch or scratch_is_unfinished(session.context.layout):
         stopped = start_from_scratch(session, sinks, graph.owned_outputs)

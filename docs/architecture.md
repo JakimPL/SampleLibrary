@@ -430,6 +430,8 @@ producing the same bytes leaves everything after it satisfied. Parameters digest
 values of a step's settings model (`settings.py`), so a default written out, `40.0` for `40` and
 reordered keys name the same outputs, and the digest reads the parameters alone, apart from the
 ceiling, the device and the worker count.
+`descriptor_source` is `automatic` by default, which reading the settings settles: `pretrained`
+where the version carries a published release record, `trained` otherwise.
 `descriptor_source = "pretrained"` builds the graph without the steps only training reads (the
 `teacher` reading and both evaluations): the `descriptor` step then downloads the published
 descriptor into the library (`descriptor adopt`), keeping it only when its bytes match the digest
@@ -437,7 +439,9 @@ its release records, and the grid cache takes the model's axis from that release
 retuned views. The release record, `sampledescriptor/pretrained.toml`, is committed with the code:
 it names the download URL, the digest and the grid, so planning a build needs no download.
 `just release-descriptor <tag>` writes it and the file to upload to that GitHub release, from a
-library's current descriptor.
+library's current descriptor. A graph naming `pretrained` on a version without a record marks the
+steps that read it unavailable (`StepGraph.unavailable`), so a run needing them refuses before its
+first step, and a catalog run goes ahead.
 `pipeline status` evaluates the same decisions without running anything, naming the components that
 moved since a step's last record under `pipeline/steps`.
 

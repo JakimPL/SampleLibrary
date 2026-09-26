@@ -92,6 +92,7 @@ appears once the workflow is on the default branch.
    to upload into `dist/descriptor/`, and the record new libraries download it by into
    `src/sampledescriptor/pretrained.toml`. Create a GitHub release with that tag, upload the file to
    it, and commit the record. The workflow downloads the file and checks it against the record.
+   A version carrying no record builds each library's cloud by training a descriptor on it.
 4. **Tag the release** and push the tag, such as `git tag v0.1.0` and `git push origin v0.1.0`. The
    tag must name the version from step 1.
 5. **Publish the draft.** The workflow drafts a GitHub release carrying the three installers.

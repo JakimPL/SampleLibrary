@@ -12,8 +12,9 @@ of this for you; the [README](../README.md) shows how to get it.
 - Node.js 25.9 or later, and npm, for the web app.
 - A PostgreSQL 17 server of your own, or Docker to run one, or neither: the library then runs a
   server of its own inside its folder.
-- An NVIDIA GPU, to train the descriptor that lays out the cloud on your own library. A library
-  taking the pretrained descriptor (`descriptor_source` below) runs on the processor alone.
+- An NVIDIA GPU, for building the cloud in reasonable time: it listens to every sample, and trains
+  the descriptor that lays out the cloud unless the version carries a published one
+  (`descriptor_source` below). The processor alone builds it too, far more slowly.
 - About 1 GB of disk for the listening model, downloaded the first time a build needs it.
 
 ## Setup
@@ -81,9 +82,9 @@ The `[pipeline]` table holds what `just rebuild` builds the library with, every 
 - `memory_cap`: the memory ceiling every step runs under, such as `"16G"`; `"none"` by default.
 - `device` and `workers`: the device training runs on, and how many processes a pass spreads over.
   `"auto"`, the default, picks an NVIDIA card when there is one and the processor otherwise.
-- `descriptor_source`: `"trained"`, the default, teaches the descriptor on your own library;
-  `"pretrained"` downloads the published one, about 2 MB, and builds the cloud with it.
-  Libraries the installed app creates start with `"pretrained"`.
+- `descriptor_source`: `"automatic"`, the default, downloads the published descriptor where this
+  version carries one, about 2 MB, and teaches one on your own library otherwise. `"trained"` and
+  `"pretrained"` name one of the two outright.
 - `labels`: a file of hand labels, as `annotations export` writes it, read into a fresh library.
 - A table per step, such as `[pipeline.descriptor]`, sets that step's parameters (`epochs = 40`) and
   its own `memory_cap`.

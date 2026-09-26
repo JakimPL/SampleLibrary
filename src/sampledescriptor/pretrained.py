@@ -20,6 +20,7 @@ SHA256_PATTERN: Final[str] = r"^[0-9a-f]{64}$"
 DOWNLOAD_CHUNK_BYTES: Final[int] = 1 << 20
 DOWNLOAD_TIMEOUT_SECONDS: Final[float] = 60.0
 DOWNLOAD_LABEL: Final[str] = "Downloading the descriptor"
+MISSING_RELEASE_MESSAGE: Final[str] = "This version of SampleLibrary carries no descriptor to download."
 
 
 class PretrainedDescriptorMissingError(Exception):
@@ -54,6 +55,11 @@ class PretrainedRelease(BaseModel):
     grid: PretrainedGrid
 
 
+def publishes_pretrained() -> bool:
+    """Whether this version of the application carries a published descriptor for libraries to download."""
+    return PRETRAINED_RELEASE_PATH.is_file()
+
+
 def pretrained_release() -> PretrainedRelease:
     """The descriptor this version of the application takes.
 
@@ -70,10 +76,7 @@ def read_pretrained_release(path: Path) -> PretrainedRelease:
         PretrainedDescriptorMissingError: no record is written there.
     """
     if not path.is_file():
-        raise PretrainedDescriptorMissingError(
-            "No pretrained descriptor is published yet. Run `just release-descriptor` after training one, "
-            'or set descriptor_source = "trained" in the [pipeline] table of the config.'
-        )
+        raise PretrainedDescriptorMissingError(MISSING_RELEASE_MESSAGE)
     with path.open("rb") as file:
         return PretrainedRelease.model_validate(tomllib.load(file))
 

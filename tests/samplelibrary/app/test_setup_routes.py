@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import time
+import tomllib
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
@@ -9,6 +10,7 @@ from typing import Final
 import pytest
 from fastapi.testclient import TestClient
 
+from samplecore.config import PIPELINE_TABLE
 from samplelibrary.app.asgi import create_application
 from samplelibrary.app.launcher import Launcher, LibraryStatus
 from samplelibrary.pipeline.settings import DescriptorSource, read_pipeline_settings
@@ -102,7 +104,7 @@ def test_chosen_folders_are_written_and_the_library_opens_under_them(
     assert "*loop*" in config_path.read_text(encoding="utf-8")
 
 
-def test_a_library_the_application_creates_takes_the_bundled_descriptor(
+def test_a_library_the_application_creates_leaves_its_descriptor_to_the_automatic_choice(
     unconfigured: TestClient, tmp_path: Path
 ) -> None:
     packs = tmp_path / "packs"
@@ -117,7 +119,7 @@ def test_a_library_the_application_creates_takes_the_bundled_descriptor(
     unconfigured.put("/api/setup/sources", json=sources)
 
     config_path = Path(unconfigured.get("/api/setup/state").json()["config_path"])
-    assert read_pipeline_settings(config_path).descriptor_source is DescriptorSource.PRETRAINED
+    assert PIPELINE_TABLE not in tomllib.loads(config_path.read_text(encoding="utf-8"))
 
 
 def test_a_library_already_configured_keeps_its_pipeline_settings(
@@ -130,9 +132,15 @@ def test_a_library_already_configured_keeps_its_pipeline_settings(
         "sample_exclusions": [],
     }
 
+    config_path.write_text(
+        f'{config_path.read_text(encoding="utf-8")}\n[{PIPELINE_TABLE}]\ndescriptor_source = "trained"\nworkers = 4\n',
+        encoding="utf-8",
+    )
+
     configured.put("/api/setup/sources", json={**sources, "module_source_directory": str(tmp_path)})
 
-    assert read_pipeline_settings(config_path).descriptor_source is DescriptorSource.TRAINED
+    settings = read_pipeline_settings(config_path)
+    assert (settings.descriptor_source, settings.workers) == (DescriptorSource.TRAINED, 4)
 
 
 def test_folders_stay_as_they_are_while_a_build_runs(configured: TestClient, config_path: Path, tmp_path: Path) -> None:

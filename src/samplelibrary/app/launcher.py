@@ -13,7 +13,7 @@ from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
 from samplecore.config import ConfigurationError, LibraryConfig, load_config
-from samplecore.config_editing import LibrarySources, write_library_sources, write_pipeline_values
+from samplecore.config_editing import LibrarySources, write_library_sources
 from samplecore.models.base import FROZEN
 from samplecore.paths import default_library_root
 from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
@@ -21,13 +21,11 @@ from samplecore.storage.cluster.embedded.server import EmbeddedCluster, Embedded
 from samplecore.storage.database import connect
 from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView
 from samplelibrary.app.processes import ChildProcess
-from samplelibrary.pipeline.settings import DESCRIPTOR_SOURCE_SETTING, DescriptorSource
 from sampleserver.app import create_app
 
 LOGS_DIRECTORY_NAME: Final[str] = "logs"
 RENDERER_LOG_NAME: Final[str] = "renderer.log"
 RENDERER_NAME: Final[str] = "morph renderer"
-NEW_LIBRARY_PIPELINE_VALUES: Final[dict[str, str]] = {DESCRIPTOR_SOURCE_SETTING: DescriptorSource.PRETRAINED.value}
 ACTIVATION_FAILURES: Final[tuple[type[Exception], ...]] = (
     ConfigurationError,
     EmbeddedClusterError,
@@ -131,19 +129,13 @@ class Launcher:
     def choose_sources(self, sources: LibrarySources) -> None:
         """Write a person's choices into the config file and open the library under them in the background.
 
-        A library the application creates downloads the published pretrained descriptor, so
-        building its cloud trains nothing.
-
         Raises:
             BuildInProgressError: a build runs, and the config file stays as it was.
             ConfigurationError: the choices fail validation, and the config file stays as it was.
         """
         if self._builds.is_running:
             raise BuildInProgressError("Wait for the build to finish or cancel it.")
-        creating = not self._config_path.is_file()
         self._config = write_library_sources(self._config_path, sources)
-        if creating:
-            write_pipeline_values(self._config_path, NEW_LIBRARY_PIPELINE_VALUES)
         self._schedule_activation(self._config)
 
     def build(self, target: BuildTarget) -> None:

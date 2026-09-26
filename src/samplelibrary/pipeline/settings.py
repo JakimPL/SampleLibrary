@@ -7,10 +7,11 @@ from enum import StrEnum, unique
 from pathlib import Path
 from typing import Any, Final
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from samplecore.config import PIPELINE_TABLE, ConfigurationError, resolve_config_path
 from samplecore.digests import digest_of_rows
+from sampledescriptor.pretrained import publishes_pretrained
 from samplelibrary.limits.ceiling import MalformedCeiling, MemoryCeiling
 from samplelibrary.pipeline.devices import AUTOMATIC_DEVICE
 
@@ -18,6 +19,7 @@ DEFAULT_MEMORY_CAP: Final[str] = "none"
 OPERATIONAL_STEP_SETTINGS: Final[set[str]] = {"memory_cap"}
 DEFAULT_DEVICE: Final[str] = AUTOMATIC_DEVICE
 DESCRIPTOR_SOURCE_SETTING: Final[str] = "descriptor_source"
+AUTOMATIC_DESCRIPTOR_SOURCE: Final[str] = "automatic"
 
 
 @unique
@@ -26,9 +28,6 @@ class DescriptorSource(StrEnum):
 
     TRAINED = "trained"
     PRETRAINED = "pretrained"
-
-
-DEFAULT_DESCRIPTOR_SOURCE: Final[DescriptorSource] = DescriptorSource.TRAINED
 
 
 class StepSettings(BaseModel):
@@ -58,6 +57,9 @@ class PipelineSettings(BaseModel):
     one is usable and the processor otherwise. `labels` names the file a fresh catalog reads its hand
     labels from. `descriptor_source` says whether the library trains its own descriptor or downloads
     the published pretrained one, which spares it the training and everything only training reads.
+    It is `automatic` unless the table names one: the published descriptor where this version of
+    the application carries one, and training otherwise. Reading the settings settles it, so every
+    step sees the source the run takes.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -66,8 +68,15 @@ class PipelineSettings(BaseModel):
     device: str = DEFAULT_DEVICE
     workers: int | None = Field(default=None, ge=1)
     labels: Path | None = None
-    descriptor_source: DescriptorSource = DEFAULT_DESCRIPTOR_SOURCE
+    descriptor_source: DescriptorSource = Field(default=AUTOMATIC_DESCRIPTOR_SOURCE, validate_default=True)
     steps: Mapping[str, Mapping[str, Any]] = Field(default_factory=dict)
+
+    @field_validator("descriptor_source", mode="before")
+    @classmethod
+    def _settle_automatic_source(cls, value: object) -> object:
+        if value == AUTOMATIC_DESCRIPTOR_SOURCE:
+            return DescriptorSource.PRETRAINED if publishes_pretrained() else DescriptorSource.TRAINED
+        return value
 
     @property
     def ceiling(self) -> MemoryCeiling:

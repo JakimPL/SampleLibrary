@@ -69,7 +69,7 @@ def main(argv: list[str] | None = None) -> None:
     if problem is not None:
         if arguments.tag is not None:
             sys.exit(problem)
-        print(f"::warning::{problem} New libraries can build their catalog, but not their cloud.")
+        print(f"::warning::{problem} New libraries train a descriptor of their own.")
     with arguments.output.open("a", encoding="utf-8") as output:
         output.write(f"version={version}\n")
 

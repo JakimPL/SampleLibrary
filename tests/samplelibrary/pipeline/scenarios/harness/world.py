@@ -50,7 +50,7 @@ from samplelibrary.sandbox.waveforms import SAMPLE_RATE, decaying, tonal_wavefor
 MODULE_COUNT: Final[int] = 6
 PACK_FILE_COUNT: Final[int] = 2
 ADDED_PACK_FRAMES: Final[int] = SAMPLE_RATE // 4
-DEFAULT_PIPELINE_TABLE: Final[str] = 'memory_cap = "none"\nworkers = 1\n'
+DEFAULT_PIPELINE_TABLE: Final[str] = 'memory_cap = "none"\nworkers = 1\ndescriptor_source = "trained"\n'
 CATALOG_PARTS: Final[tuple[str, ...]] = ("modules", "samples", "relations", "files", "passes")
 PARTS: Final[tuple[str, ...]] = (
     "modules",

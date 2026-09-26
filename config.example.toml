@@ -38,7 +38,8 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # workers = 8
 
 # "trained" teaches the descriptor on this library; "pretrained" downloads the published one.
-# descriptor_source = "trained"
+# "automatic" takes the published one where this version carries it, and trains one otherwise.
+# descriptor_source = "automatic"
 
 # A file of hand labels a fresh catalog reads in, as `samplelibrary annotations export` writes it.
 # labels = "/path/to/annotations.jsonl"

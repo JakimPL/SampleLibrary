@@ -12,6 +12,7 @@ from sampledescriptor.commands import adopt
 from sampledescriptor.descriptors.learned import DescriptorDescription
 from sampledescriptor.model_paths import descriptor_path
 from sampledescriptor.pretrained import (
+    MISSING_RELEASE_MESSAGE,
     PretrainedDescriptorMissingError,
     PretrainedDownloadError,
     PretrainedRelease,
@@ -54,8 +55,8 @@ def test_a_release_record_reads_back_as_it_was_written(tmp_path: Path, release: 
     assert read_pretrained_release(path) == release
 
 
-def test_a_version_without_a_published_descriptor_says_how_to_publish_one(tmp_path: Path) -> None:
-    with pytest.raises(PretrainedDescriptorMissingError, match="release-descriptor"):
+def test_a_version_without_a_published_descriptor_says_it_carries_none(tmp_path: Path) -> None:
+    with pytest.raises(PretrainedDescriptorMissingError, match=MISSING_RELEASE_MESSAGE):
         read_pretrained_release(tmp_path / "missing.toml")
 
 

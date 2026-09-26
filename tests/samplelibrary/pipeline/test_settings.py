@@ -58,6 +58,26 @@ def test_the_pipeline_table_names_where_the_descriptor_comes_from(tmp_path: Path
     assert settings.descriptor_source is source
 
 
+@pytest.mark.usefixtures("published")
+@pytest.mark.parametrize(
+    "pipeline_table", ["", '[pipeline]\ndescriptor_source = "automatic"\n'], ids=("unnamed", "named")
+)
+def test_a_version_carrying_a_published_descriptor_hands_it_to_a_library_choosing_automatically(
+    tmp_path: Path, pipeline_table: str
+) -> None:
+    assert read_pipeline_settings(_config(tmp_path, pipeline_table)).descriptor_source is DescriptorSource.PRETRAINED
+
+
+@pytest.mark.usefixtures("unpublished")
+@pytest.mark.parametrize(
+    "pipeline_table", ["", '[pipeline]\ndescriptor_source = "automatic"\n'], ids=("unnamed", "named")
+)
+def test_a_version_carrying_no_published_descriptor_trains_one_for_a_library_choosing_automatically(
+    tmp_path: Path, pipeline_table: str
+) -> None:
+    assert read_pipeline_settings(_config(tmp_path, pipeline_table)).descriptor_source is DescriptorSource.TRAINED
+
+
 def test_a_descriptor_source_this_pipeline_does_not_know_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ConfigurationError, match="descriptor_source"):
         read_pipeline_settings(_config(tmp_path, '[pipeline]\ndescriptor_source = "borrowed"\n'))

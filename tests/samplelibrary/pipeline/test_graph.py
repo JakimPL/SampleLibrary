@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Final
 
 import pytest
 
@@ -23,6 +24,9 @@ class NamedStep:
         return {}
 
 
+TEACHER_UNAVAILABLE: Final[str] = "no listening model is installed"
+
+
 def _graph() -> StepGraph:
     steps = (
         NamedStep("labels"),
@@ -39,6 +43,7 @@ def _graph() -> StepGraph:
             "cloud": ("descriptor",),
             ALL_TARGET: tuple(step.name for step in steps),
         },
+        unavailable={"teacher": TEACHER_UNAVAILABLE},
     )
 
 
@@ -58,6 +63,11 @@ def test_a_run_naming_no_target_takes_every_step() -> None:
 
 def test_a_step_may_be_named_in_place_of_a_target() -> None:
     assert [step.name for step in _graph().order(("modules",))] == ["labels", "modules"]
+
+
+def test_a_run_needing_a_step_this_installation_cannot_run_is_told_why() -> None:
+    assert _graph().unavailable_reason(("cloud",)) == TEACHER_UNAVAILABLE
+    assert _graph().unavailable_reason(("catalog",)) is None
 
 
 def test_every_step_that_needs_one_is_named_its_descendant() -> None:
@@ -81,9 +91,9 @@ def test_a_name_that_is_neither_a_target_nor_a_step_is_refused() -> None:
 )
 def test_a_graph_no_order_satisfies_is_refused(steps: tuple[NamedStep, ...], reason: str) -> None:
     with pytest.raises(MalformedGraph, match=reason):
-        StepGraph(steps=steps, owned_outputs=(), targets={})
+        StepGraph(steps=steps, owned_outputs=(), targets={}, unavailable={})
 
 
 def test_a_target_naming_an_unknown_step_is_refused() -> None:
     with pytest.raises(MalformedGraph, match="the cloud target names"):
-        StepGraph(steps=(NamedStep("one"),), owned_outputs=(), targets={"cloud": ("two",)})
+        StepGraph(steps=(NamedStep("one"),), owned_outputs=(), targets={"cloud": ("two",)}, unavailable={})
