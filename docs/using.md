@@ -95,5 +95,5 @@ controls sized for a finger. Your browser's "Add to Home Screen" installs the ap
 
 The installed app answers on its own computer. To open the library on a phone, run SampleLibrary
 from its source on the same network: [Running from source](source.md#phones-and-other-devices)
-shows how. Everyone on that network who opens the address can change your labels, since the app
-asks nobody to sign in.
+shows how. A phone shows your labels, ratings and favorites as they are; you change them on the
+computer SampleLibrary runs on.

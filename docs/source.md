@@ -169,8 +169,9 @@ just frontend-dev-lan
 ```
 
 This starts the web app for every device on your network; open the address it prints on your phone.
-[Using SampleLibrary](using.md#phones-and-tablets) describes the app on a phone. Everyone on your
-network who opens the address can change your labels, since the app asks nobody to sign in.
+[Using SampleLibrary](using.md#phones-and-tablets) describes the app on a phone. The API `just
+serve` runs reads the library and changes nothing, so every device on the network sees your labels
+as they are; you change them in `just app` on the computer it runs on.
 
 ## The morph renderer
 

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
 from samplecore.storage.database import connect_for_curation, create_pooled_engine
+from samplecore.storage.service_roles import ServiceRole
 from sampleserver.frontend import FrontendMount
 from sampleserver.inference_client import build_inference_client
 from sampleserver.response_cache import RevisionedJsonCache
@@ -19,17 +20,22 @@ API_PREFIX: Final[str] = "/api"
 GZIP_MINIMUM_SIZE: Final[int] = 1024
 GZIP_COMPRESSION_LEVEL: Final[int] = 1
 READ_POOL_SIZE: Final[int] = 5
+DESCRIPTIONS: Final[dict[ServiceRole, str]] = {
+    ServiceRole.READER: "Read access to the sample catalog, with morphs between samples.",
+    ServiceRole.CURATOR: "Read access to the sample catalog, with hand annotation and morphs between samples.",
+}
 
 
 def create_app(
-    database_url: str, library_root: Path, inference_url: str, *, frontend_directory: Path | None
+    database_url: str, library_root: Path, inference_url: str, *, role: ServiceRole, frontend_directory: Path | None
 ) -> FastAPI:
-    """Build the FastAPI app serving the catalog at the given database URL.
+    """Build the FastAPI app serving the catalog at the given database URL, as ``role`` allows.
 
-    Every route reads the catalog through a pooled connection Postgres itself refuses a write on. The
-    curation routes are the one exception, and they reach only a person's own decisions about
-    samples, in a schema of their own: what this application records is what a listener decided, and
-    the catalog stays the offline pipelines' to build. Morphs are rendered by a separate inference
+    Every route reads the catalog through a pooled connection Postgres itself refuses a write on. A
+    curator also serves the route recording a person's own decisions about samples, in a schema of
+    their own, and only to the person at the computer it runs on: what this application records is
+    what a listener decided, and the catalog stays the offline pipelines' to build. A reader, what a
+    deployed site runs, serves no route that writes. Morphs are rendered by a separate inference
     process at `inference_url`, which the morph routes reach over HTTP, so the models and the
     libraries behind them stay out of this process.
 
@@ -72,10 +78,11 @@ def create_app(
         docs_url=f"{API_PREFIX}/docs",
         redoc_url=f"{API_PREFIX}/redoc",
         title="SampleLibrary",
-        description="Read access to the sample catalog, with hand annotation and morphs between samples.",
+        description=DESCRIPTIONS[role],
         lifespan=lifespan,
     )
     application.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_SIZE, compresslevel=GZIP_COMPRESSION_LEVEL)
+    application.state.role = role
     application.state.database_url = database_url
     application.state.library_root = library_root
     application.state.inference_url = inference_url
@@ -83,8 +90,10 @@ def create_app(
     application.state.cloud_cache = RevisionedJsonCache()
     application.state.categories_cache = RevisionedJsonCache()
     application.state.category_tags_cache = RevisionedJsonCache()
-    for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.router, morph.router):
+    for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.read_router, morph.router):
         application.include_router(api_router, prefix=API_PREFIX)
+    if role.offers_label_editing:
+        application.include_router(curation.write_router, prefix=API_PREFIX)
     if frontend_directory is not None:
         application.router.routes.append(FrontendMount(frontend_directory, api_prefix=API_PREFIX))
     return application

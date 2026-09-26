@@ -16,6 +16,7 @@ from samplelibrary.app.launcher import Launcher
 from samplelibrary.app.routes import setup
 from sampleserver.app import API_PREFIX
 from sampleserver.frontend import FrontendMount
+from sampleserver.local_person import LocalPersonOnly
 
 SETUP_PREFIX: Final[str] = f"{API_PREFIX}/setup"
 CLOSED_LIBRARY_DETAIL: Final[str] = "The library isn't open yet. Check the setup page."
@@ -58,7 +59,8 @@ class CatalogRoute(BaseRoute):
 def create_application(launcher: Launcher, *, frontend_directory: Path | None, on_ready: Callable[[], None]) -> FastAPI:
     """The one app the application serves: the setup routes, the catalog API behind them, and the frontend.
 
-    Its lifespan opens the library as the server starts and closes it, with everything it runs, as
+    It answers the person at this machine alone, on every path, since it lists their folders,
+    writes their config file and records their labels. Its lifespan opens the library as the server starts and closes it, with everything it runs, as
     the server stops. ``on_ready`` runs once the server is about to answer, which is when the
     application opens a browser on it.
     """
@@ -79,6 +81,7 @@ def create_application(launcher: Launcher, *, frontend_directory: Path | None, o
         title="SampleLibrary setup",
         lifespan=lifespan,
     )
+    application.add_middleware(LocalPersonOnly)
     application.state.launcher = launcher
     application.include_router(setup.router, prefix=SETUP_PREFIX)
     application.router.routes.append(CatalogRoute(launcher))

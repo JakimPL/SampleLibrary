@@ -376,47 +376,24 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/api/curation/annotations/{sample_hash}": {
+    readonly "/api/curation/access": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
             readonly path?: never;
             readonly cookie?: never;
         };
-        readonly get?: never;
+        /**
+         * Read Label Editing
+         * @description Whether the person asking may change labels, so a page shows its editing controls only where they work.
+         */
+        readonly get: operations["read_label_editing_api_curation_access_get"];
         readonly put?: never;
         readonly post?: never;
-        /**
-         * Remove Annotation
-         * @description Take back everything a person decided about one sample, whether or not the catalog still holds it.
-         *
-         *     An annotation whose sample has left the catalog for good, and that relinking cannot place, is
-         *     removed through here.
-         *
-         *     Raises:
-         *         HTTPException: 404 when no annotation is held for this hash.
-         */
-        readonly delete: operations["remove_annotation_api_curation_annotations__sample_hash__delete"];
+        readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
-        /**
-         * Change Annotation
-         * @description Change what a person decided about this sample, optionally across its near-duplicates.
-         *
-         *     Every reached sample keeps the decisions the request leaves out, so a star given to a group
-         *     changes the members' ratings alone. A scope of ``equivalence_class`` reaches every sample the
-         *     detector groups with this one, the same group the listing collapses under one row, and each
-         *     member is written as its own row so the group boundary moving later leaves those decisions
-         *     intact. A sample left recording nothing has its annotation removed, which is how a person takes
-         *     a decision back.
-         *
-         *     The catalog is read through the read-only connection and only the curation schema is written,
-         *     which keeps the one write this application performs to the schema it owns.
-         *
-         *     Raises:
-         *         HTTPException: 404 when no sample is cataloged under this hash and none is annotated.
-         */
-        readonly patch: operations["change_annotation_api_curation_annotations__sample_hash__patch"];
+        readonly patch?: never;
         readonly trace?: never;
     };
     readonly "/api/curation/annotations/vocabulary": {
@@ -512,6 +489,39 @@ export interface paths {
         readonly options?: never;
         readonly head?: never;
         readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/curation/annotations/{sample_hash}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /**
+         * Change Annotation
+         * @description Change what a person decided about this sample, optionally across its near-duplicates.
+         *
+         *     Every reached sample keeps the decisions the request leaves out, so a star given to a group
+         *     changes the members' ratings alone. A scope of ``equivalence_class`` reaches every sample the
+         *     detector groups with this one, the same group the listing collapses under one row, and each
+         *     member is written as its own row so the group boundary moving later leaves those decisions
+         *     intact. A sample left recording nothing has its annotation removed, which is how a person takes
+         *     a decision back.
+         *
+         *     The catalog is read through the read-only connection and only the curation schema is written,
+         *     which keeps the one write this application performs to the schema it owns.
+         *
+         *     Raises:
+         *         HTTPException: 404 when no sample is cataloged under this hash and none is annotated.
+         */
+        readonly patch: operations["change_annotation_api_curation_annotations__sample_hash__patch"];
         readonly trace?: never;
     };
 }
@@ -678,6 +688,14 @@ export interface components {
             readonly vibrato?: components["schemas"]["Vibrato"] | null;
         };
         readonly JsonValue: unknown;
+        /**
+         * LabelEditing
+         * @description Whether the person asking may change labels here, which only the person at the computer the application runs on may.
+         */
+        readonly LabelEditing: {
+            /** Label Editing */
+            readonly label_editing: boolean;
+        };
         /**
          * LibraryStats
          * @description A snapshot of the catalog's overall size and composition.
@@ -1884,58 +1902,14 @@ export interface operations {
             };
         };
     };
-    readonly remove_annotation_api_curation_annotations__sample_hash__delete: {
+    readonly read_label_editing_api_curation_access_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
-            readonly path: {
-                readonly sample_hash: string;
-            };
+            readonly path?: never;
             readonly cookie?: never;
         };
         readonly requestBody?: never;
-        readonly responses: {
-            /** @description Successful Response */
-            readonly 204: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not Found */
-            readonly 404: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Validation Error */
-            readonly 422: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    readonly change_annotation_api_curation_annotations__sample_hash__patch: {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header?: never;
-            readonly path: {
-                readonly sample_hash: string;
-            };
-            readonly cookie?: never;
-        };
-        readonly requestBody: {
-            readonly content: {
-                readonly "application/json": components["schemas"]["AnnotationChangeRequest"];
-            };
-        };
         readonly responses: {
             /** @description Successful Response */
             readonly 200: {
@@ -1943,25 +1917,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": components["schemas"]["AnnotationsWritten"];
-                };
-            };
-            /** @description Not Found */
-            readonly 404: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Validation Error */
-            readonly 422: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                    readonly "application/json": components["schemas"]["LabelEditing"];
                 };
             };
         };
@@ -2098,6 +2054,50 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["MorphAvailability"];
+                };
+            };
+        };
+    };
+    readonly change_annotation_api_curation_annotations__sample_hash__patch: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["AnnotationChangeRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AnnotationsWritten"];
+                };
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

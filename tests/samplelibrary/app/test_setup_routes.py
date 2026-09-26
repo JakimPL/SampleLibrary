@@ -317,3 +317,8 @@ def test_setup_answers_a_page_on_this_machine_alone(
     headers = {"origin": origin} if origin is not None else {}
     with TestClient(application, base_url=base_url, client=client_address) as client:
         assert client.get("/api/setup/state", headers=headers).status_code == 403
+        assert client.get("/api/stats", headers=headers).status_code == 403
+
+
+def test_the_application_refuses_a_request_a_proxy_forwarded(unconfigured: TestClient) -> None:
+    assert unconfigured.get("/api/setup/state", headers={"x-forwarded-for": "203.0.113.9"}).status_code == 403

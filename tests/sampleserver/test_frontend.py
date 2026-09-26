@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 
+from samplecore.storage.service_roles import ServiceRole
 from sampleserver.app import API_PREFIX, create_app
 from sampleserver.frontend import INDEX_DOCUMENT
 from tests.sampleserver.conftest import INFERENCE_URL
@@ -28,7 +29,9 @@ def frontend_directory(tmp_path: Path) -> Path:
 def served(
     connection: Connection, _database_url: str, tmp_path: Path, frontend_directory: Path
 ) -> Iterator[TestClient]:
-    application = create_app(_database_url, tmp_path, INFERENCE_URL, frontend_directory=frontend_directory)
+    application = create_app(
+        _database_url, tmp_path, INFERENCE_URL, role=ServiceRole.READER, frontend_directory=frontend_directory
+    )
     with TestClient(application) as client:
         yield client
 
@@ -64,7 +67,9 @@ def test_the_api_keeps_its_own_routes_and_misses(served: TestClient) -> None:
 def test_an_app_built_without_a_frontend_serves_the_api_alone(
     connection: Connection, _database_url: str, tmp_path: Path
 ) -> None:
-    with TestClient(create_app(_database_url, tmp_path, INFERENCE_URL, frontend_directory=None)) as client:
+    with TestClient(
+        create_app(_database_url, tmp_path, INFERENCE_URL, role=ServiceRole.READER, frontend_directory=None)
+    ) as client:
         assert client.get("/").status_code == 404
         assert client.get(f"{API_PREFIX}/stats").status_code == 200
 

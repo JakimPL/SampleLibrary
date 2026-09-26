@@ -21,6 +21,7 @@ from samplecore.ports import PortUnavailableError, free_port
 from samplecore.storage.cluster.embedded.binaries import PostgresBinariesUnavailableError
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster, EmbeddedClusterError
 from samplecore.storage.database import connect
+from samplecore.storage.service_roles import ServiceRole
 from samplelibrary.app.instance.lock import HeldLock, LockUnavailableError, try_lock
 from samplelibrary.app.instance.place import library_lock_path
 from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView
@@ -252,7 +253,13 @@ class Launcher:
     async def _open_library(self, config: LibraryConfig) -> None:
         await run_in_threadpool(self._prepare_database, config)
         inference = _free_inference_address(config.inference)
-        catalog = create_app(config.catalog_url(), config.library_root, inference.url, frontend_directory=None)
+        catalog = create_app(
+            config.catalog_url(),
+            config.library_root,
+            inference.url,
+            role=ServiceRole.CURATOR,
+            frontend_directory=None,
+        )
         await self._catalog_stack.enter_async_context(catalog.router.lifespan_context(catalog))
         self._catalog = catalog
         self._renderer = ChildProcess(

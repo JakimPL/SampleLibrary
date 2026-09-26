@@ -3,12 +3,18 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Annotated, Final, Self
 
-from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Strict, model_validator
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, ConfigDict, Strict, StringConstraints, field_validator, model_validator
 from sqlalchemy import Connection
 
 from samplecore.anchoring import anchors_by_hash
-from samplecore.labeling.labels import LabelPath, SampleLabel
+from samplecore.labeling.labels import (
+    MAXIMUM_LABEL_CHARACTERS,
+    MAXIMUM_LABEL_TAGS,
+    LabelPath,
+    SampleLabel,
+    written_paths,
+)
 from samplecore.labeling.vocabulary import LabelVocabulary
 from samplecore.models.annotation import (
     AnnotationChanges,
@@ -20,17 +26,17 @@ from samplecore.models.annotation import (
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import Rating, SampleHash
 from samplecore.storage.annotation_writes import AnnotationWrite, write_annotation_changes
-from samplecore.storage.curation import claim_annotation_writes, read_tag_ranks
-from samplecore.storage.database import start_batch
+from samplecore.storage.curation import read_tag_ranks
 from samplecore.storage.repositories.sample import PostgresSampleRepository
-from samplecore.storage.repositories.sample_annotation import (
-    PostgresSampleAnnotationRepository,
-)
+from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
+from samplecore.storage.service_roles import ServiceRole
 from sampleserver.dependencies import get_connection, get_curation_connection
 from sampleserver.equivalence import equivalence_class_members
+from sampleserver.local_person import is_local_person, require_local_person
 from sampleserver.parameters import NOT_FOUND_RESPONSE, SampleHashPath
 
-router = APIRouter(prefix="/curation", tags=["curation"])
+read_router = APIRouter(prefix="/curation", tags=["curation"])
+write_router = APIRouter(prefix="/curation", tags=["curation"], dependencies=[Depends(require_local_person)])
 
 DECISION_FIELDS: Final[frozenset[str]] = frozenset(decision.value for decision in AnnotationDecision)
 
@@ -48,9 +54,16 @@ class AnnotationChangeRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     scope: AnnotationSource
-    label: Annotated[LabelText, Strict()] | None = None
+    label: Annotated[LabelText, Strict(), StringConstraints(max_length=MAXIMUM_LABEL_CHARACTERS)] | None = None
     rating: Annotated[Rating, Strict()] | None = None
     favorite: Annotated[bool, Strict()] = False
+
+    @field_validator("label")
+    @classmethod
+    def _names_few_enough_tags(cls, label: str | None) -> str | None:
+        if label is not None and len(written_paths(label)) > MAXIMUM_LABEL_TAGS:
+            raise ValueError(f"a label names at most {MAXIMUM_LABEL_TAGS} tags")
+        return label
 
     @model_validator(mode="after")
     def _names_a_decision(self) -> Self:
@@ -65,6 +78,14 @@ class AnnotationChangeRequest(BaseModel):
             values=AnnotationDecisions(label=self.label, rating=self.rating, favorite=self.favorite),
             changed=frozenset(AnnotationDecision(name) for name in self.model_fields_set & DECISION_FIELDS),
         )
+
+
+class LabelEditing(BaseModel):
+    """Whether the person asking may change labels here, which only the person at the computer the application runs on may."""
+
+    model_config = FROZEN
+
+    label_editing: bool
 
 
 class TagSummary(BaseModel):
@@ -104,7 +125,7 @@ class AnnotationsWritten(BaseModel):
     skipped: tuple[SampleHash, ...]
 
 
-@router.patch("/annotations/{sample_hash}", responses=NOT_FOUND_RESPONSE)
+@write_router.patch("/annotations/{sample_hash}", responses=NOT_FOUND_RESPONSE)
 def change_annotation(
     sample_hash: SampleHashPath,
     request: AnnotationChangeRequest,
@@ -145,33 +166,20 @@ def change_annotation(
     )
 
 
-@router.delete("/annotations/{sample_hash}", status_code=204, responses=NOT_FOUND_RESPONSE)
-def remove_annotation(
-    sample_hash: SampleHashPath, curation_connection: Connection = Depends(get_curation_connection)
-) -> Response:
-    """Take back everything a person decided about one sample, whether or not the catalog still holds it.
-
-    An annotation whose sample has left the catalog for good, and that relinking cannot place, is
-    removed through here.
-
-    Raises:
-        HTTPException: 404 when no annotation is held for this hash.
-    """
-    with start_batch(curation_connection):
-        claim_annotation_writes(curation_connection)
-        removed = PostgresSampleAnnotationRepository(curation_connection).delete_many((sample_hash,))
-    if not removed:
-        raise HTTPException(status_code=404, detail=f"no annotation held for hash {sample_hash!r}")
-    return Response(status_code=204)
+@read_router.get("/access")
+def read_label_editing(request: Request) -> LabelEditing:
+    """Whether the person asking may change labels, so a page shows its editing controls only where they work."""
+    role: ServiceRole = request.app.state.role
+    return LabelEditing(label_editing=role.offers_label_editing and is_local_person(request))
 
 
-@router.get("/annotations/vocabulary")
+@read_router.get("/annotations/vocabulary")
 def get_label_vocabulary(connection: Connection = Depends(get_connection)) -> tuple[str, ...]:
     """Every label already in use, most-used first, for offering a person their own wording back."""
     return PostgresSampleAnnotationRepository(connection).vocabulary()
 
 
-@router.get("/annotations/tags")
+@read_router.get("/annotations/tags")
 def get_label_tags(connection: Connection = Depends(get_connection)) -> tuple[TagSummary, ...]:
     """Every tag in use, read out of the labels as paths, most used first.
 

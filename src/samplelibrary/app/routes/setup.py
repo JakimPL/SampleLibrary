@@ -14,9 +14,15 @@ from samplelibrary.app.folders import FolderListing, FolderUnreadableError, Plac
 from samplelibrary.app.installation import INSTALLATION_ROUTE, QUIT_ROUTE, Installation, this_installation
 from samplelibrary.app.jobs import BuildTarget, JobAlreadyRunningError
 from samplelibrary.app.launcher import BuildInProgressError, Launcher, LibraryClosedError, SetupState
-from samplelibrary.app.routes.guard import launcher_of, require_local_person
+from sampleserver.local_person import require_local_person
 
 router = APIRouter(dependencies=[Depends(require_local_person)], tags=["setup"])
+
+
+def launcher_of(request: Request) -> Launcher:
+    launcher: Launcher = request.app.state.launcher
+    return launcher
+
 
 LauncherDependency = Annotated[Launcher, Depends(launcher_of)]
 
