@@ -46,14 +46,14 @@ def restore_annotations(connection: Connection, *, moment: datetime, apply: bool
     change, so the history records it, and restoring to the moment before it undoes it.
 
     Raises:
-        RestoreRefused: the history begins after ``moment``, or holds nothing yet.
+        RestoreRefused: the history begins after ``moment``, or has not begun.
     """
     with start_batch(connection):
         claim_annotation_writes(connection)
         history = PostgresAnnotationHistoryRepository(connection)
         started_at = history.started_at()
         if started_at is None:
-            raise RestoreRefused("the label history holds nothing yet")
+            raise RestoreRefused("the label history hasn't begun")
         if moment < started_at:
             raise RestoreRefused(f"the label history begins at {started_at.astimezone():%Y-%m-%d %H:%M:%S}")
         annotations = PostgresSampleAnnotationRepository(connection)

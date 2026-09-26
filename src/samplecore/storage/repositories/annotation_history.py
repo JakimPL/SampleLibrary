@@ -10,7 +10,12 @@ from sqlalchemy import Connection, func, select, text
 from samplecore.models.annotation import AnnotationDecisions, HistoryOperation, SampleAnnotation
 from samplecore.models.base import FROZEN
 from samplecore.models.scalars import SampleHash
-from samplecore.storage.curation import ANNOTATION_HISTORY_TABLE, CURATION_SCHEMA, annotation_history
+from samplecore.storage.curation import (
+    ANNOTATION_HISTORY_TABLE,
+    CURATION_SCHEMA,
+    annotation_history,
+    annotation_history_start,
+)
 from samplecore.storage.repositories.sample_annotation import row_to_sample_annotation
 
 # The newest entry of each sample up to the moment, read back into the annotation table's own row
@@ -48,9 +53,11 @@ class PostgresAnnotationHistoryRepository:
         self._connection = connection
 
     def started_at(self) -> datetime | None:
-        """The moment the first entry was recorded, or None while the history holds none."""
+        """The moment the history began, from which on every moment can be restored to, or None where it has not."""
         # pylint: disable-next=not-callable
-        started: datetime | None = self._connection.execute(select(func.min(annotation_history.c.recorded_at))).scalar()
+        started: datetime | None = self._connection.execute(
+            select(func.max(annotation_history_start.c.began_at))
+        ).scalar()
         return started
 
     def annotations_as_of(self, moment: datetime) -> tuple[SampleAnnotation, ...]:

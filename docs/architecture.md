@@ -220,7 +220,9 @@ it: a row trigger on `sample_annotation` records the operation, the whole row be
 JSONB, the transaction's moment and the login role. The trigger's function runs with its owner's
 rights (`SECURITY DEFINER`, with a pinned search path), so a role allowed to write annotations
 needs, and holds, no privilege on the history, and cannot edit or erase it. The history begins
-the moment its table is created, with a baseline entry for every annotation standing then.
+the moment its table is created, recorded in `curation.annotation_history_start`, with a baseline
+entry for every annotation standing then, so every moment from then on can be restored to, the
+moments before a library's first label included.
 `samplelibrary annotations history` lists the latest entries, and `annotations restore --at
 <moment>` brings every annotation back to how it stood at that moment, a dry run until `--confirm`:
 it writes whole rows back from the history, anchors included, through the table, so the history

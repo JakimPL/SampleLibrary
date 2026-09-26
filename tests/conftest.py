@@ -19,7 +19,7 @@ from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFil
 from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage.cluster.embedded import state as cluster_state
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster
-from samplecore.storage.curation import CURATION_SCHEMA, curation_metadata
+from samplecore.storage.curation import ANNOTATION_HISTORY_START_TABLE, CURATION_SCHEMA, curation_metadata
 from samplecore.storage.database import connect, metadata
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
@@ -34,8 +34,15 @@ WORKER_ENVIRONMENT_VARIABLE: Final[str] = "PYTEST_XDIST_WORKER"
 WORKER_PREFIX: Final[str] = "gw"
 FIRST_WORKER: Final[str] = "gw0"
 WORKER_PORT_BASE: Final[int] = 25432
+# The moment the label history began stays, as the schema does: it belongs to the database, not to a test.
 _EMPTY_CURATION_TABLES: Final = text(
-    f"TRUNCATE {', '.join(f'{CURATION_SCHEMA}.{table.name}' for table in curation_metadata.sorted_tables)} RESTART IDENTITY"
+    "TRUNCATE "
+    + ", ".join(
+        f"{CURATION_SCHEMA}.{table.name}"
+        for table in curation_metadata.sorted_tables
+        if table.name != ANNOTATION_HISTORY_START_TABLE
+    )
+    + " RESTART IDENTITY"
 )
 SINGLE_THREADED_MATH: Final[dict[str, str]] = {
     "OPENBLAS_NUM_THREADS": str(SINGLE_THREAD),

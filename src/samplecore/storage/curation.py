@@ -43,6 +43,7 @@ _OPERATIONS_WITHOUT_PREVIOUS_ROW: Final[tuple[str, ...]] = (
     HistoryOperation.INSERT.value,
 )
 ANNOTATION_HISTORY_TABLE: Final[str] = "annotation_history"
+ANNOTATION_HISTORY_START_TABLE: Final[str] = "annotation_history_start"
 MODULE_SLOT_ANCHOR_COLUMNS: Final[tuple[str, ...]] = (
     "module_hash",
     "module_filename",
@@ -144,6 +145,15 @@ annotation_history = Table(
     Index("annotation_history_recorded_at_index", "recorded_at"),
 )
 
+# The moment the history began, one row, since a history beginning over a library with no labels
+# yet holds no entry from that moment until the first label, while every moment since it can be
+# restored to.
+annotation_history_start = Table(
+    ANNOTATION_HISTORY_START_TABLE,
+    curation_metadata,
+    Column("began_at", DateTime(timezone=True), primary_key=True, server_default=func.transaction_timestamp()),
+)
+
 # The trigger function runs with its owner's rights, which are the ones that write the history,
 # and a pinned search path, so no role invoking it can reach anything else through it.
 _RECORDING_FUNCTION: Final[str] = f"""
@@ -171,6 +181,10 @@ _RECORDING_TRIGGER: Final[str] = (
     f"CREATE TRIGGER sample_annotation_history AFTER INSERT OR UPDATE OR DELETE "
     f"ON {CURATION_SCHEMA}.sample_annotation FOR EACH ROW "
     f"EXECUTE FUNCTION {CURATION_SCHEMA}.record_annotation_change()"
+)
+_HISTORY_START: Final[tuple[str, ...]] = (
+    f"DELETE FROM {CURATION_SCHEMA}.{ANNOTATION_HISTORY_START_TABLE}",
+    f"INSERT INTO {CURATION_SCHEMA}.{ANNOTATION_HISTORY_START_TABLE} DEFAULT VALUES",
 )
 _BASELINE: Final[str] = (
     f"INSERT INTO {CURATION_SCHEMA}.{ANNOTATION_HISTORY_TABLE} (sample_hash, operation, current) "
@@ -205,13 +219,19 @@ def create_curation_schema(connection: Connection) -> None:
 
 
 def _begin_annotation_history(connection: Connection) -> None:
-    """Install the trigger recording every change to an annotation, and record the annotations standing now.
+    """Install the trigger recording every change to an annotation, and record the moment and the annotations standing now.
 
     The table's creation and this run in one transaction under the schema lock, and creating the
     trigger waits for writes in flight to end, so every annotation is either in the baseline or
     recorded by the trigger, never missed between the two.
     """
-    for statement in (_RECORDING_FUNCTION, _RECORDING_FUNCTION_PRIVILEGES, _RECORDING_TRIGGER, _BASELINE):
+    for statement in (
+        _RECORDING_FUNCTION,
+        _RECORDING_FUNCTION_PRIVILEGES,
+        _RECORDING_TRIGGER,
+        *_HISTORY_START,
+        _BASELINE,
+    ):
         connection.execute(text(statement))
 
 

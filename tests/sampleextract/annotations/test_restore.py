@@ -122,9 +122,13 @@ def test_a_moment_before_the_history_begins_is_refused(timeline: LabelTimeline, 
         restore_annotations(connection, moment=after_labeling - timedelta(days=1), apply=True)
 
 
-def test_an_empty_history_is_refused(connection: Connection) -> None:
-    with pytest.raises(RestoreRefused, match="nothing yet"):
-        restore_annotations(connection, moment=datetime.now(UTC), apply=True)
+def test_a_moment_before_the_first_label_clears_every_label(timeline: LabelTimeline) -> None:
+    before_labeling = timeline.mark()
+    timeline.write(_annotation(KICK_HASH, label="KICK"), _annotation(SNARE_HASH, label="SNARE"))
+
+    timeline.restore(before_labeling)
+
+    assert timeline.labels() == {}
 
 
 def test_a_plan_writes_what_differs_and_clears_what_the_moment_did_not_hold() -> None:
