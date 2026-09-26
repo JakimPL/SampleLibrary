@@ -1,7 +1,8 @@
+param([Parameter(Mandatory = $true)][string] $Executable)
 $ErrorActionPreference = "SilentlyContinue"
-try {
-    Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/setup/quit" -TimeoutSec 10 | Out-Null
-} catch {
+$python = & $Executable self python-path
+if ($python -and (Test-Path $python)) {
+    & $python -m samplelibrary.app --quit | Out-Null
 }
 $installation = Join-Path $env:LOCALAPPDATA "pyapp\data\samplelibrary"
 $deadline = (Get-Date).AddSeconds(60)

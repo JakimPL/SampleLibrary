@@ -40,7 +40,7 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; IconFilename
 Filename: "{app}\{#AppName}.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\quit.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "QuitApplication"
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\quit.ps1"" -Executable ""{app}\{#AppName}.exe"""; Flags: runhidden waituntilterminated; RunOnceId: "QuitApplication"
 Filename: "{app}\{#AppName}.exe"; Parameters: "self remove"; Flags: runhidden waituntilterminated; RunOnceId: "RemovePackages"
 
 [Code]
@@ -103,7 +103,7 @@ begin
   if (CurStep = ssInstall) and FileExists(ExpandConstant('{app}\{#AppName}.exe')) then
   begin
     ExtractTemporaryFile('quit.ps1');
-    Exec('powershell.exe', ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{tmp}\quit.ps1"'), '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('powershell.exe', ExpandConstant('-NoProfile -ExecutionPolicy Bypass -File "{tmp}\quit.ps1" -Executable "{app}\{#AppName}.exe"'), '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec(ExpandConstant('{app}\{#AppName}.exe'), 'self remove', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;

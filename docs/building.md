@@ -57,7 +57,9 @@ just installer    # dist/: the installer for this system
   - The Windows installer carries both launchers and installs the NVIDIA one where `nvidia-smi`
     reports a driver for CUDA 12 or newer. It puts the app in the person's own programs folder,
     with a Start menu shortcut and an optional desktop one. Upgrading and uninstalling first quit
-    the running app and remove the packages the earlier version installed; the library stays.
+    the running app with the installed interpreter's `-m samplelibrary.app --quit`, end whatever
+    still runs from its packages a minute later, and remove the packages the earlier version
+    installed; the library stays.
   - The macOS disk image holds an app bundle whose launcher sends the app's output to the log
     folder and announces the first start. The bundle carries an ad hoc signature.
   - The Linux AppImage carries both launchers too. Its AppRun picks one on the first start by the
@@ -82,8 +84,8 @@ The Application workflow (`.github/workflows/app.yml`) builds everything on GitH
 1. It checks the inputs of the build (see [Releasing](#releasing)) and runs `just package` once.
 2. On Linux, Windows and macOS, it runs `just executable`, then installs each launcher on the fresh
    machine and walks it through a first session (`scripts/smoke_test_app.py`). The session writes 30
-   generated modules, opens a library on the built-in database, builds its catalog, quits, and
-   checks that the database stopped. The runners have no NVIDIA card, so the NVIDIA launcher's
+   generated modules, opens a library on the built-in database, and builds its catalog. A second
+   start must then leave the running app in place, and `--quit` must end it and stop its database. The runners have no NVIDIA card, so the NVIDIA launcher's
    session runs on the processor, which shows that its packages install and start. Then it runs
    `just installer`.
 3. Each run keeps the executables and installers it built, to download from the run's page. A run

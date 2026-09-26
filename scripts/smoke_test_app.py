@@ -26,6 +26,7 @@ LIBRARY_DIRECTORY_NAME: Final[str] = "library"
 CONFIG_FILE_NAME: Final[str] = "config.toml"
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
 SERVER_PID_FILE: Final[Path] = Path("postgres") / "data" / "postmaster.pid"
+APPLICATION_MODULE: Final[str] = "samplelibrary.app"
 BUILD_TARGET: Final[str] = "catalog"
 WRITE_MODULES: Final[str] = """
 import sys
@@ -73,12 +74,12 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Walk a fresh installation through a person's first session: install, choose folders, build, quit.
+    """Walk a fresh installation through a person's first session: install, choose folders, build, start again, quit.
 
     The executable installs itself on its first start, so the first wait covers the download of
     Python and every package. The library is built from the sandbox's generated modules, written by
-    the Python the executable installed, and its catalog must list them before the application quits
-    and stops its database.
+    the Python the executable installed, and its catalog must list them. A second start must then
+    leave the running application in place, and `--quit` must end it and stop its database.
 
     Raises:
         SystemExit: the application missed a step, with what it reported.
@@ -93,7 +94,7 @@ def main(argv: list[str] | None = None) -> None:
         [executable, "--no-browser", "--port", str(application.port)], env=environment
     )
     try:
-        _first_session(executable, work, launch, application)
+        _first_session(executable, work, launch, application, environment=environment)
     except SmokeTestError as error:
         sys.exit(f"Smoke test failed: {error}")
     finally:
@@ -108,12 +109,20 @@ def _free_port() -> int:
     return port
 
 
-def _first_session(executable: Path, work: Path, launch: subprocess.Popen[bytes], application: Application) -> None:
+def _first_session(
+    executable: Path,
+    work: Path,
+    launch: subprocess.Popen[bytes],
+    application: Application,
+    *,
+    environment: dict[str, str],
+) -> None:
     modules = work / MODULES_DIRECTORY_NAME
     library_root = work / LIBRARY_DIRECTORY_NAME
     state = _wait_for_state(application, lambda state: "status" in state, seconds=INSTALL_SECONDS, launch=launch)
     _step(f"The application answers with status {state['status']}.")
-    _write_modules(executable, modules)
+    python = _installed_python(executable)
+    subprocess.run([python, "-c", WRITE_MODULES, str(modules)], check=True)
     _step(f"Wrote the sandbox modules into {modules}.")
     _request("PUT", f"{application.setup_route}/sources", _sources(library_root, modules))
     state = _wait_for_state(application, lambda state: state["status"] in ("ready", "failed"), seconds=OPEN_SECONDS)
@@ -123,7 +132,9 @@ def _first_session(executable: Path, work: Path, launch: subprocess.Popen[bytes]
     _request("POST", f"{application.setup_route}/builds", {"target": BUILD_TARGET})
     _check_build(_wait_for_state(application, _build_ended, seconds=BUILD_SECONDS))
     _check_catalog(application)
-    _quit(application)
+    _check_second_start(python, application, environment=environment)
+    _step("A second start left the running application in place.")
+    _run_application(python, ["--quit"], environment=environment)
     _wait_until_closed(application)
     launch.wait(timeout=QUIT_SECONDS)
     _step("The application quit.")
@@ -132,12 +143,45 @@ def _first_session(executable: Path, work: Path, launch: subprocess.Popen[bytes]
     _step("The library's database stopped.")
 
 
-def _write_modules(executable: Path, directory: Path) -> None:
-    """Write the sandbox's modules with the installed interpreter, which PyApp's `self python-path` names."""
-    python = subprocess.run(
+def _installed_python(executable: Path) -> str:
+    """The interpreter the executable installed, which PyApp's `self python-path` names.
+
+    It runs the application's own commands to their end on every system, while the executable
+    started as a GUI program on Windows returns at once.
+    """
+    return subprocess.run(
         [executable, "self", "python-path"], check=True, capture_output=True, text=True
     ).stdout.strip()
-    subprocess.run([python, "-c", WRITE_MODULES, str(directory)], check=True)
+
+
+def _check_second_start(python: str, application: Application, *, environment: dict[str, str]) -> None:
+    """A second start under the same config opens the running application, which keeps the build it ran.
+
+    Raises:
+        SmokeTestError: the second start failed, or another application answers in place of the first.
+    """
+    _run_application(python, ["--no-browser", "--port", str(application.port)], environment=environment)
+    state = _answered_state(application)
+    if state is None or state["build"] is None:
+        raise SmokeTestError("a second start replaced the running application")
+
+
+def _run_application(python: str, options: list[str], *, environment: dict[str, str]) -> None:
+    """Run the installed application with ``options`` to its end.
+
+    Raises:
+        SmokeTestError: it ended with a failure.
+    """
+    completed = subprocess.run(
+        [python, "-m", APPLICATION_MODULE, *options],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=QUIT_SECONDS,
+    )
+    if completed.returncode != 0:
+        raise SmokeTestError(f"`{' '.join(options)}` ended with {completed.returncode}: {completed.stderr.strip()}")
 
 
 def _sources(library_root: Path, modules: Path) -> dict[str, object]:
