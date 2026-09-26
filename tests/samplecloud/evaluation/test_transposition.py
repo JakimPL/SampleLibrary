@@ -35,7 +35,7 @@ SETTINGS = EvaluationSettings(random_seed=0, probe_count=6, semitone_offsets=(-7
 NOMINAL = Hearing(reading=Reading.NOMINAL, playback_rate_by_hash={})
 
 
-class LoudnessShapeExtractor:
+class LoudnessShapeExtractor(FeatureExtractor):
     """Describes how a waveform's level is shaped over time, which a retuning leaves alone.
 
     Reading the envelope at a fixed number of points, rather than per frame, is what makes it hold:
@@ -50,7 +50,7 @@ class LoudnessShapeExtractor:
         return envelope / peak if peak > 0.0 else envelope
 
 
-class DurationExtractor:
+class DurationExtractor(FeatureExtractor):
     """Describes a waveform by how long it is, which a retuning changes by construction."""
 
     def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]:

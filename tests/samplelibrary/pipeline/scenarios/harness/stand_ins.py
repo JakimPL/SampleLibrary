@@ -15,6 +15,7 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
+from samplecloud.backends import FeatureExtractor
 from samplecore.cli_support import load_config_or_exit
 from samplecore.exit_status import ExitStatus
 from samplecore.storage.atomic import write_bytes_atomically
@@ -26,7 +27,7 @@ SEED_BYTES: Final[int] = 8
 PROGRAM: Final[str] = "samplelibrary"
 # The machine a command runs on names nothing it builds, and neither does the number the catalog
 # happened to give an experiment, which a catalog rebuilt from nothing numbers again.
-UNNAMING_WORDS: Final[frozenset[str]] = frozenset({"--workers", "--device", "--teacher-experiment"})
+UNNAMING_WORDS: Final[frozenset[str]] = frozenset({"--workers", "--device", "--teacher-experiment", "--batch-size"})
 BEST_VALIDATION_LOSS: Final[float] = 0.5
 PLANE_DIMENSIONS: Final[int] = 2
 
@@ -56,7 +57,7 @@ def describe_frames(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
     return _seeded(np.ascontiguousarray(waveform, dtype=np.float32).tobytes()).standard_normal(VECTOR_SIZE)
 
 
-class HeardContentExtractor:
+class HeardContentExtractor(FeatureExtractor):
     """Describes a sample by the frames it hears, standing in for a model that describes a sample the same way every time.
 
     It stops at the scenario's midway gate before the sample after the first checkpoint.

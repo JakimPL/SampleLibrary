@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
 import numpy as np
@@ -15,6 +16,13 @@ class FeatureExtractor(Protocol):
     (see ``samplecore.storage.audio_store.read``), so an implementation never has to account for
     the sample's original bit depth either -- both invariants are what let this project swap in a
     different extraction method later without touching the pipeline that calls it.
+
+    `extract_many` describes a batch, one vector per waveform in order. An extractor reading one
+    sample at a time takes the default by naming this protocol as its base; a model reading a batch
+    in one pass answers it faster.
     """
 
     def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]: ...
+
+    def extract_many(self, waveforms: Sequence[NDArray[np.float64]]) -> list[NDArray[np.float64]]:
+        return [self.extract(waveform) for waveform in waveforms]

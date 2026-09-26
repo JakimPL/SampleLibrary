@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from importlib.util import find_spec
 from math import gcd
 from typing import Final, Protocol
@@ -21,12 +22,18 @@ TEACHER_RATE_HZ: Final[int] = 48_000
 TEACHER_EMBEDDING_SIZE: Final[int] = 512
 TEACHER_EXTRA: Final[str] = "teacher"
 TEACHER_DEVICE_AUTOMATIC: Final[str] = "auto"
+PREPARING_THREADS: Final[int] = 4
 
 
 class Teacher(Protocol):
-    """A pretrained model that hears a clip, or reads a sentence, and answers with one vector in one space."""
+    """A pretrained model that hears a clip, or reads a sentence, and answers with one vector in one space.
+
+    `embed_many` hears a batch of clips in one pass, answering with one vector per clip in order.
+    """
 
     def embed(self, mono: NDArray[np.float32]) -> NDArray[np.float32]: ...
+
+    def embed_many(self, monos: Sequence[NDArray[np.float32]]) -> NDArray[np.float32]: ...
 
     def embed_text(self, texts: Sequence[str]) -> NDArray[np.float32]: ...
 
@@ -48,6 +55,13 @@ class ClapFeatureExtractor:
     def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]:
         vector = self._teacher.embed(prepare_for_teacher(waveform))
         return np.asarray(vector, dtype=np.float64)
+
+    def extract_many(self, waveforms: Sequence[NDArray[np.float64]]) -> list[NDArray[np.float64]]:
+        """A batch heard in one pass, its clips resampled side by side first, since resampling releases the GIL."""
+        with ThreadPoolExecutor(max_workers=PREPARING_THREADS) as preparing:
+            monos = list(preparing.map(prepare_for_teacher, waveforms))
+        vectors = self._teacher.embed_many(monos)
+        return [np.asarray(vector, dtype=np.float64) for vector in vectors]
 
 
 def prepare_for_teacher(waveform: NDArray[np.float64]) -> NDArray[np.float32]:

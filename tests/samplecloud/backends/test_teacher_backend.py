@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Final
 
 import numpy as np
 import pytest
+import torch
 from numpy.typing import NDArray
 
 from samplecloud.backends import teacher_backend, transformers_teacher
@@ -18,9 +20,13 @@ from samplecloud.backends.teacher_backend import (
     load_teacher,
     prepare_for_teacher,
 )
-from samplecloud.backends.transformers_teacher import fill_window
+from samplecloud.backends.transformers_teacher import TransformersTeacher, fill_window
 from samplecloud.registries import BACKEND_REGISTRY
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
+
+SMALL_RATE_HZ: Final[int] = 4000
+SMALL_FFT_LENGTH: Final[int] = 256
+SMALL_MEL_BANDS: Final[int] = 16
 
 
 @dataclass
@@ -34,8 +40,12 @@ class RecordingTeacher:
     heard: list[NDArray[np.float32]] = field(default_factory=list)
 
     def embed(self, mono: NDArray[np.float32]) -> NDArray[np.float32]:
-        self.heard.append(mono)
-        return np.full(TEACHER_EMBEDDING_SIZE, 1.0 / np.sqrt(TEACHER_EMBEDDING_SIZE), dtype=np.float32)
+        vector: NDArray[np.float32] = self.embed_many((mono,))[0]
+        return vector
+
+    def embed_many(self, monos: Sequence[NDArray[np.float32]]) -> NDArray[np.float32]:
+        self.heard.extend(monos)
+        return np.full((len(monos), TEACHER_EMBEDDING_SIZE), 1.0 / np.sqrt(TEACHER_EMBEDDING_SIZE), dtype=np.float32)
 
     def embed_text(self, texts: Sequence[str]) -> NDArray[np.float32]:
         return np.eye(len(texts), TEACHER_EMBEDDING_SIZE, dtype=np.float32)
@@ -122,3 +132,48 @@ def test_the_teacher_loads_the_commit_this_build_pins(monkeypatch: pytest.Monkey
     assert loaded == [
         {"checkpoint": TEACHER_CHECKPOINT, "revision": TEACHER_REVISION, "rate_hz": TEACHER_RATE_HZ, "device": "cpu"}
     ]
+
+
+class _MeanOverFrames:
+    """A stand-in audio tower hearing each clip alone: its log-mel picture averaged over frames."""
+
+    def get_audio_features(self, input_features: torch.Tensor) -> torch.Tensor:
+        return input_features[:, 0].mean(dim=1)
+
+
+def _small_teacher() -> TransformersTeacher:
+    """The teacher's own log-mel reading around a stand-in tower, so a test hears batches without the checkpoint."""
+    teacher = TransformersTeacher.__new__(TransformersTeacher)
+    teacher._rate_hz = SMALL_RATE_HZ
+    teacher._device = "cpu"
+    teacher._window_frames = SMALL_RATE_HZ
+    teacher._fft_length = SMALL_FFT_LENGTH
+    teacher._hop_length = SMALL_FFT_LENGTH // 4
+    teacher._mel_filters = torch.rand(
+        (SMALL_FFT_LENGTH // 2 + 1, SMALL_MEL_BANDS), generator=torch.Generator().manual_seed(0)
+    )
+    teacher._taper = torch.hann_window(SMALL_FFT_LENGTH, periodic=True)
+    teacher._model = _MeanOverFrames()  # type: ignore[assignment]
+    return teacher
+
+
+def test_a_batch_is_heard_as_each_of_its_clips_would_be_alone() -> None:
+    teacher = _small_teacher()
+    generator = np.random.default_rng(0)
+    clips = [generator.standard_normal(frames).astype(np.float32) for frames in (300, SMALL_RATE_HZ, 2 * SMALL_RATE_HZ)]
+
+    batch = teacher.embed_many(clips)
+
+    assert batch.shape == (len(clips), SMALL_MEL_BANDS)
+    for clip, vector in zip(clips, batch, strict=True):
+        np.testing.assert_allclose(vector, teacher.embed(clip), rtol=1e-5, atol=1e-6)
+
+
+def test_a_batch_reaches_the_teacher_prepared_and_answers_one_vector_per_waveform() -> None:
+    teacher = RecordingTeacher()
+    waveforms = [np.full((NOMINAL_WAV_RATE, 1), level) for level in (0.1, 0.2, 0.3)]
+
+    vectors = ClapFeatureExtractor(teacher).extract_many(waveforms)
+
+    assert len(vectors) == len(waveforms)
+    assert [clip.shape for clip in teacher.heard] == [(TEACHER_RATE_HZ,)] * len(waveforms)

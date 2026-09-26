@@ -16,7 +16,7 @@ from samplelibrary.limits.ceiling import MalformedCeiling, MemoryCeiling
 from samplelibrary.pipeline.devices import AUTOMATIC_DEVICE
 
 DEFAULT_MEMORY_CAP: Final[str] = "none"
-OPERATIONAL_STEP_SETTINGS: Final[set[str]] = {"memory_cap"}
+OPERATIONAL_STEP_SETTINGS: Final[set[str]] = {"memory_cap", "batch_size"}
 DEFAULT_DEVICE: Final[str] = AUTOMATIC_DEVICE
 DESCRIPTOR_SOURCE_SETTING: Final[str] = "descriptor_source"
 AUTOMATIC_DESCRIPTOR_SOURCE: Final[str] = "automatic"

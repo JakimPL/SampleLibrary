@@ -28,7 +28,14 @@ from samplelibrary.pipeline.steps.descriptor import (
     GridCacheSettings,
     descriptor_steps,
 )
-from samplelibrary.pipeline.steps.listening import CATEGORIES, TEACHER, CategorySettings, listening_steps
+from samplelibrary.pipeline.steps.listening import (
+    CATEGORIES,
+    HEARING_TEACHER,
+    TEACHER,
+    CategorySettings,
+    ListeningSettings,
+    listening_steps,
+)
 
 CATALOG_TARGET: Final[str] = "catalog"
 REMOVE_SOURCE_REMEDY: Final[str] = (
@@ -47,6 +54,8 @@ CATALOG_STEPS: Final[tuple[str, ...]] = (
 CLOUD_STEPS: Final[tuple[str, ...]] = (CATEGORIES, EVALUATION, MODULE_EVALUATION, CLOUD, MODULE_CLOUD)
 TRAINING_ONLY_STEPS: Final[frozenset[str]] = frozenset({TEACHER, EVALUATION, MODULE_EVALUATION})
 STEP_SETTINGS: Final[Mapping[str, type[StepSettings]]] = {
+    TEACHER: ListeningSettings,
+    HEARING_TEACHER: ListeningSettings,
     CATEGORIES: CategorySettings,
     GRID_CACHE: GridCacheSettings,
     DESCRIPTOR: DescriptorSettings,

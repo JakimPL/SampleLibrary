@@ -16,6 +16,7 @@ from samplecloud.experiments import (
     extractor_for,
     recipe_of,
 )
+from samplecloud.features import EXTRACTION_BATCH_SIZE
 from samplecloud.registries import BACKEND_REGISTRY, DEFAULT_BACKEND_NAME
 from samplecloud.run import EmbeddingOptions, EmbeddingSummary, create_experiment, experiment_to_rebuild, run_embedding
 from samplecore.cli_parsing import command_parser
@@ -68,7 +69,12 @@ def _embed(config: LibraryConfig, connection: Connection, arguments: argparse.Na
         connection,
         chosen.experiment_id,
         extractor=chosen.extractor,
-        options=EmbeddingOptions(reading=chosen.recipe.reading, sample_limit=arguments.limit, promote=chosen.promote),
+        options=EmbeddingOptions(
+            reading=chosen.recipe.reading,
+            sample_limit=arguments.limit,
+            promote=chosen.promote,
+            batch_size=arguments.batch_size,
+        ),
     )
 
 
@@ -233,6 +239,12 @@ def parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         type=positive_integer,
         default=None,
         help="Extract features for only the first N unfeatured samples, for a quick run over a small slice.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=positive_integer,
+        default=EXTRACTION_BATCH_SIZE,
+        help="How many samples the extractor describes at once; a larger batch keeps a GPU busier.",
     )
     parser.add_argument(
         "--extract-only",

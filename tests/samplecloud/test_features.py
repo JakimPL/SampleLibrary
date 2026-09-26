@@ -11,7 +11,13 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecloud import features as features_module
 from samplecloud.backends import FeatureExtractor
-from samplecloud.features import FeatureExtractionSummary, FeaturePass, extract_features, pending_samples
+from samplecloud.features import (
+    EXTRACTION_BATCH_SIZE,
+    FeatureExtractionSummary,
+    FeaturePass,
+    extract_features,
+    pending_samples,
+)
 from samplecloud.hearing import Hearing, hearing_for
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import Experiment, Reading
@@ -30,7 +36,7 @@ NOMINAL = Hearing(reading=Reading.NOMINAL, playback_rate_by_hash={})
 SAMPLE_FRAMES = 32
 
 
-class _StubFeatureExtractor:
+class _StubFeatureExtractor(FeatureExtractor):
     """A fast, deterministic stand-in for a real backend -- proves the extraction pipeline works
     against any FeatureExtractor, not only the one shipped implementation.
     """
@@ -64,6 +70,7 @@ def _extract(
     extractor: FeatureExtractor | None = None,
     hearing: Hearing = NOMINAL,
     sample_limit: int | None = None,
+    batch_size: int = EXTRACTION_BATCH_SIZE,
 ) -> FeatureExtractionSummary:
     feature_pass = FeaturePass(
         experiment_id=experiment_id,
@@ -71,7 +78,9 @@ def _extract(
         hearing=hearing,
     )
     pending = pending_samples(connection, experiment_id, hearing=hearing, sample_limit=sample_limit)
-    return extract_features(connection, SampleAudio.from_catalog(connection, library_root), feature_pass, pending)
+    return extract_features(
+        connection, SampleAudio.from_catalog(connection, library_root), feature_pass, pending, batch_size=batch_size
+    )
 
 
 def test_extract_features_writes_a_vector_for_every_cataloged_sample(connection: Connection, tmp_path: Path) -> None:
@@ -163,7 +172,7 @@ def test_an_empty_catalog_extracts_nothing(connection: Connection, tmp_path: Pat
     assert summary == FeatureExtractionSummary(cataloged=0, already_extracted=0, newly_extracted=0, unavailable=0)
 
 
-class _InterruptingFeatureExtractor:
+class _InterruptingFeatureExtractor(FeatureExtractor):
     """Fails on its third call, simulating a run stopped partway through extraction."""
 
     def __init__(self) -> None:
@@ -189,6 +198,25 @@ def test_an_interruption_loses_at_most_one_checkpoint_of_work(
 
     vectors = PostgresSampleFeatureVectorRepository(connection).list_for_experiment(experiment_id)
     assert len(vectors) == 2
+
+
+@pytest.mark.parametrize("batch_size", [1, 2, 16])
+def test_every_batch_size_stores_the_vectors_one_sample_at_a_time_would(
+    connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, batch_size: int
+) -> None:
+    monkeypatch.setattr(features_module, "EXTRACTION_CHECKPOINT_INTERVAL", 3)
+    for hash_seed in range(1, 8):
+        _store_sample(connection, tmp_path, hash_seed=hash_seed)
+    one_at_a_time = _create_experiment(connection)
+    batched = _create_experiment(connection)
+    repository = PostgresSampleFeatureVectorRepository(connection)
+
+    _extract(connection, tmp_path, one_at_a_time, batch_size=1)
+    summary = _extract(connection, tmp_path, batched, batch_size=batch_size)
+
+    expected = {vector.sample_hash: vector.vector for vector in repository.list_for_experiment(one_at_a_time)}
+    assert {vector.sample_hash: vector.vector for vector in repository.list_for_experiment(batched)} == expected
+    assert summary.newly_extracted == len(expected) == 7
 
 
 def test_a_sample_whose_file_is_gone_is_counted_and_stays_pending(

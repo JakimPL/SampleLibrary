@@ -87,7 +87,9 @@ The `[pipeline]` table holds what `just rebuild` builds the library with, every 
   `"pretrained"` name one of the two outright.
 - `labels`: a file of hand labels, as `annotations export` writes it, read into a fresh library.
 - A table per step, such as `[pipeline.descriptor]`, sets that step's parameters (`epochs = 40`) and
-  its own `memory_cap`.
+  its own `memory_cap`. The listening steps, `teacher` and `hearing-teacher`, take `batch_size`: how
+  many samples the listening model hears at once, 16 by default. A larger batch keeps a graphics
+  card busier, and a smaller one fits a card with less memory.
 
 ## Building the library
 

@@ -8,7 +8,7 @@ from pydantic import Field
 from samplecloud.backends.teacher_backend import TEACHER_BACKEND_NAME, TEACHER_REVISION
 from samplecloud.categories.scoring import DEFAULT_CATEGORY_COUNT, MAXIMUM_CATEGORY_COUNT
 from samplecloud.categories.vocabulary import INSTRUMENTS_CHOICE, VocabularyRefused, vocabulary_from
-from samplecloud.features import readable_pending_count
+from samplecloud.features import EXTRACTION_BATCH_SIZE, readable_pending_count
 from samplecloud.hearing import hearing_for
 from samplecore.digests import digest_of_rows
 from samplecore.models.experiment import ExperimentKey, Reading
@@ -39,6 +39,12 @@ HEARD_VECTORS: Final[str] = "heard vectors"
 VOCABULARY: Final[str] = "vocabulary"
 
 
+class ListeningSettings(StepSettings):
+    """What a listening step takes: how many samples the listening model hears at once, which this machine's memory bounds."""
+
+    batch_size: int = Field(default=EXTRACTION_BATCH_SIZE, ge=1)
+
+
 class CategorySettings(StepSettings):
     """What the categories step takes: how many labels each sample keeps, and which vocabulary they come from."""
 
@@ -58,7 +64,7 @@ def listening_steps() -> tuple[Step, ...]:
             name=TEACHER,
             requires=(MODULES, SAMPLE_FILES),
             key=lambda context: TEACHER_KEY,
-            command=lambda context: _embed_command(TEACHER_KEY, heard=False),
+            command=lambda context: _embed_command(context, TEACHER, TEACHER_KEY, heard=False),
             pending=_pending(Reading.NOMINAL),
             inputs=_teacher_inputs,
         ),
@@ -66,7 +72,7 @@ def listening_steps() -> tuple[Step, ...]:
             name=HEARING_TEACHER,
             requires=(SAMPLE_FILES, NOTES),
             key=lambda context: HEARING_TEACHER_KEY,
-            command=lambda context: _embed_command(HEARING_TEACHER_KEY, heard=True),
+            command=lambda context: _embed_command(context, HEARING_TEACHER, HEARING_TEACHER_KEY, heard=True),
             pending=_pending(Reading.HEARD_RATE),
             inputs=_hearing_inputs,
         ),
@@ -81,9 +87,21 @@ def listening_steps() -> tuple[Step, ...]:
     )
 
 
-def _embed_command(key: ExperimentKey, *, heard: bool) -> tuple[str, ...]:
+def _embed_command(context: PipelineContext, step: str, key: ExperimentKey, *, heard: bool) -> tuple[str, ...]:
     reading = ("--heard-rate",) if heard else ()
-    return ("cloud", "embed", "--backend", TEACHER_BACKEND_NAME, "--extract-only", *reading, "--key", key)
+    batch_size = context.settings.settings_for(step, ListeningSettings).batch_size
+    return (
+        "cloud",
+        "embed",
+        "--backend",
+        TEACHER_BACKEND_NAME,
+        "--extract-only",
+        *reading,
+        "--key",
+        key,
+        "--batch-size",
+        str(batch_size),
+    )
 
 
 def _pending(reading: Reading) -> Callable[[PipelineContext, int], int]:

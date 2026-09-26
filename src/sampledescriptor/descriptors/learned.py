@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -74,6 +74,11 @@ class LearnedDescriptor:
     def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]:
         """The cloud's extractor protocol: describe a stored waveform."""
         return self.describe(self.canonicalizer.canonicalize(prepare_mono(waveform)))
+
+    def extract_many(self, waveforms: Sequence[NDArray[np.float64]]) -> list[NDArray[np.float64]]:
+        """The cloud's extractor protocol over a batch: every waveform canonicalized, then described in one forward."""
+        images = tuple(self.canonicalizer.canonicalize(prepare_mono(waveform)) for waveform in waveforms)
+        return list(self.describe_many(images))
 
 
 def save_descriptor(path: Path, model: GridDescriptor, description: DescriptorDescription) -> None:

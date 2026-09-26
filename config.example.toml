@@ -51,3 +51,7 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # [pipeline.descriptor]
 # epochs = 40
 # memory_cap = "24G"
+
+# How many samples the listening model hears at once; lower it on a graphics card short of memory.
+# [pipeline.hearing-teacher]
+# batch_size = 16

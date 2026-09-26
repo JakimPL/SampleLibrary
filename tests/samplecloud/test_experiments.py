@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
+from samplecloud.backends import FeatureExtractor
 from samplecloud.backends.teacher_backend import TEACHER_REVISION
 from samplecloud.experiments import (
     EmbeddingRecipe,
@@ -117,7 +118,7 @@ def test_an_unknown_experiment_is_refused_by_its_id(connection: Connection) -> N
         experiment_named(connection, 999_999)
 
 
-class _ShapeExtractor:
+class _ShapeExtractor(FeatureExtractor):
     def __init__(self, *, swapped: bool) -> None:
         self.swapped = swapped
 

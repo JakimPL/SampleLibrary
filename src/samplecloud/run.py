@@ -28,7 +28,8 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class EmbeddingOptions:
-    """How one embedding run goes: how it reads a sample, over how many, and whether it becomes the cloud shown.
+    """How one embedding run goes: how it reads a sample, over how many, whether it becomes the cloud shown, and
+    how many samples its extractor describes at once.
 
     An experiment extracted to be measured, or to teach another descriptor, keeps its vectors and
     leaves the cloud as it was.
@@ -37,6 +38,7 @@ class EmbeddingOptions:
     reading: Reading
     sample_limit: int | None
     promote: bool
+    batch_size: int
 
 
 @dataclass(frozen=True)
@@ -123,6 +125,7 @@ def run_embedding(
             audio,
             FeaturePass(experiment_id=experiment_id, feature_extractor=feature_extractor, hearing=hearing),
             pending,
+            batch_size=options.batch_size,
         )
     else:
         extraction = FeatureExtractionSummary(
