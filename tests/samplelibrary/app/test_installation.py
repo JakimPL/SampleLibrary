@@ -7,19 +7,10 @@ from typing import Final
 import httpx
 import pytest
 
-from samplelibrary.app.installation import (
-    INSTALLATION_ROUTE,
-    QUIT_ROUTE,
-    Installation,
-    PortHolder,
-    close_running,
-    port_holder,
-    this_installation,
-)
+from samplelibrary.app.installation import QUIT_ROUTE, Installation, Reply, ask_to_quit, reply_at, this_installation
 
-SETUP_URL: Final[str] = "http://127.0.0.1:8000/api/setup"
-QUIT_WAIT_SECONDS: Final[float] = 5.0
-SHORT_WAIT_SECONDS: Final[float] = 0.3
+SETUP_URL: Final[str] = "http://127.0.0.1:27440/api/setup"
+QUIT_SECONDS: Final[float] = 5.0
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -28,8 +19,11 @@ def _setup_client(handler: Handler) -> httpx.Client:
     return httpx.Client(base_url=SETUP_URL, transport=httpx.MockTransport(handler))
 
 
-def _refused(request: httpx.Request) -> httpx.Response:
-    raise httpx.ConnectError("connection refused", request=request)
+def _raising(error: type[httpx.TransportError]) -> Handler:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise error("no answer", request=request)
+
+    return handler
 
 
 def _answering(status_code: int, body: object) -> Handler:
@@ -41,67 +35,53 @@ def _installation(version: str, environment: str) -> dict[str, str]:
 
 
 @dataclass(frozen=True)
-class HolderCase:
+class ReplyCase:
     name: str
     handler: Handler
-    expected: PortHolder
+    expected: Reply
 
 
-HOLDER_CASES: Final[tuple[HolderCase, ...]] = (
-    HolderCase("nothing listens", _refused, PortHolder.NOBODY),
-    HolderCase("this installation", _answering(200, this_installation().model_dump()), PortHolder.THIS_INSTALLATION),
-    HolderCase(
+REPLY_CASES: Final[tuple[ReplyCase, ...]] = (
+    ReplyCase("a refused connection", _raising(httpx.ConnectError), Reply.CLOSED),
+    ReplyCase("a dropped connection", _raising(httpx.RemoteProtocolError), Reply.CLOSED),
+    ReplyCase("a connection left unanswered", _raising(httpx.ReadTimeout), Reply.SILENT),
+    ReplyCase("a connection never taken", _raising(httpx.ConnectTimeout), Reply.SILENT),
+    ReplyCase("this installation", _answering(200, this_installation().model_dump()), Reply.SAME_INSTALLATION),
+    ReplyCase(
         "another environment",
         _answering(200, _installation(this_installation().version, "/elsewhere")),
-        PortHolder.OTHER_INSTALLATION,
+        Reply.OTHER_INSTALLATION,
     ),
-    HolderCase(
+    ReplyCase(
         "another version",
         _answering(200, _installation("0.0.0+elsewhere", this_installation().environment)),
-        PortHolder.OTHER_INSTALLATION,
+        Reply.OTHER_INSTALLATION,
     ),
-    HolderCase("a page missing", _answering(404, {"detail": "Not Found"}), PortHolder.OTHER_PROGRAM),
-    HolderCase("an answer of another shape", _answering(200, {"status": "ok"}), PortHolder.OTHER_PROGRAM),
+    ReplyCase("a version without the route", _answering(404, {"detail": "Not Found"}), Reply.OTHER_INSTALLATION),
+    ReplyCase("an answer of another shape", _answering(200, {"status": "ok"}), Reply.OTHER_INSTALLATION),
 )
 
 
-@pytest.mark.parametrize("case", HOLDER_CASES, ids=lambda case: case.name)
-def test_a_start_tells_who_holds_its_port(case: HolderCase) -> None:
+@pytest.mark.parametrize("case", REPLY_CASES, ids=lambda case: case.name)
+def test_a_start_tells_how_the_running_application_answers(case: ReplyCase) -> None:
     with _setup_client(case.handler) as setup:
-        assert port_holder(setup) is case.expected
+        assert reply_at(setup) is case.expected
 
 
-class QuittingApplication:
-    """An application of another installation, answering until it has been asked to quit."""
+def test_a_running_application_is_asked_to_quit() -> None:
+    requests: list[str] = []
 
-    def __init__(self, *, quits: bool) -> None:
-        self.asked_to_quit = False
-        self._quits = quits
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(f"{request.method} {request.url.path}")
+        return httpx.Response(202)
 
-    def __call__(self, request: httpx.Request) -> httpx.Response:
-        if self.asked_to_quit and self._quits:
-            raise httpx.ConnectError("connection refused", request=request)
-        if request.method == "POST" and request.url.path.endswith(QUIT_ROUTE):
-            self.asked_to_quit = True
-            return httpx.Response(202)
-        assert request.url.path.endswith(INSTALLATION_ROUTE)
-        return httpx.Response(200, json=_installation("0.0.0+elsewhere", "/elsewhere"))
+    with _setup_client(handler) as setup:
+        ask_to_quit(setup, seconds=QUIT_SECONDS)
+
+    assert requests == [f"POST /api/setup{QUIT_ROUTE}"]
 
 
-def test_another_installation_is_asked_to_quit_and_its_port_comes_free() -> None:
-    application = QuittingApplication(quits=True)
-    with _setup_client(application) as setup:
-        assert close_running(setup, wait_seconds=QUIT_WAIT_SECONDS)
-    assert application.asked_to_quit
-
-
-def test_an_installation_still_answering_after_the_wait_keeps_its_port() -> None:
-    application = QuittingApplication(quits=False)
-    with _setup_client(application) as setup:
-        assert not close_running(setup, wait_seconds=SHORT_WAIT_SECONDS)
-    assert application.asked_to_quit
-
-
-def test_an_installation_refusing_to_quit_keeps_its_port() -> None:
-    with _setup_client(_answering(403, {"detail": "Forbidden"})) as setup:
-        assert not close_running(setup, wait_seconds=QUIT_WAIT_SECONDS)
+@pytest.mark.parametrize("error", [httpx.ReadTimeout, httpx.RemoteProtocolError], ids=("unanswered", "dropped"))
+def test_a_quit_the_application_leaves_unanswered_is_left_to_its_lock(error: type[httpx.TransportError]) -> None:
+    with _setup_client(_raising(error)) as setup:
+        ask_to_quit(setup, seconds=QUIT_SECONDS)

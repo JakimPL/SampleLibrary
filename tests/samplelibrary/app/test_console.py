@@ -5,39 +5,35 @@ from pathlib import Path
 
 import pytest
 
-from samplelibrary.app import console
-from samplelibrary.app.console import log_without_console
-from samplelibrary.paths import APPLICATION_LOG_NAME, PREVIOUS_APPLICATION_LOG_NAME
-
-
-@pytest.fixture(name="log_directory")
-def fixture_log_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    directory = tmp_path / "logs"
-    monkeypatch.setattr(console, "application_log_directory", lambda: directory)
-    return directory
+from samplelibrary.app.console import console_log
 
 
 def test_a_windowless_start_writes_its_output_to_the_log_and_keeps_the_previous_one(
-    log_directory: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    log_directory.mkdir()
-    (log_directory / APPLICATION_LOG_NAME).write_text("last session\n", encoding="utf-8")
+    log = tmp_path / "logs" / "app-key.log"
+    previous = tmp_path / "logs" / "app-key.previous.log"
+    log.parent.mkdir()
+    log.write_text("last session\n", encoding="utf-8")
     monkeypatch.setattr(sys, "stdout", None)
     monkeypatch.setattr(sys, "stderr", None)
 
-    path = log_without_console()
-    print("this session")
-    sys.stderr.write("its warning\n")
-    sys.stdout.close()
+    with console_log(log, previous=previous) as path:
+        print("this session")
+        sys.stderr.write("its warning\n")
 
-    assert path == log_directory / APPLICATION_LOG_NAME
-    assert path.read_text(encoding="utf-8") == "this session\nits warning\n"
-    assert (log_directory / PREVIOUS_APPLICATION_LOG_NAME).read_text(encoding="utf-8") == "last session\n"
+    assert path == log
+    assert (sys.stdout, sys.stderr) == (None, None)
+    assert log.read_text(encoding="utf-8") == "this session\nits warning\n"
+    assert previous.read_text(encoding="utf-8") == "last session\n"
 
 
-def test_a_start_in_a_console_keeps_writing_to_it(log_directory: Path) -> None:
+def test_a_start_in_a_console_keeps_writing_to_it(tmp_path: Path) -> None:
     streams = (sys.stdout, sys.stderr)
+    log = tmp_path / "logs" / "app-key.log"
 
-    assert log_without_console() is None
-    assert (sys.stdout, sys.stderr) == streams
-    assert not log_directory.exists()
+    with console_log(log, previous=tmp_path / "logs" / "app-key.previous.log") as path:
+        assert path is None
+        assert (sys.stdout, sys.stderr) == streams
+
+    assert not log.parent.exists()

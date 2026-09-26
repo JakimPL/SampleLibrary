@@ -135,7 +135,9 @@ the library again.
 
 `just app` runs everything in one process: the library's database, the API with the built web app,
 and the morph renderer, opened in your browser. Build the web app once with `just frontend-build`.
-When no config file is there yet, it opens on the setup page, which writes one for you.
+When no config file is there yet, it opens on the setup page, which writes one for you. It listens
+on the port it used last, or on a free one, and `--port` picks one. `uv run samplelibrary app
+--quit` ends it. The checkout's config and the installed app's config each run an app of their own.
 
 To work on the app, run its parts in terminals of their own:
 

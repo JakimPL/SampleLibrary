@@ -506,19 +506,34 @@ the built frontend. The `Launcher` owns what the library needs:
   left.
 - **Setup routes.** They list folders and write the config file, so they answer a request from the
   loopback address, addressed to a local name, and sent by a page from a local name.
-- **Starts.** A start asks its port who answers there (`samplelibrary.app.installation`):
-  `GET /api/setup/installation` names the running server's version and Python environment. The
-  same installation gets the browser opened on it. Another one, a new version or the other
-  launcher, is asked to quit, and the start takes the port once it comes free. `POST
-  /api/setup/quit` answers once the build, the renderer and the managed database have stopped, so
-  the next server opens the same library at once.
+- **Starts.** One application runs under each config (`samplelibrary.app.instance`). Its place
+  is a folder in the user's state folder named by a hash of the config's path, holding a lock the
+  process keeps for its whole life and a record of the port it listens on and of the process
+  itself, its id and start time. The system lets a lock go however its process ends, so a free lock
+  means nothing runs. A start holding a taken lock reads the record and asks the server
+  `GET /api/setup/installation`, which names its version and Python environment:
+  - The same installation gets the browser opened on it.
+  - Another one, a new version or the other launcher, is asked to quit through `POST
+    /api/setup/quit`, which answers once the build, the renderer and the managed database have
+    stopped.
+  - A server that refuses connections is on its way out, and gets the time a quit takes.
+  - A server that takes a connection without answering for 20 seconds, or never ends after a
+    quit, is ended together with the processes it started (psutil), once its start time confirms
+    the record's process. A record naming no running process ends nothing, and the start is
+    refused.
+
+  The start then binds its own socket before anything else runs and records it: first the port
+  the record names, which keeps the browser's layout, theme and cache, all stored per address, then
+  27440 to 27449, then any port the system assigns, or exactly the port `--port` names. The server
+  listens on 127.0.0.1 alone and reads no forwarding headers. `--quit` ends the running one the same
+  way and starts nothing.
 
 The packaged application is a PyApp executable (`just package`, `just executable`): it embeds the
 samplelibrary wheel, which carries the built frontend, with the `app` extra pinned to the lock and
 torch's processor build. The wheel, its pinned requirements and the frontend bundle are built into
 `build/`, the executable into `bin/`, and the installers into `dist/`. On first start it installs Python and that wheel with uv. PyApp runs it as
-a GUI, in a process of its own: on Windows through pythonw, windowless, with its output in `app.log`
-in the user's log folder (`samplelibrary.app.console`), and every console program it starts, such
+a GUI, in a process of its own: on Windows through pythonw, windowless, with its output in
+`app-<config hash>.log` in the user's log folder (`samplelibrary.app.console`), and every console program it starts, such
 as `pg_ctl`, starts hidden (`samplecore.processes`). `just installer` (`scripts/installers`,
 `packaging/`) wraps the executable into an Inno Setup installer, a disk image holding an app bundle,
 or an AppImage. The

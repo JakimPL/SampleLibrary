@@ -6,14 +6,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from samplelibrary.paths import INSTANCE_LOCK_NAME, INSTANCE_RECORD_NAME, instances_directory
+from samplelibrary.paths import (
+    INSTANCE_LOCK_NAME,
+    INSTANCE_RECORD_NAME,
+    application_log_path,
+    instances_directory,
+    previous_application_log_path,
+)
 
 KEY_LENGTH: Final[int] = 16
 
 
 @dataclass(frozen=True)
 class InstancePlace:
-    """Where the application running under one config keeps the lock it holds and the record of where it listens.
+    """Where the application running under one config keeps its lock, the record of where it listens, and its log.
 
     Each config gets a place of its own, so the installed application, a source checkout and a smoke
     test each run beside the others, while two starts under one config meet at one lock.
@@ -21,6 +27,8 @@ class InstancePlace:
 
     key: str
     directory: Path
+    log: Path
+    previous_log: Path
 
     @property
     def lock(self) -> Path:
@@ -44,4 +52,9 @@ def config_key(config_path: Path) -> str:
 
 def instance_place(config_path: Path) -> InstancePlace:
     key = config_key(config_path)
-    return InstancePlace(key=key, directory=instances_directory() / key)
+    return InstancePlace(
+        key=key,
+        directory=instances_directory() / key,
+        log=application_log_path(key),
+        previous_log=previous_application_log_path(key),
+    )

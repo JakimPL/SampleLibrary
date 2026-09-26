@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-import time
+from contextlib import suppress
 from enum import StrEnum, unique
 from importlib.metadata import version
 from typing import Final
@@ -14,7 +14,6 @@ from samplelibrary.environment import PACKAGE_NAME
 
 INSTALLATION_ROUTE: Final[str] = "/installation"
 QUIT_ROUTE: Final[str] = "/quit"
-QUIT_POLL_SECONDS: Final[float] = 0.25
 
 
 class Installation(BaseModel):
@@ -31,52 +30,46 @@ class Installation(BaseModel):
 
 
 @unique
-class PortHolder(StrEnum):
-    """Who answers on the port a start of the application is about to listen on."""
+class Reply(StrEnum):
+    """How the application at a recorded address answers a start asking who it is."""
 
-    NOBODY = "nobody"
-    THIS_INSTALLATION = "this installation"
+    SAME_INSTALLATION = "same installation"
     OTHER_INSTALLATION = "other installation"
-    OTHER_PROGRAM = "other program"
+    CLOSED = "closed"
+    SILENT = "silent"
 
 
 def this_installation() -> Installation:
     return Installation(version=version(PACKAGE_NAME), environment=sys.prefix)
 
 
-def port_holder(setup: httpx.Client) -> PortHolder:
-    """Who answers at the setup routes ``setup`` is based at, told apart by the installation the answer names."""
+def reply_at(setup: httpx.Client) -> Reply:
+    """How the application at the setup routes ``setup`` is based at answers.
+
+    A refused or dropped connection means its server has closed its port on the way out; a
+    connection it takes without answering means it has stopped responding. Any answer other than
+    this installation's own comes from another installation.
+    """
     try:
         response = setup.get(INSTALLATION_ROUTE)
-    except httpx.ConnectError:
-        return PortHolder.NOBODY
-    except httpx.HTTPError:
-        return PortHolder.OTHER_PROGRAM
+    except httpx.TimeoutException:
+        return Reply.SILENT
+    except httpx.TransportError:
+        return Reply.CLOSED
     if not response.is_success:
-        return PortHolder.OTHER_PROGRAM
+        return Reply.OTHER_INSTALLATION
     try:
         running = Installation.model_validate_json(response.content)
     except ValidationError:
-        return PortHolder.OTHER_PROGRAM
-    return PortHolder.THIS_INSTALLATION if running == this_installation() else PortHolder.OTHER_INSTALLATION
+        return Reply.OTHER_INSTALLATION
+    return Reply.SAME_INSTALLATION if running == this_installation() else Reply.OTHER_INSTALLATION
 
 
-def close_running(setup: httpx.Client, *, wait_seconds: float) -> bool:
-    """Ask the application answering at ``setup`` to quit, and whether its port came free within ``wait_seconds``.
+def ask_to_quit(setup: httpx.Client, *, seconds: float) -> None:
+    """Ask the application at ``setup`` to quit, waiting up to ``seconds`` for it to close its library.
 
-    The application answers a quit once its library is closed, with its build, renderer and managed
-    database stopped, and lets its port go right after, so a start that finds the port free opens
-    the same library at once.
+    Its lock tells when it has ended, so a request the application leaves unanswered or drops as
+    it goes changes nothing for the start waiting on it.
     """
-    deadline = time.monotonic() + wait_seconds
-    try:
-        response = setup.post(QUIT_ROUTE, timeout=wait_seconds)
-    except httpx.TimeoutException:
-        return False
-    if not response.is_success:
-        return False
-    while time.monotonic() < deadline:
-        if port_holder(setup) is PortHolder.NOBODY:
-            return True
-        time.sleep(QUIT_POLL_SECONDS)
-    return False
+    with suppress(httpx.HTTPError):
+        setup.post(QUIT_ROUTE, timeout=seconds)
