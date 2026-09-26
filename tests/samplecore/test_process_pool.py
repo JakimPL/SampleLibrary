@@ -9,6 +9,7 @@ import pytest
 from threadpoolctl import threadpool_info
 
 from samplecore.process_pool import SINGLE_THREAD, SINGLE_THREAD_ENVIRONMENT, mapped_in_processes
+from samplecore.progress import ProgressBar
 
 WORKER_COUNT: Final[int] = 2
 ITEM_COUNT: Final[int] = 12
@@ -35,18 +36,24 @@ def test_a_worker_computes_on_one_thread_in_every_library_it_loads(monkeypatch: 
     for name in SINGLE_THREAD_ENVIRONMENT:
         monkeypatch.delenv(name, raising=False)
 
-    threads = mapped_in_processes(
-        ThreadsAfterLoading(), range(ITEM_COUNT), worker_count=WORKER_COUNT, chunk_size=1, description="Loading"
-    )
+    with ProgressBar(total=ITEM_COUNT, label="Loading") as progress:
+        threads = set(
+            mapped_in_processes(
+                ThreadsAfterLoading(), range(ITEM_COUNT), worker_count=WORKER_COUNT, chunk_size=1, progress=progress
+            )
+        )
 
-    assert set(threads) == {SINGLE_THREAD}
+    assert threads == {SINGLE_THREAD}
     assert all(name not in os.environ for name in SINGLE_THREAD_ENVIRONMENT)
 
 
 def test_a_worker_receives_its_work_once() -> None:
-    identities = mapped_in_processes(
-        WorkIdentity(), range(ITEM_COUNT), worker_count=WORKER_COUNT, chunk_size=1, description="Identifying"
-    )
+    with ProgressBar(total=ITEM_COUNT, label="Identifying") as progress:
+        identities = list(
+            mapped_in_processes(
+                WorkIdentity(), range(ITEM_COUNT), worker_count=WORKER_COUNT, chunk_size=1, progress=progress
+            )
+        )
 
     works_by_process: defaultdict[int, set[int]] = defaultdict(set)
     for process, work in identities:

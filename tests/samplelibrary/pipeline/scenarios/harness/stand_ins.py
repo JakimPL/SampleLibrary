@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import sys
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -178,8 +177,8 @@ def _content(argv: list[str], stand_in: StandIn) -> bytes:
 def _cache_grids(argv: list[str], stand_in: StandIn) -> None:
     from samplecore.storage.database import connect
     from samplecore.storage.sample_audio import readable_sample_hashes
+    from samplecore.storage.staging import fresh_staging, publish_staged
     from sampledescriptor.commands.cache_grids import COMMAND_NAME
-    from sampledescriptor.training.cache_staging import STAGING_SUFFIX
     from sampledescriptor.training.descriptor.cache import (
         DESCRIPTION_FILE_NAME,
         GRIDS_FILE_NAME,
@@ -192,15 +191,12 @@ def _cache_grids(argv: list[str], stand_in: StandIn) -> None:
     with connect(config.catalog_url()) as connection:
         hashes = sorted(readable_sample_hashes(connection))
     directory = grid_cache_directory(config.library_root, name=arguments.cache)  # type: ignore[attr-defined]
-    staging = directory.with_name(directory.name + STAGING_SUFFIX)
-    shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir(parents=True)
+    staging = fresh_staging(directory)
     grids = _seeded(_content(argv, stand_in)).standard_normal((len(hashes), 4, 4)).astype(np.float32)
     np.save(staging / GRIDS_FILE_NAME, grids)
     (staging / HASHES_FILE_NAME).write_text("\n".join(hashes), encoding="utf-8")
     (staging / DESCRIPTION_FILE_NAME).write_text(json.dumps({"samples": len(hashes)}), encoding="utf-8")
-    shutil.rmtree(directory, ignore_errors=True)
-    staging.replace(directory)
+    publish_staged(staging, directory, file_names=(GRIDS_FILE_NAME, HASHES_FILE_NAME, DESCRIPTION_FILE_NAME))
 
 
 def _train_descriptor(argv: list[str], stand_in: StandIn) -> None:

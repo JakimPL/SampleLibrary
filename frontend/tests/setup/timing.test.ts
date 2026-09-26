@@ -10,11 +10,12 @@ import {
 
 const STARTED_AT = "2026-09-24T10:00:00Z";
 
-function reportAfter(seconds: number, done: number, total: number): ProgressReport {
+function reportAfter(seconds: number, done: number, total: number, resumed = 0): ProgressReport {
     return {
         label: "Counting",
         done,
         total,
+        resumed,
         started_at: STARTED_AT,
         updated_at: new Date(Date.parse(STARTED_AT) + seconds * 1000).toISOString(),
     };
@@ -29,6 +30,11 @@ describe("estimateRemainingSeconds", () => {
         expect(estimateRemainingSeconds(reportAfter(ESTIMATE_WARMUP_SECONDS - 1, 100, 400))).toBeNull();
         expect(estimateRemainingSeconds(reportAfter(60, 0, 400))).toBeNull();
         expect(estimateRemainingSeconds(reportAfter(60, 400, 400))).toBeNull();
+    });
+
+    it("keeps a resumed pass's pace to the items it finished itself", () => {
+        expect(estimateRemainingSeconds(reportAfter(60, 250, 400, 200))).toBe(180);
+        expect(estimateRemainingSeconds(reportAfter(60, 200, 400, 200))).toBeNull();
     });
 });
 

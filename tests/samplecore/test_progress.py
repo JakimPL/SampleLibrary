@@ -51,3 +51,17 @@ def test_a_pass_run_by_hand_writes_no_report(tmp_path: Path, monkeypatch: pytest
 
     assert list(tracked(["a"], total=1, label="Alone")) == ["a"]
     assert read_progress(tmp_path / "absent.json") is None
+
+
+def test_a_resumed_bar_counts_on_from_the_work_finished_before_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    report_path = tmp_path / "step.progress.json"
+    monkeypatch.setenv(PROGRESS_FILE_ENVIRONMENT_VARIABLE, str(report_path))
+
+    with ProgressBar(total=10, label="Reading", resumed=6) as progress:
+        progress.update(1)
+
+    report = read_progress(report_path)
+    assert report is not None
+    assert (report.done, report.total, report.resumed) == (7, 10, 6)

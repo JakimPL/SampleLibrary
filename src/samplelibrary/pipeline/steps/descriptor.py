@@ -12,6 +12,7 @@ from samplecloud.evaluation.settings import EvaluationScope
 from samplecloud.features import readable_pending_count
 from samplecloud.hearing import hearing_for
 from samplecore.models.experiment import ExperimentKey, Reading
+from samplecore.storage.atomic import PARTIAL_SUFFIX
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
@@ -87,8 +88,10 @@ EXPERIMENT: Final[str] = "experiment"
 VECTORS: Final[str] = "vectors"
 RELATIONS: Final[str] = "relations"
 PLAYBACK_RATES: Final[str] = "playback rates"
+GRID_CACHE_PARTIALS: Final[str] = f"cache/grids/.{GRID_CACHE_PREFIX}-*{PARTIAL_SUFFIX}"
 OWNED_OUTPUTS: Final[tuple[str, ...]] = (
     f"cache/grids/{GRID_CACHE_PREFIX}-*",
+    GRID_CACHE_PARTIALS,
     f"models/descriptors/{SEALED_DESCRIPTOR_PREFIX}-*",
     f"runs/descriptor/{DESCRIPTOR_RUN_PREFIX}-*",
 )
@@ -143,6 +146,7 @@ def descriptor_steps(source: DescriptorSource) -> tuple[Step, ...]:
             artifact=_grid_cache_directory,
             command=_cache_command,
             complete=directory_artifact_is_complete(DESCRIPTION_FILE_NAME),
+            partials=GRID_CACHE_PARTIALS,
         ),
         _descriptor_step(source),
         DerivedExperimentStep(

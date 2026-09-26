@@ -14,7 +14,7 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.relation import RelationType, SampleRelation
 from samplecore.models.sample import Sample
 from samplecore.process_pool import IN_PROCESS_WORKERS, mapped_in_processes
-from samplecore.progress import tracked
+from samplecore.progress import ProgressBar, tracked
 from samplecore.storage.database import start_batch
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository, SampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
@@ -216,21 +216,22 @@ def _fingerprints_by_layout(
 ) -> tuple[Fingerprints, ...]:
     """Every sample holding sound that can be read now, fingerprinted and grouped by channel layout, which relations never cross."""
     kept: dict[ChannelLayout, list[_Fingerprinted]] = {layout: [] for layout in ChannelLayout}
-    readings = mapped_in_processes(
-        _FingerprintReader(audio),
-        samples,
-        worker_count=workers,
-        chunk_size=FINGERPRINT_CHUNK_SIZE,
-        description="Fingerprinting samples",
-    )
-    for sample, reading in zip(samples, readings, strict=True):
-        match reading:
-            case _Unfingerprinted.UNAVAILABLE:
-                tally.unavailable_samples += 1
-            case _Unfingerprinted.SILENT:
-                tally.silent_samples += 1
-            case _SampleFingerprint():
-                kept[sample.channels].append(_Fingerprinted(sample=sample, fingerprint=reading))
+    with ProgressBar(total=len(samples), label="Fingerprinting samples") as progress:
+        readings = mapped_in_processes(
+            _FingerprintReader(audio),
+            samples,
+            worker_count=workers,
+            chunk_size=FINGERPRINT_CHUNK_SIZE,
+            progress=progress,
+        )
+        for sample, reading in zip(samples, readings, strict=True):
+            match reading:
+                case _Unfingerprinted.UNAVAILABLE:
+                    tally.unavailable_samples += 1
+                case _Unfingerprinted.SILENT:
+                    tally.silent_samples += 1
+                case _SampleFingerprint():
+                    kept[sample.channels].append(_Fingerprinted(sample=sample, fingerprint=reading))
 
     return tuple(
         Fingerprints(

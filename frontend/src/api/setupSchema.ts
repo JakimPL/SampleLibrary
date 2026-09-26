@@ -328,8 +328,9 @@ export interface components {
          * ProgressReport
          * @description How far one pass has come, as the program watching it reads it: what it counts, how many are done, of how many.
          *
-         *     The pass's start and the moment of its count give the pace the watching program estimates the
-         *     pass's remaining time from.
+         *     `resumed` is how many were done already when this pass started, taken up from a pass stopped
+         *     before it. The pass's start, the moment of its count and the count it added itself give the
+         *     pace the watching program estimates the pass's remaining time from.
          */
         readonly ProgressReport: {
             /** Label */
@@ -338,6 +339,8 @@ export interface components {
             readonly done: number;
             /** Total */
             readonly total: number;
+            /** Resumed */
+            readonly resumed: number;
             /**
              * Started At
              * Format: date-time

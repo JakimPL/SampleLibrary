@@ -22,14 +22,16 @@ export function secondsBetween(start: string, end: string | number): number {
 
 /**
  * The seconds a pass has left at the pace it has kept since it started, once it has run long
- * enough for that pace to hold; null before then and once every item is done.
+ * enough for that pace to hold; null before then and once every item is done. A pass taking up
+ * where a stopped one left off keeps its pace over the items it finished itself.
  */
 export function estimateRemainingSeconds(report: ProgressReport): number | null {
     const elapsed = secondsBetween(report.started_at, report.updated_at);
-    if (report.done === 0 || report.done >= report.total || elapsed < ESTIMATE_WARMUP_SECONDS) {
+    const finishedHere = report.done - report.resumed;
+    if (finishedHere <= 0 || report.done >= report.total || elapsed < ESTIMATE_WARMUP_SECONDS) {
         return null;
     }
-    return (elapsed / report.done) * (report.total - report.done);
+    return (elapsed / finishedHere) * (report.total - report.done);
 }
 
 function describeMinutes(totalMinutes: number): string {

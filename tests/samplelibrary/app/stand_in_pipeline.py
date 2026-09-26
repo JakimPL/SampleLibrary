@@ -31,7 +31,7 @@ def main() -> None:
     events.emit(StepDecided(step="thumbnails", verdict=StepVerdict.RAN, reasons=("readable samples",)))
     events.emit(AttemptStarted(step="thumbnails", argv=("thumbnails",), log=str(run.log("thumbnails")), scope="s"))
     now = datetime.now(UTC)
-    report = ProgressReport(label="Computing thumbnails", done=7, total=7, started_at=now, updated_at=now)
+    report = ProgressReport(label="Computing thumbnails", done=7, total=7, resumed=0, started_at=now, updated_at=now)
     run.progress("thumbnails").write_text(report.model_dump_json(), encoding="utf-8")
     failing = target == FAILING_TARGET
     run.log("thumbnails").write_text("Computing thumbnails\nthe disk is full\n", encoding="utf-8")

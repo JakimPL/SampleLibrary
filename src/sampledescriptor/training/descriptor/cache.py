@@ -11,14 +11,16 @@ from pydantic import BaseModel
 from samplecore.models.base import FROZEN
 from samplecore.models.sample import Sample
 from samplecore.process_pool import mapped_in_processes
+from samplecore.progress import ProgressBar
 from samplecore.storage.sample_audio import SampleAudio
+from samplecore.storage.staging import fresh_staging, publish_staged
 from sampledescriptor.descriptors.pooling import canonical_duration, pool_bands, pooled_band_count
 from sampledescriptor.descriptors.views import retuned_view
 from sampledescriptor.geometry import Anchor, GridGeometry
 from sampledescriptor.registries import CANONICALIZER_REGISTRY, canonicalizer_for_geometry
-from sampledescriptor.training.cache_staging import CACHE_DIRECTORY_NAME, fresh_staging, publish_staged
 from samplemorph.canonicalizers.common import prepare_mono
 
+CACHE_DIRECTORY_NAME: Final[str] = "cache"
 GRID_CACHE_DIRECTORY_NAME: Final[str] = "grids"
 DEFAULT_GRID_CACHE_NAME: Final[str] = "descriptor"
 # The first reading of every sample is the stored waveform's own; the retuned views follow it.
@@ -33,6 +35,7 @@ DURATIONS_FILE_NAME: Final[str] = "durations.npy"
 HASHES_FILE_NAME: Final[str] = "hashes.txt"
 DESCRIPTION_FILE_NAME: Final[str] = "description.json"
 JOB_CHUNK_SIZE: Final[int] = 8
+CANONICALIZING_LABEL: Final[str] = "Canonicalizing"
 
 
 class GridCacheDescription(BaseModel):
@@ -205,12 +208,13 @@ def build_grid_cache(
         for sample in samples
     ]
     worker = _Worker(audio=audio, geometry=geometry, band_count=band_count)
-    derived = mapped_in_processes(
-        worker, jobs, worker_count=worker_count, chunk_size=JOB_CHUNK_SIZE, description="Canonicalizing"
-    )
-    for position, (job_grids, job_durations) in enumerate(derived):
-        grids[position] = job_grids
-        durations[position] = job_durations
+    with ProgressBar(total=len(jobs), label=CANONICALIZING_LABEL) as progress:
+        derived = mapped_in_processes(
+            worker, jobs, worker_count=worker_count, chunk_size=JOB_CHUNK_SIZE, progress=progress
+        )
+        for position, (job_grids, job_durations) in enumerate(derived):
+            grids[position] = job_grids
+            durations[position] = job_durations
     grids.flush()
     del grids
     np.save(staging / DURATIONS_FILE_NAME, durations)

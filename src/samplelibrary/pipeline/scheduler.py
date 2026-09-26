@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from samplecore.exit_status import ExitStatus
-from samplelibrary.pipeline.artifacts import write_step_record
+from samplelibrary.pipeline.artifacts import remove_path, write_step_record
 from samplelibrary.pipeline.context import RunSession
 from samplelibrary.pipeline.decisions import decide
 from samplelibrary.pipeline.events import (
@@ -197,7 +197,12 @@ def _take(session: RunSession, step: Step, sinks: Sinks, *, follow: bool) -> _Ta
 
 
 def _run(session: RunSession, step: Step, plan: StepPlan, sinks: Sinks, *, follow: bool) -> Attempt:
-    """Run one step's command, then bind what it produced to the inputs it was built from."""
+    """Run one step's command, then bind what it produced to the inputs it was built from.
+
+    The partial builds of inputs the step has moved on from go first.
+    """
+    for path in plan.discard:
+        remove_path(path)
     sinks.emit(
         AttemptStarted(
             step=step.name,

@@ -47,6 +47,7 @@ const RUNNING_BUILD: BuildView = {
                 label: "Computing thumbnails",
                 done: 40,
                 total: 160,
+                resumed: 0,
                 started_at: "2026-09-24T10:00:30Z",
                 updated_at: "2026-09-24T10:01:00Z",
             },

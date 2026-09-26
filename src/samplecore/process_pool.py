@@ -69,28 +69,27 @@ def mapped_in_processes[Item, Result](
     *,
     worker_count: int,
     chunk_size: int,
-    description: str,
+    progress: ProgressBar,
 ) -> Iterator[Result]:
     """Each item's result in order, from a pool of fresh processes or, with `IN_PROCESS_WORKERS` asked for, in this one.
 
     `work` is sent to every process once, as it starts, so it carries whatever each item needs and
-    only the items travel after that; every process computes on one thread. Progress is drawn under
-    `description`, one step per item.
+    only the items travel after that; every process computes on one thread. Each result counts one
+    step on the caller's `progress`, which knows the whole of the pass these items belong to.
     """
-    with ProgressBar(total=len(items), label=description) as progress:
-        if worker_count == IN_PROCESS_WORKERS:
-            for item in items:
-                yield work(item)
-                progress.update(1)
-        else:
-            with single_threaded_children():
-                pool = multiprocessing.get_context(WORKER_START_METHOD).Pool(
-                    worker_count, initializer=_start_worker, initargs=(work,)
-                )
-            with pool:
-                for result in pool.imap(_apply, items, chunksize=chunk_size):
-                    yield result
-                    progress.update(1)
+    if worker_count == IN_PROCESS_WORKERS:
+        for item in items:
+            yield work(item)
+            progress.update(1)
+        return
+    with single_threaded_children():
+        pool = multiprocessing.get_context(WORKER_START_METHOD).Pool(
+            worker_count, initializer=_start_worker, initargs=(work,)
+        )
+    with pool:
+        for result in pool.imap(_apply, items, chunksize=chunk_size):
+            yield result
+            progress.update(1)
 
 
 def _start_worker(work: Callable[[Any], Any]) -> None:

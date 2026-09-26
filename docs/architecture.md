@@ -454,7 +454,13 @@ inputs (`steps/kinds.py`):
 A file artifact's sidecar (`<artifact>.pipeline.json`) holds the inputs, the content digest and the
 file's fingerprint; an artifact complete by its own marker whose sidecar is missing is sealed
 without a rerun. A training artifact is complete once `finished.json` stands beside its model, and a
-run of the same inputs that stopped short continues with `--resume`. The descriptor is also sealed
+run of the same inputs that stopped short continues with `--resume`. A build that keeps its progress
+beside its artifact, in the hidden `.<artifact>.partial` directory (`samplecore/storage/staging.py`),
+continues from it when the same inputs build again; the step names every partial its builds leave,
+and a run for new inputs removes the ones older inputs left before its command starts, as a redo
+removes the current one and a run from scratch removes them all. A pass reports how much of its work
+a stopped pass had finished (`resumed` in its progress report), so the application estimates the
+time left from the pace of the work this pass does itself. The descriptor is also sealed
 under its content (`descriptor-<sha16>.pt`), which the learned experiment names, so an experiment
 always loads the weights it was described by. Downstream inputs read upstream content, so a rerun
 producing the same bytes leaves everything after it satisfied. Parameters digest over the validated

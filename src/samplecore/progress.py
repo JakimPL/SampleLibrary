@@ -17,13 +17,15 @@ from samplecore.storage.atomic import write_bytes_atomically
 
 PROGRESS_FILE_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_PROGRESS_FILE"
 REPORT_INTERVAL_SECONDS: Final[float] = 1.0
+NOTHING_RESUMED: Final[int] = 0
 
 
 class ProgressReport(BaseModel):
     """How far one pass has come, as the program watching it reads it: what it counts, how many are done, of how many.
 
-    The pass's start and the moment of its count give the pace the watching program estimates the
-    pass's remaining time from.
+    `resumed` is how many were done already when this pass started, taken up from a pass stopped
+    before it. The pass's start, the moment of its count and the count it added itself give the
+    pace the watching program estimates the pass's remaining time from.
     """
 
     model_config = FROZEN
@@ -31,6 +33,7 @@ class ProgressReport(BaseModel):
     label: str
     done: int = Field(ge=0)
     total: int = Field(ge=0)
+    resumed: int = Field(ge=0)
     started_at: datetime
     updated_at: datetime
 
@@ -41,16 +44,20 @@ class ProgressBar:
     The pipeline names a file in `SAMPLELIBRARY_PROGRESS_FILE` for each step it runs, and the bar
     writes its count there at most once every `REPORT_INTERVAL_SECONDS`, and once more as it closes,
     so the application shows a step's progress while the terminal keeps its own bar.
+
+    A pass taking up where a stopped one left off starts its count at `resumed`, so the bar shows
+    the whole of the work and the pace counts only what this pass does.
     """
 
-    def __init__(self, *, total: int, label: str) -> None:
+    def __init__(self, *, total: int, label: str, resumed: int = NOTHING_RESUMED) -> None:
         self._label = label
         self._total = total
-        self._done = 0
+        self._resumed = resumed
+        self._done = resumed
         self._started_at = datetime.now(UTC)
         self._reported_at = -math.inf
         self._report_path = progress_file_from_environment()
-        self._bar = tqdm(total=total, desc=label)
+        self._bar = tqdm(total=total, desc=label, initial=resumed)
 
     def __enter__(self) -> Self:
         self._report()
@@ -80,15 +87,19 @@ class ProgressBar:
             label=self._label,
             done=self._done,
             total=self._total,
+            resumed=self._resumed,
             started_at=self._started_at,
             updated_at=datetime.now(UTC),
         )
         write_bytes_atomically(self._report_path, report.model_dump_json().encode("utf-8"))
 
 
-def tracked[T](items: Iterable[T], *, total: int, label: str) -> Iterator[T]:
-    """Each of ``items`` in turn, counted on a `ProgressBar` as the caller finishes with it."""
-    with ProgressBar(total=total, label=label) as progress:
+def tracked[T](items: Iterable[T], *, total: int, label: str, resumed: int = NOTHING_RESUMED) -> Iterator[T]:
+    """Each of ``items`` in turn, counted on a `ProgressBar` as the caller finishes with it.
+
+    `total` counts the whole of the work, `resumed` of it done before these ``items``.
+    """
+    with ProgressBar(total=total, label=label, resumed=resumed) as progress:
         for item in items:
             yield item
             progress.update(1)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum, unique
+from pathlib import Path
 from typing import Final
 
 from samplecore.digests import digest_of_rows
@@ -68,13 +69,15 @@ class StepPlan:
     """What a step decided about itself before a run acts on it: its inputs now, and what is left to do.
 
     `argv` is the command line the step runs when it has work; a step with nothing to do names none.
-    `reasons` are the input components that moved since the step last finished, which is what
-    `status` reports, and `reason` says in words why a step refuses.
+    `discard` names what a run removes before that command starts: the partial builds of inputs the
+    step has moved on from. `reasons` are the input components that moved since the step last
+    finished, which is what `status` reports, and `reason` says in words why a step refuses.
     """
 
     inputs: Mapping[str, str]
     action: StepAction
     argv: tuple[str, ...] = ()
+    discard: tuple[Path, ...] = ()
     reasons: frozenset[str] = field(default_factory=frozenset)
     reason: str = ""
 
