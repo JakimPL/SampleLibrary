@@ -123,7 +123,7 @@ def _first_session(executable: Path, work: Path, launch: subprocess.Popen[bytes]
     _request("POST", f"{application.setup_route}/builds", {"target": BUILD_TARGET})
     _check_build(_wait_for_state(application, _build_ended, seconds=BUILD_SECONDS))
     _check_catalog(application)
-    _request("POST", f"{application.setup_route}/quit", None)
+    _quit(application)
     _wait_until_closed(application)
     launch.wait(timeout=QUIT_SECONDS)
     _step("The application quit.")
@@ -215,14 +215,19 @@ def _answered_state(application: Application) -> State | None:
 def _stop(application: Application, launch: subprocess.Popen[bytes]) -> None:
     """Ask the application to quit where it still answers, and end the executable if it still runs."""
     if _answered_state(application) is not None:
-        _request("POST", f"{application.setup_route}/quit", None)
+        _quit(application)
     try:
         launch.wait(timeout=QUIT_SECONDS)
     except subprocess.TimeoutExpired:
         launch.kill()
 
 
-def _request(method: str, url: str, body: dict[str, object] | None) -> object:
+def _quit(application: Application) -> None:
+    """Ask the application to quit, which it answers once its library is closed."""
+    _request("POST", f"{application.setup_route}/quit", None, seconds=QUIT_SECONDS)
+
+
+def _request(method: str, url: str, body: dict[str, object] | None, *, seconds: float = REQUEST_SECONDS) -> object:
     """Send one request, and return its decoded JSON answer.
 
     Raises:
@@ -232,7 +237,7 @@ def _request(method: str, url: str, body: dict[str, object] | None) -> object:
     data = None if body is None else json.dumps(body).encode("utf-8")
     request = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(request, timeout=REQUEST_SECONDS) as response:
+        with urllib.request.urlopen(request, timeout=seconds) as response:
             content = response.read()
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")

@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from samplecore.config import PIPELINE_TABLE, load_config
 from samplelibrary.app.asgi import create_application
+from samplelibrary.app.installation import Installation, this_installation
 from samplelibrary.app.launcher import Launcher, LibraryStatus
 from samplelibrary.pipeline.settings import DescriptorSource, read_pipeline_settings
 
@@ -82,6 +83,27 @@ def test_an_application_opens_the_library_its_config_names(configured: TestClien
     assert state["status"] == LibraryStatus.READY
     assert state["manages_database"] is False
     assert configured.get("/api/stats").json()["sample_count"] == 0
+
+
+def test_the_application_names_its_installation(unconfigured: TestClient) -> None:
+    answer = unconfigured.get("/api/setup/installation").json()
+
+    assert Installation.model_validate(answer) == this_installation()
+
+
+def test_quitting_closes_the_library_before_the_server_stops(config_path: Path) -> None:
+    launcher = Launcher(
+        config_path, renderer_command=IDLE_RENDERER, pipeline_command=IDLE_RENDERER, device_command=REPORTED_DEVICE
+    )
+    application = create_application(launcher, frontend_directory=None, on_ready=lambda: None)
+    library_open_at_quit: list[bool] = []
+    application.state.request_quit = lambda: library_open_at_quit.append(launcher.catalog is not None)
+    with TestClient(application, base_url=LOCAL_BASE_URL, client=LOCAL_CLIENT) as client:
+        assert _wait_until_settled(client)["status"] == LibraryStatus.READY
+
+        assert client.post("/api/setup/quit").status_code == 202
+
+    assert library_open_at_quit == [False]
 
 
 def _build_device(client: TestClient) -> dict[str, object]:

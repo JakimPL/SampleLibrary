@@ -11,6 +11,7 @@ from samplecore.config import ConfigurationError, InvalidSettingsError
 from samplecore.config_editing import LibraryOptions, LibrarySources
 from samplecore.models.base import FROZEN
 from samplelibrary.app.folders import FolderListing, FolderUnreadableError, Place, list_folder, places
+from samplelibrary.app.installation import INSTALLATION_ROUTE, QUIT_ROUTE, Installation, this_installation
 from samplelibrary.app.jobs import BuildTarget, JobAlreadyRunningError
 from samplelibrary.app.launcher import BuildInProgressError, Launcher, LibraryClosedError, SetupState
 from samplelibrary.app.routes.guard import launcher_of, require_local_person
@@ -23,6 +24,11 @@ LauncherDependency = Annotated[Launcher, Depends(launcher_of)]
 @router.get("/state")
 def read_state(launcher: LauncherDependency) -> SetupState:
     return launcher.state()
+
+
+@router.get(INSTALLATION_ROUTE)
+def read_installation() -> Installation:
+    return this_installation()
 
 
 @router.put("/sources")
@@ -104,7 +110,13 @@ def read_folder(path: Annotated[str, Query(min_length=1)]) -> FolderListing:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
 
 
-@router.post("/quit", status_code=status.HTTP_202_ACCEPTED)
-def quit_application(request: Request) -> None:
+@router.post(QUIT_ROUTE, status_code=status.HTTP_202_ACCEPTED)
+async def quit_application(request: Request, launcher: LauncherDependency) -> None:
+    """Close the library, with its build, renderer and managed database, then let the server stop.
+
+    The answer comes once the library is closed, so a start of another installation waiting for this
+    one to quit opens the same library the moment the port comes free.
+    """
+    await launcher.stop()
     request_quit: Callable[[], None] = request.app.state.request_quit
     request_quit()

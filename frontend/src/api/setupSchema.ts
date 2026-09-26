@@ -21,6 +21,23 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api/setup/installation": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /** Read Installation */
+        readonly get: operations["read_installation_api_setup_installation_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/setup/sources": {
         readonly parameters: {
             readonly query?: never;
@@ -157,7 +174,13 @@ export interface paths {
         };
         readonly get?: never;
         readonly put?: never;
-        /** Quit Application */
+        /**
+         * Quit Application
+         * @description Close the library, with its build, renderer and managed database, then let the server stop.
+         *
+         *     The answer comes once the library is closed, so a start of another installation waiting for this
+         *     one to quit opens the same library the moment the port comes free.
+         */
         readonly post: operations["quit_application_api_setup_quit_post"];
         readonly delete?: never;
         readonly options?: never;
@@ -217,6 +240,19 @@ export interface components {
         readonly HTTPValidationError: {
             /** Detail */
             readonly detail?: readonly components["schemas"]["ValidationError"][];
+        };
+        /**
+         * Installation
+         * @description Which installation of the application a running server belongs to: its version and its Python environment.
+         *
+         *     Each launcher installs its own environment, so the processor launcher, the NVIDIA one and a
+         *     source checkout each report a different one, and so does every new version.
+         */
+        readonly Installation: {
+            /** Version */
+            readonly version: string;
+            /** Environment */
+            readonly environment: string;
         };
         /**
          * JobStatus
@@ -392,6 +428,26 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["SetupState"];
+                };
+            };
+        };
+    };
+    readonly read_installation_api_setup_installation_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Installation"];
                 };
             };
         };

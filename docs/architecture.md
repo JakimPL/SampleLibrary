@@ -504,6 +504,12 @@ the built frontend. The `Launcher` owns what the library needs:
   left.
 - **Setup routes.** They list folders and write the config file, so they answer a request from the
   loopback address, addressed to a local name, and sent by a page from a local name.
+- **Starts.** A start asks its port who answers there (`samplelibrary.app.installation`):
+  `GET /api/setup/installation` names the running server's version and Python environment. The
+  same installation gets the browser opened on it. Another one, a new version or the other
+  launcher, is asked to quit, and the start takes the port once it comes free. `POST
+  /api/setup/quit` answers once the build, the renderer and the managed database have stopped, so
+  the next server opens the same library at once.
 
 The packaged application is a PyApp executable (`just package`, `just executable`): it embeds the
 samplelibrary wheel, which carries the built frontend, with the `app` extra pinned to the lock and

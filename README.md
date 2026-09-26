@@ -42,7 +42,7 @@ takes a day or more, so the page asks before it starts.
 ## Everyday use
 
 - Open SampleLibrary from the Start menu, from Applications, or from its AppImage. A start while it
-  already runs opens it in your browser again.
+  already runs opens it in your browser again. A new version closes the old one as it starts.
 - A build keeps going when you close the browser tab.
 - To add folders, or to build again after your collection grows, open **Library → Setup**.
 - **Library → Quit SampleLibrary**, or **Quit** on the setup page, stops SampleLibrary.
