@@ -578,6 +578,37 @@ as `pg_ctl`, starts hidden (`samplecore.processes`). `just installer` (`scripts/
 or an AppImage. The
 Application workflow builds all three, smoke-testing each executable on a fresh runner first.
 
+## Who may change what
+
+| Process | Connects as | May write |
+|---|---|---|
+| `samplelibrary serve`, the Docker image | the reader, `server_database_url` | nothing |
+| the SampleLibrary app's catalog API | the curator, `curation_database_url` | `curation.sample_annotation`, one sample or one group of near-duplicates per request, and new tag ranks |
+| the pipeline, every other command, `setup`, the app preparing its own database | the owner, `database_url` | everything |
+
+- **Postgres enforces the table.** Each service role holds exactly its service's rights, and a
+  start whose role holds more is refused: `samplelibrary serve` before any worker runs, the
+  SampleLibrary app before it opens the library. No request clears or truncates a table: the API
+  offers no such route, and the curator holds no `TRUNCATE`.
+- **Label writes exist only in the SampleLibrary app,** which answers the person at its computer
+  alone: a request on any path comes from the loopback address, addresses the app by a local name,
+  was sent by a page from a local name when a page sent it, and passed no proxy. The app listens on
+  127.0.0.1 alone and reads no forwarding headers. A deployed site offers no route that writes, and
+  its pages show every label, rating and favorite as it is.
+- **Every label change can be undone.** The history's trigger records every change whichever role
+  makes it, and neither service role can read, edit or erase the history. `samplelibrary
+  annotations restore --at <moment>` brings the labels back to any moment since the history began.
+- **What this leaves open:**
+  - The SampleLibrary app's own process holds the owner's rights, since it prepares its database and
+    runs its builds, so the curator role confines the app's HTTP routes, not code running in that
+    process.
+  - A reverse proxy on the same computer that adds no forwarding header looks like a browser there.
+    Publish `samplelibrary serve`, never the SampleLibrary app.
+  - A page served from another port of the same computer passes the Origin check.
+  - A temporary table is refused to the reader by the read-only transaction alone.
+  - The morph renderer opens no database. It listens on the loopback address unless told otherwise,
+    and renders whatever it is asked.
+
 ## Deployment
 
 Two packages run as long-lived services: `sampleserver`, the API, and `samplemorph.service`, the

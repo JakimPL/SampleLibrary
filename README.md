@@ -67,6 +67,11 @@ SampleLibrary keeps a log you can read or attach to a report:
 Report a problem on the [issue tracker](https://github.com/JakimPL/SampleLibrary/issues), with the
 log attached.
 
+SampleLibrary keeps every change to your labels, ratings and favorites. If some were changed by
+mistake, running SampleLibrary from source brings them back to how they were at a given time:
+`samplelibrary annotations restore --at "2026-09-26 21:30"` shows what it would change, and adding
+`--confirm` carries it out.
+
 Uninstalling SampleLibrary on Windows removes the program and the packages it downloaded. Your
 library stays in the folder you chose for it.
 
