@@ -458,7 +458,7 @@ inputs (`steps/kinds.py`):
 | `PassStep` | always runs, its command skipping the work it already finished (`pass_completion`) |
 | `GuardedPassStep` | the labels file's digest is recorded in `curation.annotation_import`; it refuses over labels of the library's own |
 | `GrowingExperimentStep` | its key names an experiment and no readable sample is left for it to describe |
-| `DerivedExperimentStep` | an experiment is filed under the key its inputs' digest names, and shown where it must be |
+| `DerivedExperimentStep` | an experiment is filed under the key its inputs' digest names, holds everything its inputs name, and is shown where it must be |
 | `FileArtifactStep` | the artifact named by its inputs' digest stands complete with a sidecar recording those inputs |
 | `PointerStep` | the library's record (the cloud's promotion, the published models) names this run's output |
 
@@ -820,8 +820,10 @@ backend, the `reading`, for a learned descriptor the model's name, and for the l
 commit of its checkpoint this build pins (`TEACHER_REVISION`), so an experiment heard through
 another commit is refused rather than extended. An experiment may carry a key, unique across the
 catalog (`experiment.key`): `cloud embed --key K` starts an experiment under K following the recipe
-flags, and every later run naming K resumes it, and `descriptor embed --key K` writes its experiment and
-every vector in one transaction, so an experiment a key names holds its whole cache. A resumed experiment follows
+flags, and every later run naming K resumes it, and `descriptor embed --key K` commits its experiment
+first and its vectors five thousand at a time, so a run stopped partway keeps what it wrote and the
+next run naming K describes only the cached samples the experiment lacks; the pipeline's `embedding`
+step counts an experiment holding fewer vectors than its cache as unfinished. A resumed experiment follows
 the recipe its own row records, so `--experiment-id` refuses a `--backend`, `--model` or
 `--heard-rate` naming another, and a label, which names a new experiment. Before new vectors join an
 experiment that already holds some, its first eight samples by hash are described again and must

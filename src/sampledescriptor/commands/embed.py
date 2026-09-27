@@ -10,6 +10,7 @@ from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import experiment_key
 from samplecore.config import LibraryConfig
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from sampledescriptor.model_paths import DEFAULT_DESCRIPTOR_NAME, descriptor_path
 from sampledescriptor.training.descriptor.cache import DEFAULT_GRID_CACHE_NAME, grid_cache_directory, open_grid_cache
 from sampledescriptor.training.run.settings import DEFAULT_ACCELERATOR
@@ -32,7 +33,7 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
         "--key",
         type=experiment_key,
         default=None,
-        help="File the experiment under this key; a key an earlier run filed ends the command with nothing to do.",
+        help="File the experiment under this key; a key an earlier run filled ends the command with nothing to do.",
     )
     parser.add_argument("--device", type=str, default=DEFAULT_ACCELERATOR, help="Which device the descriptor runs on.")
 
@@ -40,12 +41,17 @@ def add_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) ->
 def run(connection: Connection, config: LibraryConfig, arguments: argparse.Namespace) -> None:
     """Write one experiment of vectors and report which experiment it became.
 
-    A key an earlier run filed names an experiment already holding every vector of its cache, since
-    an embedding lands whole, so the command reports it and loads nothing.
+    A key an earlier run filed names the experiment these inputs make: one holding every vector of
+    its cache ends the command with nothing loaded, and one an earlier run stopped filling is
+    filled with the rest.
     """
+    cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))
     if arguments.key is not None:
         filed = PostgresExperimentRepository(connection).get_by_key(arguments.key)
-        if filed is not None:
+        if (
+            filed is not None
+            and PostgresSampleFeatureVectorRepository(connection).count_for_experiment(filed.id) == cache.sample_count
+        ):
             _logger.info("Experiment %d already holds the vectors filed under %s.", filed.id, arguments.key)
             return
     # The descriptor's network is imported here, so parsing arguments and the commands that load no
@@ -56,7 +62,6 @@ def run(connection: Connection, config: LibraryConfig, arguments: argparse.Names
     from sampledescriptor.descriptors.embedding import EmbeddingFiling, embed_cache
     from sampledescriptor.descriptors.learned import load_descriptor
 
-    cache = open_grid_cache(grid_cache_directory(config.library_root, name=arguments.cache))
     descriptor = load_descriptor(
         descriptor_path(config.library_root, name=arguments.descriptor), device=torch.device(arguments.device)
     )

@@ -13,6 +13,7 @@ from samplecloud.features import readable_pending_count
 from samplecloud.hearing import hearing_for
 from samplecore.models.experiment import ExperimentKey, Reading
 from samplecore.storage.atomic import PARTIAL_SUFFIX
+from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
@@ -27,6 +28,7 @@ from sampledescriptor.training.descriptor.cache import (
     DEFAULT_RETUNED_VIEW_COUNT,
     DEFAULT_VIEW_RANGE_SEMITONES,
     DESCRIPTION_FILE_NAME,
+    cached_sample_count,
     grid_cache_directory,
 )
 from sampledescriptor.training.descriptor.settings import (
@@ -155,6 +157,7 @@ def descriptor_steps(source: DescriptorSource) -> tuple[Step, ...]:
             inputs=_embedding_inputs,
             key=lambda context, digest: f"{LEARNED_KEY_PREFIX}-{digest}",
             command=_embed_command,
+            complete=_describes_the_whole_cache,
         ),
         GrowingExperimentStep(
             name=COMPLETION,
@@ -375,6 +378,12 @@ def _embed_command(context: PipelineContext, key: ExperimentKey) -> tuple[str, .
         key,
         *operational_flags(context, workers=False, device=True),
     )
+
+
+def _describes_the_whole_cache(context: PipelineContext, experiment_id: int) -> bool:
+    """Whether the embedding's experiment holds a vector for every sample its grid cache holds."""
+    cached = cached_sample_count(_current_grid_cache(context))
+    return PostgresSampleFeatureVectorRepository(context.connection).count_for_experiment(experiment_id) == cached
 
 
 def _nominal_pending(context: PipelineContext, experiment_id: int) -> int:

@@ -249,6 +249,11 @@ def _canonicalize_into(
             rows.checkpoint()
 
 
+def cached_sample_count(directory: Path) -> int:
+    """How many samples the cache built under `directory` holds, read from its list of hashes alone."""
+    return len((directory / HASHES_FILE_NAME).read_text(encoding="utf-8").split("\n"))
+
+
 def open_grid_cache(directory: Path) -> GridCache:
     """Read a built cache back, mapping the grids rather than loading them.
 

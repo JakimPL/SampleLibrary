@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
 import torch
+from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
@@ -107,7 +109,7 @@ class InsertStopped(RuntimeError):
     pass
 
 
-def test_an_embedding_stopped_while_writing_leaves_no_experiment_behind(
+def test_an_embedding_stopped_while_writing_keeps_its_chunks_and_a_rerun_describes_the_rest(
     connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     cache = write_grid_cache(tmp_path / "cache", sample_count=6)
@@ -115,27 +117,42 @@ def test_an_embedding_stopped_while_writing_leaves_no_experiment_behind(
     for sample_hash in cache.hashes:
         repository.upsert(Sample(hash=sample_hash, depth=BitDepth.SIXTEEN, channels=ChannelLayout.MONO, frames=4096))
     connection.commit()
-    written_chunks: list[int] = []
+    descriptor = _descriptor(cache)
+    filing = EmbeddingFiling(model_name="tiny", label=None, key="learned-tiny")
     insert_many = PostgresSampleFeatureVectorRepository.insert_many
 
     def stop_after_the_first_chunk(
         self: PostgresSampleFeatureVectorRepository, vectors: Sequence[SampleFeatureVector]
     ) -> None:
-        if written_chunks:
+        if PostgresSampleFeatureVectorRepository(connection).list_for_experiment(vectors[0].experiment_id):
             raise InsertStopped("stopped between chunks")
-        written_chunks.append(len(vectors))
         insert_many(self, vectors)
 
     monkeypatch.setattr(embedding, "INSERT_CHUNK_SIZE", 2)
     monkeypatch.setattr(PostgresSampleFeatureVectorRepository, "insert_many", stop_after_the_first_chunk)
-
     with pytest.raises(InsertStopped):
-        embed_cache(
-            connection,
-            descriptor=_descriptor(cache),
-            cache=cache,
-            filing=EmbeddingFiling(model_name="tiny", label=None, key="learned-tiny"),
-        )
+        embed_cache(connection, descriptor=descriptor, cache=cache, filing=filing)
+    monkeypatch.setattr(PostgresSampleFeatureVectorRepository, "insert_many", insert_many)
+    described: list[int] = []
+    describe_rows = embedding.describe_rows
 
-    assert written_chunks == [2]
-    assert PostgresExperimentRepository(connection).get_by_key("learned-tiny") is None
+    def counted(*arguments: Any) -> NDArray[np.float64]:
+        vectors = describe_rows(*arguments)
+        described.append(len(vectors))
+        return vectors
+
+    monkeypatch.setattr(embedding, "describe_rows", counted)
+
+    summary = embed_cache(connection, descriptor=descriptor, cache=cache, filing=filing)
+
+    assert sum(described) == 4
+    experiments = PostgresExperimentRepository(connection)
+    assert experiments.get_by_key("learned-tiny") == experiments.get(summary.experiment_id)
+    held = {
+        vector.sample_hash: vector.vector
+        for vector in PostgresSampleFeatureVectorRepository(connection).list_for_experiment(summary.experiment_id)
+    }
+    expected = describe_cache(descriptor, cache)
+    assert list(held) == sorted(cache.hashes)
+    for row, sample_hash in enumerate(cache.hashes):
+        np.testing.assert_allclose(held[sample_hash], expected[row], atol=1e-6)

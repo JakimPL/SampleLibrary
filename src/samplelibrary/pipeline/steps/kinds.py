@@ -146,10 +146,12 @@ class GrowingExperimentStep:
 
 @dataclass(frozen=True)
 class DerivedExperimentStep:
-    """An experiment named by what it was made from, which stands whole or not at all.
+    """An experiment named by what it was made from.
 
     Its key holds the digest of its inputs, so a run finding that key finds the very experiment
-    those inputs make, and one finding none makes it.
+    those inputs make, and one finding none makes it. A step whose command fills its experiment a
+    part at a time names what makes the experiment `complete`, so a filed experiment a stopped run
+    left part-filled runs again, and the command fills in the rest.
     """
 
     name: str
@@ -158,15 +160,21 @@ class DerivedExperimentStep:
     key: KeyNamer
     command: Callable[[PipelineContext, ExperimentKey], tuple[str, ...]]
     shown: Callable[[PipelineContext, int], bool] | None = None
+    complete: Callable[[PipelineContext, int], bool] | None = None
 
     def evaluate(self, context: PipelineContext) -> StepPlan:
         inputs = self.inputs(context)
         plan = StepPlan(inputs=inputs, action=StepAction.SKIP)
         key = self.key(context, plan.digest)
         filed = PostgresExperimentRepository(context.connection).get_by_key(key)
-        if filed is not None and (self.shown is None or self.shown(context, filed.id)):
+        if filed is None:
+            return StepPlan(inputs=inputs, action=StepAction.RUN, argv=self.command(context, key))
+        if not self._is_complete(context, filed.id):
+            reasons = frozenset({SAMPLES_TO_DESCRIBE})
+        elif not self._is_shown(context, filed.id):
+            reasons = frozenset({NOT_SHOWN})
+        else:
             return plan
-        reasons = frozenset({NOT_SHOWN}) if filed is not None else frozenset()
         return StepPlan(inputs=inputs, action=StepAction.RUN, argv=self.command(context, key), reasons=reasons)
 
     def seal(self, context: PipelineContext, plan: StepPlan) -> Inputs:
@@ -174,9 +182,17 @@ class DerivedExperimentStep:
         filed = PostgresExperimentRepository(context.connection).get_by_key(key)
         if filed is None:
             raise MissingOutput(f"{self.name} left no experiment filed under {key}")
-        if self.shown is not None and not self.shown(context, filed.id):
+        if not self._is_complete(context, filed.id):
+            raise MissingOutput(f"{self.name} left experiment {filed.id} under {key} part-filled")
+        if not self._is_shown(context, filed.id):
             raise MissingOutput(f"{self.name} filed experiment {filed.id} under {key} and left it unshown")
         return {"experiment": str(filed.id), "key": key}
+
+    def _is_complete(self, context: PipelineContext, experiment_id: int) -> bool:
+        return self.complete is None or self.complete(context, experiment_id)
+
+    def _is_shown(self, context: PipelineContext, experiment_id: int) -> bool:
+        return self.shown is None or self.shown(context, experiment_id)
 
 
 @dataclass(frozen=True)
