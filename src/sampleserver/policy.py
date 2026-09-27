@@ -125,8 +125,9 @@ class ServingPolicy:
         On this computer alone, the request comes from the loopback address and names the server by
         a local name, so a page on another site that points its own name at the loopback address
         still names that site and is turned away. On a home network, a device on one of
-        `HOME_NETWORKS` is answered too, naming the server by an address or by this computer's own
-        name. A site answers anyone.
+        `HOME_NETWORKS` is answered too, and so is a program on this computer passing a device's
+        request on, such as a development server, each naming the server by an address or by this
+        computer's own name. A site answers anyone.
         """
         if self.is_public:
             return True
@@ -139,7 +140,8 @@ class ServingPolicy:
             return True
         if self._exposure is Exposure.LOCAL:
             return False
-        return any(address in network for network in HOME_NETWORKS) and _names_this_computer(host)
+        from_home = address.is_loopback or any(address in network for network in HOME_NETWORKS)
+        return from_home and _names_this_computer(host)
 
 
 def _names_this_computer(host: str) -> bool:

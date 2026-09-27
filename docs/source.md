@@ -199,10 +199,13 @@ API at `http://127.0.0.1:8000`. The API describes its routes at `http://127.0.0.
 just frontend-dev-lan
 ```
 
-This starts the web app for every device on your network; open the address it prints on your phone.
-[Using SampleLibrary](using.md#phones-and-tablets) describes the app on a phone. The API `just
-serve` runs reads the library and changes nothing, so every device on the network sees your labels
-as they are; you change them in `just app` on the computer it runs on.
+This starts the development web app for every device on your network, passing their requests on to
+the API `just serve` runs; open the address it prints on your phone. The API answers devices on
+your network once your config serves the library to them, with `exposure = "network"` under
+`[server]`; left at `"local"`, it answers this computer alone. [Using SampleLibrary](using.md#phones-and-tablets)
+describes the app on a phone. The API `just serve` runs reads the library and changes nothing, so
+every device on the network sees your labels as they are; you change them in `just app` on the
+computer it runs on.
 
 ## The morph renderer
 
@@ -233,16 +236,22 @@ it at another file, as `--filter-selection` does for the filter. The renderer ne
 
 ## Docker
 
-`just docker-build` builds an image of the API with the built web app, and
-`just docker-run <library> <config>` runs it over a library folder and a config written for the
-container, both read from where you run the recipe. `docker compose up` runs the image beside a
-PostgreSQL container, with `LIBRARY_ROOT` and `CONFIG_PATH` naming the library folder and the config
-it mounts. `just docker-secrets` writes the two files it reads passwords from, each once and
-readable by you alone: `docker/postgres.env` for the server, and `docker/site.env` with the reader's
-connection for the image, which serves the library read-only as that role. Run `just database` once
-with a config whose `server_database_url` is the URL in `docker/site.env`, with `localhost` in place
-of `postgres`. The architecture's [Deployment](architecture.md#deployment) section describes what
-the image holds and what to mount.
+The image is a site: the library's pages and API, served to anyone, with the morph renderer beside
+them. [Putting your library online](deploying.md) puts it on Railway; `docker compose` runs the same
+site on this computer first, beside a PostgreSQL of its own:
+
+```sh
+just docker-secrets                                  # the two passwords, each written once into docker/
+docker compose up -d postgres
+just docker-publish                                  # or: just docker-publish --config dev-library/config.toml
+PUBLICATION=<your library>/publication docker compose up site
+```
+
+`just docker-secrets` writes `docker/postgres.env`, the database's own password, and
+`docker/site.env`, the reader's connection, each readable by you alone; compose refuses to start
+without them. `just docker-publish` publishes the library into that database, reading both files,
+and the site serves it on http://127.0.0.1:8000. `just docker-build` builds the image alone. The
+architecture's [Deployment](architecture.md#deployment) section describes what the image holds.
 
 ## Recipes
 
@@ -259,7 +268,7 @@ the image holds and what to mount.
 | `just tracking-ui` | Opens MLflow over the recorded runs |
 | `just capped <command>` | Runs a `samplelibrary` command under a 16 GB ceiling; `just MEMORY_CAP=24G capped …` raises it |
 | `just reset` | Empties the catalog and the stored audio once you confirm, keeping labels, ratings, favorites, models and runs |
-| `just docker-build`, `just docker-run <library> <config>` | Build the image, and run it over a library folder and a config |
+| `just docker-secrets`, `just docker-publish`, `just docker-build` | Write the rehearsal's passwords, publish a library into its database, build the site's image |
 
 [Development](development.md) lists the recipes for checks, tests and the sandbox, and
 [Building and releasing](building.md) the ones that build the executable and the installers.

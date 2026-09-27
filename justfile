@@ -202,18 +202,9 @@ docker-secrets:
 
 [group("docker")]
 docker-build:
-    docker build -t samplelibrary-server .
+    docker build -t samplelibrary-site .
 
-LIBRARY_MOUNT := "type=bind,target=/library,readonly,source="
-CONFIG_MOUNT := "type=bind,target=/app/config.toml,readonly,source="
-
+# Publish a library into the database docker-compose.yml runs, such as `just docker-publish --config dev-library/config.toml`.
 [group("docker")]
-[linux]
-docker-run library_root config_path:
-    docker run --rm --network host --mount "{{ LIBRARY_MOUNT }}{{ absolute_path(join(invocation_directory(), library_root)) }}" --mount "{{ CONFIG_MOUNT }}{{ absolute_path(join(invocation_directory(), config_path)) }}" samplelibrary-server serve --host 127.0.0.1 --port 8000
-
-[group("docker")]
-[macos]
-[windows]
-docker-run library_root config_path:
-    docker run --rm -p 127.0.0.1:8000:8000 --mount "{{ LIBRARY_MOUNT }}{{ absolute_path(join(invocation_directory(), library_root)) }}" --mount "{{ CONFIG_MOUNT }}{{ absolute_path(join(invocation_directory(), config_path)) }}" samplelibrary-server
+docker-publish *arguments:
+    uv run python scripts/docker_publish.py {{ arguments }}

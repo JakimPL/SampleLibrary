@@ -78,6 +78,7 @@ library stays in the folder you chose for it.
 ## Documentation
 
 - [Using SampleLibrary](docs/using.md): the cloud, the morph, keys and gestures, phones and tablets.
+- [Putting your library online](docs/deploying.md): publishing your library as a site on Railway.
 - [Running from source](docs/source.md): running SampleLibrary from a checkout, with its commands
   and every setting.
 - [Development](docs/development.md): checks, tests and the sandbox library, for contributors.

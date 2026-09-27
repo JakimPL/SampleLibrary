@@ -726,7 +726,7 @@ rests on it for 120 ms.
 
 | Process | Connects as | May write |
 |---|---|---|
-| `samplelibrary serve`, the Docker image | the reader, `server_database_url` | nothing |
+| `samplelibrary serve`, `samplelibrary site` and its image | the reader, `server_database_url` | nothing |
 | the SampleLibrary app's catalog API | the curator, `curation_database_url` | `curation.sample_annotation`, one sample or one group of near-duplicates per request, and new tag ranks |
 | the pipeline, every other command, `setup`, the app preparing its own database | the owner, `database_url` | everything |
 
@@ -758,20 +758,21 @@ rests on it for 120 ms.
 
 Two packages run as long-lived services: `sampleserver`, the API, and `samplemorph.service`, the
 morph inference process. `sampleextract` and `samplecloud` are one-shot offline batch commands,
-run by hand or on a schedule, never by the served app itself. The root `Dockerfile` builds a
-runtime image for the served app alone: a Node stage builds the frontend, and the Python stages
-install only the `server` extra (`fastapi`, `uvicorn`, `httpx`) -- `sampleextract`/`samplecloud`'s
-own heavier dependencies (`librosa`, `umap-learn`, `scikit-learn`) never reach that image, mirroring
-the `sampleserver never imports the offline batch pipelines` import-linter contract above. The
-image runs as an unprivileged user (uid 1000), so a mounted library has to be readable by it, which
-objects written by this version are. The catalog names each sample directory by the path it was
-scanned under, so a container serving samples from sample directories mounts each one read-only at
-that same path, which the commented mount in `docker-compose.yml` shows. Its environment names the config at `/app/config.toml`
-(`SAMPLELIBRARY_CONFIG`), the built frontend (`SAMPLELIBRARY_FRONTEND_DIRECTORY`) and four workers
-(`WEB_CONCURRENCY`), and its command is `serve --host 0.0.0.0 --port 8000`, so a replacement command
-keeps the frontend and the workers; the health check reads `/api/stats`, so a healthy container is one
-whose catalog answers. The config mounted into it names `module_source_directory` and `library_root`
-as paths inside the container, and `database_url` unless the environment supplies it.
+run by hand or on a schedule, never by the served app itself. The root `Dockerfile` builds the image
+of a site (`samplelibrary site`, [The site](#the-site)): a Node stage builds the frontend, and the
+Python stages install the `server` and `morph` extras from the lock, so the API and its renderer
+share one container while `sampleextract`/`samplecloud`'s heavier dependencies (`umap-learn`,
+`scikit-learn`, torch) never reach it. trackmod, a git submodule a platform building from the
+repository checks out no copy of, comes from its own repository at the commit the submodule names,
+which a test holds the `Dockerfile` to. The image runs as an unprivileged user (uid 1000), with the
+site's config, `docker/site.toml`, at `/app/config.toml`: `library_root` is `/library`, where the
+platform mounts the volume holding the published audio, the renderer listens on the loopback
+address, the exposure is `public` and `[server.visitors]` sizes the limits. It holds no credential:
+the platform names the reader's connection in `SAMPLELIBRARY_SERVER_DATABASE_URL`. Its environment
+runs one process (`WEB_CONCURRENCY=1`), and its command is `site --host 0.0.0.0`, on the port
+`$PORT` names; the health check reads `/api/health` there. `railway.json` builds the `Dockerfile` on
+Railway, checks `/api/health` as a deployment starts, restarts a site that ends with a failure, and
+rebuilds only when something the image holds changes. `docs/deploying.md` walks a person through it.
 
 The inference process (`samplelibrary morph serve`) installs the `morph` extra alone, reads the library
 root and the sample directories its configuration lists, renders under the settings `morph.yaml` in
@@ -783,8 +784,8 @@ directories is read from — the first still as it was scanned, or a 404 before 
 when none is. The process reads a named file only inside its own sample directories, and only when
 the file decodes to the hash the request names. Both processes read one setting, `[inference] url` in `config.toml`: the
 process binds it, the API dials it, and a morph request reaching the API while no process answers
-comes back as 503 with that address in its detail, a render outlasting the client's wait as 504, and
-any other failure of the process as 502. Renders are deterministic given what a route reads, so
+comes back as 503, a render outlasting the client's wait as 504, and any other failure of the
+process as 502, each naming the address where the serving policy names internals. Renders are deterministic given what a route reads, so
 each carries a validator built from a fingerprint over the route's description, its settings, and `RENDER_REVISION`, together with the point, under `Cache-Control: private, no-cache`: a browser
 revalidates every play, and one holding the render is answered with a 304 by the process that made
 it. A point whose ends are heard more than sixteen times apart in rate, or that would render past
@@ -832,31 +833,19 @@ end the start with one message and exit status 3, and a database that cannot be 
 seconds with one message and exit status 1. Every worker connects as that reader, and creates
 nothing.
 
-`docker-compose.yml` adds a `postgres` service alongside it (a named volume for persistence), as a
-worked example of the two running together. Its `sampleserver` mounts `LIBRARY_ROOT` (default
-`./library`) at `/library` and `CONFIG_PATH` (default `docker/config.toml`, whose paths are the
-container's own) at `/app/config.toml`, both read-only, connects as the reader through
-`SAMPLELIBRARY_SERVER_DATABASE_URL`, read from `docker/site.env`, and publishes the app on
-`127.0.0.1:8000`. The server's own superuser password comes from `docker/postgres.env`. `just
-docker-secrets` writes both files once, with passwords of their own and readable by their owner
-alone, and compose refuses to start without them, so no password is written into the compose file
-or falls back to a known or empty one. `samplelibrary setup database`, run once from the
-host with a config naming that role, creates it. A path either names that is
-not there fails the start rather than mounting an empty directory. Its `extra_hosts` entry lets the
-container reach a renderer running on the host at `http://host.docker.internal:8010`, the commented
-`[inference]` table in `docker/config.toml`. A real deployment points
-`server_database_url`/`SAMPLELIBRARY_SERVER_DATABASE_URL` at whatever Postgres instance it actually
-runs against, container or otherwise. `just docker-run <library> <config>` runs the image alone against a config
-written for the container, which names its `server_database_url` and, for morphs, an `[inference]
-url` the container reaches. On Linux the recipe shares the host's network and binds `127.0.0.1:8000`, so
-`localhost` in that config means the host itself; on macOS and Windows it publishes
-`127.0.0.1:8000`, and Docker Desktop names the host `host.docker.internal`. The recipe reads both
-paths from the directory it was run in, and mounts them so that a path that is not there fails the
-run. Local development runs
+`docker-compose.yml` runs the site as a platform does, beside a Postgres of its own, on this
+computer alone: a rehearsal of what visitors will see. `just docker-secrets` writes the superuser's
+password into `docker/postgres.env` and the reader's connection into `docker/site.env`, each once,
+with passwords of their own and readable by their owner alone; compose refuses to start without
+them, so no password is written into the compose file or falls back to a known or empty one, and
+the site's container is handed the reader's connection alone. `just docker-publish` publishes a
+library into that Postgres over the loopback address, reading both passwords from those files, and
+the `site` service mounts the publication folder (`PUBLICATION`, by default
+`./library/publication`) read-only at `/library` and answers on `127.0.0.1:8000`. A path that is not
+there fails the start rather than mounting an empty directory. Local development runs
 against a Postgres installed on the machine directly, which the test suite and both library
-databases share. The container runs
-`samplelibrary serve` with several worker processes (`WEB_CONCURRENCY`), where `just serve` starts the one
-reloading process development uses: each worker holds a small pool of Postgres connections as the
+databases share. A served app runs as one or several worker processes (`WEB_CONCURRENCY`), where `just serve` starts
+the one reloading process development uses: each worker holds a small pool of Postgres connections as the
 reader, checked out per request (`sampleserver.dependencies.READ_CONNECTION`), which Postgres's
 own concurrent-connection handling supports natively, so multiple people browsing the library
 through one deployed server works correctly with no shared state between workers. A route and every
@@ -873,10 +862,7 @@ own pages carry a content security policy loading everything from the server its
 needs of the built pages: regl compiles its drawing commands with `Function`, wavesurfer writes a
 style into a shadow root and plays from a blob URL, and the build inlines its smallest font files as
 data URLs. The two typefaces travel with the application (`@fontsource`), so a page loads nothing
-from any other site. A library served to anyone also tells browsers to reach it over HTTPS alone. The library's data
-directory and a `config.toml` pointing at its in-container path are supplied at `docker run` time as
-bind mounts, never baked into the image, mirroring `config.toml` never being committed to the
-repository.
+from any other site. A library served to anyone also tells browsers to reach it over HTTPS alone.
 
 Three routes answer for the whole catalog at once — the cloud's hundred thousand points, a
 nearest-neighbor search, the library statistics — and each is written for that shape rather than

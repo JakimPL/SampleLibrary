@@ -1,8 +1,11 @@
+# The site as a hosting platform runs it, beside a database of its own, on this computer alone: a
+# rehearsal of what visitors will see. `just docker-secrets` writes the two files the passwords come
+# from, `just docker-publish` publishes a library into the database, and `docker compose up site`
+# serves it on http://127.0.0.1:8000.
 services:
   postgres:
     image: postgres:17-alpine
-    # `just docker-secrets` writes the superuser's password into this file, which the server's
-    # container alone reads; compose refuses to start without it.
+    # The superuser's password, which the site's container is never handed.
     env_file:
       - path: docker/postgres.env
         required: true
@@ -20,41 +23,26 @@ services:
       timeout: 5s
       retries: 10
 
-  sampleserver:
+  site:
     build: .
-    image: samplelibrary-server
+    image: samplelibrary-site
+    # The reader's connection, SAMPLELIBRARY_SERVER_DATABASE_URL, and nothing that could change the catalog.
+    env_file:
+      - path: docker/site.env
+        required: true
+    environment:
+      PORT: "8000"
     ports:
       - "127.0.0.1:8000:8000"
-    # Compose validates every service, so these defaults let `postgres` start alone. A path that is
-    # not there fails the start rather than leaving an empty directory mounted in its place.
+    # The folder `samplelibrary publish` gathers the audio in, read-only where a platform mounts its
+    # volume. A path that is not there fails the start rather than mounting an empty directory.
     volumes:
       - type: bind
-        source: ${LIBRARY_ROOT:-./library}
+        source: ${PUBLICATION:-./library/publication}
         target: /library
         read_only: true
         bind:
           create_host_path: false
-      - type: bind
-        source: ${CONFIG_PATH:-./docker/config.toml}
-        target: /app/config.toml
-        read_only: true
-        bind:
-          create_host_path: false
-      # Samples found in sample directories are read in place, and the catalog names each directory
-      # by the path it was scanned under, so each one is mounted at that same path, read-only:
-      # - type: bind
-      #   source: /home/you/Samples/Packs
-      #   target: /home/you/Samples/Packs
-      #   read_only: true
-    # The server connects as the role that reads alone. `just docker-secrets` writes its connection,
-    # SAMPLELIBRARY_SERVER_DATABASE_URL, into this file with a password of its own; compose refuses
-    # to start without it. `samplelibrary setup database` creates the role from the same URL.
-    env_file:
-      - path: docker/site.env
-        required: true
-    # Lets `[inference] url = "http://host.docker.internal:8010"` reach a renderer on the host.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
