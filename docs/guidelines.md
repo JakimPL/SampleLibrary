@@ -71,6 +71,7 @@
 1. Avoid code comments. Comments are acceptable for tensor/array shapes, third-party API quirks, or non-obvious invariants.
 1. Code comments and docstrings are not for documenting changes nor progress.
 1. Don't write module docstrings.
+1. The justfile holds the recipes alone. Describe each recipe in the guide that lists it: `development.md`, `source.md` or `building.md`.
 
 ## Tests
 

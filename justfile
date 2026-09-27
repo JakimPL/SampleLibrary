@@ -34,7 +34,6 @@ lint:
     uv run pylint src scripts
     uv run lint-imports
 
-# The tests but the pipeline scenarios, which `test-all` and `test-scenarios` run.
 [group("quality")]
 test:
     uv run pytest -n auto --maxprocesses {{ TEST_WORKERS }} -m "{{ QUICK_TESTS }}"
@@ -59,7 +58,6 @@ explore-pipeline:
 coverage:
     uv run pytest --cov --cov-report=term-missing
 
-# Every check a push needs, marking the commit they passed on; the pre-push hook lets that commit through.
 [group("quality")]
 check: _check-start _hooks lint test-all frontend-check
     uv run --no-project python scripts/checked_commits.py record
@@ -141,7 +139,6 @@ dev *arguments:
 serve-dev:
     uv run sampleripper --config {{ DEV_CONFIG }} serve --reload --port {{ DEV_PORT }}
 
-# The SampleRipper app on the sandbox, which records labels where `serve-dev` only reads.
 [group("dev")]
 app-dev:
     uv run sampleripper --config {{ DEV_CONFIG }} app --port {{ DEV_PORT }}
@@ -219,7 +216,6 @@ _directory path:
 _directory path:
     New-Item -ItemType Directory -Force -Path "{{ path }}" | Out-Null
 
-# The passwords docker-compose.yml reads, each written once into docker/ and readable by you alone.
 [group("docker")]
 docker-secrets:
     uv run python scripts/docker_secrets.py
@@ -228,7 +224,6 @@ docker-secrets:
 docker-build:
     docker build -t sampleripper-site .
 
-# Publish a library into the database docker-compose.yml runs, such as `just docker-publish --config dev-library/config.toml`.
 [group("docker")]
 docker-publish *arguments:
     uv run python scripts/docker_publish.py {{ arguments }}
