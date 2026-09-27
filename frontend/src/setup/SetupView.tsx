@@ -55,7 +55,7 @@ function SetupPlaceholder({ source }: { readonly source: SetupSource }): ReactEl
                     <h2>Setup isn&apos;t available here</h2>
                     <p className="setup-hint">
                         This server only shows the library. To choose folders and build the library, start SampleLibrary
-                        with `samplelibrary app`.
+                        with `sampleripper app`.
                     </p>
                 </section>
             );

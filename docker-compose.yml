@@ -26,7 +26,7 @@ services:
   site:
     build: .
     image: samplelibrary-site
-    # The reader's connection, SAMPLELIBRARY_SERVER_DATABASE_URL, and nothing that could change the catalog.
+    # The reader's connection, SAMPLERIPPER_SERVER_DATABASE_URL, and nothing that could change the catalog.
     env_file:
       - path: docker/site.env
         required: true
@@ -34,7 +34,7 @@ services:
       PORT: "8000"
     ports:
       - "127.0.0.1:8000:8000"
-    # The folder `samplelibrary publish` gathers the audio in, read-only where a platform mounts its
+    # The folder `sampleripper publish` gathers the audio in, read-only where a platform mounts its
     # volume. A path that is not there fails the start rather than mounting an empty directory.
     volumes:
       - type: bind

@@ -8,7 +8,7 @@ release. Running the app from a checkout takes [Running from source](source.md) 
 ```
 build/
   frontend/               the built web app
-  package/                the samplelibrary wheel, which carries the web app, and each launcher's requirements
+  package/                the sampleripper wheel, which carries the web app, and each launcher's requirements
 bin/
   SampleLibrary           the processor launcher (SampleLibrary.exe on Windows)
   SampleLibrary-nvidia    the NVIDIA launcher, on Windows and Linux
@@ -43,7 +43,7 @@ just executable   # bin/: the launchers for this system
 just installer    # dist/: the installer for this system
 ```
 
-- `just package` builds the web app and the samplelibrary wheel. It also writes the exact versions
+- `just package` builds the web app and the sampleripper wheel. It also writes the exact versions
   the app installs, taken from `uv.lock`, twice: with torch's processor build, which runs on every
   machine, and with its CUDA build and NVIDIA libraries, several gigabytes more, for a machine with
   an NVIDIA card.
@@ -57,7 +57,7 @@ just installer    # dist/: the installer for this system
   - The Windows installer carries both launchers and installs the NVIDIA one where `nvidia-smi`
     reports a driver for CUDA 12 or newer. It puts the app in the person's own programs folder,
     with a Start menu shortcut and an optional desktop one. Upgrading and uninstalling first quit
-    the running app with the installed interpreter's `-m samplelibrary.app --quit`, end whatever
+    the running app with the installed interpreter's `-m sampleripper.app --quit`, end whatever
     still runs from its packages a minute later, and remove the packages the earlier version
     installed; the library stays.
   - The macOS disk image holds an app bundle whose launcher sends the app's output to the log

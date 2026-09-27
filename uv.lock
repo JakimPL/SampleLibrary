@@ -3997,7 +3997,7 @@ wheels = [
 ]
 
 [[package]]
-name = "samplelibrary"
+name = "sampleripper"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
@@ -4114,7 +4114,7 @@ requires-dist = [
     { name = "python-multipart", marker = "extra == 'morph'", specifier = ">=0.0.20" },
     { name = "pytz", specifier = ">=2025.2" },
     { name = "pyyaml", marker = "extra == 'morph'", specifier = ">=6.0" },
-    { name = "samplelibrary", extras = ["server", "morph", "cloud", "descriptor", "teacher"], marker = "extra == 'app'" },
+    { name = "sampleripper", extras = ["server", "morph", "cloud", "descriptor", "teacher"], marker = "extra == 'app'" },
     { name = "scikit-learn", marker = "extra == 'cloud'", specifier = ">=1.9" },
     { name = "scikit-learn", marker = "extra == 'descriptor'", specifier = ">=1.9" },
     { name = "scipy", specifier = ">=1.16" },

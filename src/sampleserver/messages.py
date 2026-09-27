@@ -17,7 +17,7 @@ TOO_MANY_MORPHS: Final[str] = "Too many morphs in a short time. Try again in a m
 MORPHS_BUSY: Final[str] = "The morph renderer is busy. Try again in a moment."
 
 SERVE_REFUSES_PUBLIC: Final[str] = (
-    "This config serves the library to anyone on the internet, which `samplelibrary site` does, with its "
+    "This config serves the library to anyone on the internet, which `sampleripper site` does, with its "
     "renderer and its visitor limits. Start it that way."
 )
 HOST_BEYOND_EXPOSURE: Final[str] = (

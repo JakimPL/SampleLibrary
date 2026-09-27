@@ -9,7 +9,7 @@ from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from samplecore.exit_status import ExitStatus
 from sampleextract.thumbnail_cli import main
 
-PROGRAM = "samplelibrary thumbnails"
+PROGRAM = "sampleripper thumbnails"
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:

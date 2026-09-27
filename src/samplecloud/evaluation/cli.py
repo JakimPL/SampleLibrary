@@ -36,7 +36,7 @@ from samplecore.storage.atomic import write_bytes_atomically
 from samplecore.storage.sample_audio import SampleAudio
 from samplecore.tracking.session import open_run
 
-UNWRITTEN_REPORT_PREFIX: Final[str] = "samplelibrary-evaluation-"
+UNWRITTEN_REPORT_PREFIX: Final[str] = "sampleripper-evaluation-"
 UNWRITTEN_REPORT_NAME: Final[str] = "report.json"
 
 _logger = logging.getLogger(__name__)

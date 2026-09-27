@@ -11,7 +11,7 @@ from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
 from sampleextract.cli import main as extract_main
 from sampleextract.notes.cli import main
 
-PROGRAM = "samplelibrary notes"
+PROGRAM = "sampleripper notes"
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:
@@ -95,7 +95,7 @@ def test_a_pass_over_the_modules_the_last_complete_pass_read_ends_at_once(
 ) -> None:
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(_write_config(tmp_path, _database_url)))
     (tmp_path / "modules" / "song.xm").write_bytes(xm_module_bytes)
-    extract_main(["--workers", "1"], prog="samplelibrary extract")
+    extract_main(["--workers", "1"], prog="sampleripper extract")
     main([], prog=PROGRAM)
     capsys.readouterr()
 
@@ -103,7 +103,7 @@ def test_a_pass_over_the_modules_the_last_complete_pass_read_ends_at_once(
     assert NOTHING_TO_READ in capsys.readouterr().out
 
     (tmp_path / "modules" / "other.it").write_bytes(it_module_bytes)
-    extract_main(["--workers", "1"], prog="samplelibrary extract")
+    extract_main(["--workers", "1"], prog="sampleripper extract")
     capsys.readouterr()
     main([], prog=PROGRAM)
     assert NOTHING_TO_READ not in capsys.readouterr().out

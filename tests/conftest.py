@@ -27,7 +27,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from tests.paths import REPOSITORY_DIRECTORY
 
-SERVER_URL_VARIABLE: Final[str] = "SAMPLELIBRARY_TEST_DATABASE_URL"
+SERVER_URL_VARIABLE: Final[str] = "SAMPLERIPPER_TEST_DATABASE_URL"
 TEST_DATABASE_NAME: Final[str] = "samplelibrary_test"
 NO_SERVER_MESSAGE: Final[str] = (
     f"The suite needs a Postgres server: name it in {SERVER_URL_VARIABLE}, or in the database_url of your config."
@@ -75,7 +75,7 @@ def pytest_configure() -> None:
 def _server_url() -> str:
     """The Postgres server the suite runs against, and the database on it the suite starts from.
 
-    ``SAMPLELIBRARY_TEST_DATABASE_URL`` names it outright; otherwise the server the configuration
+    ``SAMPLERIPPER_TEST_DATABASE_URL`` names it outright; otherwise the server the configuration
     names is used, under the ``samplelibrary_test`` database `just database` creates, so a library
     set up on another port is tested on that port. With neither, the session ends with one message,
     since every credential the suite logs in with is a person's own. The database this URL names is

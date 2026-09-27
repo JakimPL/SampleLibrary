@@ -24,11 +24,11 @@ from wheel_pins import write_pinned_wheel
 PYAPP_VERSION: Final[str] = "0.29.0"
 PYTHON_VERSION: Final[str] = "3.13"
 APP_EXTRA: Final[str] = "app"
-APP_MODULE: Final[str] = "samplelibrary.app"
+APP_MODULE: Final[str] = "sampleripper.app"
 APP_NAME: Final[str] = "SampleLibrary"
 NVIDIA_APP_NAME: Final[str] = f"{APP_NAME}-nvidia"
 EXECUTABLE_SUFFIX: Final[str] = ".exe" if sys.platform == "win32" else ""
-WHEEL_PATTERN: Final[str] = "samplelibrary-*.whl"
+WHEEL_PATTERN: Final[str] = "sampleripper-*.whl"
 # PyTorch publishes CUDA builds for Windows and Linux alone; a Mac computes on its processor.
 NVIDIA_PLATFORMS: Final[frozenset[str]] = frozenset({"win32", "linux"})
 
@@ -105,7 +105,7 @@ def _build_launcher(cargo: str, wheel: Path, launcher: LauncherBuild) -> None:
 
 
 def _built_wheel() -> Path:
-    """The samplelibrary wheel `just package` built.
+    """The sampleripper wheel `just package` built.
 
     Raises:
         SystemExit: the package folder holds none, or more than one, or a launcher's requirements are missing.
@@ -113,7 +113,7 @@ def _built_wheel() -> Path:
     wheels = sorted(PACKAGE_BUILD_DIRECTORY.glob(WHEEL_PATTERN))
     requirements_written = all(launcher.requirements.is_file() for launcher in launcher_builds())
     if len(wheels) != 1 or not requirements_written:
-        sys.exit(f"No single samplelibrary wheel in {PACKAGE_BUILD_DIRECTORY}. Run `just package` first.")
+        sys.exit(f"No single sampleripper wheel in {PACKAGE_BUILD_DIRECTORY}. Run `just package` first.")
     return wheels[0]
 
 

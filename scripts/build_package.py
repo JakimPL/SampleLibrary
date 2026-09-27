@@ -24,7 +24,7 @@ CUDA_ONLY_PACKAGES: Final[tuple[str, ...]] = ("nvidia-", "triton==")
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build the samplelibrary wheel with the frontend inside, and the pinned requirements it installs."
+        description="Build the sampleripper wheel with the frontend inside, and the pinned requirements it installs."
     )
     return parser.parse_args(argv)
 

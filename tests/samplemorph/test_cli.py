@@ -29,7 +29,7 @@ from samplemorph.envelope.response import HeldEnd
 from samplemorph.envelope.settings import EnvelopeSettings
 from tests.samplemorph.conftest import harmonic_tone
 
-PROGRAM = "samplelibrary morph"
+PROGRAM = "sampleripper morph"
 SAMPLE_FRAME_COUNT = 4096
 CATALOG_SIZE = 12
 SAMPLE_RATE_HZ = 8_363

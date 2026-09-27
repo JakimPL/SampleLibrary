@@ -79,7 +79,7 @@ def _admit_exposure(policy: ServingPolicy, *, host: str) -> None:
     """Insist that this command may serve the library the way its config exposes it, on the address asked for.
 
     Raises:
-        SystemExit: the library is exposed to anyone, which `samplelibrary site` serves, or ``host``
+        SystemExit: the library is exposed to anyone, which `sampleripper site` serves, or ``host``
             lies beyond where the exposure listens.
     """
     if not policy.permits_serve:
@@ -106,7 +106,7 @@ def admit_reader(config: LibraryConfig) -> None:
             check_service_role(connection, ServiceRole.READER)
         except ServiceRoleRefusedError as error:
             _logger.error(
-                "%s Name a role that reads alone in server_database_url, then run `samplelibrary setup database`.",
+                "%s Name a role that reads alone in server_database_url, then run `sampleripper setup database`.",
                 error,
             )
             sys.exit(ExitStatus.REFUSED)

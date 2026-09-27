@@ -22,7 +22,7 @@ from samplecore.storage.repositories.cloud import PostgresCloudPromotionReposito
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 
-PROGRAM = "samplelibrary cloud embed"
+PROGRAM = "sampleripper cloud embed"
 SAMPLE_HASH = "a" * 64
 
 

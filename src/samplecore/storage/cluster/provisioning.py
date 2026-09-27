@@ -35,7 +35,7 @@ from samplecore.storage.service_roles import ServiceRoleRefusedError, check_serv
 DEVELOPMENT_DATABASE: Final[str] = "samplelibrary_dev"
 TEST_DATABASE: Final[str] = "samplelibrary_test"
 
-ADMIN_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_ADMIN_DATABASE_URL"
+ADMIN_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_ADMIN_DATABASE_URL"
 DEFAULT_POSTGRES_PORT: Final[int] = 5432
 
 # Server-level work connects to a database other than the ones it creates. `postgres` is present on
@@ -148,7 +148,7 @@ def login_role(database_url: str) -> str:
 def admin_urls(database_url: str) -> tuple[URL, ...]:
     """The connections to try for server-level work, the most explicitly chosen one leading.
 
-    ``SAMPLELIBRARY_ADMIN_DATABASE_URL`` names a connection carrying the privilege to create a role,
+    ``SAMPLERIPPER_ADMIN_DATABASE_URL`` names a connection carrying the privilege to create a role,
     which a library's own credentials rarely have. Left unset, the library's own URL is reused
     against a maintenance database, which is all a role that already exists needs in order to create
     the databases it will own.
@@ -286,7 +286,7 @@ def connection_remedy(url: URL, message: str, *, source: ConnectionSource) -> tu
     """The lines that address a refused connection, read from the words Postgres refused it with.
 
     Advice names the place the refused role and password were actually read from, and leaves out
-    the route that was already taken, so a run that set ``SAMPLELIBRARY_ADMIN_DATABASE_URL`` is
+    the route that was already taken, so a run that set ``SAMPLERIPPER_ADMIN_DATABASE_URL`` is
     never told to set it.
     """
     role = url.username if url.username is not None else _UNNAMED_ROLE
@@ -339,7 +339,7 @@ def _password_route(role: str, password: str) -> tuple[str, ...]:
     """The statement that gives an existing role the password the configuration carries."""
     return (
         f"If role {role!r} exists with another password, give it this one at a superuser prompt, such as",
-        "`sudo -u postgres psql`, then run `samplelibrary setup database` again:",
+        "`sudo -u postgres psql`, then run `sampleripper setup database` again:",
         f"        ALTER ROLE {statement_value(role)} WITH PASSWORD {password_value(password)};",
         "",
     )
@@ -360,7 +360,7 @@ def role_creation_remedy(url: URL, role: str, password: str) -> tuple[str, ...]:
         f"        CREATE ROLE {statement_value(role)} WITH LOGIN CREATEDB " f"PASSWORD {password_value(password)};",
         "",
         "  * If you know the password of a superuser on this server, usually the `postgres`",
-        f"    account, set {ADMIN_URL_ENVIRONMENT_VARIABLE} to this URL, then run `samplelibrary setup database`",
+        f"    account, set {ADMIN_URL_ENVIRONMENT_VARIABLE} to this URL, then run `sampleripper setup database`",
         "    again and it creates the role for you. Replace <password> with that account's own:",
         f"        postgresql+psycopg://postgres:<password>@{server_address(url)}/{MAINTENANCE_DATABASES[0]}",
         "",
@@ -502,7 +502,7 @@ def _claim_service_role(connection: Connection, *, url: URL, role: str) -> bool:
             f"Role {role!r} is missing, and this connection may not create one.",
             remedy=(
                 "Create it at a superuser prompt, such as `sudo -u postgres psql`, "
-                "then run `samplelibrary setup database` again:",
+                "then run `sampleripper setup database` again:",
                 "",
                 f"    CREATE ROLE {statement_value(role)} WITH LOGIN PASSWORD {password_value(password)};",
             ),
@@ -532,7 +532,7 @@ def _check_service_login(url: URL, *, service: ServiceRole) -> None:
             str(error),
             remedy=(
                 "Take the extra rights away at a superuser prompt, such as `sudo -u postgres psql`, or name "
-                "a role of its own for it in the config, then run `samplelibrary setup database` again.",
+                "a role of its own for it in the config, then run `sampleripper setup database` again.",
             ),
         ) from error
 
@@ -559,7 +559,7 @@ def _claim_database(connection: Connection, *, name: str, owner: str) -> Databas
             f"Database {name!r} is missing, and role {owner!r} may not create one.",
             remedy=(
                 "Grant it at a superuser prompt, such as `sudo -u postgres psql`, "
-                "then run `samplelibrary setup database` again:",
+                "then run `sampleripper setup database` again:",
                 "",
                 f"    ALTER ROLE {statement_value(owner)} CREATEDB;",
             ),
@@ -585,7 +585,7 @@ def _require_ownership(outcome: DatabaseOutcome, *, role: str) -> None:
         "create the catalog's tables in it.",
         remedy=(
             "Change its owner at a superuser prompt, such as `sudo -u postgres psql`, "
-            "then run `samplelibrary setup database` again:",
+            "then run `sampleripper setup database` again:",
             "",
             f"    ALTER DATABASE {statement_value(outcome.name)} OWNER TO {statement_value(role)};",
         ),
@@ -611,7 +611,7 @@ def _prepare_schemas(url: URL, *, role: str, service_roles: Mapping[ServiceRole,
                     "public schema.",
                     remedy=(
                         "Grant it at a superuser prompt connected to that database, such as "
-                        f"`sudo -u postgres psql -d {url.database}`, then run `samplelibrary setup database` again:",
+                        f"`sudo -u postgres psql -d {url.database}`, then run `sampleripper setup database` again:",
                         "",
                         f"    GRANT CREATE ON SCHEMA public TO {statement_value(role)};",
                     ),

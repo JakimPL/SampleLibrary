@@ -1,5 +1,5 @@
 [project]
-name = "samplelibrary"
+name = "sampleripper"
 version = "0.0.1"
 description = "Personal library and web application for tracker music samples"
 readme = "README.md"
@@ -42,14 +42,14 @@ descriptor = [
 tracking = ["mlflow>=3.6"]
 teacher = ["torch>=2.9", "transformers>=4.45"]
 app = [
-    "samplelibrary[server,morph,cloud,descriptor,teacher]",
+    "sampleripper[server,morph,cloud,descriptor,teacher]",
     "postgresql-binaries>=18.6",
     "filelock>=3.32",
     "psutil>=7.2",
 ]
 
 [project.scripts]
-samplelibrary = "samplelibrary.cli:main"
+sampleripper = "sampleripper.cli:main"
 
 # The card is sm_120, which needs a CUDA 12.8 or newer build.
 [[tool.uv.index]]
@@ -93,7 +93,7 @@ packages = [
     "src/sampleserver",
     "src/samplemorph",
     "src/sampledescriptor",
-    "src/samplelibrary",
+    "src/sampleripper",
 ]
 
 [tool.hatch.build.targets.wheel.hooks.custom]
@@ -105,7 +105,7 @@ packages = [
 "src/sampleserver/py.typed" = "sampleserver/py.typed"
 "src/samplemorph/py.typed" = "samplemorph/py.typed"
 "src/sampledescriptor/py.typed" = "sampledescriptor/py.typed"
-"src/samplelibrary/py.typed" = "samplelibrary/py.typed"
+"src/sampleripper/py.typed" = "sampleripper/py.typed"
 
 [tool.black]
 line-length = 120
@@ -121,7 +121,7 @@ known_first_party = [
     "sampleserver",
     "samplemorph",
     "sampledescriptor",
-    "samplelibrary",
+    "sampleripper",
 ]
 
 [tool.pytest.ini_options]
@@ -141,7 +141,7 @@ source = [
     "sampleserver",
     "samplemorph",
     "sampledescriptor",
-    "samplelibrary",
+    "sampleripper",
 ]
 concurrency = ["multiprocessing", "thread"]
 sigterm = true
@@ -192,7 +192,7 @@ root_packages = [
     "sampleserver",
     "samplemorph",
     "sampledescriptor",
-    "samplelibrary",
+    "sampleripper",
 ]
 include_external_packages = true
 
@@ -207,12 +207,12 @@ source_modules = [
     "samplemorph",
     "sampledescriptor",
 ]
-forbidden_modules = ["samplelibrary"]
+forbidden_modules = ["sampleripper"]
 
 [[tool.importlinter.contracts]]
 name = "the application runs the pipelines and the renderer as programs of their own, and stays light"
 type = "forbidden"
-source_modules = ["samplelibrary.app"]
+source_modules = ["sampleripper.app"]
 forbidden_modules = [
     "samplecloud",
     "sampledescriptor",
@@ -224,7 +224,7 @@ forbidden_modules = [
 [[tool.importlinter.contracts]]
 name = "a site serves the catalog and runs its renderer as a program of its own, and stays light"
 type = "forbidden"
-source_modules = ["samplelibrary.site"]
+source_modules = ["sampleripper.site"]
 forbidden_modules = [
     "sampleextract",
     "samplecloud",
@@ -237,7 +237,7 @@ forbidden_modules = [
 [[tool.importlinter.contracts]]
 name = "the memory ceiling boundary reaches the core alone"
 type = "forbidden"
-source_modules = ["samplelibrary.limits"]
+source_modules = ["sampleripper.limits"]
 forbidden_modules = [
     "sampleextract",
     "samplecloud",

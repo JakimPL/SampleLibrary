@@ -8,7 +8,7 @@ module_source_directory = "/path/to/your/module/collection"
 library_root = "/path/to/your/sample/library"
 
 # A PostgreSQL server of your own holding the catalog. `just database` creates it with this user and password.
-# `samplelibrary setup config` writes a new password in place of each stand-in; copied by hand, choose your own.
+# `sampleripper setup config` writes a new password in place of each stand-in; copied by hand, choose your own.
 # Left out, the library keeps its own server inside library_root, which `just database` creates and starts.
 database_url = "postgresql+psycopg://samplelibrary:<password>@localhost:5432/samplelibrary"
 
@@ -22,7 +22,7 @@ curation_database_url = "postgresql+psycopg://samplelibrary_curator:<password>@l
 # minimum_sample_frames = 512
 
 # Folders of plain audio files (WAV, AIFF, FLAC) the library reads in place, without copying them.
-# `samplelibrary files` catalogs them; a file that goes missing later is skipped until it is back.
+# `sampleripper files` catalogs them; a file that goes missing later is skipped until it is back.
 # sample_directories = ["/path/to/your/sample/packs"]
 
 # Patterns naming files and folders inside those folders to leave out, matched without regard to case
@@ -39,7 +39,7 @@ curation_database_url = "postgresql+psycopg://samplelibrary_curator:<password>@l
 [server]
 # Who the served library answers. "local": you, on this computer, seeing everything. "network": the
 # devices on your home network too, which may look but change nothing. "public": anyone on the
-# internet, for a site started with `samplelibrary site`, which shows no folder of yours and none of
+# internet, for a site started with `sampleripper site`, which shows no folder of yours and none of
 # your labels, ratings or favorites.
 # exposure = "local"
 
@@ -48,7 +48,7 @@ curation_database_url = "postgresql+psycopg://samplelibrary_curator:<password>@l
 # sample_directories = ["/path/to/your/sample/packs/Free Pack"]
 
 [pipeline]
-# How `samplelibrary pipeline run` builds the library. Every setting here is optional.
+# How `sampleripper pipeline run` builds the library. Every setting here is optional.
 
 # The memory ceiling every step runs under, such as "16G", or "none".
 # memory_cap = "16G"
@@ -62,7 +62,7 @@ curation_database_url = "postgresql+psycopg://samplelibrary_curator:<password>@l
 # "automatic" takes the published one where this version carries it, and trains one otherwise.
 # descriptor_source = "automatic"
 
-# A file of hand labels a fresh catalog reads in, as `samplelibrary annotations export` writes it.
+# A file of hand labels a fresh catalog reads in, as `sampleripper annotations export` writes it.
 # labels = "/path/to/annotations.jsonl"
 
 # A table per step sets that step's parameters and its own ceiling; outputs are named by the parameters.

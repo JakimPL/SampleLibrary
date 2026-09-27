@@ -161,7 +161,7 @@ def test_a_writable_checkout_between_read_only_ones_writes_and_leaves_the_next_r
 
 
 def test_one_lock_name_stands_for_one_key_in_the_signed_64_bit_range() -> None:
-    names = ("samplelibrary-a-teacher", "samplelibrary-a-descriptor", "samplelibrary-b-teacher")
+    names = ("sampleripper-a-teacher", "sampleripper-a-descriptor", "sampleripper-b-teacher")
     keys = [named_lock_key(name) for name in names]
 
     assert keys == [named_lock_key(name) for name in names]
@@ -173,13 +173,13 @@ def test_a_named_lock_is_free_again_once_the_connection_holding_it_closes(
     connection: Connection, _database_url: str
 ) -> None:
     holder = connect(_database_url, read_only=True)
-    assert claim_named_lock(holder, "samplelibrary-held-step")
+    assert claim_named_lock(holder, "sampleripper-held-step")
 
-    assert not claim_named_lock(connection, "samplelibrary-held-step")
+    assert not claim_named_lock(connection, "sampleripper-held-step")
     holder.close()
     # The server lets go of a closed session's locks as its backend exits, a moment after the close.
     deadline = time.monotonic() + LOCK_RELEASE_DEADLINE_SECONDS
-    while not claim_named_lock(connection, "samplelibrary-held-step"):
+    while not claim_named_lock(connection, "sampleripper-held-step"):
         assert time.monotonic() < deadline, "the lock stayed held after its connection closed"
         time.sleep(0.05)
-    connection.execute(select(func.pg_advisory_unlock(named_lock_key("samplelibrary-held-step"))))
+    connection.execute(select(func.pg_advisory_unlock(named_lock_key("sampleripper-held-step"))))

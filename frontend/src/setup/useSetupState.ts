@@ -39,7 +39,7 @@ export function lastKnownState(source: SetupSource): SetupState | null {
 
 /**
  * The application's setup state, asked again every second while the library opens or a build runs
- * and every few seconds otherwise. A server without setup routes — `samplelibrary serve` alone —
+ * and every few seconds otherwise. A server without setup routes — `sampleripper serve` alone —
  * reports them absent, and the page then says setup belongs to the application.
  */
 export function useSetupState(): SetupStateHandle {

@@ -10,7 +10,7 @@ from samplecore.exit_status import ExitStatus
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from sampleextract.cli import main
 
-PROGRAM = "samplelibrary extract"
+PROGRAM = "sampleripper extract"
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:

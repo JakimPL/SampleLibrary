@@ -25,14 +25,14 @@ from samplecore.paths import CHECKOUT_CONFIG_PATH, EXAMPLE_CONFIG_PATH, runs_fro
 from samplecore.storage.atomic import PRIVATE_FILE_MODE, write_bytes_atomically
 from samplecore.storage.cluster.embedded.state import managed_catalog_url, managed_service_url
 
-CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
-DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_DATABASE_URL"
-SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_SERVER_DATABASE_URL"
-CURATION_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CURATION_DATABASE_URL"
+CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_CONFIG"
+DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_DATABASE_URL"
+SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_SERVER_DATABASE_URL"
+CURATION_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_CURATION_DATABASE_URL"
 # The connection a publication is written through, and the reader's password it sets there; both are
 # read from the environment alone, since they unlock a server of their own.
-PUBLISH_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_PUBLISH_DATABASE_URL"
-PUBLISH_READER_PASSWORD_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_PUBLISH_READER_PASSWORD"
+PUBLISH_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_PUBLISH_DATABASE_URL"
+PUBLISH_READER_PASSWORD_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_PUBLISH_READER_PASSWORD"
 # Each setting naming a database URL, beside the environment variable that overrides it.
 DATABASE_URL_SETTINGS: Final[dict[str, str]] = {
     "database_url": DATABASE_URL_ENVIRONMENT_VARIABLE,
@@ -205,7 +205,7 @@ def home_exposure(*, answers_the_home_network: bool) -> str:
 
 
 class PublishConfig(BaseModel):
-    """What `samplelibrary publish` takes to a site beyond the module collection, as the ``[publish]`` table sets it.
+    """What `sampleripper publish` takes to a site beyond the module collection, as the ``[publish]`` table sets it.
 
     ``sample_directories`` names the sample directories whose samples a site shows and plays,
     each one of the library's own; a sample found only in any other stays off the site.
@@ -336,7 +336,7 @@ class LibraryConfig(BaseModel):
             return managed_service_url(self.library_root, service)
         raise ServiceRoleUnconfiguredError(
             f"The config names no {setting}, the role a served {service.value} connects as. Set it in the "
-            f"[{LIBRARY_TABLE}] table, then run `samplelibrary setup database` to create the role."
+            f"[{LIBRARY_TABLE}] table, then run `sampleripper setup database` to create the role."
         )
 
     def database_urls(self) -> dict[str, str]:
@@ -357,11 +357,11 @@ class LibraryConfig(BaseModel):
 def load_config(path: Path | None = None) -> LibraryConfig:
     """Load and validate the local library configuration.
 
-    The lookup order is an explicit ``path``, then the ``SAMPLELIBRARY_CONFIG`` environment
+    The lookup order is an explicit ``path``, then the ``SAMPLERIPPER_CONFIG`` environment
     variable, then `default_config_path` — the first of these that is actually
     provided wins, so a caller (a test, a CLI flag) can always be explicit about where to read
     from without an environment variable silently overriding it. ``database_url`` follows the same
-    precedence separately: the ``SAMPLELIBRARY_DATABASE_URL`` environment variable, when set to a
+    precedence separately: the ``SAMPLERIPPER_DATABASE_URL`` environment variable, when set to a
     value, overrides whatever ``config.toml`` holds, so credentials can be supplied at deployment
     time (a Docker secret, a CI variable) without living in a config file at all. A relative path
     setting is read from the config file's own directory, which is where a person writing it stands.
@@ -374,7 +374,7 @@ def load_config(path: Path | None = None) -> LibraryConfig:
     resolved_path = resolve_config_path(path)
     if not resolved_path.is_file():
         raise ConfigurationError(
-            f"No config file at {resolved_path}. Run `samplelibrary setup config` to put one there, or copy "
+            f"No config file at {resolved_path}. Run `sampleripper setup config` to put one there, or copy "
             "config.example.toml to config.toml yourself, and fill in your paths."
         )
     return parse_config(resolved_path.read_text(encoding="utf-8"), resolved_path)
@@ -411,7 +411,7 @@ def parse_config(content: str, config_path: Path) -> LibraryConfig:
 
 
 def resolve_config_path(path: Path | None = None) -> Path:
-    """The config file a command reads: ``path`` when given, then ``SAMPLELIBRARY_CONFIG``, then the default."""
+    """The config file a command reads: ``path`` when given, then ``SAMPLERIPPER_CONFIG``, then the default."""
     return path or _config_path_from_environment() or default_config_path()
 
 

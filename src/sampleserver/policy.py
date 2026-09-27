@@ -86,12 +86,12 @@ class ServingPolicy:
 
     @property
     def permits_serve(self) -> bool:
-        """Whether `samplelibrary serve` may serve the library; a site starts through `samplelibrary site` alone."""
+        """Whether `sampleripper serve` may serve the library; a site starts through `sampleripper site` alone."""
         return not self.is_public
 
     @property
     def permits_site(self) -> bool:
-        """Whether `samplelibrary site` may serve the library, which it does to anyone."""
+        """Whether `sampleripper site` may serve the library, which it does to anyone."""
         return self.is_public
 
     @property

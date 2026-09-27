@@ -28,7 +28,7 @@ several gigabytes, which needs Railway's Pro plan.
 
    Keep it in your password manager; you need it each time you publish.
 5. **Tell the site where the catalog is.** In the site service's variables, add
-   `SAMPLELIBRARY_SERVER_DATABASE_URL` with this value, putting the password in:
+   `SAMPLERIPPER_SERVER_DATABASE_URL` with this value, putting the password in:
 
    ```
    postgresql+psycopg://samplelibrary_reader:<the password>@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
@@ -59,9 +59,9 @@ your library, `publication`. Repeat it whenever you want the site to show your l
 3. **Publish**, typing the two secrets where nothing records them:
 
    ```sh
-   read -rs SAMPLELIBRARY_PUBLISH_DATABASE_URL && export SAMPLELIBRARY_PUBLISH_DATABASE_URL
-   read -rs SAMPLELIBRARY_PUBLISH_READER_PASSWORD && export SAMPLELIBRARY_PUBLISH_READER_PASSWORD
-   samplelibrary publish
+   read -rs SAMPLERIPPER_PUBLISH_DATABASE_URL && export SAMPLERIPPER_PUBLISH_DATABASE_URL
+   read -rs SAMPLERIPPER_PUBLISH_READER_PASSWORD && export SAMPLERIPPER_PUBLISH_READER_PASSWORD
+   sampleripper publish
    ```
 
    The first variable is the `DATABASE_PUBLIC_URL` you copied, the second the reader's password.

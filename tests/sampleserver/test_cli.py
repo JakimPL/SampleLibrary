@@ -20,7 +20,7 @@ from sampleserver.frontend import (
 )
 from tests.sampleserver.conftest import SITE_VISITORS_TABLE
 
-PROGRAM = "samplelibrary serve"
+PROGRAM = "sampleripper serve"
 PUBLIC_HOST = "0.0.0.0"
 OTHER_PORT = 8001
 WORKER_COUNT = 4
@@ -103,7 +103,7 @@ def test_a_library_served_to_anyone_is_left_to_the_site_command(
 
     assert raised.value.code == ExitStatus.REFUSED
     assert recorded.calls == []
-    assert "samplelibrary site" in capsys.readouterr().err
+    assert "sampleripper site" in capsys.readouterr().err
 
 
 def test_an_unnamed_process_count_is_left_to_uvicorn(recorded: RecordedRun) -> None:

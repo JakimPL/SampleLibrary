@@ -16,7 +16,7 @@ from samplemorph.service import renderer as renderer_module
 from samplemorph.service.renderer import load_renderer
 from samplemorph.service.settings import ServiceSettings
 
-PROGRAM = "samplelibrary morph"
+PROGRAM = "sampleripper morph"
 CONFIGURED_HOST = "0.0.0.0"
 CONFIGURED_PORT = 9010
 OVERRIDING_PORT = 9100

@@ -5,9 +5,9 @@ from pathlib import Path
 
 from samplecore.cli_support import load_config_or_exit
 from samplecore.storage.cluster.provisioning import development_database_url
-from samplelibrary.sandbox.build import DEFAULT_OUTPUT_DIRECTORY, build_sandbox
-from samplelibrary.sandbox.modules import TARGET_MODULE_COUNT
-from samplelibrary.sandbox.sample_pack import sample_pack
+from sampleripper.sandbox.build import DEFAULT_OUTPUT_DIRECTORY, build_sandbox
+from sampleripper.sandbox.modules import TARGET_MODULE_COUNT
+from sampleripper.sandbox.sample_pack import sample_pack
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:

@@ -1,6 +1,6 @@
 # The site's configuration, built into its image. Paths are the container's own: the platform mounts
 # the volume holding the published audio at /library. The reader's connection is no setting here;
-# the platform names it in SAMPLELIBRARY_SERVER_DATABASE_URL.
+# the platform names it in SAMPLERIPPER_SERVER_DATABASE_URL.
 
 [library]
 library_root = "/library"

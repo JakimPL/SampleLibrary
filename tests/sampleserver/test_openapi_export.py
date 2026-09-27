@@ -8,7 +8,7 @@ import pytest
 from sampleserver.app import API_PREFIX
 from sampleserver.openapi_export import main
 
-PROGRAM = "samplelibrary schema"
+PROGRAM = "sampleripper schema"
 
 
 def test_main_prints_a_valid_openapi_document(capsys: pytest.CaptureFixture[str]) -> None:

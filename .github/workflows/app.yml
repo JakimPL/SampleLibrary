@@ -41,7 +41,7 @@ jobs:
         with:
           name: package
           path: |
-            build/package/samplelibrary-*.whl
+            build/package/sampleripper-*.whl
             build/package/app-requirements.txt
             build/package/app-requirements-nvidia.txt
           if-no-files-found: error

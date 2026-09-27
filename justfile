@@ -10,17 +10,17 @@ QUICK_TESTS := "not pipeline_real and not pipeline_explore and not pipeline_scen
 DEV_CONFIG := "dev-library/config.toml"
 DEV_PORT := "8001"
 SCHEMAS := "build/schemas"
-CAPPED_SAMPLELIBRARY := "uv run samplelibrary --memory-cap " + MEMORY_CAP
+CAPPED_SAMPLERIPPER := "uv run sampleripper --memory-cap " + MEMORY_CAP
 
 [group("setup")]
 install: && frontend-install
     uv sync --all-extras --all-groups
     uv run pre-commit install --hook-type pre-commit --hook-type pre-push
-    uv run samplelibrary setup config
+    uv run sampleripper setup config
 
 [group("setup")]
 database:
-    uv run samplelibrary setup database
+    uv run sampleripper setup database
 
 [group("quality")]
 format:
@@ -45,15 +45,15 @@ test-all:
 
 [group("quality")]
 test-scenarios:
-    uv run pytest -n auto --maxprocesses {{ TEST_WORKERS }} -m pipeline_scenario tests/samplelibrary/pipeline/scenarios
+    uv run pytest -n auto --maxprocesses {{ TEST_WORKERS }} -m pipeline_scenario tests/sampleripper/pipeline/scenarios
 
 [group("quality")]
 test-pipeline:
-    uv run pytest -m pipeline_real tests/samplelibrary/pipeline/scenarios/real
+    uv run pytest -m pipeline_real tests/sampleripper/pipeline/scenarios/real
 
 [group("quality")]
 explore-pipeline:
-    uv run pytest -m pipeline_explore tests/samplelibrary/pipeline/scenarios/test_exploration.py
+    uv run pytest -m pipeline_explore tests/sampleripper/pipeline/scenarios/test_exploration.py
 
 [group("quality")]
 coverage:
@@ -74,88 +74,88 @@ _hooks:
 
 [group("library")]
 app:
-    uv run samplelibrary app
+    uv run sampleripper app
 
 [group("library")]
 serve:
-    uv run samplelibrary serve --reload
+    uv run sampleripper serve --reload
 
 [group("library")]
 serve-inference:
-    uv run samplelibrary morph serve
+    uv run sampleripper morph serve
 
 [group("library")]
 tracking-ui:
-    uv run samplelibrary tracking ui
+    uv run sampleripper tracking ui
 
 [group("library")]
 rebuild *targets:
-    uv run samplelibrary pipeline run {{ targets }}
+    uv run sampleripper pipeline run {{ targets }}
 
 [group("library")]
 status *targets:
-    uv run samplelibrary pipeline status {{ targets }}
+    uv run sampleripper pipeline status {{ targets }}
 
 [group("library")]
 [unix]
 [positional-arguments]
 capped *arguments:
-    {{ CAPPED_SAMPLELIBRARY }} "$@"
+    {{ CAPPED_SAMPLERIPPER }} "$@"
 
 [group("library")]
 [windows]
 [positional-arguments]
 [script("powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File")]
 capped *arguments:
-    {{ CAPPED_SAMPLELIBRARY }} @args
+    {{ CAPPED_SAMPLERIPPER }} @args
     exit $LASTEXITCODE
 
 [group("library")]
 reset: && _reset-confirmed
-    uv run samplelibrary reset
+    uv run sampleripper reset
 
 [confirm("Empty the library named above?")]
 _reset-confirmed:
-    uv run samplelibrary reset --confirm
+    uv run sampleripper reset --confirm
 
 [group("dev")]
 dev-build *targets:
     uv run python scripts/build_dev_library.py
-    uv run samplelibrary --config {{ DEV_CONFIG }} pipeline run {{ targets }}
+    uv run sampleripper --config {{ DEV_CONFIG }} pipeline run {{ targets }}
 
 [group("dev")]
 [unix]
 [positional-arguments]
 dev *arguments:
-    uv run samplelibrary --config {{ DEV_CONFIG }} "$@"
+    uv run sampleripper --config {{ DEV_CONFIG }} "$@"
 
 [group("dev")]
 [windows]
 [positional-arguments]
 [script("powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File")]
 dev *arguments:
-    uv run samplelibrary --config {{ DEV_CONFIG }} @args
+    uv run sampleripper --config {{ DEV_CONFIG }} @args
     exit $LASTEXITCODE
 
 [group("dev")]
 serve-dev:
-    uv run samplelibrary --config {{ DEV_CONFIG }} serve --reload --port {{ DEV_PORT }}
+    uv run sampleripper --config {{ DEV_CONFIG }} serve --reload --port {{ DEV_PORT }}
 
 # The SampleLibrary app on the sandbox, which records labels where `serve-dev` only reads.
 [group("dev")]
 app-dev:
-    uv run samplelibrary --config {{ DEV_CONFIG }} app --port {{ DEV_PORT }}
+    uv run sampleripper --config {{ DEV_CONFIG }} app --port {{ DEV_PORT }}
 
 [group("dev")]
 [unix]
 dev-reset:
-    if [ -f {{ DEV_CONFIG }} ]; then uv run samplelibrary --config {{ DEV_CONFIG }} reset --confirm; fi
+    if [ -f {{ DEV_CONFIG }} ]; then uv run sampleripper --config {{ DEV_CONFIG }} reset --confirm; fi
     rm -rf dev-library
 
 [group("dev")]
 [windows]
 dev-reset:
-    if (Test-Path {{ DEV_CONFIG }}) { uv run samplelibrary --config {{ DEV_CONFIG }} reset --confirm }
+    if (Test-Path {{ DEV_CONFIG }}) { uv run sampleripper --config {{ DEV_CONFIG }} reset --confirm }
     if (Test-Path dev-library) { Remove-Item -Recurse -Force dev-library }
 
 [group("frontend")]
@@ -188,8 +188,8 @@ frontend-check:
 
 [group("frontend")]
 frontend-types: (_directory SCHEMAS)
-    uv run samplelibrary schema --output {{ SCHEMAS }}/openapi.json
-    uv run samplelibrary setup-schema --output {{ SCHEMAS }}/setup-openapi.json
+    uv run sampleripper schema --output {{ SCHEMAS }}/openapi.json
+    uv run sampleripper setup-schema --output {{ SCHEMAS }}/setup-openapi.json
     npm --prefix frontend run types
 
 [group("release")]
