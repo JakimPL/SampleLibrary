@@ -749,10 +749,8 @@ def test_a_sample_found_in_a_file_is_detailed_with_its_file_name_and_rate(
     assert detail["occurrences"] == []
     assert detail["files"] == [
         {
-            "location": {
-                "directory": cataloged_kick_file.location.directory.as_posix(),
-                "relative_path": "Kicks/Deep 01.wav",
-            },
+            "directory": cataloged_kick_file.location.directory.as_posix(),
+            "relative_path": "Kicks/Deep 01.wav",
             "rate": 48000,
             "available": True,
         }

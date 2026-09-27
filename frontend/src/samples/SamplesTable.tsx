@@ -22,8 +22,9 @@ import {
     TABLE_ROW_HEIGHT_BY_INPUT,
 } from "../shared/tableMetrics";
 import { useListingOrderStore } from "../workspace/listingOrderStore";
-import { SAMPLE_COLUMNS, sampleColumnSpec } from "./sampleColumns";
+import { SAMPLE_COLUMN_IDS, SAMPLE_COLUMNS, sampleColumnSpec } from "./sampleColumns";
 import { SampleRow } from "./SampleRow";
+import { useCurationAccess } from "./useCurationAccess";
 
 const LOAD_MORE_TRIGGER_DISTANCE = 20;
 
@@ -66,12 +67,13 @@ export function SamplesTable({
     const [sorting, setSorting] = useState<SortingState>([]);
     const scrollElementRef = useRef<HTMLDivElement | null>(null);
     const { input } = useLayoutMode();
-    const spec = useMemo(() => sampleColumnSpec(input), [input]);
+    const { curationShown } = useCurationAccess();
+    const spec = useMemo(() => sampleColumnSpec(input, curationShown), [input, curationShown]);
     const width = useContainerWidth(scrollElementRef);
     const visibleColumns = useMemo(() => fitColumns(spec, width ?? Number.POSITIVE_INFINITY), [spec, width]);
     const columnVisibility = useMemo(
-        () => Object.fromEntries(spec.map((column) => [column.id, visibleColumns.has(column.id)])),
-        [spec, visibleColumns],
+        () => Object.fromEntries(SAMPLE_COLUMN_IDS.map((id) => [id, visibleColumns.has(id)])),
+        [visibleColumns],
     );
 
     const data = useMemo(() => Array.from(samples), [samples]);
@@ -155,28 +157,32 @@ export function SamplesTable({
                             />
                             Group similar
                         </label>
-                        <button
-                            type="button"
-                            aria-pressed={selection.favoritesOnly}
-                            onClick={() => {
-                                onSelectionChange({ ...selection, favoritesOnly: !selection.favoritesOnly });
-                            }}
-                        >
-                            Favorites
-                        </button>
-                        <select
-                            aria-label="Order"
-                            value={selection.sort}
-                            onChange={(event) => {
-                                onSelectionChange({
-                                    ...selection,
-                                    sort: event.target.value === "rating" ? "rating" : "occurrences",
-                                });
-                            }}
-                        >
-                            <option value="occurrences">Most used</option>
-                            <option value="rating">Best rated</option>
-                        </select>
+                        {curationShown && (
+                            <>
+                                <button
+                                    type="button"
+                                    aria-pressed={selection.favoritesOnly}
+                                    onClick={() => {
+                                        onSelectionChange({ ...selection, favoritesOnly: !selection.favoritesOnly });
+                                    }}
+                                >
+                                    Favorites
+                                </button>
+                                <select
+                                    aria-label="Order"
+                                    value={selection.sort}
+                                    onChange={(event) => {
+                                        onSelectionChange({
+                                            ...selection,
+                                            sort: event.target.value === "rating" ? "rating" : "occurrences",
+                                        });
+                                    }}
+                                >
+                                    <option value="occurrences">Most used</option>
+                                    <option value="rating">Best rated</option>
+                                </select>
+                            </>
+                        )}
                     </>
                 }
                 status={

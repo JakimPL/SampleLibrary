@@ -7,7 +7,7 @@ import type { SampleDetail } from "../../src/api/samples";
 import { AnnotationEditor } from "../../src/samples/AnnotationEditor";
 import { AnnotationRows } from "../../src/samples/AnnotationRows";
 import { useAnnotationStore } from "../../src/samples/annotationStore";
-import { useLabelEditing } from "../../src/samples/useLabelEditing";
+import { useCurationAccess } from "../../src/samples/useCurationAccess";
 
 const { changeSampleAnnotation, getLabelVocabulary } = vi.hoisted(() => ({
     changeSampleAnnotation: vi.fn(),
@@ -59,7 +59,7 @@ function renderEditor(sample: SampleDetail, scope: CurationApi.AnnotationScope =
 
 describe("AnnotationEditor", () => {
     it("shows the decisions as they stand where labels may only be seen", () => {
-        vi.mocked(useLabelEditing).mockReturnValue(false);
+        vi.mocked(useCurationAccess).mockReturnValue({ curationShown: true, labelEditing: false });
         renderEditor(buildSample({ hand_label: "SNARE", rating: 4, favorite: true, equivalence_member_count: 3 }));
 
         expect(screen.getByText("SNARE")).toBeInTheDocument();

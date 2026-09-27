@@ -22,6 +22,8 @@ from sampleserver.frontend import (
     built_frontend,
     frontend_directory_from_environment,
 )
+from sampleserver.messages import HOST_BEYOND_EXPOSURE, SERVE_REFUSES_PUBLIC
+from sampleserver.policy import ServingPolicy
 
 APPLICATION_PATH: Final[str] = "sampleserver.main:app"
 DEFAULT_HOST: Final[str] = "127.0.0.1"
@@ -40,12 +42,15 @@ def main(argv: list[str], *, prog: str) -> None:
     role is missing, may change anything, or finds no catalog prepared.
 
     Raises:
-        SystemExit: the config names no reader, or the role it names is refused.
+        SystemExit: the config serves the library publicly or on this computer alone while ``--host``
+            names another address, names no reader, or the role it names is refused.
     """
     arguments = _parse_arguments(argv, prog=prog)
     if arguments.frontend is not None:
         os.environ[FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE] = str(arguments.frontend)
-    _admit_reader(bootstrap_cli())
+    config = bootstrap_cli()
+    _admit_exposure(ServingPolicy.of(config.server), host=arguments.host)
+    _admit_reader(config)
 
     uvicorn.run(
         APPLICATION_PATH,
@@ -55,6 +60,21 @@ def main(argv: list[str], *, prog: str) -> None:
         reload_dirs=[str(PACKAGES_DIRECTORY)] if arguments.reload else None,
         workers=arguments.workers,
     )
+
+
+def _admit_exposure(policy: ServingPolicy, *, host: str) -> None:
+    """Insist that this command may serve the library the way its config exposes it, on the address asked for.
+
+    Raises:
+        SystemExit: the library is exposed to anyone, which `samplelibrary site` serves, or ``host``
+            lies beyond where the exposure listens.
+    """
+    if not policy.permits_serve:
+        _logger.error("%s", SERVE_REFUSES_PUBLIC)
+        sys.exit(ExitStatus.REFUSED)
+    if not policy.binds(host):
+        _logger.error("%s", HOST_BEYOND_EXPOSURE)
+        sys.exit(ExitStatus.REFUSED)
 
 
 def _admit_reader(config: LibraryConfig) -> None:

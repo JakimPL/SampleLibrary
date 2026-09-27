@@ -611,6 +611,33 @@ as `pg_ctl`, starts hidden (`samplecore.processes`). `just installer` (`scripts/
 or an AppImage. The
 Application workflow builds all three, smoke-testing each executable on a fresh runner first.
 
+## Who a served library answers
+
+`[server] exposure` in the config decides it, and nothing else does (`samplecore.config.Exposure`):
+
+| | `local` (the default) | `network` | `public` |
+|---|---|---|---|
+| Listens on | 127.0.0.1 alone | every address | every address, `samplelibrary site` alone |
+| Answers | the loopback address, naming the server by a local name | also devices on the home network's own ranges (10/8, 172.16/12, 192.168/16, 169.254/16, fc00::/7, fe80::/10, an IPv4 address inside IPv6 unwrapped), naming it by an address or this computer's name | anyone |
+| Sample file folders | full path, and whether the file is there | full path, and whether the file is there | the folder's name, no file state |
+| Labels, ratings, favorites | shown | shown | not served: null fields, the routes reading them answer 404, a listing narrowed or ordered by them 422 |
+| A relation's reviewer | named | named | left out |
+| A stored object | served by its hash | served by its hash | served for a cataloged sample alone |
+| A refusal | names the file or the renderer's address | names the file or the renderer's address | plain words; the details go to the log |
+| API docs | served | served | none |
+
+`sampleserver.policy.ServingPolicy` derives every row from the exposure alone, and every route,
+middleware and command that behaves differently reads one of its properties; a test holds every
+other source file to naming no exposure. `AdmittedRequestsOnly` answers each request `admits`
+accepts, which is how a page elsewhere that points its own name at the loopback address is turned
+away under `local`. Nothing a request carries selects the exposure: its address, the name it gives
+the server and its headers can only turn it away. The page asks `GET /api/curation/access`, which
+answers what it may show and change (`curation_shown`, `label_editing`), and shows no control for a
+decision the server holds back. A served app opens a sample's file only in the sample directories
+its own configuration lists, whatever folder the catalog it serves names. `samplelibrary serve` binds
+only where the exposure listens and refuses `public`, which `samplelibrary site` serves, and the
+SampleLibrary app refuses `public` before it opens a library.
+
 ## Who may change what
 
 | Process | Connects as | May write |

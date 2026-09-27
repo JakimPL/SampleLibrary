@@ -5,7 +5,7 @@ import { CLOUD_LABELS_CACHE_KEY } from "../cloud/useCloudLabels";
 import { invalidateRequest } from "../shared/requestCache";
 import { useAnnotationError, useIsSavingSample } from "./annotationStore";
 import { queueAnnotationChange } from "./annotationWriteQueue";
-import { useLabelEditing } from "./useLabelEditing";
+import { useCurationAccess } from "./useCurationAccess";
 import { LABEL_TAGS_CACHE_KEY } from "./useLabelTags";
 import { sampleDetailCacheKey } from "./useSampleDetail";
 import { samplePreviewCacheKey } from "./useSamplePreview";
@@ -42,7 +42,7 @@ function forgetWhatTheWriteChanged(written: AnnotationsWritten, changes: Annotat
  * nothing, `change` is null, the one thing every control checks to show what the sample holds alone.
  */
 export function useAnnotationWriter(sampleHash: string, scope: AnnotationScope): AnnotationWriter {
-    const editing = useLabelEditing();
+    const editing = useCurationAccess().labelEditing;
     const isSaving = useIsSavingSample(sampleHash);
     const message = useAnnotationError(sampleHash);
 

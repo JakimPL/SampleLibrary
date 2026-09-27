@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 
 import type { InputMode } from "../layout/layoutMode";
-import { useLabelEditing } from "../samples/useLabelEditing";
+import { useCurationAccess } from "../samples/useCurationAccess";
 import { BottomSheet } from "../shared/overlay/BottomSheet";
 
 interface GuideEntry {
@@ -122,7 +122,7 @@ interface GuideSheetProps {
 
 /** What each gesture, click and key does, worded for the input the person has and what they may change here. */
 export function GuideSheet({ input, onClose }: GuideSheetProps): ReactElement {
-    const labelEditing = useLabelEditing();
+    const { labelEditing } = useCurationAccess();
     const sections = input === "touch" ? TOUCH_GUIDE : POINTER_GUIDE;
     return (
         <BottomSheet title={TITLES[input]} onClose={onClose}>

@@ -36,6 +36,7 @@ from sampleserver.dependencies import (
     get_cloud_cache,
     get_connection,
     get_shown_experiment_id,
+    require_shown_curation,
 )
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers.curation import TagSummary
@@ -140,7 +141,7 @@ class CloudLabel(BaseModel):
     paths: tuple[tuple[str, ...], ...]
 
 
-@router.get("/labels")
+@router.get("/labels", dependencies=[Depends(require_shown_curation)])
 def get_cloud_labels(connection: Connection = Depends(get_connection)) -> tuple[CloudLabel, ...]:
     """Every labeled sample's tags, for coloring the cloud by what a person decided.
 

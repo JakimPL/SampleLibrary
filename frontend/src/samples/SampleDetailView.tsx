@@ -9,6 +9,7 @@ import { FILE_COLUMN_LABELS, SampleFileRow } from "./SampleFileRow";
 import { OCCURRENCE_COLUMN_LABELS, SampleOccurrenceRow } from "./SampleOccurrenceRow";
 import { RELATION_COLUMN_LABELS, SampleRelationRow } from "./SampleRelationRow";
 import { SIMILAR_COLUMN_LABELS, SimilarSampleRow } from "./SimilarSampleRow";
+import { useCurationAccess } from "./useCurationAccess";
 
 export type DetailTab = "info" | "similar" | "occurrences" | "relations" | "cooccurrence";
 
@@ -62,7 +63,7 @@ function SampleFilesTable({ sample }: { readonly sample: SampleDetail }): ReactE
             <tbody>
                 {sample.files.map((sampleFile) => (
                     <SampleFileRow
-                        key={`${sampleFile.location.directory}/${sampleFile.location.relative_path}`}
+                        key={`${sampleFile.directory}/${sampleFile.relative_path}`}
                         sampleFile={sampleFile}
                     />
                 ))}
@@ -134,9 +135,10 @@ function CooccurrenceSection(): ReactElement {
 
 /** The sample's own facts: its label and what is decided about it, the categories heard in it, and the properties of its audio. */
 function InfoSection({ sample }: { readonly sample: SampleDetail }): ReactElement {
+    const { curationShown } = useCurationAccess();
     return (
         <dl className="kv">
-            <AnnotationRows key={sample.hash} sample={sample} />
+            {curationShown && <AnnotationRows key={sample.hash} sample={sample} />}
             <dt>Size</dt>
             <dd className="mono">{formatBytes(sample.size_bytes)}</dd>
             <dt>Duration</dt>

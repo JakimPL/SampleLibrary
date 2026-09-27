@@ -8,10 +8,13 @@ from typing import Final
 from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
+from samplecore.config import ServerConfig
 from samplecore.models.service_role import ServiceRole
 from samplecore.storage.database import create_pooled_engine
+from sampleserver.admission import AdmittedRequestsOnly
 from sampleserver.frontend import FrontendMount
 from sampleserver.inference_client import build_inference_client
+from sampleserver.policy import ServingPolicy
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers import cloud, curation, modules, morph, samples, stats
 from sampleserver.spectral_cache import SpectralVectorCache
@@ -26,10 +29,25 @@ DESCRIPTIONS: Final[dict[ServiceRole, str]] = {
 }
 
 
+# The app's settings travel together, which is what makes this factory's signature long; each is one
+# of them, with nothing further to group them under.
+# pylint: disable-next=too-many-arguments
 def create_app(
-    database_url: str, library_root: Path, inference_url: str, *, role: ServiceRole, frontend_directory: Path | None
+    database_url: str,
+    library_root: Path,
+    inference_url: str,
+    *,
+    role: ServiceRole,
+    server: ServerConfig,
+    sample_directories: tuple[Path, ...],
+    frontend_directory: Path | None,
 ) -> FastAPI:
-    """Build the FastAPI app serving the catalog at the given database URL, as ``role`` allows.
+    """Build the FastAPI app serving the catalog at the given database URL, as ``role`` allows, to whom ``server`` says.
+
+    What the app shows and whom it answers follow from ``server``'s exposure alone, through the
+    `ServingPolicy` it derives (`sampleserver.policy`): every request passes `AdmittedRequestsOnly`
+    first, and every route reading a path, a person's labels or an internal address asks the policy
+    whether to show it. A sample's file is opened only inside ``sample_directories``.
 
     Every route reads the catalog through a pooled connection Postgres itself refuses a write on. A
     curator also serves the route recording a person's own decisions about samples, in a schema of
@@ -71,16 +89,20 @@ def create_app(
             await application.state.inference_client.aclose()
             application.state.engine.dispose()
 
+    policy = ServingPolicy.of(server)
     application = FastAPI(
-        openapi_url=f"{API_PREFIX}/openapi.json",
-        docs_url=f"{API_PREFIX}/docs",
-        redoc_url=f"{API_PREFIX}/redoc",
+        openapi_url=f"{API_PREFIX}/openapi.json" if policy.serves_docs else None,
+        docs_url=f"{API_PREFIX}/docs" if policy.serves_docs else None,
+        redoc_url=f"{API_PREFIX}/redoc" if policy.serves_docs else None,
         title="SampleLibrary",
         description=DESCRIPTIONS[role],
         lifespan=lifespan,
     )
     application.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_SIZE, compresslevel=GZIP_COMPRESSION_LEVEL)
+    application.add_middleware(AdmittedRequestsOnly, policy=policy)
     application.state.role = role
+    application.state.policy = policy
+    application.state.sample_directories = sample_directories
     application.state.database_url = database_url
     application.state.library_root = library_root
     application.state.inference_url = inference_url

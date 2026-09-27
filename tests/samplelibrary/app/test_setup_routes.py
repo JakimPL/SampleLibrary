@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from samplecore.config import PIPELINE_TABLE, load_config
 from samplelibrary.app.asgi import create_application
 from samplelibrary.app.installation import Installation, this_installation
-from samplelibrary.app.launcher import Launcher, LibraryStatus
+from samplelibrary.app.launcher import PUBLIC_LIBRARY_REFUSED, Launcher, LibraryStatus
 from samplelibrary.pipeline.settings import DescriptorSource, read_pipeline_settings
 
 LOCAL_CLIENT: Final[tuple[str, int]] = ("127.0.0.1", 50000)
@@ -163,6 +163,21 @@ def test_a_library_whose_curator_may_do_more_than_record_labels_stays_closed(
 
         assert state["status"] == LibraryStatus.FAILED
         assert "doesn't fit a curator" in str(state["problem"])
+        assert client.get("/api/stats").status_code == 503
+
+
+def test_a_library_served_to_anyone_stays_closed_in_the_application(tmp_path: Path) -> None:
+    """The application edits labels and writes its config, which a library served to anyone offers no one."""
+    path = tmp_path / "config.toml"
+    path.write_text(
+        f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\n[server]\nexposure = "public"\n',
+        encoding="utf-8",
+    )
+    for client in _client(path, device_command=REPORTED_DEVICE):
+        state = _wait_until_settled(client)
+
+        assert state["status"] == LibraryStatus.FAILED
+        assert state["problem"] == PUBLIC_LIBRARY_REFUSED
         assert client.get("/api/stats").status_code == 503
 
 

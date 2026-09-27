@@ -111,15 +111,18 @@ export interface paths {
          * Get Sample Audio
          * @description The sample's own canonical audio: its stored object, or the WAV the store would hold for it.
          *
-         *     A stored object is read straight off the store by its hash, with no catalog round trip on the
-         *     way to a sound: the hash's own shape is checked on the path, which is what keeps a request inside
-         *     the store. A sample found in a sample file is read from the file the catalog names and encoded
-         *     the way the store encodes an object, so both kinds play at the same nominal header rate. Either
-         *     way the bytes are those of the hash, so they are served with a cache lifetime of a year.
+         *     A stored object is read off the store by its hash: the hash's own shape is checked on the path,
+         *     which is what keeps a request inside the store. Where the policy serves stored objects by their
+         *     hash alone, that takes no catalog round trip on the way to a sound; otherwise the catalog is
+         *     asked first, so an object left in the store for a sample the catalog no longer holds stays
+         *     unheard. A sample found in a sample file is read from a file the catalog names inside this
+         *     server's sample directories, and encoded the way the store encodes an object, so both kinds play
+         *     at the same nominal header rate. Either way the bytes are those of the hash, so they are served
+         *     with a cache lifetime of a year.
          *
          *     Raises:
-         *         HTTPException: 404 when the store holds no object under this hash and no cataloged file
-         *             holds the sample now.
+         *         HTTPException: 404 when the sample is not served, the store holds no object under this hash,
+         *             and no cataloged file in this server's sample directories holds the sample now.
          */
         readonly get: operations["get_sample_audio_api_samples__sample_hash__audio_get"];
         readonly put?: never;
@@ -165,7 +168,7 @@ export interface paths {
         };
         /**
          * Get Sample Relations
-         * @description Every equivalence-class link this sample participates in, on either side of the pair.
+         * @description Every equivalence-class link this sample participates in, on either side of the pair, reviewed by whom the policy says.
          *
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
@@ -384,10 +387,10 @@ export interface paths {
             readonly cookie?: never;
         };
         /**
-         * Read Label Editing
-         * @description Whether the person asking may change labels, so a page shows its editing controls only where they work.
+         * Read Curation Access
+         * @description What the person asking may see and change of the labels, so a page shows its controls only where they work.
          */
-        readonly get: operations["read_label_editing_api_curation_access_get"];
+        readonly get: operations["read_curation_access_api_curation_access_get"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -460,7 +463,8 @@ export interface paths {
          *         HTTPException: 503 when no inference process answers, and 504 when it takes longer than a
          *             render is waited for; the process's own 404 for a sample it has no object for, and 422
          *             for a point it will not render, are relayed with their detail; any other answer it
-         *             gives reads as 502.
+         *             gives reads as 502. Each names the process's address and its own words only where
+         *             the policy names internals.
          */
         readonly get: operations["get_morph_audio_api_morph_audio_get"];
         readonly put?: never;
@@ -642,6 +646,20 @@ export interface components {
             readonly paths: readonly (readonly string[])[];
         };
         /**
+         * CurationAccess
+         * @description What the person asking may see and do of a person's own decisions about samples.
+         *
+         *     ``label_editing`` says whether they may change labels here, which only the person at the
+         *     computer the application runs on may; ``curation_shown`` says whether the labels, ratings and
+         *     favorites a person decided are shown at all, which the server's exposure decides.
+         */
+        readonly CurationAccess: {
+            /** Label Editing */
+            readonly label_editing: boolean;
+            /** Curation Shown */
+            readonly curation_shown: boolean;
+        };
+        /**
          * ErrorDetail
          * @description What a refused request is told, in the one shape every route answers a refusal in.
          */
@@ -688,14 +706,6 @@ export interface components {
             readonly vibrato?: components["schemas"]["Vibrato"] | null;
         };
         readonly JsonValue: unknown;
-        /**
-         * LabelEditing
-         * @description Whether the person asking may change labels here, which only the person at the computer the application runs on may.
-         */
-        readonly LabelEditing: {
-            /** Label Editing */
-            readonly label_editing: boolean;
-        };
         /**
          * LibraryStats
          * @description A snapshot of the catalog's overall size and composition.
@@ -1085,32 +1095,20 @@ export interface components {
          * SampleFileDetail
          * @description One file a sample was found in, read in place from a sample directory.
          *
-         *     ``available`` says whether the file is there now with the size and write time it was scanned
-         *     at, which is what playing the sample from it needs.
+         *     ``directory`` is the folder it was found in: its full path where the server shows paths, and its
+         *     name otherwise. ``available`` says whether the file is there now with the size and write time it
+         *     was scanned at, which is what playing the sample from it needs; it is ``None`` where the server
+         *     reports no file's state, or reads no file from that folder.
          */
         readonly SampleFileDetail: {
-            readonly location: components["schemas"]["SampleFileLocation"];
-            /** Rate */
-            readonly rate: number;
-            /** Available */
-            readonly available: boolean;
-        };
-        /**
-         * SampleFileLocation
-         * @description Where a sample file sits: one of the configured sample directories, and its path inside it.
-         *
-         *     The path inside the directory is written with forward slashes on every system and names a file
-         *     below the directory, which keeps a location read from a request or a catalog row within the
-         *     directory it names.
-         */
-        readonly SampleFileLocation: {
-            /**
-             * Directory
-             * Format: path
-             */
+            /** Directory */
             readonly directory: string;
             /** Relative Path */
             readonly relative_path: string;
+            /** Rate */
+            readonly rate: number;
+            /** Available */
+            readonly available: boolean | null;
         };
         /**
          * SampleOccurrence
@@ -1902,7 +1900,7 @@ export interface operations {
             };
         };
     };
-    readonly read_label_editing_api_curation_access_get: {
+    readonly read_curation_access_api_curation_access_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
@@ -1917,7 +1915,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": components["schemas"]["LabelEditing"];
+                    readonly "application/json": components["schemas"]["CurationAccess"];
                 };
             };
         };

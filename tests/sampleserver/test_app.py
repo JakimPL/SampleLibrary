@@ -9,7 +9,7 @@ from sqlalchemy import Connection, text
 from samplecore.models.service_role import ServiceRole
 from samplecore.storage.curation import CURATION_SCHEMA
 from sampleserver.app import API_PREFIX, create_app
-from tests.sampleserver.conftest import INFERENCE_URL
+from tests.sampleserver.conftest import INFERENCE_URL, LOCAL_CLIENT, LOCAL_ORIGIN, LOCAL_SERVER
 
 UNUSED_DATABASE_URL: Final[str] = "postgresql+psycopg://unused/unused"
 READING_METHODS: Final[frozenset[str]] = frozenset({"GET", "HEAD"})
@@ -23,8 +23,16 @@ def test_get_connection_opens_a_real_read_only_connection_to_the_configured_data
     depended on only for this test's isolation from others sharing the same database, not used
     directly: the schema it creates on first connect is already in place by the time this runs.
     """
-    application = create_app(_database_url, tmp_path, INFERENCE_URL, role=ServiceRole.READER, frontend_directory=None)
-    with TestClient(application) as client:
+    application = create_app(
+        _database_url,
+        tmp_path,
+        INFERENCE_URL,
+        role=ServiceRole.READER,
+        server=LOCAL_SERVER,
+        sample_directories=(),
+        frontend_directory=None,
+    )
+    with TestClient(application, base_url=LOCAL_ORIGIN, client=LOCAL_CLIENT) as client:
         response = client.get(f"{API_PREFIX}/stats")
 
     assert response.status_code == 200
@@ -36,7 +44,17 @@ def test_a_response_past_a_kilobyte_goes_out_gzipped_when_the_caller_accepts_it(
 ) -> None:
     """The cloud's payload is text that compresses several-fold, and every route shares the middleware."""
     with TestClient(
-        create_app(_database_url, tmp_path, INFERENCE_URL, role=ServiceRole.READER, frontend_directory=None)
+        create_app(
+            _database_url,
+            tmp_path,
+            INFERENCE_URL,
+            role=ServiceRole.READER,
+            server=LOCAL_SERVER,
+            sample_directories=(),
+            frontend_directory=None,
+        ),
+        base_url=LOCAL_ORIGIN,
+        client=LOCAL_CLIENT,
     ) as client:
         response = client.get(f"{API_PREFIX}/openapi.json", headers={"Accept-Encoding": "gzip"})
 
@@ -53,9 +71,15 @@ def test_every_route_is_served_under_the_api_prefix(connection: Connection, _dat
     rather than leaving it to the paths the other tests happen to name.
     """
     served = set(
-        create_app(_database_url, tmp_path, INFERENCE_URL, role=ServiceRole.CURATOR, frontend_directory=None).openapi()[
-            "paths"
-        ]
+        create_app(
+            _database_url,
+            tmp_path,
+            INFERENCE_URL,
+            role=ServiceRole.CURATOR,
+            server=LOCAL_SERVER,
+            sample_directories=(),
+            frontend_directory=None,
+        ).openapi()["paths"]
     )
 
     assert f"{API_PREFIX}/samples" in served
@@ -65,7 +89,15 @@ def test_every_route_is_served_under_the_api_prefix(connection: Connection, _dat
 
 
 def _writing_routes(role: ServiceRole, tmp_path: Path) -> set[tuple[str, str]]:
-    application = create_app(UNUSED_DATABASE_URL, tmp_path, INFERENCE_URL, role=role, frontend_directory=None)
+    application = create_app(
+        UNUSED_DATABASE_URL,
+        tmp_path,
+        INFERENCE_URL,
+        role=role,
+        server=LOCAL_SERVER,
+        sample_directories=(),
+        frontend_directory=None,
+    )
     return {
         (method.upper(), path)
         for path, operations in application.openapi()["paths"].items()
@@ -88,4 +120,4 @@ def test_a_reader_refuses_a_label_change_and_says_so(client: TestClient) -> None
     response = client.patch(f"/curation/annotations/{'a' * 64}", json={"scope": "sample", "rating": 3})
 
     assert response.status_code in (404, 405)
-    assert client.get("/curation/access").json() == {"label_editing": False}
+    assert client.get("/curation/access").json() == {"label_editing": False, "curation_shown": True}

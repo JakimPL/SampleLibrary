@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { changeSampleAnnotation, getLabelEditing, getLabelTags, getLabelVocabulary } from "../../src/api/curation";
+import { changeSampleAnnotation, getCurationAccess, getLabelTags, getLabelVocabulary } from "../../src/api/curation";
 
 const SAMPLE_HASH = "a".repeat(64);
 
@@ -72,11 +72,11 @@ describe("getLabelTags", () => {
     });
 });
 
-describe("getLabelEditing", () => {
-    it("asks whether the person here may change labels", async () => {
-        const fetchMock = stubFetch({ label_editing: false });
+describe("getCurationAccess", () => {
+    it("asks what the person here may see and change of the labels", async () => {
+        const fetchMock = stubFetch({ label_editing: false, curation_shown: true });
 
-        expect(await getLabelEditing()).toEqual({ label_editing: false });
+        expect(await getCurationAccess()).toEqual({ label_editing: false, curation_shown: true });
         expect(fetchMock).toHaveBeenCalledWith("/api/curation/access");
     });
 });

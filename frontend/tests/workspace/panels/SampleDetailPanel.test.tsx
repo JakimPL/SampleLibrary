@@ -155,17 +155,14 @@ describe("SampleDetailPanel", () => {
         expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
     });
 
-    it("lists the sample files a sample was found in beside its module slots, marking a file gone since its scan", async () => {
+    it("lists the sample files a sample was found in beside its module slots, marking a file gone since its scan and none the server reports no state for", async () => {
         getSample.mockResolvedValue({
             ...SAMPLE_DETAIL,
             occurrences: [],
             files: [
-                { location: { directory: "/packs", relative_path: "Kicks/Kick 01.wav" }, rate: 44100, available: true },
-                {
-                    location: { directory: "/packs", relative_path: "Kicks/Kick 02.wav" },
-                    rate: 44100,
-                    available: false,
-                },
+                { directory: "/packs", relative_path: "Kicks/Kick 01.wav", rate: 44100, available: true },
+                { directory: "/packs", relative_path: "Kicks/Kick 02.wav", rate: 44100, available: false },
+                { directory: "packs", relative_path: "Kicks/Kick 03.wav", rate: 44100, available: null },
             ],
         });
         getSampleRelations.mockResolvedValue([]);
@@ -174,9 +171,10 @@ describe("SampleDetailPanel", () => {
 
         renderPanel();
 
-        fireEvent.click(await screen.findByRole("button", { name: "Occurrences (2)" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Occurrences (3)" }));
 
         expect(screen.getByText("Kicks/Kick 01.wav")).toBeInTheDocument();
+        expect(screen.getByText("Kicks/Kick 03.wav")).toBeInTheDocument();
         expect(screen.getAllByText("unavailable")).toHaveLength(1);
         expect(screen.queryByRole("link", { name: "A Song" })).not.toBeInTheDocument();
     });

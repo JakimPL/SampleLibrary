@@ -30,12 +30,17 @@ from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView
 from samplelibrary.app.processes import ChildProcess, probe_build_device
 from samplelibrary.pipeline.devices import BuildDevice
 from sampleserver.app import create_app
+from sampleserver.policy import ServingPolicy
 
 LOGS_DIRECTORY_NAME: Final[str] = "logs"
 RENDERER_LOG_NAME: Final[str] = "renderer.log"
 RENDERER_NAME: Final[str] = "morph renderer"
 RENDERER_HOST_OPTION: Final[str] = "--host"
 RENDERER_PORT_OPTION: Final[str] = "--port"
+PUBLIC_LIBRARY_REFUSED: Final[str] = (
+    'This library is set up to be served to anyone on the internet. Set exposure = "local" '
+    "under [server] in its config to open it here."
+)
 
 
 class LibraryInUseError(Exception):
@@ -254,6 +259,13 @@ class Launcher:
                 await self._close_library()
 
     async def _open_library(self, config: LibraryConfig) -> None:
+        """Open the library, which the app serves only where its exposure lets a person at this computer edit it.
+
+        Raises:
+            ConfigurationError: the config serves the library to anyone, which a site alone does.
+        """
+        if not ServingPolicy.of(config.server).permits_desktop_app:
+            raise ConfigurationError(PUBLIC_LIBRARY_REFUSED)
         await run_in_threadpool(self._prepare_database, config)
         curator_url = await run_in_threadpool(_curator_url, config)
         inference = _free_inference_address(config.inference)
@@ -262,6 +274,8 @@ class Launcher:
             config.library_root,
             inference.url,
             role=ServiceRole.CURATOR,
+            server=config.server,
+            sample_directories=config.sample_directories,
             frontend_directory=None,
         )
         await self._catalog_stack.enter_async_context(catalog.router.lifespan_context(catalog))

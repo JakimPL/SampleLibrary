@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tomllib
+from enum import StrEnum, unique
 from pathlib import Path
 from typing import Final
 from urllib.parse import SplitResult, urlsplit
@@ -36,6 +37,7 @@ DEFAULT_BUILD_CLOUD: Final[bool] = True
 DEFAULT_INFERENCE_URL: Final[str] = "http://127.0.0.1:8010"
 LIBRARY_TABLE: Final[str] = "library"
 INFERENCE_TABLE: Final[str] = "inference"
+SERVER_TABLE: Final[str] = "server"
 # The pipeline reads its own table, since what it holds is named by the steps rather than by the
 # settings every command shares.
 PIPELINE_TABLE: Final[str] = "pipeline"
@@ -110,6 +112,40 @@ class InferenceConfig(BaseModel):
         return InferenceConfig(url=f"{INFERENCE_SCHEME}://{host}:{port}")
 
 
+@unique
+class Exposure(StrEnum):
+    """Who a served library answers: the person at this computer, the devices on its home network too, or anyone.
+
+    ``local`` listens on this computer alone and shows everything the library holds, paths and a
+    person's labels included; ``network`` answers the devices on the home network as well, which may
+    look but change nothing; ``public`` is a site on the internet, showing the catalog and its sounds
+    and nothing about the computer it came from or the person who curated it.
+    """
+
+    LOCAL = "local"
+    NETWORK = "network"
+    PUBLIC = "public"
+
+
+DEFAULT_EXPOSURE: Final[Exposure] = Exposure.LOCAL
+
+
+class ServerConfig(BaseModel):
+    """How a served library meets the people it is served to, as the ``[server]`` table sets it.
+
+    ``exposure`` is the one setting every serving behavior follows (see `sampleserver.policy`).
+    Left out, a library is served to the person at this computer alone, which listens on the
+    loopback address and so exposes nothing a forgotten setting did not mean to.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    exposure: Exposure = DEFAULT_EXPOSURE
+
+
+DEFAULT_SERVER_CONFIG: Final[ServerConfig] = ServerConfig()
+
+
 class LibraryConfig(BaseModel):
     """Local, machine-specific configuration this project reads at startup.
 
@@ -144,6 +180,7 @@ class LibraryConfig(BaseModel):
     sample_exclusions: tuple[str, ...] = DEFAULT_SAMPLE_EXCLUSIONS
     build_cloud: bool = DEFAULT_BUILD_CLOUD
     inference: InferenceConfig = InferenceConfig()
+    server: ServerConfig = DEFAULT_SERVER_CONFIG
 
     @field_validator("sample_directories")
     @classmethod
@@ -275,6 +312,7 @@ def parse_config(content: str, config_path: Path) -> LibraryConfig:
         if from_environment:
             library_data[setting] = from_environment
     library_data[INFERENCE_TABLE] = _table(data, INFERENCE_TABLE, config_path)
+    library_data[SERVER_TABLE] = _table(data, SERVER_TABLE, config_path)
     try:
         config = LibraryConfig.model_validate(library_data)
     except ValidationError as error:
@@ -344,11 +382,11 @@ def _read_tables(content: str, config_path: Path) -> dict[str, object]:
     except tomllib.TOMLDecodeError as error:
         raise ConfigurationError(f"{config_path} is not valid TOML: {error}") from error
 
-    unknown_tables = sorted(set(data) - {LIBRARY_TABLE, INFERENCE_TABLE, PIPELINE_TABLE})
+    unknown_tables = sorted(set(data) - {LIBRARY_TABLE, INFERENCE_TABLE, SERVER_TABLE, PIPELINE_TABLE})
     if unknown_tables:
         raise ConfigurationError(
             f"{config_path} holds settings this project does not read: {', '.join(unknown_tables)}. "
-            f"Settings belong under [{LIBRARY_TABLE}], [{INFERENCE_TABLE}] and [{PIPELINE_TABLE}]."
+            f"Settings belong under [{LIBRARY_TABLE}], [{INFERENCE_TABLE}], [{SERVER_TABLE}] and [{PIPELINE_TABLE}]."
         )
     return data
 

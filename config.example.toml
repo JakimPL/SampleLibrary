@@ -36,6 +36,13 @@ curation_database_url = "postgresql+psycopg://samplelibrary_curator:<password>@l
 # Where the morph renderer listens, and where the app reaches it.
 # url = "http://127.0.0.1:8010"
 
+[server]
+# Who the served library answers. "local": you, on this computer, seeing everything. "network": the
+# devices on your home network too, which may look but change nothing. "public": anyone on the
+# internet, for a site started with `samplelibrary site`, which shows no folder of yours and none of
+# your labels, ratings or favorites.
+# exposure = "local"
+
 [pipeline]
 # How `samplelibrary pipeline run` builds the library. Every setting here is optional.
 

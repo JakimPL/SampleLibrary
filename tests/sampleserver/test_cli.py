@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy.exc import OperationalError
 
-from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE, Exposure
 from samplecore.exit_status import ExitStatus
 from samplecore.models.service_role import ServiceRole
 from samplecore.paths import PACKAGES_DIRECTORY
@@ -36,7 +36,9 @@ class RecordedRun:
         return self.calls[0]
 
 
-def _write_config(tmp_path: Path, *, database_url: str, server_database_url: str | None = None) -> Path:
+def _write_config(
+    tmp_path: Path, *, database_url: str, server_database_url: str | None = None, exposure: Exposure = Exposure.LOCAL
+) -> Path:
     config_path = tmp_path / "config.toml"
     reader = f'server_database_url = "{server_database_url}"\n' if server_database_url is not None else ""
     config_path.write_text(
@@ -44,18 +46,17 @@ def _write_config(tmp_path: Path, *, database_url: str, server_database_url: str
         f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
         f'library_root = "{(tmp_path / "library").as_posix()}"\n'
         f'database_url = "{database_url}"\n'
-        f"{reader}",
+        f"{reader}"
+        f'[server]\nexposure = "{exposure.value}"\n',
         encoding="utf-8",
     )
     return config_path
 
 
-@pytest.fixture
-def recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RecordedRun:
-    """Captures what the serve command hands uvicorn, in place of binding a socket, over a catalog that answers."""
+def _recording(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, exposure: Exposure) -> RecordedRun:
     monkeypatch.setenv(
         CONFIG_PATH_ENVIRONMENT_VARIABLE,
-        str(_write_config(tmp_path, database_url="postgresql+psycopg://unused@localhost/unused")),
+        str(_write_config(tmp_path, database_url="postgresql+psycopg://unused@localhost/unused", exposure=exposure)),
     )
     monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
     monkeypatch.setattr(cli, "_admit_reader", lambda config: None)
@@ -64,11 +65,43 @@ def recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RecordedRun:
     return run
 
 
-def test_flags_name_the_address_and_the_processes(recorded: RecordedRun) -> None:
+@pytest.fixture
+def recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> RecordedRun:
+    """Captures what the serve command hands uvicorn, in place of binding a socket, over a catalog that answers."""
+    return _recording(tmp_path, monkeypatch, exposure=Exposure.LOCAL)
+
+
+def test_flags_name_the_address_and_the_processes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded = _recording(tmp_path, monkeypatch, exposure=Exposure.NETWORK)
+
     cli.main(["--host", PUBLIC_HOST, "--port", str(OTHER_PORT), "--workers", str(WORKER_COUNT)], prog=PROGRAM)
 
     options = recorded.only
     assert (options["host"], options["port"], options["workers"]) == (PUBLIC_HOST, OTHER_PORT, WORKER_COUNT)
+
+
+def test_a_library_served_on_this_computer_alone_listens_nowhere_else(
+    recorded: RecordedRun, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        cli.main(["--host", PUBLIC_HOST], prog=PROGRAM)
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert recorded.calls == []
+    assert 'exposure = "network"' in capsys.readouterr().err
+
+
+def test_a_library_served_to_anyone_is_left_to_the_site_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recorded = _recording(tmp_path, monkeypatch, exposure=Exposure.PUBLIC)
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main([], prog=PROGRAM)
+
+    assert raised.value.code == ExitStatus.REFUSED
+    assert recorded.calls == []
+    assert "samplelibrary site" in capsys.readouterr().err
 
 
 def test_an_unnamed_process_count_is_left_to_uvicorn(recorded: RecordedRun) -> None:

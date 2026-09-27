@@ -30,10 +30,11 @@ from samplecore.storage.annotation_writes import AnnotationWrite, write_annotati
 from samplecore.storage.curation import read_tag_ranks
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from sampleserver.dependencies import get_connection, get_curation_connection
+from sampleserver.dependencies import get_connection, get_curation_connection, get_policy, require_shown_curation
 from sampleserver.equivalence import equivalence_class_members
 from sampleserver.local_person import is_local_person, require_local_person
 from sampleserver.parameters import NOT_FOUND_RESPONSE, SampleHashPath
+from sampleserver.policy import ServingPolicy
 
 read_router = APIRouter(prefix="/curation", tags=["curation"])
 write_router = APIRouter(prefix="/curation", tags=["curation"], dependencies=[Depends(require_local_person)])
@@ -80,12 +81,18 @@ class AnnotationChangeRequest(BaseModel):
         )
 
 
-class LabelEditing(BaseModel):
-    """Whether the person asking may change labels here, which only the person at the computer the application runs on may."""
+class CurationAccess(BaseModel):
+    """What the person asking may see and do of a person's own decisions about samples.
+
+    ``label_editing`` says whether they may change labels here, which only the person at the
+    computer the application runs on may; ``curation_shown`` says whether the labels, ratings and
+    favorites a person decided are shown at all, which the server's exposure decides.
+    """
 
     model_config = FROZEN
 
     label_editing: bool
+    curation_shown: bool
 
 
 class TagSummary(BaseModel):
@@ -167,19 +174,22 @@ def change_annotation(
 
 
 @read_router.get("/access")
-def read_label_editing(request: Request) -> LabelEditing:
-    """Whether the person asking may change labels, so a page shows its editing controls only where they work."""
+def read_curation_access(request: Request, policy: ServingPolicy = Depends(get_policy)) -> CurationAccess:
+    """What the person asking may see and change of the labels, so a page shows its controls only where they work."""
     role: ServiceRole = request.app.state.role
-    return LabelEditing(label_editing=role.offers_label_editing and is_local_person(request))
+    return CurationAccess(
+        label_editing=policy.shows_curation and role.offers_label_editing and is_local_person(request),
+        curation_shown=policy.shows_curation,
+    )
 
 
-@read_router.get("/annotations/vocabulary")
+@read_router.get("/annotations/vocabulary", dependencies=[Depends(require_shown_curation)])
 def get_label_vocabulary(connection: Connection = Depends(get_connection)) -> tuple[str, ...]:
     """Every label already in use, most-used first, for offering a person their own wording back."""
     return PostgresSampleAnnotationRepository(connection).vocabulary()
 
 
-@read_router.get("/annotations/tags")
+@read_router.get("/annotations/tags", dependencies=[Depends(require_shown_curation)])
 def get_label_tags(connection: Connection = Depends(get_connection)) -> tuple[TagSummary, ...]:
     """Every tag in use, read out of the labels as paths, most used first.
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated, Final
 
@@ -15,7 +17,7 @@ from samplecore.models.module import Module
 from samplecore.models.note_event import SamplePlaybackRate
 from samplecore.models.relation import SampleRelation
 from samplecore.models.sample import DescribedSample, SampleSelection, SampleSort, SampleSummary
-from samplecore.models.sample_file import SampleFileLocation
+from samplecore.models.sample_file import SampleFile
 from samplecore.models.sample_properties import TrackerSampleProperties
 from samplecore.models.scalars import (
     MAXIMUM_RATING,
@@ -51,17 +53,26 @@ from sampleserver.dependencies import (
     get_connection,
     get_connection_opener,
     get_library_root,
+    get_policy,
+    get_sample_directories,
     get_shown_experiment_id,
     get_spectral_vectors,
 )
 from sampleserver.equivalence import equivalence_class_members
+from sampleserver.messages import CURATION_WITHHELD, NOT_FOUND
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
 from sampleserver.parameters import MAX_PAGE_OFFSET, NOT_FOUND_RESPONSE, WAV_CONTENT, WAV_MEDIA_TYPE, SampleHashPath
+from sampleserver.policy import ServingPolicy
+from sampleserver.sample_files import files_inside, unreadable_audio
 
 router = APIRouter(prefix="/samples", tags=["samples"])
 
 DEFAULT_SIMILAR_SAMPLES_LIMIT: Final[int] = 10
 MAX_SIMILAR_SAMPLES_LIMIT: Final[int] = 50
+UNDECIDED_SELECTION: Final[SampleSelection] = SampleSelection()
+WITHHELD_CURATION: Final[dict[str, object]] = {"hand_label": None, "rating": None, "favorite": False}
+
+_logger = logging.getLogger(__name__)
 
 
 class SampleOccurrenceModule(BaseModel):
@@ -87,15 +98,18 @@ class SampleOccurrenceDetail(BaseModel):
 class SampleFileDetail(BaseModel):
     """One file a sample was found in, read in place from a sample directory.
 
-    ``available`` says whether the file is there now with the size and write time it was scanned
-    at, which is what playing the sample from it needs.
+    ``directory`` is the folder it was found in: its full path where the server shows paths, and its
+    name otherwise. ``available`` says whether the file is there now with the size and write time it
+    was scanned at, which is what playing the sample from it needs; it is ``None`` where the server
+    reports no file's state, or reads no file from that folder.
     """
 
     model_config = FROZEN
 
-    location: SampleFileLocation
+    directory: str
+    relative_path: str
     rate: Rate
-    available: bool
+    available: bool | None
 
 
 class SampleDistance(BaseModel):
@@ -167,14 +181,22 @@ def get_selection(
     favorites_only: bool = False,
     minimum_rating: Annotated[int | None, Query(ge=MINIMUM_RATING, le=MAXIMUM_RATING)] = None,
     sort: SampleSort = SampleSort.OCCURRENCES,
+    policy: ServingPolicy = Depends(get_policy),
 ) -> SampleSelection:
     """Read a listing's narrowing and ordering off the query string.
 
     Gathered as a dependency so the three arrive as one value: a query-parameter model expands only
     where it is the sole ``Query`` on a route, and this listing pages with ``limit`` and ``offset``
-    beside it.
+    beside it. A library showing no ratings or favorites narrows and orders by neither, which would
+    say what they hold through the order of what it lists.
+
+    Raises:
+        HTTPException: 422 for a narrowing or an order by a person's decisions the policy withholds.
     """
-    return SampleSelection(favorites_only=favorites_only, minimum_rating=minimum_rating, sort=sort)
+    selection = SampleSelection(favorites_only=favorites_only, minimum_rating=minimum_rating, sort=sort)
+    if not policy.shows_curation and selection != UNDECIDED_SELECTION:
+        raise HTTPException(status_code=HTTPStatus.UNPROCESSABLE_ENTITY, detail=CURATION_WITHHELD)
+    return selection
 
 
 @router.get("")
@@ -188,6 +210,7 @@ def list_samples(
     selection: SampleSelection = Depends(get_selection),
     connection: Connection = Depends(get_connection),
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
+    policy: ServingPolicy = Depends(get_policy),
 ) -> Page[SampleSummary]:
     """A page of the catalog's samples, narrowed and ordered by what a person has decided.
 
@@ -211,7 +234,12 @@ def list_samples(
     if group_by_equivalence:
         items = _collapse_by_equivalence(items)
 
-    return Page(items=items, total=total, limit=limit, offset=offset)
+    return Page(items=tuple(_presented(item, policy) for item in items), total=total, limit=limit, offset=offset)
+
+
+def _presented[Described: DescribedSample](sample: Described, policy: ServingPolicy) -> Described:
+    """The sample as the policy shows it: with a person's label, rating and favorite, or with none of them."""
+    return sample if policy.shows_curation else sample.model_copy(update=WITHHELD_CURATION)
 
 
 def _collapse_by_equivalence(items: tuple[SampleSummary, ...]) -> tuple[SampleSummary, ...]:
@@ -251,6 +279,8 @@ def get_sample(
     sample_hash: SampleHashPath,
     connection: Connection = Depends(get_connection),
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
+    policy: ServingPolicy = Depends(get_policy),
+    sample_directories: tuple[Path, ...] = Depends(get_sample_directories),
 ) -> SampleDetail:
     """One sample's own fields plus every module occurrence and sample file holding it.
 
@@ -276,14 +306,14 @@ def get_sample(
     tally = tally_playback_rates(PostgresNoteEventRepository(connection).note_usage_for_sample(sample_hash))
     display_names, _ = PostgresSampleRepository(connection).display_names_and_rates_by_hash([sample_hash])
     categories = _categories(connection, sample_hash, shown_experiment_id=shown_experiment_id)
-    return SampleDetail(
+    detail = SampleDetail(
         hash=sample.hash,
         depth=sample.depth,
         channels=sample.channels,
         frames=sample.frames,
         occurrences=occurrences,
         files=tuple(
-            SampleFileDetail(location=found.location, rate=found.rate, available=is_unchanged(found))
+            _file_detail(found, policy=policy, sample_directories=sample_directories)
             for found in PostgresSampleFileRepository(connection).list_for_samples([sample_hash])
         ),
         size_bytes=sample.stored_bytes,
@@ -297,6 +327,19 @@ def get_sample(
         playback_rates=playback_rates_of(tally),
         equivalence_member_count=len(equivalence_class_members(connection, sample_hash)),
         categories=categories,
+    )
+    return _presented(detail, policy)
+
+
+def _file_detail(found: SampleFile, *, policy: ServingPolicy, sample_directories: tuple[Path, ...]) -> SampleFileDetail:
+    """One file as the policy shows it, its state read from disk only in a folder this server reads."""
+    directory = found.location.directory
+    reads_its_folder = policy.reports_file_availability and bool(files_inside((found,), sample_directories))
+    return SampleFileDetail(
+        directory=directory.as_posix() if policy.shows_paths else directory.name,
+        relative_path=found.location.relative_path,
+        rate=found.rate,
+        available=is_unchanged(found) if reads_its_folder else None,
     )
 
 
@@ -322,31 +365,42 @@ def get_sample_audio(
     sample_hash: SampleHashPath,
     library_root: Path = Depends(get_library_root),
     open_connection: ConnectionOpener = Depends(get_connection_opener),
+    policy: ServingPolicy = Depends(get_policy),
+    sample_directories: tuple[Path, ...] = Depends(get_sample_directories),
 ) -> Response:
     """The sample's own canonical audio: its stored object, or the WAV the store would hold for it.
 
-    A stored object is read straight off the store by its hash, with no catalog round trip on the
-    way to a sound: the hash's own shape is checked on the path, which is what keeps a request inside
-    the store. A sample found in a sample file is read from the file the catalog names and encoded
-    the way the store encodes an object, so both kinds play at the same nominal header rate. Either
-    way the bytes are those of the hash, so they are served with a cache lifetime of a year.
+    A stored object is read off the store by its hash: the hash's own shape is checked on the path,
+    which is what keeps a request inside the store. Where the policy serves stored objects by their
+    hash alone, that takes no catalog round trip on the way to a sound; otherwise the catalog is
+    asked first, so an object left in the store for a sample the catalog no longer holds stays
+    unheard. A sample found in a sample file is read from a file the catalog names inside this
+    server's sample directories, and encoded the way the store encodes an object, so both kinds play
+    at the same nominal header rate. Either way the bytes are those of the hash, so they are served
+    with a cache lifetime of a year.
 
     Raises:
-        HTTPException: 404 when the store holds no object under this hash and no cataloged file
-            holds the sample now.
+        HTTPException: 404 when the sample is not served, the store holds no object under this hash,
+            and no cataloged file in this server's sample directories holds the sample now.
     """
+    if not policy.serves_uncataloged_audio:
+        with open_connection() as connection:
+            if PostgresSampleRepository(connection).get(sample_hash) is None:
+                raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=NOT_FOUND)
     path = audio_store.object_path(library_root, sample_hash)
     if path.is_file():
         return FileResponse(path, media_type=WAV_MEDIA_TYPE, headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
 
     with open_connection() as connection:
-        sample_files = PostgresSampleFileRepository(connection).list_for_samples([sample_hash])
+        sample_files = files_inside(
+            PostgresSampleFileRepository(connection).list_for_samples([sample_hash]), sample_directories
+        )
     try:
         sample_pcm = SampleAudio.of_files(library_root, sample_files).read_by_hash(sample_hash)
     except FileNotFoundError as error:
         raise HTTPException(status_code=404, detail=f"no sample stored with hash {sample_hash!r}") from error
     except SampleUnavailableError as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
+        raise unreadable_audio(error, policy) from error
 
     return Response(
         audio_store.encode_wav(sample_pcm),
@@ -360,6 +414,7 @@ def get_sample_preview(
     sample_hash: SampleHashPath,
     connection: Connection = Depends(get_connection),
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
+    policy: ServingPolicy = Depends(get_policy),
 ) -> SamplePreview:
     """A sample as a hover shows it, read from what the catalog already holds and nothing decoded.
 
@@ -372,15 +427,21 @@ def get_sample_preview(
     if PostgresSampleRepository(connection).get(sample_hash) is None:
         raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
-    return _previews_by_hash(connection, [sample_hash], shown_experiment_id=shown_experiment_id)[sample_hash]
+    return _previews_by_hash(connection, [sample_hash], shown_experiment_id=shown_experiment_id, policy=policy)[
+        sample_hash
+    ]
 
 
 def _previews_by_hash(
-    connection: Connection, sample_hashes: list[str], *, shown_experiment_id: int | None
+    connection: Connection, sample_hashes: list[str], *, shown_experiment_id: int | None, policy: ServingPolicy
 ) -> dict[str, SamplePreview]:
-    """A glance at each given sample, from five lookups over the whole list at once."""
+    """A glance at each given sample, from five lookups over the whole list at once, a person's label as the policy shows it."""
     display_names, _ = PostgresSampleRepository(connection).display_names_and_rates_by_hash(sample_hashes)
-    annotations_by_hash = PostgresSampleAnnotationRepository(connection).annotations_by_hash(sample_hashes)
+    annotations_by_hash = (
+        PostgresSampleAnnotationRepository(connection).annotations_by_hash(sample_hashes)
+        if policy.shows_curation
+        else {}
+    )
     thumbnails_by_hash = PostgresSampleThumbnailRepository(connection).get_many(sample_hashes)
     top_category_by_hash = (
         {}
@@ -401,9 +462,11 @@ def _previews_by_hash(
 
 @router.get("/{sample_hash}/relations", responses=NOT_FOUND_RESPONSE)
 def get_sample_relations(
-    sample_hash: SampleHashPath, connection: Connection = Depends(get_connection)
+    sample_hash: SampleHashPath,
+    connection: Connection = Depends(get_connection),
+    policy: ServingPolicy = Depends(get_policy),
 ) -> tuple[SampleRelation, ...]:
-    """Every equivalence-class link this sample participates in, on either side of the pair.
+    """Every equivalence-class link this sample participates in, on either side of the pair, reviewed by whom the policy says.
 
     Raises:
         HTTPException: 404 when no sample is cataloged under this hash.
@@ -411,7 +474,10 @@ def get_sample_relations(
     if PostgresSampleRepository(connection).get(sample_hash) is None:
         raise HTTPException(status_code=404, detail=f"no sample cataloged with hash {sample_hash!r}")
 
-    return PostgresSampleRelationRepository(connection).list_for_sample(sample_hash)
+    relations = PostgresSampleRelationRepository(connection).list_for_sample(sample_hash)
+    if policy.shows_reviewers:
+        return relations
+    return tuple(relation.model_copy(update={"review": None}) for relation in relations)
 
 
 @router.get("/{sample_hash}/distance/{other_hash}", responses=NOT_FOUND_RESPONSE)
@@ -438,12 +504,16 @@ def get_sample_distance(
 
 
 @router.get("/{sample_hash}/similar", responses=NOT_FOUND_RESPONSE)
+# FastAPI reads a route's query parameters and dependencies off its signature, which is what makes
+# this one long; each entry is one of the two, with nothing to group them under.
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def get_similar_samples(
     sample_hash: SampleHashPath,
     limit: Annotated[int, Query(ge=1, le=MAX_SIMILAR_SAMPLES_LIMIT)] = DEFAULT_SIMILAR_SAMPLES_LIMIT,
     connection: Connection = Depends(get_connection),
     vectors: SpectralVectors = Depends(get_spectral_vectors),
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
+    policy: ServingPolicy = Depends(get_policy),
 ) -> tuple[SimilarSample, ...]:
     """The catalog's samples whose spectral feature vector sits closest to this one's, nearest first.
 
@@ -460,7 +530,9 @@ def get_similar_samples(
 
     neighbors = nearest_neighbors(sample_hash, vectors, limit=limit)
     neighbor_hashes = [neighbor_hash for neighbor_hash, _ in neighbors]
-    previews_by_hash = _previews_by_hash(connection, neighbor_hashes, shown_experiment_id=shown_experiment_id)
+    previews_by_hash = _previews_by_hash(
+        connection, neighbor_hashes, shown_experiment_id=shown_experiment_id, policy=policy
+    )
     playback_rate_by_hash = resolved_playback_rates(connection, neighbor_hashes)
     return tuple(
         _similar_sample(

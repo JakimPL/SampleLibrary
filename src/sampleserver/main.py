@@ -12,5 +12,7 @@ app = create_app(
     _config.library_root,
     _config.inference.url,
     role=ServiceRole.READER,
+    server=_config.server,
+    sample_directories=_config.sample_directories,
     frontend_directory=frontend_directory_from_environment(),
 )

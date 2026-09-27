@@ -10,7 +10,7 @@ from sqlalchemy import Connection
 from samplecore.models.service_role import ServiceRole
 from sampleserver.app import API_PREFIX, create_app
 from sampleserver.frontend import INDEX_DOCUMENT
-from tests.sampleserver.conftest import INFERENCE_URL
+from tests.sampleserver.conftest import INFERENCE_URL, LOCAL_CLIENT, LOCAL_ORIGIN, LOCAL_SERVER
 
 INDEX_MARKUP = "<!doctype html><title>SampleLibrary</title>"
 SCRIPT_BODY = "console.log('sample library');"
@@ -30,9 +30,15 @@ def served(
     connection: Connection, _database_url: str, tmp_path: Path, frontend_directory: Path
 ) -> Iterator[TestClient]:
     application = create_app(
-        _database_url, tmp_path, INFERENCE_URL, role=ServiceRole.READER, frontend_directory=frontend_directory
+        _database_url,
+        tmp_path,
+        INFERENCE_URL,
+        role=ServiceRole.READER,
+        server=LOCAL_SERVER,
+        sample_directories=(),
+        frontend_directory=frontend_directory,
     )
-    with TestClient(application) as client:
+    with TestClient(application, base_url=LOCAL_ORIGIN, client=LOCAL_CLIENT) as client:
         yield client
 
 
@@ -68,7 +74,17 @@ def test_an_app_built_without_a_frontend_serves_the_api_alone(
     connection: Connection, _database_url: str, tmp_path: Path
 ) -> None:
     with TestClient(
-        create_app(_database_url, tmp_path, INFERENCE_URL, role=ServiceRole.READER, frontend_directory=None)
+        create_app(
+            _database_url,
+            tmp_path,
+            INFERENCE_URL,
+            role=ServiceRole.READER,
+            server=LOCAL_SERVER,
+            sample_directories=(),
+            frontend_directory=None,
+        ),
+        base_url=LOCAL_ORIGIN,
+        client=LOCAL_CLIENT,
     ) as client:
         assert client.get("/").status_code == 404
         assert client.get(f"{API_PREFIX}/stats").status_code == 200

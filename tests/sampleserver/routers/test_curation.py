@@ -447,12 +447,12 @@ def test_a_change_from_anyone_but_the_person_at_this_computer_is_refused(
     )
 
     assert response.status_code == 403
-    assert client.get("/curation/access", headers=headers).json() == {"label_editing": False}
+    assert client.get("/curation/access", headers=headers).json().get("label_editing", False) is False
     assert PostgresSampleAnnotationRepository(connection).count() == 0
 
 
 def test_the_person_at_this_computer_may_change_labels(client: TestClient) -> None:
-    assert client.get("/curation/access").json() == {"label_editing": True}
+    assert client.get("/curation/access").json() == {"label_editing": True, "curation_shown": True}
 
 
 def test_the_vocabulary_offers_back_what_has_already_been_chosen(client: TestClient, connection: Connection) -> None:

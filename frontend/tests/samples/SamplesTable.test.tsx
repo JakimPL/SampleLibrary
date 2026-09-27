@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import type * as CloudApi from "../../src/api/cloud";
 import { type SampleSelection, type SampleSummary, WHOLE_CATALOG } from "../../src/api/samples";
 import { SamplesTable } from "../../src/samples/SamplesTable";
+import { useCurationAccess } from "../../src/samples/useCurationAccess";
 import { useListingOrderStore } from "../../src/workspace/listingOrderStore";
 
 const { getCategoryTags } = vi.hoisted(() => ({ getCategoryTags: vi.fn().mockResolvedValue([]) }));
@@ -308,5 +309,23 @@ describe("SamplesTable narrowing", () => {
         renderTable({ selection: { ...WHOLE_CATALOG, favoritesOnly: true } });
 
         expect(screen.getByRole("button", { name: "Favorites" })).toHaveAttribute("aria-pressed", "true");
+    });
+});
+
+describe("SamplesTable on a site", () => {
+    it("offers no narrowing or order by a person's decisions, and no rating column", () => {
+        vi.mocked(useCurationAccess).mockReturnValue({ curationShown: false, labelEditing: false });
+        renderTable();
+
+        expect(screen.queryByRole("button", { name: "Favorites" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("combobox", { name: "Order" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("columnheader", { name: "Rating" })).not.toBeInTheDocument();
+    });
+
+    it("offers both where a person's decisions are shown", () => {
+        renderTable();
+
+        expect(screen.getByRole("button", { name: "Favorites" })).toBeInTheDocument();
+        expect(screen.getByRole("combobox", { name: "Order" })).toBeInTheDocument();
     });
 });

@@ -6,8 +6,12 @@ export type AnnotationsWritten = components["schemas"]["AnnotationsWritten"];
 
 /** How far one gesture reaches: this sample alone, or every near-duplicate grouped with it. */
 export type AnnotationScope = components["schemas"]["AnnotationSource"];
-/** Whether the person asking may change labels here: only at the computer the SampleLibrary app runs on. */
-export type LabelEditing = components["schemas"]["LabelEditing"];
+/**
+ * What the person asking may see and do of a person's decisions: whether labels, ratings and favorites
+ * are shown at all, and whether they may change them, which only the person at the computer the
+ * SampleLibrary app runs on may.
+ */
+export type CurationAccess = components["schemas"]["CurationAccess"];
 /** One tag in use: its path, how many samples carry it, and the rank that stays with it. */
 export type TagSummary = components["schemas"]["TagSummary"];
 /** The decisions one gesture changes; a decision left out stays as the sample holds it. */
@@ -44,6 +48,6 @@ export async function getLabelTags(): Promise<readonly TagSummary[]> {
     return requestJson<readonly TagSummary[]>("/curation/annotations/tags");
 }
 
-export async function getLabelEditing(): Promise<LabelEditing> {
-    return requestJson<LabelEditing>("/curation/access");
+export async function getCurationAccess(): Promise<CurationAccess> {
+    return requestJson<CurationAccess>("/curation/access");
 }

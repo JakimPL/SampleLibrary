@@ -7,6 +7,16 @@ import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
 
 export type SampleColumnId = "waveform" | "name" | "category" | "verdict" | "size_bytes" | "occurrence_count";
 
+/** Every column the listing may show, whichever of them fit and are shown. */
+export const SAMPLE_COLUMN_IDS: readonly SampleColumnId[] = [
+    "waveform",
+    "name",
+    "category",
+    "verdict",
+    "size_bytes",
+    "occurrence_count",
+];
+
 const WAVEFORM_WIDTH_PX = 76;
 const CATEGORY_WIDTH_PX = 144;
 /** Six slots for the stars and the heart under a pointer; one tap target for the heart alone under touch. */
@@ -14,13 +24,19 @@ const VERDICT_WIDTH_PX: Readonly<Record<InputMode, number>> = { pointer: 110, to
 const SIZE_WIDTH_PX = 80;
 const OCCURRENCES_WIDTH_PX = 84;
 
-/** The samples listing's columns, in order, and how each yields as the listing narrows: the counts first, the verdict last. */
-export function sampleColumnSpec(input: InputMode): readonly FittableColumn<SampleColumnId>[] {
+/**
+ * The samples listing's columns, in order, and how each yields as the listing narrows: the counts first,
+ * the verdict last. A listing showing no one's ratings or favorites holds no verdict column.
+ */
+export function sampleColumnSpec(input: InputMode, curationShown: boolean): readonly FittableColumn<SampleColumnId>[] {
+    const verdict: readonly FittableColumn<SampleColumnId>[] = curationShown
+        ? [{ id: "verdict", widthPx: VERDICT_WIDTH_PX[input], dropOrder: 4 }]
+        : [];
     return [
         { id: "waveform", widthPx: WAVEFORM_WIDTH_PX, dropOrder: null },
         { id: "name", widthPx: null, dropOrder: null },
         { id: "category", widthPx: CATEGORY_WIDTH_PX, dropOrder: 3 },
-        { id: "verdict", widthPx: VERDICT_WIDTH_PX[input], dropOrder: 4 },
+        ...verdict,
         { id: "size_bytes", widthPx: SIZE_WIDTH_PX, dropOrder: 2 },
         { id: "occurrence_count", widthPx: OCCURRENCES_WIDTH_PX, dropOrder: 1 },
     ];

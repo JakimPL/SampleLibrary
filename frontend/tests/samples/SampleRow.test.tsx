@@ -10,7 +10,7 @@ import type { InputMode } from "../../src/layout/layoutMode";
 import { type SampleColumnId, sampleColumnSpec } from "../../src/samples/sampleColumns";
 import { SampleRow } from "../../src/samples/SampleRow";
 import { useAudioPreview } from "../../src/samples/useAudioPreview";
-import { useLabelEditing } from "../../src/samples/useLabelEditing";
+import { useCurationAccess } from "../../src/samples/useCurationAccess";
 import { LONG_PRESS_HOLD_MS } from "../../src/shared/gestures/gestureThresholds";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 
@@ -57,7 +57,7 @@ function buildSample(overrides: Partial<SampleSummary> = {}): SampleSummary {
     };
 }
 
-const EVERY_COLUMN: ReadonlySet<SampleColumnId> = new Set(sampleColumnSpec("pointer").map((column) => column.id));
+const EVERY_COLUMN: ReadonlySet<SampleColumnId> = new Set(sampleColumnSpec("pointer", true).map((column) => column.id));
 
 interface RowOverrides {
     readonly sample?: SampleSummary;
@@ -330,7 +330,7 @@ describe("SampleRow", () => {
 
 describe("SampleRow where labels may only be seen", () => {
     it("shows the decisions as they stand, and its keys write nothing", () => {
-        vi.mocked(useLabelEditing).mockReturnValue(false);
+        vi.mocked(useCurationAccess).mockReturnValue({ curationShown: true, labelEditing: false });
         renderRow({ sample: buildSample({ hand_label: "KICK", rating: 3, favorite: true }) });
 
         expect(screen.getByRole("img", { name: "Rated 3 of 5" })).toBeInTheDocument();

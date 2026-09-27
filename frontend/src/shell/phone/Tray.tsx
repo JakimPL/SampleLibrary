@@ -13,6 +13,7 @@ import { MiniWaveform } from "../../samples/MiniWaveform";
 import { RatingStars } from "../../samples/RatingStars";
 import { useAnnotationWriter } from "../../samples/useAnnotationWriter";
 import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
+import { useCurationAccess } from "../../samples/useCurationAccess";
 import { useSampleDetail } from "../../samples/useSampleDetail";
 import { useSamplePreview } from "../../samples/useSamplePreview";
 import { classNames } from "../../shared/classNames";
@@ -68,6 +69,7 @@ function SampleTray({ hash }: EntityTrayProps): ReactElement {
     const sample = detail.status === "success" ? detail.data.sample : null;
     const { play, pause, resume, playingKey, paused, source } = useAudioPreview();
     const decisions = useSampleAnnotation(hash, sample === null ? NO_DECISIONS : decisionsOf(sample)) ?? NO_DECISIONS;
+    const { curationShown } = useCurationAccess();
     const { change, message } = useAnnotationWriter(hash, sample === null ? "sample" : defaultScopeFor(sample));
     const isSounding = playingKey === hash;
     const name = preview.status === "success" ? preview.data.display_name : (sample?.display_name ?? null);
@@ -122,7 +124,7 @@ function SampleTray({ hash }: EntityTrayProps): ReactElement {
                         )}
                     </span>
                 </TrayIdentity>
-                {sample !== null && (
+                {sample !== null && curationShown && (
                     <>
                         <RatingStars
                             rating={decisions.rating}

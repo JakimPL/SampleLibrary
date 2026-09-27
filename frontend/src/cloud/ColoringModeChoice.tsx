@@ -18,7 +18,11 @@ const CHOICES: readonly ModeChoice[] = [
     { mode: "label", label: "Labels" },
 ];
 
-/** The two ways the cloud paints its samples, one pressed, the same control in the toolbar and in the legend's sheet. */
+/**
+ * The two ways the cloud paints its samples, one pressed, the same control in the toolbar and in the
+ * legend's sheet. A library showing no one's labels paints by category alone, where its callers offer
+ * no choice.
+ */
 export function ColoringModeChoice({ mode, onModeChange }: ColoringModeChoiceProps): ReactElement {
     return (
         <>

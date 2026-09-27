@@ -17,16 +17,16 @@ afterEach(() => {
     cleanup();
 });
 
-// Most tests stand where the SampleLibrary app runs, where labels may be changed; a test of the
-// read-only page says otherwise for itself, and goes back to this after.
-vi.mock("../src/samples/useLabelEditing", () => ({
-    LABEL_EDITING_CACHE_KEY: "label-editing",
-    useLabelEditing: vi.fn(() => true),
+// Most tests stand where the SampleLibrary app runs, where labels are shown and may be changed; a
+// test of a read-only page or of a site says otherwise for itself, and goes back to this after.
+vi.mock("../src/samples/useCurationAccess", () => ({
+    CURATION_ACCESS_CACHE_KEY: "curation-access",
+    useCurationAccess: vi.fn(() => ({ curationShown: true, labelEditing: true })),
 }));
 
 afterEach(async () => {
-    const { useLabelEditing } = await import("../src/samples/useLabelEditing");
-    vi.mocked(useLabelEditing).mockReturnValue(true);
+    const { useCurationAccess } = await import("../src/samples/useCurationAccess");
+    vi.mocked(useCurationAccess).mockReturnValue({ curationShown: true, labelEditing: true });
 });
 
 // Module-level stores and caches outlive a test, so each one returns to its initial state here.

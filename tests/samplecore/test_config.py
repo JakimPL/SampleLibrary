@@ -18,6 +18,7 @@ from samplecore.config import (
     PASSWORD_PLACEHOLDER,
     SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE,
     ConfigurationError,
+    Exposure,
     InferenceConfig,
     InvalidSettingsError,
     LibraryConfig,
@@ -502,3 +503,20 @@ def test_a_service_url_in_the_environment_takes_the_configs_place(
     config = _library_config(tmp_path, 'server_database_url = "postgresql+psycopg://reader:secret@db.local/library"\n')
 
     assert config.server_database_url == "postgresql+psycopg://reader:other@db.local/library"
+
+
+@pytest.mark.parametrize("exposure", list(Exposure))
+def test_the_server_table_names_who_the_library_is_served_to(tmp_path: Path, exposure: Exposure) -> None:
+    config = _library_config(tmp_path, f'[server]\nexposure = "{exposure.value}"\n')
+
+    assert config.server.exposure is exposure
+
+
+def test_a_library_left_without_a_server_table_is_served_on_this_computer_alone(tmp_path: Path) -> None:
+    """A forgotten setting listens on the loopback address, which exposes nothing no one chose to."""
+    assert _library_config(tmp_path, "").server.exposure is Exposure.LOCAL
+
+
+def test_an_exposure_this_project_does_not_know_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(InvalidSettingsError, match="server.exposure"):
+        _library_config(tmp_path, '[server]\nexposure = "everyone"\n')

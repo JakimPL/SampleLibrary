@@ -87,6 +87,13 @@ The `[inference]` table holds `url`: the address the morph renderer listens on a
 it at, `http://127.0.0.1:8010` by default. The SampleLibrary app starts its own renderer on this
 address, or on another port of the same host when a program already holds this one.
 
+The `[server]` table holds `exposure`: who a served library answers. `"local"`, the default, is you
+on this computer alone, seeing everything the library holds, folders and your labels included.
+`"network"` also answers the devices on your home network, which may look and change nothing.
+`"public"` is a site on the internet, started with `samplelibrary site`, which shows no folder of
+yours and none of your labels, ratings or favorites. `samplelibrary serve` listens on 127.0.0.1
+unless this says otherwise, and refuses `"public"`; the SampleLibrary app refuses it too.
+
 The `[pipeline]` table holds what `just rebuild` builds the library with, every key optional:
 
 - `memory_cap`: the memory ceiling every step runs under, such as `"16G"`; `"none"` by default.
