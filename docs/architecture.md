@@ -1296,6 +1296,18 @@ every point a hollow square in its painted tag's color at every zoom, the select
 morph pair joined by a yellow line. A system dark preference applies the dark block beneath a chosen
 OpenMPT theme as well, so the OpenMPT block declares every token the dark block declares.
 
+The controls follow the same rule. Every push button is `.button` with a variant naming its intent
+(`button-primary`, `button-quiet`, `button-icon`, `button-wide`), rendered through
+`shared/controls/Button.tsx` or, for a link or a menu's summary, `buttonClassName`; the fields,
+checks, bars, group boxes and list boxes are `.field`, `.check`, `.progress`, `.group` and
+`.listbox`. Each takes its look from the `--button-*`, `--field-*`, `--check-*`, `--progress-*`,
+`--group-*`, `--list-*`, `--pane-tab-*` and `--sheet-*` tokens on `:root`, which the light and dark
+themes fill from their surfaces and the OpenMPT theme fills with Windows 10 literals: 75px square
+buttons with a blue ring on the default one and gray text when disabled, sunken white fields, square
+black-on-white checks, a green bar, etched group captions and a flat menu bar. A page wanting larger
+controls, as the setup page does, sets `--button-height` and `--field-height` on itself, since
+`--control-height` is resolved on `:root`.
+
 ## Morphs in the application
 
 A morph is a pair of samples and a weight between them, held in `frontend/src/morph/morphStore.ts`

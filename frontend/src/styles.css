@@ -178,6 +178,8 @@
     --pane-tab-font-size: var(--font-size-small);
     --pane-tab-font-weight: 600;
     --pane-tab-letter-spacing: 0.01em;
+    --sheet-radius: var(--radius-4);
+    --sheet-handle: block;
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
 }
@@ -443,6 +445,8 @@
     --pane-tab-font-size: var(--font-size-body);
     --pane-tab-font-weight: 400;
     --pane-tab-letter-spacing: normal;
+    --sheet-radius: 0;
+    --sheet-handle: none;
     --font-body: "Segoe UI", "Open Sans", "Tahoma", sans-serif;
     --font-mono: var(--font-body);
 }
@@ -1486,7 +1490,7 @@ table.data td .annotation-editor-input {
     padding: var(--space-3) var(--space-6) calc(var(--space-6) + var(--safe-bottom));
     background: var(--surface-1);
     color: var(--text-primary);
-    border-radius: var(--radius-4) var(--radius-4) 0 0;
+    border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
     box-shadow: var(--shadow);
     animation: sheet-rise 160ms ease-out;
 }
@@ -1496,6 +1500,7 @@ table.data td .annotation-editor-input {
 }
 
 .sheet-handle {
+    display: var(--sheet-handle);
     width: 36px;
     height: 4px;
     margin: 0 auto var(--space-4);
