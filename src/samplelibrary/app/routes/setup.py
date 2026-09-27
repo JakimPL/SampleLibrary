@@ -58,7 +58,7 @@ async def choose_sources(sources: LibrarySources, launcher: LauncherDependency) 
 
 @router.put("/options")
 def choose_options(options: LibraryOptions, launcher: LauncherDependency) -> SetupState:
-    """Write how the library is built into the config file, which the next build reads.
+    """Write how the library is built and whom it opens to into the config file, which the next build and start read.
 
     Raises:
         HTTPException: 409 before any folders are saved, and 422 when the config file fails validation.

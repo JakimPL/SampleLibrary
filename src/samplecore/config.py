@@ -180,6 +180,11 @@ class ServerConfig(BaseModel):
     exposure: Exposure = DEFAULT_EXPOSURE
     visitors: VisitorLimits | None = None
 
+    @property
+    def answers_the_home_network(self) -> bool:
+        """Whether devices on the home network are answered too, which a person turns on on the setup page."""
+        return self.exposure is Exposure.NETWORK
+
     @model_validator(mode="after")
     def _limits_visitors_where_anyone_visits(self) -> ServerConfig:
         if self.exposure is Exposure.PUBLIC and self.visitors is None:
@@ -192,6 +197,11 @@ class ServerConfig(BaseModel):
 
 
 DEFAULT_SERVER_CONFIG: Final[ServerConfig] = ServerConfig()
+
+
+def home_exposure(*, answers_the_home_network: bool) -> str:
+    """The exposure a library at home is written with: open to the home network, or to this computer alone."""
+    return (Exposure.NETWORK if answers_the_home_network else Exposure.LOCAL).value
 
 
 class PublishConfig(BaseModel):

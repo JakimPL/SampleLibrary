@@ -242,6 +242,19 @@ export interface components {
             readonly detail?: readonly components["schemas"]["ValidationError"][];
         };
         /**
+         * HomeNetworkReach
+         * @description Whether this run of the application answers the devices on the home network, and the address they open it at.
+         *
+         *     It holds from the start of the run to its end, whatever the config says meanwhile. ``address``
+         *     is None while this computer is on no home network.
+         */
+        readonly HomeNetworkReach: {
+            /** Open */
+            readonly open: boolean;
+            /** Address */
+            readonly address: string | null;
+        };
+        /**
          * Installation
          * @description Which installation of the application a running server belongs to: its version and its Python environment.
          *
@@ -282,11 +295,16 @@ export interface components {
         };
         /**
          * LibraryOptions
-         * @description How the application builds a person's library: whether its builds go on past the catalog to the cloud.
+         * @description How the application builds and serves a person's library.
+         *
+         *     ``build_cloud`` says whether its builds go on past the catalog to the cloud, and
+         *     ``open_to_network`` whether the devices on the home network may open the library too, to look.
          */
         readonly LibraryOptions: {
             /** Build Cloud */
             readonly build_cloud: boolean;
+            /** Open To Network */
+            readonly open_to_network: boolean;
         };
         /**
          * LibrarySources
@@ -372,6 +390,7 @@ export interface components {
             /** Problem */
             readonly problem: string | null;
             readonly build: components["schemas"]["JobView"] | null;
+            readonly home_network: components["schemas"]["HomeNetworkReach"];
         };
         /**
          * StepState

@@ -6,9 +6,10 @@ from typing import Final
 
 import tomlkit
 from pydantic import BaseModel
+from tomlkit import TOMLDocument
 from tomlkit.items import Table
 
-from samplecore.config import LIBRARY_TABLE, LibraryConfig, parse_config
+from samplecore.config import LIBRARY_TABLE, SERVER_TABLE, LibraryConfig, home_exposure, parse_config
 from samplecore.models.base import FROZEN
 from samplecore.storage.atomic import write_bytes_atomically
 
@@ -17,6 +18,7 @@ LIBRARY_ROOT_KEY: Final[str] = "library_root"
 SAMPLE_DIRECTORIES_KEY: Final[str] = "sample_directories"
 SAMPLE_EXCLUSIONS_KEY: Final[str] = "sample_exclusions"
 BUILD_CLOUD_KEY: Final[str] = "build_cloud"
+EXPOSURE_KEY: Final[str] = "exposure"
 
 
 class LibrarySources(BaseModel):
@@ -44,15 +46,20 @@ class LibrarySources(BaseModel):
 
 
 class LibraryOptions(BaseModel):
-    """How the application builds a person's library: whether its builds go on past the catalog to the cloud."""
+    """How the application builds and serves a person's library.
+
+    ``build_cloud`` says whether its builds go on past the catalog to the cloud, and
+    ``open_to_network`` whether the devices on the home network may open the library too, to look.
+    """
 
     model_config = FROZEN
 
     build_cloud: bool
+    open_to_network: bool
 
     @classmethod
     def of(cls, config: LibraryConfig) -> LibraryOptions:
-        return cls(build_cloud=config.build_cloud)
+        return cls(build_cloud=config.build_cloud, open_to_network=config.server.answers_the_home_network)
 
 
 def write_library_sources(path: Path, sources: LibrarySources) -> LibraryConfig:
@@ -65,7 +72,7 @@ def write_library_sources(path: Path, sources: LibrarySources) -> LibraryConfig:
         ConfigurationError: the sources, together with the rest of the file, fail validation; the
             file then stays as it was.
     """
-    return _rewrite_library_table(path, lambda library: _set_sources(library, sources))
+    return _rewrite(path, lambda document: _set_sources(_table_of(document, LIBRARY_TABLE), sources))
 
 
 def write_library_options(path: Path, options: LibraryOptions) -> LibraryConfig:
@@ -74,21 +81,24 @@ def write_library_options(path: Path, options: LibraryOptions) -> LibraryConfig:
     Raises:
         ConfigurationError: the file, with the options in it, fails validation; it then stays as it was.
     """
-    return _rewrite_library_table(path, lambda library: _set_options(library, options))
+    return _rewrite(path, lambda document: _set_options(document, options))
 
 
-def _rewrite_library_table(path: Path, change: Callable[[Table], None]) -> LibraryConfig:
-    """Apply ``change`` to the config file's `[library]` table, validating the whole file before it replaces the old one.
+def _rewrite(path: Path, change: Callable[[TOMLDocument], None]) -> LibraryConfig:
+    """Apply ``change`` to the config file, validating the whole file before it replaces the old one.
+
+    A file the application creates says whom the library is served to, this computer alone, so a
+    person opening it finds the setting beside the others.
 
     Raises:
         ConfigurationError: the changed file fails validation; the file then stays as it was.
     """
-    document = tomlkit.parse(path.read_text(encoding="utf-8")) if path.is_file() else tomlkit.document()
-    library = document.get(LIBRARY_TABLE)
-    if not isinstance(library, Table):
-        library = tomlkit.table()
-        document[LIBRARY_TABLE] = library
-    change(library)
+    if path.is_file():
+        document = tomlkit.parse(path.read_text(encoding="utf-8"))
+    else:
+        document = tomlkit.document()
+        _table_of(document, SERVER_TABLE)[EXPOSURE_KEY] = home_exposure(answers_the_home_network=False)
+    change(document)
     content = tomlkit.dumps(document)
     config = parse_config(content, path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,8 +106,18 @@ def _rewrite_library_table(path: Path, change: Callable[[Table], None]) -> Libra
     return config
 
 
-def _set_options(library: Table, options: LibraryOptions) -> None:
-    library[BUILD_CLOUD_KEY] = options.build_cloud
+def _table_of(document: TOMLDocument, name: str) -> Table:
+    """The document's table of this name, added where the file has none."""
+    table = document.get(name)
+    if not isinstance(table, Table):
+        table = tomlkit.table()
+        document[name] = table
+    return table
+
+
+def _set_options(document: TOMLDocument, options: LibraryOptions) -> None:
+    _table_of(document, LIBRARY_TABLE)[BUILD_CLOUD_KEY] = options.build_cloud
+    _table_of(document, SERVER_TABLE)[EXPOSURE_KEY] = home_exposure(answers_the_home_network=options.open_to_network)
 
 
 def _set_sources(library: Table, sources: LibrarySources) -> None:

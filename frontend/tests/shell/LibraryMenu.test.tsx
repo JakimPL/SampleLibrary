@@ -22,12 +22,13 @@ const READY: SetupState = {
         sample_directories: [],
         sample_exclusions: [],
     },
-    options: { build_cloud: true },
+    options: { build_cloud: true, open_to_network: false },
     build_device: { card: null },
     suggested_library_root: "/home/person/Music/SampleLibrary",
     manages_database: true,
     problem: null,
     build: null,
+    home_network: { open: false, address: null },
 };
 
 function renderWorkspace(): void {

@@ -569,10 +569,18 @@ the built frontend. The `Launcher` owns what the library needs:
   report carries the moment the pass started, from which the setup page estimates the time it has
   left.
 - **The person at this computer.** The app lists folders, writes the config file and records
-  labels, so it answers a request on any path only from the loopback address, addressed to a local
-  name, sent by a page from a local name when a page sent it, and forwarded by no proxy
-  (`sampleserver.local_person.LocalPersonOnly`). A page elsewhere that renames its own host to
-  reach this one still names that host, and is refused.
+  labels, so it answers the person at this computer on every path: a request from the loopback
+  address, addressed to a local name, sent by a page from a local name when a page sent it, and
+  forwarded by no proxy (`sampleserver.local_person.LocalPersonOrHomeDevices`). A page elsewhere
+  that renames its own host to reach this one still names that host, and is refused.
+- **Devices at home.** The setup page's **Open on my home network** switch writes `exposure =
+  "network"` or `"local"` (`samplecore.config_editing.LibraryOptions`), which the application
+  reads as it starts (`samplelibrary.app.listener.starting_policy`); a config it cannot read, or
+  one serving the library to anyone, starts it on this computer alone. Opened, it listens on every
+  address, and the devices the policy admits reach every path but the setup routes; label writes
+  still ask for the person at this computer (`require_local_person`), and at most two morphs render
+  at once. The setup page shows the address a device opens, this computer's address on its home
+  network with the port, and asks for a restart while the switch differs from the run.
 - **Starts.** One application runs under each config (`samplelibrary.app.instance`). Its place
   is a folder in the user's state folder named by a hash of the config's path, holding a lock the
   process keeps for its whole life and a record of the port it listens on and of the process
@@ -592,7 +600,8 @@ the built frontend. The `Launcher` owns what the library needs:
   The start then binds its own socket before anything else runs and records it: first the port
   the record names, which keeps the browser's layout, theme and cache, all stored per address, then
   27440 to 27449, then any port the system assigns, or exactly the port `--port` names. The server
-  listens on 127.0.0.1 alone and reads no forwarding headers. `--quit` ends the running one the same
+  listens on 127.0.0.1, or on every address once opened to the home network, and reads no
+  forwarding headers. `--quit` ends the running one the same
   way and starts nothing.
 - **One application per library.** The launcher holds a second lock, in the instances folder's
   `libraries/`, named by a hash of the library root, from the moment it opens a library until the
@@ -625,12 +634,14 @@ Application workflow builds all three, smoke-testing each executable on a fresh 
 | A stored object | served by its hash | served by its hash | served for a cataloged sample alone |
 | A refusal | names the file or the renderer's address | names the file or the renderer's address | plain words; the details go to the log |
 | API docs | served | served | none |
+| Morphs rendering at once | any number | two | `[server.visitors] concurrent_morphs` |
 
 `sampleserver.policy.ServingPolicy` derives every row from the exposure alone, and every route,
 middleware and command that behaves differently reads one of its properties; a test holds every
 other source file to naming no exposure. `AdmittedRequestsOnly` answers each request `admits`
 accepts, which is how a page elsewhere that points its own name at the loopback address is turned
-away under `local`. Nothing a request carries selects the exposure: its address, the name it gives
+away under `local`, and a request a page sent passes `admits_page` too: at home, the page comes
+from the server itself or from a local name, so a site open in the same browser is turned away. Nothing a request carries selects the exposure: its address, the name it gives
 the server and its headers can only turn it away. The page asks `GET /api/curation/access`, which
 answers what it may show and change (`curation_shown`, `label_editing`), and shows no control for a
 decision the server holds back. A served app opens a sample's file only in the sample directories

@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as SetupApi from "../../src/api/setup";
-import type { BuildDevice, BuildView, SetupState } from "../../src/api/setup";
+import type { BuildDevice, BuildView, HomeNetworkReach, SetupState } from "../../src/api/setup";
 import type { LibraryStats } from "../../src/api/stats";
 import { LibraryPanel } from "../../src/setup/LibraryPanel";
 
@@ -73,7 +73,16 @@ const FINISHED_BUILD: BuildView = {
     ],
 };
 
-function stateWith(build: BuildView | null, device: BuildDevice | null = CARD, buildCloud = true): SetupState {
+const CLOSED_TO_THE_NETWORK: HomeNetworkReach = { open: false, address: null };
+const OPEN_TO_THE_NETWORK: HomeNetworkReach = { open: true, address: "http://192.168.1.10:27440/" };
+
+function stateWith(
+    build: BuildView | null,
+    device: BuildDevice | null = CARD,
+    buildCloud = true,
+    openToNetwork = false,
+    homeNetwork: HomeNetworkReach = CLOSED_TO_THE_NETWORK,
+): SetupState {
     return {
         status: "ready",
         config_path: "/home/person/.config/SampleLibrary/config.toml",
@@ -83,12 +92,13 @@ function stateWith(build: BuildView | null, device: BuildDevice | null = CARD, b
             sample_directories: [],
             sample_exclusions: [],
         },
-        options: { build_cloud: buildCloud },
+        options: { build_cloud: buildCloud, open_to_network: openToNetwork },
         build_device: device,
         suggested_library_root: "/home/person/Music/SampleLibrary",
         manages_database: true,
         problem: null,
         build,
+        home_network: homeNetwork,
     };
 }
 
@@ -142,7 +152,29 @@ describe("LibraryPanel", () => {
 
         fireEvent.click(screen.getByRole("checkbox", { name: /Build the cloud/ }));
 
-        expect(chooseOptions).toHaveBeenCalledWith({ build_cloud: false });
+        expect(chooseOptions).toHaveBeenCalledWith({ build_cloud: false, open_to_network: false });
+    });
+
+    it("saves the network switch for the next start, and says a restart applies it", () => {
+        renderPanel(stateWith(null));
+
+        expect(screen.queryByText("Restart SampleLibrary to apply this.")).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole("checkbox", { name: /Open on my home network/ }));
+
+        expect(chooseOptions).toHaveBeenCalledWith({ build_cloud: true, open_to_network: true });
+    });
+
+    it("says a restart is due while the switch differs from how the library started", () => {
+        renderPanel(stateWith(null, CARD, true, true, CLOSED_TO_THE_NETWORK));
+
+        expect(screen.getByRole("checkbox", { name: /Open on my home network/ })).toBeChecked();
+        expect(screen.getByText("Restart SampleLibrary to apply this.")).toBeInTheDocument();
+    });
+
+    it("names the address a device on the network opens", () => {
+        renderPanel(stateWith(null, CARD, true, true, OPEN_TO_THE_NETWORK));
+
+        expect(screen.getByText("On another device, open http://192.168.1.10:27440/")).toBeInTheDocument();
     });
 
     it("waits to build until it knows the device", () => {

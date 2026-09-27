@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from sampleserver.addresses import is_loopback
+from sampleserver.policy import ServingPolicy
 
 LOCAL_HOST_NAMES: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"})
 FORWARDING_HEADERS: Final[tuple[str, ...]] = (
@@ -51,22 +52,40 @@ def require_local_person(request: Request) -> None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, LOCAL_PERSON_DETAIL)
 
 
-class LocalPersonOnly:
-    """Middleware answering the person at this machine alone, on every path the app serves.
+class LocalPersonOrHomeDevices:
+    """Middleware answering the person at this machine on every path, and the devices the policy admits on the others.
 
-    The application a person runs on their own computer lists folders, writes its config file and
-    records their labels, so no request from elsewhere reaches any of it, its pages included.
+    Paths under ``personal_prefix`` list folders, write the config file and quit the application,
+    so only the person at this machine reaches them; so do label writes, which the catalog API
+    guards itself. Where the policy answers beyond this computer, the devices it admits open the
+    library's pages and read its catalog.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, *, policy: ServingPolicy, personal_prefix: str) -> None:
         self._app = app
+        self._policy = policy
+        self._personal_prefix = personal_prefix
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and not is_local_person(HTTPConnection(scope)):
+        if scope["type"] in ("http", "websocket") and not self._admitted(HTTPConnection(scope)):
+            if scope["type"] == "websocket":
+                await send({"type": "websocket.close", "code": POLICY_VIOLATION_CLOSE_CODE})
+                return
             response = JSONResponse({"detail": LOCAL_PERSON_DETAIL}, status_code=status.HTTP_403_FORBIDDEN)
             await response(scope, receive, send)
             return
-        if scope["type"] == "websocket" and not is_local_person(HTTPConnection(scope)):
-            await send({"type": "websocket.close", "code": POLICY_VIOLATION_CLOSE_CODE})
-            return
         await self._app(scope, receive, send)
+
+    def _admitted(self, connection: HTTPConnection) -> bool:
+        if is_local_person(connection):
+            return True
+        path = connection.url.path
+        if path == self._personal_prefix or path.startswith(f"{self._personal_prefix}/"):
+            return False
+        client = connection.client
+        host = connection.url.hostname
+        return (
+            self._policy.listens_beyond_this_computer
+            and self._policy.admits(client.host if client is not None else None, host)
+            and self._policy.admits_page(connection.headers.get("origin"), host)
+        )

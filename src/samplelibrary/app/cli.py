@@ -26,7 +26,7 @@ from samplelibrary.app.instance.record import InstanceRecord, read_record, write
 from samplelibrary.app.instance.system import HttpContact, SystemClock, SystemProcesses
 from samplelibrary.app.instance.takeover import Claimed, Intent, Patience, Refused, Running, Takeover
 from samplelibrary.app.launcher import Launcher
-from samplelibrary.app.listener import LOOPBACK_HOST, port_choices
+from samplelibrary.app.listener import LOOPBACK_HOST, home_network_reach, port_choices, starting_policy
 from samplelibrary.children import samplelibrary_command
 from sampleserver.frontend import built_frontend
 
@@ -104,8 +104,9 @@ def _serve(
     with console_log(place.log, previous=place.previous_log) as log:
         if log is not None:
             configure_logging()
+        policy = starting_policy(config_path)
         try:
-            listener = listen_on_first_free(LOOPBACK_HOST, port_choices(requested_port, read_record(place.record)))
+            listener = listen_on_first_free(policy.bind_host, port_choices(requested_port, read_record(place.record)))
         except PortUnavailableError as error:
             _logger.error("%s Leave --port out to let SampleLibrary choose a port.", error)
             sys.exit(ExitStatus.REFUSED)
@@ -117,6 +118,7 @@ def _serve(
             renderer_command=samplelibrary_command(*RENDERER_COMMAND),
             pipeline_command=samplelibrary_command(*PIPELINE_COMMAND),
             device_command=samplelibrary_command(*DEVICE_COMMAND),
+            home_network=home_network_reach(policy, port=port),
         )
         if frontend is None:
             _logger.warning("No built frontend found. Run `just frontend-build` first.")
@@ -124,7 +126,9 @@ def _serve(
         def schedule_browser() -> None:
             asyncio.get_running_loop().call_later(BROWSER_DELAY_SECONDS, _open_browser, address, open_browser)
 
-        application = create_application(launcher, frontend_directory=frontend, on_ready=schedule_browser)
+        application = create_application(
+            launcher, frontend_directory=frontend, on_ready=schedule_browser, policy=policy
+        )
         server = uvicorn.Server(uvicorn.Config(application, proxy_headers=False))
         application.state.request_quit = lambda: setattr(server, "should_exit", True)
         _logger.info("SampleLibrary is running at %s. Press Ctrl+C or click Quit to stop it.", address)

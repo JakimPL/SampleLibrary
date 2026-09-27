@@ -7,10 +7,17 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from sampleserver.local_person import LocalPersonOnly
+from samplecore.config import DEFAULT_SERVER_CONFIG, Exposure, ServerConfig
+from sampleserver.local_person import LocalPersonOrHomeDevices
+from sampleserver.policy import ServingPolicy
 
 LOCAL_CLIENT: Final[tuple[str, int]] = ("127.0.0.1", 50000)
 LOCAL_BASE_URL: Final[str] = "http://localhost"
+HOME_DEVICE: Final[tuple[str, int]] = ("192.168.1.20", 50000)
+HOME_BASE_URL: Final[str] = "http://192.168.1.10"
+PERSONAL_PREFIX: Final[str] = "/personal"
+LOCAL_POLICY: Final[ServingPolicy] = ServingPolicy.of(DEFAULT_SERVER_CONFIG)
+NETWORK_POLICY: Final[ServingPolicy] = ServingPolicy.of(ServerConfig(exposure=Exposure.NETWORK))
 
 
 @dataclass(frozen=True)
@@ -35,12 +42,16 @@ REQUEST_CASES: Final[tuple[RequestCase, ...]] = (
 )
 
 
-def _guarded_application() -> FastAPI:
+def _guarded_application(policy: ServingPolicy) -> FastAPI:
     application = FastAPI()
-    application.add_middleware(LocalPersonOnly)
+    application.add_middleware(LocalPersonOrHomeDevices, policy=policy, personal_prefix=PERSONAL_PREFIX)
 
     @application.get("/page")
     def page() -> dict[str, bool]:
+        return {"served": True}
+
+    @application.get(f"{PERSONAL_PREFIX}/folders")
+    def folders() -> dict[str, bool]:
         return {"served": True}
 
     return application
@@ -48,7 +59,46 @@ def _guarded_application() -> FastAPI:
 
 @pytest.mark.parametrize("case", REQUEST_CASES, ids=lambda case: case.name)
 def test_only_the_person_at_this_machine_is_answered(case: RequestCase) -> None:
-    with TestClient(_guarded_application(), base_url=case.base_url, client=case.client) as client:
+    with TestClient(_guarded_application(LOCAL_POLICY), base_url=case.base_url, client=case.client) as client:
         response = client.get("/page", headers=case.headers)
 
     assert response.status_code == (200 if case.admitted else 403)
+
+
+HOME_CASES: Final[tuple[RequestCase, ...]] = (
+    RequestCase("a device at home", admitted=True, client=HOME_DEVICE, base_url=HOME_BASE_URL),
+    RequestCase(
+        "a page it loaded from here",
+        admitted=True,
+        client=HOME_DEVICE,
+        base_url=HOME_BASE_URL,
+        headers={"origin": HOME_BASE_URL},
+    ),
+    RequestCase(
+        "a page from elsewhere",
+        admitted=False,
+        client=HOME_DEVICE,
+        base_url=HOME_BASE_URL,
+        headers={"origin": "http://attacker.example"},
+    ),
+    RequestCase(
+        "a name another site points here", admitted=False, client=HOME_DEVICE, base_url="http://rebound.example"
+    ),
+    RequestCase("an address beyond the home", admitted=False, client=("203.0.113.9", 50000), base_url=HOME_BASE_URL),
+)
+
+
+@pytest.mark.parametrize("case", HOME_CASES, ids=lambda case: case.name)
+def test_a_home_network_opens_to_its_own_devices(case: RequestCase) -> None:
+    with TestClient(_guarded_application(NETWORK_POLICY), base_url=case.base_url, client=case.client) as client:
+        response = client.get("/page", headers=case.headers)
+
+    assert response.status_code == (200 if case.admitted else 403)
+
+
+def test_the_personal_paths_answer_the_person_at_this_machine_alone() -> None:
+    application = _guarded_application(NETWORK_POLICY)
+    with TestClient(application, base_url=HOME_BASE_URL, client=HOME_DEVICE) as device:
+        assert device.get(f"{PERSONAL_PREFIX}/folders").status_code == 403
+    with TestClient(application, base_url=LOCAL_BASE_URL, client=LOCAL_CLIENT) as person:
+        assert person.get(f"{PERSONAL_PREFIX}/folders").status_code == 200

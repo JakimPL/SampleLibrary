@@ -11,6 +11,7 @@ import {
 import type { LibraryStats } from "../api/stats";
 import { ActionSheet } from "../shared/overlay/ActionSheet";
 import { BuildProgress } from "./BuildProgress";
+import { NetworkOption } from "./NetworkOption";
 import { describeRefusal } from "./refusal";
 import { SetupMessage, type SetupMessageText } from "./SetupMessage";
 import { useLibraryStats } from "./useLibraryStats";
@@ -30,6 +31,7 @@ const CONFIRMATION_TITLE = "Build the cloud without an NVIDIA graphics card?";
 const CONFIRMATION_NOTE =
     "On the processor, analyzing a large collection can take a day or more. You can build the cloud later.";
 const DEFAULT_BUILD_CLOUD = true;
+const DEFAULT_OPEN_TO_NETWORK = false;
 
 function countOf(count: number, noun: string): string {
     return `${count.toLocaleString()} ${noun}${count === 1 ? "" : "s"}`;
@@ -73,8 +75,8 @@ function describeDevice(device: BuildDevice | null): string {
 
 /**
  * Where a person builds the open library and watches it happen: the library's status and size, one
- * build whose cloud a switch includes, the device builds compute on, and the latest build's
- * progress. A build going on to the cloud without an NVIDIA card asks first, since the processor
+ * build whose cloud a switch includes, the device builds compute on, the switch opening the library
+ * to the home network, and the latest build's progress. A build going on to the cloud without an NVIDIA card asks first, since the processor
  * takes many hours over a large collection.
  */
 export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelProps): ReactElement {
@@ -84,6 +86,7 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
     const running = build?.status === "running";
     const device = state.build_device;
     const buildCloud = state.options?.build_cloud ?? DEFAULT_BUILD_CLOUD;
+    const openToNetwork = state.options?.open_to_network ?? DEFAULT_OPEN_TO_NETWORK;
     const canStart = state.status === "ready" && !running && !unsavedChanges && device !== null;
     const stats = useLibraryStats(state.status === "ready", `${build?.started_at ?? ""} ${build?.status ?? ""}`);
     const status =
@@ -145,7 +148,7 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
                             disabled={state.options === null || running}
                             onChange={(event) => {
                                 const chosen = event.target.checked;
-                                void act(() => chooseOptions({ build_cloud: chosen }));
+                                void act(() => chooseOptions({ build_cloud: chosen, open_to_network: openToNetwork }));
                             }}
                         />
                         <span className="build-option-text">
@@ -158,6 +161,14 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
                         </span>
                     </div>
                     <p className="setup-hint build-device">{describeDevice(device)}</p>
+                    <NetworkOption
+                        chosen={openToNetwork}
+                        reach={state.home_network}
+                        disabled={state.options === null}
+                        onChoose={(chosen) => {
+                            void act(() => chooseOptions({ build_cloud: buildCloud, open_to_network: chosen }));
+                        }}
+                    />
                 </div>
                 <BuildProgress
                     build={build}

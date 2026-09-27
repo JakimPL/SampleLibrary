@@ -41,13 +41,14 @@ def monotonic_seconds() -> float:
     return time.monotonic()
 
 
-def visitor_of(connection: HTTPConnection, *, address_header: str) -> str:
+def visitor_of(connection: HTTPConnection, *, address_header: str | None) -> str:
     """The visitor a request comes from: the address the platform names in ``address_header``, else the peer.
 
+    With no header named, as on a home network with no platform in front, the peer is the visitor.
     An IPv6 address counts by its /64 network, which one host holds whole, and an IPv4 address
     carried in IPv6 counts as itself.
     """
-    named = connection.headers.get(address_header)
+    named = connection.headers.get(address_header) if address_header is not None else None
     peer = connection.client.host if connection.client is not None else None
     for candidate in (named, peer):
         address = parsed_address(candidate)
@@ -146,37 +147,57 @@ class VisitorRequestLimits:
         return float(self._limits.whole_catalog_weight if route in WHOLE_CATALOG_PATHS else 1)
 
 
-class MorphGate:
-    """What a morph asks of the renderer: one visitor's budget, everyone's, and a place among the renders in flight.
+@dataclass(frozen=True)
+class _MorphBudgets:
+    """A site's morph budgets: one per visitor, and one everyone shares."""
 
-    A morph a browser already holds is answered 304 by the renderer at no cost, so a request naming
-    the render it holds is charged only once the renderer answers with new audio; any other is
-    charged before the renderer is asked. At most ``concurrent`` requests reach the renderer at once,
-    which renders one at a time; one past them is turned away at once, since waiting would only hold
-    a connection while the renderer works through the others.
+    visitors: TokenBudget
+    everyone: TokenBudget
+
+    @classmethod
+    def of(cls, limits: VisitorLimits, *, clock: Clock) -> _MorphBudgets:
+        return cls(
+            visitors=TokenBudget(
+                capacity=limits.morphs_per_minute,
+                refill_per_second=limits.morphs_per_minute / SECONDS_PER_MINUTE,
+                clock=clock,
+            ),
+            everyone=TokenBudget(
+                capacity=limits.morphs_per_minute_overall,
+                refill_per_second=limits.morphs_per_minute_overall / SECONDS_PER_MINUTE,
+                clock=clock,
+            ),
+        )
+
+
+class MorphGate:
+    """What a morph asks of the renderer: a place among the renders in flight, and, on a site, one visitor's budget and everyone's.
+
+    At most ``concurrent`` requests reach the renderer at once, which renders one at a time; one
+    past them is turned away at once, since waiting would only hold a connection while the renderer
+    works through the others. Where ``limits`` are given, a morph a browser already holds is
+    answered 304 by the renderer at no cost, so a request naming the render it holds is charged only
+    once the renderer answers with new audio; any other is charged before the renderer is asked.
     """
 
-    def __init__(self, limits: VisitorLimits, *, clock: Clock = monotonic_seconds) -> None:
-        refill = limits.morphs_per_minute / SECONDS_PER_MINUTE
-        overall_refill = limits.morphs_per_minute_overall / SECONDS_PER_MINUTE
-        self._address_header = limits.address_header
-        self._visitors = TokenBudget(capacity=limits.morphs_per_minute, refill_per_second=refill, clock=clock)
-        self._everyone = TokenBudget(
-            capacity=limits.morphs_per_minute_overall, refill_per_second=overall_refill, clock=clock
-        )
-        self._concurrent = limits.concurrent_morphs
+    def __init__(self, *, concurrent: int, limits: VisitorLimits | None, clock: Clock = monotonic_seconds) -> None:
+        self._concurrent = concurrent
         self._in_flight = 0
+        self._address_header = limits.address_header if limits is not None else None
+        self._budgets = _MorphBudgets.of(limits, clock=clock) if limits is not None else None
 
     def visitor(self, connection: HTTPConnection) -> str:
         return visitor_of(connection, address_header=self._address_header)
 
     def admit(self, visitor: str) -> None:
-        """Spend one morph of the visitor's budget and everyone's before the renderer is asked.
+        """Spend one morph of the visitor's budget and everyone's before the renderer is asked, where there are budgets.
 
         Raises:
             HTTPException: 429 with the seconds to wait, once either budget is spent.
         """
-        for key, budget in ((visitor, self._visitors), (UNKNOWN_VISITOR, self._everyone)):
+        if self._budgets is None:
+            return
+        for key, budget in ((visitor, self._budgets.visitors), (UNKNOWN_VISITOR, self._budgets.everyone)):
             wait = budget.take(key, 1.0)
             if wait is not None:
                 raise HTTPException(
@@ -186,9 +207,11 @@ class MorphGate:
                 )
 
     def charge(self, visitor: str) -> None:
-        """Spend one morph of both budgets after the renderer answered with new audio."""
-        self._visitors.charge(visitor, 1.0)
-        self._everyone.charge(UNKNOWN_VISITOR, 1.0)
+        """Spend one morph of both budgets after the renderer answered with new audio, where there are budgets."""
+        if self._budgets is None:
+            return
+        self._budgets.visitors.charge(visitor, 1.0)
+        self._budgets.everyone.charge(UNKNOWN_VISITOR, 1.0)
 
     @contextmanager
     def slot(self) -> Iterator[None]:

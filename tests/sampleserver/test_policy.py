@@ -7,7 +7,7 @@ from typing import Final
 import pytest
 
 from samplecore.config import Exposure, ServerConfig
-from sampleserver.policy import ServingPolicy
+from sampleserver.policy import HOME_CONCURRENT_MORPHS, ServingPolicy
 from tests.sampleserver.conftest import SITE_VISITORS
 
 THIS_COMPUTER: Final[str] = socket.gethostname()
@@ -95,3 +95,28 @@ def test_a_library_at_home_shows_everything_it_holds(exposure: Exposure) -> None
     assert not home.requires_secure_transport
     assert home.visitor_limits is None
     assert (home.permits_site, home.permits_serve, home.permits_desktop_app) == (False, True, True)
+
+
+def test_renders_are_capped_wherever_anyone_but_this_computer_asks() -> None:
+    assert _policy(Exposure.LOCAL).concurrent_morphs is None
+    assert _policy(Exposure.NETWORK).concurrent_morphs == HOME_CONCURRENT_MORPHS
+    assert _policy(Exposure.PUBLIC).concurrent_morphs == SITE_VISITORS.concurrent_morphs
+
+
+@pytest.mark.parametrize(
+    ("exposure", "origin", "host", "admitted"),
+    [
+        (Exposure.LOCAL, None, "localhost", True),
+        (Exposure.LOCAL, "http://localhost:5173", "127.0.0.1", True),
+        (Exposure.LOCAL, "http://attacker.example", "localhost", False),
+        (Exposure.LOCAL, "null", "localhost", False),
+        (Exposure.NETWORK, "http://192.168.1.10:27440", "192.168.1.10", True),
+        (Exposure.NETWORK, "http://attacker.example", "192.168.1.10", False),
+        (Exposure.NETWORK, "http://192.168.1.10", None, False),
+        (Exposure.PUBLIC, "http://attacker.example", "site.example", True),
+    ],
+)
+def test_a_page_elsewhere_is_turned_away_from_a_library_at_home(
+    exposure: Exposure, origin: str | None, host: str | None, admitted: bool
+) -> None:
+    assert _policy(exposure).admits_page(origin, host) is admitted

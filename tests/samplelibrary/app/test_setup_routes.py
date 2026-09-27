@@ -10,13 +10,16 @@ from typing import Final
 from urllib.parse import urlsplit
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from samplecore.config import PIPELINE_TABLE, load_config
+from samplecore.config import DEFAULT_SERVER_CONFIG, PIPELINE_TABLE, load_config
 from samplelibrary.app.asgi import create_application
 from samplelibrary.app.installation import Installation, this_installation
 from samplelibrary.app.launcher import PUBLIC_LIBRARY_REFUSED, Launcher, LibraryStatus
+from samplelibrary.app.listener import CLOSED_TO_THE_NETWORK, HomeNetworkReach, starting_policy
 from samplelibrary.pipeline.settings import DescriptorSource, read_pipeline_settings
+from sampleserver.policy import ServingPolicy
 from tests.sampleserver.conftest import SITE_VISITORS_TABLE
 
 LOCAL_CLIENT: Final[tuple[str, int]] = ("127.0.0.1", 50000)
@@ -26,6 +29,11 @@ TEST_CARD: Final[str] = "Test Card"
 REPORTED_DEVICE: Final[tuple[str, ...]] = (sys.executable, "-c", f'print(\'{{"card": "{TEST_CARD}"}}\')')
 SILENT_DEVICE: Final[tuple[str, ...]] = (sys.executable, "-c", "raise SystemExit(1)")
 OPENING_TIMEOUT_SECONDS: Final[float] = 30.0
+LOCAL_POLICY: Final[ServingPolicy] = ServingPolicy.of(DEFAULT_SERVER_CONFIG)
+HOME_DEVICE: Final[tuple[str, int]] = ("192.168.1.20", 50000)
+HOME_BASE_URL: Final[str] = "http://192.168.1.10"
+HOME_REACH: Final[HomeNetworkReach] = HomeNetworkReach(open=True, address=f"{HOME_BASE_URL}:27440/")
+NETWORK_SERVER_TABLE: Final[str] = '[server]\nexposure = "network"\n'
 
 
 @pytest.fixture
@@ -50,10 +58,15 @@ def configured(config_path: Path) -> Iterator[TestClient]:
 def _client(config_path: Path, *, device_command: tuple[str, ...]) -> Iterator[TestClient]:
     application = create_application(
         Launcher(
-            config_path, renderer_command=IDLE_RENDERER, pipeline_command=IDLE_RENDERER, device_command=device_command
+            config_path,
+            renderer_command=IDLE_RENDERER,
+            pipeline_command=IDLE_RENDERER,
+            device_command=device_command,
+            home_network=CLOSED_TO_THE_NETWORK,
         ),
         frontend_directory=None,
         on_ready=lambda: None,
+        policy=LOCAL_POLICY,
     )
     application.state.request_quit = lambda: None
     with TestClient(application, base_url=LOCAL_BASE_URL, client=LOCAL_CLIENT) as client:
@@ -94,9 +107,13 @@ def test_the_application_names_its_installation(unconfigured: TestClient) -> Non
 
 def test_quitting_closes_the_library_before_the_server_stops(config_path: Path) -> None:
     launcher = Launcher(
-        config_path, renderer_command=IDLE_RENDERER, pipeline_command=IDLE_RENDERER, device_command=REPORTED_DEVICE
+        config_path,
+        renderer_command=IDLE_RENDERER,
+        pipeline_command=IDLE_RENDERER,
+        device_command=REPORTED_DEVICE,
+        home_network=CLOSED_TO_THE_NETWORK,
     )
-    application = create_application(launcher, frontend_directory=None, on_ready=lambda: None)
+    application = create_application(launcher, frontend_directory=None, on_ready=lambda: None, policy=LOCAL_POLICY)
     library_open_at_quit: list[bool] = []
     application.state.request_quit = lambda: library_open_at_quit.append(launcher.catalog is not None)
     with TestClient(application, base_url=LOCAL_BASE_URL, client=LOCAL_CLIENT) as client:
@@ -124,8 +141,9 @@ def test_a_renderer_whose_port_is_taken_listens_on_another_one(config_path: Path
             renderer_command=recording_renderer,
             pipeline_command=IDLE_RENDERER,
             device_command=REPORTED_DEVICE,
+            home_network=CLOSED_TO_THE_NETWORK,
         )
-        application = create_application(launcher, frontend_directory=None, on_ready=lambda: None)
+        application = create_application(launcher, frontend_directory=None, on_ready=lambda: None, policy=LOCAL_POLICY)
         application.state.request_quit = lambda: None
         with TestClient(application, base_url=LOCAL_BASE_URL, client=LOCAL_CLIENT) as client:
             assert _wait_until_settled(client)["status"] == LibraryStatus.READY
@@ -202,17 +220,19 @@ def test_a_device_the_application_cannot_ask_about_leaves_builds_on_the_processo
         assert _build_device(client) == {"card": None}
 
 
-def test_the_cloud_option_is_written_for_the_next_build(configured: TestClient, config_path: Path) -> None:
+def test_the_options_are_written_for_the_next_build_and_start(configured: TestClient, config_path: Path) -> None:
     _wait_until_settled(configured)
 
-    response = configured.put("/api/setup/options", json={"build_cloud": False})
+    response = configured.put("/api/setup/options", json={"build_cloud": False, "open_to_network": True})
 
-    assert response.json()["options"] == {"build_cloud": False}
+    assert response.json()["options"] == {"build_cloud": False, "open_to_network": True}
+    assert response.json()["home_network"] == {"open": False, "address": None}
     assert not load_config(config_path).build_cloud
+    assert load_config(config_path).server.answers_the_home_network
 
 
-def test_the_cloud_option_waits_for_the_folders(unconfigured: TestClient) -> None:
-    response = unconfigured.put("/api/setup/options", json={"build_cloud": False})
+def test_the_options_wait_for_the_folders(unconfigured: TestClient) -> None:
+    response = unconfigured.put("/api/setup/options", json={"build_cloud": False, "open_to_network": False})
 
     assert response.status_code == 409
 
@@ -342,9 +362,11 @@ def test_setup_answers_a_page_on_this_machine_alone(
             renderer_command=IDLE_RENDERER,
             pipeline_command=IDLE_RENDERER,
             device_command=REPORTED_DEVICE,
+            home_network=CLOSED_TO_THE_NETWORK,
         ),
         frontend_directory=None,
         on_ready=lambda: None,
+        policy=LOCAL_POLICY,
     )
     headers = {"origin": origin} if origin is not None else {}
     with TestClient(application, base_url=base_url, client=client_address) as client:
@@ -354,3 +376,74 @@ def test_setup_answers_a_page_on_this_machine_alone(
 
 def test_the_application_refuses_a_request_a_proxy_forwarded(unconfigured: TestClient) -> None:
     assert unconfigured.get("/api/setup/state", headers={"x-forwarded-for": "203.0.113.9"}).status_code == 403
+
+
+@pytest.fixture
+def home_network_application(config_path: Path) -> Iterator[FastAPI]:
+    """The application opened to the home network, as its config says, holding its library open."""
+    with config_path.open("a", encoding="utf-8") as config:
+        config.write(NETWORK_SERVER_TABLE)
+    policy = starting_policy(config_path)
+    application = create_application(
+        Launcher(
+            config_path,
+            renderer_command=IDLE_RENDERER,
+            pipeline_command=IDLE_RENDERER,
+            device_command=REPORTED_DEVICE,
+            home_network=HOME_REACH,
+        ),
+        frontend_directory=None,
+        on_ready=lambda: None,
+        policy=policy,
+    )
+    application.state.request_quit = lambda: None
+    with TestClient(application, base_url=LOCAL_BASE_URL, client=LOCAL_CLIENT) as client:
+        assert _wait_until_settled(client)["home_network"] == HOME_REACH.model_dump()
+        yield application
+
+
+def test_a_device_on_the_home_network_reads_the_library(home_network_application: FastAPI) -> None:
+    device = TestClient(home_network_application, base_url=HOME_BASE_URL, client=HOME_DEVICE)
+
+    assert device.get("/api/stats").status_code == 200
+    assert device.get("/api/curation/access").json()["label_editing"] is False
+
+
+def test_a_device_on_the_home_network_changes_nothing(home_network_application: FastAPI) -> None:
+    device = TestClient(home_network_application, base_url=HOME_BASE_URL, client=HOME_DEVICE)
+
+    assert device.get("/api/setup/state").status_code == 403
+    assert device.put("/api/setup/options", json={"build_cloud": True, "open_to_network": True}).status_code == 403
+    assert device.post("/api/setup/quit").status_code == 403
+    assert device.patch(f"/api/curation/annotations/{'0' * 64}", json={"rating": 5}).status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("client_address", "base_url", "origin"),
+    [
+        (("203.0.113.9", 50000), HOME_BASE_URL, None),
+        (("198.18.0.1", 50000), HOME_BASE_URL, None),
+        (HOME_DEVICE, "http://rebound.example", None),
+        (HOME_DEVICE, HOME_BASE_URL, "http://attacker.example"),
+        (LOCAL_CLIENT, LOCAL_BASE_URL, "http://attacker.example"),
+    ],
+    ids=["a public address", "the benchmarking range", "a rebound name", "a page elsewhere", "a page here elsewhere"],
+)
+def test_the_home_network_opens_to_its_own_devices_alone(
+    home_network_application: FastAPI, client_address: tuple[str, int], base_url: str, origin: str | None
+) -> None:
+    headers = {"origin": origin} if origin is not None else {}
+    stranger = TestClient(home_network_application, base_url=base_url, client=client_address)
+
+    assert stranger.get("/api/stats", headers=headers).status_code == 403
+
+
+def test_a_library_opened_to_the_network_meanwhile_opens_at_the_next_start(
+    configured: TestClient, config_path: Path
+) -> None:
+    _wait_until_settled(configured)
+    configured.put("/api/setup/options", json={"build_cloud": True, "open_to_network": True})
+    device = TestClient(configured.app, base_url=HOME_BASE_URL, client=HOME_DEVICE)
+
+    assert device.get("/api/stats").status_code == 403
+    assert starting_policy(config_path).listens_beyond_this_computer

@@ -89,7 +89,8 @@ address, or on another port of the same host when a program already holds this o
 
 The `[server]` table holds `exposure`: who a served library answers. `"local"`, the default, is you
 on this computer alone, seeing everything the library holds, folders and your labels included.
-`"network"` also answers the devices on your home network, which may look and change nothing.
+`"network"` also answers the devices on your home network, which may look and change nothing. The
+setup page's **Open on my home network** switch writes one or the other.
 `"public"` is a site on the internet, started with `samplelibrary site`, which shows no folder of
 yours and none of your labels, ratings or favorites. `samplelibrary serve` listens on 127.0.0.1
 unless this says otherwise, and refuses `"public"`; the SampleLibrary app refuses it too.

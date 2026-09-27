@@ -2,26 +2,19 @@ from __future__ import annotations
 
 import socket
 from dataclasses import dataclass
-from ipaddress import IPv4Network, IPv6Network
 from typing import Final
+from urllib.parse import urlsplit
 
 from samplecore.config import Exposure, ServerConfig, VisitorLimits
-from sampleserver.addresses import is_loopback, parsed_address
+from sampleserver.addresses import is_home_address, is_loopback, parsed_address
 
 LOCAL_HOST_NAMES: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"})
 LOOPBACK_BIND_HOST: Final[str] = "127.0.0.1"
+EVERY_ADDRESS: Final[str] = "0.0.0.0"
+# The renderer renders one morph at a time, so the devices of a home network wait their turn for two
+# at most, and one past them is answered at once.
+HOME_CONCURRENT_MORPHS: Final[int] = 2
 LOCAL_NETWORK_SUFFIX: Final[str] = ".local"
-# The networks a home network hands its devices addresses from, named one by one: the standard
-# library's own notion of a private address also covers ranges no home network uses, such as the
-# benchmarking range, which a device elsewhere can present itself from.
-HOME_NETWORKS: Final[tuple[IPv4Network | IPv6Network, ...]] = (
-    IPv4Network("10.0.0.0/8"),
-    IPv4Network("172.16.0.0/12"),
-    IPv4Network("192.168.0.0/16"),
-    IPv4Network("169.254.0.0/16"),
-    IPv6Network("fc00::/7"),
-    IPv6Network("fe80::/10"),
-)
 
 
 @dataclass(frozen=True)
@@ -111,9 +104,25 @@ class ServingPolicy:
         """How much each visitor may ask, where anyone may visit; a library at home limits no one."""
         return self._visitors if self.is_public else None
 
+    @property
+    def concurrent_morphs(self) -> int | None:
+        """How many morphs the renderer is asked for at once, where anyone but this computer asks; no limit here alone."""
+        match self._exposure:
+            case Exposure.PUBLIC:
+                return self._visitors.concurrent_morphs if self._visitors is not None else None
+            case Exposure.NETWORK:
+                return HOME_CONCURRENT_MORPHS
+            case Exposure.LOCAL:
+                return None
+
     def refusal(self, internal: str, *, plain: str) -> str:
         """What a refusal says: its ``internal`` detail where the policy names internals, the ``plain`` words otherwise."""
         return internal if self.names_internals else plain
+
+    @property
+    def bind_host(self) -> str:
+        """The address a server listens on: every address where it answers beyond this computer, loopback otherwise."""
+        return EVERY_ADDRESS if self.listens_beyond_this_computer else LOOPBACK_BIND_HOST
 
     def binds(self, host: str) -> bool:
         """Whether a server may listen on ``host``: any address once it listens beyond this computer, loopback otherwise."""
@@ -140,8 +149,22 @@ class ServingPolicy:
             return True
         if self._exposure is Exposure.LOCAL:
             return False
-        from_home = address.is_loopback or any(address in network for network in HOME_NETWORKS)
+        from_home = address.is_loopback or is_home_address(address)
         return from_home and _names_this_computer(host)
+
+    def admits_page(self, origin: str | None, host: str | None) -> bool:
+        """Whether a request a page sent, from ``origin``, is one this exposure answers, the server named as ``host``.
+
+        A request no page sent names no origin. At home, a page answers only from the server itself
+        or from a local name, as a development server serves it, so a page on another site open in the
+        same browser is turned away. A site answers pages anywhere.
+        """
+        if self.is_public or origin is None:
+            return True
+        page_host = urlsplit(origin).hostname
+        if page_host is None or host is None:
+            return False
+        return page_host in LOCAL_HOST_NAMES or page_host == host.lower()
 
 
 def _names_this_computer(host: str) -> bool:

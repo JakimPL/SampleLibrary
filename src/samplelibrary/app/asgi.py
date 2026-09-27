@@ -16,7 +16,8 @@ from samplelibrary.app.launcher import Launcher
 from samplelibrary.app.routes import setup
 from sampleserver.app import API_PREFIX
 from sampleserver.frontend import FrontendMount
-from sampleserver.local_person import LocalPersonOnly
+from sampleserver.local_person import LocalPersonOrHomeDevices
+from sampleserver.policy import ServingPolicy
 
 SETUP_PREFIX: Final[str] = f"{API_PREFIX}/setup"
 CLOSED_LIBRARY_DETAIL: Final[str] = "The library isn't open yet. Check the setup page."
@@ -56,13 +57,16 @@ class CatalogRoute(BaseRoute):
         await catalog(scope, receive, send)
 
 
-def create_application(launcher: Launcher, *, frontend_directory: Path | None, on_ready: Callable[[], None]) -> FastAPI:
+def create_application(
+    launcher: Launcher, *, frontend_directory: Path | None, on_ready: Callable[[], None], policy: ServingPolicy
+) -> FastAPI:
     """The one app the application serves: the setup routes, the catalog API behind them, and the frontend.
 
-    It answers the person at this machine alone, on every path, since it lists their folders,
-    writes their config file and records their labels. Its lifespan opens the library as the server starts and closes it, with everything it runs, as
-    the server stops. ``on_ready`` runs once the server is about to answer, which is when the
-    application opens a browser on it.
+    It answers the person at this machine on every path, since it lists their folders, writes their
+    config file and records their labels; where ``policy`` answers the home network, its devices
+    also open the library to look (`LocalPersonOrHomeDevices`). Its lifespan opens the library as the
+    server starts and closes it, with everything it runs, as the server stops. ``on_ready`` runs once
+    the server is about to answer, which is when the application opens a browser on it.
     """
 
     @asynccontextmanager
@@ -81,7 +85,7 @@ def create_application(launcher: Launcher, *, frontend_directory: Path | None, o
         title="SampleLibrary setup",
         lifespan=lifespan,
     )
-    application.add_middleware(LocalPersonOnly)
+    application.add_middleware(LocalPersonOrHomeDevices, policy=policy, personal_prefix=SETUP_PREFIX)
     application.state.launcher = launcher
     application.include_router(setup.router, prefix=SETUP_PREFIX)
     application.router.routes.append(CatalogRoute(launcher))

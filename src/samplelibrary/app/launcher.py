@@ -27,6 +27,7 @@ from samplecore.storage.service_roles import ServiceRoleRefusedError, check_serv
 from samplelibrary.app.instance.lock import HeldLock, LockUnavailableError, try_lock
 from samplelibrary.app.instance.place import library_lock_path
 from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView
+from samplelibrary.app.listener import HomeNetworkReach
 from samplelibrary.app.processes import child_environment, probe_build_device
 from samplelibrary.children import ChildProcess
 from samplelibrary.pipeline.devices import BuildDevice
@@ -97,6 +98,7 @@ class SetupState(BaseModel):
     manages_database: bool | None
     problem: str | None
     build: JobView | None
+    home_network: HomeNetworkReach
 
 
 @dataclass(frozen=True)
@@ -122,8 +124,10 @@ class Launcher:
         renderer_command: tuple[str, ...],
         pipeline_command: tuple[str, ...],
         device_command: tuple[str, ...],
+        home_network: HomeNetworkReach,
     ) -> None:
         self._config_path = config_path
+        self._home_network = home_network
         self._renderer_command = renderer_command
         self._device_command = device_command
         self._build_device: BuildDevice | None = None
@@ -163,6 +167,7 @@ class Launcher:
             manages_database=self._config.manages_database if self._config is not None else None,
             problem=self._problem,
             build=self._builds.view(),
+            home_network=self._home_network,
         )
 
     def start(self) -> None:
@@ -190,7 +195,7 @@ class Launcher:
         self._schedule_activation(self._config)
 
     def choose_options(self, options: LibraryOptions) -> None:
-        """Write how the library is built into the config file; the next build reads them.
+        """Write how the library is built and whom it opens to into the config file; the next build and start read them.
 
         Raises:
             LibraryClosedError: no folders have been chosen yet, so no config file holds the library.

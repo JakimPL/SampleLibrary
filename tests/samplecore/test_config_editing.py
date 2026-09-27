@@ -29,6 +29,7 @@ def test_sources_written_into_a_new_file_read_back_as_chosen(
     assert LibrarySources.of(written) == sources
     assert LibrarySources.of(load_config(path)) == sources
     assert written.manages_database
+    assert 'exposure = "local"' in path.read_text(encoding="utf-8")
 
 
 def test_writing_sources_keeps_every_other_setting_and_comment(tmp_path: Path, sources: LibrarySources) -> None:
@@ -84,7 +85,20 @@ def test_options_written_beside_the_sources_leave_them_as_chosen(
     path = tmp_path / "config.toml"
     write_library_sources(path, sources)
 
-    written = write_library_options(path, LibraryOptions(build_cloud=False))
+    chosen = LibraryOptions(build_cloud=False, open_to_network=True)
 
-    assert LibraryOptions.of(load_config(path)) == LibraryOptions.of(written) == LibraryOptions(build_cloud=False)
+    written = write_library_options(path, chosen)
+
+    assert LibraryOptions.of(load_config(path)) == LibraryOptions.of(written) == chosen
     assert LibrarySources.of(load_config(path)) == sources
+
+
+def test_a_library_opened_to_the_network_closes_again(tmp_path: Path, sources: LibrarySources) -> None:
+    path = tmp_path / "config.toml"
+    write_library_sources(path, sources)
+    write_library_options(path, LibraryOptions(build_cloud=True, open_to_network=True))
+
+    written = write_library_options(path, LibraryOptions(build_cloud=True, open_to_network=False))
+
+    assert not written.server.answers_the_home_network
+    assert not load_config(path).server.answers_the_home_network

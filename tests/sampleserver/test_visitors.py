@@ -151,9 +151,8 @@ def test_a_whole_catalog_answer_costs_its_weight_and_the_health_check_costs_noth
 
 def test_the_gate_spends_one_morph_of_the_visitors_budget_and_everyones() -> None:
     clock = Clock()
-    gate = MorphGate(
-        SITE_VISITORS.model_copy(update={"morphs_per_minute": 1, "morphs_per_minute_overall": 2}), clock=clock
-    )
+    limits = SITE_VISITORS.model_copy(update={"morphs_per_minute": 1, "morphs_per_minute_overall": 2})
+    gate = MorphGate(concurrent=limits.concurrent_morphs, limits=limits, clock=clock)
 
     gate.admit("first")
     with pytest.raises(HTTPException, match=TOO_MANY_MORPHS):
@@ -163,8 +162,15 @@ def test_the_gate_spends_one_morph_of_the_visitors_budget_and_everyones() -> Non
         gate.admit("third")
 
 
+def test_a_gate_without_visitor_limits_charges_no_budget() -> None:
+    gate = MorphGate(concurrent=1, limits=None, clock=Clock())
+
+    for _ in range(SITE_VISITORS.morphs_per_minute_overall + 1):
+        gate.admit("192.168.1.20")
+
+
 def test_the_gate_holds_as_many_renders_as_it_may_and_turns_the_next_away() -> None:
-    gate = MorphGate(SITE_VISITORS.model_copy(update={"concurrent_morphs": 1}), clock=Clock())
+    gate = MorphGate(concurrent=1, limits=None, clock=Clock())
 
     with gate.slot():
         with pytest.raises(HTTPException, match=MORPHS_BUSY):

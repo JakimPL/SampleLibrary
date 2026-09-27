@@ -5,6 +5,7 @@ export type SetupState = components["schemas"]["SetupState"];
 export type LibraryStatus = SetupState["status"];
 export type LibrarySources = components["schemas"]["LibrarySources"];
 export type LibraryOptions = components["schemas"]["LibraryOptions"];
+export type HomeNetworkReach = components["schemas"]["HomeNetworkReach"];
 export type BuildDevice = components["schemas"]["BuildDevice"];
 export type BuildView = components["schemas"]["JobView"];
 export type BuildTarget = BuildView["target"];

@@ -3524,6 +3524,11 @@ table.data td .annotation-editor-input {
     padding: 0 var(--space-7);
 }
 
+.network-reach {
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
 .build-placeholder {
     padding: var(--space-6) 0;
 }

@@ -96,7 +96,8 @@ controls sized for a finger. Your browser's "Add to Home Screen" installs the ap
 | Cloud | Hold a point | Opens its actions |
 | Cloud | ⌖ | Centers the cloud on the point in hand |
 
-The installed app answers on its own computer. To open the library on a phone, run SampleLibrary
-from its source on the same network: [Running from source](source.md#phones-and-other-devices)
-shows how. A phone shows your labels, ratings and favorites as they are; you change them on the
-computer SampleLibrary runs on.
+SampleLibrary answers on its own computer. To open your library on a phone or another computer on
+the same network, turn on **Open on my home network** on the setup page and restart SampleLibrary.
+The setup page then shows the address to open on the other device. Other devices can browse and play
+your library, and see your labels, ratings and favorites as they are; you change them, and the
+setup, on the computer SampleLibrary runs on. Turn the switch off and restart to close it again.

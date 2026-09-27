@@ -108,7 +108,10 @@ def create_app(
         application.add_middleware(VisitorRequestLimits, limits=visitor_limits, api_prefix=API_PREFIX)
     application.add_middleware(SecurityHeaders, policy=policy, api_prefix=API_PREFIX)
     application.add_middleware(AdmittedRequestsOnly, policy=policy)
-    application.state.morph_gate = MorphGate(visitor_limits) if visitor_limits is not None else None
+    concurrent_morphs = policy.concurrent_morphs
+    application.state.morph_gate = (
+        MorphGate(concurrent=concurrent_morphs, limits=visitor_limits) if concurrent_morphs is not None else None
+    )
     application.state.role = role
     application.state.policy = policy
     application.state.sample_directories = sample_directories

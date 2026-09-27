@@ -16,6 +16,7 @@ const UNCONFIGURED: SetupState = {
     manages_database: null,
     problem: null,
     build: null,
+    home_network: { open: false, address: null },
 };
 
 const CONFIGURED: SetupState = {
