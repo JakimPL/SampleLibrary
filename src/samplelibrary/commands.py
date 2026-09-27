@@ -111,6 +111,12 @@ def _pipeline(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _device(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.pipeline.devices import main
+
+    main(argv, prog=prog)
+
+
 def _morph(argv: list[str], *, prog: str) -> None:
     from samplemorph.cli import main
 
@@ -123,8 +129,32 @@ def _descriptor(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _app(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.app.cli import main
+
+    main(argv, prog=prog)
+
+
+def _setup_schema(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.app.openapi_export import main
+
+    main(argv, prog=prog)
+
+
 def _serve(argv: list[str], *, prog: str) -> None:
     from sampleserver.cli import main
+
+    main(argv, prog=prog)
+
+
+def _publish(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.publish.cli import main
+
+    main(argv, prog=prog)
+
+
+def _site(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.site.cli import main
 
     main(argv, prog=prog)
 
@@ -148,6 +178,7 @@ def _tracking_ui(argv: list[str], *, prog: str) -> None:
 
 
 COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
+    Command(name="app", summary="Run SampleLibrary with its setup pages, opened in a browser.", run=_app),
     Command(name="setup", summary="Put a config file in place, or prepare the databases it names.", run=_setup),
     Command(name="reset", summary="Empty the configured library's catalog and content store.", run=_reset),
     Command(name="extract", summary="Catalog every module under the configured source directory.", run=_extract),
@@ -162,7 +193,9 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
         name="notes", summary="Read the notes each module plays, and the rate each sample is heard at.", run=_notes
     ),
     Command(
-        name="annotations", summary="Move hand-made sample annotations in and out of the catalog.", run=_annotations
+        name="annotations",
+        summary="Move hand-made sample annotations in and out of the catalog, list their history, restore them.",
+        run=_annotations,
     ),
     CommandGroup(
         name="cloud",
@@ -193,14 +226,23 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
         summary="Build the library through its steps, or say what each would do.",
         run=_pipeline,
     ),
+    Command(name="device", summary="Name the device builds compute on.", run=_device),
     Command(
         name="descriptor",
-        summary="Cache the sounds' grids, teach the learned descriptor, and describe every sample with it.",
+        summary="Cache the sounds' grids, teach the learned descriptor or download the pretrained one, "
+        "and describe every sample with it.",
         run=_descriptor,
     ),
     Command(name="morph", summary="Serve morphs between two samples over HTTP, and write morph filters.", run=_morph),
     Command(name="serve", summary="Serve the library's API, and the built frontend when named, over HTTP.", run=_serve),
+    Command(name="site", summary="Serve the library to anyone as a site, with its morph renderer.", run=_site),
+    Command(name="publish", summary="Publish the library to a site's database, and gather its audio.", run=_publish),
     Command(name="schema", summary="Print the API's OpenAPI schema as JSON, or write it to a file.", run=_schema),
+    Command(
+        name="setup-schema",
+        summary="Print the setup pages' OpenAPI schema as JSON, or write it to a file.",
+        run=_setup_schema,
+    ),
     CommandGroup(
         name="tracking",
         summary="Find the run store every training and evaluation pass records to.",

@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { useCloudDotsStore } from "../src/cloud/cloudDotsStore";
@@ -13,8 +13,25 @@ import { useThemeStore } from "../src/theme/themeStore";
 import { INITIAL_LISTING_ORDER_STATE, useListingOrderStore } from "../src/workspace/listingOrderStore";
 import { INITIAL_SELECTION_STATE, useSelectionStore } from "../src/workspace/selectionStore";
 
+// The tests run on every core at once, which can hold a render past the one second a wait allows by default.
+const ASYNC_WAIT_MS = 4000;
+
+configure({ asyncUtilTimeout: ASYNC_WAIT_MS });
+
 afterEach(() => {
     cleanup();
+});
+
+// Most tests stand where the SampleLibrary app runs, where labels are shown and may be changed; a
+// test of a read-only page or of a site says otherwise for itself, and goes back to this after.
+vi.mock("../src/samples/useCurationAccess", () => ({
+    CURATION_ACCESS_CACHE_KEY: "curation-access",
+    useCurationAccess: vi.fn(() => ({ curationShown: true, labelEditing: true })),
+}));
+
+afterEach(async () => {
+    const { useCurationAccess } = await import("../src/samples/useCurationAccess");
+    vi.mocked(useCurationAccess).mockReturnValue({ curationShown: true, labelEditing: true });
 });
 
 // Module-level stores and caches outlive a test, so each one returns to its initial state here.

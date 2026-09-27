@@ -36,7 +36,11 @@ def catalog_steps() -> tuple[Step, ...]:
         PassStep(name=SAMPLE_FILES, requires=(LABELS,), command=_scan_sample_files),
         PassStep(name=NOTES, requires=(MODULES,), command=lambda context: ("notes",)),
         PassStep(name=THUMBNAILS, requires=(MODULES, SAMPLE_FILES), command=lambda context: ("thumbnails",)),
-        PassStep(name=EQUIVALENCE, requires=(MODULES, SAMPLE_FILES), command=lambda context: ("equivalence",)),
+        PassStep(
+            name=EQUIVALENCE,
+            requires=(MODULES, SAMPLE_FILES),
+            command=lambda context: ("equivalence", *_workers(context)),
+        ),
         PassStep(
             name=RELINK,
             requires=(MODULES, SAMPLE_FILES, LABELS),

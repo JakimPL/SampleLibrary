@@ -17,6 +17,9 @@ from pydantic import BaseModel
 
 from samplecore.exit_status import ExitStatus
 from samplecore.models.base import FROZEN
+from samplecore.paths import CHECKOUT_DIRECTORY, runs_from_checkout
+from samplecore.processes import HIDDEN_CONSOLE_FLAGS
+from samplecore.progress import PROGRESS_FILE_ENVIRONMENT_VARIABLE
 from samplelibrary.environment import (
     CONFIG_OPTION,
     MEMORY_CAP_OPTION,
@@ -28,7 +31,10 @@ from samplelibrary.pipeline.context import RunSession
 from samplelibrary.pipeline.results import AttemptOutcome
 
 INTERRUPT_STATUSES: Final[frozenset[int]] = frozenset({130, -signal.SIGINT, -signal.SIGTERM, 143, -1073741510})
-KILLED_STATUSES: Final[frozenset[int]] = frozenset({137, -signal.SIGKILL})
+if sys.platform == "win32":
+    KILLED_STATUSES: Final[frozenset[int]] = frozenset({137})
+else:
+    KILLED_STATUSES: Final[frozenset[int]] = frozenset({137, -signal.SIGKILL})
 RECORDED_PACKAGES: Final[tuple[str, ...]] = ("torch", "transformers", "librosa", "trackmod", "numpy")
 TQDM_INTERVAL_SECONDS: Final[str] = "30"
 CHILD_ENVIRONMENT: Final[Mapping[str, str]] = {
@@ -168,7 +174,7 @@ def run_step_command(session: RunSession, *, step: str, command: tuple[str, ...]
             argv,
             stdout=stream,
             stderr=subprocess.STDOUT,
-            env=_child_environment(step_lock=scope_name),
+            env=_child_environment(step_lock=scope_name, progress_file=session.run.progress(step)),
             start_new_session=sys.platform != "win32",
         )
         interrupts.watch(process)
@@ -234,13 +240,17 @@ def _outcome_of(status: int, *, interrupted: bool, capped: bool) -> AttemptOutco
     return AttemptOutcome.FAILED
 
 
-def _child_environment(*, step_lock: str) -> dict[str, str]:
-    """What a step's process starts with: this environment, cleared of what would point it elsewhere."""
+def _child_environment(*, step_lock: str, progress_file: Path) -> dict[str, str]:
+    """What a step's process starts with: this environment, cleared of what would point it elsewhere.
+
+    It names the step's lock and the file its pass reports its progress to.
+    """
     environment = {
         name: value for name, value in os.environ.items() if not name.startswith(CLEARED_ENVIRONMENT_PREFIXES)
     }
     environment.update(CHILD_ENVIRONMENT)
     environment[STEP_LOCK_ENVIRONMENT_VARIABLE] = step_lock
+    environment[PROGRESS_FILE_ENVIRONMENT_VARIABLE] = str(progress_file)
     return environment
 
 
@@ -257,13 +267,16 @@ def _package_versions() -> dict[str, str]:
 
 def _repository_revision() -> str | None:
     """The commit this project runs from, where it runs from a checkout at all."""
+    if not runs_from_checkout():
+        return None
     try:
         finished = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             check=False,
             capture_output=True,
             text=True,
-            cwd=Path(__file__).resolve().parent,
+            cwd=CHECKOUT_DIRECTORY,
+            creationflags=HIDDEN_CONSOLE_FLAGS,
         )
     except OSError:
         return None

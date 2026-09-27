@@ -30,7 +30,7 @@ def hold_step_lock() -> Connection | None:
     if not name:
         return None
 
-    connection = connect(load_config_or_exit().database_url, read_only=True)
+    connection = connect(load_config_or_exit().catalog_url(), read_only=True)
     if not claim_named_lock(connection, name):
         _logger.error("Ran nothing: %s is already running in another process.", name)
         sys.exit(ExitStatus.REFUSED)

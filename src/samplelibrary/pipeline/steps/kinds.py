@@ -8,6 +8,7 @@ from typing import Final, Protocol
 from samplecore.models.experiment import ExperimentKey
 from samplecore.storage.atomic import copy_atomically
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
+from samplecore.storage.staging import partial_path
 from samplelibrary.pipeline.artifacts import (
     CONTENT_KEY,
     artifact_holds_its_content,
@@ -145,10 +146,12 @@ class GrowingExperimentStep:
 
 @dataclass(frozen=True)
 class DerivedExperimentStep:
-    """An experiment named by what it was made from, which stands whole or not at all.
+    """An experiment named by what it was made from.
 
     Its key holds the digest of its inputs, so a run finding that key finds the very experiment
-    those inputs make, and one finding none makes it.
+    those inputs make, and one finding none makes it. A step whose command fills its experiment a
+    part at a time names what makes the experiment `complete`, so a filed experiment a stopped run
+    left part-filled runs again, and the command fills in the rest.
     """
 
     name: str
@@ -157,15 +160,21 @@ class DerivedExperimentStep:
     key: KeyNamer
     command: Callable[[PipelineContext, ExperimentKey], tuple[str, ...]]
     shown: Callable[[PipelineContext, int], bool] | None = None
+    complete: Callable[[PipelineContext, int], bool] | None = None
 
     def evaluate(self, context: PipelineContext) -> StepPlan:
         inputs = self.inputs(context)
         plan = StepPlan(inputs=inputs, action=StepAction.SKIP)
         key = self.key(context, plan.digest)
         filed = PostgresExperimentRepository(context.connection).get_by_key(key)
-        if filed is not None and (self.shown is None or self.shown(context, filed.id)):
+        if filed is None:
+            return StepPlan(inputs=inputs, action=StepAction.RUN, argv=self.command(context, key))
+        if not self._is_complete(context, filed.id):
+            reasons = frozenset({SAMPLES_TO_DESCRIBE})
+        elif not self._is_shown(context, filed.id):
+            reasons = frozenset({NOT_SHOWN})
+        else:
             return plan
-        reasons = frozenset({NOT_SHOWN}) if filed is not None else frozenset()
         return StepPlan(inputs=inputs, action=StepAction.RUN, argv=self.command(context, key), reasons=reasons)
 
     def seal(self, context: PipelineContext, plan: StepPlan) -> Inputs:
@@ -173,9 +182,17 @@ class DerivedExperimentStep:
         filed = PostgresExperimentRepository(context.connection).get_by_key(key)
         if filed is None:
             raise MissingOutput(f"{self.name} left no experiment filed under {key}")
-        if self.shown is not None and not self.shown(context, filed.id):
+        if not self._is_complete(context, filed.id):
+            raise MissingOutput(f"{self.name} left experiment {filed.id} under {key} part-filled")
+        if not self._is_shown(context, filed.id):
             raise MissingOutput(f"{self.name} filed experiment {filed.id} under {key} and left it unshown")
         return {"experiment": str(filed.id), "key": key}
+
+    def _is_complete(self, context: PipelineContext, experiment_id: int) -> bool:
+        return self.complete is None or self.complete(context, experiment_id)
+
+    def _is_shown(self, context: PipelineContext, experiment_id: int) -> bool:
+        return self.shown is None or self.shown(context, experiment_id)
 
 
 @dataclass(frozen=True)
@@ -197,6 +214,10 @@ class FileArtifactStep:
     stands beside its model, and continues from its resume point where it stopped short of it. A
     step naming a sealed copy keeps one under the artifact's content, which an experiment names so the
     model it loads by that name is always the one it was described by.
+
+    A build that keeps its progress in the artifact's partial (`partial_path`) continues from it when
+    the same inputs build again. `partials` names every partial the step's builds leave, as a pattern
+    under the library root, and a run for new inputs removes the ones older inputs left first.
     """
 
     name: str
@@ -207,6 +228,7 @@ class FileArtifactStep:
     complete: Callable[[Path], bool]
     training: Callable[[PipelineContext, str], TrainingRecords] | None = None
     sealed_as: Callable[[PipelineContext, str], Path] | None = None
+    partials: str | None = None
 
     def evaluate(self, context: PipelineContext) -> StepPlan:
         inputs = self.inputs(context)
@@ -223,6 +245,7 @@ class FileArtifactStep:
             inputs=inputs,
             action=StepAction.RUN,
             argv=self.command(context, artifact, self._resumes(context, plan.digest)),
+            discard=self._partials_left_behind(context, artifact),
         )
 
     def seal(self, context: PipelineContext, plan: StepPlan) -> Inputs:
@@ -248,7 +271,7 @@ class FileArtifactStep:
         """Remove what this step built for the inputs it reads now, so a redo builds it again; a sealed copy stays."""
         plan = StepPlan(inputs=self.inputs(context), action=StepAction.SKIP)
         artifact = self.artifact(context, plan.digest)
-        removed = remove_path(sidecar_path(artifact)) + remove_path(artifact)
+        removed = remove_path(sidecar_path(artifact)) + remove_path(artifact) + remove_path(partial_path(artifact))
         if self.training is not None:
             removed += remove_path(self.training(context, plan.digest).directory)
         return removed
@@ -257,6 +280,13 @@ class FileArtifactStep:
         if not self.complete(self.artifact(context, digest)):
             return False
         return self.training is None or self.training(context, digest).finished.is_file()
+
+    def _partials_left_behind(self, context: PipelineContext, artifact: Path) -> tuple[Path, ...]:
+        """The partial builds this step left for inputs other than the ones building `artifact` now."""
+        if self.partials is None:
+            return ()
+        current = partial_path(artifact)
+        return tuple(path for path in sorted(context.config.library_root.glob(self.partials)) if path != current)
 
     def _resumes(self, context: PipelineContext, digest: str) -> bool:
         """Whether a training run of these inputs stopped short of finishing and left a point to continue from."""

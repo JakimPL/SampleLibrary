@@ -1,0 +1,7 @@
+# gitleaks runs its own rules over every commit; these are the findings that name no secret.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "An experiment's key names its backend and a digest of its settings, and unlocks nothing."
+regexes = ['''clap-(nominal|heard)-[0-9a-f]{8}''']

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import sys
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
@@ -15,24 +17,37 @@ from threadpoolctl import threadpool_limits
 
 from samplecore.config import ConfigurationError, load_config
 from samplecore.models.sample_file import FileFingerprint, SampleFile, SampleFileLocation
+from samplecore.process_pool import SINGLE_THREAD, SINGLE_THREAD_ENVIRONMENT
 from samplecore.sample_files.decoding import decode_sample_file
-from samplecore.storage.curation import curation_metadata
+from samplecore.storage.cluster.embedded import state as cluster_state
+from samplecore.storage.cluster.embedded.server import EmbeddedCluster
+from samplecore.storage.curation import ANNOTATION_HISTORY_START_TABLE, CURATION_SCHEMA, curation_metadata
 from samplecore.storage.database import connect, metadata
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
+from tests.paths import REPOSITORY_DIRECTORY
 
 SERVER_URL_VARIABLE: Final[str] = "SAMPLELIBRARY_TEST_DATABASE_URL"
 TEST_DATABASE_NAME: Final[str] = "samplelibrary_test"
-DEFAULT_SERVER_URL: Final[str] = f"postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/{TEST_DATABASE_NAME}"
+NO_SERVER_MESSAGE: Final[str] = (
+    f"The suite needs a Postgres server: name it in {SERVER_URL_VARIABLE}, or in the database_url of your config."
+)
 VANISHED_SAMPLE_FRAMES: Final[int] = 2048
 VANISHED_SAMPLE_RATE: Final[int] = 44100
-SINGLE_THREAD: Final[int] = 1
-SINGLE_THREADED_MATH: Final[dict[str, str]] = {
-    "OPENBLAS_NUM_THREADS": str(SINGLE_THREAD),
-    "OMP_NUM_THREADS": str(SINGLE_THREAD),
-    "MKL_NUM_THREADS": str(SINGLE_THREAD),
-    "NUMBA_NUM_THREADS": str(SINGLE_THREAD),
-}
+WORKER_ENVIRONMENT_VARIABLE: Final[str] = "PYTEST_XDIST_WORKER"
+WORKER_PREFIX: Final[str] = "gw"
+FIRST_WORKER: Final[str] = "gw0"
+WORKER_PORT_BASE: Final[int] = 25432
+# The moment the label history began stays, as the schema does: it belongs to the database, not to a test.
+_EMPTY_CURATION_TABLES: Final = text(
+    "TRUNCATE "
+    + ", ".join(
+        f"{CURATION_SCHEMA}.{table.name}"
+        for table in curation_metadata.sorted_tables
+        if table.name != ANNOTATION_HISTORY_START_TABLE
+    )
+    + " RESTART IDENTITY"
+)
 
 
 def pytest_configure() -> None:
@@ -44,9 +59,16 @@ def pytest_configure() -> None:
     from these variables when they first load, which covers torch and numba in each worker and every
     library in the processes a scenario starts, since those inherit the environment. numpy is loaded
     by the time this hook runs, so its pool is resized in place.
+
+    The repository joins the import path too. A worker process a test starts imports the work it is
+    handed, which a test often defines, from the path its parent holds, and the suite imports its
+    modules without adding their folder to that path; otherwise a started worker would find no
+    ``tests`` and its pool would wait for it forever.
     """
-    os.environ.update(SINGLE_THREADED_MATH)
+    os.environ.update(SINGLE_THREAD_ENVIRONMENT)
     threadpool_limits(limits=SINGLE_THREAD)
+    if str(REPOSITORY_DIRECTORY) not in sys.path:
+        sys.path.insert(0, str(REPOSITORY_DIRECTORY))
 
 
 @pytest.fixture(scope="session")
@@ -55,10 +77,10 @@ def _server_url() -> str:
 
     ``SAMPLELIBRARY_TEST_DATABASE_URL`` names it outright; otherwise the server the configuration
     names is used, under the ``samplelibrary_test`` database `just database` creates, so a library
-    set up on another port is tested on that port; with no configuration to read, a local server
-    on the default port. The database this URL names is only ever connected to in order to create
-    and drop the per-worker databases below, so it needs to exist but stays empty. The role it
-    authenticates as needs ``CREATEDB``.
+    set up on another port is tested on that port. With neither, the session ends with one message,
+    since every credential the suite logs in with is a person's own. The database this URL names is
+    only ever connected to in order to create and drop the per-worker databases below, so it needs
+    to exist but stays empty. The role it authenticates as needs ``CREATEDB``.
     """
     named = os.environ.get(SERVER_URL_VARIABLE)
     if named:
@@ -66,7 +88,9 @@ def _server_url() -> str:
     try:
         configured = load_config().database_url
     except ConfigurationError:
-        return DEFAULT_SERVER_URL
+        pytest.exit(NO_SERVER_MESSAGE)
+    if configured is None:
+        pytest.exit(NO_SERVER_MESSAGE)
     return make_url(configured).set(database=TEST_DATABASE_NAME).render_as_string(hide_password=False)
 
 
@@ -96,6 +120,29 @@ def _database_url(_server_url: str, worker_id: str) -> Iterator[str]:
 
 
 @pytest.fixture
+def fresh_database_url(_database_url: str) -> Iterator[str]:
+    """A brand-new, empty database on the shared test server, with no schema created yet.
+
+    The shared ``connection`` fixture's database always already has its schema in place (only its
+    rows are emptied between tests), so it cannot exercise ``connect()``'s own first-use schema
+    creation -- this creates and drops a genuinely fresh database on the same server for exactly
+    that. ``CREATE DATABASE``/``DROP DATABASE`` cannot run inside a transaction block, hence the
+    ``AUTOCOMMIT`` isolation level.
+    """
+    admin_url = make_url(_database_url)
+    database_name = f"fresh_{uuid.uuid4().hex}"
+    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    with admin_engine.connect() as admin_connection:
+        admin_connection.execute(text(f'CREATE DATABASE "{database_name}"'))
+        try:
+            # str() on a URL renders its password as "***"; the yielded URL has to carry the real one.
+            yield admin_url.set(database=database_name).render_as_string(hide_password=False)
+        finally:
+            admin_connection.execute(text(f'DROP DATABASE "{database_name}" WITH (FORCE)'))
+    admin_engine.dispose()
+
+
+@pytest.fixture
 def connection(_database_url: str) -> Iterator[Connection]:
     """A catalog connection to this worker's database, with an empty schema on every test.
 
@@ -105,15 +152,18 @@ def connection(_database_url: str) -> Iterator[Connection]:
 
     The curation tables are named here deliberately, since they live on a metadata of their own that
     ``reset_library`` has no reach into. A test wants them cleared between cases; a real library
-    wants them kept, and that difference is exactly what the separate metadata buys.
+    wants them kept, and that difference is exactly what the separate metadata buys. They are
+    truncated in one statement, which fires no row trigger, so the label history a test wrote goes
+    with them rather than recording the cleanup.
     """
     open_connection = connect(_database_url)
     try:
         yield open_connection
     finally:
         open_connection.rollback()
-        for table in [*reversed(metadata.sorted_tables), *reversed(curation_metadata.sorted_tables)]:
+        for table in reversed(metadata.sorted_tables):
             open_connection.execute(table.delete())
+        open_connection.execute(_EMPTY_CURATION_TABLES)
         open_connection.commit()
         open_connection.close()
 
@@ -141,3 +191,38 @@ def vanished_sample_file(connection: Connection, tmp_path: Path) -> SampleFile:
     connection.commit()
     path.unlink()
     return sample_file
+
+
+def _worker_cluster_port() -> int:
+    """A port of this test worker's own for the clusters it starts, below the range systems hand out on their own.
+
+    Clusters that workers start side by side each listen on theirs, and the database connections
+    the tests open never take it between a cluster's port check and its start.
+    """
+    worker = int(os.environ.get(WORKER_ENVIRONMENT_VARIABLE, FIRST_WORKER).removeprefix(WORKER_PREFIX))
+    return WORKER_PORT_BASE + worker
+
+
+@pytest.fixture
+def worker_cluster_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Have every library's own server a test starts prefer this worker's port."""
+    monkeypatch.setattr(cluster_state, "PREFERRED_MANAGED_PORT", _worker_cluster_port())
+
+
+@pytest.fixture(scope="module")
+def module_cluster_root(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    """A library root whose own Postgres server runs for one test module, its owner a superuser.
+
+    The service roles a served catalog API connects as are created by a superuser, which the
+    library's own server has and a shared test server need not, so the tests of those roles run
+    here. The server prefers a port of the test worker's own, as `_worker_cluster_port` explains.
+    """
+    root = tmp_path_factory.mktemp("library")
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(cluster_state, "PREFERRED_MANAGED_PORT", _worker_cluster_port())
+        cluster = EmbeddedCluster(root)
+        cluster.ensure_running(own_programs=True)
+    try:
+        yield root
+    finally:
+        cluster.stop()

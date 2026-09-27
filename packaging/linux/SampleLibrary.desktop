@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=SampleLibrary
+Comment=Browse, audition, label and morph the samples of your tracker modules
+Exec=SampleLibrary
+Icon=samplelibrary
+Categories=AudioVideo;Audio;
+Terminal=false

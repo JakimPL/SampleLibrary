@@ -11,21 +11,24 @@ interface SampleFileRowProps {
     readonly sampleFile: SampleFile;
 }
 
-/** One file of a sample directory a sample was found in, marked when the file is gone or changed since its scan. */
+/**
+ * One file of a sample directory a sample was found in, named in its folder, marked when the file is
+ * gone or changed since its scan. A server that reports no file's state marks none.
+ */
 export function SampleFileRow({ sampleFile }: SampleFileRowProps): ReactElement {
     return (
         <tr>
             <td className="cell-name" data-label={FILE_COLUMN_LABELS.file}>
-                <span className="cell-primary">{sampleFile.location.relative_path}</span>
+                <span className="cell-primary">{sampleFile.relative_path}</span>
             </td>
             <td className="cell-muted" data-label={FILE_COLUMN_LABELS.directory}>
-                {sampleFile.location.directory}
+                {sampleFile.directory}
             </td>
             <td className="mono" data-label={FILE_COLUMN_LABELS.rate}>
                 {sampleFile.rate}
             </td>
             <td data-label={FILE_COLUMN_LABELS.status}>
-                {!sampleFile.available && <span className="badge badge-unavailable">unavailable</span>}
+                {sampleFile.available === false && <span className="badge badge-unavailable">unavailable</span>}
             </td>
         </tr>
     );

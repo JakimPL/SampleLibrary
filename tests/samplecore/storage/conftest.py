@@ -41,7 +41,7 @@ from sampleextract.notes.playback_rates import record_playback_rates
 from sampleextract.parsing import parse_module
 from samplelibrary.sandbox.build import SAMPLE_PACK_DIRECTORY_NAME, build_sandbox
 
-SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
+SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/samplelibrary_dev"
 
 
 def _ingest_all(connection: Connection, library_root: Path, modules_directory: Path) -> None:
@@ -77,7 +77,7 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
     object -- every table the schema declares, not only the ones a plain extraction pass happens to
     touch. Returns the filesystem library root the content store was written under.
     """
-    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL, service_urls={})
     library_root = tmp_path / "catalog"
     _ingest_all(connection, library_root, tmp_path / "modules")
     connection.commit()

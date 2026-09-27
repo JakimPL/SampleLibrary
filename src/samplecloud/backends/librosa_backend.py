@@ -6,6 +6,7 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 
+from samplecloud.backends import FeatureExtractor
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.waveform import fold_to_mono
 
@@ -18,7 +19,7 @@ MINIMUM_DELTA_WIDTH: Final[int] = 3
 NO_ONSET_ATTACK_FRACTION: Final[float] = 0.0
 
 
-class LibrosaFeatureExtractor:
+class LibrosaFeatureExtractor(FeatureExtractor):
     """Extracts a general-purpose timbral and temporal descriptor vector from a waveform with librosa.
 
     Concatenates each MFCC coefficient's mean and standard deviation across time, the mean and

@@ -33,7 +33,10 @@ const SAMPLE: SampleSummary = {
 
 const NOTHING = { label: null, rating: null, favorite: false };
 
-function renderSheet(onChange = vi.fn(), onClose = vi.fn()): void {
+function renderSheet(
+    onChange: ((changes: CurationApi.AnnotationChanges) => void) | null = vi.fn(),
+    onClose = vi.fn(),
+): void {
     render(
         <MemoryRouter initialEntries={["/"]}>
             <Routes>
@@ -76,5 +79,14 @@ describe("RowActionSheet", () => {
         fireEvent.click(screen.getByRole("button", { name: "Label…" }));
 
         expect(screen.getByRole("dialog", { name: "Label" })).toBeInTheDocument();
+    });
+
+    it("keeps its actions alone where labels may only be seen", () => {
+        renderSheet(null);
+
+        expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Rate 4" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Favorite" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Label…" })).not.toBeInTheDocument();
     });
 });

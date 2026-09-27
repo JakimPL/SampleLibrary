@@ -11,6 +11,7 @@ from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 from trackmod.trackers.xm.tuning import Tuning
 
+from samplecore.labeling.labels import MAXIMUM_LABEL_CHARACTERS, MAXIMUM_LABEL_TAGS
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation, SampleFileAnchor
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
@@ -33,6 +34,12 @@ from samplecore.storage.repositories.sample_properties import (
 SAMPLE_HASH_A = "a" * 64
 SAMPLE_HASH_B = "b" * 64
 UNKNOWN_SAMPLE_HASH = "f" * 64
+
+
+@pytest.fixture(name="client")
+def fixture_client(curating_client: TestClient) -> TestClient:
+    """The curation routes write, so every test here asks a curator's app from the computer it runs on."""
+    return curating_client
 
 
 def _change(client: TestClient, sample_hash: str, *, scope: str = "sample", **decisions: Any) -> Response:
@@ -387,7 +394,7 @@ def test_a_malformed_hash_is_refused(client: TestClient) -> None:
     assert client.patch("/curation/annotations/NOT-A-HASH", json={"scope": "sample", "rating": 3}).status_code == 422
 
 
-def test_an_annotation_whose_sample_left_the_catalog_can_be_changed_and_removed(
+def test_an_annotation_whose_sample_left_the_catalog_can_be_changed_and_cleared(
     client: TestClient, connection: Connection
 ) -> None:
     module = _insert_module(connection)
@@ -411,12 +418,41 @@ def test_an_annotation_whose_sample_left_the_catalog_can_be_changed_and_removed(
     connection.commit()
 
     assert _change(client, UNKNOWN_SAMPLE_HASH, rating=2).status_code == 200
-    assert client.delete(f"/curation/annotations/{UNKNOWN_SAMPLE_HASH}").status_code == 204
+    assert _change(client, UNKNOWN_SAMPLE_HASH, label=None, rating=None, favorite=False).status_code == 200
     assert PostgresSampleAnnotationRepository(connection).count() == 0
 
 
-def test_removing_an_annotation_nobody_made_is_not_found(client: TestClient) -> None:
-    assert client.delete(f"/curation/annotations/{UNKNOWN_SAMPLE_HASH}").status_code == 404
+@pytest.mark.parametrize(
+    "label",
+    ["A" * (MAXIMUM_LABEL_CHARACTERS + 1), ", ".join(f"TAG {index}" for index in range(MAXIMUM_LABEL_TAGS + 1))],
+    ids=("too long", "too many tags"),
+)
+def test_a_label_past_the_limits_is_refused(client: TestClient, connection: Connection, label: str) -> None:
+    _seed_a_pair_of_near_duplicates(connection)
+
+    assert _change(client, SAMPLE_HASH_A, label=label).status_code == 422
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [{"x-forwarded-for": "203.0.113.9"}, {"host": "evil.example"}, {"origin": "http://evil.example"}],
+    ids=("forwarded by a proxy", "addressed by another name", "sent by a page from elsewhere"),
+)
+def test_a_change_from_anyone_but_the_person_at_this_computer_is_refused(
+    client: TestClient, connection: Connection, headers: dict[str, str]
+) -> None:
+    _seed_a_pair_of_near_duplicates(connection)
+    response = client.patch(
+        f"/curation/annotations/{SAMPLE_HASH_A}", json={"scope": "sample", "rating": 3}, headers=headers
+    )
+
+    assert response.status_code == 403
+    assert client.get("/curation/access", headers=headers).json().get("label_editing", False) is False
+    assert PostgresSampleAnnotationRepository(connection).count() == 0
+
+
+def test_the_person_at_this_computer_may_change_labels(client: TestClient) -> None:
+    assert client.get("/curation/access").json() == {"label_editing": True, "curation_shown": True}
 
 
 def test_the_vocabulary_offers_back_what_has_already_been_chosen(client: TestClient, connection: Connection) -> None:

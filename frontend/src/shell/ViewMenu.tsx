@@ -1,14 +1,10 @@
 import type { DockviewApi } from "dockview-react";
 import { type ReactElement, useEffect, useState } from "react";
 
-import { floatRenderingSupport } from "../cloud/floatRendering";
-import { useLayoutMode } from "../layout/useLayoutMode";
 import { DisclosureMenu } from "../shared/overlay/DisclosureMenu";
 import { addRegisteredPanel } from "../workspace/addPanel";
 import { resetLayout } from "../workspace/dockviewPersistence";
 import { PANEL_REGISTRY, type PanelDefinition, type PanelId } from "../workspace/panelRegistry";
-import { DIAGNOSTICS_TITLE, DiagnosticsSheet } from "./DiagnosticsSheet";
-import { GUIDE_TITLES, GuideSheet } from "./GuideSheet";
 
 interface ViewMenuProps {
     readonly api: DockviewApi | null;
@@ -33,14 +29,10 @@ function openPanelIds(api: DockviewApi): ReadonlySet<PanelId> {
  * reopens it at its registered placement, and the reset that draws the first-run arrangement
  * again. Reads `PANEL_REGISTRY` generically, so a newly registered panel appears here with no
  * change to this file. The panel controls wait, disabled, until the shell's dockview instance is
- * ready. The guide to the keys and clicks, or to the gestures under touch, and the diagnostics
- * open from here as well.
+ * ready.
  */
 export function ViewMenu({ api }: ViewMenuProps): ReactElement {
     const [openIds, setOpenIds] = useState<ReadonlySet<PanelId>>(new Set());
-    const [guideOpen, setGuideOpen] = useState(false);
-    const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-    const { input } = useLayoutMode();
 
     useEffect(() => {
         if (api === null) {
@@ -75,63 +67,27 @@ export function ViewMenu({ api }: ViewMenuProps): ReactElement {
     }
 
     return (
-        <>
-            <DisclosureMenu label="View" className="view-menu">
-                <ul className="view-menu-list">
-                    {Object.values(PANEL_REGISTRY).map((definition) => (
-                        <li key={definition.id}>
-                            <label>
-                                <input
-                                    type="checkbox"
-                                    checked={openIds.has(definition.id)}
-                                    disabled={api === null}
-                                    onChange={() => {
-                                        handleToggle(definition);
-                                    }}
-                                />
-                                {definition.title}
-                            </label>
-                        </li>
-                    ))}
-                </ul>
-                <button type="button" className="view-menu-reset" disabled={api === null} onClick={handleReset}>
-                    Reset layout
-                </button>
-                <button
-                    type="button"
-                    className="view-menu-reset"
-                    onClick={() => {
-                        setGuideOpen(true);
-                    }}
-                >
-                    {GUIDE_TITLES[input]}
-                </button>
-                <button
-                    type="button"
-                    className="view-menu-reset"
-                    onClick={() => {
-                        setDiagnosticsOpen(true);
-                    }}
-                >
-                    {DIAGNOSTICS_TITLE}
-                </button>
-            </DisclosureMenu>
-            {guideOpen && (
-                <GuideSheet
-                    input={input}
-                    onClose={() => {
-                        setGuideOpen(false);
-                    }}
-                />
-            )}
-            {diagnosticsOpen && (
-                <DiagnosticsSheet
-                    support={floatRenderingSupport()}
-                    onClose={() => {
-                        setDiagnosticsOpen(false);
-                    }}
-                />
-            )}
-        </>
+        <DisclosureMenu label="View" className="view-menu">
+            <ul className="view-menu-list">
+                {Object.values(PANEL_REGISTRY).map((definition) => (
+                    <li key={definition.id}>
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={openIds.has(definition.id)}
+                                disabled={api === null}
+                                onChange={() => {
+                                    handleToggle(definition);
+                                }}
+                            />
+                            {definition.title}
+                        </label>
+                    </li>
+                ))}
+            </ul>
+            <button type="button" className="menu-action" disabled={api === null} onClick={handleReset}>
+                Reset layout
+            </button>
+        </DisclosureMenu>
     );
 }

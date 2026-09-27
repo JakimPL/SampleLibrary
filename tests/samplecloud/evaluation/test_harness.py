@@ -10,6 +10,7 @@ import pytest
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
+from samplecloud.evaluation import harness as harness_module
 from samplecloud.evaluation.cli import _report, main
 from samplecloud.evaluation.harness import evaluate_experiment
 from samplecloud.evaluation.report import report_json
@@ -50,6 +51,7 @@ def test_a_pass_without_an_extractor_scores_the_stored_vectors_alone(
         experiment_id=separable_catalog.experiment_id,
         describer=None,
         settings=SETTINGS,
+        report_path=tmp_path / "report.json",
     )
 
     assert report.transposition is None
@@ -69,6 +71,7 @@ def test_a_pass_scores_the_hand_labels_once_enough_samples_carry_one(
         experiment_id=separable_catalog.experiment_id,
         describer=None,
         settings=SETTINGS,
+        report_path=tmp_path / "report.json",
     )
 
     assert report.hand_labels is not None
@@ -97,7 +100,9 @@ def test_a_corpus_too_small_to_fold_leaves_those_metrics_out(connection: Connect
         )
     connection.commit()
 
-    report = evaluate_experiment(connection, experiment_id=experiment_id, describer=None, settings=SETTINGS)
+    report = evaluate_experiment(
+        connection, experiment_id=experiment_id, describer=None, settings=SETTINGS, report_path=tmp_path / "report.json"
+    )
 
     assert (report.notes, report.hand_labels) == (None, None)
     assert json.loads(report_json(report))["notes"] is None
@@ -111,6 +116,7 @@ def test_a_score_no_metric_could_read_is_written_as_null(
         experiment_id=separable_catalog.experiment_id,
         describer=None,
         settings=SETTINGS,
+        report_path=tmp_path / "report.json",
     )
     assert report.notes is not None
     unreadable = replace(report, notes=replace(report.notes, single_pitch_auc=float("nan")))
@@ -120,7 +126,9 @@ def test_a_score_no_metric_could_read_is_written_as_null(
 
 def test_an_unknown_experiment_says_so(connection: Connection, tmp_path: Path) -> None:
     with pytest.raises(ExperimentRefused, match="holds no experiment"):
-        evaluate_experiment(connection, experiment_id=9999, describer=None, settings=SETTINGS)
+        evaluate_experiment(
+            connection, experiment_id=9999, describer=None, settings=SETTINGS, report_path=tmp_path / "report.json"
+        )
 
 
 def test_a_report_renders_as_json_a_tracker_can_read(
@@ -131,6 +139,7 @@ def test_a_report_renders_as_json_a_tracker_can_read(
         experiment_id=separable_catalog.experiment_id,
         describer=None,
         settings=SETTINGS,
+        report_path=tmp_path / "report.json",
     )
 
     rendered = json.loads(report_json(report))
@@ -256,6 +265,7 @@ def test_the_command_reports_retrieval_offset_by_offset(
         experiment_id=separable_catalog.experiment_id,
         describer=None,
         settings=SETTINGS,
+        report_path=tmp_path / "report.json",
     )
     stubbed = replace(
         report,
@@ -277,3 +287,48 @@ def test_the_command_reports_retrieval_offset_by_offset(
 
     assert "Transposition retrieval over 4 probes" in caplog.text
     assert "+12 st" in caplog.text
+
+
+class EvaluationStopped(RuntimeError):
+    pass
+
+
+def test_a_pass_stopped_after_its_first_metric_takes_it_up_again_and_ends_as_a_straight_pass_would(
+    connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, separable_catalog: SeededCatalog
+) -> None:
+    label_catalog(connection, separable_catalog)
+    straight = evaluate_experiment(
+        connection,
+        experiment_id=separable_catalog.experiment_id,
+        describer=None,
+        settings=SETTINGS,
+        report_path=tmp_path / "straight.json",
+    )
+    hand_labels = harness_module.hand_label_agreement
+    note_agreement = harness_module.note_agreement
+
+    def stop(*arguments: object, **keywords: object) -> None:
+        raise EvaluationStopped("stopped after the note agreement")
+
+    monkeypatch.setattr(harness_module, "hand_label_agreement", stop)
+    with pytest.raises(EvaluationStopped):
+        evaluate_experiment(
+            connection,
+            experiment_id=separable_catalog.experiment_id,
+            describer=None,
+            settings=SETTINGS,
+            report_path=tmp_path / "report.json",
+        )
+    monkeypatch.setattr(harness_module, "hand_label_agreement", hand_labels)
+    monkeypatch.setattr(harness_module, "note_agreement", stop)
+
+    resumed = evaluate_experiment(
+        connection,
+        experiment_id=separable_catalog.experiment_id,
+        describer=None,
+        settings=SETTINGS,
+        report_path=tmp_path / "report.json",
+    )
+
+    monkeypatch.setattr(harness_module, "note_agreement", note_agreement)
+    assert replace(resumed, evaluated_at=straight.evaluated_at) == straight

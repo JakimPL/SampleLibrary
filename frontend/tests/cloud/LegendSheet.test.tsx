@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ColoringMode } from "../../src/cloud/ColoringModeChoice";
 import type { TopLevelTag } from "../../src/cloud/labelColoring";
 import { LegendSheet } from "../../src/cloud/LegendSheet";
+import { useCurationAccess } from "../../src/samples/useCurationAccess";
 
 const EMPTY_CAPTION = "No sample carries a tag yet.";
 
@@ -44,6 +45,14 @@ describe("LegendSheet", () => {
         expect(onModeChange).toHaveBeenCalledWith("label");
         expect(screen.getByRole("dialog", { name: "Legend" })).toBeInTheDocument();
         expect(screen.getByRole("button", { name: /SNARE/ })).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("paints by category alone, offering no choice, where no one's labels are shown", () => {
+        vi.mocked(useCurationAccess).mockReturnValue({ curationShown: false, labelEditing: false });
+        renderSheet();
+
+        expect(screen.queryByRole("group", { name: "Color by" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Labels" })).not.toBeInTheDocument();
     });
 
     it("says so while the chosen mode has no tag yet", () => {

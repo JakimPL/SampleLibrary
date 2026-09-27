@@ -46,6 +46,13 @@ class RecordedCall:
 
 
 ROUTE_CASES = (
+    RouteCase(
+        ["setup-schema", "--output", "setup.json"],
+        "samplelibrary.app.openapi_export.main",
+        ["--output", "setup.json"],
+        "samplelibrary setup-schema",
+    ),
+    RouteCase(["app", "--no-browser"], "samplelibrary.app.cli.main", ["--no-browser"], "samplelibrary app"),
     RouteCase(["setup", "database"], "samplelibrary.setup.main", ["database"], "samplelibrary setup"),
     RouteCase(["reset", "--confirm"], "samplelibrary.reset.main", ["--confirm"], "samplelibrary reset"),
     RouteCase(["extract", "--workers", "2"], "sampleextract.cli.main", ["--workers", "2"], "samplelibrary extract"),
@@ -89,6 +96,7 @@ ROUTE_CASES = (
         ["run", "catalog"],
         "samplelibrary pipeline",
     ),
+    RouteCase(["device"], "samplelibrary.pipeline.devices.main", [], "samplelibrary device"),
     RouteCase(
         ["descriptor", "cache-grids", "--cache", "grids", "--views", "0"],
         "sampledescriptor.cli.main",
@@ -102,6 +110,10 @@ ROUTE_CASES = (
         "samplelibrary morph",
     ),
     RouteCase(["serve", "--reload"], "sampleserver.cli.main", ["--reload"], "samplelibrary serve"),
+    RouteCase(
+        ["site", "--host", "0.0.0.0"], "samplelibrary.site.cli.main", ["--host", "0.0.0.0"], "samplelibrary site"
+    ),
+    RouteCase(["publish"], "samplelibrary.publish.cli.main", [], "samplelibrary publish"),
     RouteCase(["schema"], "sampleserver.openapi_export.main", [], "samplelibrary schema"),
     RouteCase(["tracking", "uri"], "samplelibrary.tracking.uri.main", [], "samplelibrary tracking uri"),
     RouteCase(
@@ -168,7 +180,7 @@ def test_the_named_configuration_supplies_the_database_over_an_exported_one(
     monkeypatch.setenv(DATABASE_URL_ENVIRONMENT_VARIABLE, EXPORTED_DATABASE_URL)
     database_urls: list[str] = []
     monkeypatch.setattr(
-        "sampleextract.notes.cli.main", lambda argv, *, prog: database_urls.append(load_config().database_url)
+        "sampleextract.notes.cli.main", lambda argv, *, prog: database_urls.append(load_config().catalog_url())
     )
 
     dispatch(["--config", str(_write_sandbox_config(tmp_path)), "notes"])

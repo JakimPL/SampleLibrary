@@ -1,14 +1,22 @@
 # Paths take forward slashes on every system; a Windows backslash is written twice: "C:\\Modules".
 
 [library]
-# Your tracker module collection, folders inside it included.
+# Your tracker module collection, folders inside it included. Leave it out for a library of sample folders alone.
 module_source_directory = "/path/to/your/module/collection"
 
 # Where the library keeps its extracted samples, trained models and recorded runs.
 library_root = "/path/to/your/sample/library"
 
-# The PostgreSQL database holding the catalog. `just database` creates it with this user and password.
-database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"
+# A PostgreSQL server of your own holding the catalog. `just database` creates it with this user and password.
+# `samplelibrary setup config` writes a new password in place of each stand-in; copied by hand, choose your own.
+# Left out, the library keeps its own server inside library_root, which `just database` creates and starts.
+database_url = "postgresql+psycopg://samplelibrary:<password>@localhost:5432/samplelibrary"
+
+# The roles the served API and the SampleLibrary app connect to that server as: one reads the catalog,
+# the other also records your labels, and neither may change anything else. `just database` creates
+# both with these names and passwords. A library keeping its own server creates its roles itself.
+server_database_url = "postgresql+psycopg://samplelibrary_reader:<password>@localhost:5432/samplelibrary"
+curation_database_url = "postgresql+psycopg://samplelibrary_curator:<password>@localhost:5432/samplelibrary"
 
 # The library keeps samples at least this many frames long.
 # minimum_sample_frames = 512
@@ -21,9 +29,23 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # against each path relative to its folder, where * also crosses folders.
 # sample_exclusions = ["*loop*", "*.aif"]
 
+# Whether the application's builds go on to analyze every sample and lay out the cloud.
+# build_cloud = true
+
 [inference]
 # Where the morph renderer listens, and where the app reaches it.
 # url = "http://127.0.0.1:8010"
+
+[server]
+# Who the served library answers. "local": you, on this computer, seeing everything. "network": the
+# devices on your home network too, which may look but change nothing. "public": anyone on the
+# internet, for a site started with `samplelibrary site`, which shows no folder of yours and none of
+# your labels, ratings or favorites.
+# exposure = "local"
+
+[publish]
+# Which of your sample directories a site shows; samples found only in the others stay off it.
+# sample_directories = ["/path/to/your/sample/packs/Free Pack"]
 
 [pipeline]
 # How `samplelibrary pipeline run` builds the library. Every setting here is optional.
@@ -32,8 +54,13 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # memory_cap = "16G"
 
 # The device training and learned descriptors run on, and how many processes a pass spreads over.
-# device = "cuda"
+# "auto" picks an NVIDIA card when there is one and the processor otherwise.
+# device = "auto"
 # workers = 8
+
+# "trained" teaches the descriptor on this library; "pretrained" downloads the published one.
+# "automatic" takes the published one where this version carries it, and trains one otherwise.
+# descriptor_source = "automatic"
 
 # A file of hand labels a fresh catalog reads in, as `samplelibrary annotations export` writes it.
 # labels = "/path/to/annotations.jsonl"
@@ -42,3 +69,7 @@ database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/
 # [pipeline.descriptor]
 # epochs = 40
 # memory_cap = "24G"
+
+# How many samples the listening model hears at once; lower it on a graphics card short of memory.
+# [pipeline.hearing-teacher]
+# batch_size = 16

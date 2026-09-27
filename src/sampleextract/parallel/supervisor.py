@@ -82,7 +82,7 @@ def _cover_here(
     config: LibraryConfig, items: tuple[Item, ...], cover: ShareCover[Item, Summary], *, progress: ProgressSink
 ) -> Summary:
     """Cover the work list in this process, which is what a single share amounts to."""
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         return cover(config, connection, items, progress=progress)
 
 

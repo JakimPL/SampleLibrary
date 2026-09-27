@@ -23,7 +23,7 @@ from samplelibrary.sandbox.build import build_sandbox
 from samplelibrary.sandbox.modules import sandbox_modules
 from samplelibrary.sandbox.one_shots import ONE_SHOT_COUNT, ONE_SHOTS_DIRECTORY_NAME, SOUND_KINDS
 
-SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
+SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/samplelibrary_dev"
 LIBRARY_ON_ANOTHER_PORT = "postgresql+psycopg://someone:secret@localhost:5433/my_library"
 
 
@@ -45,14 +45,14 @@ def _ingest_all(connection: Connection, library_root: Path, modules_directory: P
 
 
 def test_build_sandbox_writes_every_scenario_module_and_a_config(tmp_path: Path) -> None:
-    written_paths = build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    written_paths = build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL, service_urls={})
 
     assert len(written_paths) == len(sandbox_modules())
     assert (tmp_path / "config.toml").is_file()
 
 
 def test_build_sandbox_config_names_the_database_and_an_inference_address_of_its_own(tmp_path: Path) -> None:
-    build_sandbox(tmp_path, database_url=LIBRARY_ON_ANOTHER_PORT)
+    build_sandbox(tmp_path, database_url=LIBRARY_ON_ANOTHER_PORT, service_urls={})
 
     with (tmp_path / "config.toml").open("rb") as config_file:
         config = tomllib.load(config_file)
@@ -62,9 +62,9 @@ def test_build_sandbox_config_names_the_database_and_an_inference_address_of_its
 
 
 def test_build_sandbox_regenerating_replaces_rather_than_accumulates_modules(tmp_path: Path) -> None:
-    first_paths = build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    first_paths = build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL, service_urls={})
 
-    second_paths = build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    second_paths = build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL, service_urls={})
 
     assert len(second_paths) == len(first_paths)
 
@@ -79,7 +79,7 @@ def test_the_generated_corpus_yields_exactly_the_intended_relations(
     """A regression check on the corpus itself: every scenario must survive both candidate
     generation and scoring, and no two scenarios may coincidentally relate to each other.
     """
-    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL, service_urls={})
     _ingest_all(connection, tmp_path / "catalog", tmp_path / "modules")
 
     summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path / "catalog"))
@@ -93,7 +93,7 @@ def test_the_generated_corpus_yields_exactly_the_intended_relations(
 
 
 def test_the_sandbox_config_names_a_sample_pack_whose_loop_its_exclusions_leave_out(tmp_path: Path) -> None:
-    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL, service_urls={})
     with (tmp_path / "config.toml").open("rb") as config_file:
         library = tomllib.load(config_file)["library"]
 
@@ -112,7 +112,7 @@ def test_the_sandbox_config_names_a_sample_pack_whose_loop_its_exclusions_leave_
 
 
 def test_the_sandbox_labels_name_one_shots_its_pack_holds_and_its_pipeline_table_reads(tmp_path: Path) -> None:
-    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL)
+    build_sandbox(tmp_path, database_url=SANDBOX_DATABASE_URL, service_urls={})
     settings = read_pipeline_settings(tmp_path / "config.toml")
     assert settings.labels is not None
 

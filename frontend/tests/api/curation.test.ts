@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { changeSampleAnnotation, getLabelTags, getLabelVocabulary } from "../../src/api/curation";
+import { changeSampleAnnotation, getCurationAccess, getLabelTags, getLabelVocabulary } from "../../src/api/curation";
 
 const SAMPLE_HASH = "a".repeat(64);
 
@@ -69,5 +69,14 @@ describe("getLabelTags", () => {
         await getLabelTags();
 
         expect(fetchMock).toHaveBeenCalledWith("/api/curation/annotations/tags");
+    });
+});
+
+describe("getCurationAccess", () => {
+    it("asks what the person here may see and change of the labels", async () => {
+        const fetchMock = stubFetch({ label_editing: false, curation_shown: true });
+
+        expect(await getCurationAccess()).toEqual({ label_editing: false, curation_shown: true });
+        expect(fetchMock).toHaveBeenCalledWith("/api/curation/access");
     });
 });

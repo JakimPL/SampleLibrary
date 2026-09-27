@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import stat
+import sys
 from pathlib import Path
 from typing import IO
 
@@ -9,6 +10,7 @@ import pytest
 from samplecore.storage.atomic import (
     PARTIAL_SUFFIX,
     PLAIN_FILE_MODE,
+    PRIVATE_FILE_MODE,
     synchronize_directory,
     synchronize_file,
     write_atomically,
@@ -35,6 +37,22 @@ def test_a_written_file_holds_the_whole_content_with_plain_permissions(tmp_path:
 
     assert destination.read_bytes() == NEW_CONTENT
     assert stat.S_IMODE(destination.stat().st_mode) == PLAIN_FILE_MODE
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows keeps no POSIX file modes")
+def test_a_private_file_is_readable_by_its_owner_alone_at_every_moment_of_its_writing(tmp_path: Path) -> None:
+    """A password is never readable by another user, while it is staged or once it is in place."""
+    destination = tmp_path / "roles.json"
+    staged_modes: list[int] = []
+
+    def write(stream: IO[bytes]) -> None:
+        stream.write(NEW_CONTENT)
+        staged_modes.append(stat.S_IMODE(Path(stream.name).stat().st_mode))
+
+    write_atomically(destination, write, mode=PRIVATE_FILE_MODE)
+
+    assert staged_modes == [PRIVATE_FILE_MODE]
+    assert stat.S_IMODE(destination.stat().st_mode) == PRIVATE_FILE_MODE
 
 
 def test_a_writer_that_raises_leaves_the_previous_file_and_nothing_beside_it(tmp_path: Path) -> None:

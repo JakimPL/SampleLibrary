@@ -7,6 +7,7 @@ import re
 import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Final
 
 from sqlalchemy import Connection
@@ -15,6 +16,7 @@ from sqlalchemy.engine import make_url
 from samplecore.config import ConfigurationError, LibraryConfig, load_config
 from samplecore.exit_status import ExitStatus
 from samplecore.models.experiment import EXPERIMENT_KEY_PATTERN
+from samplecore.ports import MAXIMUM_PORT, MINIMUM_PORT
 from samplecore.storage.database import connect
 from samplecore.storage.sample_audio import SampleAudio
 
@@ -22,8 +24,6 @@ _LOG_FORMAT: Final[str] = "%(asctime)s  %(message)s"
 _LOG_DATE_FORMAT: Final[str] = "%H:%M:%S"
 _CONFIRM_FLAG_HINT: Final[str] = "Nothing has been changed. Pass --confirm to carry it out."
 
-MINIMUM_PORT: Final[int] = 1
-MAXIMUM_PORT: Final[int] = 65_535
 
 _logger = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ def open_catalog_audio(config: LibraryConfig) -> Iterator[tuple[Connection, Samp
     The reader learns every sample file the catalog lists as the pass opens, so a pass reads each
     sample from the store or from the files cataloged when it started.
     """
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         yield connection, SampleAudio.from_catalog(connection, config.library_root)
 
 
@@ -223,6 +223,19 @@ def non_negative_integer(raw_value: str) -> int:
 def port_number(raw_value: str) -> int:
     """An argparse type reading a TCP port."""
     return _bounded_integer(raw_value, minimum=MINIMUM_PORT, maximum=MAXIMUM_PORT)
+
+
+def moment(raw_value: str) -> datetime:
+    """An argparse type reading a moment in ISO 8601, a moment without a time zone read as this machine's local time.
+
+    Raises:
+        argparse.ArgumentTypeError: the value is no moment ISO 8601 spells.
+    """
+    try:
+        read = datetime.fromisoformat(raw_value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"{raw_value!r} is no moment, as in 2026-09-26 21:30") from error
+    return read if read.tzinfo is not None else read.astimezone()
 
 
 def _bounded_integer(raw_value: str, *, minimum: int, maximum: int | None) -> int:

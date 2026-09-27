@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from enum import StrEnum, unique
@@ -13,10 +13,19 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.pool import NullPool
 
-from samplecore.config import DATABASE_URL_ENVIRONMENT_VARIABLE, resolve_config_path
-from samplecore.storage.cluster.quoting import UnsafeValueError, identifier, literal
-from samplecore.storage.cluster.statements import create_database, create_role, database_owner, role_attributes
+from samplecore.config import DATABASE_URL_ENVIRONMENT_VARIABLE, EXAMPLE_DATABASE_URL, resolve_config_path
+from samplecore.models.service_role import ServiceRole
+from samplecore.storage.cluster.quoting import UnsafeValueError, identifier
+from samplecore.storage.cluster.statements import (
+    create_database,
+    create_role,
+    create_service_role,
+    database_owner,
+    password_literal,
+    role_attributes,
+)
 from samplecore.storage.database import CONNECT_TIMEOUT_SECONDS, connect
+from samplecore.storage.service_roles import ServiceRoleRefusedError, check_service_role, grant_service_role
 
 # The disposable sandbox and the database the test suite bootstraps from keep names of their own,
 # matching the config the dev library builder writes and the suite's own default server. Naming them
@@ -92,6 +101,8 @@ class ProvisioningSummary:
     role_creates_databases: bool
     databases: tuple[DatabaseOutcome, ...]
     schemas_prepared: tuple[str, ...]
+    service_roles: tuple[str, ...]
+    service_roles_created: tuple[str, ...]
 
 
 def library_databases(database_url: str) -> tuple[str, ...]:
@@ -107,7 +118,7 @@ def library_databases(database_url: str) -> tuple[str, ...]:
     if library is None:
         raise ProvisioningError(
             f"Your database_url names no database: {make_url(database_url).render_as_string()}",
-            remedy=("Name one, as in postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary",),
+            remedy=(f"Name one, as in {EXAMPLE_DATABASE_URL}",),
         )
 
     return tuple(dict.fromkeys((library, DEVELOPMENT_DATABASE, TEST_DATABASE)))
@@ -128,7 +139,7 @@ def login_role(database_url: str) -> str:
     if role is None:
         raise ProvisioningError(
             f"Your database_url names no role to log in as: {make_url(database_url).render_as_string()}",
-            remedy=("Name one, as in postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary",),
+            remedy=(f"Name one, as in {EXAMPLE_DATABASE_URL}",),
         )
 
     return role
@@ -183,15 +194,18 @@ def open_admin_connection(database_url: str) -> Iterator[Connection]:
         engine.dispose()
 
 
-def provision(database_url: str) -> ProvisioningSummary:
-    """Create the role and the three databases this project expects, where they are missing.
+def provision(database_url: str, *, service_urls: Mapping[ServiceRole, str]) -> ProvisioningSummary:
+    """Create the roles and the three databases this project expects, where they are missing.
 
     Every step looks at ``pg_catalog`` first and adds only what is absent, so a library already in
     use comes through untouched: the catalog keeps its rows, and so does the ``curation`` schema
     holding a person's own labels, ratings, and favorites. The library and the development sandbox
     then have their tables brought into existence, which leaves each ready to serve or extract into.
     The test database stays empty, being the one the suite connects to only in order to create and
-    drop a database per worker.
+    drop a database per worker. Each service role the config names, the one a deployed site reads
+    as and the one the SampleLibrary app records labels as, is created with no power over the
+    server, granted exactly what its service needs in both prepared databases, and then logged in
+    as, which confirms its password and its rights.
 
     Raises:
         ProvisioningError: the configuration names something Postgres cannot be asked for, or the
@@ -200,10 +214,16 @@ def provision(database_url: str) -> ProvisioningSummary:
     library_url = make_url(database_url)
     role = login_role(database_url)
     databases = library_databases(database_url)
-    _require_nameable(role, *databases)
+    service_roles = {service: login_role(url) for service, url in service_urls.items()}
+    _require_nameable(role, *service_roles.values(), *databases)
 
     with open_admin_connection(database_url) as connection:
         role_created = _claim_role(connection, url=library_url, role=role)
+        service_roles_created = tuple(
+            service_roles[service]
+            for service, url in service_urls.items()
+            if _claim_service_role(connection, url=make_url(url), role=service_roles[service])
+        )
         outcomes = tuple(_claim_database(connection, name=name, owner=role) for name in databases)
         attributes = role_attributes(connection, role=role)
 
@@ -212,7 +232,9 @@ def provision(database_url: str) -> ProvisioningSummary:
         if outcome.name in prepared:
             _require_ownership(outcome, role=role)
     for name in prepared:
-        _prepare_schemas(library_url.set(database=name), role=role)
+        _prepare_schemas(library_url.set(database=name), role=role, service_roles=service_roles)
+    for service, url in service_urls.items():
+        _check_service_login(make_url(url), service=service)
 
     return ProvisioningSummary(
         server=describe_server(library_url),
@@ -221,6 +243,8 @@ def provision(database_url: str) -> ProvisioningSummary:
         role_creates_databases=attributes is not None and attributes.may_create_databases,
         databases=outcomes,
         schemas_prepared=prepared,
+        service_roles=tuple(service_roles.values()),
+        service_roles_created=service_roles_created,
     )
 
 
@@ -316,7 +340,7 @@ def _password_route(role: str, password: str) -> tuple[str, ...]:
     return (
         f"If role {role!r} exists with another password, give it this one at a superuser prompt, such as",
         "`sudo -u postgres psql`, then run `samplelibrary setup database` again:",
-        f"        ALTER ROLE {statement_value(role)} WITH PASSWORD {statement_value(password, quoted=False)};",
+        f"        ALTER ROLE {statement_value(role)} WITH PASSWORD {password_value(password)};",
         "",
     )
 
@@ -333,8 +357,7 @@ def role_creation_remedy(url: URL, role: str, password: str) -> tuple[str, ...]:
         "Creating a role needs a PostgreSQL superuser. Any of these will do:",
         "",
         "  * Run this at a superuser prompt, such as `sudo -u postgres psql`:",
-        f"        CREATE ROLE {statement_value(role)} WITH LOGIN CREATEDB "
-        f"PASSWORD {statement_value(password, quoted=False)};",
+        f"        CREATE ROLE {statement_value(role)} WITH LOGIN CREATEDB " f"PASSWORD {password_value(password)};",
         "",
         "  * If you know the password of a superuser on this server, usually the `postgres`",
         f"    account, set {ADMIN_URL_ENVIRONMENT_VARIABLE} to this URL, then run `samplelibrary setup database`",
@@ -355,14 +378,22 @@ def container_route() -> tuple[str, ...]:
     )
 
 
-def statement_value(value: str, *, quoted: bool = True) -> str:
-    """One name or password, spelled as it would be spelled in a statement a person types.
+def statement_value(value: str) -> str:
+    """One name, spelled as it would be spelled in a statement a person types.
 
     Composed through the same quoting the command's own statements go through, so an advice line
-    and the statement it stands for agree on how a value is spelled.
+    and the statement it stands for agree on how a name is spelled.
     """
-    fragment = identifier(value) if quoted else literal(value)
-    return fragment.as_string(None).strip()
+    return identifier(value).as_string(None).strip()
+
+
+def password_value(password: str) -> str:
+    """A password as a statement a person pastes carries it: its SCRAM verifier, quoted.
+
+    Postgres stores a verifier as it is, so the pasted statement gives the role this very password
+    while the advice, the terminal it prints to and any server log keep only what the server keeps.
+    """
+    return password_literal(password).as_string(None).strip()
 
 
 def _open_admin(database_url: str) -> tuple[Engine, Connection]:
@@ -445,6 +476,67 @@ def _claim_role(connection: Connection, *, url: URL, role: str) -> bool:
     return True
 
 
+def _claim_service_role(connection: Connection, *, url: URL, role: str) -> bool:
+    """Create a service role where the server lacks it, reporting whether it was created.
+
+    Raises:
+        ProvisioningError: the role is absent, and either this connection may not create one or the
+            configuration carries no password for it to log in with.
+    """
+    if role_attributes(connection, role=role) is not None:
+        return False
+
+    password = url.password
+    if password is None:
+        raise ProvisioningError(
+            f"Role {role!r} is missing, and creating it needs the password it will log in with.",
+            remedy=(f"Put one in the URL that names {role!r}.",),
+        )
+
+    try:
+        create_service_role(connection, role=role, password=password)
+    except postgres_errors.DuplicateObject:
+        return False
+    except postgres_errors.InsufficientPrivilege as error:
+        raise ProvisioningError(
+            f"Role {role!r} is missing, and this connection may not create one.",
+            remedy=(
+                "Create it at a superuser prompt, such as `sudo -u postgres psql`, "
+                "then run `samplelibrary setup database` again:",
+                "",
+                f"    CREATE ROLE {statement_value(role)} WITH LOGIN PASSWORD {password_value(password)};",
+            ),
+        ) from error
+
+    return True
+
+
+def _check_service_login(url: URL, *, service: ServiceRole) -> None:
+    """Log in as a service role and confirm it holds exactly what its service needs.
+
+    Raises:
+        ProvisioningError: the role cannot log in with the configured password, or holds more or
+            less than its service needs.
+    """
+    role = url.username or ""
+    try:
+        with closing(connect(url.render_as_string(hide_password=False), read_only=True)) as connection:
+            check_service_role(connection, service)
+    except OperationalError as error:
+        raise ProvisioningError(
+            f"Role {role!r} can't log in: {server_message(error)}",
+            remedy=_password_route(role, url.password or ""),
+        ) from error
+    except ServiceRoleRefusedError as error:
+        raise ProvisioningError(
+            str(error),
+            remedy=(
+                "Take the extra rights away at a superuser prompt, such as `sudo -u postgres psql`, or name "
+                "a role of its own for it in the config, then run `samplelibrary setup database` again.",
+            ),
+        ) from error
+
+
 def _claim_database(connection: Connection, *, name: str, owner: str) -> DatabaseOutcome:
     """Create one database owned by ``owner`` where the server lacks it.
 
@@ -500,15 +592,17 @@ def _require_ownership(outcome: DatabaseOutcome, *, role: str) -> None:
     )
 
 
-def _prepare_schemas(url: URL, *, role: str) -> None:
-    """Bring one database's catalog and curation schemas into existence.
+def _prepare_schemas(url: URL, *, role: str, service_roles: Mapping[ServiceRole, str]) -> None:
+    """Bring one database's catalog and curation schemas into existence, and grant each service role its rights.
 
     Raises:
         ProvisioningError: the role may not create them where they are missing.
     """
     try:
-        with closing(connect(url.render_as_string(hide_password=False))):
-            pass
+        with closing(connect(url.render_as_string(hide_password=False))) as connection:
+            for service, service_role in service_roles.items():
+                grant_service_role(connection, service=service, role=service_role)
+            connection.commit()
     except DBAPIError as error:
         match error.orig:
             case postgres_errors.InsufficientPrivilege():

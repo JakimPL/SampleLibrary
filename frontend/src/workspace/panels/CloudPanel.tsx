@@ -26,6 +26,7 @@ import { useMorphStore } from "../../morph/morphStore";
 import { MorphStrip } from "../../morph/MorphStrip";
 import { useMorphPlayback } from "../../morph/useMorphPlayback";
 import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
+import { useCurationAccess } from "../../samples/useCurationAccess";
 import { useLabelTags } from "../../samples/useLabelTags";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
@@ -180,6 +181,7 @@ export function CloudPanel(): ReactElement {
     const width = useContainerWidth(panelRef);
     const legendAsSheet = width !== null && width < LEGEND_SHEET_WIDTH_PX;
     const { input, layout } = useLayoutMode();
+    const { curationShown } = useCurationAccess();
     const state = useActiveCloudPoints(tab);
     const { coloring, tags, painted, togglePainted } = useSampleColoring(mode);
     const navigate = useNavigate();
@@ -305,10 +307,12 @@ export function CloudPanel(): ReactElement {
                                 Legend
                             </button>
                         ) : (
-                            <>
-                                <span className="panel-filter-caption">Color by</span>
-                                <ColoringModeChoice mode={mode} onModeChange={setMode} />
-                            </>
+                            curationShown && (
+                                <>
+                                    <span className="panel-filter-caption">Color by</span>
+                                    <ColoringModeChoice mode={mode} onModeChange={setMode} />
+                                </>
+                            )
                         )}
                     </>
                 )}

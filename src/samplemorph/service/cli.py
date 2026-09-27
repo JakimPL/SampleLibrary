@@ -10,12 +10,8 @@ from samplecore.cli_parsing import add_subcommand
 from samplecore.cli_support import port_number
 from samplecore.config import LibraryConfig
 from samplecore.exit_status import ExitStatus
-from samplemorph.routes.selection import (
-    DEFAULT_FILTER_SELECTION_PATH,
-    DEFAULT_SELECTION_PATH,
-    read_filter_selection,
-    read_route_selection,
-)
+from samplemorph.paths import DEFAULT_FILTER_SELECTION_PATH, DEFAULT_SELECTION_PATH
+from samplemorph.routes.selection import read_filter_selection, read_route_selection
 from samplemorph.service.settings import ServiceSettings
 
 COMMAND_NAME: Final[str] = "serve"
@@ -73,7 +69,7 @@ def run(config: LibraryConfig, arguments: argparse.Namespace) -> None:
         _logger.error("Serving nothing: %s.", error)
         sys.exit(ExitStatus.REFUSED)
 
-    uvicorn.run(create_app(renderer), host=host, port=port)
+    uvicorn.run(create_app(renderer, host=host), host=host, port=port)
 
 
 def _bind_address(config: LibraryConfig, arguments: argparse.Namespace) -> tuple[str, int]:

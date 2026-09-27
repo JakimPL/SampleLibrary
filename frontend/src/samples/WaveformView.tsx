@@ -137,7 +137,7 @@ export function WaveformView({
                     className={classNames("wave-notice", notice.failed && "wave-notice-failed")}
                     {...(notice.failed ? { role: "status" } : {})}
                 >
-                    {notice.text}
+                    <span className="wave-notice-text">{notice.text}</span>
                 </p>
             )}
             {playheadFraction !== null && (

@@ -16,6 +16,7 @@ from sampleextract.equivalence.scoring import (
     MAXIMUM_GAIN,
     MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON,
     RESAMPLED_MINIMUM_CONFIDENCE,
+    resampling_filter,
     score_gain_variant,
     score_resampled_variant,
 )
@@ -264,3 +265,22 @@ def test_the_lag_search_finds_the_offset_a_trimmed_lead_in_left_on_every_channel
     assert alignment.lag_frames == 17
     direct = np.corrcoef(alignment.windowed_resampled.reshape(-1), alignment.windowed_reference.reshape(-1))[0, 1]
     assert alignment.correlation == pytest.approx(direct, abs=1e-9)
+
+
+def test_score_resampled_variant_compares_lengths_whose_ratio_rounds_to_one() -> None:
+    """Lengths past the gain scorer's tolerance whose ratio rounds to one are compared frame for frame."""
+    waveform = _tonal_waveform(20_000)
+
+    score = score_resampled_variant(waveform, np.pad(waveform, ((0, 40), (0, 0))))
+
+    assert score is not None
+    assert score.confidence > RESAMPLED_MINIMUM_CONFIDENCE
+
+
+@pytest.mark.parametrize("ratio", [(2, 1), (1, 2), (147, 160), (199, 200)])
+def test_the_resampling_filter_designed_once_resamples_as_a_fresh_design_does(ratio: tuple[int, int]) -> None:
+    waveform = np.random.default_rng(3).standard_normal((5000, 2))
+
+    reused = resample_poly(waveform, *ratio, axis=0, window=resampling_filter(*ratio))
+
+    np.testing.assert_array_equal(reused, resample_poly(waveform, *ratio, axis=0))

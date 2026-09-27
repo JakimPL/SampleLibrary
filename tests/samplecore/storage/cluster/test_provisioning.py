@@ -13,6 +13,8 @@ from sqlalchemy.engine import URL, make_url
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
 from samplecore.models.annotation import AnnotationSource, ModuleSlotAnchor, SampleAnnotation
 from samplecore.models.sample_properties import SampleOccurrence
+from samplecore.models.service_role import ServiceRole
+from samplecore.storage.cluster.embedded.state import managed_catalog_url
 from samplecore.storage.cluster.provisioning import (
     ADMIN_URL_ENVIRONMENT_VARIABLE,
     DEVELOPMENT_DATABASE,
@@ -29,6 +31,8 @@ from samplecore.storage.cluster.provisioning import (
     development_database_url,
     library_databases,
     login_role,
+    password_value,
+    provision,
     server_address,
     statement_value,
 )
@@ -37,8 +41,8 @@ from samplecore.storage.database import connect
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 
 _ROLELESS_URL = "postgresql+psycopg://localhost:5432/samplelibrary"
-_DATABASELESS_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432"
-_LIBRARY_URL = make_url("postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary")
+_DATABASELESS_URL = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432"
+_LIBRARY_URL = make_url("postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/samplelibrary")
 
 
 @pytest.fixture
@@ -71,7 +75,7 @@ def _remedy(
 
 def test_library_databases_leads_with_the_configured_library() -> None:
     library, development, test_database = library_databases(
-        "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/my_own_library"
+        "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/my_own_library"
     )
 
     assert library == "my_own_library"
@@ -81,7 +85,7 @@ def test_library_databases_leads_with_the_configured_library() -> None:
 def test_library_databases_names_the_sandbox_once_for_a_sandbox_url() -> None:
     """A URL already naming the sandbox yields the same companions, each named once."""
     databases = library_databases(
-        f"postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/{DEVELOPMENT_DATABASE}"
+        f"postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/{DEVELOPMENT_DATABASE}"
     )
 
     assert databases == (DEVELOPMENT_DATABASE, TEST_DATABASE)
@@ -174,9 +178,10 @@ def test_the_statement_a_person_is_told_to_run_names_the_role_as_postgres_reads_
     assert f'CREATE ROLE "{role}" WITH LOGIN CREATEDB PASSWORD' in remedy
 
 
-def test_a_password_in_a_suggested_statement_is_spelled_the_way_the_command_would_spell_it() -> None:
-    assert statement_value("pa'ss", quoted=False) == "'pa''ss'"
+def test_a_suggested_statement_names_a_role_the_way_the_command_would_and_carries_a_verifier() -> None:
     assert statement_value("user") == '"user"'
+    assert password_value("pa'ss").startswith("'SCRAM-SHA-256$4096:")
+    assert "pa'ss" not in password_value("pa'ss")
 
 
 def test_preparing_a_fresh_database_creates_both_schemas(prepared_database_url: str) -> None:
@@ -322,10 +327,12 @@ def test_a_server_is_named_the_way_the_driver_reaches_it(case: ServerCase) -> No
     assert server_address(url) == case.address
 
 
-def test_a_rejected_password_offers_to_set_it_on_the_existing_role() -> None:
+def test_a_rejected_password_offers_to_set_it_on_the_existing_role_through_its_verifier() -> None:
+    """The statement gives the role the configured password while the advice itself never shows it."""
     remedy = "\n".join(_remedy('FATAL:  password authentication failed for user "samplelibrary"'))
 
-    assert "ALTER ROLE \"samplelibrary\" WITH PASSWORD 'samplelibrary';" in remedy
+    assert 'ALTER ROLE "samplelibrary" WITH PASSWORD \'SCRAM-SHA-256$4096:' in remedy
+    assert _LIBRARY_URL.password not in remedy
 
 
 def test_a_missing_role_is_offered_its_creation_alone() -> None:
@@ -336,9 +343,33 @@ def test_a_missing_role_is_offered_its_creation_alone() -> None:
 
 
 def test_advice_for_a_url_without_a_port_names_a_connection_url_that_parses() -> None:
-    url = make_url("postgresql+psycopg://samplelibrary:samplelibrary@localhost/samplelibrary")
+    url = make_url("postgresql+psycopg://samplelibrary:not-a-real-password@localhost/samplelibrary")
 
     remedy = _remedy('FATAL:  password authentication failed for user "samplelibrary"', url=url)
 
     admin_line = next(line.strip() for line in remedy if "<password>@" in line)
     assert make_url(admin_line).port == 5432
+
+
+def test_provisioning_creates_service_roles_that_log_in_holding_what_their_service_needs(
+    module_cluster_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A server of a person's own, played by a library's own cluster, whose owner is the superuser `provision` asks."""
+    superuser = make_url(managed_catalog_url(module_cluster_root))
+    monkeypatch.setenv(
+        ADMIN_URL_ENVIRONMENT_VARIABLE,
+        superuser.set(database=MAINTENANCE_DATABASES[0]).render_as_string(hide_password=False),
+    )
+    owner = superuser.set(username="provisioned_owner", password="owner-secret", database="provisioned")
+    service_urls = {
+        ServiceRole.READER: owner.set(username="provisioned_reader", password="reader-secret"),
+        ServiceRole.CURATOR: owner.set(username="provisioned_curator", password="curator-secret"),
+    }
+    rendered = {service: url.render_as_string(hide_password=False) for service, url in service_urls.items()}
+
+    first = provision(owner.render_as_string(hide_password=False), service_urls=rendered)
+    again = provision(owner.render_as_string(hide_password=False), service_urls=rendered)
+
+    assert first.service_roles_created == ("provisioned_reader", "provisioned_curator")
+    assert again.service_roles_created == ()
+    assert again.service_roles == ("provisioned_reader", "provisioned_curator")

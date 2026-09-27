@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
 import sys
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -15,6 +14,7 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
+from samplecloud.backends import FeatureExtractor
 from samplecore.cli_support import load_config_or_exit
 from samplecore.exit_status import ExitStatus
 from samplecore.storage.atomic import write_bytes_atomically
@@ -26,7 +26,7 @@ SEED_BYTES: Final[int] = 8
 PROGRAM: Final[str] = "samplelibrary"
 # The machine a command runs on names nothing it builds, and neither does the number the catalog
 # happened to give an experiment, which a catalog rebuilt from nothing numbers again.
-UNNAMING_WORDS: Final[frozenset[str]] = frozenset({"--workers", "--device", "--teacher-experiment"})
+UNNAMING_WORDS: Final[frozenset[str]] = frozenset({"--workers", "--device", "--teacher-experiment", "--batch-size"})
 BEST_VALIDATION_LOSS: Final[float] = 0.5
 PLANE_DIMENSIONS: Final[int] = 2
 
@@ -56,7 +56,7 @@ def describe_frames(waveform: NDArray[np.float64]) -> NDArray[np.float64]:
     return _seeded(np.ascontiguousarray(waveform, dtype=np.float32).tobytes()).standard_normal(VECTOR_SIZE)
 
 
-class HeardContentExtractor:
+class HeardContentExtractor(FeatureExtractor):
     """Describes a sample by the frames it hears, standing in for a model that describes a sample the same way every time.
 
     It stops at the scenario's midway gate before the sample after the first checkpoint.
@@ -82,7 +82,8 @@ class WordedTeacher:
         )
 
 
-def lay_out_on_a_plane(standardized: NDArray[np.float64], *, n_neighbors: int) -> NDArray[np.float64]:
+# pylint: disable-next=unused-argument
+def lay_out_on_a_plane(standardized: NDArray[np.float64], *, n_neighbors: int, stages: object) -> NDArray[np.float64]:
     """A sample's first two standardized features as its place on the cloud, standing in for a fitted layout.
 
     The same vectors give the same places in any process and a changed vector moves its point, which
@@ -177,8 +178,8 @@ def _content(argv: list[str], stand_in: StandIn) -> bytes:
 def _cache_grids(argv: list[str], stand_in: StandIn) -> None:
     from samplecore.storage.database import connect
     from samplecore.storage.sample_audio import readable_sample_hashes
+    from samplecore.storage.staging import fresh_staging, publish_staged
     from sampledescriptor.commands.cache_grids import COMMAND_NAME
-    from sampledescriptor.training.cache_staging import STAGING_SUFFIX
     from sampledescriptor.training.descriptor.cache import (
         DESCRIPTION_FILE_NAME,
         GRIDS_FILE_NAME,
@@ -188,18 +189,15 @@ def _cache_grids(argv: list[str], stand_in: StandIn) -> None:
 
     arguments = _descriptor_arguments([COMMAND_NAME, *argv])
     config = load_config_or_exit()
-    with connect(config.database_url) as connection:
+    with connect(config.catalog_url()) as connection:
         hashes = sorted(readable_sample_hashes(connection))
     directory = grid_cache_directory(config.library_root, name=arguments.cache)  # type: ignore[attr-defined]
-    staging = directory.with_name(directory.name + STAGING_SUFFIX)
-    shutil.rmtree(staging, ignore_errors=True)
-    staging.mkdir(parents=True)
+    staging = fresh_staging(directory)
     grids = _seeded(_content(argv, stand_in)).standard_normal((len(hashes), 4, 4)).astype(np.float32)
     np.save(staging / GRIDS_FILE_NAME, grids)
     (staging / HASHES_FILE_NAME).write_text("\n".join(hashes), encoding="utf-8")
     (staging / DESCRIPTION_FILE_NAME).write_text(json.dumps({"samples": len(hashes)}), encoding="utf-8")
-    shutil.rmtree(directory, ignore_errors=True)
-    staging.replace(directory)
+    publish_staged(staging, directory, file_names=(GRIDS_FILE_NAME, HASHES_FILE_NAME, DESCRIPTION_FILE_NAME))
 
 
 def _train_descriptor(argv: list[str], stand_in: StandIn) -> None:
@@ -264,7 +262,7 @@ def _embed_cache(argv: list[str]) -> None:
         sys.exit(ExitStatus.FAILED)
     cache = grid_cache_directory(config.library_root, name=arguments.cache)  # type: ignore[attr-defined]
     hashes = (cache / HASHES_FILE_NAME).read_text(encoding="utf-8").split("\n")
-    with connect(config.database_url) as connection:
+    with connect(config.catalog_url()) as connection:
         experiments = PostgresExperimentRepository(connection)
         if experiments.get_by_key(arguments.key) is not None:  # type: ignore[attr-defined]
             return

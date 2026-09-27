@@ -39,5 +39,5 @@ def cover_share(
     claim ``connect`` takes settles which of several starting at once creates a fresh catalog's
     tables.
     """
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         return cover(config, connection, items, progress=QueueProgress(counts))

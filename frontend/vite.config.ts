@@ -14,6 +14,10 @@ export default defineConfig({
             moduleTargetText: process.env.VITE_CLOUD_DENSIFY_MODULES,
         }),
     ],
+    build: {
+        outDir: "../build/frontend",
+        emptyOutDir: true,
+    },
     server: {
         proxy: {
             "/api": BACKEND_DEV_URL,

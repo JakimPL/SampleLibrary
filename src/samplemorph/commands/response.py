@@ -17,8 +17,9 @@ from samplemorph.envelope.payload import response_payload
 from samplemorph.envelope.response import EnvelopeResponse, ResponseReading, build_envelope_response
 from samplemorph.geometry import log_frequency_geometry
 from samplemorph.heard import HeardSample, SampleNotCataloged, common_rate, read_heard_sample, require_sample
+from samplemorph.paths import DEFAULT_FILTER_SELECTION_PATH
 from samplemorph.routes.route import hear_in_frame
-from samplemorph.routes.selection import DEFAULT_FILTER_SELECTION_PATH, read_filter_selection
+from samplemorph.routes.selection import read_filter_selection
 from samplemorph.transport.analysis import analyze
 from samplemorph.transport.settings import TransportSettings
 

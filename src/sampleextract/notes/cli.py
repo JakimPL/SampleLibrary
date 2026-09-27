@@ -33,7 +33,7 @@ def main(argv: list[str], *, prog: str) -> None:
     """
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         modules = PostgresModuleRepository(connection)
         passes = PostgresPassCompletionRepository(connection)
         membership = modules.membership_digest()

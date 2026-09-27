@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { useMemo } from "react";
 
+import { useCurationAccess } from "../samples/useCurationAccess";
 import { BottomSheet } from "../shared/overlay/BottomSheet";
 import { labelColor, readLabelPaletteParameters } from "../theme/labelPalette";
 import { useThemeSignal } from "../theme/useThemeSignal";
@@ -33,6 +34,7 @@ export function LegendSheet({
     onClose,
 }: LegendSheetProps): ReactElement {
     const themeSignal = useThemeSignal();
+    const { curationShown } = useCurationAccess();
     const colorByName = useMemo(() => {
         const parameters = readLabelPaletteParameters();
         return new Map(tags.map((tag) => [tag.name, labelColor(tag.rank, parameters)]));
@@ -41,10 +43,12 @@ export function LegendSheet({
 
     return (
         <BottomSheet title="Legend" onClose={onClose}>
-            <fieldset className="legend-sheet-mode">
-                <legend>Color by</legend>
-                <ColoringModeChoice mode={mode} onModeChange={onModeChange} />
-            </fieldset>
+            {curationShown && (
+                <fieldset className="legend-sheet-mode">
+                    <legend>Color by</legend>
+                    <ColoringModeChoice mode={mode} onModeChange={onModeChange} />
+                </fieldset>
+            )}
             {tags.length === 0 ? (
                 <p className="legend-sheet-empty">{emptyCaption}</p>
             ) : (

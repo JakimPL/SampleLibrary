@@ -1,22 +1,30 @@
 from __future__ import annotations
 
 import logging
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from typing import Final
 
+import numpy as np
+from numpy.typing import NDArray
 from sqlalchemy import Connection
-from tqdm import tqdm
 
 from samplecloud.backends import FeatureExtractor
 from samplecloud.hearing import Hearing
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.models.sample import Sample
+from samplecore.prefetch import prefetched
+from samplecore.progress import ProgressBar
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError, readable_sample_hashes
 
 EXTRACTION_CHECKPOINT_INTERVAL: Final[int] = 500
+EXTRACTION_BATCH_SIZE: Final[int] = 16
+READ_AHEAD_SAMPLES: Final[int] = 64
+EXTRACTION_LABEL: Final[str] = "Extracting features"
 
 _logger = logging.getLogger(__name__)
 
@@ -107,7 +115,7 @@ def readable_pending_count(connection: Connection, experiment_id: int, *, hearin
 
 
 def extract_features(
-    connection: Connection, audio: SampleAudio, feature_pass: FeaturePass, pending: PendingSamples
+    connection: Connection, audio: SampleAudio, feature_pass: FeaturePass, pending: PendingSamples, *, batch_size: int
 ) -> FeatureExtractionSummary:
     """Extract a feature vector for every pending sample of the pass's experiment.
 
@@ -120,48 +128,108 @@ def extract_features(
     partway through a real library's pass loses at most one checkpoint's worth of work on restart,
     rather than the whole pass. A moved sample's old vector leaves in the checkpoint that stores its
     new one, so the experiment holds one vector per sample throughout.
+
+    Samples are described ``batch_size`` at a time, which an extractor reading a batch in one pass
+    answers faster, while a thread reads and hears the ones after them. A batch ends at a checkpoint,
+    so every checkpoint holds exactly the samples described before it.
     """
-    experiment_id = feature_pass.experiment_id
-    feature_vector_repository = PostgresSampleFeatureVectorRepository(connection)
     _logger.info("%d samples already extracted, %d to extract.", pending.already_extracted, len(pending.samples))
-
-    pending_vectors: list[SampleFeatureVector] = []
-    newly_extracted_count = 0
-    unavailable_count = 0
-    for sample in tqdm(pending.samples, desc="Extracting features"):
-        try:
-            sample_pcm = audio.read(sample)
-        except SampleUnavailableError:
-            unavailable_count += 1
-            continue
-        heard = feature_pass.hearing.hear(sample.hash, sample_pcm.pcm)
-        raw_vector = feature_pass.feature_extractor.extract(heard)
-        pending_vectors.append(
-            SampleFeatureVector(
-                experiment_id=experiment_id,
-                sample_hash=sample.hash,
-                vector=tuple(float(value) for value in raw_vector),
-                computed_at=datetime.now(UTC),
-                heard_rate=feature_pass.hearing.rate_for(sample.hash),
-            )
-        )
-        newly_extracted_count += 1
-        if len(pending_vectors) >= EXTRACTION_CHECKPOINT_INTERVAL:
-            _store_checkpoint(
-                connection, feature_vector_repository, pending_vectors, experiment_id=experiment_id, moved=pending.moved
-            )
-            pending_vectors = []
-
-    _store_checkpoint(
-        connection, feature_vector_repository, pending_vectors, experiment_id=experiment_id, moved=pending.moved
-    )
+    read_ahead = prefetched(pending.samples, partial(_heard, audio, feature_pass.hearing), depth=READ_AHEAD_SAMPLES)
+    with (
+        closing(read_ahead) as heard_samples,
+        ProgressBar(total=len(pending.samples), label=EXTRACTION_LABEL) as progress,
+    ):
+        extraction = _Extraction(connection, feature_pass, pending, batch_size=batch_size, progress=progress)
+        for sample, heard in heard_samples:
+            extraction.take(sample, heard)
+        extraction.finish()
     _logger.info("Feature extraction complete.")
     return FeatureExtractionSummary(
         cataloged=pending.cataloged,
         already_extracted=pending.already_extracted,
-        newly_extracted=newly_extracted_count,
-        unavailable=unavailable_count,
+        newly_extracted=extraction.newly_extracted,
+        unavailable=extraction.unavailable,
     )
+
+
+def _heard(audio: SampleAudio, hearing: Hearing, sample: Sample) -> NDArray[np.float64] | None:
+    """The sample's frames as the pass hears them, or None where no file holds the sample now."""
+    try:
+        sample_pcm = audio.read(sample)
+    except SampleUnavailableError:
+        return None
+    return hearing.hear(sample.hash, sample_pcm.pcm)
+
+
+class _Extraction:
+    """One pass through its pending samples: the batch it gathers, and the checkpoint the described batches fill."""
+
+    def __init__(
+        self,
+        connection: Connection,
+        feature_pass: FeaturePass,
+        pending: PendingSamples,
+        *,
+        batch_size: int,
+        progress: ProgressBar,
+    ) -> None:
+        self._connection = connection
+        self._feature_pass = feature_pass
+        self._moved = pending.moved
+        self._batch_size = batch_size
+        self._progress = progress
+        self._repository = PostgresSampleFeatureVectorRepository(connection)
+        self._batch: list[tuple[Sample, NDArray[np.float64]]] = []
+        self._checkpoint: list[SampleFeatureVector] = []
+        self.newly_extracted = 0
+        self.unavailable = 0
+
+    def take(self, sample: Sample, heard: NDArray[np.float64] | None) -> None:
+        """Add one sample to the batch, describing the batch once it is full or reaches the next checkpoint."""
+        if heard is None:
+            self.unavailable += 1
+            self._progress.update(1)
+            return
+        self._batch.append((sample, heard))
+        room = EXTRACTION_CHECKPOINT_INTERVAL - len(self._checkpoint)
+        if len(self._batch) >= min(self._batch_size, room):
+            self._describe_batch()
+
+    def finish(self) -> None:
+        """Describe what the last batch holds, and commit the last checkpoint."""
+        if self._batch:
+            self._describe_batch()
+        self._store()
+
+    def _describe_batch(self) -> None:
+        hearing = self._feature_pass.hearing
+        vectors = self._feature_pass.feature_extractor.extract_many([heard for _, heard in self._batch])
+        described_at = datetime.now(UTC)
+        self._checkpoint.extend(
+            SampleFeatureVector(
+                experiment_id=self._feature_pass.experiment_id,
+                sample_hash=sample.hash,
+                vector=tuple(float(value) for value in vector),
+                computed_at=described_at,
+                heard_rate=hearing.rate_for(sample.hash),
+            )
+            for (sample, _), vector in zip(self._batch, vectors, strict=True)
+        )
+        self.newly_extracted += len(self._batch)
+        self._progress.update(len(self._batch))
+        self._batch = []
+        if len(self._checkpoint) >= EXTRACTION_CHECKPOINT_INTERVAL:
+            self._store()
+
+    def _store(self) -> None:
+        _store_checkpoint(
+            self._connection,
+            self._repository,
+            self._checkpoint,
+            experiment_id=self._feature_pass.experiment_id,
+            moved=self._moved,
+        )
+        self._checkpoint = []
 
 
 def _store_checkpoint(

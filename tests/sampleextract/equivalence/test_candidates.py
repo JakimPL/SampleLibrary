@@ -16,7 +16,6 @@ from sampleextract.equivalence.candidates import (
     MAX_RESAMPLE_RATIO,
     MINIMUM_GAIN_FINGERPRINT_SIMILARITY,
     MINIMUM_RESAMPLED_FINGERPRINT_SIMILARITY,
-    CandidateBlock,
     Fingerprints,
     candidate_blocks,
 )
@@ -47,35 +46,50 @@ def _fingerprints(rows: list[tuple[NDArray[np.float32], int]]) -> Fingerprints:
         shapes=stacked,
         rates=stacked,
         trimmed_frames=np.array([frames for _, frames in rows], dtype=np.int64),
+        first_new=0,
     )
 
 
-def _merged(blocks: list[CandidateBlock]) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
-    def indices(pairs: tuple[tuple[Sample, Sample], ...]) -> set[tuple[int, int]]:
-        return {(int(first.hash, 16), int(second.hash, 16)) for first, second in pairs}
+def _merged(fingerprints: Fingerprints, *, block_rows: int) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
+    """Every pair the search finds, named by the seeds of its samples' hashes, in the order it names them."""
+
+    def seeds(pairs: tuple[tuple[int, int], ...]) -> set[tuple[int, int]]:
+        return {
+            (int(fingerprints.samples[first].hash, 16), int(fingerprints.samples[second].hash, 16))
+            for first, second in pairs
+        }
 
     gain: set[tuple[int, int]] = set()
     resampled: set[tuple[int, int]] = set()
-    for block in blocks:
-        gain |= indices(block.gain_pairs)
-        resampled |= indices(block.resampled_pairs)
+    for block in candidate_blocks(fingerprints, block_rows=block_rows):
+        gain |= seeds(block.gain_pairs)
+        resampled |= seeds(block.resampled_pairs)
     return gain, resampled
+
+
+def _clustered_rows(count: int) -> NDArray[np.float32]:
+    rng = np.random.default_rng(5)
+    centers = rng.standard_normal((12, 16))
+    rows = centers[rng.integers(0, 12, count)] + rng.standard_normal((count, 16)) * 0.15
+    return (rows / np.linalg.norm(rows, axis=1, keepdims=True)).astype(np.float32)
+
+
+def _split(unit_rows: NDArray[np.float32], seeds: NDArray[np.int64], *, first_new: int) -> Fingerprints:
+    return Fingerprints(
+        samples=tuple(_sample(int(seed)) for seed in seeds),
+        shapes=unit_rows,
+        rates=unit_rows,
+        trimmed_frames=np.full(len(seeds), 1000, dtype=np.int64),
+        first_new=first_new,
+    )
 
 
 @pytest.mark.parametrize("block_rows", [1, 7, 500])
 def test_the_block_search_finds_exactly_the_pairs_a_radius_search_finds(block_rows: int) -> None:
-    rng = np.random.default_rng(5)
-    centers = rng.standard_normal((12, 16))
-    rows = centers[rng.integers(0, 12, 200)] + rng.standard_normal((200, 16)) * 0.15
-    unit_rows = (rows / np.linalg.norm(rows, axis=1, keepdims=True)).astype(np.float32)
-    fingerprints = Fingerprints(
-        samples=tuple(_sample(seed) for seed in range(200)),
-        shapes=unit_rows,
-        rates=unit_rows,
-        trimmed_frames=np.full(200, 1000, dtype=np.int64),
-    )
+    unit_rows = _clustered_rows(200)
+    fingerprints = _split(unit_rows, np.arange(200), first_new=0)
 
-    gain, _ = _merged(list(candidate_blocks(fingerprints, block_rows=block_rows)))
+    gain, _ = _merged(fingerprints, block_rows=block_rows)
 
     radius = np.sqrt(2.0 * (1.0 - MINIMUM_GAIN_FINGERPRINT_SIMILARITY))
     expected = cKDTree(unit_rows.astype(np.float64)).query_pairs(r=radius - 1e-6)
@@ -84,6 +98,27 @@ def test_the_block_search_finds_exactly_the_pairs_a_radius_search_finds(block_ro
         float(unit_rows[first] @ unit_rows[second]) >= MINIMUM_GAIN_FINGERPRINT_SIMILARITY - 1e-5
         for first, second in gain
     )
+
+
+@pytest.mark.parametrize("first_new", [1, 57, 199])
+def test_a_search_from_the_new_rows_adds_to_the_compared_ones_exactly_the_pairs_a_whole_search_finds(
+    first_new: int,
+) -> None:
+    """Pairs among compared rows stay found, pairs reaching a new row are found once, each lower hash first."""
+    unit_rows = _clustered_rows(200)
+    seeds = np.random.default_rng(8).permutation(200)
+    compared_order = np.argsort(seeds[:first_new], kind="stable")
+    new_order = first_new + np.argsort(seeds[first_new:], kind="stable")
+    order = np.concatenate([compared_order, new_order])
+    whole = _split(unit_rows[np.argsort(seeds)], np.sort(seeds), first_new=0)
+
+    incremental, _ = _merged(_split(unit_rows[order], seeds[order], first_new=first_new), block_rows=7)
+    earlier, _ = _merged(_split(unit_rows[compared_order], seeds[compared_order], first_new=0), block_rows=7)
+
+    expected, _ = _merged(whole, block_rows=7)
+    assert incremental | earlier == expected
+    assert not incremental & earlier
+    assert all(first < second for first, second in incremental)
 
 
 @dataclass(frozen=True)
@@ -127,7 +162,7 @@ def test_a_close_pair_is_classified_by_how_its_trimmed_lengths_relate(case: Clas
     assert float(NEARLY_SIMILAR @ SIMILAR) < MINIMUM_RESAMPLED_FINGERPRINT_SIMILARITY
     fingerprints = _fingerprints([(SIMILAR, case.first_frames), (case.second_fingerprint, case.second_frames)])
 
-    gain, resampled = _merged(list(candidate_blocks(fingerprints, block_rows=2)))
+    gain, resampled = _merged(fingerprints, block_rows=2)
 
     assert (gain == {(0, 1)}) is case.gain
     assert (resampled == {(0, 1)}) is case.resampled
@@ -184,8 +219,9 @@ def test_every_accepted_gain_variant_is_a_gain_candidate(case: GainVariantCase) 
         shapes=np.stack([compute_shape_fingerprint(first), compute_shape_fingerprint(second)]).astype(np.float32),
         rates=np.stack([compute_rate_fingerprint(first), compute_rate_fingerprint(second)]).astype(np.float32),
         trimmed_frames=np.array([first.shape[0], second.shape[0]], dtype=np.int64),
+        first_new=0,
     )
 
-    gain, _ = _merged(list(candidate_blocks(fingerprints, block_rows=2)))
+    gain, _ = _merged(fingerprints, block_rows=2)
 
     assert gain == {(0, 1)}

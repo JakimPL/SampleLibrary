@@ -7,6 +7,7 @@ import type { SampleDetail } from "../../src/api/samples";
 import { AnnotationEditor } from "../../src/samples/AnnotationEditor";
 import { AnnotationRows } from "../../src/samples/AnnotationRows";
 import { useAnnotationStore } from "../../src/samples/annotationStore";
+import { useCurationAccess } from "../../src/samples/useCurationAccess";
 
 const { changeSampleAnnotation, getLabelVocabulary } = vi.hoisted(() => ({
     changeSampleAnnotation: vi.fn(),
@@ -57,6 +58,17 @@ function renderEditor(sample: SampleDetail, scope: CurationApi.AnnotationScope =
 }
 
 describe("AnnotationEditor", () => {
+    it("shows the decisions as they stand where labels may only be seen", () => {
+        vi.mocked(useCurationAccess).mockReturnValue({ curationShown: true, labelEditing: false });
+        renderEditor(buildSample({ hand_label: "SNARE", rating: 4, favorite: true, equivalence_member_count: 3 }));
+
+        expect(screen.getByText("SNARE")).toBeInTheDocument();
+        expect(screen.getByRole("img", { name: "Rated 4 of 5" })).toBeInTheDocument();
+        expect(screen.queryAllByRole("button")).toHaveLength(0);
+        expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+        expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    });
+
     it("saves the wording a person typed", async () => {
         getLabelVocabulary.mockResolvedValue([]);
         resolvesTo({ ...NOTHING, label: "WARM PAD" }, [SAMPLE_HASH]);

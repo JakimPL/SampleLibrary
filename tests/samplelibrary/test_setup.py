@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 
-from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, EXAMPLE_CONFIG_PATH
+from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, PASSWORD_PLACEHOLDER
 from samplecore.exit_status import ExitStatus
+from samplecore.paths import EXAMPLE_CONFIG_PATH
 from samplelibrary import setup
 from samplelibrary.cli import dispatch
 
 PROGRAM = "samplelibrary setup"
 
-_UNREACHABLE_SERVER_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:1/samplelibrary"
+_UNREACHABLE_SERVER_URL = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:1/samplelibrary"
 
 
 def test_config_writes_a_file_where_none_is_there(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -20,7 +22,7 @@ def test_config_writes_a_file_where_none_is_there(tmp_path: Path, monkeypatch: p
 
     setup.main(["config"], prog=PROGRAM)
 
-    assert config_path.read_text(encoding="utf-8") == EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
+    assert _as_example(config_path) == EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
 
 
 def test_config_writes_the_file_the_command_line_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -29,8 +31,13 @@ def test_config_writes_the_file_the_command_line_names(tmp_path: Path, monkeypat
 
     dispatch(["--config", str(config_path), "setup", "config"])
 
-    assert config_path.read_text(encoding="utf-8") == EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
+    assert _as_example(config_path) == EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
     assert not (tmp_path / "elsewhere.toml").exists()
+
+
+def _as_example(config_path: Path) -> str:
+    """A written config with each password it chose put back as the example's stand-in."""
+    return re.sub(r":[\w-]+@", f":{PASSWORD_PLACEHOLDER}@", config_path.read_text(encoding="utf-8"))
 
 
 def test_config_keeps_a_file_already_there(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

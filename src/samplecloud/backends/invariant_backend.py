@@ -6,6 +6,7 @@ import librosa
 import numpy as np
 from numpy.typing import NDArray
 
+from samplecloud.backends import FeatureExtractor
 from samplecore.auditory.envelope import local_rms_envelope
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.waveform import fold_to_mono, remove_dc_offset, resample_to_fraction_points
@@ -23,7 +24,7 @@ MINIMUM_STEP_LENGTH: Final[int] = 64
 STEP_LENGTH_SECONDS: Final[float] = 0.02
 
 
-class InvariantFeatureExtractor:
+class InvariantFeatureExtractor(FeatureExtractor):
     """Extracts a descriptor invariant to gain and to a sample's rate/pitch interpretation.
 
     A tracker sample-hash carries no single "true" playback rate -- the same stored waveform is

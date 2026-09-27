@@ -22,7 +22,8 @@ class StepGraph:
     """Every step a pipeline holds, what each needs before it, the targets a run names them by, and what it owns.
 
     `owned_outputs` are the patterns, under the library root, of everything the steps build, which a
-    run from scratch removes along with whatever else the pipeline sealed.
+    run from scratch removes along with whatever else the pipeline sealed. `unavailable` names the
+    steps that cannot run on this installation and why, so a run needing one refuses before it starts.
 
     Steps are declared in the order they read, and a run keeps that order wherever the requirements
     leave a choice, so two runs over one target do the same things in the same sequence.
@@ -31,6 +32,7 @@ class StepGraph:
     steps: tuple[Step, ...]
     targets: Mapping[str, tuple[str, ...]]
     owned_outputs: tuple[str, ...]
+    unavailable: Mapping[str, str]
 
     def __post_init__(self) -> None:
         names = [step.name for step in self.steps]
@@ -92,6 +94,16 @@ class StepGraph:
                 break
             needed |= required
         return tuple(step for step in self.steps if step.name in needed)
+
+    def unavailable_reason(self, targets: Sequence[str]) -> str | None:
+        """Why a run over these targets cannot proceed on this installation, named by the first step it needs that cannot run.
+
+        Raises:
+            UnknownTarget: a name is neither a target nor a step of this pipeline.
+        """
+        return next(
+            (self.unavailable[step.name] for step in self.order(targets) if step.name in self.unavailable), None
+        )
 
     def descendants(self, name: str) -> frozenset[str]:
         """Every step that needs this one, directly or through another."""

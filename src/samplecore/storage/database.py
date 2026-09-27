@@ -18,6 +18,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     MetaData,
     PrimaryKeyConstraint,
     Sequence,
@@ -76,6 +77,9 @@ EXTRACTION_LOCK_KEY: Final[int] = 2_940_318_775_601_922_553
 # The promotion table holds one row, the cloud being shown, and this is its key.
 PROMOTION_SLOT: Final[int] = 0
 CONNECT_TIMEOUT_SECONDS: Final[int] = 10
+SERVED_POOL_OVERFLOW: Final[int] = 10
+SERVED_STATEMENT_TIMEOUT_MILLISECONDS: Final[int] = 30_000
+SERVED_IDLE_TRANSACTION_MILLISECONDS: Final[int] = 60_000
 
 Item = TypeVar("Item")
 
@@ -308,6 +312,26 @@ sample_thumbnail = Table(
     CheckConstraint(column("bucket_count") > 0, name="sample_thumbnail_bucket_count_check"),
 )
 
+# A sample's equivalence fingerprint, the content-only reading candidates are searched through, kept
+# under the version of the rule that read it; `compared_version` names the comparison rule under
+# which the sample has been compared with every other fingerprinted sample. A silent sample holds
+# no fingerprint, since nothing in it is there to compare.
+sample_fingerprint = Table(
+    "sample_fingerprint",
+    metadata,
+    Column("sample_hash", String(64), ForeignKey("sample.hash"), primary_key=True),
+    Column("version", Integer, nullable=False),
+    Column("silent", Boolean, nullable=False),
+    Column("trimmed_frames", Integer, nullable=False),
+    Column("shape", LargeBinary, nullable=True),
+    Column("rate", LargeBinary, nullable=True),
+    Column("compared_version", Integer, nullable=True),
+    CheckConstraint(
+        column("silent") | (column("shape").is_not(None) & column("rate").is_not(None)),
+        name="sample_fingerprint_content_check",
+    ),
+)
+
 experiment = Table(
     "experiment",
     metadata,
@@ -485,20 +509,6 @@ def connect(database_url: str, *, read_only: bool = False) -> Connection:
     return connection
 
 
-def connect_for_curation(database_url: str) -> Connection:
-    """Open a writable connection for hand-curated work, preparing only the curation schema.
-
-    The served application reads the catalog read-only and writes nothing but a person's own
-    labels, so this prepares the one schema it owns and leaves bringing a catalog into existence to
-    the pipelines that build one. The caller owns the transaction and commits its own work.
-    """
-    connection = _open(database_url)
-    _claim_schema_creation(connection)
-    create_curation_schema(connection)
-    connection.commit()
-    return connection
-
-
 def _open(database_url: str) -> Connection:
     return create_engine(
         database_url, poolclass=NullPool, connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS}
@@ -511,13 +521,24 @@ def create_pooled_engine(database_url: str, *, pool_size: int) -> Engine:
     A served request costs a query or two, and opening a connection for each costs Postgres a
     handshake that outweighs them; a small pool keeps a few connections warm and checks each one
     before handing it out, so a connection the server dropped is replaced rather than failing a
-    request.
+    request. Past the pool, `SERVED_POOL_OVERFLOW` more open for a burst. Postgres ends a served
+    statement past `SERVED_STATEMENT_TIMEOUT_MILLISECONDS` and a transaction left idle past
+    `SERVED_IDLE_TRANSACTION_MILLISECONDS`, so no request holds the server longer than the slowest
+    answer a catalog gives: a whole-catalog read takes a few seconds, and a request waiting while
+    another rebuilds a cached answer waits no longer than that rebuild.
     """
     return create_engine(
         database_url,
         pool_size=pool_size,
+        max_overflow=SERVED_POOL_OVERFLOW,
         pool_pre_ping=True,
-        connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
+        connect_args={
+            "connect_timeout": CONNECT_TIMEOUT_SECONDS,
+            "options": (
+                f"-c statement_timeout={SERVED_STATEMENT_TIMEOUT_MILLISECONDS} "
+                f"-c idle_in_transaction_session_timeout={SERVED_IDLE_TRANSACTION_MILLISECONDS}"
+            ),
+        },
     )
 
 
@@ -533,14 +554,14 @@ def create_schema(connection: Connection) -> None:
     while staying outside the metadata every rebuild and purge iterates.
 
     Safe to call from several processes opening the same fresh catalog at once: each waits its turn
-    on `_claim_schema_creation`, and every one after the first finds the tables already standing.
+    on `claim_schema_creation`, and every one after the first finds the tables already standing.
     """
-    _claim_schema_creation(connection)
+    claim_schema_creation(connection)
     metadata.create_all(connection)
     create_curation_schema(connection)
 
 
-def _claim_schema_creation(connection: Connection) -> None:
+def claim_schema_creation(connection: Connection) -> None:
     """Hold the catalog's creation lock until the caller's transaction ends.
 
     ``CREATE TABLE IF NOT EXISTS`` still races: two processes can both find a table missing and both

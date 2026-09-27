@@ -1,28 +1,49 @@
 from __future__ import annotations
 
 import re
+import stat
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 import pydantic
 import pytest
+from sqlalchemy.engine import make_url
 
 from samplecore.config import (
     CONFIG_PATH_ENVIRONMENT_VARIABLE,
     DATABASE_URL_ENVIRONMENT_VARIABLE,
-    DEFAULT_CONFIG_PATH,
-    EXAMPLE_CONFIG_PATH,
+    EXAMPLE_DATABASE_URL,
+    PASSWORD_PLACEHOLDER,
+    SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE,
     ConfigurationError,
+    Exposure,
     InferenceConfig,
+    InvalidSettingsError,
     LibraryConfig,
+    ServiceRoleUnconfiguredError,
     create_config_file,
+    default_config_path,
     load_config,
+    parse_config,
 )
+from samplecore.models.service_role import ServiceRole
+from samplecore.paths import EXAMPLE_CONFIG_PATH
+from samplecore.storage.atomic import PRIVATE_FILE_MODE
+from samplecore.storage.cluster.embedded.state import (
+    ManagedClusterMissingError,
+    claim_service_roles,
+    create_cluster_state,
+)
+from tests.sampleserver.conftest import SITE_VISITORS_TABLE
+
+URL_SETTING_PREFIXES: Final[tuple[str, ...]] = ("database_url", "server_database_url", "curation_database_url")
 
 
-def test_the_default_config_path_sits_next_to_the_committed_example_template() -> None:
-    assert DEFAULT_CONFIG_PATH.name == "config.toml"
-    assert (DEFAULT_CONFIG_PATH.parent / "config.example.toml").is_file()
+def test_a_source_checkout_reads_the_config_beside_the_committed_example_template() -> None:
+    assert default_config_path().name == "config.toml"
+    assert (default_config_path().parent / "config.example.toml").is_file()
 
 
 def test_a_config_file_round_trips_through_load_config(tmp_path: Path) -> None:
@@ -71,12 +92,7 @@ def test_the_inference_address_has_a_default_when_the_table_is_absent(tmp_path: 
     assert load_config(config_path).inference == InferenceConfig()
 
 
-def test_database_url_is_required(tmp_path: Path) -> None:
-    with pytest.raises(pydantic.ValidationError):
-        LibraryConfig(module_source_directory=tmp_path / "modules", library_root=tmp_path / "library")
-
-
-def test_a_config_missing_a_setting_names_it_in_a_configuration_error(
+def test_a_config_leaving_out_the_database_url_manages_its_own_database(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_path = tmp_path / "config.toml"
@@ -88,10 +104,39 @@ def test_a_config_missing_a_setting_names_it_in_a_configuration_error(
     )
     monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
 
-    with pytest.raises(ConfigurationError, match="database_url") as raised:
-        load_config(config_path)
+    config = load_config(config_path)
 
-    assert DATABASE_URL_ENVIRONMENT_VARIABLE in str(raised.value)
+    assert config.manages_database
+    with pytest.raises(ManagedClusterMissingError):
+        config.catalog_url()
+
+
+def test_a_managed_database_is_reached_at_the_address_its_cluster_recorded(tmp_path: Path) -> None:
+    config = LibraryConfig(module_source_directory=tmp_path / "modules", library_root=tmp_path / "library")
+    state = create_cluster_state(config.library_root)
+
+    assert config.catalog_url() == state.catalog_url
+
+
+def test_a_configured_database_url_is_the_catalog_url(tmp_path: Path) -> None:
+    config = LibraryConfig(
+        module_source_directory=tmp_path / "modules",
+        library_root=tmp_path / "library",
+        database_url="postgresql+psycopg://user:pass@host/db",
+    )
+
+    assert not config.manages_database
+    assert config.catalog_url() == "postgresql+psycopg://user:pass@host/db"
+
+
+def test_a_config_missing_a_setting_names_it_in_a_configuration_error(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nmodule_source_directory = "{(tmp_path / "modules").as_posix()}"\n', encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigurationError, match="library_root"):
+        load_config(config_path)
 
 
 def test_loading_a_missing_config_file_raises_a_configuration_error(tmp_path: Path) -> None:
@@ -159,13 +204,41 @@ def test_database_url_environment_variable_overrides_the_config_file(
     assert config.database_url == "postgresql+psycopg://from-environment/db"
 
 
-def test_create_config_file_copies_the_example_where_no_config_is_there(tmp_path: Path) -> None:
+def test_create_config_file_fills_every_stand_in_password_with_one_of_its_own(tmp_path: Path) -> None:
+    """No two installations share a password, and none is a password the example names."""
     config_path = tmp_path / "config.toml"
 
     created = create_config_file(config_path)
 
+    written = config_path.read_text(encoding="utf-8")
+    example = EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
+    passwords = [
+        make_url(line.split('"')[1]).password for line in written.splitlines() if line.startswith(URL_SETTING_PREFIXES)
+    ]
     assert created
-    assert config_path.read_text(encoding="utf-8") == EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
+    assert PASSWORD_PLACEHOLDER not in written
+    assert len(passwords) == example.count(PASSWORD_PLACEHOLDER) == len(set(passwords))
+    assert written.split("\n")[:3] == example.split("\n")[:3]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows keeps no POSIX file modes")
+def test_a_created_config_holding_passwords_is_readable_by_its_owner_alone(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    create_config_file(config_path)
+
+    assert stat.S_IMODE(config_path.stat().st_mode) == PRIVATE_FILE_MODE
+
+
+def test_a_config_still_carrying_the_stand_in_password_is_refused(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\ndatabase_url = "{EXAMPLE_DATABASE_URL}"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="stand-in password for database_url"):
+        load_config(config_path)
 
 
 def test_create_config_file_keeps_a_config_already_there(tmp_path: Path) -> None:
@@ -193,7 +266,7 @@ def test_a_config_naming_one_stand_in_path_is_rejected(tmp_path: Path) -> None:
         "[library]\n"
         'module_source_directory = "/path/to/your/module/collection"\n'
         f'library_root = "{(tmp_path / "library").as_posix()}"\n'
-        'database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"\n',
+        'database_url = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/samplelibrary"\n',
         encoding="utf-8",
     )
 
@@ -299,6 +372,22 @@ def test_the_inference_address_names_its_host_and_port() -> None:
     assert (inference.host, inference.port) == ("render.local", 9000)
 
 
+@pytest.mark.parametrize(
+    ("url", "moved_url"),
+    [
+        ("http://127.0.0.1:8010", "http://127.0.0.1:9000"),
+        ("http://render.local:8010/", "http://render.local:9000"),
+        ("http://[::1]:8010", "http://[::1]:9000"),
+    ],
+    ids=("an address", "a name", "an IPv6 address"),
+)
+def test_the_inference_address_moves_to_another_port_on_its_host(url: str, moved_url: str) -> None:
+    moved = InferenceConfig(url=url).at_port(9000)
+
+    assert moved.url == moved_url
+    assert (moved.host, moved.port) == (InferenceConfig(url=url).host, 9000)
+
+
 def test_sample_directories_and_exclusions_are_read_with_relative_directories_anchored(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
@@ -341,6 +430,17 @@ def test_sample_directories_the_catalog_cannot_place_a_file_under_once_are_refus
         )
 
 
+def test_a_refused_setting_is_named_with_its_validators_own_sentence(tmp_path: Path) -> None:
+    content = _library_table(tmp_path) + 'sample_directories = ["/samples", "/samples/drums"]\n'
+
+    with pytest.raises(InvalidSettingsError) as refusal:
+        parse_config(content, tmp_path / "config.toml")
+
+    sentence = f"{Path('/samples')} and {Path('/samples/drums')} overlap. Choose each folder only once."
+    assert refusal.value.problems == (sentence,)
+    assert str(refusal.value).endswith(f"sample_directories: {sentence}")
+
+
 def test_a_blank_sample_exclusion_is_refused() -> None:
     with pytest.raises(pydantic.ValidationError, match="exclusion"):
         LibraryConfig(
@@ -359,3 +459,84 @@ def test_a_sample_directory_still_naming_the_stand_in_path_is_rejected(tmp_path:
 
     with pytest.raises(ConfigurationError, match="sample_directories"):
         load_config(config_path)
+
+
+def _library_config(tmp_path: Path, extra: str) -> LibraryConfig:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\n{extra}', encoding="utf-8"
+    )
+    return load_config(config_path)
+
+
+def test_a_named_service_url_is_the_one_a_served_api_connects_with(tmp_path: Path) -> None:
+    config = _library_config(
+        tmp_path,
+        'database_url = "postgresql+psycopg://owner:secret@db.local/library"\n'
+        'server_database_url = "postgresql+psycopg://reader:secret@db.local/library"\n',
+    )
+
+    assert config.service_url(ServiceRole.READER) == "postgresql+psycopg://reader:secret@db.local/library"
+    assert config.service_urls() == {ServiceRole.READER: "postgresql+psycopg://reader:secret@db.local/library"}
+
+
+def test_a_library_on_a_server_of_its_own_names_the_setting_a_missing_role_needs(tmp_path: Path) -> None:
+    config = _library_config(tmp_path, 'database_url = "postgresql+psycopg://owner:secret@db.local/library"\n')
+
+    with pytest.raises(ServiceRoleUnconfiguredError, match="curation_database_url"):
+        config.service_url(ServiceRole.CURATOR)
+
+
+def test_a_managed_library_connects_its_service_roles_to_its_own_cluster(tmp_path: Path) -> None:
+    config = _library_config(tmp_path, "")
+    state = create_cluster_state(config.library_root)
+    roles = claim_service_roles(config.library_root)
+
+    assert config.service_url(ServiceRole.READER) == (
+        f"postgresql+psycopg://samplelibrary_reader:{roles.reader_password}@127.0.0.1:{state.port}/samplelibrary"
+    )
+
+
+def test_a_service_url_in_the_environment_takes_the_configs_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE, "postgresql+psycopg://reader:other@db.local/library")
+    config = _library_config(tmp_path, 'server_database_url = "postgresql+psycopg://reader:secret@db.local/library"\n')
+
+    assert config.server_database_url == "postgresql+psycopg://reader:other@db.local/library"
+
+
+@pytest.mark.parametrize("exposure", [Exposure.LOCAL, Exposure.NETWORK])
+def test_the_server_table_names_who_the_library_is_served_to(tmp_path: Path, exposure: Exposure) -> None:
+    config = _library_config(tmp_path, f'[server]\nexposure = "{exposure.value}"\n')
+
+    assert config.server.exposure is exposure
+
+
+def test_a_library_served_to_anyone_limits_its_visitors(tmp_path: Path) -> None:
+    config = _library_config(tmp_path, f'[server]\nexposure = "public"\n{SITE_VISITORS_TABLE}')
+
+    assert config.server.exposure is Exposure.PUBLIC
+    assert config.server.visitors is not None
+    assert config.server.visitors.address_header == "X-Real-IP"
+
+
+def test_a_library_served_to_anyone_without_visitor_limits_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(InvalidSettingsError, match="visitor limits"):
+        _library_config(tmp_path, '[server]\nexposure = "public"\n')
+
+
+def test_visitor_limits_on_a_library_at_home_are_refused(tmp_path: Path) -> None:
+    """Limits beside a local exposure say someone meant a site, which the config does not serve."""
+    with pytest.raises(InvalidSettingsError, match="limits a library served to anyone"):
+        _library_config(tmp_path, f'[server]\nexposure = "local"\n{SITE_VISITORS_TABLE}')
+
+
+def test_a_library_left_without_a_server_table_is_served_on_this_computer_alone(tmp_path: Path) -> None:
+    """A forgotten setting listens on the loopback address, which exposes nothing no one chose to."""
+    assert _library_config(tmp_path, "").server.exposure is Exposure.LOCAL
+
+
+def test_an_exposure_this_project_does_not_know_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(InvalidSettingsError, match="server.exposure"):
+        _library_config(tmp_path, '[server]\nexposure = "everyone"\n')

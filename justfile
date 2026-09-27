@@ -5,8 +5,11 @@ set default-list := true
 set shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
 MEMORY_CAP := "16G"
+TEST_WORKERS := "8"
+QUICK_TESTS := "not pipeline_real and not pipeline_explore and not pipeline_scenario"
 DEV_CONFIG := "dev-library/config.toml"
 DEV_PORT := "8001"
+SCHEMAS := "build/schemas"
 CAPPED_SAMPLELIBRARY := "uv run samplelibrary --memory-cap " + MEMORY_CAP
 
 [group("setup")]
@@ -31,9 +34,18 @@ lint:
     uv run pylint src scripts
     uv run lint-imports
 
+# The tests but the pipeline scenarios, which `test-all` and `test-scenarios` run.
 [group("quality")]
 test:
-    uv run pytest -n auto
+    uv run pytest -n auto --maxprocesses {{ TEST_WORKERS }} -m "{{ QUICK_TESTS }}"
+
+[group("quality")]
+test-all:
+    uv run pytest -n auto --maxprocesses {{ TEST_WORKERS }}
+
+[group("quality")]
+test-scenarios:
+    uv run pytest -n auto --maxprocesses {{ TEST_WORKERS }} -m pipeline_scenario tests/samplelibrary/pipeline/scenarios
 
 [group("quality")]
 test-pipeline:
@@ -47,8 +59,22 @@ explore-pipeline:
 coverage:
     uv run pytest --cov --cov-report=term-missing
 
+# Every check a push needs, marking the commit they passed on; the pre-push hook lets that commit through.
 [group("quality")]
-check: format lint test frontend-check
+check: _check-start _hooks lint test-all frontend-check
+    uv run --no-project python scripts/checked_commits.py record
+
+[private]
+_check-start:
+    uv run --no-project python scripts/checked_commits.py start
+
+[private]
+_hooks:
+    uv run pre-commit run --all-files
+
+[group("library")]
+app:
+    uv run samplelibrary app
 
 [group("library")]
 serve:
@@ -115,6 +141,11 @@ dev *arguments:
 serve-dev:
     uv run samplelibrary --config {{ DEV_CONFIG }} serve --reload --port {{ DEV_PORT }}
 
+# The SampleLibrary app on the sandbox, which records labels where `serve-dev` only reads.
+[group("dev")]
+app-dev:
+    uv run samplelibrary --config {{ DEV_CONFIG }} app --port {{ DEV_PORT }}
+
 [group("dev")]
 [unix]
 dev-reset:
@@ -156,27 +187,45 @@ frontend-check:
     npm test
 
 [group("frontend")]
-[working-directory("frontend")]
-frontend-types:
-    uv run samplelibrary schema --output openapi.json
-    npm run types
+frontend-types: (_directory SCHEMAS)
+    uv run samplelibrary schema --output {{ SCHEMAS }}/openapi.json
+    uv run samplelibrary setup-schema --output {{ SCHEMAS }}/setup-openapi.json
+    npm --prefix frontend run types
+
+[group("release")]
+package:
+    uv run --no-project python scripts/build_package.py
+
+[group("release")]
+executable:
+    uv run --no-project python scripts/build_app.py
+
+[group("release")]
+installer:
+    uv run --no-project --with pillow python scripts/build_installer.py
+
+[group("release")]
+release-descriptor tag *arguments:
+    uv run python scripts/release_descriptor.py --tag {{ tag }} {{ arguments }}
+
+[unix]
+_directory path:
+    mkdir -p "{{ path }}"
+
+[windows]
+_directory path:
+    New-Item -ItemType Directory -Force -Path "{{ path }}" | Out-Null
+
+# The passwords docker-compose.yml reads, each written once into docker/ and readable by you alone.
+[group("docker")]
+docker-secrets:
+    uv run python scripts/docker_secrets.py
 
 [group("docker")]
 docker-build:
-    docker build -t samplelibrary-server .
+    docker build -t samplelibrary-site .
 
-LIBRARY_MOUNT := "type=bind,target=/library,readonly,source="
-CONFIG_MOUNT := "type=bind,target=/app/config.toml,readonly,source="
-
-# Both paths are read from where the recipe was run, and a mount of a path that is not there fails
-# rather than leaving an empty directory in its place.
+# Publish a library into the database docker-compose.yml runs, such as `just docker-publish --config dev-library/config.toml`.
 [group("docker")]
-[linux]
-docker-run library_root config_path:
-    docker run --rm --network host --mount "{{ LIBRARY_MOUNT }}{{ absolute_path(join(invocation_directory(), library_root)) }}" --mount "{{ CONFIG_MOUNT }}{{ absolute_path(join(invocation_directory(), config_path)) }}" samplelibrary-server serve --host 127.0.0.1 --port 8000
-
-[group("docker")]
-[macos]
-[windows]
-docker-run library_root config_path:
-    docker run --rm -p 127.0.0.1:8000:8000 --mount "{{ LIBRARY_MOUNT }}{{ absolute_path(join(invocation_directory(), library_root)) }}" --mount "{{ CONFIG_MOUNT }}{{ absolute_path(join(invocation_directory(), config_path)) }}" samplelibrary-server
+docker-publish *arguments:
+    uv run python scripts/docker_publish.py {{ arguments }}

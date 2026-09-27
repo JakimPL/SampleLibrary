@@ -3104,6 +3104,18 @@ wheels = [
 ]
 
 [[package]]
+name = "postgresql-binaries"
+version = "18.6.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/96/75f71bedbd08645d57f635249fa2b25a385b2336c7523177147b4d511ab0/postgresql_binaries-18.6.0-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:3a9d64f002462e8e595db242eebf9dde44d4cf90ceba982878326eefbceda2af", size = 13263859, upload-time = "2026-09-20T15:24:26.769Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/9f/bf0a4e197be35fed95ed4ea346fd35f665f6dba6169fc4d71df62e3030fa/postgresql_binaries-18.6.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:79a3c84ca214d3c52aa1d4960fc9befc9354f0334b03c4bbd6a44207bbfeb143", size = 12894905, upload-time = "2026-09-20T14:54:19.13Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/7e/59acdc480bad19a8122790453ec4b6de3eda230d034a0190c16250cd3fcc/postgresql_binaries-18.6.0-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:3ebed8ab6f48450e1af1c991273dd438d559f692a38fad765f75ce52ca44c398", size = 11749069, upload-time = "2026-09-20T15:24:29.415Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/d6/5bf88efbd89c599506a141e547ecb5607384dc3fa706360b971cd9bdd530/postgresql_binaries-18.6.0-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:e25217097466f049d4b577b4e980f2ef5fbc6fb0a71f7260a2ef5ca247af0477", size = 11980958, upload-time = "2026-09-20T15:24:27.573Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/5e/4b09b624f88fb3b61c6520c69acdaa5da55227853cc6bcba40771130f33f/postgresql_binaries-18.6.0-py3-none-win_amd64.whl", hash = "sha256:075f493fd899a5aeef1aea47dbd6b662e6b634c0b904e4e754fdaf6fef2db343", size = 53687377, upload-time = "2026-09-20T14:54:28.419Z" },
+]
+
+[[package]]
 name = "pre-commit"
 version = "4.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3990,17 +4002,39 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
+    { name = "platformdirs" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pytz" },
     { name = "scipy" },
     { name = "soundfile" },
     { name = "sqlalchemy" },
+    { name = "threadpoolctl" },
+    { name = "tomlkit" },
     { name = "tqdm" },
     { name = "trackmod" },
 ]
 
 [package.optional-dependencies]
+app = [
+    { name = "fastapi" },
+    { name = "filelock" },
+    { name = "httpx" },
+    { name = "librosa" },
+    { name = "lightning" },
+    { name = "mlflow" },
+    { name = "pghipy" },
+    { name = "postgresql-binaries" },
+    { name = "psutil" },
+    { name = "python-multipart" },
+    { name = "pyyaml" },
+    { name = "scikit-learn" },
+    { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform != 'darwin'" },
+    { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
+    { name = "transformers" },
+    { name = "umap-learn" },
+    { name = "uvicorn" },
+]
 cloud = [
     { name = "librosa" },
     { name = "mlflow" },
@@ -4012,7 +4046,6 @@ descriptor = [
     { name = "lightning" },
     { name = "mlflow" },
     { name = "scikit-learn" },
-    { name = "threadpoolctl" },
     { name = "torch", version = "2.11.0+cu128", source = { registry = "https://download.pytorch.org/whl/cu128" }, marker = "sys_platform != 'darwin'" },
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform == 'darwin'" },
 ]
@@ -4054,7 +4087,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
-    { name = "threadpoolctl" },
+    { name = "types-psutil" },
     { name = "types-pyyaml" },
 ]
 
@@ -4062,6 +4095,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", marker = "extra == 'morph'", specifier = ">=0.120" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.120" },
+    { name = "filelock", marker = "extra == 'app'", specifier = ">=3.32" },
     { name = "httpx", marker = "extra == 'server'", specifier = ">=0.28" },
     { name = "librosa", marker = "extra == 'cloud'", specifier = ">=0.11" },
     { name = "librosa", marker = "extra == 'descriptor'", specifier = ">=0.11" },
@@ -4072,29 +4106,34 @@ requires-dist = [
     { name = "mlflow", marker = "extra == 'tracking'", specifier = ">=3.6" },
     { name = "numpy", specifier = ">=2.1" },
     { name = "pghipy", marker = "extra == 'morph'", specifier = ">=0.1" },
+    { name = "platformdirs", specifier = ">=4.4" },
+    { name = "postgresql-binaries", marker = "extra == 'app'", specifier = ">=18.6" },
+    { name = "psutil", marker = "extra == 'app'", specifier = ">=7.2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "python-multipart", marker = "extra == 'morph'", specifier = ">=0.0.20" },
     { name = "pytz", specifier = ">=2025.2" },
     { name = "pyyaml", marker = "extra == 'morph'", specifier = ">=6.0" },
+    { name = "samplelibrary", extras = ["server", "morph", "cloud", "descriptor", "teacher"], marker = "extra == 'app'" },
     { name = "scikit-learn", marker = "extra == 'cloud'", specifier = ">=1.9" },
     { name = "scikit-learn", marker = "extra == 'descriptor'", specifier = ">=1.9" },
     { name = "scipy", specifier = ">=1.16" },
     { name = "soundfile", specifier = ">=0.14" },
     { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "threadpoolctl", marker = "extra == 'descriptor'", specifier = ">=3.6" },
+    { name = "threadpoolctl", specifier = ">=3.6" },
+    { name = "tomlkit", specifier = ">=0.13" },
     { name = "torch", marker = "sys_platform == 'darwin' and extra == 'descriptor'", specifier = ">=2.9" },
     { name = "torch", marker = "sys_platform == 'darwin' and extra == 'teacher'", specifier = ">=2.9" },
     { name = "torch", marker = "sys_platform != 'darwin' and extra == 'descriptor'", specifier = ">=2.9", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torch", marker = "sys_platform != 'darwin' and extra == 'teacher'", specifier = ">=2.9", index = "https://download.pytorch.org/whl/cu128" },
     { name = "tqdm", specifier = ">=4.67" },
-    { name = "trackmod", editable = "trackmod" },
+    { name = "trackmod", specifier = ">=0.2.0" },
     { name = "transformers", marker = "extra == 'teacher'", specifier = ">=4.45" },
     { name = "umap-learn", marker = "extra == 'cloud'", specifier = ">=0.5" },
     { name = "uvicorn", marker = "extra == 'morph'", specifier = ">=0.35" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.35" },
 ]
-provides-extras = ["server", "cloud", "morph", "descriptor", "tracking", "teacher"]
+provides-extras = ["server", "cloud", "morph", "descriptor", "tracking", "teacher", "app"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -4112,7 +4151,7 @@ dev = [
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-cov", specifier = "==7.1.0" },
     { name = "pytest-xdist", specifier = "==3.8.0" },
-    { name = "threadpoolctl", specifier = ">=3.6" },
+    { name = "types-psutil", specifier = "==7.2.2.20260906" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260906" },
 ]
 
@@ -4548,29 +4587,14 @@ wheels = [
 [[package]]
 name = "trackmod"
 version = "0.2.0"
-source = { editable = "trackmod" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "pydantic" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "numpy", specifier = ">=2.1" },
-    { name = "pydantic", specifier = ">=2.13.4" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "black", specifier = "==26.5.1" },
-    { name = "isort", specifier = "==8.0.1" },
-    { name = "mypy", specifier = "==2.1.0" },
-    { name = "pre-commit", specifier = "==4.6.0" },
-    { name = "pylint", specifier = "==4.0.6" },
-    { name = "pylint-pydantic", specifier = "==0.4.1" },
-    { name = "pytest", specifier = "==9.1.1" },
-    { name = "pytest-cov", specifier = "==7.1.0" },
-    { name = "pytest-xdist", specifier = "==3.8.0" },
+sdist = { url = "https://files.pythonhosted.org/packages/1c/54/deec696fb2123aec8f93c502814df29607c7743d67f3aee445190770f3df/trackmod-0.2.0.tar.gz", hash = "sha256:1bfc65fcb64bc5ddfdd6a30431c3f2b064f60b8d1b8db34d3dfa486618a6a97e", size = 333447, upload-time = "2026-09-25T12:12:47.234Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/ca/8c63097afbcb1505cf8e9686166bbfe67a0520588640e243c807dd59bbb3/trackmod-0.2.0-py3-none-any.whl", hash = "sha256:cbdd024dded8eb108ad0c4b0f5a622967040b75565823c5a93f122b4fba4c42f", size = 289950, upload-time = "2026-09-25T12:12:45.72Z" },
 ]
 
 [[package]]
@@ -4623,6 +4647,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/16/f7/57713ba479fd405eb76de31404b2c744c289e336b2d999511ebf51e496f7/typer-0.27.2.tar.gz", hash = "sha256:269b7eb9d3c202ca84b4bc9618cb04ebb43d3d4d1e567e4c768607232c05f945", size = 204045, upload-time = "2026-08-28T10:26:55.046Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/bf/205d0004930ede8f542fb58f601526fccf4ae7626075ca1e6c4de5d3d652/typer-0.27.2-py3-none-any.whl", hash = "sha256:b3a5fc4342d5fc8fda8fc3010b1cf117e9249aab7fae800c2eff62fd3842d97d", size = 123130, upload-time = "2026-08-28T10:26:53.752Z" },
+]
+
+[[package]]
+name = "types-psutil"
+version = "7.2.2.20260906"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/97/0a/f48b9b0ab5ba8599fd117309e345152bf82c756c72be2ff0f635780c2792/types_psutil-7.2.2.20260906.tar.gz", hash = "sha256:93abf22cf9a62b915f724e433bde702995ac274865425fd4a76d1d9b5828da1a", size = 27396, upload-time = "2026-09-06T06:35:24.499Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/eb/8d/81a86107486e1c23f5ca21bea1e9e5b18a50754242e7a0b82f41f9ae8384/types_psutil-7.2.2.20260906-py3-none-any.whl", hash = "sha256:db00baf7f96c3f63421c4d3d68d373923094a0dfddf13e922c5c5fbc42488159", size = 33383, upload-time = "2026-09-06T06:35:23.575Z" },
 ]
 
 [[package]]

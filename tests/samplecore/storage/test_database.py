@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import time
-import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import Connection, create_engine, func, inspect, select, text
+from sqlalchemy import Connection, func, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
@@ -18,7 +17,6 @@ from samplecore.storage.database import (
     chunks,
     claim_named_lock,
     connect,
-    connect_for_curation,
     create_pooled_engine,
     create_schema,
     module,
@@ -37,29 +35,6 @@ EXPECTED_TABLES = frozenset(
         "sample_category",
     }
 )
-
-
-@pytest.fixture
-def fresh_database_url(_database_url: str) -> Iterator[str]:
-    """A brand-new, empty database on the shared test server, with no schema created yet.
-
-    The shared ``connection`` fixture's database always already has its schema in place (only its
-    rows are emptied between tests), so it cannot exercise ``connect()``'s own first-use schema
-    creation -- this creates and drops a genuinely fresh database on the same server for exactly
-    that. ``CREATE DATABASE``/``DROP DATABASE`` cannot run inside a transaction block, hence the
-    ``AUTOCOMMIT`` isolation level.
-    """
-    admin_url = make_url(_database_url)
-    database_name = f"fresh_{uuid.uuid4().hex}"
-    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
-    with admin_engine.connect() as admin_connection:
-        admin_connection.execute(text(f'CREATE DATABASE "{database_name}"'))
-        try:
-            # str() on a URL renders its password as "***"; the yielded URL has to carry the real one.
-            yield admin_url.set(database=database_name).render_as_string(hide_password=False)
-        finally:
-            admin_connection.execute(text(f'DROP DATABASE "{database_name}" WITH (FORCE)'))
-    admin_engine.dispose()
 
 
 def test_create_schema_creates_every_expected_table(connection: Connection) -> None:
@@ -95,35 +70,6 @@ def test_a_read_only_connection_never_creates_the_schema(fresh_database_url: str
 
 def test_hand_labels_get_a_schema_of_their_own(connection: Connection) -> None:
     assert "sample_annotation" in set(inspect(connection).get_table_names(schema=CURATION_SCHEMA))
-
-
-def test_a_curation_connection_prepares_labels_and_leaves_building_a_catalog_alone(
-    fresh_database_url: str,
-) -> None:
-    """The served application owns the labels it records; the offline pipelines own the catalog."""
-    connection = connect_for_curation(fresh_database_url)
-    try:
-        catalog_tables = set(inspect(connection).get_table_names())
-        curation_tables = set(inspect(connection).get_table_names(schema=CURATION_SCHEMA))
-    finally:
-        connection.close()
-
-    assert catalog_tables == set()
-    assert curation_tables == {"sample_annotation", "tag_rank", "annotation_import"}
-
-
-def test_a_curation_connection_waits_for_the_schema_claim(connection: Connection, _database_url: str) -> None:
-    """Workers starting together each prepare the curation schema, one after another.
-
-    The other run asks with a short lock timeout, so the test reports the wait instead of blocking on it.
-    """
-    impatient_url = make_url(_database_url).update_query_dict({"options": "-c lock_timeout=200"})
-    connection.execute(select(func.pg_advisory_xact_lock(SCHEMA_LOCK_KEY)))
-    try:
-        with pytest.raises(DBAPIError, match="lock timeout"):
-            connect_for_curation(impatient_url.render_as_string(hide_password=False))
-    finally:
-        connection.rollback()
 
 
 def test_creating_the_schema_holds_a_claim_no_other_run_can_take(connection: Connection, _database_url: str) -> None:

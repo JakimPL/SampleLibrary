@@ -1,23 +1,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import IntEnum, unique
 from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
 from sqlalchemy import Connection
-from tqdm import tqdm
 
 from samplecloud.backends import FeatureExtractor
 from samplecloud.evaluation.corpus import EvaluationCorpus
 from samplecloud.evaluation.settings import EvaluationSettings
+from samplecloud.evaluation.stages import PROBE_STATUS_FILE_NAME, QUERIES_FILE_NAME, EvaluationStages
 from samplecloud.hearing import Hearing
+from samplecore.models.sample import Sample
+from samplecore.progress import ProgressBar
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError
+from samplecore.storage.staged_rows import StagedRows
 from samplecore.waveform import resample_by_semitones
 
 QUERY_CHUNK_SIZE: Final[int] = 64
 CLOSE_RANK: Final[int] = 5
+RETUNING_LABEL: Final[str] = "Retuning probes"
 
 
 @dataclass(frozen=True)
@@ -72,57 +77,94 @@ class ProbeDescriber:
     audio: SampleAudio
 
 
+@unique
+class ProbeReading(IntEnum):
+    """How reading one probe went, kept beside its vectors: described, gone from the catalog, or with no file to read."""
+
+    GONE = 0
+    DESCRIBED = 1
+    UNAVAILABLE = 2
+
+
 def transposition_retrieval(
     connection: Connection,
     corpus: EvaluationCorpus,
     *,
     describer: ProbeDescriber,
     settings: EvaluationSettings,
+    stages: EvaluationStages,
 ) -> TranspositionRetrieval | None:
     """Retune each probe sample by every offset and ask where its own original ranks.
 
     Each probe is heard the way the experiment heard its samples before it is retuned, so an
-    unretuned probe is described exactly as its stored vector was. A probe whose sample files are gone
-    is counted and left out. Returns None when the corpus offers no probe the catalog still holds and
-    can read.
+    unretuned probe is described exactly as its stored vector was. A probe's retunings are described
+    together and kept among the pass's `stages` as they come, so a pass stopped partway takes up with
+    the next probe. A probe whose sample files are gone is counted and left out. Returns None when
+    the corpus offers no probe the catalog still holds and can read.
     """
     offsets = settings.semitone_offsets
     positions = _probe_positions(corpus, settings=settings)
+    rows = stages.probe_rows(probe_count=len(positions), offset_count=len(offsets), dimensions=corpus.vectors.shape[1])
     samples = PostgresSampleRepository(connection).get_many([corpus.sample_hashes[position] for position in positions])
-    ranks_by_offset: dict[float, list[int]] = {offset: [] for offset in offsets}
-    queries: list[NDArray[np.float64]] = []
-    targets: list[int] = []
-    query_offsets: list[float] = []
-    unavailable_probe_count = 0
-    for position in tqdm(positions, desc="Retuning probes"):
-        sample = samples.get(corpus.sample_hashes[position])
-        if sample is None:
-            continue
-        try:
-            sample_pcm = describer.audio.read(sample)
-        except SampleUnavailableError:
-            unavailable_probe_count += 1
-            continue
-
-        waveform = describer.hearing.hear(sample.hash, sample_pcm.pcm)
-        for offset in offsets:
-            retuned = resample_by_semitones(waveform, semitones=offset)
-            queries.append(np.asarray(describer.feature_extractor.extract(retuned), dtype=np.float64))
-            targets.append(position)
-            query_offsets.append(offset)
-    if not queries:
+    probes = tuple(samples.get(corpus.sample_hashes[position]) for position in positions)
+    _describe_probes(probes, rows=rows, describer=describer, offsets=offsets)
+    readings = rows.array(PROBE_STATUS_FILE_NAME)
+    described = np.flatnonzero(readings == ProbeReading.DESCRIBED)
+    if described.size == 0:
         return None
 
-    for rank, offset in zip(_ranks_of(corpus, np.stack(queries), targets), query_offsets, strict=True):
+    queries = np.asarray(rows.array(QUERIES_FILE_NAME)[described]).reshape(-1, corpus.vectors.shape[1])
+    targets = np.repeat(positions[described], len(offsets)).tolist()
+    ranks_by_offset: dict[float, list[int]] = {offset: [] for offset in offsets}
+    for rank, offset in zip(_ranks_of(corpus, queries, targets), offsets * int(described.size), strict=True):
         ranks_by_offset[offset].append(rank)
 
     return TranspositionRetrieval(
         offsets=tuple(_summarize(offset, ranks_by_offset[offset]) for offset in offsets),
         probe_sample_count=len(positions),
-        unavailable_probe_count=unavailable_probe_count,
+        unavailable_probe_count=int((readings == ProbeReading.UNAVAILABLE).sum()),
         catalog_sample_count=corpus.sample_count,
         random_seed=settings.random_seed,
     )
+
+
+def _describe_probes(
+    probes: tuple[Sample | None, ...], *, rows: StagedRows, describer: ProbeDescriber, offsets: tuple[float, ...]
+) -> None:
+    """Describe every probe a stopped pass left undescribed, checkpointing as they come and on the way out.
+
+    `probes` holds each probe's sample, or ``None`` for one the catalog no longer holds.
+    """
+    queries = rows.array(QUERIES_FILE_NAME)
+    readings = rows.array(PROBE_STATUS_FILE_NAME)
+    with ProgressBar(total=len(probes), label=RETUNING_LABEL, resumed=rows.resumed_rows) as progress:
+        try:
+            for row in range(rows.resumed_rows, len(probes)):
+                reading = _probe_reading(probes[row], describer, offsets)
+                if isinstance(reading, ProbeReading):
+                    readings[row] = reading
+                else:
+                    queries[row] = reading
+                    readings[row] = ProbeReading.DESCRIBED
+                rows.advance_to(row + 1)
+                progress.update(1)
+        finally:
+            rows.checkpoint()
+
+
+def _probe_reading(
+    sample: Sample | None, describer: ProbeDescriber, offsets: tuple[float, ...]
+) -> NDArray[np.float64] | ProbeReading:
+    """One probe's vector at every offset, `(offsets, dimensions)`, or why none was read."""
+    if sample is None:
+        return ProbeReading.GONE
+    try:
+        sample_pcm = describer.audio.read(sample)
+    except SampleUnavailableError:
+        return ProbeReading.UNAVAILABLE
+    waveform = describer.hearing.hear(sample.hash, sample_pcm.pcm)
+    retuned = [resample_by_semitones(waveform, semitones=offset) for offset in offsets]
+    return np.stack(describer.feature_extractor.extract_many(retuned)).astype(np.float64)
 
 
 def _probe_positions(corpus: EvaluationCorpus, *, settings: EvaluationSettings) -> NDArray[np.intp]:

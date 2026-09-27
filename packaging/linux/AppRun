@@ -1,0 +1,47 @@
+#!/bin/sh
+here="$(dirname "$(readlink -f "$0")")"
+settings_directory="${XDG_CONFIG_HOME:-$HOME/.config}/SampleLibrary"
+launcher_choice="$settings_directory/launcher"
+minimum_cuda_major=@MINIMUM_DRIVER_CUDA_MAJOR@
+
+# The first start picks the launcher once, and every later start keeps it, so a driver that fails to
+# answer one day leaves the installed packages where they are.
+if [ ! -f "$launcher_choice" ]; then
+    choice=processor
+    cuda_major="$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: *\([0-9][0-9]*\)\..*/\1/p' | head -n 1)"
+    if [ -n "$cuda_major" ] && [ "$cuda_major" -ge "$minimum_cuda_major" ]; then
+        choice=nvidia
+    fi
+    mkdir -p "$settings_directory"
+    printf '%s\n' "$choice" >"$launcher_choice"
+fi
+case "$(cat "$launcher_choice")" in
+    nvidia) application="$here/usr/bin/SampleLibrary-nvidia" ;;
+    *) application="$here/usr/bin/SampleLibrary" ;;
+esac
+
+if [ -t 1 ]; then
+    exec "$application" "$@"
+fi
+
+log_directory="${XDG_STATE_HOME:-$HOME/.local/state}/SampleLibrary/log"
+log="$log_directory/app.log"
+log_limit_bytes=10000000
+
+notify() {
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send --app-name=SampleLibrary "$@"
+    fi
+}
+
+mkdir -p "$log_directory"
+if [ -f "$log" ] && [ "$(wc -c <"$log")" -gt "$log_limit_bytes" ]; then
+    mv "$log" "$log_directory/app.previous.log"
+fi
+if [ -z "$("$application" self metadata)" ]; then
+    notify "Preparing SampleLibrary" "The first start takes a few minutes. SampleLibrary opens in your browser when it is ready."
+fi
+if ! "$application" "$@" >>"$log" 2>&1; then
+    notify --urgency=critical "SampleLibrary couldn't start" "Details are in $log."
+    exit 1
+fi

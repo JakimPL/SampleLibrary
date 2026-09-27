@@ -113,12 +113,31 @@ describe("FocusedSampleTransport", () => {
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
+        await waitFor(() => {
+            expect(createMock).toHaveBeenCalled();
+        });
 
         fireEvent.change(screen.getByLabelText("Rate"), { target: { value: "8363" } });
 
+        expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 44100, false);
+    });
+
+    it("plays a rate chosen while the waveform loads once it is ready", async () => {
+        catalogAnswers({ playbackRateHz: 22050, playbackRates: TWO_RATES });
+        render(<FocusedSampleTransport sampleHash="abc" />);
         await waitFor(() => {
-            expect(latestInstance().setPlaybackRate).toHaveBeenCalledWith(8363 / 44100, false);
+            expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
+        await waitFor(() => {
+            expect(createMock).toHaveBeenCalled();
+        });
+
+        fireEvent.change(screen.getByLabelText("Rate"), { target: { value: "8363" } });
+        act(() => {
+            latestInstance().emit("ready", 1.0);
+        });
+
+        expect(latestInstance().setPlaybackRate).toHaveBeenLastCalledWith(8363 / 44100, false);
     });
 
     it("says so for a sample the catalog knows no rate for", async () => {

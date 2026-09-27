@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, DATABASE_URL_ENVIRONMENT_VARIABLE
+from tests.paths import BUILD_DEV_LIBRARY_SCRIPT
 
-_SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "build_dev_library.py"
 LIBRARY_ON_ANOTHER_PORT = "postgresql+psycopg://someone:secret@localhost:5433/my_library"
 
 
 def _load_build_dev_library() -> types.ModuleType:
     """Imports the script by file path -- it lives outside every installed package, by design."""
-    spec = importlib.util.spec_from_file_location("build_dev_library", _SCRIPT_PATH)
+    spec = importlib.util.spec_from_file_location("build_dev_library", BUILD_DEV_LIBRARY_SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

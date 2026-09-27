@@ -11,6 +11,7 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecloud.backends import FeatureExtractor
 from samplecloud.experiments import EmbeddingRecipe, ExperimentRefused, ExtractorChanged
+from samplecloud.features import EXTRACTION_BATCH_SIZE
 from samplecloud.run import (
     REBUILT_RECIPE,
     EmbeddingOptions,
@@ -32,15 +33,15 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 
 SAMPLE_COUNT = 5
 STUB_RECIPE = EmbeddingRecipe(backend_name="stub", reading=Reading.NOMINAL, model_name=None)
-PROMOTE = EmbeddingOptions(reading=Reading.NOMINAL, sample_limit=None, promote=True)
+PROMOTE = EmbeddingOptions(reading=Reading.NOMINAL, sample_limit=None, promote=True, batch_size=EXTRACTION_BATCH_SIZE)
 
 
-class _StubFeatureExtractor:
+class _StubFeatureExtractor(FeatureExtractor):
     def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]:
         return np.array([waveform.mean(), waveform.std()])
 
 
-class _RetrainedFeatureExtractor:
+class _RetrainedFeatureExtractor(FeatureExtractor):
     """Describes the same samples along other axes, the way a descriptor retrained under one name would."""
 
     def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -100,7 +101,9 @@ def test_run_embedding_respects_the_sample_limit(connection: Connection, _databa
         connection,
         experiment_id,
         extractor=_stub,
-        options=EmbeddingOptions(reading=Reading.NOMINAL, sample_limit=1, promote=False),
+        options=EmbeddingOptions(
+            reading=Reading.NOMINAL, sample_limit=1, promote=False, batch_size=EXTRACTION_BATCH_SIZE
+        ),
     )
 
     assert summary.extraction.newly_extracted == 1
@@ -132,7 +135,9 @@ def test_run_embedding_keeps_the_cloud_as_it_was_when_asked_only_to_extract(
         connection,
         experiment_id,
         extractor=_stub,
-        options=EmbeddingOptions(reading=Reading.NOMINAL, sample_limit=None, promote=False),
+        options=EmbeddingOptions(
+            reading=Reading.NOMINAL, sample_limit=None, promote=False, batch_size=EXTRACTION_BATCH_SIZE
+        ),
     )
 
     assert summary.reduction is None
@@ -169,7 +174,9 @@ def test_promoting_an_experiment_the_cloud_does_not_show_lays_it_out(
         connection,
         measured,
         extractor=_stub,
-        options=EmbeddingOptions(reading=Reading.NOMINAL, sample_limit=None, promote=False),
+        options=EmbeddingOptions(
+            reading=Reading.NOMINAL, sample_limit=None, promote=False, batch_size=EXTRACTION_BATCH_SIZE
+        ),
     )
 
     summary = run_embedding(config, connection, measured, extractor=_never_built, options=PROMOTE)

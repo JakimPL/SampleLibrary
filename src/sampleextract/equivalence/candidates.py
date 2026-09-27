@@ -20,35 +20,48 @@ NEIGHBOR_BLOCK_ROWS: Final[int] = 256
 
 @dataclass(frozen=True)
 class Fingerprints:
-    """The fingerprints of samples sharing one channel layout, row by row.
+    """The fingerprints of samples sharing one channel layout, row by row: the samples compared before, then the new ones.
 
     ``shapes`` holds each sample's shape fingerprint and ``rates`` its rate fingerprint (see
     fingerprint.py); ``trimmed_frames`` holds each sample's length once its trailing silence is
-    trimmed, the length the scorers compare.
+    trimmed, the length the scorers compare. Every row before ``first_new`` has been compared with
+    every other such row by an earlier pass, so only pairs reaching a row from ``first_new`` on are
+    left to find.
     """
 
     samples: tuple[Sample, ...]
     shapes: NDArray[np.float32]
     rates: NDArray[np.float32]
     trimmed_frames: NDArray[np.int64]
+    first_new: int
 
 
 @dataclass(frozen=True)
 class CandidateBlock:
-    """The candidate pairs whose first sample falls in one block of rows."""
+    """The candidate pairs one block of new rows finds among the rows before each of them.
 
-    gain_pairs: tuple[tuple[Sample, Sample], ...]
-    resampled_pairs: tuple[tuple[Sample, Sample], ...]
+    Each pair names two rows, the one holding the lower sample hash first: the order a pass over the
+    whole catalog in hash order meets them in, which is the order the scorers read a pair in.
+    """
+
+    rows: range
+    gain_pairs: tuple[tuple[int, int], ...]
+    resampled_pairs: tuple[tuple[int, int], ...]
 
 
 def candidate_blocks(fingerprints: Fingerprints, *, block_rows: int) -> Iterator[CandidateBlock]:
-    """Every pair of samples a scorer should see, found through their fingerprints a block of rows at a time.
+    """Every pair of samples a scorer should see and no earlier pass saw, found a block of new rows at a time.
 
     Two samples related by gain or depth alone share a length and a shape, so their shape
     fingerprints lie close together; two related by a resample hold the same cycles over lengths in
-    proportion, so their rate fingerprints do. The cosine similarity of each block of rows against
-    every later row finds those neighbors exactly, while holding one block's similarities in memory,
-    so a catalog of a hundred thousand samples is searched in bounded memory and scored block by block.
+    proportion, so their rate fingerprints do. The cosine similarity of each block of new rows
+    against every row before it finds those neighbors exactly, while holding one block's
+    similarities in memory, so a catalog of a hundred thousand samples is searched in bounded memory
+    and scored block by block.
+
+    Each pair is found from its later row, so a pair between two compared rows is never found again,
+    every pair reaching a new row is found exactly once, and a search whose rows are all new finds
+    every pair a search of the whole catalog finds.
 
     A pair whose trimmed lengths agree within ``MAX_TRIM_MISMATCH_FRAMES`` and whose shapes pass
     ``MINIMUM_GAIN_FINGERPRINT_SIMILARITY`` is a gain candidate. A pair whose lengths differ by more,
@@ -57,36 +70,35 @@ def candidate_blocks(fingerprints: Fingerprints, *, block_rows: int) -> Iterator
     """
     row_count = fingerprints.shapes.shape[0]
     frames = fingerprints.trimmed_frames.astype(np.int32)
-    for block_start in range(0, row_count, block_rows):
+    for block_start in range(fingerprints.first_new, row_count, block_rows):
         block_stop = min(block_start + block_rows, row_count)
-        # (block rows, rows from the block's start onward)
-        shape_similarities = fingerprints.shapes[block_start:block_stop] @ fingerprints.shapes[block_start:].T
-        rate_similarities = fingerprints.rates[block_start:block_stop] @ fingerprints.rates[block_start:].T
-        firsts = np.arange(block_start, block_stop)[:, np.newaxis]
-        seconds = np.arange(block_start, row_count)[np.newaxis, :]
-        shorter = np.minimum(frames[firsts], frames[seconds])
-        longer = np.maximum(frames[firsts], frames[seconds])
-        after = seconds > firsts
+        # (block rows, every row up to the block's end)
+        shape_similarities = fingerprints.shapes[block_start:block_stop] @ fingerprints.shapes[:block_stop].T
+        rate_similarities = fingerprints.rates[block_start:block_stop] @ fingerprints.rates[:block_stop].T
+        laters = np.arange(block_start, block_stop)[:, np.newaxis]
+        earliers = np.arange(block_stop)[np.newaxis, :]
+        shorter = np.minimum(frames[laters], frames[earliers])
+        longer = np.maximum(frames[laters], frames[earliers])
+        before = earliers < laters
         lengths_agree = (longer - shorter) <= MAX_TRIM_MISMATCH_FRAMES
-        gain = after & lengths_agree & (shape_similarities >= MINIMUM_GAIN_FINGERPRINT_SIMILARITY)
+        gain = before & lengths_agree & (shape_similarities >= MINIMUM_GAIN_FINGERPRINT_SIMILARITY)
         resampled = (
-            after
+            before
             & ~lengths_agree
             & (shorter >= MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON)
             & (longer <= shorter * MAX_RESAMPLE_RATIO)
             & (rate_similarities >= MINIMUM_RESAMPLED_FINGERPRINT_SIMILARITY)
         )
         yield CandidateBlock(
+            rows=range(block_start, block_stop),
             gain_pairs=_pairs(fingerprints.samples, gain, block_start=block_start),
             resampled_pairs=_pairs(fingerprints.samples, resampled, block_start=block_start),
         )
 
 
-def _pairs(
-    samples: tuple[Sample, ...], chosen: NDArray[np.bool_], *, block_start: int
-) -> tuple[tuple[Sample, Sample], ...]:
-    block_positions, later_positions = np.nonzero(chosen)
+def _pairs(samples: tuple[Sample, ...], chosen: NDArray[np.bool_], *, block_start: int) -> tuple[tuple[int, int], ...]:
+    block_positions, earlier_rows = np.nonzero(chosen)
     return tuple(
-        (samples[block_start + first], samples[block_start + second])
-        for first, second in zip(block_positions.tolist(), later_positions.tolist())
+        (earlier, later) if samples[earlier].hash < samples[later].hash else (later, earlier)
+        for later, earlier in zip((block_positions + block_start).tolist(), earlier_rows.tolist())
     )

@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    readonly "/api/health": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Health
+         * @description Whether the catalog answers, at the cost of one trivial query, for a platform checking the server's health.
+         */
+        readonly get: operations["get_health_api_health_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/modules": {
         readonly parameters: {
             readonly query?: never;
@@ -111,15 +131,18 @@ export interface paths {
          * Get Sample Audio
          * @description The sample's own canonical audio: its stored object, or the WAV the store would hold for it.
          *
-         *     A stored object is read straight off the store by its hash, with no catalog round trip on the
-         *     way to a sound: the hash's own shape is checked on the path, which is what keeps a request inside
-         *     the store. A sample found in a sample file is read from the file the catalog names and encoded
-         *     the way the store encodes an object, so both kinds play at the same nominal header rate. Either
-         *     way the bytes are those of the hash, so they are served with a cache lifetime of a year.
+         *     A stored object is read off the store by its hash: the hash's own shape is checked on the path,
+         *     which is what keeps a request inside the store. Where the policy serves stored objects by their
+         *     hash alone, that takes no catalog round trip on the way to a sound; otherwise the catalog is
+         *     asked first, so an object left in the store for a sample the catalog no longer holds stays
+         *     unheard. A sample found in a sample file is read from a file the catalog names inside this
+         *     server's sample directories, and encoded the way the store encodes an object, so both kinds play
+         *     at the same nominal header rate. Either way the bytes are those of the hash, so they are served
+         *     with a cache lifetime of a year.
          *
          *     Raises:
-         *         HTTPException: 404 when the store holds no object under this hash and no cataloged file
-         *             holds the sample now.
+         *         HTTPException: 404 when the sample is not served, the store holds no object under this hash,
+         *             and no cataloged file in this server's sample directories holds the sample now.
          */
         readonly get: operations["get_sample_audio_api_samples__sample_hash__audio_get"];
         readonly put?: never;
@@ -165,7 +188,7 @@ export interface paths {
         };
         /**
          * Get Sample Relations
-         * @description Every equivalence-class link this sample participates in, on either side of the pair.
+         * @description Every equivalence-class link this sample participates in, on either side of the pair, reviewed by whom the policy says.
          *
          *     Raises:
          *         HTTPException: 404 when no sample is cataloged under this hash.
@@ -376,47 +399,24 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/api/curation/annotations/{sample_hash}": {
+    readonly "/api/curation/access": {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
             readonly path?: never;
             readonly cookie?: never;
         };
-        readonly get?: never;
+        /**
+         * Read Curation Access
+         * @description What the person asking may see and change of the labels, so a page shows its controls only where they work.
+         */
+        readonly get: operations["read_curation_access_api_curation_access_get"];
         readonly put?: never;
         readonly post?: never;
-        /**
-         * Remove Annotation
-         * @description Take back everything a person decided about one sample, whether or not the catalog still holds it.
-         *
-         *     An annotation whose sample has left the catalog for good, and that relinking cannot place, is
-         *     removed through here.
-         *
-         *     Raises:
-         *         HTTPException: 404 when no annotation is held for this hash.
-         */
-        readonly delete: operations["remove_annotation_api_curation_annotations__sample_hash__delete"];
+        readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
-        /**
-         * Change Annotation
-         * @description Change what a person decided about this sample, optionally across its near-duplicates.
-         *
-         *     Every reached sample keeps the decisions the request leaves out, so a star given to a group
-         *     changes the members' ratings alone. A scope of ``equivalence_class`` reaches every sample the
-         *     detector groups with this one, the same group the listing collapses under one row, and each
-         *     member is written as its own row so the group boundary moving later leaves those decisions
-         *     intact. A sample left recording nothing has its annotation removed, which is how a person takes
-         *     a decision back.
-         *
-         *     The catalog is read through the read-only connection and only the curation schema is written,
-         *     which keeps the one write this application performs to the schema it owns.
-         *
-         *     Raises:
-         *         HTTPException: 404 when no sample is cataloged under this hash and none is annotated.
-         */
-        readonly patch: operations["change_annotation_api_curation_annotations__sample_hash__patch"];
+        readonly patch?: never;
         readonly trace?: never;
     };
     readonly "/api/curation/annotations/vocabulary": {
@@ -479,11 +479,18 @@ export interface paths {
          *     caching headers pass through untouched, and so does a caller's conditional request, so a
          *     browser that holds the render is answered with a 304 by the process that made it.
          *
+         *     Where the policy limits visitors, a new render spends one morph of the visitor's budget and of
+         *     everyone's before the renderer is asked, and a request naming the render it holds spends one
+         *     only once the renderer answers with new audio; at most the configured number reach the renderer
+         *     at once (`sampleserver.visitors.MorphGate`).
+         *
          *     Raises:
-         *         HTTPException: 503 when no inference process answers, and 504 when it takes longer than a
+         *         HTTPException: 429 once a morph budget is spent, 503 while the renderer is busy with as many
+         *             as it may be asked for, or when no inference process answers, and 504 when it takes longer than a
          *             render is waited for; the process's own 404 for a sample it has no object for, and 422
          *             for a point it will not render, are relayed with their detail; any other answer it
-         *             gives reads as 502.
+         *             gives reads as 502. Each names the process's address and its own words only where
+         *             the policy names internals.
          */
         readonly get: operations["get_morph_audio_api_morph_audio_get"];
         readonly put?: never;
@@ -512,6 +519,39 @@ export interface paths {
         readonly options?: never;
         readonly head?: never;
         readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/api/curation/annotations/{sample_hash}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /**
+         * Change Annotation
+         * @description Change what a person decided about this sample, optionally across its near-duplicates.
+         *
+         *     Every reached sample keeps the decisions the request leaves out, so a star given to a group
+         *     changes the members' ratings alone. A scope of ``equivalence_class`` reaches every sample the
+         *     detector groups with this one, the same group the listing collapses under one row, and each
+         *     member is written as its own row so the group boundary moving later leaves those decisions
+         *     intact. A sample left recording nothing has its annotation removed, which is how a person takes
+         *     a decision back.
+         *
+         *     The catalog is read through the read-only connection and only the curation schema is written,
+         *     which keeps the one write this application performs to the schema it owns.
+         *
+         *     Raises:
+         *         HTTPException: 404 when no sample is cataloged under this hash and none is annotated.
+         */
+        readonly patch: operations["change_annotation_api_curation_annotations__sample_hash__patch"];
         readonly trace?: never;
     };
 }
@@ -632,6 +672,20 @@ export interface components {
             readonly paths: readonly (readonly string[])[];
         };
         /**
+         * CurationAccess
+         * @description What the person asking may see and do of a person's own decisions about samples.
+         *
+         *     ``label_editing`` says whether they may change labels here, which only the person at the
+         *     computer the application runs on may; ``curation_shown`` says whether the labels, ratings and
+         *     favorites a person decided are shown at all, which the server's exposure decides.
+         */
+        readonly CurationAccess: {
+            /** Label Editing */
+            readonly label_editing: boolean;
+            /** Curation Shown */
+            readonly curation_shown: boolean;
+        };
+        /**
          * ErrorDetail
          * @description What a refused request is told, in the one shape every route answers a refusal in.
          */
@@ -643,6 +697,14 @@ export interface components {
         readonly HTTPValidationError: {
             /** Detail */
             readonly detail?: readonly components["schemas"]["ValidationError"][];
+        };
+        /**
+         * Health
+         * @description What a health check reads: that the server answers and its catalog does too.
+         */
+        readonly Health: {
+            /** Catalog Answers */
+            readonly catalog_answers: boolean;
         };
         /**
          * ITSampleProperties
@@ -1067,32 +1129,20 @@ export interface components {
          * SampleFileDetail
          * @description One file a sample was found in, read in place from a sample directory.
          *
-         *     ``available`` says whether the file is there now with the size and write time it was scanned
-         *     at, which is what playing the sample from it needs.
+         *     ``directory`` is the folder it was found in: its full path where the server shows paths, and its
+         *     name otherwise. ``available`` says whether the file is there now with the size and write time it
+         *     was scanned at, which is what playing the sample from it needs; it is ``None`` where the server
+         *     reports no file's state, or reads no file from that folder.
          */
         readonly SampleFileDetail: {
-            readonly location: components["schemas"]["SampleFileLocation"];
-            /** Rate */
-            readonly rate: number;
-            /** Available */
-            readonly available: boolean;
-        };
-        /**
-         * SampleFileLocation
-         * @description Where a sample file sits: one of the configured sample directories, and its path inside it.
-         *
-         *     The path inside the directory is written with forward slashes on every system and names a file
-         *     below the directory, which keeps a location read from a request or a catalog row within the
-         *     directory it names.
-         */
-        readonly SampleFileLocation: {
-            /**
-             * Directory
-             * Format: path
-             */
+            /** Directory */
             readonly directory: string;
             /** Relative Path */
             readonly relative_path: string;
+            /** Rate */
+            readonly rate: number;
+            /** Available */
+            readonly available: boolean | null;
         };
         /**
          * SampleOccurrence
@@ -1412,6 +1462,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    readonly get_health_api_health_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
     readonly list_modules_api_modules_get: {
         readonly parameters: {
             readonly query?: {
@@ -1884,58 +1954,14 @@ export interface operations {
             };
         };
     };
-    readonly remove_annotation_api_curation_annotations__sample_hash__delete: {
+    readonly read_curation_access_api_curation_access_get: {
         readonly parameters: {
             readonly query?: never;
             readonly header?: never;
-            readonly path: {
-                readonly sample_hash: string;
-            };
+            readonly path?: never;
             readonly cookie?: never;
         };
         readonly requestBody?: never;
-        readonly responses: {
-            /** @description Successful Response */
-            readonly 204: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not Found */
-            readonly 404: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Validation Error */
-            readonly 422: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    readonly change_annotation_api_curation_annotations__sample_hash__patch: {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header?: never;
-            readonly path: {
-                readonly sample_hash: string;
-            };
-            readonly cookie?: never;
-        };
-        readonly requestBody: {
-            readonly content: {
-                readonly "application/json": components["schemas"]["AnnotationChangeRequest"];
-            };
-        };
         readonly responses: {
             /** @description Successful Response */
             readonly 200: {
@@ -1943,25 +1969,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": components["schemas"]["AnnotationsWritten"];
-                };
-            };
-            /** @description Not Found */
-            readonly 404: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["ErrorDetail"];
-                };
-            };
-            /** @description Validation Error */
-            readonly 422: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/json": components["schemas"]["HTTPValidationError"];
+                    readonly "application/json": components["schemas"]["CurationAccess"];
                 };
             };
         };
@@ -2098,6 +2106,50 @@ export interface operations {
                 };
                 content: {
                     readonly "application/json": components["schemas"]["MorphAvailability"];
+                };
+            };
+        };
+    };
+    readonly change_annotation_api_curation_annotations__sample_hash__patch: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly sample_hash: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["AnnotationChangeRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AnnotationsWritten"];
+                };
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ErrorDetail"];
+                };
+            };
+            /** @description Validation Error */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

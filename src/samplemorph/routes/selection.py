@@ -2,16 +2,12 @@ from __future__ import annotations
 
 from enum import StrEnum, unique
 from pathlib import Path
-from typing import Final
 
 import yaml
 from pydantic import BaseModel, ValidationError
 
 from samplecore.models.base import FROZEN
 from samplemorph.envelope.settings import EnvelopeSettings
-
-DEFAULT_SELECTION_PATH: Final[Path] = Path(__file__).resolve().parents[3] / "morph.yaml"
-DEFAULT_FILTER_SELECTION_PATH: Final[Path] = DEFAULT_SELECTION_PATH.with_name("morph-filter.yaml")
 
 
 @unique

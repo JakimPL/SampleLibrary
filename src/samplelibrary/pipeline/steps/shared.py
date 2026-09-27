@@ -17,6 +17,7 @@ from sampledescriptor.training.run.settings import (
 )
 from samplelibrary.pipeline.artifacts import read_sidecar
 from samplelibrary.pipeline.context import PipelineContext
+from samplelibrary.pipeline.devices import resolved_device
 from samplelibrary.pipeline.settings import StepSettings
 from samplelibrary.pipeline.steps.kinds import StepRefused
 
@@ -57,7 +58,7 @@ def operational_flags(context: PipelineContext, *, workers: bool, device: bool) 
     if workers and context.settings.workers is not None:
         flags.extend(["--workers", str(context.settings.workers)])
     if device:
-        flags.extend(["--device", context.settings.device])
+        flags.extend(["--device", resolved_device(context.settings.device)])
     return tuple(flags)
 
 

@@ -21,6 +21,7 @@
     --font-size-label: 9.5px;
     --control-height: 24px;
     --control-height-compact: 22px;
+    --setup-control-height: 32px;
     --tap-target: 24px;
     --row-height: 40px;
     --toolbar-height: 32px;
@@ -451,7 +452,8 @@ select:focus-visible,
     cursor: pointer;
 }
 
-.view-menu-reset {
+.menu-action {
+    display: block;
     width: 100%;
     margin-top: var(--space-3);
     border: 1px solid var(--border);
@@ -462,6 +464,17 @@ select:focus-visible,
     font-size: var(--font-size-small);
     cursor: pointer;
     color: var(--text-muted);
+}
+
+.menu-action:first-child {
+    margin-top: 0;
+}
+
+.menu-note {
+    max-width: 240px;
+    margin: var(--space-3) 0 0;
+    color: var(--critical);
+    font-size: var(--font-size-small);
 }
 
 /* Two classes outrank dockview.css's single-class theme rule whatever the load order. */
@@ -883,7 +896,9 @@ tr:focus-within .row-open,
 }
 
 .rating-star:disabled,
-.favorite-toggle:disabled {
+.favorite-toggle:disabled,
+.rating-star.is-read-only,
+.favorite-toggle.is-read-only {
     cursor: default;
 }
 
@@ -1771,12 +1786,18 @@ table.data td .annotation-editor-input {
     height: 100%;
 }
 
-/* On a phone the player is one row: the play button beside the frame, the readout in the frame's corner. */
+/* On a phone the player is one row: the play button and the file at either side of the frame, the readout in its corner. */
 .wave-panel-compact {
     flex-direction: row;
     align-items: center;
     gap: var(--space-4);
-    padding-left: var(--space-4);
+    padding: 0 var(--space-4);
+}
+
+/* Where there is no file to save, the file's room stays, so the frame keeps its center. */
+.wave-panel-slot {
+    flex: 0 0 auto;
+    width: var(--control-height);
 }
 
 /* The frame the corner readout is positioned against; it carries the wrap in either form. */
@@ -1853,6 +1874,13 @@ table.data td .annotation-editor-input {
     color: var(--critical);
 }
 
+/* The words on a sliver of the frame's own ground, so they read over whatever contour lies behind them. */
+.wave-notice-text {
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-1);
+    background: var(--wave-bg);
+}
+
 .wave-playhead {
     position: absolute;
     top: 0;
@@ -1912,12 +1940,11 @@ table.data td .annotation-editor-input {
     --play-button-size: max(26px, var(--control-height));
 }
 
-.transport .download-link {
+.download-link {
     display: flex;
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    margin-left: auto;
     width: max(26px, var(--tap-target));
     height: max(26px, var(--tap-target));
     border: 1px solid var(--border);
@@ -1929,7 +1956,17 @@ table.data td .annotation-editor-input {
     text-decoration: none;
 }
 
-.transport .download-link:hover {
+.transport .download-link {
+    margin-left: auto;
+}
+
+/* In the row form the file matches the play button, so the frame stands between two controls of one size. */
+.wave-panel-compact .download-link {
+    width: var(--control-height);
+    height: var(--control-height);
+}
+
+.download-link:hover {
     color: var(--text-primary);
     border-color: var(--border-strong);
 }
@@ -2451,22 +2488,10 @@ table.data td .annotation-editor-input {
     gap: var(--space-3);
 }
 
-/* A waveform takes one fixed height under the slider, so opening it costs the cloud the same every time. */
-.morph-wave,
+/* A waveform takes the height a sample's player has over its detail, so opening it costs the cloud the same every time. */
 .morph-strip-wave {
     flex: 0 0 auto;
-    height: 160px;
-}
-
-/* A lone end's own player takes the height it has over a sample's detail: one row on a phone. */
-.morph-strip-wave-lone {
     height: var(--sample-transport-height);
-}
-
-.morph-wave .transport {
-    padding: 6px 0 0;
-    border-top: none;
-    background: transparent;
 }
 
 .morph-weight {
@@ -2814,15 +2839,6 @@ table.data td .annotation-editor-input {
     background: var(--surface-2);
 }
 
-.tray-hint {
-    display: flex;
-    align-items: center;
-    min-height: 56px;
-    padding: 0 var(--space-6);
-    color: var(--text-muted);
-    font-size: var(--font-size-small);
-}
-
 /* A short viewport keeps the morph strip to its row and gives the cloud the tray's room: the strip
    names the tapped sample, and a held point offers the rest. */
 @media (height < 560px) {
@@ -3121,4 +3137,527 @@ table.data td .annotation-editor-input {
 .screen-menu .theme-menu {
     width: 100%;
     margin-left: 0;
+}
+
+/* The setup page: on a desktop it fills the window, the folders beside the library, each pane
+   scrolling its own body between a fixed header and footer, so no content moves a button. A phone
+   stacks the panes and scrolls the page. */
+.setup-page {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: var(--space-7);
+    width: min(100%, 1200px);
+    height: 100dvh;
+    margin: 0 auto;
+    padding: calc(var(--space-7) + var(--safe-top)) var(--space-7) calc(var(--space-7) + var(--safe-bottom));
+    box-sizing: border-box;
+    font-size: 14px;
+}
+
+.setup-page-closed {
+    grid-template-rows: auto;
+    align-content: start;
+    max-width: 720px;
+}
+
+.setup-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-6);
+    min-height: var(--setup-control-height);
+}
+
+.setup-header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+.setup-header-actions {
+    display: flex;
+    gap: var(--space-4);
+}
+
+/* The panes share their header and footer rows, so the lines dividing them run level across both. */
+.setup-panes {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--space-7);
+    min-height: 0;
+}
+
+.setup-pane {
+    display: grid;
+    grid-row: span 3;
+    grid-template-rows: subgrid;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-4);
+    background: var(--surface-1);
+}
+
+.setup-pane-header {
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-7) var(--space-7) var(--space-6);
+    border-bottom: 1px solid var(--border);
+}
+
+.setup-pane-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-7);
+    align-content: start;
+    padding: var(--space-7);
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.setup-pane-body-tall {
+    grid-row: span 2;
+}
+
+/* Anchored to the bottom edge, the button stays put while a longer message grows the footer upward. */
+.setup-pane-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: var(--space-6);
+    padding: var(--space-6) var(--space-7);
+    border-top: 1px solid var(--border);
+}
+
+.setup-card {
+    display: grid;
+    gap: var(--space-6);
+    padding: var(--space-7);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-4);
+    background: var(--surface-1);
+}
+
+.setup-pane h2,
+.setup-card h1,
+.setup-card h2 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.setup-hint {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* A reserved line: empty, it keeps its height, so a message arriving moves nothing below it. */
+.setup-message {
+    min-height: 1.45em;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.setup-message[data-tone="error"] {
+    color: var(--critical);
+}
+
+.setup-status {
+    color: var(--text-primary);
+}
+
+.setup-notice {
+    text-align: center;
+}
+
+.setup-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+}
+
+.setup-field-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+}
+
+.setup-field-title {
+    margin: 0;
+    font-size: 14px;
+}
+
+.setup-label {
+    display: grid;
+    gap: var(--space-2);
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.setup-input {
+    min-height: var(--setup-control-height);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+}
+
+.setup-button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--setup-control-height);
+    padding: 0 var(--space-6);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-size: 13px;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.setup-button:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+.setup-button-primary {
+    border-color: var(--accent-strong);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+}
+
+.setup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.setup-folder {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-height: var(--setup-control-height);
+}
+
+/* The line runs right to left, so a path too long for it loses its start and keeps the folder's
+   name in view; the path inside reads left to right in its <bdi>. */
+.path-line {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    direction: rtl;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.path-line[data-empty="true"] {
+    color: var(--text-faint);
+    font-style: italic;
+}
+
+.setup-folder-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.folder-places {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+}
+
+.folder-place {
+    min-height: var(--tap-target);
+    padding: 0 var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--surface-0);
+    cursor: pointer;
+}
+
+.folder-place[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.folder-current {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-width: 0;
+}
+
+.folder-up {
+    flex: none;
+    min-height: var(--tap-target);
+    padding: 0 var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    cursor: pointer;
+}
+
+.folder-up:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+
+/* One height whatever the folder holds, so the buttons under it keep their place. */
+.folder-list {
+    display: block;
+    height: min(45dvh, 360px);
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    list-style: none;
+}
+
+.folder-item + .folder-item {
+    border-top: 1px solid var(--border);
+}
+
+.folder-empty {
+    padding: var(--space-4);
+    color: var(--text-muted);
+}
+
+.folder-entry {
+    width: 100%;
+    min-height: var(--tap-target);
+    padding: var(--space-3) var(--space-4);
+    border: none;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+.folder-entry:hover {
+    background: var(--surface-2);
+}
+
+.build-choices {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.build-choice {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-6) var(--space-7);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-3);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+}
+
+.build-choice:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+
+.build-choice:hover:enabled {
+    border-color: var(--accent);
+}
+
+.build-choice[data-running="true"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    opacity: 1;
+}
+
+.build-choice-title {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.build-choice-note {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.build-option {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-5);
+    padding: 0 var(--space-7);
+}
+
+.build-option-check {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin: 2px 0 0;
+    accent-color: var(--accent);
+}
+
+.build-option-text {
+    display: grid;
+    gap: var(--space-1);
+}
+
+.build-option-title {
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.build-device {
+    min-height: 1.45em;
+    padding: 0 var(--space-7);
+}
+
+.network-reach {
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.build-placeholder {
+    padding: var(--space-6) 0;
+}
+
+.build-progress {
+    display: grid;
+    gap: var(--space-4);
+    padding-top: var(--space-7);
+    border-top: 1px solid var(--border);
+}
+
+/* The heading row keeps a button's height, so Cancel appears and leaves without moving the steps. */
+.build-progress-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: var(--space-6);
+    min-height: var(--setup-control-height);
+}
+
+.build-progress-title {
+    margin: 0;
+    font-size: 15px;
+}
+
+.build-progress-position {
+    color: var(--text-muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.build-progress-times {
+    min-height: 1.45em;
+    font-variant-numeric: tabular-nums;
+}
+
+.build-steps {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.build-step {
+    display: grid;
+    grid-template-columns: 1.25em minmax(0, 1fr) auto;
+    gap: var(--space-2) var(--space-4);
+    align-items: center;
+}
+
+.build-step-mark {
+    text-align: center;
+}
+
+.build-step[data-state="done"] .build-step-mark,
+.build-step[data-state="up to date"] .build-step-mark {
+    color: var(--good);
+}
+
+.build-step[data-state="running"] .build-step-mark {
+    color: var(--accent);
+}
+
+.build-step[data-state="failed"] .build-step-mark {
+    color: var(--critical);
+}
+
+.build-step[data-state="waiting"],
+.build-step[data-state="skipped"] {
+    color: var(--text-faint);
+}
+
+.build-step-note {
+    color: var(--text-muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.build-step-bar {
+    grid-column: 2 / -1;
+    width: 100%;
+    height: 6px;
+    accent-color: var(--accent);
+}
+
+.build-log pre {
+    max-height: 240px;
+    margin: var(--space-3) 0 0;
+    padding: var(--space-4);
+    overflow: auto;
+    border-radius: var(--radius-2);
+    background: var(--surface-2);
+    font-size: 12px;
+    white-space: pre-wrap;
+}
+
+:root[data-layout="phone"] .setup-page {
+    grid-template-rows: auto auto;
+    height: auto;
+    min-height: 100dvh;
+}
+
+:root[data-layout="phone"] .setup-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+:root[data-layout="phone"] .setup-notice {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    text-align: left;
+}
+
+:root[data-layout="phone"] .setup-panes {
+    grid-template-rows: none;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-7);
+}
+
+:root[data-layout="phone"] .setup-pane {
+    grid-row: auto;
+    grid-template-rows: auto auto auto;
+}
+
+:root[data-layout="phone"] .setup-pane-body-tall {
+    grid-row: auto;
+}
+
+:root[data-layout="phone"] .setup-pane-body {
+    overflow: visible;
 }

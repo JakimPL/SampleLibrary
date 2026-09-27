@@ -59,7 +59,7 @@ def _report(outcome: SampleFileScanOutcome) -> None:
 
 
 def _prune(config: LibraryConfig, outcome: SampleFileScanOutcome) -> None:
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         try:
             summary = prune_gone_sample_files(config, connection, outcome)
         except PruneRefused as error:

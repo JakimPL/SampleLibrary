@@ -20,6 +20,11 @@ repos:
         language: system
         types: [python]
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3
     hooks:
@@ -34,61 +39,10 @@ repos:
         files: ^frontend/
         pass_filenames: false
 
-      - id: mypy
-        name: mypy
-        entry: uv run mypy
+      - id: checked-commit
+        name: the pushed commit passed just check
+        entry: uv run --no-project python scripts/checked_commits.py verify
         language: system
-        types: [python]
-        require_serial: true
-        exclude: ^(tests/)
-        stages: [pre-push]
-        pass_filenames: false
-
-      - id: pylint
-        name: pylint
-        entry: uv run pylint src scripts
-        language: system
-        types: [python]
-        require_serial: true
-        exclude: ^(tests/)
-        stages: [pre-push]
-        pass_filenames: false
-
-      - id: import-linter
-        name: import-linter
-        entry: uv run lint-imports
-        language: system
-        stages: [pre-push]
-        pass_filenames: false
-
-      - id: pytest
-        name: pytest
-        entry: uv run pytest -n auto
-        language: system
-        types: [python]
-        stages: [pre-push]
-        pass_filenames: false
-
-      - id: frontend-typecheck
-        name: frontend-typecheck
-        entry: npm --prefix frontend run typecheck
-        language: system
-        files: ^frontend/
-        stages: [pre-push]
-        pass_filenames: false
-
-      - id: frontend-lint
-        name: frontend-lint
-        entry: npm --prefix frontend run lint
-        language: system
-        files: ^frontend/
-        stages: [pre-push]
-        pass_filenames: false
-
-      - id: vitest
-        name: vitest
-        entry: npm --prefix frontend run test
-        language: system
-        files: ^frontend/
+        always_run: true
         stages: [pre-push]
         pass_filenames: false

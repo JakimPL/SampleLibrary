@@ -15,28 +15,27 @@ ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-COPY trackmod ./trackmod
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --extra server --no-dev --no-editable --frozen --no-install-project
-COPY README.md ./
+RUN uv sync --extra server --extra morph --no-dev --no-editable --frozen --no-install-project
+COPY README.md hatch_build.py ./
 COPY src ./src
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --extra server --no-dev --no-editable --frozen
+RUN uv sync --extra server --extra morph --no-dev --no-editable --frozen
 
 FROM python:3.13-slim-bookworm AS runtime
 
-RUN useradd --create-home samplelibrary
+RUN useradd --create-home --uid 1000 samplelibrary
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=frontend /frontend/dist /app/frontend
+COPY --from=frontend /build/frontend /app/frontend
+COPY docker/site.toml /app/config.toml
 ENV PATH="/app/.venv/bin:${PATH}" \
     SAMPLELIBRARY_CONFIG=/app/config.toml \
     SAMPLELIBRARY_FRONTEND_DIRECTORY=/app/frontend \
-    WEB_CONCURRENCY=4
+    WEB_CONCURRENCY=1 \
+    NUMBA_CACHE_DIR=/tmp/numba \
+    PYTHONUNBUFFERED=1
 USER samplelibrary
 
-EXPOSE 8000
-# The statistics route counts rows, so a healthy container is one whose catalog answers too.
-HEALTHCHECK CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/stats', timeout=5)"]
+# A healthy site is one whose catalog answers, on the port the platform names.
+HEALTHCHECK CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ['PORT']}/api/health\", timeout=5)"]
 ENTRYPOINT ["samplelibrary"]
-CMD ["serve", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["site", "--host", "0.0.0.0"]

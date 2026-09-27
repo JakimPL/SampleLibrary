@@ -232,7 +232,8 @@ def test_the_machine_a_library_is_built_on_names_none_of_its_outputs(runner: Sce
     """Workers, the device and a ceiling reach the commands, and every output stands as it was built."""
     _built(runner)
     world.set_pipeline_table(
-        'memory_cap = "none"\nworkers = 2\ndevice = "cpu"\n\n[pipeline.descriptor]\nepochs = 40\nmemory_cap = "none"\n'
+        'memory_cap = "none"\nworkers = 2\ndevice = "cpu"\ndescriptor_source = "trained"\n\n'
+        '[pipeline.descriptor]\nepochs = 40\nmemory_cap = "none"\n'
     )
 
     host = runner.start(Run())

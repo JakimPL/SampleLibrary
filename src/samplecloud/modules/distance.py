@@ -19,20 +19,37 @@ def chamfer_distances(sets: ModuleSampleSets) -> NDArray[np.float32]:
     distance to B's closest sample; the result averages both directions. Averaging over each
     module's own samples keeps modules of different sizes comparable: a module that adds one sample
     to another's set lies that sample's distance divided by twice its own size away.
+    """
+    module_count = len(sets.module_hashes)
+    # (modules, modules): row B, column A holds the directed distance from A to B.
+    toward = np.empty((module_count, module_count), dtype=np.float32)
+    for batch, distances in directed_batches(sets, first_module=0):
+        toward[batch.start : batch.stop] = distances
+    return symmetric_distances(toward)
+
+
+def directed_batches(sets: ModuleSampleSets, *, first_module: int) -> Iterator[tuple[range, NDArray[np.float32]]]:
+    """Each batch of modules from `first_module` on, with the directed distance from every module toward each of them.
 
     Modules are measured in batches of about ``BATCH_MEMBER_COUNT`` member samples: one matrix
     product gives every sample's distance to each batch member, and each batch folds straight into
-    the directed distances, so memory grows with the module count squared plus one batch of columns.
+    the directed distances, so memory grows with one batch of columns. A batch's distances are
+    ``(batch modules, modules)``: row B, column A holds the distance from A toward B. The batches
+    fall the same way every time, so a measurement stopped after a batch takes up with the next.
     """
-    module_count = len(sets.module_hashes)
     squared_norms = np.einsum("ij,ij->i", sets.vectors, sets.vectors)
     averaging = _averaging_matrix(sets)
-    # (modules, modules): row A, column B holds the directed distance from A to B.
-    directed = np.empty((module_count, module_count), dtype=np.float32)
     for batch in _batches(sets.member_rows):
+        if batch.stop <= first_module:
+            continue
         nearest = _nearest_distances(sets, batch, squared_norms=squared_norms)
-        directed[:, batch.start : batch.stop] = averaging @ nearest
-    distances: NDArray[np.float32] = (0.5 * (directed + directed.T)).astype(np.float32)
+        distances: NDArray[np.float32] = (averaging @ nearest).T
+        yield batch, distances
+
+
+def symmetric_distances(toward: NDArray[np.float32]) -> NDArray[np.float32]:
+    """Both directions of every pair averaged, from the directed distances `directed_batches` fills in."""
+    distances: NDArray[np.float32] = (0.5 * (toward + toward.T)).astype(np.float32)
     return distances
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from contextlib import nullcontext
 from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated, Final
@@ -20,9 +22,16 @@ from sampleserver.dependencies import (
     get_connection_opener,
     get_inference_client,
     get_library_root,
+    get_morph_gate,
+    get_policy,
+    get_sample_directories,
 )
 from sampleserver.inference_client import STATUS_TIMEOUT_SECONDS, timed_out_detail, unavailable_detail
+from sampleserver.messages import MORPH_REFUSED, MORPH_TIMED_OUT, MORPH_UNAVAILABLE
 from sampleserver.parameters import WAV_CONTENT, WAV_MEDIA_TYPE, ErrorDetail
+from sampleserver.policy import ServingPolicy
+from sampleserver.sample_files import files_inside, unreadable_audio
+from sampleserver.visitors import MorphGate
 
 router = APIRouter(prefix="/morph", tags=["morph"])
 
@@ -31,6 +40,8 @@ STATUS_PATH: Final[str] = "/morph/status"
 RELAYED_HEADERS: Final[frozenset[str]] = frozenset({"etag", "cache-control"})
 CONDITIONAL_HEADER: Final[str] = "if-none-match"
 RELAYED_REFUSALS: Final[frozenset[int]] = frozenset({HTTPStatus.NOT_FOUND, HTTPStatus.UNPROCESSABLE_ENTITY})
+
+_logger = logging.getLogger(__name__)
 
 
 class MorphAvailability(BaseModel):
@@ -46,27 +57,32 @@ def get_heard_point(
     point: Annotated[MorphPoint, Query()],
     open_connection: ConnectionOpener = Depends(get_connection_opener),
     library_root: Path = Depends(get_library_root),
+    policy: ServingPolicy = Depends(get_policy),
+    sample_directories: tuple[Path, ...] = Depends(get_sample_directories),
 ) -> HeardMorphPoint:
     """The point with the rate each end is heard at, and the file an end found in a sample directory is read from.
 
     The rate follows the one rule every reader of the catalog applies, and a sample the catalog
     holds no rate for is heard as stored, at the nominal rate its file states, which is the reading
-    every player of such a sample gives it. The file is the first of the sample's files still as it
-    was scanned, which the inference process reads in place. The connection is held only while the
-    catalog is read, so none waits in the pool's stead while the render is awaited.
+    every player of such a sample gives it. The file is the first of the sample's files in this
+    server's sample directories still as it was scanned, which the inference process reads in place.
+    The connection is held only while the catalog is read, so none waits in the pool's stead while
+    the render is awaited.
 
     Raises:
         HTTPException: 404 when an end lives only in sample files and every one of them is gone or changed.
     """
     with open_connection() as connection:
         rates = resolved_playback_rates(connection, [point.first, point.second])
-        sample_files = PostgresSampleFileRepository(connection).list_for_samples([point.first, point.second])
+        sample_files = files_inside(
+            PostgresSampleFileRepository(connection).list_for_samples([point.first, point.second]), sample_directories
+        )
     audio = SampleAudio.of_files(library_root, sample_files)
     try:
         first_location = audio.location_to_read(point.first)
         second_location = audio.location_to_read(point.second)
     except SampleUnavailableError as error:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from error
+        raise unreadable_audio(error, policy) from error
     return HeardMorphPoint(
         first=point.first,
         second=point.second,
@@ -98,6 +114,8 @@ async def get_morph_audio(
     request: Request,
     point: HeardMorphPoint = Depends(get_heard_point),
     client: httpx.AsyncClient = Depends(get_inference_client),
+    policy: ServingPolicy = Depends(get_policy),
+    gate: MorphGate | None = Depends(get_morph_gate),
 ) -> Response:
     """The audio at one point between two samples, rendered by the inference process and relayed as it came.
 
@@ -106,37 +124,57 @@ async def get_morph_audio(
     caching headers pass through untouched, and so does a caller's conditional request, so a
     browser that holds the render is answered with a 304 by the process that made it.
 
+    At most the configured number of morphs reach the renderer at once. Where the policy limits
+    visitors, a new render spends one morph of the visitor's budget and of everyone's before the
+    renderer is asked, and a request naming the render it holds is asked while neither budget is in
+    debt, spending one once the renderer answers with new audio (`sampleserver.visitors.MorphGate`).
+
     Raises:
-        HTTPException: 503 when no inference process answers, and 504 when it takes longer than a
+        HTTPException: 429 once a morph budget is spent, 503 while the renderer is busy with as many
+            as it may be asked for, or when no inference process answers, and 504 when it takes longer than a
             render is waited for; the process's own 404 for a sample it has no object for, and 422
             for a point it will not render, are relayed with their detail; any other answer it
-            gives reads as 502.
+            gives reads as 502. Each names the process's address and its own words only where
+            the policy names internals.
     """
     headers = {CONDITIONAL_HEADER: request.headers[CONDITIONAL_HEADER]} if CONDITIONAL_HEADER in request.headers else {}
+    visitor = gate.visitor(request) if gate is not None else None
     try:
-        upstream = await client.get(
-            AUDIO_PATH, params=point.model_dump(mode="json", exclude_none=True), headers=headers
-        )
+        with gate.slot() if gate is not None else nullcontext():
+            if gate is not None and visitor is not None:
+                gate.admit(visitor, names_a_render=bool(headers))
+            upstream = await client.get(
+                AUDIO_PATH, params=point.model_dump(mode="json", exclude_none=True), headers=headers
+            )
     except httpx.TimeoutException as error:
+        detail = timed_out_detail(str(client.base_url))
+        _logger.warning("%s", detail)
         raise HTTPException(
-            status_code=HTTPStatus.GATEWAY_TIMEOUT, detail=timed_out_detail(str(client.base_url))
+            status_code=HTTPStatus.GATEWAY_TIMEOUT, detail=policy.refusal(detail, plain=MORPH_TIMED_OUT)
         ) from error
     except httpx.TransportError as error:
+        detail = unavailable_detail(str(client.base_url))
+        _logger.warning("%s", detail)
         raise HTTPException(
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=unavailable_detail(str(client.base_url))
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE, detail=policy.refusal(detail, plain=MORPH_UNAVAILABLE)
         ) from error
 
     relayed = {name: value for name, value in upstream.headers.items() if name.lower() in RELAYED_HEADERS}
     if upstream.status_code == HTTPStatus.NOT_MODIFIED:
         return Response(status_code=HTTPStatus.NOT_MODIFIED, headers=relayed)
     if upstream.status_code in RELAYED_REFUSALS:
-        raise HTTPException(status_code=upstream.status_code, detail=_upstream_detail(upstream))
-    if upstream.status_code != HTTPStatus.OK:
+        _logger.warning("The inference process refused a morph: %s", _upstream_detail(upstream))
         raise HTTPException(
-            status_code=HTTPStatus.BAD_GATEWAY,
-            detail=f"the inference process answered {upstream.status_code}: {_upstream_detail(upstream)}",
+            status_code=upstream.status_code,
+            detail=policy.refusal(_upstream_detail(upstream), plain=MORPH_REFUSED),
         )
+    if upstream.status_code != HTTPStatus.OK:
+        detail = f"the inference process answered {upstream.status_code}: {_upstream_detail(upstream)}"
+        _logger.warning("%s", detail)
+        raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=policy.refusal(detail, plain=MORPH_REFUSED))
 
+    if gate is not None and visitor is not None and headers:
+        gate.charge(visitor)
     return Response(content=upstream.content, media_type=WAV_MEDIA_TYPE, headers=relayed)
 
 

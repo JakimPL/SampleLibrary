@@ -5,6 +5,7 @@ from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.sparse import csr_array
 
 from samplecore.storage.audio_store import NOMINAL_WAV_RATE
 from samplecore.waveform import average_to_fraction_points, triangular_weights
@@ -21,6 +22,11 @@ class LogFrequencyCanonicalizer:
 
     Each band averages the linear Fourier bins across its own width, so a rate change is a
     whole-band translation of the picture.
+
+    The analysis frames are read onto the time columns before the bins are read onto the bands.
+    Both readings are weighted averages, so their order leaves the picture as it is, and reading
+    the time first holds the band product to the grid's own width, as small for a minute-long
+    sample as for a click.
     """
 
     def __init__(self, geometry: GridGeometry) -> None:
@@ -32,13 +38,14 @@ class LogFrequencyCanonicalizer:
 
     def canonicalize(self, mono: PreparedMono) -> SoundImage:
         linear = np.abs(analysis_transform(mono, geometry=self._geometry))
-        bands: NDArray[np.float64] = band_weights(self._geometry) @ linear
+        columns = to_time_columns(linear, time_columns=self._geometry.time_columns)
+        bands: NDArray[np.float64] = band_weights(self._geometry) @ columns
         return to_sound_image(bands, geometry=self._geometry, frame_count=mono.shape[0])
 
 
 @cache
-def band_weights(geometry: GridGeometry) -> NDArray[np.float64]:
-    """Weights averaging the linear Fourier bins each logarithmic band covers.
+def band_weights(geometry: GridGeometry) -> csr_array:
+    """Weights averaging the linear Fourier bins each logarithmic band covers, as a sparse matrix.
 
     A band spans one Fourier bin at around 560 Hz and widens with frequency from there, reaching
     about forty bins at the top of the range. Each band therefore takes a weighted mean over its
@@ -46,18 +53,22 @@ def band_weights(geometry: GridGeometry) -> NDArray[np.float64]:
     where the analysis found it.
 
     Bands narrower than one bin widen to that much, so every band draws on the grid it is read
-    from. Weights fall linearly from each band's center to its edge and sum to one per band. They
-    are computed once per geometry and shared read-only.
+    from. Weights fall linearly from each band's center to its edge and sum to one per band. A band
+    covers a few bins of the thousand, so the matrix keeps only those, which is what makes applying
+    it cheap. The weights are computed once per geometry and shared read-only.
     """
     band_frequencies = geometry.band_frequencies
     step = 2.0 ** (1.0 / geometry.bins_per_octave)
     bin_spacing = geometry.analysis_rate_hz / geometry.fft_length
-    weights = triangular_weights(
-        source_positions=geometry.linear_frequencies,
-        target_positions=band_frequencies,
-        half_widths=np.maximum(band_frequencies * (step - 1.0 / step) / 2.0, bin_spacing),
+    weights = csr_array(
+        triangular_weights(
+            source_positions=geometry.linear_frequencies,
+            target_positions=band_frequencies,
+            half_widths=np.maximum(band_frequencies * (step - 1.0 / step) / 2.0, bin_spacing),
+        )
     )
-    weights.setflags(write=False)
+    for part in (weights.data, weights.indices, weights.indptr):
+        part.setflags(write=False)
     return weights
 
 
@@ -176,6 +187,8 @@ def align_and_describe(
         log_duration=float(np.log2(frame_count / NOMINAL_WAV_RATE)),
         log_gain=log_gain,
     )
+    if applied_shift == 0.0:
+        return padded, conditioners
     return shift_bands(padded, applied_shift), conditioners
 
 
@@ -190,11 +203,11 @@ def to_time_columns(magnitude: NDArray[np.float64], *, time_columns: int) -> NDA
 
 
 def to_sound_image(bands: NDArray[np.float64], *, geometry: GridGeometry, frame_count: int) -> SoundImage:
-    """Assemble the canonical image from a frequency axis's own magnitude spectrogram.
+    """Assemble the canonical image from a frequency axis's magnitudes read onto the grid's time columns.
 
-    Every axis differs only in how it reads a waveform into `bands`; the time axis, the
-    normalization and the alignment that follow are one shared rule, applied here.
+    Every axis differs only in how it reads a waveform into `bands`, one row per band and one
+    column per time column; the normalization and the alignment that follow are one shared rule,
+    applied here. `frame_count` is the waveform's length, which the duration conditioner records.
     """
-    columns = to_time_columns(bands, time_columns=geometry.time_columns)
-    grid, conditioners = align_and_describe(columns, geometry=geometry, frame_count=frame_count)
+    grid, conditioners = align_and_describe(bands, geometry=geometry, frame_count=frame_count)
     return SoundImage(grid=grid, conditioners=conditioners, geometry=geometry)

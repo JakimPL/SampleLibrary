@@ -1,0 +1,23 @@
+# The site's configuration, built into its image. Paths are the container's own: the platform mounts
+# the volume holding the published audio at /library. The reader's connection is no setting here;
+# the platform names it in SAMPLELIBRARY_SERVER_DATABASE_URL.
+
+[library]
+library_root = "/library"
+
+[inference]
+# The morph renderer runs beside the site, on this computer alone.
+url = "http://127.0.0.1:8010"
+
+[server]
+exposure = "public"
+
+[server.visitors]
+# Railway's edge sets X-Real-IP to the address a request came from, whatever the request said.
+address_header = "X-Real-IP"
+burst = 300
+refill_per_second = 10.0
+whole_catalog_weight = 20
+morphs_per_minute = 30
+morphs_per_minute_overall = 600
+concurrent_morphs = 2

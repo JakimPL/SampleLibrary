@@ -8,28 +8,56 @@ from typing import Final
 from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
-from samplecore.storage.database import connect_for_curation, create_pooled_engine
+from samplecore.config import ServerConfig
+from samplecore.models.service_role import ServiceRole
+from samplecore.storage.database import create_pooled_engine
+from sampleserver.admission import AdmittedRequestsOnly
 from sampleserver.frontend import FrontendMount
+from sampleserver.headers import SecurityHeaders
 from sampleserver.inference_client import build_inference_client
+from sampleserver.policy import ServingPolicy
 from sampleserver.response_cache import RevisionedJsonCache
-from sampleserver.routers import cloud, curation, modules, morph, samples, stats
+from sampleserver.routers import cloud, curation, health, modules, morph, samples, stats
 from sampleserver.spectral_cache import SpectralVectorCache
+from sampleserver.visitors import MorphGate, VisitorRequestLimits
 
 API_PREFIX: Final[str] = "/api"
 GZIP_MINIMUM_SIZE: Final[int] = 1024
 GZIP_COMPRESSION_LEVEL: Final[int] = 1
 READ_POOL_SIZE: Final[int] = 5
+DESCRIPTIONS: Final[dict[ServiceRole, str]] = {
+    ServiceRole.READER: "Read access to the sample catalog, with morphs between samples.",
+    ServiceRole.CURATOR: "Read access to the sample catalog, with hand annotation and morphs between samples.",
+}
 
 
+# The app's settings travel together, which is what makes this factory's signature long; each is one
+# of them, with nothing further to group them under.
+# pylint: disable-next=too-many-arguments
 def create_app(
-    database_url: str, library_root: Path, inference_url: str, *, frontend_directory: Path | None
+    database_url: str,
+    library_root: Path,
+    inference_url: str,
+    *,
+    role: ServiceRole,
+    server: ServerConfig,
+    sample_directories: tuple[Path, ...],
+    frontend_directory: Path | None,
 ) -> FastAPI:
-    """Build the FastAPI app serving the catalog at the given database URL.
+    """Build the FastAPI app serving the catalog at the given database URL, as ``role`` allows, to whom ``server`` says.
 
-    Every route reads the catalog through a pooled connection Postgres itself refuses a write on. The
-    curation routes are the one exception, and they reach only a person's own decisions about
-    samples, in a schema of their own: what this application records is what a listener decided, and
-    the catalog stays the offline pipelines' to build. Morphs are rendered by a separate inference
+    What the app shows and whom it answers follow from ``server``'s exposure alone, through the
+    `ServingPolicy` it derives (`sampleserver.policy`): every request passes `AdmittedRequestsOnly`
+    first, and every route reading a path, a person's labels or an internal address asks the policy
+    whether to show it. A sample's file is opened only inside ``sample_directories``. Every response
+    states what a browser may do with it (`sampleserver.headers.SecurityHeaders`). Where the policy
+    limits visitors, each is held to a request budget and a morph budget (`sampleserver.visitors`).
+
+    Every route reads the catalog through a pooled connection Postgres itself refuses a write on. A
+    curator also serves the route recording a person's own decisions about samples, in a schema of
+    their own, and only to the person at the computer it runs on: what this application records is
+    what a listener decided, and the catalog stays the offline pipelines' to build. A reader, what a
+    deployed site runs, serves no route that writes. Morphs are rendered by a separate inference
     process at `inference_url`, which the morph routes reach over HTTP, so the models and the
     libraries behind them stay out of this process.
 
@@ -50,15 +78,13 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-        """Prepare the curation schema, the catalog's pool and the inference client before the first request.
+        """Open the catalog's pool and the inference client before the first request.
 
-        The samples listing reads a sample's hand annotation as part of its own query, and the
-        read-only connection every route uses can create nothing. Preparing the schema once at
-        startup is what lets a database the offline pipelines have never written to still serve a
-        listing. The pool and the inference client live as long as the app, so their connections
-        are reused across requests, and both are closed when the app stops.
+        The app creates nothing: its role may read and, for a curator, write labels, so the schema
+        it reads is prepared beforehand by the catalog's owner. The pool and the inference client
+        live as long as the app, so their connections are reused across requests, and both are
+        closed when the app stops.
         """
-        connect_for_curation(application.state.database_url).close()
         application.state.engine = create_pooled_engine(application.state.database_url, pool_size=READ_POOL_SIZE)
         application.state.inference_client = build_inference_client(application.state.inference_url)
         try:
@@ -67,15 +93,28 @@ def create_app(
             await application.state.inference_client.aclose()
             application.state.engine.dispose()
 
+    policy = ServingPolicy.of(server)
     application = FastAPI(
-        openapi_url=f"{API_PREFIX}/openapi.json",
-        docs_url=f"{API_PREFIX}/docs",
-        redoc_url=f"{API_PREFIX}/redoc",
+        openapi_url=f"{API_PREFIX}/openapi.json" if policy.serves_docs else None,
+        docs_url=f"{API_PREFIX}/docs" if policy.serves_docs else None,
+        redoc_url=f"{API_PREFIX}/redoc" if policy.serves_docs else None,
         title="SampleLibrary",
-        description="Read access to the sample catalog, with hand annotation and morphs between samples.",
+        description=DESCRIPTIONS[role],
         lifespan=lifespan,
     )
     application.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_SIZE, compresslevel=GZIP_COMPRESSION_LEVEL)
+    visitor_limits = policy.visitor_limits
+    if visitor_limits is not None:
+        application.add_middleware(VisitorRequestLimits, limits=visitor_limits, api_prefix=API_PREFIX)
+    application.add_middleware(SecurityHeaders, policy=policy, api_prefix=API_PREFIX)
+    application.add_middleware(AdmittedRequestsOnly, policy=policy)
+    concurrent_morphs = policy.concurrent_morphs
+    application.state.morph_gate = (
+        MorphGate(concurrent=concurrent_morphs, limits=visitor_limits) if concurrent_morphs is not None else None
+    )
+    application.state.role = role
+    application.state.policy = policy
+    application.state.sample_directories = sample_directories
     application.state.database_url = database_url
     application.state.library_root = library_root
     application.state.inference_url = inference_url
@@ -83,8 +122,18 @@ def create_app(
     application.state.cloud_cache = RevisionedJsonCache()
     application.state.categories_cache = RevisionedJsonCache()
     application.state.category_tags_cache = RevisionedJsonCache()
-    for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.router, morph.router):
+    for api_router in (
+        health.router,
+        modules.router,
+        samples.router,
+        stats.router,
+        cloud.router,
+        curation.read_router,
+        morph.router,
+    ):
         application.include_router(api_router, prefix=API_PREFIX)
+    if role.offers_label_editing:
+        application.include_router(curation.write_router, prefix=API_PREFIX)
     if frontend_directory is not None:
         application.router.routes.append(FrontendMount(frontend_directory, api_prefix=API_PREFIX))
     return application

@@ -8,14 +8,17 @@ export function apiUrl(path: string): string {
 
 export class ApiError extends Error {
     public readonly status: number;
+    /** The server's own words about the refusal, where it gave a `detail`. */
+    public readonly detail: string | null;
 
-    constructor(status: number, message: string) {
+    constructor(status: number, message: string, detail: string | null) {
         super(message);
         this.status = status;
+        this.detail = detail;
     }
 }
 
-export type WriteMethod = "PATCH";
+export type WriteMethod = "PATCH" | "PUT" | "POST";
 
 export interface JsonRequest {
     readonly method: WriteMethod;
@@ -25,7 +28,8 @@ export interface JsonRequest {
 
 async function readJson<T>(url: string, response: Response): Promise<T> {
     if (!response.ok) {
-        throw new ApiError(response.status, await failureMessage(url, response));
+        const detail = await refusalDetail(response);
+        throw new ApiError(response.status, failureMessage(url, response.status, detail), detail);
     }
     return (await response.json()) as T;
 }
@@ -42,9 +46,8 @@ export async function refusalDetail(response: Response): Promise<string | null> 
 }
 
 /** What went wrong with a request, in the server's own words where it gave a `detail`. */
-async function failureMessage(url: string, response: Response): Promise<string> {
-    const general = `request to ${url} failed with status ${String(response.status)}`;
-    const detail = await refusalDetail(response);
+function failureMessage(url: string, status: number, detail: string | null): string {
+    const general = `request to ${url} failed with status ${String(status)}`;
     return detail === null ? general : `${general}: ${detail}`;
 }
 

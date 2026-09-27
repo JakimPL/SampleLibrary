@@ -2,22 +2,55 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, closing
+from http import HTTPStatus
 from pathlib import Path
+from typing import Final
 
 import httpx
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy import Connection
 
 from samplecore.spectral_distance import SpectralVectors
 from samplecore.storage.database import checkout_read_only
 from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
+from sampleserver.messages import NOT_FOUND
+from sampleserver.policy import ServingPolicy
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.spectral_cache import SpectralVectorCache
+from sampleserver.visitors import MorphGate
 
 
 def get_library_root(request: Request) -> Path:
     """The content-addressable audio store's root, for routes that read a sample's own bytes."""
     return Path(request.app.state.library_root)
+
+
+def get_policy(request: Request) -> ServingPolicy:
+    """What this server shows and to whom, as its configured exposure decides."""
+    policy: ServingPolicy = request.app.state.policy
+    return policy
+
+
+def get_morph_gate(request: Request) -> MorphGate | None:
+    """What a morph asks of the renderer where the policy limits visitors, and nothing where it limits no one."""
+    gate: MorphGate | None = request.app.state.morph_gate
+    return gate
+
+
+def get_sample_directories(request: Request) -> tuple[Path, ...]:
+    """The sample directories this server reads files from, and the only places it opens one."""
+    directories: tuple[Path, ...] = request.app.state.sample_directories
+    return directories
+
+
+def require_shown_curation(policy: ServingPolicy = Depends(get_policy)) -> None:
+    """Answer a route serving a person's labels only where the policy shows them, as though it were not there otherwise.
+
+    Raises:
+        HTTPException: 404 where the library shows no labels, ratings or favorites.
+    """
+    if not policy.shows_curation:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=NOT_FOUND)
 
 
 def get_inference_client(request: Request) -> httpx.AsyncClient:
@@ -41,6 +74,11 @@ def get_connection(request: Request) -> Iterator[Connection]:
     finally:
         connection.close()
 
+
+# Every route reading the catalog shares this one dependency, released as the route returns: the pool
+# gets the connection back before the answer is sent, so a caller reading an answer slowly holds none
+# of the pool, and a dependency sharing it with its route reads through the same connection.
+READ_CONNECTION: Final = Depends(get_connection, scope="function")
 
 ConnectionOpener = Callable[[], AbstractContextManager[Connection]]
 
@@ -71,13 +109,16 @@ def get_curation_connection(request: Request) -> Iterator[Connection]:
         connection.close()
 
 
-def get_spectral_vectors(request: Request, connection: Connection = Depends(get_connection)) -> SpectralVectors:
+CURATION_CONNECTION: Final = Depends(get_curation_connection, scope="function")
+
+
+def get_spectral_vectors(request: Request, connection: Connection = READ_CONNECTION) -> SpectralVectors:
     """The catalog's spectral vectors as one matrix, parsed once per embedding rather than per request."""
     cache: SpectralVectorCache = request.app.state.spectral_vectors
     return cache.vectors(connection)
 
 
-def get_shown_experiment_id(connection: Connection = Depends(get_connection)) -> int | None:
+def get_shown_experiment_id(connection: Connection = READ_CONNECTION) -> int | None:
     """The scoring on show, read once for a request rather than once per sample it answers with.
 
     FastAPI resolves a dependency once per request and hands every route the same value, so a page

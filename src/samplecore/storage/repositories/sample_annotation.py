@@ -63,7 +63,7 @@ class PostgresSampleAnnotationRepository:
     def get(self, sample_hash: str) -> SampleAnnotation | None:
         statement = select(sample_annotation).where(sample_annotation.c.sample_hash == sample_hash)
         row = self._connection.execute(statement).fetchone()
-        return _row_to_sample_annotation(row) if row is not None else None
+        return row_to_sample_annotation(row) if row is not None else None
 
     def annotations_by_hash(self, hashes: list[str]) -> dict[str, SampleAnnotation]:
         """The annotation held for each of ``hashes`` that carries one, for filling read models.
@@ -78,7 +78,7 @@ class PostgresSampleAnnotationRepository:
         for chunk in chunks(hashes, HASH_CHUNK_SIZE):
             statement = select(sample_annotation).where(sample_annotation.c.sample_hash.in_(chunk))
             annotations.update(
-                {row.sample_hash: _row_to_sample_annotation(row) for row in self._connection.execute(statement)}
+                {row.sample_hash: row_to_sample_annotation(row) for row in self._connection.execute(statement)}
             )
 
         return annotations
@@ -87,7 +87,7 @@ class PostgresSampleAnnotationRepository:
         statement = select(sample_annotation).order_by(
             sample_annotation.c.annotated_at, sample_annotation.c.sample_hash
         )
-        return tuple(_row_to_sample_annotation(row) for row in self._connection.execute(statement).fetchall())
+        return tuple(row_to_sample_annotation(row) for row in self._connection.execute(statement).fetchall())
 
     def upsert_many(self, annotations: tuple[SampleAnnotation, ...]) -> None:
         """Write each annotation whole over whatever its sample held, in statements Postgres binds.
@@ -201,7 +201,7 @@ def _anchor_values(anchor: AnnotationAnchor) -> dict[str, str | int | None]:
             }
 
 
-def _row_to_sample_annotation(row: Row[Any]) -> SampleAnnotation:
+def row_to_sample_annotation(row: Row[Any]) -> SampleAnnotation:
     """Reconstruct a `SampleAnnotation` from a Core row, addressed by its own column names."""
     return SampleAnnotation(
         sample_hash=row.sample_hash,

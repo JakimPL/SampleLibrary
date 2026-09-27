@@ -30,9 +30,12 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     """Build the sandbox beside the configured library, on the same server under the sandbox's own database."""
     arguments = _parse_arguments(argv)
-    database_url = development_database_url(load_config_or_exit().database_url)
+    config = load_config_or_exit()
     written_paths = build_sandbox(
-        arguments.output, database_url=database_url, target_module_count=arguments.target_module_count
+        arguments.output,
+        database_url=development_database_url(config.catalog_url()),
+        service_urls={service: development_database_url(url) for service, url in config.service_urls().items()},
+        target_module_count=arguments.target_module_count,
     )
     print(
         f"Wrote {len(written_paths)} modules, {len(sample_pack())} sample files and config.toml "

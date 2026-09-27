@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from functools import cache
 from math import sqrt
 from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.signal import fftconvolve, resample_poly
+from scipy.signal import fftconvolve, firwin, resample_poly
 from trackmod.core.samples.depth import BitDepth
 
 GAIN_VARIANT_RMS_ERROR_CEILING: Final[float] = 0.02
@@ -31,6 +32,9 @@ MAX_RESAMPLE_DENOMINATOR: Final[int] = 200
 MAX_TRIM_LAG_FRAMES: Final[int] = 64
 MAX_COMPARISON_FRAMES: Final[int] = 20_000
 RESAMPLED_MINIMUM_CONFIDENCE: Final[float] = 0.9
+# scipy's own design for resample_poly's low-pass filter.
+RESAMPLING_WINDOW: Final[tuple[str, float]] = ("kaiser", 5.0)
+RESAMPLING_HALF_TAPS_PER_RATE: Final[int] = 10
 
 
 @dataclass(frozen=True)
@@ -118,7 +122,7 @@ def score_resampled_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray
     if short.shape[0] < MINIMUM_FRAMES_FOR_RESAMPLE_COMPARISON:
         return None
     ratio = Fraction(long_.shape[0], short.shape[0]).limit_denominator(MAX_RESAMPLE_DENOMINATOR)
-    resampled = _match_length(resample_poly(short, up=ratio.numerator, down=ratio.denominator, axis=0), long_.shape[0])
+    resampled = _match_length(_resampled(short, ratio), long_.shape[0])
 
     # A polyphase filter sized to the resampling ratio's denominator dominates resample_poly's own
     # cost far more than either waveform's length does, so MAX_RESAMPLE_DENOMINATOR is bounded
@@ -145,6 +149,36 @@ def score_resampled_variant(waveform_a: NDArray[np.float64], waveform_b: NDArray
             "gain": gain,
         },
     )
+
+
+@cache
+def resampling_filter(up: int, down: int) -> NDArray[np.float64]:
+    """The low-pass filter `resample_poly` designs for a ratio of `up` to `down`, designed once per ratio.
+
+    It is the filter scipy designs itself -- a Kaiser-windowed sinc of ten zero crossings per side at
+    the tighter of the two rates, `RESAMPLING_WINDOW` -- so a pass comparing thousands of pairs at a
+    few hundred distinct ratios designs each filter once and resamples exactly as a fresh design would.
+    """
+    rate = max(up, down)
+    taps: NDArray[np.float64] = firwin(
+        2 * RESAMPLING_HALF_TAPS_PER_RATE * rate + 1, 1.0 / rate, window=RESAMPLING_WINDOW
+    )
+    taps.setflags(write=False)
+    return taps
+
+
+def _resampled(waveform: NDArray[np.float64], ratio: Fraction) -> NDArray[np.float64]:
+    """A waveform read at `ratio` times as many frames, as `resample_poly` reads it; a ratio of one reads it as it is."""
+    if ratio == 1:
+        return waveform.copy()
+    resampled: NDArray[np.float64] = resample_poly(
+        waveform,
+        up=ratio.numerator,
+        down=ratio.denominator,
+        axis=0,
+        window=resampling_filter(ratio.numerator, ratio.denominator),
+    )
+    return resampled
 
 
 def _match_length(waveform: NDArray[np.float64], target_frames: int) -> NDArray[np.float64]:

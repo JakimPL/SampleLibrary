@@ -11,6 +11,8 @@ TAG_SEPARATOR: Final[str] = ","
 LEVEL_SEPARATOR: Final[str] = ":"
 DISPLAY_LEVEL_SEPARATOR: Final[str] = ": "
 DISPLAY_TAG_SEPARATOR: Final[str] = ", "
+MAXIMUM_LABEL_CHARACTERS: Final[int] = 200
+MAXIMUM_LABEL_TAGS: Final[int] = 16
 
 LabelPath = tuple[str, ...]
 

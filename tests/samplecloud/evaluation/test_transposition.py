@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from trackmod.core.samples.depth import BitDepth
 from samplecloud.backends import FeatureExtractor
 from samplecloud.evaluation.corpus import load_corpus
 from samplecloud.evaluation.settings import EvaluationScope, EvaluationSettings
+from samplecloud.evaluation.stages import EvaluationStages
 from samplecloud.evaluation.transposition import ProbeDescriber, TranspositionRetrieval, transposition_retrieval
 from samplecloud.hearing import Hearing, hearing_for
 from samplecore.models.channels import ChannelLayout
@@ -35,7 +38,7 @@ SETTINGS = EvaluationSettings(random_seed=0, probe_count=6, semitone_offsets=(-7
 NOMINAL = Hearing(reading=Reading.NOMINAL, playback_rate_by_hash={})
 
 
-class LoudnessShapeExtractor:
+class LoudnessShapeExtractor(FeatureExtractor):
     """Describes how a waveform's level is shaped over time, which a retuning leaves alone.
 
     Reading the envelope at a fixed number of points, rather than per frame, is what makes it hold:
@@ -50,11 +53,15 @@ class LoudnessShapeExtractor:
         return envelope / peak if peak > 0.0 else envelope
 
 
-class DurationExtractor:
+class DurationExtractor(FeatureExtractor):
     """Describes a waveform by how long it is, which a retuning changes by construction."""
 
     def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]:
         return np.array([float(waveform.shape[0]), float(waveform.shape[0]) ** 0.5])
+
+
+REPORT_NAME = "report.json"
+STAGES_IDENTITY = "transposition"
 
 
 def _tone(frames: int, *, frequency: float, decay: float) -> NDArray[np.float64]:
@@ -121,6 +128,7 @@ def _retrieve(
             feature_extractor=extractor, hearing=hearing, audio=SampleAudio.from_catalog(connection, library_root)
         ),
         settings=settings,
+        stages=EvaluationStages.open(library_root / f"{uuid.uuid4().hex}.json", identity=STAGES_IDENTITY),
     )
     assert retrieval is not None
     return retrieval
@@ -208,6 +216,7 @@ def test_a_corpus_whose_probes_left_the_catalog_retrieves_nothing(connection: Co
             feature_extractor=extractor, hearing=NOMINAL, audio=SampleAudio.from_catalog(connection, tmp_path)
         ),
         settings=SETTINGS,
+        stages=EvaluationStages.open(tmp_path / REPORT_NAME, identity=STAGES_IDENTITY),
     )
 
     assert retrieval is None
@@ -235,3 +244,52 @@ def test_a_probe_whose_file_is_gone_is_counted_and_left_out(
 
     assert (retrieval.probe_sample_count, retrieval.unavailable_probe_count) == (SAMPLE_COUNT + 1, 1)
     assert retrieval.offsets[0].trial_count == SAMPLE_COUNT
+
+
+class ProbesStopped(RuntimeError):
+    pass
+
+
+class CountedExtractor(FeatureExtractor):
+    """Describes probes as `LoudnessShapeExtractor` does, counting them, and stops before the one it is told to."""
+
+    def __init__(self, *, stop_before: int | None) -> None:
+        self._inner = LoudnessShapeExtractor()
+        self._stop_before = stop_before
+        self.probes = 0
+
+    def extract(self, waveform: NDArray[np.float64]) -> NDArray[np.float64]:
+        return self._inner.extract(waveform)
+
+    def extract_many(self, waveforms: Sequence[NDArray[np.float64]]) -> list[NDArray[np.float64]]:
+        if self.probes == self._stop_before:
+            raise ProbesStopped("stopped between probes")
+        self.probes += 1
+        return [self.extract(waveform) for waveform in waveforms]
+
+
+def test_a_retrieval_stopped_partway_describes_only_the_probes_left_and_ends_as_a_straight_one_would(
+    connection: Connection, tmp_path: Path
+) -> None:
+    experiment_id = _seed(connection, tmp_path, LoudnessShapeExtractor())
+    corpus = load_corpus(connection, experiment_id=experiment_id, scope=EvaluationScope.CATALOG)
+    audio = SampleAudio.from_catalog(connection, tmp_path)
+
+    def retrieve(extractor: FeatureExtractor, report: str) -> TranspositionRetrieval | None:
+        return transposition_retrieval(
+            connection,
+            corpus,
+            describer=ProbeDescriber(feature_extractor=extractor, hearing=NOMINAL, audio=audio),
+            settings=SETTINGS,
+            stages=EvaluationStages.open(tmp_path / report, identity=STAGES_IDENTITY),
+        )
+
+    straight = retrieve(LoudnessShapeExtractor(), "straight.json")
+    with pytest.raises(ProbesStopped):
+        retrieve(CountedExtractor(stop_before=2), REPORT_NAME)
+    continued = CountedExtractor(stop_before=None)
+
+    resumed = retrieve(continued, REPORT_NAME)
+
+    assert continued.probes == SETTINGS.probe_count - 2
+    assert resumed == straight

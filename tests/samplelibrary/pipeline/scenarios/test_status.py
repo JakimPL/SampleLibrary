@@ -5,7 +5,8 @@ import subprocess
 import sys
 
 from samplecore.exit_status import ExitStatus
-from tests.samplelibrary.pipeline.scenarios.harness.runner import REPOSITORY_ROOT, Run, ScenarioRunner
+from tests.paths import REPOSITORY_DIRECTORY
+from tests.samplelibrary.pipeline.scenarios.harness.runner import Run, ScenarioRunner
 from tests.samplelibrary.pipeline.scenarios.harness.stories import CATALOG, FIRST_BUILD
 from tests.samplelibrary.pipeline.scenarios.harness.world import World
 
@@ -22,7 +23,7 @@ def test_status_says_what_each_step_would_do_and_leaves_nothing_behind(runner: S
         check=False,
         capture_output=True,
         text=True,
-        cwd=REPOSITORY_ROOT,
+        cwd=REPOSITORY_DIRECTORY,
         env={name: value for name, value in os.environ.items() if not name.startswith("SAMPLELIBRARY_")},
         timeout=STATUS_TIMEOUT_SECONDS,
     )

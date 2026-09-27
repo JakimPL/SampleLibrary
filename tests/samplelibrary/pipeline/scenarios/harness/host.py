@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Final
 
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE
+from samplelibrary.pipeline import devices
 from samplelibrary.pipeline.cli import run_pipeline_command
+from samplelibrary.pipeline.devices import CPU_DEVICE
 from samplelibrary.pipeline.events import (
     AttemptEnded,
     AttemptStarted,
@@ -67,6 +69,9 @@ def main() -> None:
     os.environ[FAULT_PLAN_VARIABLE] = str(faults)
     os.environ[LEDGER_VARIABLE] = str(plan.ledger)
     os.environ[GATES_VARIABLE] = str(plan.gates)
+    if plan.stands_in:
+        # The stand-in programs ignore the device, so the run skips asking torch which one this machine offers.
+        devices.available_device = lambda: CPU_DEVICE  # type: ignore[method-assign]
     sinks: list[EventSink] = [EventFile(plan.events)]
     if plan.kill_at is not None:
         sinks.append(SelfKill(plan.kill_at))

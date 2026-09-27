@@ -10,12 +10,8 @@ from fastapi import FastAPI
 from samplecore.config import CONFIG_PATH_ENVIRONMENT_VARIABLE, InferenceConfig
 from samplecore.exit_status import ExitStatus
 from samplemorph.cli import MorphCommand, main
-from samplemorph.routes.selection import (
-    DEFAULT_FILTER_SELECTION_PATH,
-    DEFAULT_SELECTION_PATH,
-    read_filter_selection,
-    read_route_selection,
-)
+from samplemorph.paths import DEFAULT_FILTER_SELECTION_PATH, DEFAULT_SELECTION_PATH
+from samplemorph.routes.selection import read_filter_selection, read_route_selection
 from samplemorph.service import renderer as renderer_module
 from samplemorph.service.renderer import load_renderer
 from samplemorph.service.settings import ServiceSettings

@@ -21,7 +21,7 @@ from samplelibrary.pipeline.programs import ProgramResolver, SampleLibraryProgra
 from samplelibrary.pipeline.scheduler import RunRequest, run_pipeline
 from samplelibrary.pipeline.settings import PipelineSettings, read_pipeline_settings
 from samplelibrary.pipeline.status import read_status, report_last_attempts, report_status
-from samplelibrary.pipeline.steps.library import library_graph, settings_model
+from samplelibrary.pipeline.steps.library import every_step_name, library_graph, settings_model
 
 RUN_COMMAND: Final[str] = "run"
 STATUS_COMMAND: Final[str] = "status"
@@ -53,13 +53,13 @@ def run_pipeline_command(
     except ConfigurationError as error:
         _logger.error("Configuration error: %s", error)
         raise SystemExit(ExitStatus.REFUSED) from error
-    graph = library_graph()
-    _require_readable_step_tables(settings, graph)
+    graph = library_graph(settings.descriptor_source)
+    _require_readable_step_tables(settings)
     targets = tuple(arguments.targets)
     with ending_in_one_line("Ran nothing", REFUSALS):
         graph.order(targets)
 
-    with open_catalog_connection(config.database_url) as connection:
+    with open_catalog_connection(config.catalog_url()) as connection:
         context = PipelineContext(
             config=config,
             settings=settings,
@@ -78,13 +78,16 @@ def run_pipeline_command(
         _run(session, graph, arguments, extra_sinks)
 
 
-def _require_readable_step_tables(settings: PipelineSettings, graph: StepGraph) -> None:
+def _require_readable_step_tables(settings: PipelineSettings) -> None:
     """Refuse a step table naming a step this pipeline does not hold, or holding a setting its step does not read.
+
+    A table stays readable whichever descriptor the library takes, so switching to the pretrained one
+    keeps the tables of the steps only training reads.
 
     Raises:
         SystemExit: a table names no step of this pipeline, or a setting or value its step does not read.
     """
-    known = {step.name for step in graph.steps}
+    known = every_step_name()
     unknown = sorted(set(settings.steps) - known)
     if unknown:
         _logger.error(
@@ -124,7 +127,7 @@ def _run(
         redo=tuple(arguments.redo),
         follow=arguments.follow,
     )
-    with open_catalog_connection(session.context.config.database_url) as lock_connection:
+    with open_catalog_connection(session.context.config.catalog_url()) as lock_connection:
         lock = claim_pipeline_lock(lock_connection, session.context.library_identity)
         with ending_in_one_line("Ran nothing", REFUSALS):
             report = run_pipeline(session, graph, request, sinks, lock)

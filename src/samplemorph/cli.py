@@ -26,7 +26,7 @@ def main(argv: list[str], *, prog: str) -> None:
         case MorphCommand.SERVE:
             service_cli.run(config, arguments)
         case MorphCommand.RESPONSE:
-            with open_catalog_connection(config.database_url) as connection:
+            with open_catalog_connection(config.catalog_url()) as connection:
                 response.run(connection, config, arguments)
 
 

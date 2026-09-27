@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Protocol
 
-from sqlalchemy import Connection, Row, delete, select
+from sqlalchemy import Connection, Row, delete, func, select
 from trackmod.schema.scalars import Rate
 
 from samplecore.digests import digest_of_rows
@@ -17,6 +17,8 @@ class SampleFeatureVectorRepository(Protocol):
     def insert_many(self, vectors: Sequence[SampleFeatureVector]) -> None: ...
 
     def sample_hashes_for_experiment(self, experiment_id: int) -> frozenset[str]: ...
+
+    def count_for_experiment(self, experiment_id: int) -> int: ...
 
     def heard_rates_for_experiment(self, experiment_id: int) -> dict[str, Rate | None]: ...
 
@@ -61,6 +63,16 @@ class PostgresSampleFeatureVectorRepository:
             sample_feature_vector.c.experiment_id == experiment_id
         )
         return frozenset(str(row.sample_hash) for row in self._connection.execute(statement))
+
+    def count_for_experiment(self, experiment_id: int) -> int:
+        """How many samples an experiment holds a vector for."""
+        statement = (
+            # pylint: disable-next=not-callable
+            select(func.count())
+            .select_from(sample_feature_vector)
+            .where(sample_feature_vector.c.experiment_id == experiment_id)
+        )
+        return int(self._connection.execute(statement).scalar_one())
 
     def heard_rates_for_experiment(self, experiment_id: int) -> dict[str, Rate | None]:
         """The rate each of an experiment's samples was heard at when described, read without the vectors."""

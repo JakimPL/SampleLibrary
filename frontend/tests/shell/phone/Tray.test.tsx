@@ -7,6 +7,7 @@ import type * as CurationApi from "../../../src/api/curation";
 import type * as ModulesApi from "../../../src/api/modules";
 import type * as SamplesApi from "../../../src/api/samples";
 import { useAudioPreview } from "../../../src/samples/useAudioPreview";
+import { useCurationAccess } from "../../../src/samples/useCurationAccess";
 import { Tray, useEntityInHand } from "../../../src/shell/phone/Tray";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 
@@ -99,12 +100,12 @@ function catalogAnswers(): void {
     });
 }
 
-function renderTray(idleHint: string | null = null): ReturnType<typeof render> {
+function renderTray(): ReturnType<typeof render> {
     catalogAnswers();
     return render(
         <MemoryRouter initialEntries={["/"]}>
             <Routes>
-                <Route path="/" element={<Tray idleHint={idleHint} />} />
+                <Route path="/" element={<Tray />} />
                 <Route path="/samples/:sampleHash" element={<p>sample page</p>} />
                 <Route path="/modules/:moduleHash" element={<p>module page</p>} />
             </Routes>
@@ -140,12 +141,6 @@ describe("Tray", () => {
         const { container } = renderTray();
 
         expect(container).toBeEmptyDOMElement();
-    });
-
-    it("keeps its slot with a hint while nothing is in hand, where one is given", () => {
-        renderTray("Tap a point to hear it.");
-
-        expect(screen.getByText("Tap a point to hear it.")).toHaveClass("tray-hint");
     });
 
     it("names the sample in hand and offers the way to open it", async () => {
@@ -221,6 +216,16 @@ describe("Tray", () => {
         });
         expect(screen.queryByRole("button", { name: "Label…" })).not.toBeInTheDocument();
         expect(screen.queryByRole("button", { name: /Morph/ })).not.toBeInTheDocument();
+    });
+
+    it("shows no stars or heart where no one's decisions are shown", async () => {
+        vi.mocked(useCurationAccess).mockReturnValue({ curationShown: false, labelEditing: false });
+        useSelectionStore.getState().highlightEntity({ kind: "sample", hash: SAMPLE_HASH });
+        renderTray();
+
+        await screen.findByText("×3");
+        expect(screen.queryByRole("button", { name: "Favorite" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Rate 4" })).not.toBeInTheDocument();
     });
 
     it("names the module in hand and offers the way to open it", async () => {

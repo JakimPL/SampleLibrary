@@ -4,7 +4,7 @@
 
 1. Keep code modularized around clear ownership boundaries.
 1. If a function has several meaningful steps, split them into helpers with one clear responsibility.
-1. Run `just format` (isort + black, line length 120) then `just lint` (mypy strict + pylint + import-linter) after each change; the pre-commit hooks in `.pre-commit-config.yaml` enforce the same, and `just test` runs the suite.
+1. Run `just format` (isort + black, line length 120) then `just lint` (mypy strict + pylint + import-linter) after each change; the pre-commit hooks in `.pre-commit-config.yaml` enforce the formatting, `just test` runs the tests but the pipeline scenarios, and `just check` runs everything a push needs.
 1. Do not abbreviate variable names. Use `note`, not `n`.
 1. Use American English everywhere: identifiers, comments, docstrings and documentation. Write `color`, `behavior`, `cataloged`, `normalize`. Names imported from a third-party package keep that package's own spelling.
 1. Avoid hardcoded semantic values. Prefer `Final` constants, and move them to a shared module when the concept is reused.
@@ -23,6 +23,8 @@
 
 1. Refer to [`architecture.md`](architecture.md) for the package ownership map (which package owns what).
 1. General-purpose helpers that are not model-specific belong in `samplecore`, not inside a feature package.
+1. Each package names its files in its own `paths.py`, which holds the package's single `Path(__file__)` anchor. `samplecore/paths.py` also names the source checkout's files and the application's folders for the user, and `scripts/paths.py` and `tests/paths.py` name the repository's. Every other module imports its paths from these.
+1. Generated files live in three top-level folders: `build/` holds intermediate outputs (the frontend bundle, the API schemas, the wheel and its pinned requirements), `bin/` the executable, and `dist/` what a release publishes. Source folders hold source alone. The frontend bundle's folder is named in three places that cannot share a definition: `frontend/vite.config.ts` writes it, and `samplecore/paths.py` and `hatch_build.py` read it.
 1. Do not create delegated imports or re-export modules just so other modules can import through them.
 1. Import shared helpers directly from the module that owns their implementation.
 1. Before adding a helper, search the repository for existing logic with `rg`.

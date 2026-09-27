@@ -11,6 +11,7 @@ from samplecore.models.module import Module
 from samplecore.models.sample_properties import SampleOccurrence
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.database import connect, metadata
+from samplecore.storage.repositories.annotation_history import PostgresAnnotationHistoryRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.reset import RETIRED_SUFFIX, ResetRefused, reset_library
@@ -89,6 +90,9 @@ def test_reset_library_leaves_hand_labels_untouched(connection: Connection, popu
     assert surviving.label == "WARM PAD"
     assert isinstance(surviving.anchor, ModuleSlotAnchor)
     assert surviving.anchor.occurrence.module_hash == module.hash
+    assert PostgresAnnotationHistoryRepository(connection).changes(
+        sample_hash=occurrence_row.sample_hash, since=None, limit=10
+    )
 
 
 def test_reset_library_leaves_the_schema_usable_afterward(connection: Connection, populated_library: Path) -> None:

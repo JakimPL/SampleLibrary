@@ -20,18 +20,21 @@ def _process_umask() -> int:
 
 
 PLAIN_FILE_MODE: Final[int] = _PLAIN_FILE_PERMISSIONS & ~_process_umask()
+PRIVATE_FILE_MODE: Final[int] = 0o600
 
 
-def write_atomically(path: Path, write: Callable[[IO[bytes]], None]) -> None:
+def write_atomically(path: Path, write: Callable[[IO[bytes]], None], *, mode: int = PLAIN_FILE_MODE) -> None:
     """Put a file in place whole: written beside its destination, flushed to disk, then moved over it.
 
     A reader of ``path`` finds either what was there before or the complete new content, and a
     process stopped partway leaves only a ``.partial`` file beside it, removed on the way out when
     the writer raises. Staging in the destination's own directory keeps the move on one filesystem,
-    which is what makes it a single step. The file ends with the permissions a plain ``open`` gives
-    under this process's umask, so a library one user writes reads for another user the way any of
-    their files does. The directory is flushed after the move, so the new name survives a machine
-    that stops right after this returns.
+    which is what makes it a single step. The staged file is created readable by its owner alone and
+    takes ``mode`` before it moves into place: by default the permissions a plain ``open`` gives under
+    this process's umask, so a library one user writes reads for another user the way any of their
+    files does, and `PRIVATE_FILE_MODE` for a file holding a password, which no other user can read
+    at any moment. The directory is flushed after the move, so the new name survives a machine that
+    stops right after this returns.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=path.parent, suffix=PARTIAL_SUFFIX, delete_on_close=False) as partial:
@@ -40,7 +43,7 @@ def write_atomically(path: Path, write: Callable[[IO[bytes]], None]) -> None:
         os.fsync(partial.fileno())
         partial.close()
         staged = Path(partial.name)
-        staged.chmod(PLAIN_FILE_MODE)
+        staged.chmod(mode)
         staged.replace(path)
     synchronize_directory(path.parent)
 
@@ -55,13 +58,13 @@ def copy_atomically(source: Path, destination: Path) -> None:
     write_atomically(destination, write)
 
 
-def write_bytes_atomically(path: Path, content: bytes) -> None:
+def write_bytes_atomically(path: Path, content: bytes, *, mode: int = PLAIN_FILE_MODE) -> None:
     """Put ``content`` in place at ``path`` whole, the way `write_atomically` puts any file."""
 
     def write(file: IO[bytes]) -> None:
         file.write(content)
 
-    write_atomically(path, write)
+    write_atomically(path, write, mode=mode)
 
 
 def synchronize_file(path: Path) -> None:

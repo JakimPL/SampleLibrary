@@ -8,6 +8,8 @@ import torch
 from numpy.typing import NDArray
 from transformers import AutoTokenizer, ClapFeatureExtractor, ClapModel
 
+from samplecore.devices import usable_cuda_card
+
 # The audio tower reads a fixed picture: a ten-second window at the model's rate, as a log-mel
 # spectrogram of this many frames. A shorter clip is repeated to fill the window and padded with
 # silence, which is the model's own reading of a short sound; a longer one is read from its start.
@@ -16,8 +18,8 @@ LOG_MEL_FLOOR: Final[float] = 1e-10
 
 
 def preferred_device() -> str:
-    """The GPU when the machine has one, the processor otherwise."""
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    """The GPU where torch computes on a card here, the processor otherwise."""
+    return "cuda" if usable_cuda_card() is not None else "cpu"
 
 
 class TransformersTeacher:
@@ -48,15 +50,23 @@ class TransformersTeacher:
         self._taper = torch.hann_window(self._fft_length, periodic=True, device=self._device)
 
     def embed(self, mono: NDArray[np.float32]) -> NDArray[np.float32]:
-        window = torch.as_tensor(fill_window(mono, self._window_frames), device=self._device)
-        # (1, 1, frames, mel bands), the layout the audio tower expects
-        features = self._log_mel(window)[None, None]
+        vector: NDArray[np.float32] = self.embed_many((mono,))[0]
+        return vector
+
+    def embed_many(self, monos: Sequence[NDArray[np.float32]]) -> NDArray[np.float32]:
+        # (clips, window frames)
+        windows = torch.as_tensor(
+            np.stack([fill_window(mono, self._window_frames) for mono in monos]), device=self._device
+        )
+        # (clips, 1, frames, mel bands), the layout the audio tower expects
+        features = self._log_mel(windows)[:, None]
         with torch.no_grad():
             pooled = self._model.get_audio_features(input_features=features)
         # Newer releases return an output object in place of the tensor; either way the vector is pooled.
         tensor = pooled if isinstance(pooled, torch.Tensor) else pooled.pooler_output
-        vector: NDArray[np.float32] = torch.nn.functional.normalize(tensor, dim=-1)[0].cpu().numpy()
-        return vector
+        # (clips, embedding size), one unit vector per clip
+        vectors: NDArray[np.float32] = torch.nn.functional.normalize(tensor, dim=-1).cpu().numpy()
+        return vectors
 
     def embed_text(self, texts: Sequence[str]) -> NDArray[np.float32]:
         encoded = self._tokenizer(list(texts), padding=True, return_tensors="pt")
@@ -70,10 +80,10 @@ class TransformersTeacher:
         vectors: NDArray[np.float32] = torch.nn.functional.normalize(tensor, dim=-1).cpu().numpy()
         return vectors
 
-    def _log_mel(self, window: torch.Tensor) -> torch.Tensor:
-        """The library's log-mel picture, computed on the device: power spectrum, mel bands, decibels."""
+    def _log_mel(self, windows: torch.Tensor) -> torch.Tensor:
+        """The library's log-mel picture of each window, computed on the device: power spectrum, mel bands, decibels."""
         spectrum = torch.stft(
-            window,
+            windows,
             n_fft=self._fft_length,
             hop_length=self._hop_length,
             window=self._taper,
@@ -81,9 +91,9 @@ class TransformersTeacher:
             pad_mode="reflect",
             return_complex=True,
         )
-        power = spectrum.real**2 + spectrum.imag**2  # (fourier bins, frames)
-        mel = torch.clamp(self._mel_filters.T @ power, min=LOG_MEL_FLOOR)
-        return (10.0 * torch.log10(mel)).T  # (frames, mel bands)
+        power = spectrum.real**2 + spectrum.imag**2  # (clips, fourier bins, frames)
+        mel = torch.clamp(self._mel_filters.T @ power, min=LOG_MEL_FLOOR)  # (clips, mel bands, frames)
+        return (10.0 * torch.log10(mel)).mT  # (clips, frames, mel bands)
 
 
 def fill_window(mono: NDArray[np.float32], window_frames: int) -> NDArray[np.float32]:

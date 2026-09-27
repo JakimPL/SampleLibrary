@@ -5,6 +5,7 @@ import { CLOUD_LABELS_CACHE_KEY } from "../cloud/useCloudLabels";
 import { invalidateRequest } from "../shared/requestCache";
 import { useAnnotationError, useIsSavingSample } from "./annotationStore";
 import { queueAnnotationChange } from "./annotationWriteQueue";
+import { useCurationAccess } from "./useCurationAccess";
 import { LABEL_TAGS_CACHE_KEY } from "./useLabelTags";
 import { sampleDetailCacheKey } from "./useSampleDetail";
 import { samplePreviewCacheKey } from "./useSamplePreview";
@@ -12,8 +13,8 @@ import { samplePreviewCacheKey } from "./useSamplePreview";
 export const VOCABULARY_CACHE_KEY = "label-vocabulary";
 
 export interface AnnotationWriter {
-    /** Change the decisions this gesture names, leaving the sample's others as they are. */
-    readonly change: (changes: AnnotationChanges) => void;
+    /** Change the decisions this gesture names, leaving the sample's others as they are; null where nobody here may. */
+    readonly change: ((changes: AnnotationChanges) => void) | null;
     readonly isSaving: boolean;
     readonly message: string | null;
 }
@@ -37,9 +38,11 @@ function forgetWhatTheWriteChanged(written: AnnotationsWritten, changes: Annotat
  * the session store shows it at once. Once the server has answered, the cached requests describing
  * those samples are dropped, and a new wording also drops the vocabulary, the tag tree and the
  * cloud's labels, so every mounted view asks again and paints the sample by what was just said. A
- * failure is kept beside the sample for whichever view shows it.
+ * failure is kept beside the sample for whichever view shows it. Where the person here may change
+ * nothing, `change` is null, the one thing every control checks to show what the sample holds alone.
  */
 export function useAnnotationWriter(sampleHash: string, scope: AnnotationScope): AnnotationWriter {
+    const editing = useCurationAccess().labelEditing;
     const isSaving = useIsSavingSample(sampleHash);
     const message = useAnnotationError(sampleHash);
 
@@ -54,5 +57,5 @@ export function useAnnotationWriter(sampleHash: string, scope: AnnotationScope):
         [sampleHash, scope],
     );
 
-    return { change, isSaving, message };
+    return { change: editing ? change : null, isSaving, message };
 }

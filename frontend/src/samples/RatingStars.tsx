@@ -7,7 +7,8 @@ import { EMPTY_STAR, FILLED_STAR, RATING_VALUES } from "./rating";
 
 interface RatingStarsProps {
     readonly rating: number | null;
-    readonly onRatingChange: (rating: number | null) => void;
+    /** Records a new rating; null where the person here may only see it. */
+    readonly onRatingChange: ((rating: number | null) => void) | null;
 }
 
 /**
@@ -19,9 +20,45 @@ interface RatingStarsProps {
  *
  * Pointing at a star fills it and every star before it, showing the rating the click would leave
  * behind -- four out of five reads as four stars, the way the committed rating does. A finger
- * points at nothing before it taps, so under touch the stars answer to the tap alone.
+ * points at nothing before it taps, so under touch the stars answer to the tap alone. Where the person
+ * here may only see the rating, the stars show it and take no clicks.
  */
 export function RatingStars({ rating, onRatingChange }: RatingStarsProps): ReactElement {
+    if (onRatingChange === null) {
+        return <ShownRating rating={rating} />;
+    }
+    return <RatingButtons rating={rating} onRatingChange={onRatingChange} />;
+}
+
+function ShownRating({ rating }: { readonly rating: number | null }): ReactElement {
+    return (
+        <span
+            className="rating-stars is-read-only"
+            role="img"
+            aria-label={rating === null ? "Not rated" : `Rated ${String(rating)} of ${String(RATING_VALUES.length)}`}
+        >
+            {RATING_VALUES.map((value) => (
+                <span
+                    key={value}
+                    className={classNames(
+                        "rating-star is-read-only",
+                        rating !== null && value <= rating && "is-filled",
+                    )}
+                >
+                    {rating !== null && value <= rating ? FILLED_STAR : EMPTY_STAR}
+                </span>
+            ))}
+        </span>
+    );
+}
+
+function RatingButtons({
+    rating,
+    onRatingChange,
+}: {
+    readonly rating: number | null;
+    readonly onRatingChange: (rating: number | null) => void;
+}): ReactElement {
     const [previewed, setPreviewed] = useState<number | null>(null);
     const { input } = useLayoutMode();
     const previews = input === "pointer";

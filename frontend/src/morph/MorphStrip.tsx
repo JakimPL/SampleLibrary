@@ -180,7 +180,7 @@ export function MorphStrip(): ReactElement {
                 </div>
             )}
             {shown && lone !== null && (
-                <div className="morph-strip-wave morph-strip-wave-lone" id={bodyId}>
+                <div className="morph-strip-wave" id={bodyId}>
                     <FocusedSampleTransport sampleHash={lone} />
                 </div>
             )}

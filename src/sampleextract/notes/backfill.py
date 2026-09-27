@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import Connection
-from tqdm import tqdm
 
 from samplecore.config import LibraryConfig
 from samplecore.hashing import compute_module_hash
+from samplecore.progress import tracked
 from samplecore.storage.database import share_extraction_lock, start_batch
 from samplecore.storage.repositories.module import PostgresModuleRepository
 from samplecore.storage.repositories.note_extraction import PostgresModuleNoteExtractionRepository
@@ -53,7 +53,7 @@ def extract_missing_notes(config: LibraryConfig, connection: Connection, *, forc
     note_events = 0
     duplicate_files = 0
     already_extracted = 0
-    for path in tqdm(paths, desc="Reading module notes"):
+    for path in tracked(paths, total=len(paths), label="Reading module notes"):
         try:
             data = path.read_bytes()
         except OSError as error:

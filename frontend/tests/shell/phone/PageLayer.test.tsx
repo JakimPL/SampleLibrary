@@ -188,12 +188,15 @@ describe("PageHeaderFor", () => {
 });
 
 describe("PageBody", () => {
-    it("puts the sample's one-row transport over its detail", async () => {
+    it("puts the sample's one-row transport over its detail, the file to save at the row's end", async () => {
         stubMatchMedia(new Set([PHONE_MEDIA_QUERY]));
         useSelectionStore.getState().focusSample("b");
         renderHeaderAt(["/samples/b"], { kind: "sample", sampleHash: "b" }, true);
 
         expect(await screen.findByRole("button", { name: "▶" })).toBeInTheDocument();
-        expect(screen.queryByRole("link", { name: "Save this sample" })).not.toBeInTheDocument();
+        expect(document.querySelector(".wave-panel-compact > :last-child")).toBe(
+            screen.getByRole("link", { name: "Save this sample" }),
+        );
+        expect(screen.queryByLabelText("Rate")).not.toBeInTheDocument();
     });
 });

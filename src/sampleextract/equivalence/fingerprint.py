@@ -8,6 +8,8 @@ from numpy.typing import NDArray
 TIME_BINS: Final[int] = 16
 FREQUENCY_BANDS: Final[int] = 8
 FINGERPRINT_SIZE: Final[int] = TIME_BINS * FREQUENCY_BANDS
+# Moves whenever a change here would read any sample differently, so every stored fingerprint is read anew.
+FINGERPRINT_VERSION: Final[int] = 1
 # Every time bin holds at least two frames per band once a waveform spans this many frames.
 MINIMUM_FINGERPRINTED_FRAMES: Final[int] = FINGERPRINT_SIZE * 2
 

@@ -12,6 +12,8 @@ from samplecloud.evaluation.settings import EvaluationScope
 from samplecloud.features import readable_pending_count
 from samplecloud.hearing import hearing_for
 from samplecore.models.experiment import ExperimentKey, Reading
+from samplecore.storage.atomic import PARTIAL_SUFFIX
+from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.playback_rate import PostgresSamplePlaybackRateRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
@@ -20,11 +22,13 @@ from sampledescriptor.descriptors.pooling import DESCRIPTOR_BANDS_PER_SEMITONE
 from sampledescriptor.descriptors.shape import DEFAULT_WIDTH
 from sampledescriptor.geometry import DEFAULT_ANCHOR, Anchor
 from sampledescriptor.model_paths import descriptor_path
+from sampledescriptor.pretrained import PretrainedDescriptorMissingError, PretrainedRelease, pretrained_release
 from sampledescriptor.registries import DEFAULT_CANONICALIZER_NAME
 from sampledescriptor.training.descriptor.cache import (
     DEFAULT_RETUNED_VIEW_COUNT,
     DEFAULT_VIEW_RANGE_SEMITONES,
     DESCRIPTION_FILE_NAME,
+    cached_sample_count,
     grid_cache_directory,
 )
 from sampledescriptor.training.descriptor.settings import (
@@ -40,8 +44,9 @@ from sampledescriptor.training.descriptor.settings import (
 from sampledescriptor.training.run.paths import RunFamily, finished_record_path, resume_path, run_directory
 from sampledescriptor.training.run.settings import DEFAULT_RANDOM_SEED
 from samplelibrary.pipeline.context import PipelineContext
+from samplelibrary.pipeline.layout import EVALUATIONS_DIRECTORY_NAME, PIPELINE_DIRECTORY_NAME
 from samplelibrary.pipeline.results import input_digest
-from samplelibrary.pipeline.settings import StepSettings
+from samplelibrary.pipeline.settings import DescriptorSource, StepSettings
 from samplelibrary.pipeline.steps.catalog import EQUIVALENCE, MODULES, NOTES, RELINK, SAMPLE_FILES
 from samplelibrary.pipeline.steps.kinds import (
     DerivedExperimentStep,
@@ -49,6 +54,7 @@ from samplelibrary.pipeline.steps.kinds import (
     GrowingExperimentStep,
     Inputs,
     Step,
+    StepRefused,
     TrainingRecords,
     directory_artifact_is_complete,
     local_artifact_is_complete,
@@ -77,15 +83,19 @@ DESCRIPTOR_RUN_PREFIX: Final[str] = "descriptor-run"
 SEALED_DESCRIPTOR_PREFIX: Final[str] = "descriptor"
 LEARNED_KEY_PREFIX: Final[str] = "learned"
 SEALED_CHARACTERS: Final[int] = 16
+REPORT_SUFFIX: Final[str] = ".json"
 GRID_CACHE_INPUT: Final[str] = "grid cache"
 TEACHER_VECTORS: Final[str] = "teacher vectors"
+PRETRAINED_INPUT: Final[str] = "pretrained descriptor"
 DESCRIPTOR_INPUT: Final[str] = "descriptor"
 EXPERIMENT: Final[str] = "experiment"
 VECTORS: Final[str] = "vectors"
 RELATIONS: Final[str] = "relations"
 PLAYBACK_RATES: Final[str] = "playback rates"
+GRID_CACHE_PARTIALS: Final[str] = f"cache/grids/.{GRID_CACHE_PREFIX}-*{PARTIAL_SUFFIX}"
 OWNED_OUTPUTS: Final[tuple[str, ...]] = (
     f"cache/grids/{GRID_CACHE_PREFIX}-*",
+    GRID_CACHE_PARTIALS,
     f"models/descriptors/{SEALED_DESCRIPTOR_PREFIX}-*",
     f"runs/descriptor/{DESCRIPTOR_RUN_PREFIX}-*",
 )
@@ -123,12 +133,14 @@ class EvaluationStepSettings(StepSettings):
     seed: int = DEFAULT_EVALUATION_SEED
 
 
-def descriptor_steps() -> tuple[Step, ...]:
+def descriptor_steps(source: DescriptorSource) -> tuple[Step, ...]:
     """The learned descriptor from its grid cache to the experiment describing every readable sample, and its scores.
 
     The cache and the training run are named by what they were built from, the finished model is
     kept under its own content, and the experiment is named by that model and the cache it
     described, so a library that stands still rebuilds none of them and one that grew rebuilds each.
+    A library taking the pretrained descriptor downloads the published model in place of training
+    one, named by the digest its release records.
     """
     return (
         FileArtifactStep(
@@ -138,23 +150,16 @@ def descriptor_steps() -> tuple[Step, ...]:
             artifact=_grid_cache_directory,
             command=_cache_command,
             complete=directory_artifact_is_complete(DESCRIPTION_FILE_NAME),
+            partials=GRID_CACHE_PARTIALS,
         ),
-        FileArtifactStep(
-            name=DESCRIPTOR,
-            requires=(GRID_CACHE, TEACHER, RELINK),
-            inputs=_descriptor_inputs,
-            artifact=_descriptor_run_model,
-            command=_train_command,
-            complete=local_artifact_is_complete,
-            training=_descriptor_training,
-            sealed_as=_sealed_descriptor,
-        ),
+        _descriptor_step(source),
         DerivedExperimentStep(
             name=EMBEDDING,
             requires=(DESCRIPTOR, GRID_CACHE),
             inputs=_embedding_inputs,
             key=lambda context, digest: f"{LEARNED_KEY_PREFIX}-{digest}",
             command=_embed_command,
+            complete=_describes_the_whole_cache,
         ),
         GrowingExperimentStep(
             name=COMPLETION,
@@ -173,13 +178,53 @@ def descriptor_steps() -> tuple[Step, ...]:
     )
 
 
+def _descriptor_step(source: DescriptorSource) -> FileArtifactStep:
+    match source:
+        case DescriptorSource.TRAINED:
+            return FileArtifactStep(
+                name=DESCRIPTOR,
+                requires=(GRID_CACHE, TEACHER, RELINK),
+                inputs=_descriptor_inputs,
+                artifact=_descriptor_run_model,
+                command=_train_command,
+                complete=local_artifact_is_complete,
+                training=_descriptor_training,
+                sealed_as=_sealed_descriptor,
+            )
+        case DescriptorSource.PRETRAINED:
+            return FileArtifactStep(
+                name=DESCRIPTOR,
+                requires=(),
+                inputs=_descriptor_inputs,
+                artifact=_descriptor_run_model,
+                command=_adopt_command,
+                complete=local_artifact_is_complete,
+                sealed_as=_sealed_descriptor,
+            )
+
+
 def learned_key(context: PipelineContext) -> ExperimentKey:
     """The key of the experiment the descriptor and the cache it read make together."""
     return f"{LEARNED_KEY_PREFIX}-{input_digest(_embedding_inputs(context))}"
 
 
 def _grid_cache_settings(context: PipelineContext) -> GridCacheSettings:
-    return context.settings.settings_for(GRID_CACHE, GridCacheSettings)
+    """The grid cache's settings: the configured ones, or for the pretrained descriptor the axis it reads.
+
+    The pretrained descriptor describes only the stored grid of each sample, so its cache keeps no
+    retuned views, which only training reads.
+    """
+    match context.settings.descriptor_source:
+        case DescriptorSource.TRAINED:
+            return context.settings.settings_for(GRID_CACHE, GridCacheSettings)
+        case DescriptorSource.PRETRAINED:
+            grid = _pretrained().grid
+            return GridCacheSettings(
+                canonicalizer=grid.canonicalizer,
+                anchor=grid.anchor,
+                bands_per_semitone=grid.bands_per_semitone,
+                views=0,
+            )
 
 
 def _grid_cache_inputs(context: PipelineContext) -> Inputs:
@@ -230,12 +275,34 @@ def _descriptor_settings(context: PipelineContext) -> DescriptorSettings:
 
 
 def _descriptor_inputs(context: PipelineContext) -> Inputs:
-    return {
-        GRID_CACHE_INPUT: sealed_content(_current_grid_cache(context)),
-        TEACHER_VECTORS: vectors_digest(context, TEACHER_KEY),
-        LABELS: PostgresSampleAnnotationRepository(context.connection).label_digest(),
-        PARAMETERS: _descriptor_settings(context).parameters_digest,
-    }
+    """What the descriptor is built from: what training reads, or the digest the pretrained model's release records."""
+    match context.settings.descriptor_source:
+        case DescriptorSource.TRAINED:
+            return {
+                GRID_CACHE_INPUT: sealed_content(_current_grid_cache(context)),
+                TEACHER_VECTORS: vectors_digest(context, TEACHER_KEY),
+                LABELS: PostgresSampleAnnotationRepository(context.connection).label_digest(),
+                PARAMETERS: _descriptor_settings(context).parameters_digest,
+            }
+        case DescriptorSource.PRETRAINED:
+            return {PRETRAINED_INPUT: _pretrained().sha256}
+
+
+def _pretrained() -> PretrainedRelease:
+    """The release of the pretrained descriptor this version takes.
+
+    Raises:
+        StepRefused: no descriptor is published for this version.
+    """
+    try:
+        return pretrained_release()
+    except PretrainedDescriptorMissingError as error:
+        raise StepRefused(str(error)) from error
+
+
+# pylint: disable-next=unused-argument
+def _adopt_command(context: PipelineContext, artifact: Path, resume: bool) -> tuple[str, ...]:
+    return ("descriptor", "adopt", "--descriptor", artifact.stem)
 
 
 def _descriptor_run_name(digest: str) -> str:
@@ -315,6 +382,12 @@ def _embed_command(context: PipelineContext, key: ExperimentKey) -> tuple[str, .
     )
 
 
+def _describes_the_whole_cache(context: PipelineContext, experiment_id: int) -> bool:
+    """Whether the embedding's experiment holds a vector for every sample its grid cache holds."""
+    cached = cached_sample_count(_current_grid_cache(context))
+    return PostgresSampleFeatureVectorRepository(context.connection).count_for_experiment(experiment_id) == cached
+
+
 def _nominal_pending(context: PipelineContext, experiment_id: int) -> int:
     return readable_pending_count(
         context.connection, experiment_id, hearing=hearing_for(context.connection, Reading.NOMINAL)
@@ -357,7 +430,7 @@ def _evaluation(name: str, scope: EvaluationScope) -> FileArtifactStep:
         )
 
     report: Callable[[PipelineContext, str], Path] = lambda context, digest: context.layout.evaluations / (
-        f"{scope.value}-{digest}.json"
+        f"{scope.value}-{digest}{REPORT_SUFFIX}"
     )
     return FileArtifactStep(
         name=name,
@@ -366,4 +439,5 @@ def _evaluation(name: str, scope: EvaluationScope) -> FileArtifactStep:
         artifact=report,
         command=command,
         complete=local_artifact_is_complete,
+        partials=f"{PIPELINE_DIRECTORY_NAME}/{EVALUATIONS_DIRECTORY_NAME}/.{scope.value}-*{REPORT_SUFFIX}{PARTIAL_SUFFIX}",
     )
