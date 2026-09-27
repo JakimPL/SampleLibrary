@@ -69,20 +69,22 @@ your library, `publication`. Repeat it whenever you want the site to show your l
    carrying a label, a rating, a favorite or a path of your computer, and changes nothing when it
    refuses.
 4. **Close the database again:** turn its public networking off.
-5. **Upload the audio** it names to the site's volume:
+5. **Upload the audio** it names to the site's volume. Railway names a volume's files from the
+   volume's own root, which the site sees as `/library`:
 
    ```sh
-   railway volume files upload <your library>/publication/objects /library/objects
+   railway volume files upload <your library>/publication/objects /objects
    ```
 
-   A sample no longer published stays unheard, since the site plays only what its catalog lists.
-   To free its space, delete `/library/objects` with `railway volume browse` before uploading.
+   When you publish again, first run `railway volume files delete /objects`, so the volume holds
+   the samples published now and no others.
 6. **Restart the site** from its Deployments tab, so it reads the new catalog.
 
 ## Check it once it runs
 
 1. **Open the site** at its address, play a few samples and a morph. A sample that won't play
-   means the site can't read its volume.
+   means the site can't read its volume: Railway's answer is the variable `RAILWAY_RUN_UID=0` on the
+   site's service, which runs it as the volume's owner.
 2. **Check that each visitor has limits of their own.** This asks for the whole-catalog summary 30
    times, each time claiming to be someone else:
 
