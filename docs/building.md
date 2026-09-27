@@ -43,6 +43,8 @@ just executable   # bin/: the launchers for this system
 just installer    # dist/: the installer for this system
 ```
 
+`just app-build` runs the three in turn.
+
 - `just package` builds the web app and the sampleripper wheel. It also writes the exact versions
   the app installs, taken from `uv.lock`, twice: with torch's processor build, which runs on every
   machine, and with its CUDA build and NVIDIA libraries, several gigabytes more, for a machine with

@@ -205,6 +205,9 @@ installer:
     uv run --no-project --with pillow python scripts/build_installer.py
 
 [group("release")]
+app-build: package executable installer
+
+[group("release")]
 release-descriptor tag *arguments:
     uv run python scripts/release_descriptor.py --tag {{ tag }} {{ arguments }}
 
