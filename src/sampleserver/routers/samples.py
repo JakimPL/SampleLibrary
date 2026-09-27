@@ -49,8 +49,8 @@ from samplecore.storage.sample_audio import SampleAudio, SampleUnavailableError,
 from samplecore.waveform import WaveformPeak
 from sampleserver.caching import IMMUTABLE_CACHE_CONTROL
 from sampleserver.dependencies import (
+    READ_CONNECTION,
     ConnectionOpener,
-    get_connection,
     get_connection_opener,
     get_library_root,
     get_policy,
@@ -208,7 +208,7 @@ def list_samples(
     offset: Annotated[int, Query(ge=0, le=MAX_PAGE_OFFSET)] = 0,
     group_by_equivalence: bool = False,
     selection: SampleSelection = Depends(get_selection),
-    connection: Connection = Depends(get_connection),
+    connection: Connection = READ_CONNECTION,
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
     policy: ServingPolicy = Depends(get_policy),
 ) -> Page[SampleSummary]:
@@ -277,7 +277,7 @@ def _collapse_by_equivalence(items: tuple[SampleSummary, ...]) -> tuple[SampleSu
 @router.get("/{sample_hash}", responses=NOT_FOUND_RESPONSE)
 def get_sample(
     sample_hash: SampleHashPath,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = READ_CONNECTION,
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
     policy: ServingPolicy = Depends(get_policy),
     sample_directories: tuple[Path, ...] = Depends(get_sample_directories),
@@ -412,7 +412,7 @@ def get_sample_audio(
 @router.get("/{sample_hash}/preview", responses=NOT_FOUND_RESPONSE)
 def get_sample_preview(
     sample_hash: SampleHashPath,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = READ_CONNECTION,
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
     policy: ServingPolicy = Depends(get_policy),
 ) -> SamplePreview:
@@ -463,7 +463,7 @@ def _previews_by_hash(
 @router.get("/{sample_hash}/relations", responses=NOT_FOUND_RESPONSE)
 def get_sample_relations(
     sample_hash: SampleHashPath,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = READ_CONNECTION,
     policy: ServingPolicy = Depends(get_policy),
 ) -> tuple[SampleRelation, ...]:
     """Every equivalence-class link this sample participates in, on either side of the pair, reviewed by whom the policy says.
@@ -482,7 +482,7 @@ def get_sample_relations(
 
 @router.get("/{sample_hash}/distance/{other_hash}", responses=NOT_FOUND_RESPONSE)
 def get_sample_distance(
-    sample_hash: SampleHashPath, other_hash: SampleHashPath, connection: Connection = Depends(get_connection)
+    sample_hash: SampleHashPath, other_hash: SampleHashPath, connection: Connection = READ_CONNECTION
 ) -> SampleDistance:
     """The Euclidean distance between two samples' persisted, standardized spectral feature vectors.
 
@@ -510,7 +510,7 @@ def get_sample_distance(
 def get_similar_samples(
     sample_hash: SampleHashPath,
     limit: Annotated[int, Query(ge=1, le=MAX_SIMILAR_SAMPLES_LIMIT)] = DEFAULT_SIMILAR_SAMPLES_LIMIT,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = READ_CONNECTION,
     vectors: SpectralVectors = Depends(get_spectral_vectors),
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
     policy: ServingPolicy = Depends(get_policy),

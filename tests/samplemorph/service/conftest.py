@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 import pytest
 import soundfile
@@ -26,6 +27,9 @@ TONES = ((220.0, 4096), (330.0, 8192), (440.0, 6144))
 FILTER_COEFFICIENT_COUNT = 24
 FILE_TONE = (275.0, 5120)
 FILE_RATE_HZ = 44100
+
+RENDERER_HOST: Final[str] = "127.0.0.1"
+RENDERER_URL: Final[str] = f"http://{RENDERER_HOST}:8010"
 
 
 @dataclass(frozen=True)
@@ -98,5 +102,5 @@ def gliding_settings(library: StoredLibrary) -> ServiceSettings:
 
 @pytest.fixture
 def client(settings: ServiceSettings) -> Iterator[TestClient]:
-    with TestClient(create_app(load_renderer(settings))) as test_client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as test_client:
         yield test_client

@@ -31,10 +31,10 @@ from samplecore.storage.repositories.sample_annotation import (
 from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from sampleserver.dependencies import (
+    READ_CONNECTION,
     get_categories_cache,
     get_category_tags_cache,
     get_cloud_cache,
-    get_connection,
     get_shown_experiment_id,
     require_shown_curation,
 )
@@ -89,7 +89,7 @@ CLOUD_POINTS: Final = TypeAdapter(tuple[SampleCloudPoint, ...])
 @router.get("", response_model=tuple[SampleCloudPoint, ...])
 def get_cloud(
     request: Request,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = READ_CONNECTION,
     cache: RevisionedJsonCache = Depends(get_cloud_cache),
 ) -> Response:
     """Every sample's position in the library's 2D embedding space, as of the latest embedding run.
@@ -142,7 +142,7 @@ class CloudLabel(BaseModel):
 
 
 @router.get("/labels", dependencies=[Depends(require_shown_curation)])
-def get_cloud_labels(connection: Connection = Depends(get_connection)) -> tuple[CloudLabel, ...]:
+def get_cloud_labels(connection: Connection = READ_CONNECTION) -> tuple[CloudLabel, ...]:
     """Every labeled sample's tags, for coloring the cloud by what a person decided.
 
     These travel apart from the points on purpose: the labels are a few hundred rows against a
@@ -178,7 +178,7 @@ CLOUD_CATEGORY_TAGS: Final = TypeAdapter(tuple[TagSummary, ...])
 @router.get("/categories", response_model=tuple[CloudCategory, ...])
 def get_cloud_categories(
     request: Request,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = READ_CONNECTION,
     cache: RevisionedJsonCache = Depends(get_categories_cache),
 ) -> Response:
     """Every sample's top category from the scoring on show, for coloring the cloud by what a model hears.
@@ -219,7 +219,7 @@ def _cached_json(
 @router.get("/category-tags", response_model=tuple[TagSummary, ...])
 def get_cloud_category_tags(
     request: Request,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = READ_CONNECTION,
     cache: RevisionedJsonCache = Depends(get_category_tags_cache),
     shown_experiment_id: int | None = Depends(get_shown_experiment_id),
 ) -> Response:
@@ -261,7 +261,7 @@ def _tags(connection: Connection, experiment_id: int | None) -> tuple[TagSummary
 
 
 @router.get("/modules")
-def get_module_cloud(connection: Connection = Depends(get_connection)) -> tuple[ModuleCloudPoint, ...]:
+def get_module_cloud(connection: Connection = READ_CONNECTION) -> tuple[ModuleCloudPoint, ...]:
     """Every module's position in the library's 2D embedding space, placed by the sounds of its samples."""
     return tuple(
         ModuleCloudPoint(

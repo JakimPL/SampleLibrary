@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import Connection
 
@@ -18,7 +18,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
 from samplecore.waveform import WaveformPeak
-from sampleserver.dependencies import get_connection
+from sampleserver.dependencies import READ_CONNECTION
 from sampleserver.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, Page
 from sampleserver.parameters import MAX_PAGE_OFFSET, NOT_FOUND_RESPONSE, ModuleHashPath
 
@@ -57,7 +57,7 @@ def list_modules(
     limit: Annotated[int, Query(ge=1, le=MAX_PAGE_LIMIT)] = DEFAULT_PAGE_LIMIT,
     offset: Annotated[int, Query(ge=0, le=MAX_PAGE_OFFSET)] = 0,
     tracker: TrackerFormat | None = None,
-    connection: Connection = Depends(get_connection),
+    connection: Connection = READ_CONNECTION,
 ) -> Page[Module]:
     """A page of cataloged modules, optionally filtered by tracker format."""
     repository = PostgresModuleRepository(connection)
@@ -67,7 +67,7 @@ def list_modules(
 
 
 @router.get("/{module_hash}", responses=NOT_FOUND_RESPONSE)
-def get_module(module_hash: ModuleHashPath, connection: Connection = Depends(get_connection)) -> ModuleDetail:
+def get_module(module_hash: ModuleHashPath, connection: Connection = READ_CONNECTION) -> ModuleDetail:
     """One module's own fields plus every sample occurrence it declares.
 
     Raises:

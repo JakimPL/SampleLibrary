@@ -30,7 +30,7 @@ from samplecore.storage.annotation_writes import AnnotationWrite, write_annotati
 from samplecore.storage.curation import read_tag_ranks
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from sampleserver.dependencies import get_connection, get_curation_connection, get_policy, require_shown_curation
+from sampleserver.dependencies import CURATION_CONNECTION, READ_CONNECTION, get_policy, require_shown_curation
 from sampleserver.equivalence import equivalence_class_members
 from sampleserver.local_person import is_local_person, require_local_person
 from sampleserver.parameters import NOT_FOUND_RESPONSE, SampleHashPath
@@ -136,8 +136,8 @@ class AnnotationsWritten(BaseModel):
 def change_annotation(
     sample_hash: SampleHashPath,
     request: AnnotationChangeRequest,
-    connection: Connection = Depends(get_connection),
-    curation_connection: Connection = Depends(get_curation_connection),
+    connection: Connection = READ_CONNECTION,
+    curation_connection: Connection = CURATION_CONNECTION,
 ) -> AnnotationsWritten:
     """Change what a person decided about this sample, optionally across its near-duplicates.
 
@@ -184,13 +184,13 @@ def read_curation_access(request: Request, policy: ServingPolicy = Depends(get_p
 
 
 @read_router.get("/annotations/vocabulary", dependencies=[Depends(require_shown_curation)])
-def get_label_vocabulary(connection: Connection = Depends(get_connection)) -> tuple[str, ...]:
+def get_label_vocabulary(connection: Connection = READ_CONNECTION) -> tuple[str, ...]:
     """Every label already in use, most-used first, for offering a person their own wording back."""
     return PostgresSampleAnnotationRepository(connection).vocabulary()
 
 
 @read_router.get("/annotations/tags", dependencies=[Depends(require_shown_curation)])
-def get_label_tags(connection: Connection = Depends(get_connection)) -> tuple[TagSummary, ...]:
+def get_label_tags(connection: Connection = READ_CONNECTION) -> tuple[TagSummary, ...]:
     """Every tag in use, read out of the labels as paths, most used first.
 
     Where `get_label_vocabulary` offers whole wordings back to the person typing one, this reads the

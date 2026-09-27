@@ -77,6 +77,9 @@ EXTRACTION_LOCK_KEY: Final[int] = 2_940_318_775_601_922_553
 # The promotion table holds one row, the cloud being shown, and this is its key.
 PROMOTION_SLOT: Final[int] = 0
 CONNECT_TIMEOUT_SECONDS: Final[int] = 10
+SERVED_POOL_OVERFLOW: Final[int] = 10
+SERVED_STATEMENT_TIMEOUT_MILLISECONDS: Final[int] = 30_000
+SERVED_IDLE_TRANSACTION_MILLISECONDS: Final[int] = 60_000
 
 Item = TypeVar("Item")
 
@@ -518,13 +521,24 @@ def create_pooled_engine(database_url: str, *, pool_size: int) -> Engine:
     A served request costs a query or two, and opening a connection for each costs Postgres a
     handshake that outweighs them; a small pool keeps a few connections warm and checks each one
     before handing it out, so a connection the server dropped is replaced rather than failing a
-    request.
+    request. Past the pool, `SERVED_POOL_OVERFLOW` more open for a burst. Postgres ends a served
+    statement past `SERVED_STATEMENT_TIMEOUT_MILLISECONDS` and a transaction left idle past
+    `SERVED_IDLE_TRANSACTION_MILLISECONDS`, so no request holds the server longer than the slowest
+    answer a catalog gives: a whole-catalog read takes a few seconds, and a request waiting while
+    another rebuilds a cached answer waits no longer than that rebuild.
     """
     return create_engine(
         database_url,
         pool_size=pool_size,
+        max_overflow=SERVED_POOL_OVERFLOW,
         pool_pre_ping=True,
-        connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
+        connect_args={
+            "connect_timeout": CONNECT_TIMEOUT_SECONDS,
+            "options": (
+                f"-c statement_timeout={SERVED_STATEMENT_TIMEOUT_MILLISECONDS} "
+                f"-c idle_in_transaction_session_timeout={SERVED_IDLE_TRANSACTION_MILLISECONDS}"
+            ),
+        },
     )
 
 

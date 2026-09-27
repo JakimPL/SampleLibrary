@@ -4,6 +4,7 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, closing
 from http import HTTPStatus
 from pathlib import Path
+from typing import Final
 
 import httpx
 from fastapi import Depends, HTTPException, Request
@@ -67,6 +68,11 @@ def get_connection(request: Request) -> Iterator[Connection]:
         connection.close()
 
 
+# Every route reading the catalog shares this one dependency, released as the route returns: the pool
+# gets the connection back before the answer is sent, so a caller reading an answer slowly holds none
+# of the pool, and a dependency sharing it with its route reads through the same connection.
+READ_CONNECTION: Final = Depends(get_connection, scope="function")
+
 ConnectionOpener = Callable[[], AbstractContextManager[Connection]]
 
 
@@ -96,13 +102,16 @@ def get_curation_connection(request: Request) -> Iterator[Connection]:
         connection.close()
 
 
-def get_spectral_vectors(request: Request, connection: Connection = Depends(get_connection)) -> SpectralVectors:
+CURATION_CONNECTION: Final = Depends(get_curation_connection, scope="function")
+
+
+def get_spectral_vectors(request: Request, connection: Connection = READ_CONNECTION) -> SpectralVectors:
     """The catalog's spectral vectors as one matrix, parsed once per embedding rather than per request."""
     cache: SpectralVectorCache = request.app.state.spectral_vectors
     return cache.vectors(connection)
 
 
-def get_shown_experiment_id(connection: Connection = Depends(get_connection)) -> int | None:
+def get_shown_experiment_id(connection: Connection = READ_CONNECTION) -> int | None:
     """The scoring on show, read once for a request rather than once per sample it answers with.
 
     FastAPI resolves a dependency once per request and hands every route the same value, so a page

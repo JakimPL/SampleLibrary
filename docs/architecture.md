@@ -665,9 +665,10 @@ SampleLibrary app refuses `public` before it opens a library.
   - A reverse proxy on the same computer that adds no forwarding header looks like a browser there.
     Publish `samplelibrary serve`, never the SampleLibrary app.
   - A page served from another port of the same computer passes the Origin check.
-  - A temporary table is refused to the reader by the read-only transaction alone.
   - The morph renderer opens no database. It listens on the loopback address unless told otherwise,
-    and renders whatever it is asked.
+    and renders whatever a program calling its address asks; it answers no web page
+    (`samplemorph.service.callers`), since a page sends an `Origin` with every request it makes
+    elsewhere, and a page that points its own name at the renderer's address still names itself.
 
 ## Deployment
 
@@ -772,9 +773,23 @@ against a Postgres installed on the machine directly, which the test suite and b
 databases share. The container runs
 `samplelibrary serve` with several worker processes (`WEB_CONCURRENCY`), where `just serve` starts the one
 reloading process development uses: each worker holds a small pool of Postgres connections as the
-reader, checked out per request (`sampleserver.dependencies.get_connection`), which Postgres's
+reader, checked out per request (`sampleserver.dependencies.READ_CONNECTION`), which Postgres's
 own concurrent-connection handling supports natively, so multiple people browsing the library
-through one deployed server works correctly with no shared state between workers. The library's data
+through one deployed server works correctly with no shared state between workers. A route and every
+dependency it reads through share one connection, which goes back to the pool as the route returns,
+before its answer is sent, so a caller reading an answer slowly holds none of the pool. Postgres ends
+a served statement after 30 seconds and a transaction left idle after 60
+(`samplecore.storage.database.create_pooled_engine`), longer than a whole-catalog read or a cached
+answer's rebuild takes. `GET /api/health` answers once the catalog does, at the cost of `SELECT 1`,
+for a platform checking the server.
+
+Every response states what a browser may do with it (`sampleserver.headers`): read it as the type it
+states (`nosniff`), frame it on no page, and send its address to no other site. The application's
+own pages carry a content security policy loading everything from the server itself, beyond three
+needs of the built pages: regl compiles its drawing commands with `Function`, wavesurfer writes a
+style into a shadow root and plays from a blob URL, and the build inlines its smallest font files as
+data URLs. The two typefaces travel with the application (`@fontsource`), so a page loads nothing
+from any other site. A library served to anyone also tells browsers to reach it over HTTPS alone. The library's data
 directory and a `config.toml` pointing at its in-container path are supplied at `docker run` time as
 bind mounts, never baked into the image, mirroring `config.toml` never being committed to the
 repository.

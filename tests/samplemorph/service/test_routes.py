@@ -23,7 +23,7 @@ from samplemorph.routes.selection import Glide
 from samplemorph.service.app import create_app
 from samplemorph.service.renderer import MorphRenderer, load_renderer
 from samplemorph.service.settings import RESPONSE_MEDIA_TYPE, ServiceSettings
-from tests.samplemorph.service.conftest import FILTER_COEFFICIENT_COUNT, StoredLibrary
+from tests.samplemorph.service.conftest import FILTER_COEFFICIENT_COUNT, RENDERER_HOST, RENDERER_URL, StoredLibrary
 
 AUDIO_PATH = "/morph/audio"
 RESPONSE_PATH = "/morph/response"
@@ -214,7 +214,7 @@ def _pair_params(library: StoredLibrary) -> dict[str, str | float | int]:
 def test_a_pair_answers_with_the_filter_between_its_two_samples(
     settings: ServiceSettings, library: StoredLibrary
 ) -> None:
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         answered = client.get(RESPONSE_PATH, params=_pair_params(library))
 
         assert answered.status_code == HTTPStatus.OK
@@ -229,7 +229,7 @@ def test_a_gliding_envelope_route_renders_morphs_and_hands_over_the_filter_besid
     gliding_settings: ServiceSettings, library: StoredLibrary
 ) -> None:
     """The filter is read under the process's filter selection, which holds every pitch while its renders glide."""
-    with TestClient(create_app(load_renderer(gliding_settings))) as client:
+    with TestClient(create_app(load_renderer(gliding_settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         status = client.get(STATUS_PATH).json()
         rendered = client.get(AUDIO_PATH, params=_params(library, 0.5))
         answered = client.get(RESPONSE_PATH, params=_pair_params(library))
@@ -242,7 +242,7 @@ def test_a_gliding_envelope_route_renders_morphs_and_hands_over_the_filter_besid
 
 
 def test_a_pair_asked_for_twice_is_read_once(settings: ServiceSettings, library: StoredLibrary) -> None:
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         for _ in range(2):
             client.get(RESPONSE_PATH, params=_pair_params(library))
 
@@ -252,7 +252,7 @@ def test_a_pair_asked_for_twice_is_read_once(settings: ServiceSettings, library:
 def test_a_caller_holding_the_filter_is_answered_without_reading_it_again(
     settings: ServiceSettings, library: StoredLibrary
 ) -> None:
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         first = client.get(RESPONSE_PATH, params=_pair_params(library))
 
         again = client.get(
@@ -264,7 +264,7 @@ def test_a_caller_holding_the_filter_is_answered_without_reading_it_again(
 
 
 def test_a_pair_naming_a_sample_the_store_lacks_is_refused(settings: ServiceSettings, library: StoredLibrary) -> None:
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         answered = client.get(RESPONSE_PATH, params={**_pair_params(library), "second": "f" * DIGEST_LENGTH})
 
         assert answered.status_code == HTTPStatus.NOT_FOUND
@@ -273,7 +273,7 @@ def test_a_pair_naming_a_sample_the_store_lacks_is_refused(settings: ServiceSett
 def test_the_filter_a_pair_answers_with_returns_that_sample_as_the_pair_hears_it(
     settings: ServiceSettings, library: StoredLibrary
 ) -> None:
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         response = response_from_payload(client.get(RESPONSE_PATH, params=_pair_params(library)).content)
 
     heard = hear_in_frame(
@@ -308,7 +308,7 @@ def _uploads(library: StoredLibrary, *, first_rate_hz: int, second_rate_hz: int)
 def test_two_uploaded_sounds_answer_with_the_filter_between_them(
     settings: ServiceSettings, library: StoredLibrary
 ) -> None:
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         answered = client.post(
             RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
         )
@@ -321,7 +321,7 @@ def test_two_uploaded_sounds_answer_with_the_filter_between_them(
 
 
 def test_uploads_at_two_rates_are_heard_at_the_higher(settings: ServiceSettings, library: StoredLibrary) -> None:
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         answered = client.post(
             RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ * 2)
         )
@@ -331,7 +331,7 @@ def test_uploads_at_two_rates_are_heard_at_the_higher(settings: ServiceSettings,
 
 def test_the_same_uploads_sent_twice_are_read_once(settings: ServiceSettings, library: StoredLibrary) -> None:
     uploads = _uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         first = client.post(RESPONSE_PATH, files=uploads)
         again = client.post(RESPONSE_PATH, files=uploads)
 
@@ -342,7 +342,7 @@ def test_the_same_uploads_sent_twice_are_read_once(settings: ServiceSettings, li
 def test_the_filter_from_uploads_returns_the_first_sound_at_its_own_end(
     settings: ServiceSettings, library: StoredLibrary
 ) -> None:
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         answered = client.post(
             RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
         )
@@ -364,7 +364,7 @@ def test_the_filter_from_uploads_returns_the_first_sound_at_its_own_end(
 def test_an_upload_holding_no_audio_is_refused(settings: ServiceSettings, library: StoredLibrary) -> None:
     uploads = _uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
     uploads["second"] = ("second.wav", b"no audio in here", "audio/wav")
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         answered = client.post(RESPONSE_PATH, files=uploads)
 
     assert answered.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
@@ -374,14 +374,14 @@ def test_an_upload_holding_no_audio_is_refused(settings: ServiceSettings, librar
 def test_an_upload_past_the_byte_bound_is_refused(settings: ServiceSettings, library: StoredLibrary) -> None:
     uploads = _uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
     bounded = replace(settings, limits=replace(settings.limits, maximum_upload_bytes=UPLOAD_BYTE_BOUND))
-    with TestClient(create_app(load_renderer(bounded))) as client:
+    with TestClient(create_app(load_renderer(bounded), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         answered = client.post(RESPONSE_PATH, files=uploads)
 
     assert answered.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
 
 
 def test_uploads_heard_too_far_apart_in_rate_are_refused(settings: ServiceSettings, library: StoredLibrary) -> None:
-    with TestClient(create_app(load_renderer(settings))) as client:
+    with TestClient(create_app(load_renderer(settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         answered = client.post(
             RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ * 32)
         )
@@ -392,7 +392,7 @@ def test_uploads_heard_too_far_apart_in_rate_are_refused(settings: ServiceSettin
 def test_uploads_to_a_process_serving_a_gliding_route_are_answered_with_the_filter(
     gliding_settings: ServiceSettings, library: StoredLibrary
 ) -> None:
-    with TestClient(create_app(load_renderer(gliding_settings))) as client:
+    with TestClient(create_app(load_renderer(gliding_settings), host=RENDERER_HOST), base_url=RENDERER_URL) as client:
         answered = client.post(
             RESPONSE_PATH, files=_uploads(library, first_rate_hz=UPLOAD_RATE_HZ, second_rate_hz=UPLOAD_RATE_HZ)
         )

@@ -13,10 +13,11 @@ from samplecore.models.service_role import ServiceRole
 from samplecore.storage.database import create_pooled_engine
 from sampleserver.admission import AdmittedRequestsOnly
 from sampleserver.frontend import FrontendMount
+from sampleserver.headers import SecurityHeaders
 from sampleserver.inference_client import build_inference_client
 from sampleserver.policy import ServingPolicy
 from sampleserver.response_cache import RevisionedJsonCache
-from sampleserver.routers import cloud, curation, modules, morph, samples, stats
+from sampleserver.routers import cloud, curation, health, modules, morph, samples, stats
 from sampleserver.spectral_cache import SpectralVectorCache
 
 API_PREFIX: Final[str] = "/api"
@@ -47,7 +48,8 @@ def create_app(
     What the app shows and whom it answers follow from ``server``'s exposure alone, through the
     `ServingPolicy` it derives (`sampleserver.policy`): every request passes `AdmittedRequestsOnly`
     first, and every route reading a path, a person's labels or an internal address asks the policy
-    whether to show it. A sample's file is opened only inside ``sample_directories``.
+    whether to show it. A sample's file is opened only inside ``sample_directories``. Every response
+    states what a browser may do with it (`sampleserver.headers.SecurityHeaders`).
 
     Every route reads the catalog through a pooled connection Postgres itself refuses a write on. A
     curator also serves the route recording a person's own decisions about samples, in a schema of
@@ -99,6 +101,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_SIZE, compresslevel=GZIP_COMPRESSION_LEVEL)
+    application.add_middleware(SecurityHeaders, policy=policy, api_prefix=API_PREFIX)
     application.add_middleware(AdmittedRequestsOnly, policy=policy)
     application.state.role = role
     application.state.policy = policy
@@ -110,7 +113,15 @@ def create_app(
     application.state.cloud_cache = RevisionedJsonCache()
     application.state.categories_cache = RevisionedJsonCache()
     application.state.category_tags_cache = RevisionedJsonCache()
-    for api_router in (modules.router, samples.router, stats.router, cloud.router, curation.read_router, morph.router):
+    for api_router in (
+        health.router,
+        modules.router,
+        samples.router,
+        stats.router,
+        cloud.router,
+        curation.read_router,
+        morph.router,
+    ):
         application.include_router(api_router, prefix=API_PREFIX)
     if role.offers_label_editing:
         application.include_router(curation.write_router, prefix=API_PREFIX)
