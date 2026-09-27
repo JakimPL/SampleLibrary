@@ -11,18 +11,22 @@ project uses its databases.
 
 ## Checks
 
-`just check` runs everything a change has to pass: formatting, linting and tests for the Python code,
-then the same for the web app. Its parts run on their own too:
+`just check` runs everything a change has to pass before it is pushed: the commit hooks over every
+file, linting and every test of the Python code, then the same for the web app. It takes several
+minutes. Its parts run on their own too:
 
 - `just format`: isort and black.
-- `just lint`: codespell, mypy, pylint and import-linter.
-- `just test`: the test suite, spread over every core; `just coverage` also reports the lines the
-  tests leave unrun.
+- `just lint`: codespell, mypy, pylint and import-linter. pylint fails on any message, even while
+  its score reads 10.00, so read its messages or its exit status.
+- `just test`: the tests but the pipeline scenarios, in about two minutes; `just test-all` adds
+  them, and `just test-scenarios` runs them alone. `just coverage` also reports the lines the tests
+  leave unrun.
 - `just frontend-check`: type checking, ESLint, Stylelint, Prettier and the web app's tests.
 
-`just install` sets up git hooks: formatting and spelling run on every commit, and type checking,
-linting and the tests on every push. The push hook fails on any pylint message, even while pylint's score reads
-10.00, so read its messages or its exit status.
+`just install` sets up git hooks. Formatting, spelling and secret scanning run on every commit. A
+push goes through once `just check` has passed on the commit it sends, with no file changed
+meanwhile: the check marks that commit, and the push hook only looks the mark up, since git holds
+the connection to GitHub open while the hook runs. Commit, run `just check`, then push.
 
 ## Tests
 
@@ -79,8 +83,9 @@ describes `bin/` and `dist/`.
 
 | Recipe | What it does |
 |---|---|
-| `just check` | Formats, lints and tests the Python code and the web app |
+| `just check` | Runs every check a push needs, and marks the commit it passed on |
 | `just format`, `just lint`, `just test`, `just coverage` | Run one part of the Python checks |
+| `just test-all`, `just test-scenarios` | Run every test, or the pipeline scenarios alone |
 | `just test-pipeline` | Builds a tiny library with every real program, on the processor |
 | `just explore-pipeline` | Runs the pipeline in random orders for a few minutes, checking every run |
 | `just frontend-install`, `just frontend-check` | Install the web app's packages, and check it |

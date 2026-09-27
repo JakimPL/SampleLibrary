@@ -5,6 +5,8 @@ set default-list := true
 set shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
 
 MEMORY_CAP := "16G"
+TEST_WORKERS := "8"
+QUICK_TESTS := "not pipeline_real and not pipeline_explore and not pipeline_scenario"
 DEV_CONFIG := "dev-library/config.toml"
 DEV_PORT := "8001"
 SCHEMAS := "build/schemas"
@@ -32,9 +34,18 @@ lint:
     uv run pylint src scripts
     uv run lint-imports
 
+# The tests but the pipeline scenarios, which `test-all` and `test-scenarios` run.
 [group("quality")]
 test:
-    uv run pytest -n auto
+    uv run pytest -n auto --maxprocesses {{ TEST_WORKERS }} -m "{{ QUICK_TESTS }}"
+
+[group("quality")]
+test-all:
+    uv run pytest -n auto --maxprocesses {{ TEST_WORKERS }}
+
+[group("quality")]
+test-scenarios:
+    uv run pytest -n auto --maxprocesses {{ TEST_WORKERS }} -m pipeline_scenario tests/samplelibrary/pipeline/scenarios
 
 [group("quality")]
 test-pipeline:
@@ -48,8 +59,18 @@ explore-pipeline:
 coverage:
     uv run pytest --cov --cov-report=term-missing
 
+# Every check a push needs, marking the commit they passed on; the pre-push hook lets that commit through.
 [group("quality")]
-check: format lint test frontend-check
+check: _check-start _hooks lint test-all frontend-check
+    uv run --no-project python scripts/checked_commits.py record
+
+[private]
+_check-start:
+    uv run --no-project python scripts/checked_commits.py start
+
+[private]
+_hooks:
+    uv run pre-commit run --all-files
 
 [group("library")]
 app:

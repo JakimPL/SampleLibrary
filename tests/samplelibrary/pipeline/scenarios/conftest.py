@@ -6,9 +6,17 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Connection
 
+from tests.paths import PIPELINE_SCENARIOS_DIRECTORY
 from tests.samplelibrary.pipeline.scenarios.harness.runner import ScenarioRunner
 from tests.samplelibrary.pipeline.scenarios.harness.slots import claim_scenario_slot
 from tests.samplelibrary.pipeline.scenarios.harness.world import World, WorldSetup
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Mark every scenario, which `just test` leaves to `just test-all` for the minutes they take together."""
+    for item in items:
+        if PIPELINE_SCENARIOS_DIRECTORY in item.path.parents:
+            item.add_marker(pytest.mark.pipeline_scenario)
 
 
 @pytest.fixture(name="scenario_slot")

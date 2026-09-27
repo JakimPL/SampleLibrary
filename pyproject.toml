@@ -126,8 +126,9 @@ known_first_party = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--import-mode=importlib -m 'not pipeline_real and not pipeline_explore'"
+addopts = "--import-mode=importlib --dist worksteal -m 'not pipeline_real and not pipeline_explore'"
 markers = [
+    "pipeline_scenario: acts out a story on a small library with the pipeline's own programs; `just test-all` runs them",
     "pipeline_real: runs the pipeline's real programs, listening model and training included; `just test-pipeline` runs them",
     "pipeline_explore: acts on a library in orders Hypothesis draws, for minutes; `just explore-pipeline` runs it",
 ]
