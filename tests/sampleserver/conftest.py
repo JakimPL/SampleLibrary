@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from contextlib import nullcontext
 from pathlib import Path
@@ -10,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 
-from samplecore.config import Exposure, ServerConfig
+from samplecore.config import Exposure, ServerConfig, VisitorLimits
 from samplecore.models.service_role import ServiceRole
 from sampleserver.app import API_PREFIX, create_app
 from sampleserver.dependencies import get_connection, get_connection_opener, get_curation_connection
@@ -22,7 +23,21 @@ LOCAL_CLIENT: Final[tuple[str, int]] = ("127.0.0.1", 50000)
 LOCAL_ORIGIN: Final[str] = "http://localhost"
 LOCAL_BASE_URL: Final[str] = f"{LOCAL_ORIGIN}{API_PREFIX}"
 LOCAL_SERVER: Final[ServerConfig] = ServerConfig(exposure=Exposure.LOCAL)
-PUBLIC_SERVER: Final[ServerConfig] = ServerConfig(exposure=Exposure.PUBLIC)
+# Limits wide enough for a test to ask what it needs, with a morph budget a test can spend.
+SITE_VISITORS: Final[VisitorLimits] = VisitorLimits(
+    address_header="X-Real-IP",
+    burst=1000,
+    refill_per_second=100.0,
+    whole_catalog_weight=5,
+    morphs_per_minute=3,
+    morphs_per_minute_overall=100,
+    concurrent_morphs=1,
+)
+PUBLIC_SERVER: Final[ServerConfig] = ServerConfig(exposure=Exposure.PUBLIC, visitors=SITE_VISITORS)
+# The same limits as a config file writes them, for a test writing a site's config.
+SITE_VISITORS_TABLE: Final[str] = "[server.visitors]\n" + "".join(
+    f"{name} = {json.dumps(value)}\n" for name, value in SITE_VISITORS.model_dump().items()
+)
 # The folders beside the library the tests catalog sample files in, which the served app reads.
 SAMPLE_DIRECTORY_NAMES: Final[tuple[str, ...]] = ("packs", "vanished pack")
 

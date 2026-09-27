@@ -17,6 +17,7 @@ from samplelibrary.app.asgi import create_application
 from samplelibrary.app.installation import Installation, this_installation
 from samplelibrary.app.launcher import PUBLIC_LIBRARY_REFUSED, Launcher, LibraryStatus
 from samplelibrary.pipeline.settings import DescriptorSource, read_pipeline_settings
+from tests.sampleserver.conftest import SITE_VISITORS_TABLE
 
 LOCAL_CLIENT: Final[tuple[str, int]] = ("127.0.0.1", 50000)
 LOCAL_BASE_URL: Final[str] = "http://localhost"
@@ -170,7 +171,8 @@ def test_a_library_served_to_anyone_stays_closed_in_the_application(tmp_path: Pa
     """The application edits labels and writes its config, which a library served to anyone offers no one."""
     path = tmp_path / "config.toml"
     path.write_text(
-        f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\n[server]\nexposure = "public"\n',
+        f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\n[server]\nexposure = "public"\n'
+        f"{SITE_VISITORS_TABLE}",
         encoding="utf-8",
     )
     for client in _client(path, device_command=REPORTED_DEVICE):

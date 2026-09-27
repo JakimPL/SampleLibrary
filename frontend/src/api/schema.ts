@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    readonly "/api/health": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get Health
+         * @description Whether the catalog answers, at the cost of one trivial query, for a platform checking the server's health.
+         */
+        readonly get: operations["get_health_api_health_get"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api/modules": {
         readonly parameters: {
             readonly query?: never;
@@ -459,8 +479,14 @@ export interface paths {
          *     caching headers pass through untouched, and so does a caller's conditional request, so a
          *     browser that holds the render is answered with a 304 by the process that made it.
          *
+         *     Where the policy limits visitors, a new render spends one morph of the visitor's budget and of
+         *     everyone's before the renderer is asked, and a request naming the render it holds spends one
+         *     only once the renderer answers with new audio; at most the configured number reach the renderer
+         *     at once (`sampleserver.visitors.MorphGate`).
+         *
          *     Raises:
-         *         HTTPException: 503 when no inference process answers, and 504 when it takes longer than a
+         *         HTTPException: 429 once a morph budget is spent, 503 while the renderer is busy with as many
+         *             as it may be asked for, or when no inference process answers, and 504 when it takes longer than a
          *             render is waited for; the process's own 404 for a sample it has no object for, and 422
          *             for a point it will not render, are relayed with their detail; any other answer it
          *             gives reads as 502. Each names the process's address and its own words only where
@@ -671,6 +697,14 @@ export interface components {
         readonly HTTPValidationError: {
             /** Detail */
             readonly detail?: readonly components["schemas"]["ValidationError"][];
+        };
+        /**
+         * Health
+         * @description What a health check reads: that the server answers and its catalog does too.
+         */
+        readonly Health: {
+            /** Catalog Answers */
+            readonly catalog_answers: boolean;
         };
         /**
          * ITSampleProperties
@@ -1428,6 +1462,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    readonly get_health_api_health_get: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Successful Response */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
     readonly list_modules_api_modules_get: {
         readonly parameters: {
             readonly query?: {

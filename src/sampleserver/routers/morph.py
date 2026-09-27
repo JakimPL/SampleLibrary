@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated, Final
@@ -21,6 +22,7 @@ from sampleserver.dependencies import (
     get_connection_opener,
     get_inference_client,
     get_library_root,
+    get_morph_gate,
     get_policy,
     get_sample_directories,
 )
@@ -29,6 +31,7 @@ from sampleserver.messages import MORPH_REFUSED, MORPH_TIMED_OUT, MORPH_UNAVAILA
 from sampleserver.parameters import WAV_CONTENT, WAV_MEDIA_TYPE, ErrorDetail
 from sampleserver.policy import ServingPolicy
 from sampleserver.sample_files import files_inside, unreadable_audio
+from sampleserver.visitors import MorphGate
 
 router = APIRouter(prefix="/morph", tags=["morph"])
 
@@ -112,6 +115,7 @@ async def get_morph_audio(
     point: HeardMorphPoint = Depends(get_heard_point),
     client: httpx.AsyncClient = Depends(get_inference_client),
     policy: ServingPolicy = Depends(get_policy),
+    gate: MorphGate | None = Depends(get_morph_gate),
 ) -> Response:
     """The audio at one point between two samples, rendered by the inference process and relayed as it came.
 
@@ -120,18 +124,28 @@ async def get_morph_audio(
     caching headers pass through untouched, and so does a caller's conditional request, so a
     browser that holds the render is answered with a 304 by the process that made it.
 
+    Where the policy limits visitors, a new render spends one morph of the visitor's budget and of
+    everyone's before the renderer is asked, and a request naming the render it holds spends one
+    only once the renderer answers with new audio; at most the configured number reach the renderer
+    at once (`sampleserver.visitors.MorphGate`).
+
     Raises:
-        HTTPException: 503 when no inference process answers, and 504 when it takes longer than a
+        HTTPException: 429 once a morph budget is spent, 503 while the renderer is busy with as many
+            as it may be asked for, or when no inference process answers, and 504 when it takes longer than a
             render is waited for; the process's own 404 for a sample it has no object for, and 422
             for a point it will not render, are relayed with their detail; any other answer it
             gives reads as 502. Each names the process's address and its own words only where
             the policy names internals.
     """
     headers = {CONDITIONAL_HEADER: request.headers[CONDITIONAL_HEADER]} if CONDITIONAL_HEADER in request.headers else {}
+    visitor = gate.visitor(request) if gate is not None else None
+    if gate is not None and visitor is not None and not headers:
+        gate.admit(visitor)
     try:
-        upstream = await client.get(
-            AUDIO_PATH, params=point.model_dump(mode="json", exclude_none=True), headers=headers
-        )
+        with gate.slot() if gate is not None else nullcontext():
+            upstream = await client.get(
+                AUDIO_PATH, params=point.model_dump(mode="json", exclude_none=True), headers=headers
+            )
     except httpx.TimeoutException as error:
         detail = timed_out_detail(str(client.base_url))
         _logger.warning("%s", detail)
@@ -159,6 +173,8 @@ async def get_morph_audio(
         _logger.warning("%s", detail)
         raise HTTPException(status_code=HTTPStatus.BAD_GATEWAY, detail=policy.refusal(detail, plain=MORPH_REFUSED))
 
+    if gate is not None and visitor is not None and headers:
+        gate.charge(visitor)
     return Response(content=upstream.content, media_type=WAV_MEDIA_TYPE, headers=relayed)
 
 

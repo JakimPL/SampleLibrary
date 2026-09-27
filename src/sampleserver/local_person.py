@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from ipaddress import ip_address
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -8,6 +7,8 @@ from fastapi import HTTPException, Request, status
 from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
+
+from sampleserver.addresses import is_loopback
 
 LOCAL_HOST_NAMES: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"})
 FORWARDING_HEADERS: Final[tuple[str, ...]] = (
@@ -33,7 +34,7 @@ def is_local_person(connection: HTTPConnection) -> bool:
     origin = connection.headers.get("origin")
     return (
         client is not None
-        and _is_loopback(client.host)
+        and is_loopback(client.host)
         and connection.url.hostname in LOCAL_HOST_NAMES
         and (origin is None or urlsplit(origin).hostname in LOCAL_HOST_NAMES)
         and not any(header in connection.headers for header in FORWARDING_HEADERS)
@@ -69,10 +70,3 @@ class LocalPersonOnly:
             await send({"type": "websocket.close", "code": POLICY_VIOLATION_CLOSE_CODE})
             return
         await self._app(scope, receive, send)
-
-
-def _is_loopback(host: str) -> bool:
-    try:
-        return ip_address(host).is_loopback
-    except ValueError:
-        return False

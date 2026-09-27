@@ -249,3 +249,50 @@ describe("holding and taking up a preview", () => {
         expect(result.current.source?.key).toBe("stopped");
     });
 });
+
+describe("playAnswered", () => {
+    it("reports a render the server declines in the server's own words, playing nothing", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue(
+                new Response(JSON.stringify({ detail: "Too many morphs in a short time. Try again in a minute." }), {
+                    status: 429,
+                    headers: { "Content-Type": "application/json" },
+                }),
+            ),
+        );
+        const { result } = renderHook(() => useAudioPreview());
+        const source = { key: "/api/morph/audio?first=a&second=b&weight=0.5", url: "/morph", playbackRateHz: null };
+
+        let played = true;
+        await act(async () => {
+            played = await result.current.playAnswered(source);
+        });
+
+        expect(played).toBe(false);
+        expect(result.current.playingKey).toBeNull();
+        expect(result.current.failure).toEqual({
+            key: source.key,
+            message: "Too many morphs in a short time. Try again in a minute.",
+        });
+        vi.unstubAllGlobals();
+    });
+
+    it("plays what the server answered with under the source's own key", async () => {
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new Blob(["RIFF"]), { status: 200 })));
+        vi.stubGlobal(
+            "URL",
+            Object.assign(URL, { createObjectURL: vi.fn(() => "blob:answered"), revokeObjectURL: vi.fn() }),
+        );
+        const { result } = renderHook(() => useAudioPreview());
+        const source = { key: "/api/morph/audio?first=a&second=b&weight=0.75", url: "/morph", playbackRateHz: null };
+
+        await act(async () => {
+            await result.current.playAnswered(source);
+        });
+
+        expect(result.current.playingKey).toBe(source.key);
+        expect(result.current.source?.url).toBe("blob:answered");
+        vi.unstubAllGlobals();
+    });
+});

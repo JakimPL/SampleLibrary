@@ -110,6 +110,9 @@ ROUTE_CASES = (
         "samplelibrary morph",
     ),
     RouteCase(["serve", "--reload"], "sampleserver.cli.main", ["--reload"], "samplelibrary serve"),
+    RouteCase(
+        ["site", "--host", "0.0.0.0"], "samplelibrary.site.cli.main", ["--host", "0.0.0.0"], "samplelibrary site"
+    ),
     RouteCase(["schema"], "sampleserver.openapi_export.main", [], "samplelibrary schema"),
     RouteCase(["tracking", "uri"], "samplelibrary.tracking.uri.main", [], "samplelibrary tracking uri"),
     RouteCase(

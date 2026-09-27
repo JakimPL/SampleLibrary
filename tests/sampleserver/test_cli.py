@@ -18,6 +18,7 @@ from sampleserver.frontend import (
     INDEX_DOCUMENT,
     frontend_directory_from_environment,
 )
+from tests.sampleserver.conftest import SITE_VISITORS_TABLE
 
 PROGRAM = "samplelibrary serve"
 PUBLIC_HOST = "0.0.0.0"
@@ -47,7 +48,8 @@ def _write_config(
         f'library_root = "{(tmp_path / "library").as_posix()}"\n'
         f'database_url = "{database_url}"\n'
         f"{reader}"
-        f'[server]\nexposure = "{exposure.value}"\n',
+        f'[server]\nexposure = "{exposure.value}"\n'
+        f"{SITE_VISITORS_TABLE if exposure is Exposure.PUBLIC else ''}",
         encoding="utf-8",
     )
     return config_path
@@ -59,7 +61,7 @@ def _recording(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, exposure: Exp
         str(_write_config(tmp_path, database_url="postgresql+psycopg://unused@localhost/unused", exposure=exposure)),
     )
     monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
-    monkeypatch.setattr(cli, "_admit_reader", lambda config: None)
+    monkeypatch.setattr(cli, "admit_reader", lambda config: None)
     run = RecordedRun()
     monkeypatch.setattr(cli.uvicorn, "run", lambda application_path, **options: run.calls.append(options))
     return run

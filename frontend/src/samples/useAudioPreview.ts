@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 
+import { refusalDetail } from "../api/client";
 import { sampleAudioUrl } from "../api/samples";
 import { soundedRate } from "./nominalRate";
 
@@ -39,6 +40,8 @@ let audioElement: HTMLAudioElement | null = null;
 let state: PreviewState = { playingKey: null, paused: false, failure: null, source: null };
 let progress: PreviewProgress = AT_THE_START;
 let playSequence = 0;
+/** The object URL of the answer `playAnswered` last played, released as the next one takes its place. */
+let answeredUrl: string | null = null;
 const listeners = new Set<() => void>();
 const progressListeners = new Set<() => void>();
 
@@ -121,6 +124,41 @@ function play(source: PreviewSource): void {
     });
 }
 
+/**
+ * Plays a source only once its server has answered with audio, so a refusal is reported in the
+ * server's own words, which a media element never exposes. The audio plays from the answer the
+ * browser already holds, and a play started meanwhile wins. Resolves to whether the server
+ * answered with audio.
+ */
+async function playAnswered(source: PreviewSource): Promise<boolean> {
+    playSequence += 1;
+    const sequence = playSequence;
+    const response = await fetch(source.url);
+    if (!response.ok) {
+        const detail = await refusalDetail(response);
+        if (sequence === playSequence) {
+            publish({
+                playingKey: null,
+                paused: false,
+                failure: { key: source.key, message: detail ?? UNPLAYABLE_MESSAGE },
+                source,
+            });
+        }
+        return false;
+    }
+    const answered = URL.createObjectURL(await response.blob());
+    if (sequence !== playSequence) {
+        URL.revokeObjectURL(answered);
+        return true;
+    }
+    if (answeredUrl !== null) {
+        URL.revokeObjectURL(answeredUrl);
+    }
+    answeredUrl = answered;
+    play({ ...source, url: answered });
+    return true;
+}
+
 function pause(): void {
     if (state.playingKey === null || audioElement === null) {
         return;
@@ -193,6 +231,8 @@ export interface AudioPreview {
     readonly failure: PreviewFailure | null;
     readonly source: PreviewSource | null;
     readonly play: (source: PreviewSource) => void;
+    /** Plays a source once its server answers with audio, reporting a refusal in the server's words; resolves to whether it played. */
+    readonly playAnswered: (source: PreviewSource) => Promise<boolean>;
     /** Holds the sound where it is; `resume` takes it up again from there. */
     readonly pause: () => void;
     readonly resume: () => void;
@@ -222,6 +262,7 @@ export function useAudioPreview(): AudioPreview {
         failure: current.failure,
         source: current.source,
         play: playSource,
+        playAnswered,
         pause,
         resume,
         stop,

@@ -94,6 +94,13 @@ on this computer alone, seeing everything the library holds, folders and your la
 yours and none of your labels, ratings or favorites. `samplelibrary serve` listens on 127.0.0.1
 unless this says otherwise, and refuses `"public"`; the SampleLibrary app refuses it too.
 
+A site names how much each visitor may ask in `[server.visitors]`: `address_header`, the header its
+hosting platform names a visitor's address in (`"X-Real-IP"` on Railway); `burst` and
+`refill_per_second`, the requests a visitor may send at once and the pace after that;
+`whole_catalog_weight`, what one answer over the whole catalog counts as; `morphs_per_minute` and
+`morphs_per_minute_overall`, the morphs one visitor and every visitor together may ask for; and
+`concurrent_morphs`, how many the renderer is asked for at once.
+
 The `[pipeline]` table holds what `just rebuild` builds the library with, every key optional:
 
 - `memory_cap`: the memory ceiling every step runs under, such as `"16G"`; `"none"` by default.

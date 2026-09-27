@@ -17,6 +17,7 @@ from sampleserver.messages import NOT_FOUND
 from sampleserver.policy import ServingPolicy
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.spectral_cache import SpectralVectorCache
+from sampleserver.visitors import MorphGate
 
 
 def get_library_root(request: Request) -> Path:
@@ -28,6 +29,12 @@ def get_policy(request: Request) -> ServingPolicy:
     """What this server shows and to whom, as its configured exposure decides."""
     policy: ServingPolicy = request.app.state.policy
     return policy
+
+
+def get_morph_gate(request: Request) -> MorphGate | None:
+    """What a morph asks of the renderer where the policy limits visitors, and nothing where it limits no one."""
+    gate: MorphGate | None = request.app.state.morph_gate
+    return gate
 
 
 def get_sample_directories(request: Request) -> tuple[Path, ...]:

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import socket
 from dataclasses import dataclass
-from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_address
+from ipaddress import IPv4Network, IPv6Network
 from typing import Final
 
-from samplecore.config import Exposure, ServerConfig
+from samplecore.config import Exposure, ServerConfig, VisitorLimits
+from sampleserver.addresses import is_loopback, parsed_address
 
 LOCAL_HOST_NAMES: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"})
 LOOPBACK_BIND_HOST: Final[str] = "127.0.0.1"
@@ -34,10 +35,11 @@ class ServingPolicy:
     """
 
     _exposure: Exposure
+    _visitors: VisitorLimits | None
 
     @classmethod
     def of(cls, server: ServerConfig) -> ServingPolicy:
-        return cls(_exposure=server.exposure)
+        return cls(_exposure=server.exposure, _visitors=server.visitors)
 
     @property
     def is_public(self) -> bool:
@@ -104,13 +106,18 @@ class ServingPolicy:
         """Whether the server listens on every address rather than the loopback address alone."""
         return self._exposure is not Exposure.LOCAL
 
+    @property
+    def visitor_limits(self) -> VisitorLimits | None:
+        """How much each visitor may ask, where anyone may visit; a library at home limits no one."""
+        return self._visitors if self.is_public else None
+
     def refusal(self, internal: str, *, plain: str) -> str:
         """What a refusal says: its ``internal`` detail where the policy names internals, the ``plain`` words otherwise."""
         return internal if self.names_internals else plain
 
     def binds(self, host: str) -> bool:
         """Whether a server may listen on ``host``: any address once it listens beyond this computer, loopback otherwise."""
-        return self.listens_beyond_this_computer or host in LOCAL_HOST_NAMES or _is_loopback(host)
+        return self.listens_beyond_this_computer or host in LOCAL_HOST_NAMES or is_loopback(host)
 
     def admits(self, peer: str | None, host: str | None) -> bool:
         """Whether a request from ``peer``, naming the server as ``host``, is one this exposure answers.
@@ -125,7 +132,7 @@ class ServingPolicy:
             return True
         if peer is None or host is None:
             return False
-        address = _address(peer)
+        address = parsed_address(peer)
         if address is None:
             return False
         if address.is_loopback and host.lower() in LOCAL_HOST_NAMES:
@@ -137,23 +144,7 @@ class ServingPolicy:
 
 def _names_this_computer(host: str) -> bool:
     """Whether ``host`` names this computer as a device on the home network reaches it: by an address, or by its name."""
-    if _address(host) is not None:
+    if parsed_address(host) is not None:
         return True
     name = socket.gethostname().lower()
     return host.lower() in {name, f"{name}{LOCAL_NETWORK_SUFFIX}"}
-
-
-def _address(value: str) -> IPv4Address | IPv6Address | None:
-    """The address a peer or a host names, an IPv4 address carried in IPv6 unwrapped to itself."""
-    try:
-        address = ip_address(value)
-    except ValueError:
-        return None
-    if isinstance(address, IPv6Address) and address.ipv4_mapped is not None:
-        return address.ipv4_mapped
-    return address
-
-
-def _is_loopback(host: str) -> bool:
-    address = _address(host)
-    return address is not None and address.is_loopback

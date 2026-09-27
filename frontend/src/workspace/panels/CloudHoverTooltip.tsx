@@ -7,7 +7,11 @@ import { useModule } from "../../modules/useModule";
 import { SampleGlance } from "../../samples/SampleGlance";
 import { useSamplePreview } from "../../samples/useSamplePreview";
 import { classNames } from "../../shared/classNames";
+import { useSettled } from "../../shared/useSettled";
 import type { EntityRef } from "../selectionStore";
+
+/** How long the cursor rests on a point before the popup asks the server about it. */
+const HOVER_DWELL_MS = 120;
 
 interface CloudHoverTooltipProps {
     readonly entity: EntityRef;
@@ -93,8 +97,14 @@ function ModuleHoverTooltip({ hash, x, y }: EntityTooltipProps): ReactElement | 
  * name, a short git-style abbreviated hash as a stable identity even for an unnamed sample, and
  * for a sample its compact waveform. Positioned at the point's own screen coordinates, which
  * `CloudView` reports through its `onHover` callback, on the side of the point that keeps it in view.
+ * It asks for the entity once the cursor rests on its point for `HOVER_DWELL_MS`, so a sweep across
+ * the cloud asks about the point it stops at alone.
  */
 export function CloudHoverTooltip({ entity, x, y }: CloudHoverTooltipProps): ReactElement | null {
+    const settled = useSettled(`${entity.kind}:${entity.hash}`, HOVER_DWELL_MS);
+    if (!settled) {
+        return null;
+    }
     return entity.kind === "sample" ? (
         <SampleHoverTooltip hash={entity.hash} x={x} y={y} />
     ) : (

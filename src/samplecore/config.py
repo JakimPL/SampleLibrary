@@ -7,7 +7,16 @@ from pathlib import Path
 from typing import Final
 from urllib.parse import SplitResult, urlsplit
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveFloat,
+    PositiveInt,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import ErrorDetails
 
 from samplecore.models.service_role import ServiceRole
@@ -20,6 +29,10 @@ CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
 DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_DATABASE_URL"
 SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_SERVER_DATABASE_URL"
 CURATION_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CURATION_DATABASE_URL"
+# The connection a publication is written through, and the reader's password it sets there; both are
+# read from the environment alone, since they unlock a server of their own.
+PUBLISH_DATABASE_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_PUBLISH_DATABASE_URL"
+PUBLISH_READER_PASSWORD_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_PUBLISH_READER_PASSWORD"
 # Each setting naming a database URL, beside the environment variable that overrides it.
 DATABASE_URL_SETTINGS: Final[dict[str, str]] = {
     "database_url": DATABASE_URL_ENVIRONMENT_VARIABLE,
@@ -130,17 +143,51 @@ class Exposure(StrEnum):
 DEFAULT_EXPOSURE: Final[Exposure] = Exposure.LOCAL
 
 
+class VisitorLimits(BaseModel):
+    """How much one visitor, and every visitor together, may ask of a library served to anyone, as ``[server.visitors]`` sets it.
+
+    A visitor is the address the platform in front of the site names in ``address_header``, which
+    a platform's edge sets itself (Railway's is ``X-Real-IP``). Each visitor may send ``burst``
+    requests at once and ``refill_per_second`` more each second after, a whole-catalog answer
+    counting ``whole_catalog_weight`` requests. Morphs, which the renderer computes, have budgets of
+    their own: ``morphs_per_minute`` for one visitor, ``morphs_per_minute_overall`` for everyone,
+    and at most ``concurrent_morphs`` asked of the renderer at once.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    address_header: str = Field(min_length=1)
+    burst: PositiveInt
+    refill_per_second: PositiveFloat
+    whole_catalog_weight: PositiveInt
+    morphs_per_minute: PositiveInt
+    morphs_per_minute_overall: PositiveInt
+    concurrent_morphs: PositiveInt
+
+
 class ServerConfig(BaseModel):
     """How a served library meets the people it is served to, as the ``[server]`` table sets it.
 
     ``exposure`` is the one setting every serving behavior follows (see `sampleserver.policy`).
     Left out, a library is served to the person at this computer alone, which listens on the
-    loopback address and so exposes nothing a forgotten setting did not mean to.
+    loopback address and so exposes nothing a forgotten setting did not mean to. A library served to
+    anyone names its ``visitors`` limits, which no other exposure takes.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     exposure: Exposure = DEFAULT_EXPOSURE
+    visitors: VisitorLimits | None = None
+
+    @model_validator(mode="after")
+    def _limits_visitors_where_anyone_visits(self) -> ServerConfig:
+        if self.exposure is Exposure.PUBLIC and self.visitors is None:
+            raise ValueError("a library served to anyone names its visitor limits under [server.visitors]")
+        if self.exposure is not Exposure.PUBLIC and self.visitors is not None:
+            raise ValueError(
+                '[server.visitors] limits a library served to anyone; set exposure = "public" or remove it'
+            )
+        return self
 
 
 DEFAULT_SERVER_CONFIG: Final[ServerConfig] = ServerConfig()

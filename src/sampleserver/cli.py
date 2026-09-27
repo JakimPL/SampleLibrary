@@ -29,6 +29,7 @@ APPLICATION_PATH: Final[str] = "sampleserver.main:app"
 DEFAULT_HOST: Final[str] = "127.0.0.1"
 DEFAULT_PORT: Final[int] = 8000
 WORKER_COUNT_ENVIRONMENT_VARIABLE: Final[str] = "WEB_CONCURRENCY"
+NO_WEBSOCKETS: Final[str] = "none"
 
 _logger = logging.getLogger(__name__)
 
@@ -50,15 +51,27 @@ def main(argv: list[str], *, prog: str) -> None:
         os.environ[FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE] = str(arguments.frontend)
     config = bootstrap_cli()
     _admit_exposure(ServingPolicy.of(config.server), host=arguments.host)
-    _admit_reader(config)
+    admit_reader(config)
+    run_server(host=arguments.host, port=arguments.port, reload=arguments.reload, workers=arguments.workers)
 
+
+def run_server(*, host: str, port: int, reload: bool, workers: int | None) -> None:
+    """Serve the app `sampleserver.main` builds from the configuration, until the server is stopped.
+
+    uvicorn names itself in no header, reads no forwarding header (a site reads the address its
+    platform names itself, `sampleserver.visitors`), and speaks no WebSocket, which no route offers.
+    ``workers`` left out leaves the count to ``$WEB_CONCURRENCY``, which uvicorn reads.
+    """
     uvicorn.run(
         APPLICATION_PATH,
-        host=arguments.host,
-        port=arguments.port,
-        reload=arguments.reload,
-        reload_dirs=[str(PACKAGES_DIRECTORY)] if arguments.reload else None,
-        workers=arguments.workers,
+        host=host,
+        port=port,
+        reload=reload,
+        reload_dirs=[str(PACKAGES_DIRECTORY)] if reload else None,
+        workers=workers,
+        server_header=False,
+        proxy_headers=False,
+        ws=NO_WEBSOCKETS,
     )
 
 
@@ -77,7 +90,7 @@ def _admit_exposure(policy: ServingPolicy, *, host: str) -> None:
         sys.exit(ExitStatus.REFUSED)
 
 
-def _admit_reader(config: LibraryConfig) -> None:
+def admit_reader(config: LibraryConfig) -> None:
     """Insist that the role the served API connects as reads the catalog and may change nothing.
 
     Raises:
@@ -130,14 +143,14 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         )
     except ValueError as error:
         parser.error(f"--frontend names no built frontend: {error}")
-    if arguments.workers is None and not _names_a_process_count(os.environ.get(WORKER_COUNT_ENVIRONMENT_VARIABLE)):
+    if arguments.workers is None and not names_a_process_count(os.environ.get(WORKER_COUNT_ENVIRONMENT_VARIABLE)):
         parser.error(
             f"${WORKER_COUNT_ENVIRONMENT_VARIABLE} names no process count; set it to a whole number of at least 1"
         )
     return arguments
 
 
-def _names_a_process_count(raw_value: str | None) -> bool:
+def names_a_process_count(raw_value: str | None) -> bool:
     """Whether the variable uvicorn reads a process count from is unset, or holds a count it can start."""
     if raw_value is None:
         return True

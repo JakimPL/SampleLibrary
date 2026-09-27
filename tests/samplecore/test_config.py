@@ -36,6 +36,7 @@ from samplecore.storage.cluster.embedded.state import (
     claim_service_roles,
     create_cluster_state,
 )
+from tests.sampleserver.conftest import SITE_VISITORS_TABLE
 
 URL_SETTING_PREFIXES: Final[tuple[str, ...]] = ("database_url", "server_database_url", "curation_database_url")
 
@@ -505,11 +506,30 @@ def test_a_service_url_in_the_environment_takes_the_configs_place(
     assert config.server_database_url == "postgresql+psycopg://reader:other@db.local/library"
 
 
-@pytest.mark.parametrize("exposure", list(Exposure))
+@pytest.mark.parametrize("exposure", [Exposure.LOCAL, Exposure.NETWORK])
 def test_the_server_table_names_who_the_library_is_served_to(tmp_path: Path, exposure: Exposure) -> None:
     config = _library_config(tmp_path, f'[server]\nexposure = "{exposure.value}"\n')
 
     assert config.server.exposure is exposure
+
+
+def test_a_library_served_to_anyone_limits_its_visitors(tmp_path: Path) -> None:
+    config = _library_config(tmp_path, f'[server]\nexposure = "public"\n{SITE_VISITORS_TABLE}')
+
+    assert config.server.exposure is Exposure.PUBLIC
+    assert config.server.visitors is not None
+    assert config.server.visitors.address_header == "X-Real-IP"
+
+
+def test_a_library_served_to_anyone_without_visitor_limits_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(InvalidSettingsError, match="visitor limits"):
+        _library_config(tmp_path, '[server]\nexposure = "public"\n')
+
+
+def test_visitor_limits_on_a_library_at_home_are_refused(tmp_path: Path) -> None:
+    """Limits beside a local exposure say someone meant a site, which the config does not serve."""
+    with pytest.raises(InvalidSettingsError, match="limits a library served to anyone"):
+        _library_config(tmp_path, f'[server]\nexposure = "local"\n{SITE_VISITORS_TABLE}')
 
 
 def test_a_library_left_without_a_server_table_is_served_on_this_computer_alone(tmp_path: Path) -> None:

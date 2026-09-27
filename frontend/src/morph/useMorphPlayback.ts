@@ -15,11 +15,12 @@ export interface MorphPlayback {
 /**
  * The one way a point of the morph is heard: the strip's slider and play button and the marker on
  * the cloud all come through here, so a weight let go anywhere plays once through the shared
- * preview element and is drawn wherever the render is shown.
+ * preview element and is drawn wherever the render is shown. A render the server declines, as a
+ * site does past a visitor's budget, is reported in the server's own words.
  */
 export function useMorphPlayback(): MorphPlayback {
     const status = useMorphStatus();
-    const { play } = useAudioPreview();
+    const { playAnswered } = useAudioPreview();
     const markRendered = useMorphStore((state) => state.markRendered);
 
     function hearCurrentPoint(): void {
@@ -27,8 +28,13 @@ export function useMorphPlayback(): MorphPlayback {
         if (first === null || second === null || !status.available) {
             return;
         }
-        markRendered();
-        play(morphPreview(first, second, weight));
+        // The waveform reads the render once it is marked, by then from the answer the browser
+        // holds, so the server makes one render of each point heard.
+        void playAnswered(morphPreview(first, second, weight))
+            .catch(() => false)
+            .then(() => {
+                markRendered();
+            });
     }
 
     return { status, hearCurrentPoint };

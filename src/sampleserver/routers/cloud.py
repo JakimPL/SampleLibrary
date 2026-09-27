@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Hashable
 from datetime import datetime
+from http import HTTPStatus
 from typing import Final
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -30,6 +31,7 @@ from samplecore.storage.repositories.sample_annotation import (
 )
 from samplecore.storage.repositories.sample_category import PostgresSampleCategoryRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
+from sampleserver.caching import REVALIDATED_CACHE_CONTROL, entity_tag
 from sampleserver.dependencies import (
     READ_CONNECTION,
     get_categories_cache,
@@ -48,6 +50,8 @@ router = APIRouter(prefix="/cloud", tags=["cloud"])
 COORDINATE_DECIMALS: Final[int] = 4
 JSON_MEDIA_TYPE: Final[str] = "application/json"
 GZIP_ENCODING: Final[str] = "gzip"
+IDENTITY_ENCODING: Final[str] = "identity"
+CONDITIONAL_HEADER: Final[str] = "if-none-match"
 
 CloudRevision = tuple[tuple[int, datetime | None], tuple[int, int], int, tuple[int, int]]
 
@@ -207,10 +211,17 @@ def _top_categories(
 def _cached_json(
     request: Request, cache: RevisionedJsonCache, revision: Hashable, build: Callable[[], bytes]
 ) -> Response:
-    """The cached answer in the encoding the caller takes, marked so the middleware and the caches downstream read it right."""
+    """The cached answer in the encoding the caller takes, marked so the middleware and the caches downstream read it right.
+
+    The answer carries a validator of its revision, and a browser holding the same one is answered
+    304 with no body, so a returning visitor downloads the whole catalog again only once it moved.
+    """
     accepts_gzip = GZIP_ENCODING in request.headers.get("accept-encoding", "")
+    tag = entity_tag(revision, encoding=GZIP_ENCODING if accepts_gzip else IDENTITY_ENCODING)
+    headers = {"Vary": "Accept-Encoding", "ETag": tag, "Cache-Control": REVALIDATED_CACHE_CONTROL}
+    if request.headers.get(CONDITIONAL_HEADER) == tag:
+        return Response(status_code=HTTPStatus.NOT_MODIFIED, headers=headers)
     body = cache.body(revision, build, gzipped=accepts_gzip)
-    headers = {"Vary": "Accept-Encoding"}
     if accepts_gzip:
         headers["Content-Encoding"] = GZIP_ENCODING
     return Response(content=body, media_type=JSON_MEDIA_TYPE, headers=headers)

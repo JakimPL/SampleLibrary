@@ -31,6 +31,7 @@ const {
     getModule,
     getMorphStatus,
     play,
+    playAnswered,
 } = vi.hoisted(() => {
     class FakeScatterplot {
         readonly draw = vi.fn().mockResolvedValue(undefined);
@@ -91,6 +92,7 @@ const {
         getModule: vi.fn(),
         getMorphStatus: vi.fn().mockResolvedValue({ available: true, service: null }),
         play: vi.fn(),
+        playAnswered: vi.fn().mockResolvedValue(true),
     };
 });
 
@@ -115,7 +117,7 @@ vi.mock("../../../src/api/samples", async () => {
 
 vi.mock("../../../src/samples/useAudioPreview", async () => {
     const actual = await vi.importActual<typeof AudioPreview>("../../../src/samples/useAudioPreview");
-    return { ...actual, useAudioPreview: () => ({ play, playingKey: null, failure: null }) };
+    return { ...actual, useAudioPreview: () => ({ play, playAnswered, playingKey: null, failure: null }) };
 });
 
 vi.mock("../../../src/api/morph", async () => {
@@ -393,6 +395,7 @@ describe("CloudPanel", () => {
 
         expect(useMorphStore.getState()).toMatchObject({ first: anchor, second: other });
         expect(play).not.toHaveBeenCalled();
+        expect(playAnswered).not.toHaveBeenCalled();
     });
 
     it("joins two samples dragged from one to the other with the right button", async () => {
@@ -437,12 +440,14 @@ describe("CloudPanel", () => {
         fireEvent.pointerDown(marker, { pointerId: 1, clientX: 10, clientY: 20 });
         fireEvent.pointerUp(marker, { pointerId: 1, clientX: 10, clientY: 20 });
 
-        expect(play).toHaveBeenCalledWith({
+        expect(playAnswered).toHaveBeenCalledWith({
             key: `/api/morph/audio?first=${first}&second=${second}&weight=0.5`,
             url: `/api/morph/audio?first=${first}&second=${second}&weight=0.5`,
             playbackRateHz: null,
         });
-        expect(useMorphStore.getState().renderedWeight).toBe(0.5);
+        await waitFor(() => {
+            expect(useMorphStore.getState().renderedWeight).toBe(0.5);
+        });
     });
 
     it("plays no morph on a marker release while no renderer answers", async () => {
@@ -466,7 +471,7 @@ describe("CloudPanel", () => {
         fireEvent.pointerDown(marker, { pointerId: 1, clientX: 10, clientY: 20 });
         fireEvent.pointerUp(marker, { pointerId: 1, clientX: 10, clientY: 20 });
 
-        expect(play).not.toHaveBeenCalled();
+        expect(playAnswered).not.toHaveBeenCalled();
     });
 
     it("carries the morph strip under the samples cloud alone", async () => {

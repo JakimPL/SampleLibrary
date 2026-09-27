@@ -77,7 +77,7 @@ export function MorphWaveform({
     renderedWeight,
     available,
 }: MorphWaveformProps): ReactElement {
-    const { play, failure } = useAudioPreview();
+    const { playAnswered, failure } = useAudioPreview();
     const progress = usePreviewProgress();
     const themeSignal = useThemeSignal();
     const compact = useLayoutMode().layout === "phone";
@@ -115,7 +115,7 @@ export function MorphWaveform({
 
     function replay(): void {
         if (renderedWeight !== null) {
-            play(morphPreview(first, second, renderedWeight));
+            void playAnswered(morphPreview(first, second, renderedWeight)).catch(() => false);
         }
     }
 

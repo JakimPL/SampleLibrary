@@ -27,7 +27,7 @@ from samplelibrary.app.instance.system import HttpContact, SystemClock, SystemPr
 from samplelibrary.app.instance.takeover import Claimed, Intent, Patience, Refused, Running, Takeover
 from samplelibrary.app.launcher import Launcher
 from samplelibrary.app.listener import LOOPBACK_HOST, port_choices
-from samplelibrary.app.processes import samplelibrary_command
+from samplelibrary.children import samplelibrary_command
 from sampleserver.frontend import built_frontend
 
 BROWSER_DELAY_SECONDS: Final[float] = 0.5

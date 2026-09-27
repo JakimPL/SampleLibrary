@@ -21,16 +21,25 @@ const MOVED_WEIGHT = 0.25;
 const MOVED_RENDER_URL = `/api/morph/audio?first=${FIRST}&second=${SECOND}&weight=${String(MOVED_WEIGHT)}`;
 const NAMES: Readonly<Record<string, string>> = { [FIRST]: "kick_808", [SECOND]: "" };
 
-const { getSample, getSamplePreview, getSampleRelations, getSimilarSamples, getSampleDistance, getMorphStatus, play } =
-    vi.hoisted(() => ({
-        getSample: vi.fn(),
-        getSamplePreview: vi.fn(),
-        getSampleRelations: vi.fn().mockResolvedValue([]),
-        getSimilarSamples: vi.fn().mockResolvedValue([]),
-        getSampleDistance: vi.fn().mockReturnValue(new Promise(() => undefined)),
-        getMorphStatus: vi.fn(),
-        play: vi.fn(),
-    }));
+const {
+    getSample,
+    getSamplePreview,
+    getSampleRelations,
+    getSimilarSamples,
+    getSampleDistance,
+    getMorphStatus,
+    play,
+    playAnswered,
+} = vi.hoisted(() => ({
+    getSample: vi.fn(),
+    getSamplePreview: vi.fn(),
+    getSampleRelations: vi.fn().mockResolvedValue([]),
+    getSimilarSamples: vi.fn().mockResolvedValue([]),
+    getSampleDistance: vi.fn().mockReturnValue(new Promise(() => undefined)),
+    getMorphStatus: vi.fn(),
+    play: vi.fn(),
+    playAnswered: vi.fn().mockResolvedValue(true),
+}));
 
 vi.mock("../../src/api/samples", async () => {
     const actual = await vi.importActual<typeof SamplesApi>("../../src/api/samples");
@@ -44,7 +53,7 @@ vi.mock("../../src/api/morph", async () => {
 
 vi.mock("../../src/samples/useAudioPreview", async () => {
     const actual = await vi.importActual<typeof AudioPreview>("../../src/samples/useAudioPreview");
-    return { ...actual, useAudioPreview: () => ({ play, playingKey: null, failure: null }) };
+    return { ...actual, useAudioPreview: () => ({ play, playAnswered, playingKey: null, failure: null }) };
 });
 
 vi.mock("../../src/samples/SampleTransport", () => ({
@@ -462,10 +471,16 @@ describe("MorphStrip opened out", () => {
         fireEvent.pointerUp(slider);
 
         expect(useMorphStore.getState().weight).toBe(moved ? MOVED_WEIGHT : DEFAULT_WEIGHT);
-        expect(play).toHaveBeenCalledTimes(plays ? 1 : 0);
+        expect(playAnswered).toHaveBeenCalledTimes(plays ? 1 : 0);
         if (plays) {
-            expect(play).toHaveBeenCalledWith({ key: MOVED_RENDER_URL, url: MOVED_RENDER_URL, playbackRateHz: null });
-            expect(useMorphStore.getState().renderedWeight).toBe(MOVED_WEIGHT);
+            expect(playAnswered).toHaveBeenCalledWith({
+                key: MOVED_RENDER_URL,
+                url: MOVED_RENDER_URL,
+                playbackRateHz: null,
+            });
+            await waitFor(() => {
+                expect(useMorphStore.getState().renderedWeight).toBe(MOVED_WEIGHT);
+            });
         }
     });
 
@@ -485,7 +500,7 @@ describe("MorphStrip opened out", () => {
         } else {
             expect(screen.getByText(hint)).toBeInTheDocument();
         }
-        expect(play).toHaveBeenCalledTimes(released && available ? 1 : 0);
+        expect(playAnswered).toHaveBeenCalledTimes(released && available ? 1 : 0);
         expect(askedForARender(fetching)).toBe(available);
     });
 
@@ -504,11 +519,18 @@ describe("MorphStrip opened out", () => {
     it("sounds the point already drawn again, at the weight it was drawn for", async () => {
         await showPairOpened(true);
         letTheSliderGo(MOVED_WEIGHT);
-        play.mockClear();
+        await waitFor(() => {
+            expect(screen.getByRole("button", { name: "Play the morph" })).toBeEnabled();
+        });
+        playAnswered.mockClear();
 
         fireEvent.click(screen.getByRole("button", { name: "Play the morph" }));
 
-        expect(play).toHaveBeenCalledWith({ key: MOVED_RENDER_URL, url: MOVED_RENDER_URL, playbackRateHz: null });
+        expect(playAnswered).toHaveBeenCalledWith({
+            key: MOVED_RENDER_URL,
+            url: MOVED_RENDER_URL,
+            playbackRateHz: null,
+        });
     });
 
     it("plays nothing when a key is let go with the weight where it was", async () => {
@@ -516,6 +538,6 @@ describe("MorphStrip opened out", () => {
 
         fireEvent.keyUp(screen.getByRole("slider", { name: "Point along the morph" }), { key: "Tab" });
 
-        expect(play).not.toHaveBeenCalled();
+        expect(playAnswered).not.toHaveBeenCalled();
     });
 });

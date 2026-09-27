@@ -12,6 +12,9 @@ MORPH_TIMED_OUT: Final[str] = "This morph took too long to make."
 MORPH_REFUSED: Final[str] = "This morph can't be made."
 CURATION_WITHHELD: Final[str] = "This library shows no ratings or favorites."
 NOT_FOUND: Final[str] = "Not Found"
+TOO_MANY_REQUESTS: Final[str] = "Too many requests in a short time. Try again in a moment."
+TOO_MANY_MORPHS: Final[str] = "Too many morphs in a short time. Try again in a minute."
+MORPHS_BUSY: Final[str] = "The morph renderer is busy. Try again in a moment."
 
 SERVE_REFUSES_PUBLIC: Final[str] = (
     "This config serves the library to anyone on the internet, which `samplelibrary site` does, with its "

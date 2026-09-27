@@ -27,7 +27,8 @@ from samplecore.storage.service_roles import ServiceRoleRefusedError, check_serv
 from samplelibrary.app.instance.lock import HeldLock, LockUnavailableError, try_lock
 from samplelibrary.app.instance.place import library_lock_path
 from samplelibrary.app.jobs import BuildTarget, JobRunner, JobView
-from samplelibrary.app.processes import ChildProcess, probe_build_device
+from samplelibrary.app.processes import child_environment, probe_build_device
+from samplelibrary.children import ChildProcess
 from samplelibrary.pipeline.devices import BuildDevice
 from sampleserver.app import create_app
 from sampleserver.policy import ServingPolicy
@@ -283,7 +284,7 @@ class Launcher:
         self._renderer = ChildProcess(
             RENDERER_NAME,
             (*self._renderer_command, RENDERER_HOST_OPTION, inference.host, RENDERER_PORT_OPTION, str(inference.port)),
-            config_path=self._config_path,
+            environment=child_environment(self._config_path),
             log_path=config.library_root / LOGS_DIRECTORY_NAME / RENDERER_LOG_NAME,
         )
         self._renderer.start()

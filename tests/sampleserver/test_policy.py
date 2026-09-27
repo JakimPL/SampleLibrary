@@ -8,6 +8,7 @@ import pytest
 
 from samplecore.config import Exposure, ServerConfig
 from sampleserver.policy import ServingPolicy
+from tests.sampleserver.conftest import SITE_VISITORS
 
 THIS_COMPUTER: Final[str] = socket.gethostname()
 
@@ -40,7 +41,8 @@ ADMISSION_CASES: Final[tuple[AdmissionCase, ...]] = (
 
 
 def _policy(exposure: Exposure) -> ServingPolicy:
-    return ServingPolicy.of(ServerConfig(exposure=exposure))
+    visitors = SITE_VISITORS if exposure is Exposure.PUBLIC else None
+    return ServingPolicy.of(ServerConfig(exposure=exposure, visitors=visitors))
 
 
 @pytest.mark.parametrize(
@@ -77,6 +79,7 @@ def test_a_site_shows_the_catalog_and_nothing_of_the_computer_or_the_person_behi
     assert not (site.shows_paths or site.reports_file_availability or site.names_internals)
     assert not (site.shows_curation or site.shows_reviewers or site.serves_uncataloged_audio or site.serves_docs)
     assert site.requires_secure_transport
+    assert site.visitor_limits == SITE_VISITORS
     assert (site.permits_site, site.permits_serve, site.permits_desktop_app) == (True, False, False)
 
 
@@ -87,4 +90,5 @@ def test_a_library_at_home_shows_everything_it_holds(exposure: Exposure) -> None
     assert home.shows_paths and home.reports_file_availability and home.names_internals
     assert home.shows_curation and home.shows_reviewers and home.serves_uncataloged_audio and home.serves_docs
     assert not home.requires_secure_transport
+    assert home.visitor_limits is None
     assert (home.permits_site, home.permits_serve, home.permits_desktop_app) == (False, True, True)

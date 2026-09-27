@@ -638,6 +638,41 @@ its own configuration lists, whatever folder the catalog it serves names. `sampl
 only where the exposure listens and refuses `public`, which `samplelibrary site` serves, and the
 SampleLibrary app refuses `public` before it opens a library.
 
+### The site
+
+`samplelibrary site` (`samplelibrary.site`) serves a library to anyone: the catalog's API and pages
+through the same app `serve` builds, and the morph renderer beside them in one container. Before
+anything starts it refuses, each in a sentence of its own (`samplelibrary.site.admission`):
+
+- an exposure other than `public`;
+- a missing or malformed `$PORT`, which a hosting platform names;
+- an owner, curator, administrator or publishing connection, from the config or the environment;
+- a reader named nowhere, or with a password shorter than 24 characters;
+- a renderer listening beyond the loopback address, or on the site's own port;
+- a missing audio store.
+
+It then checks the reader's role the way `serve` does. The renderer starts as a child with no
+database connection in its environment and one thread per numerical library, its output joining the
+site's, and the site serves once the renderer answers. A renderer that ends while the site serves
+ends the site with status 1, so the platform starts both again.
+
+`[server.visitors]` limits a library served to anyone, and no other exposure takes it
+(`sampleserver.visitors`). A visitor is the address the platform's edge names in
+`address_header` (Railway sets `X-Real-IP` itself, overwriting whatever a client sent), an IPv6
+address counting by its /64, and the socket's peer where the header names none. Each visitor holds
+a token budget of `burst` requests refilled at `refill_per_second`, a whole-catalog answer costing
+`whole_catalog_weight` and the health check nothing; a request past it is answered 429 with
+`Retry-After`. A morph also spends one of the visitor's `morphs_per_minute` and one of everyone's
+`morphs_per_minute_overall` before the renderer is asked, or, for a request naming the render it
+holds, once the renderer answers with new audio, and at most `concurrent_morphs` reach the renderer
+at once, one past them answered 503. The budgets live in the server's process, bounded to the most
+recently active visitors, so a site runs one process (`WEB_CONCURRENCY=1`), which also keeps one
+copy of the spectral matrix and matches the renderer's one render at a time. The cached answers
+over the whole catalog carry an ETag, named apart per process, so a returning visitor is answered
+304 until the catalog moves or the site restarts. The page fetches a morph before playing it, so a
+refusal shows the server's own words, and a hovered point asks for its glance once the cursor
+rests on it for 120 ms.
+
 ## Who may change what
 
 | Process | Connects as | May write |

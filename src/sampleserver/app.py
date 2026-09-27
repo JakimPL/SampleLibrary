@@ -19,6 +19,7 @@ from sampleserver.policy import ServingPolicy
 from sampleserver.response_cache import RevisionedJsonCache
 from sampleserver.routers import cloud, curation, health, modules, morph, samples, stats
 from sampleserver.spectral_cache import SpectralVectorCache
+from sampleserver.visitors import MorphGate, VisitorRequestLimits
 
 API_PREFIX: Final[str] = "/api"
 GZIP_MINIMUM_SIZE: Final[int] = 1024
@@ -49,7 +50,8 @@ def create_app(
     `ServingPolicy` it derives (`sampleserver.policy`): every request passes `AdmittedRequestsOnly`
     first, and every route reading a path, a person's labels or an internal address asks the policy
     whether to show it. A sample's file is opened only inside ``sample_directories``. Every response
-    states what a browser may do with it (`sampleserver.headers.SecurityHeaders`).
+    states what a browser may do with it (`sampleserver.headers.SecurityHeaders`). Where the policy
+    limits visitors, each is held to a request budget and a morph budget (`sampleserver.visitors`).
 
     Every route reads the catalog through a pooled connection Postgres itself refuses a write on. A
     curator also serves the route recording a person's own decisions about samples, in a schema of
@@ -101,8 +103,12 @@ def create_app(
         lifespan=lifespan,
     )
     application.add_middleware(GZipMiddleware, minimum_size=GZIP_MINIMUM_SIZE, compresslevel=GZIP_COMPRESSION_LEVEL)
+    visitor_limits = policy.visitor_limits
+    if visitor_limits is not None:
+        application.add_middleware(VisitorRequestLimits, limits=visitor_limits, api_prefix=API_PREFIX)
     application.add_middleware(SecurityHeaders, policy=policy, api_prefix=API_PREFIX)
     application.add_middleware(AdmittedRequestsOnly, policy=policy)
+    application.state.morph_gate = MorphGate(visitor_limits) if visitor_limits is not None else None
     application.state.role = role
     application.state.policy = policy
     application.state.sample_directories = sample_directories
