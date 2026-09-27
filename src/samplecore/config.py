@@ -51,6 +51,7 @@ DEFAULT_INFERENCE_URL: Final[str] = "http://127.0.0.1:8010"
 LIBRARY_TABLE: Final[str] = "library"
 INFERENCE_TABLE: Final[str] = "inference"
 SERVER_TABLE: Final[str] = "server"
+PUBLISH_TABLE: Final[str] = "publish"
 # The pipeline reads its own table, since what it holds is named by the steps rather than by the
 # settings every command shares.
 PIPELINE_TABLE: Final[str] = "pipeline"
@@ -193,6 +194,21 @@ class ServerConfig(BaseModel):
 DEFAULT_SERVER_CONFIG: Final[ServerConfig] = ServerConfig()
 
 
+class PublishConfig(BaseModel):
+    """What `samplelibrary publish` takes to a site beyond the module collection, as the ``[publish]`` table sets it.
+
+    ``sample_directories`` names the sample directories whose samples a site shows and plays,
+    each one of the library's own; a sample found only in any other stays off the site.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    sample_directories: tuple[Path, ...] = DEFAULT_SAMPLE_DIRECTORIES
+
+
+DEFAULT_PUBLISH_CONFIG: Final[PublishConfig] = PublishConfig()
+
+
 class LibraryConfig(BaseModel):
     """Local, machine-specific configuration this project reads at startup.
 
@@ -228,6 +244,7 @@ class LibraryConfig(BaseModel):
     build_cloud: bool = DEFAULT_BUILD_CLOUD
     inference: InferenceConfig = InferenceConfig()
     server: ServerConfig = DEFAULT_SERVER_CONFIG
+    publish: PublishConfig = DEFAULT_PUBLISH_CONFIG
 
     @field_validator("sample_directories")
     @classmethod
@@ -240,6 +257,16 @@ class LibraryConfig(BaseModel):
                 if directory.is_relative_to(other) or other.is_relative_to(directory):
                     raise ValueError(f"{directory} and {other} overlap. Choose each folder only once.")
         return directories
+
+    @model_validator(mode="after")
+    def _publishes_its_own_sample_directories(self) -> LibraryConfig:
+        for directory in self.publish.sample_directories:
+            if directory not in self.sample_directories:
+                raise ValueError(f"{directory} under [publish] is none of the library's sample_directories")
+        names = [directory.name for directory in self.publish.sample_directories]
+        if len(set(names)) != len(names):
+            raise ValueError("the sample directories a site shows need folder names of their own")
+        return self
 
     @field_validator("sample_exclusions")
     @classmethod
@@ -360,6 +387,7 @@ def parse_config(content: str, config_path: Path) -> LibraryConfig:
             library_data[setting] = from_environment
     library_data[INFERENCE_TABLE] = _table(data, INFERENCE_TABLE, config_path)
     library_data[SERVER_TABLE] = _table(data, SERVER_TABLE, config_path)
+    library_data[PUBLISH_TABLE] = _table(data, PUBLISH_TABLE, config_path)
     try:
         config = LibraryConfig.model_validate(library_data)
     except ValidationError as error:
@@ -429,11 +457,12 @@ def _read_tables(content: str, config_path: Path) -> dict[str, object]:
     except tomllib.TOMLDecodeError as error:
         raise ConfigurationError(f"{config_path} is not valid TOML: {error}") from error
 
-    unknown_tables = sorted(set(data) - {LIBRARY_TABLE, INFERENCE_TABLE, SERVER_TABLE, PIPELINE_TABLE})
+    readable = (LIBRARY_TABLE, INFERENCE_TABLE, SERVER_TABLE, PUBLISH_TABLE, PIPELINE_TABLE)
+    unknown_tables = sorted(set(data) - set(readable))
     if unknown_tables:
         raise ConfigurationError(
             f"{config_path} holds settings this project does not read: {', '.join(unknown_tables)}. "
-            f"Settings belong under [{LIBRARY_TABLE}], [{INFERENCE_TABLE}], [{SERVER_TABLE}] and [{PIPELINE_TABLE}]."
+            f"Settings belong under {', '.join(f'[{table}]' for table in readable)}."
         )
     return data
 

@@ -14,6 +14,7 @@ INSTANCE_LOCK_NAME: Final[str] = "instance.lock"
 INSTANCE_RECORD_NAME: Final[str] = "instance.json"
 LIBRARY_LOCKS_DIRECTORY_NAME: Final[str] = "libraries"
 LIBRARY_LOCK_SUFFIX: Final[str] = ".lock"
+PUBLICATION_DIRECTORY_NAME: Final[str] = "publication"
 
 
 def application_log_path(key: str) -> Path:
@@ -29,3 +30,8 @@ def previous_application_log_path(key: str) -> Path:
 def instances_directory() -> Path:
     """The folder holding one place for each config the application runs under, in the user's state folder."""
     return user_state_path(APPLICATION_NAME, appauthor=False) / INSTANCES_DIRECTORY_NAME
+
+
+def publication_directory(library_root: Path) -> Path:
+    """The folder `samplelibrary publish` builds a site's audio store in, beside the library's own."""
+    return library_root / PUBLICATION_DIRECTORY_NAME

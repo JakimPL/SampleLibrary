@@ -638,6 +638,55 @@ its own configuration lists, whatever folder the catalog it serves names. `sampl
 only where the exposure listens and refuses `public`, which `samplelibrary site` serves, and the
 SampleLibrary app refuses `public` before it opens a library.
 
+### Publishing a library
+
+`samplelibrary publish` (`samplelibrary.publish`) puts a library on a site: its catalog in the site's
+database, and its audio in `library_root/publication/objects`, a folder laid out as the store is, to
+upload. The database comes from `SAMPLELIBRARY_PUBLISH_DATABASE_URL` and the reader's password from
+`SAMPLELIBRARY_PUBLISH_READER_PASSWORD`, the environment alone. A plain `postgresql://` URL is read
+through psycopg, and a server other than this computer is reached with `sslmode=require` and
+`channel_binding=require`: SCRAM binds the password to the TLS handshake, so a platform's proxy
+presenting a certificate no authority signed cannot stand between the two unnoticed.
+
+Everything is read from one `REPEATABLE READ` snapshot of the library's catalog:
+
+1. **The samples.** Every sample a module holds, and every sample found in a directory named under
+   `[publish] sample_directories`; a sample found only elsewhere, a commercial pack's say, stays
+   home. The categories on show must have been scored with the shipped vocabulary, whose wording is
+   no one's own.
+2. **The audio.** Each sample a module holds is linked from the store, a missing object stopping
+   the publication as a damaged store; a file-only sample is written as the store would hold it, or
+   left out when none of its files still reads as scanned. Anything else in the folder goes.
+3. **The catalog.** One transaction on the target: the schema, the reader created or given the new
+   password (as its verifier) and granted what it reads, every table emptied, then each table's
+   published rows streamed by `COPY` from the snapshot. `samplelibrary.publish.rules` gives every
+   table of the catalog and the curation schema one rule, and a test holds the rules to exactly the
+   tables there are, so a table added later is published only once someone decided which of its
+   rows go:
+   - whole: the module collection (`module`, the sample properties, `note_event`,
+     `module_cloud_coordinates`) and `category_promotion`;
+   - the published samples' rows: `sample`, their coordinates, spectral features, thumbnails and
+     playback rates;
+   - `sample_file`: the published directories' files, each directory written as `/` and its
+     folder's name;
+   - `sample_relation`: the relations joining two published samples, with no review;
+   - `sample_category`: the published samples' categories in the scoring on show;
+   - `experiment`: the scoring on show alone, with its parameters cut to the vocabulary and no label
+     or key;
+   - none: every curation table, fingerprints, feature vectors, `cloud_promotion`,
+     `pass_completion`, `module_instrument`, `module_note_extraction`.
+
+   Before the commit, every curation table must be empty, and no text or JSON column may name the
+   library root, the module directory, a sample directory or the home folder; either rolls the
+   whole transaction back, naming the table and column. A `publication.record` row, in a schema of
+   its own, marks the database as a publication's. A database holding a catalog without it is
+   someone's library and is refused before anything in it changes, so a publication pointed at the
+   library itself empties nothing.
+4. **The reader.** Logged in as over the same address, and checked the way a site checks it.
+
+A publication replaces the whole catalog while the site's reads wait at most 60 seconds for it
+(`lock_timeout`). The site then restarts to read it, which also names its cached answers anew.
+
 ### The site
 
 `samplelibrary site` (`samplelibrary.site`) serves a library to anyone: the catalog's API and pages

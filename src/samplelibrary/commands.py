@@ -147,6 +147,12 @@ def _serve(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _publish(argv: list[str], *, prog: str) -> None:
+    from samplelibrary.publish.cli import main
+
+    main(argv, prog=prog)
+
+
 def _site(argv: list[str], *, prog: str) -> None:
     from samplelibrary.site.cli import main
 
@@ -230,6 +236,7 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
     Command(name="morph", summary="Serve morphs between two samples over HTTP, and write morph filters.", run=_morph),
     Command(name="serve", summary="Serve the library's API, and the built frontend when named, over HTTP.", run=_serve),
     Command(name="site", summary="Serve the library to anyone as a site, with its morph renderer.", run=_site),
+    Command(name="publish", summary="Publish the library to a site's database, and gather its audio.", run=_publish),
     Command(name="schema", summary="Print the API's OpenAPI schema as JSON, or write it to a file.", run=_schema),
     Command(
         name="setup-schema",

@@ -101,6 +101,11 @@ hosting platform names a visitor's address in (`"X-Real-IP"` on Railway); `burst
 `morphs_per_minute_overall`, the morphs one visitor and every visitor together may ask for; and
 `concurrent_morphs`, how many the renderer is asked for at once.
 
+The `[publish]` table holds `sample_directories`: which of your sample directories a site shows,
+each one of `[library] sample_directories` with a folder name of its own. Samples found only in the
+others, such as a commercial pack's, stay off the site. Left out, a site shows the module collection
+alone.
+
 The `[pipeline]` table holds what `just rebuild` builds the library with, every key optional:
 
 - `memory_cap`: the memory ceiling every step runs under, such as `"16G"`; `"none"` by default.

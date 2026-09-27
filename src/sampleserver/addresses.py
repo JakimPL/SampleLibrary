@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from ipaddress import IPv4Address, IPv6Address, ip_address
+from typing import Final
+
+LOOPBACK_NAME: Final[str] = "localhost"
 
 
 def parsed_address(value: str | None) -> IPv4Address | IPv6Address | None:
@@ -20,3 +23,8 @@ def is_loopback(host: str) -> bool:
     """Whether ``host`` is an address of this computer's loopback interface."""
     address = parsed_address(host)
     return address is not None and address.is_loopback
+
+
+def names_loopback(host: str) -> bool:
+    """Whether ``host`` names this computer's loopback interface: ``localhost``, or a loopback address."""
+    return host.lower() == LOOPBACK_NAME or is_loopback(host)

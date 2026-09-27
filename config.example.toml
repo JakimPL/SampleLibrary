@@ -43,6 +43,10 @@ curation_database_url = "postgresql+psycopg://samplelibrary_curator:<password>@l
 # your labels, ratings or favorites.
 # exposure = "local"
 
+[publish]
+# Which of your sample directories a site shows; samples found only in the others stay off it.
+# sample_directories = ["/path/to/your/sample/packs/Free Pack"]
+
 [pipeline]
 # How `samplelibrary pipeline run` builds the library. Every setting here is optional.
 

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from ipaddress import ip_address
 from typing import Final
 
 from sqlalchemy.engine import make_url
 
 from samplecore.config import PUBLISH_DATABASE_URL_ENVIRONMENT_VARIABLE, LibraryConfig
+from samplecore.passwords import MINIMUM_SERVICE_PASSWORD_LENGTH
 from samplecore.ports import MAXIMUM_PORT, MINIMUM_PORT
 from samplecore.storage.audio_store import OBJECTS_DIRECTORY_NAME
 from samplecore.storage.cluster.provisioning import ADMIN_URL_ENVIRONMENT_VARIABLE
@@ -22,11 +22,10 @@ from samplelibrary.site.messages import (
     RENDERER_BEYOND_THIS_COMPUTER,
     WEAK_READER_PASSWORD,
 )
+from sampleserver.addresses import names_loopback
 from sampleserver.policy import ServingPolicy
 
 PORT_ENVIRONMENT_VARIABLE: Final[str] = "PORT"
-MINIMUM_READER_PASSWORD_LENGTH: Final[int] = 24
-LOOPBACK_NAME: Final[str] = "localhost"
 # The connections that may change something, which a site's own environment holds none of.
 CHANGING_CONNECTION_VARIABLES: Final[tuple[str, ...]] = (
     ADMIN_URL_ENVIRONMENT_VARIABLE,
@@ -93,14 +92,14 @@ def _credentials(config: LibraryConfig, *, environment: Mapping[str, str]) -> tu
     problems = [CREDENTIAL_BEYOND_READER.format(name=name) for name in beyond]
     if config.server_database_url is None:
         problems.append(NO_READER)
-    elif len(make_url(config.server_database_url).password or "") < MINIMUM_READER_PASSWORD_LENGTH:
-        problems.append(WEAK_READER_PASSWORD.format(length=MINIMUM_READER_PASSWORD_LENGTH))
+    elif len(make_url(config.server_database_url).password or "") < MINIMUM_SERVICE_PASSWORD_LENGTH:
+        problems.append(WEAK_READER_PASSWORD.format(length=MINIMUM_SERVICE_PASSWORD_LENGTH))
     return tuple(problems)
 
 
 def _renderer(config: LibraryConfig, *, port: int) -> tuple[str, ...]:
     problems = []
-    if not _is_loopback(config.inference.host):
+    if not names_loopback(config.inference.host):
         problems.append(RENDERER_BEYOND_THIS_COMPUTER)
     if config.inference.port == port:
         problems.append(PORT_TAKEN_BY_RENDERER)
@@ -111,12 +110,3 @@ def _audio_store(config: LibraryConfig) -> tuple[str, ...]:
     store = config.library_root / OBJECTS_DIRECTORY_NAME
     readable = store.is_dir() and os.access(store, os.R_OK | os.X_OK)
     return () if readable else (NO_AUDIO_STORE.format(path=store),)
-
-
-def _is_loopback(host: str) -> bool:
-    if host == LOOPBACK_NAME:
-        return True
-    try:
-        return ip_address(host).is_loopback
-    except ValueError:
-        return False

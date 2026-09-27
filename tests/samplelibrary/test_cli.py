@@ -113,6 +113,7 @@ ROUTE_CASES = (
     RouteCase(
         ["site", "--host", "0.0.0.0"], "samplelibrary.site.cli.main", ["--host", "0.0.0.0"], "samplelibrary site"
     ),
+    RouteCase(["publish"], "samplelibrary.publish.cli.main", [], "samplelibrary publish"),
     RouteCase(["schema"], "sampleserver.openapi_export.main", [], "samplelibrary schema"),
     RouteCase(["tracking", "uri"], "samplelibrary.tracking.uri.main", [], "samplelibrary tracking uri"),
     RouteCase(
