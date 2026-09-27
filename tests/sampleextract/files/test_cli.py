@@ -11,7 +11,7 @@ from samplecore.storage.repositories.sample_file import PostgresSampleFileReposi
 from sampleextract.files.cli import main
 from tests.sampleextract.files.conftest import MINIMUM_SAMPLE_FRAMES, SamplePack
 
-PROGRAM = "samplelibrary files"
+PROGRAM = "sampleripper files"
 
 
 def _write_config(tmp_path: Path, database_url: str, *, sample_directories: tuple[Path, ...]) -> Path:

@@ -7,8 +7,8 @@ import sys
 from pathlib import Path
 from typing import Final
 
-CHECKED_COMMITS_NAME: Final[str] = "samplelibrary-checked-commits"
-CHECK_START_NAME: Final[str] = "samplelibrary-check-start"
+CHECKED_COMMITS_NAME: Final[str] = "sampleripper-checked-commits"
+CHECK_START_NAME: Final[str] = "sampleripper-check-start"
 KEPT_COMMITS: Final[int] = 500
 PUSHED_COMMIT_VARIABLE: Final[str] = "PRE_COMMIT_TO_REF"
 STEPS: Final[tuple[str, ...]] = ("start", "record", "verify")

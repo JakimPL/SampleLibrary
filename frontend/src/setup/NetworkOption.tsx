@@ -14,7 +14,7 @@ interface NetworkOptionProps {
 const NETWORK_TITLE = "Open on my home network";
 const NETWORK_NOTE =
     "Phones and computers on the same network can browse and play your library, and see your folders and labels. Only this computer can change anything. Use it only on a network you trust, such as your home Wi-Fi.";
-const RESTART_NOTE = "Restart SampleLibrary to apply this.";
+const RESTART_NOTE = "Restart SampleRipper to apply this.";
 const OFF_NETWORK_NOTE = "This computer isn't on a network right now.";
 
 function describeReach(chosen: boolean, reach: HomeNetworkReach): string | null {

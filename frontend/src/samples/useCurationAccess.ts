@@ -18,7 +18,7 @@ const NOTHING_SHOWN: CurationView = { curationShown: false, labelEditing: false 
 /**
  * What the server lets this page show and change of a person's decisions about samples.
  *
- * Only the SampleLibrary app on its own computer records them, and a site on the internet shows
+ * Only the SampleRipper app on its own computer records them, and a site on the internet shows
  * none of them. Both answers are false until the server has given them, so a page never shows a
  * control the server would refuse, or a decision it holds back.
  */

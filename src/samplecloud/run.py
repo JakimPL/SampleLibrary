@@ -77,7 +77,7 @@ def experiment_to_rebuild(connection: Connection) -> int:
     if PostgresCloudCoordinateRepository(connection).revision()[0] > 0:
         raise ExperimentRefused(
             "the cloud shows coordinates with no record of the experiment they came from; "
-            "`samplelibrary cloud embed --experiment-id N` lays out experiment N and records it"
+            "`sampleripper cloud embed --experiment-id N` lays out experiment N and records it"
         )
 
     with start_batch(connection):

@@ -51,7 +51,7 @@ REFUSED_STATEMENTS: Final[tuple[RefusedStatement, ...]] = (
     RefusedStatement(ServiceRole.READER, "SELECT nextval('public.module_id_seq')"),
     RefusedStatement(ServiceRole.READER, "CREATE TEMPORARY TABLE intruder (id integer)"),
     RefusedStatement(ServiceRole.READER, "SELECT pg_catalog.pg_read_file('postgresql.conf')"),
-    RefusedStatement(ServiceRole.READER, "SET ROLE samplelibrary"),
+    RefusedStatement(ServiceRole.READER, "SET ROLE sampleripper"),
     RefusedStatement(ServiceRole.CURATOR, "TRUNCATE curation.sample_annotation"),
     RefusedStatement(ServiceRole.CURATOR, "UPDATE public.sample SET frames = 0"),
     RefusedStatement(ServiceRole.CURATOR, "DELETE FROM public.module"),

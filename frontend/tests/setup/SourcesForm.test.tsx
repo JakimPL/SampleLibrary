@@ -8,11 +8,11 @@ import { useSourcesDraft } from "../../src/setup/useSourcesDraft";
 
 const UNCONFIGURED: SetupState = {
     status: "unconfigured",
-    config_path: "/home/person/.config/SampleLibrary/config.toml",
+    config_path: "/home/person/.config/SampleRipper/config.toml",
     sources: null,
     options: null,
     build_device: null,
-    suggested_library_root: "/home/person/Music/SampleLibrary",
+    suggested_library_root: "/home/person/Music/SampleRipper",
     manages_database: null,
     problem: null,
     build: null,
@@ -39,7 +39,7 @@ describe("SourcesForm", () => {
     it("suggests a library location and holds the save back until a folder is chosen", () => {
         render(<Form state={UNCONFIGURED} />);
 
-        expect(screen.getByText("/home/person/Music/SampleLibrary")).toBeInTheDocument();
+        expect(screen.getByText("/home/person/Music/SampleRipper")).toBeInTheDocument();
         expect(screen.getByText("No folder chosen")).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Remove" })).toBeDisabled();
         expect(screen.getByRole("button", { name: "Save and open the library" })).toBeDisabled();

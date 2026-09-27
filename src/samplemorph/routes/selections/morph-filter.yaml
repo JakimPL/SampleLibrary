@@ -1,4 +1,4 @@
-# What `samplelibrary morph response --selection morph-filter.yaml` reads two samples under, to write
+# What `sampleripper morph response --selection morph-filter.yaml` reads two samples under, to write
 # the morph filter a VST applies at any weight.
 #
 # A response is the envelope route held to one sound: its whole path is the cepstral coefficients of

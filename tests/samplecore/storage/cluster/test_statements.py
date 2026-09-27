@@ -89,7 +89,7 @@ def test_a_database_named_the_same_twice_is_refused_by_the_server(
 
 @pytest.mark.parametrize(
     "value",
-    ["samplelibrary", "pa'ss", "back\\slash", 'quote"mark', "'; DROP DATABASE postgres; --", "  spaced  "],
+    ["sampleripper", "pa'ss", "back\\slash", 'quote"mark', "'; DROP DATABASE postgres; --", "  spaced  "],
 )
 def test_a_composed_value_reaches_the_server_as_the_value_it_stands_for(_server_url: str, value: str) -> None:
     """The path a password rides to ``CREATE ROLE`` on, proved against the server that receives it.
@@ -136,4 +136,4 @@ def test_a_created_role_may_log_in_with_the_password_it_was_given(
 
 def test_a_name_quoting_cannot_carry_never_reaches_the_server(cluster_connection: Connection) -> None:
     with pytest.raises(UnsafeValueError):
-        create_database(cluster_connection, name="na\x00me", owner="samplelibrary")
+        create_database(cluster_connection, name="na\x00me", owner="sampleripper")

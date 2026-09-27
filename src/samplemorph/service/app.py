@@ -17,7 +17,7 @@ def create_app(renderer: MorphRenderer, *, host: str) -> FastAPI:
     a temporary library root.
     """
     application = FastAPI(
-        title="SampleLibrary morph inference",
+        title="SampleRipper morph inference",
         description="Morphs between two samples of the catalog, rendered through the envelope route.",
     )
     application.add_middleware(ProgramsCallingItsAddressOnly, host=host)

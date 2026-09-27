@@ -39,9 +39,9 @@ from sampleextract.files.ingest import ingest_sample_file
 from sampleextract.ingest import ingest_module
 from sampleextract.notes.playback_rates import record_playback_rates
 from sampleextract.parsing import parse_module
-from samplelibrary.sandbox.build import SAMPLE_PACK_DIRECTORY_NAME, build_sandbox
+from sampleripper.sandbox.build import SAMPLE_PACK_DIRECTORY_NAME, build_sandbox
 
-SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/samplelibrary_dev"
+SANDBOX_DATABASE_URL = "postgresql+psycopg://sampleripper:not-a-real-password@localhost:5432/sampleripper_dev"
 
 
 def _ingest_all(connection: Connection, library_root: Path, modules_directory: Path) -> None:

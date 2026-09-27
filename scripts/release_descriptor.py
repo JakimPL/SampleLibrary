@@ -13,12 +13,12 @@ from sampledescriptor.model_paths import descriptor_path
 from sampledescriptor.paths import PRETRAINED_RELEASE_PATH
 from sampledescriptor.pretrained import write_pretrained_release
 from sampledescriptor.releasing import release_of
-from samplelibrary.pipeline.artifacts import read_step_record
-from samplelibrary.pipeline.layout import PipelineLayout
-from samplelibrary.pipeline.steps.descriptor import DESCRIPTOR
+from sampleripper.pipeline.artifacts import read_step_record
+from sampleripper.pipeline.layout import PipelineLayout
+from sampleripper.pipeline.steps.descriptor import DESCRIPTOR
 
 SEALED_OUTPUT: Final[str] = "sealed"
-RELEASE_DOWNLOAD_URL: Final[str] = "https://github.com/JakimPL/SampleLibrary/releases/download/{tag}/{name}"
+RELEASE_DOWNLOAD_URL: Final[str] = "https://github.com/JakimPL/SampleRipper/releases/download/{tag}/{name}"
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:

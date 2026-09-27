@@ -20,7 +20,7 @@ from samplecore.progress import ProgressBar
 # rather than a copy of a process holding a catalog connection or the GPU.
 WORKER_START_METHOD: Final[str] = "spawn"
 IN_PROCESS_WORKERS: Final[int] = 0
-STAGED_WORK_PREFIX: Final[str] = "samplelibrary-work-"
+STAGED_WORK_PREFIX: Final[str] = "sampleripper-work-"
 SINGLE_THREAD: Final[int] = 1
 # Each numerical library sizes its thread pool from its variable as it first loads.
 SINGLE_THREAD_ENVIRONMENT: Final[Mapping[str, str]] = {

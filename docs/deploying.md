@@ -28,10 +28,10 @@ several gigabytes, which needs Railway's Pro plan.
 
    Keep it in your password manager; you need it each time you publish.
 5. **Tell the site where the catalog is.** In the site service's variables, add
-   `SAMPLELIBRARY_SERVER_DATABASE_URL` with this value, putting the password in:
+   `SAMPLERIPPER_SERVER_DATABASE_URL` with this value, putting the password in:
 
    ```
-   postgresql+psycopg://samplelibrary_reader:<the password>@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
+   postgresql+psycopg://sampleripper_reader:<the password>@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
    ```
 
    Then seal the variable, so Railway never shows it again. Add no other database variable: the
@@ -59,9 +59,9 @@ your library, `publication`. Repeat it whenever you want the site to show your l
 3. **Publish**, typing the two secrets where nothing records them:
 
    ```sh
-   read -rs SAMPLELIBRARY_PUBLISH_DATABASE_URL && export SAMPLELIBRARY_PUBLISH_DATABASE_URL
-   read -rs SAMPLELIBRARY_PUBLISH_READER_PASSWORD && export SAMPLELIBRARY_PUBLISH_READER_PASSWORD
-   samplelibrary publish
+   read -rs SAMPLERIPPER_PUBLISH_DATABASE_URL && export SAMPLERIPPER_PUBLISH_DATABASE_URL
+   read -rs SAMPLERIPPER_PUBLISH_READER_PASSWORD && export SAMPLERIPPER_PUBLISH_READER_PASSWORD
+   sampleripper publish
    ```
 
    The first variable is the `DATABASE_PUBLIC_URL` you copied, the second the reader's password.
@@ -69,20 +69,22 @@ your library, `publication`. Repeat it whenever you want the site to show your l
    carrying a label, a rating, a favorite or a path of your computer, and changes nothing when it
    refuses.
 4. **Close the database again:** turn its public networking off.
-5. **Upload the audio** it names to the site's volume:
+5. **Upload the audio** it names to the site's volume. Railway names a volume's files from the
+   volume's own root, which the site sees as `/library`:
 
    ```sh
-   railway volume files upload <your library>/publication/objects /library/objects
+   railway volume files upload <your library>/publication/objects /objects
    ```
 
-   A sample no longer published stays unheard, since the site plays only what its catalog lists.
-   To free its space, delete `/library/objects` with `railway volume browse` before uploading.
+   When you publish again, first run `railway volume files delete /objects`, so the volume holds
+   the samples published now and no others.
 6. **Restart the site** from its Deployments tab, so it reads the new catalog.
 
 ## Check it once it runs
 
 1. **Open the site** at its address, play a few samples and a morph. A sample that won't play
-   means the site can't read its volume.
+   means the site can't read its volume: Railway's answer is the variable `RAILWAY_RUN_UID=0` on the
+   site's service, which runs it as the volume's owner.
 2. **Check that each visitor has limits of their own.** This asks for the whole-catalog summary 30
    times, each time claiming to be someone else:
 

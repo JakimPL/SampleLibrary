@@ -10,23 +10,23 @@ services:
       - path: docker/postgres.env
         required: true
     environment:
-      POSTGRES_USER: samplelibrary
-      POSTGRES_DB: samplelibrary
+      POSTGRES_USER: sampleripper
+      POSTGRES_DB: sampleripper
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       # Over TCP: while the image initializes a cluster, a temporary server answers on the socket.
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U samplelibrary"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U sampleripper"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   site:
     build: .
-    image: samplelibrary-site
-    # The reader's connection, SAMPLELIBRARY_SERVER_DATABASE_URL, and nothing that could change the catalog.
+    image: sampleripper-site
+    # The reader's connection, SAMPLERIPPER_SERVER_DATABASE_URL, and nothing that could change the catalog.
     env_file:
       - path: docker/site.env
         required: true
@@ -34,7 +34,7 @@ services:
       PORT: "8000"
     ports:
       - "127.0.0.1:8000:8000"
-    # The folder `samplelibrary publish` gathers the audio in, read-only where a platform mounts its
+    # The folder `sampleripper publish` gathers the audio in, read-only where a platform mounts its
     # volume. A path that is not there fails the start rather than mounting an empty directory.
     volumes:
       - type: bind

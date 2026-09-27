@@ -17,7 +17,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from sampleextract.cli import main as extract_main
 from sampleextract.equivalence.cli import main
 
-PROGRAM = "samplelibrary equivalence"
+PROGRAM = "sampleripper equivalence"
 SAMPLE_HASH = "a" * 64
 OTHER_SAMPLE_HASH = "b" * 64
 
@@ -108,7 +108,7 @@ def test_a_pass_over_the_samples_the_last_complete_pass_compared_ends_at_once(
         encoding="utf-8",
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
-    extract_main(["--workers", "1"], prog="samplelibrary extract")
+    extract_main(["--workers", "1"], prog="sampleripper extract")
 
     main(["--limit", "1"], prog=PROGRAM)
     main([], prog=PROGRAM)
@@ -121,7 +121,7 @@ def test_a_pass_over_the_samples_the_last_complete_pass_compared_ends_at_once(
     assert NOTHING_TO_DETECT not in capsys.readouterr().out
 
     (modules / "eight-bit.mod").write_bytes(mod_module_bytes)
-    extract_main(["--workers", "1"], prog="samplelibrary extract")
+    extract_main(["--workers", "1"], prog="sampleripper extract")
     capsys.readouterr()
     main([], prog=PROGRAM)
     assert NOTHING_TO_DETECT not in capsys.readouterr().out

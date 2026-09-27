@@ -1,4 +1,4 @@
-# What `samplelibrary morph serve` renders between two samples. The process reads this file when it
+# What `sampleripper morph serve` renders between two samples. The process reads this file when it
 # starts, so a change takes effect on its next start.
 #
 # The morph filter a VST reads is built under `morph-filter.yaml` beside this file, because a filter

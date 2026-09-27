@@ -85,16 +85,16 @@ function stateWith(
 ): SetupState {
     return {
         status: "ready",
-        config_path: "/home/person/.config/SampleLibrary/config.toml",
+        config_path: "/home/person/.config/SampleRipper/config.toml",
         sources: {
-            library_root: "/home/person/Music/SampleLibrary",
+            library_root: "/home/person/Music/SampleRipper",
             module_source_directory: "/home/person/Modules",
             sample_directories: [],
             sample_exclusions: [],
         },
         options: { build_cloud: buildCloud, open_to_network: openToNetwork },
         build_device: device,
-        suggested_library_root: "/home/person/Music/SampleLibrary",
+        suggested_library_root: "/home/person/Music/SampleRipper",
         manages_database: true,
         problem: null,
         build,
@@ -158,7 +158,7 @@ describe("LibraryPanel", () => {
     it("saves the network switch for the next start, and says a restart applies it", () => {
         renderPanel(stateWith(null));
 
-        expect(screen.queryByText("Restart SampleLibrary to apply this.")).not.toBeInTheDocument();
+        expect(screen.queryByText("Restart SampleRipper to apply this.")).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole("checkbox", { name: /Open on my home network/ }));
 
         expect(chooseOptions).toHaveBeenCalledWith({ build_cloud: true, open_to_network: true });
@@ -168,7 +168,7 @@ describe("LibraryPanel", () => {
         renderPanel(stateWith(null, CARD, true, true, CLOSED_TO_THE_NETWORK));
 
         expect(screen.getByRole("checkbox", { name: /Open on my home network/ })).toBeChecked();
-        expect(screen.getByText("Restart SampleLibrary to apply this.")).toBeInTheDocument();
+        expect(screen.getByText("Restart SampleRipper to apply this.")).toBeInTheDocument();
     });
 
     it("names the address a device on the network opens", () => {

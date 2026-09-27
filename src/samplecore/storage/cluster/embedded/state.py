@@ -16,8 +16,8 @@ DATA_DIRECTORY_NAME: Final[str] = "data"
 STATE_FILE_NAME: Final[str] = "cluster.json"
 ROLES_FILE_NAME: Final[str] = "roles.json"
 LOG_FILE_NAME: Final[str] = "server.log"
-MANAGED_ROLE: Final[str] = "samplelibrary"
-MANAGED_DATABASE: Final[str] = "samplelibrary"
+MANAGED_ROLE: Final[str] = "sampleripper"
+MANAGED_DATABASE: Final[str] = "sampleripper"
 MANAGED_HOST: Final[str] = "127.0.0.1"
 PREFERRED_MANAGED_PORT: Final[int] = 54329
 
@@ -88,7 +88,7 @@ def read_cluster_state(library_root: Path) -> ClusterState:
     if not path.is_file():
         raise ManagedClusterMissingError(
             f"The library at {library_root} has no database yet. "
-            "Start the SampleLibrary app or run `samplelibrary setup database` to create one."
+            "Start the SampleRipper app or run `sampleripper setup database` to create one."
         )
     return ClusterState.model_validate_json(path.read_text(encoding="utf-8"))
 
@@ -128,7 +128,7 @@ def managed_service_url(library_root: Path, service: ServiceRole) -> str:
     if not path.is_file():
         raise ManagedClusterMissingError(
             f"The database of the library at {library_root} has no service roles yet. "
-            "Start the SampleLibrary app or run `samplelibrary setup database` to create them."
+            "Start the SampleRipper app or run `sampleripper setup database` to create them."
         )
     roles = ServiceRoleState.model_validate_json(path.read_text(encoding="utf-8"))
     return (

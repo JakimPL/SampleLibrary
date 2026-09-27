@@ -54,7 +54,7 @@ MODULE_SLOT_ANCHOR_COLUMNS: Final[tuple[str, ...]] = (
 SAMPLE_FILE_ANCHOR_COLUMNS: Final[tuple[str, ...]] = ("file_directory", "file_relative_path")
 
 # A MetaData of its own, in a schema of its own, is what keeps hand-made work safe from the passes
-# that rebuild everything else. Both places this project empties a database -- `samplelibrary reset`
+# that rebuild everything else. Both places this project empties a database -- `sampleripper reset`
 # and the test suite's own teardown -- iterate `database.metadata.sorted_tables`, so a table registered
 # here is beyond their reach by construction rather than by an exemption list somebody has to maintain.
 # For the same reason nothing here carries a foreign key into the catalog: one would either delete

@@ -15,7 +15,7 @@ export type ProgressReport = components["schemas"]["ProgressReport"];
 export type FolderListing = components["schemas"]["FolderListing"];
 export type Place = components["schemas"]["Place"];
 
-// Kept equal to `SETUP_PREFIX` in `src/samplelibrary/app/asgi.py`, relative to the API's root.
+// Kept equal to `SETUP_PREFIX` in `src/sampleripper/app/asgi.py`, relative to the API's root.
 const SETUP_PATH = "/setup";
 
 export async function getSetupState(): Promise<SetupState> {

@@ -1,6 +1,6 @@
-# SampleLibrary
+# SampleRipper
 
-SampleLibrary gathers every sample from your tracker modules (XM, IT, MOD, S3M) and your folders of
+SampleRipper gathers every sample from your tracker modules (XM, IT, MOD, S3M) and your folders of
 audio files into one library you browse in your web browser. It keeps one copy of each sample,
 groups near-duplicates, and lets you play, label and rate every sample. The cloud lays out the
 whole library by how the samples sound, and the morph plays the sounds between any two of them.
@@ -8,23 +8,23 @@ whole library by how the samples sound, and the morph plays the sounds between a
 ## Install
 
 Download the file for your system from the
-[Releases](https://github.com/JakimPL/SampleLibrary/releases) page:
+[Releases](https://github.com/JakimPL/SampleRipper/releases) page:
 
-- **Windows** (64-bit): run `SampleLibrary-<version>-windows-x64-setup.exe`. It installs
-  SampleLibrary for you alone and adds it to the Start menu. If Windows warns about an unrecognized
+- **Windows** (64-bit): run `SampleRipper-<version>-windows-x64-setup.exe`. It installs
+  SampleRipper for you alone and adds it to the Start menu. If Windows warns about an unrecognized
   app, click **More info**, then **Run anyway**.
-- **macOS** (Apple silicon): open `SampleLibrary-<version>-macos-arm64.dmg` and drag SampleLibrary
+- **macOS** (Apple silicon): open `SampleRipper-<version>-macos-arm64.dmg` and drag SampleRipper
   into Applications. The first time you open it, macOS asks you to confirm an app from outside the
   App Store: go to **System Settings → Privacy & Security** and click **Open Anyway**.
-- **Linux** (64-bit): allow `SampleLibrary-<version>-linux-x64.AppImage` to run as a program, in its
+- **Linux** (64-bit): allow `SampleRipper-<version>-linux-x64.AppImage` to run as a program, in its
   file properties or with `chmod +x`, then open it.
 
 ## First start
 
-The first start downloads Python and the packages SampleLibrary runs on, about 2 GB on disk, which
+The first start downloads Python and the packages SampleRipper runs on, about 2 GB on disk, which
 takes several minutes. On Windows and Linux with an NVIDIA graphics card, it takes the packages that
 let the card do the heavy listening instead, several gigabytes more. Later starts take a few
-seconds. SampleLibrary then opens in your browser on its setup page:
+seconds. SampleRipper then opens in your browser on its setup page:
 
 1. Under **Your folders**, choose your module folder, your sample folders, or both.
 2. Choose where the library keeps its files. Pick a drive with free space: a large collection takes
@@ -41,45 +41,45 @@ takes a day or more, so the page asks before it starts.
 
 ## Everyday use
 
-- Open SampleLibrary from the Start menu, from Applications, or from its AppImage. A start while it
+- Open SampleRipper from the Start menu, from Applications, or from its AppImage. A start while it
   already runs opens it in your browser again. A new version closes the old one as it starts, and
   so does any start when the running one has stopped responding.
 - A build keeps going when you close the browser tab.
 - To add folders, or to build again after your collection grows, open **Library → Setup**.
-- **Library → Quit SampleLibrary**, or **Quit** on the setup page, stops SampleLibrary.
+- **Library → Quit SampleRipper**, or **Quit** on the setup page, stops SampleRipper.
 
-[Using SampleLibrary](docs/using.md) explains the cloud, the morph, every click and key, and using
+[Using SampleRipper](docs/using.md) explains the cloud, the morph, every click and key, and using
 the app on a phone or tablet. The app shows the same list under **Help → Keyboard and mouse**.
 
 ## When something goes wrong
 
-If the first start stops before SampleLibrary opens, a download was interrupted. Start SampleLibrary
+If the first start stops before SampleRipper opens, a download was interrupted. Start SampleRipper
 again: it reuses every file it finished downloading.
 
-SampleLibrary keeps a log you can read or attach to a report:
+SampleRipper keeps a log you can read or attach to a report:
 
 | System | Log folder |
 |---|---|
-| Windows | `%LOCALAPPDATA%\SampleLibrary\Logs` |
-| macOS | `~/Library/Logs/SampleLibrary` |
-| Linux | `~/.local/state/SampleLibrary/log` |
+| Windows | `%LOCALAPPDATA%\SampleRipper\Logs` |
+| macOS | `~/Library/Logs/SampleRipper` |
+| Linux | `~/.local/state/SampleRipper/log` |
 
-Report a problem on the [issue tracker](https://github.com/JakimPL/SampleLibrary/issues), with the
+Report a problem on the [issue tracker](https://github.com/JakimPL/SampleRipper/issues), with the
 log attached.
 
-SampleLibrary keeps every change to your labels, ratings and favorites. If some were changed by
-mistake, running SampleLibrary from source brings them back to how they were at a given time:
-`samplelibrary annotations restore --at "2026-09-26 21:30"` shows what it would change, and adding
+SampleRipper keeps every change to your labels, ratings and favorites. If some were changed by
+mistake, running SampleRipper from source brings them back to how they were at a given time:
+`sampleripper annotations restore --at "2026-09-26 21:30"` shows what it would change, and adding
 `--confirm` carries it out.
 
-Uninstalling SampleLibrary on Windows removes the program and the packages it downloaded. Your
+Uninstalling SampleRipper on Windows removes the program and the packages it downloaded. Your
 library stays in the folder you chose for it.
 
 ## Documentation
 
-- [Using SampleLibrary](docs/using.md): the cloud, the morph, keys and gestures, phones and tablets.
+- [Using SampleRipper](docs/using.md): the cloud, the morph, keys and gestures, phones and tablets.
 - [Putting your library online](docs/deploying.md): publishing your library as a site on Railway.
-- [Running from source](docs/source.md): running SampleLibrary from a checkout, with its commands
+- [Running from source](docs/source.md): running SampleRipper from a checkout, with its commands
   and every setting.
 - [Development](docs/development.md): checks, tests and the sandbox library, for contributors.
 - [Building and releasing](docs/building.md): building the executable and the installers, and

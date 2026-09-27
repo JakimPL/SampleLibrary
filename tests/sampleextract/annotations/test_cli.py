@@ -14,7 +14,7 @@ from samplecore.models.annotation import SampleAnnotation
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from sampleextract.annotations.cli import main
 
-PROGRAM = "samplelibrary annotations"
+PROGRAM = "sampleripper annotations"
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:

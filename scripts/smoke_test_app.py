@@ -24,14 +24,14 @@ QUIT_SECONDS: Final[float] = 120.0
 MODULES_DIRECTORY_NAME: Final[str] = "modules"
 LIBRARY_DIRECTORY_NAME: Final[str] = "library"
 CONFIG_FILE_NAME: Final[str] = "config.toml"
-CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
+CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_CONFIG"
 SERVER_PID_FILE: Final[Path] = Path("postgres") / "data" / "postmaster.pid"
-APPLICATION_MODULE: Final[str] = "samplelibrary.app"
+APPLICATION_MODULE: Final[str] = "sampleripper.app"
 BUILD_TARGET: Final[str] = "catalog"
 WRITE_MODULES: Final[str] = """
 import sys
 from pathlib import Path
-from samplelibrary.sandbox.modules import sandbox_modules
+from sampleripper.sandbox.modules import sandbox_modules
 target = Path(sys.argv[1])
 target.mkdir(parents=True, exist_ok=True)
 for name, content in sandbox_modules().items():

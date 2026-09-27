@@ -16,7 +16,7 @@ export function TopBar({ api }: TopBarProps): ReactElement {
     return (
         <header className="top-bar">
             <Link to="/" className="top-bar-title">
-                SampleLibrary
+                SampleRipper
             </Link>
             <ViewMenu api={api} />
             <LibraryMenu />

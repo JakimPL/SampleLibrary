@@ -11,14 +11,14 @@ from installers.icons import macos_icon
 from paths import MACOS_LAUNCHER
 
 PLATFORM: Final[str] = "macos-arm64"
-BUNDLE_IDENTIFIER: Final[str] = "io.github.jakimpl.samplelibrary"
+BUNDLE_IDENTIFIER: Final[str] = "io.github.jakimpl.sampleripper"
 MINIMUM_SYSTEM_VERSION: Final[str] = "11.0"
 APPLICATIONS_FOLDER: Final[Path] = Path("/Applications")
 AD_HOC_IDENTITY: Final[str] = "-"
 
 
 def macos_disk_image(executable: Path, *, version: str, output_directory: Path, work: Path) -> Path:
-    """A disk image holding SampleLibrary.app beside a link to Applications, for dragging the app across.
+    """A disk image holding SampleRipper.app beside a link to Applications, for dragging the app across.
 
     The bundle's executable is a launcher script. It starts the PyApp executable beside it with its
     output in the person's log folder, and tells them the first start takes a few minutes. The bundle

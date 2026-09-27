@@ -11,7 +11,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.status import HTTP_404_NOT_FOUND
 from starlette.types import Scope
 
-FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_FRONTEND_DIRECTORY"
+FRONTEND_DIRECTORY_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_FRONTEND_DIRECTORY"
 INDEX_DOCUMENT: Final[str] = "index.html"
 
 
@@ -73,7 +73,7 @@ def built_frontend(directory: Path) -> Path:
 
 
 def frontend_directory_from_environment() -> Path | None:
-    """The built frontend `samplelibrary serve --frontend` hands every worker, if it named one.
+    """The built frontend `sampleripper serve --frontend` hands every worker, if it named one.
 
     Raises:
         ValueError: the variable names a directory holding no built frontend.

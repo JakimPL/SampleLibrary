@@ -10,8 +10,8 @@ from samplecore.passwords import new_password
 from samplecore.storage.atomic import PRIVATE_FILE_MODE, write_bytes_atomically
 
 POSTGRES_PASSWORD_VARIABLE: Final[str] = "POSTGRES_PASSWORD"
-READER_URL_VARIABLE: Final[str] = "SAMPLELIBRARY_SERVER_DATABASE_URL"
-READER_URL_TEMPLATE: Final[str] = "postgresql+psycopg://samplelibrary_reader:{password}@postgres:5432/samplelibrary"
+READER_URL_VARIABLE: Final[str] = "SAMPLERIPPER_SERVER_DATABASE_URL"
+READER_URL_TEMPLATE: Final[str] = "postgresql+psycopg://sampleripper_reader:{password}@postgres:5432/sampleripper"
 
 
 def main() -> None:

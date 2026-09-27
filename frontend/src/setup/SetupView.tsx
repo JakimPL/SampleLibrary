@@ -54,8 +54,8 @@ function SetupPlaceholder({ source }: { readonly source: SetupSource }): ReactEl
                 <section className="setup-card">
                     <h2>Setup isn&apos;t available here</h2>
                     <p className="setup-hint">
-                        This server only shows the library. To choose folders and build the library, start SampleLibrary
-                        with `samplelibrary app`.
+                        This server only shows the library. To choose folders and build the library, start SampleRipper
+                        with `sampleripper app`.
                     </p>
                 </section>
             );
@@ -76,7 +76,7 @@ export function SetupView(): ReactElement {
     const [quitRefusal, setQuitRefusal] = useState<string | null>(null);
     const state = lastKnownState(source);
     const notice =
-        quitRefusal ?? (source.status === "unreachable" ? `Can't reach SampleLibrary: ${source.message}` : null);
+        quitRefusal ?? (source.status === "unreachable" ? `Can't reach SampleRipper: ${source.message}` : null);
 
     async function handleQuit(): Promise<void> {
         setQuitRefusal(null);
@@ -91,7 +91,7 @@ export function SetupView(): ReactElement {
     return (
         <main className="setup-page">
             <header className="setup-header">
-                <h1>SampleLibrary</h1>
+                <h1>SampleRipper</h1>
                 <SetupMessage
                     message={notice === null ? null : { text: notice, tone: "error" }}
                     className="setup-notice"

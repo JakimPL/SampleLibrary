@@ -20,7 +20,7 @@ from sampleserver.app import API_PREFIX, create_app
 from sampleserver.headers import EVERY_RESPONSE_HEADERS, PAGE_CONTENT_SECURITY_POLICY, STRICT_TRANSPORT_SECURITY
 from tests.sampleserver.conftest import INFERENCE_URL, LOCAL_CLIENT, LOCAL_ORIGIN, LOCAL_SERVER
 
-INDEX_MARKUP: Final[str] = "<!doctype html><title>SampleLibrary</title>"
+INDEX_MARKUP: Final[str] = "<!doctype html><title>SampleRipper</title>"
 MILLISECONDS_PER_SECOND: Final[int] = 1000
 SECONDS_PER_MINUTE: Final[int] = 60
 

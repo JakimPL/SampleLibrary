@@ -1,4 +1,4 @@
-# Using SampleLibrary
+# Using SampleRipper
 
 This guide is for everyone who uses the app. It covers the panels, labels and ratings, the cloud,
 the morph, every click, key and gesture, and phones and tablets.
@@ -22,7 +22,7 @@ Every sample takes a rating from one to five stars, a heart that keeps it close,
 own. The listening model gives each sample a category when the library is built with its cloud; a
 label you write stands in its place.
 
-You give them in the SampleLibrary app, on the computer it runs on. Anywhere else, such as a phone
+You give them in the SampleRipper app, on the computer it runs on. Anywhere else, such as a phone
 or a copy of the library published as a website, they show as they are.
 
 ## The cloud
@@ -96,10 +96,10 @@ controls sized for a finger. Your browser's "Add to Home Screen" installs the ap
 | Cloud | Hold a point | Opens its actions |
 | Cloud | ⌖ | Centers the cloud on the point in hand |
 
-SampleLibrary answers on its own computer. To open your library on a phone or another computer on
-the same network, turn on **Open on my home network** on the setup page and restart SampleLibrary.
+SampleRipper answers on its own computer. To open your library on a phone or another computer on
+the same network, turn on **Open on my home network** on the setup page and restart SampleRipper.
 The setup page then shows the address to open on the other device. Other devices can browse and play
 your library, and see your folders, labels, ratings and favorites as they are; you change them, and
-the setup, on the computer SampleLibrary runs on. Anyone on the same network can do the same, so use
+the setup, on the computer SampleRipper runs on. Anyone on the same network can do the same, so use
 it only on a network you trust, such as your home Wi-Fi. Turn the switch off and restart to close
 it again.

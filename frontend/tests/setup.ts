@@ -22,7 +22,7 @@ afterEach(() => {
     cleanup();
 });
 
-// Most tests stand where the SampleLibrary app runs, where labels are shown and may be changed; a
+// Most tests stand where the SampleRipper app runs, where labels are shown and may be changed; a
 // test of a read-only page or of a site says otherwise for itself, and goes back to this after.
 vi.mock("../src/samples/useCurationAccess", () => ({
     CURATION_ACCESS_CACHE_KEY: "curation-access",

@@ -15,7 +15,7 @@ from samplecore.storage.repositories.sample_category import PostgresSampleCatego
 from tests.samplecloud.backends.test_teacher_backend import RecordingTeacher
 from tests.samplecloud.categories.test_scoring import KICK_HASH, VOCABULARY, seed_listening_experiment
 
-PROGRAM = "samplelibrary cloud categorize"
+PROGRAM = "sampleripper cloud categorize"
 
 
 def _write_config(tmp_path: Path, database_url: str) -> Path:

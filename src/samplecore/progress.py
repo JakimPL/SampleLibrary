@@ -15,7 +15,7 @@ from tqdm import tqdm
 from samplecore.models.base import FROZEN
 from samplecore.storage.atomic import write_bytes_atomically
 
-PROGRESS_FILE_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_PROGRESS_FILE"
+PROGRESS_FILE_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_PROGRESS_FILE"
 REPORT_INTERVAL_SECONDS: Final[float] = 1.0
 NOTHING_RESUMED: Final[int] = 0
 
@@ -41,7 +41,7 @@ class ProgressReport(BaseModel):
 class ProgressBar:
     """One pass's count of finished work, drawn on the terminal and reported to a watching program.
 
-    The pipeline names a file in `SAMPLELIBRARY_PROGRESS_FILE` for each step it runs, and the bar
+    The pipeline names a file in `SAMPLERIPPER_PROGRESS_FILE` for each step it runs, and the bar
     writes its count there at most once every `REPORT_INTERVAL_SECONDS`, and once more as it closes,
     so the application shows a step's progress while the terminal keeps its own bar.
 

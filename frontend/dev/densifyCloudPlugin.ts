@@ -25,7 +25,7 @@ export interface DensifyCloudPluginOptions {
     readonly moduleTargetText: string | undefined;
 }
 
-const PLUGIN_NAME = "samplelibrary:densify-cloud";
+const PLUGIN_NAME = "sampleripper:densify-cloud";
 const SAMPLE_CLOUD_PATH = "/api/cloud";
 const MODULE_CLOUD_PATH = "/api/cloud/modules";
 const SAMPLE_LISTING_PATH = "/api/samples";

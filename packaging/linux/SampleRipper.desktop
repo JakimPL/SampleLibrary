@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=SampleRipper
+Comment=Browse, audition, label and morph the samples of your tracker modules
+Exec=SampleRipper
+Icon=sampleripper
+Categories=AudioVideo;Audio;
+Terminal=false

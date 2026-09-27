@@ -221,7 +221,7 @@ def _server_settings() -> str:
     return "\n".join(
         (
             "",
-            "# Written by SampleLibrary.",
+            "# Written by SampleRipper.",
             f"listen_addresses = '{MANAGED_HOST}'",
             "unix_socket_directories = ''",
             "",

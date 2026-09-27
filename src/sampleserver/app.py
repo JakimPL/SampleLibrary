@@ -98,7 +98,7 @@ def create_app(
         openapi_url=f"{API_PREFIX}/openapi.json" if policy.serves_docs else None,
         docs_url=f"{API_PREFIX}/docs" if policy.serves_docs else None,
         redoc_url=f"{API_PREFIX}/redoc" if policy.serves_docs else None,
-        title="SampleLibrary",
+        title="SampleRipper",
         description=DESCRIPTIONS[role],
         lifespan=lifespan,
     )

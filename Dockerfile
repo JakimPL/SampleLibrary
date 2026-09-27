@@ -22,20 +22,20 @@ RUN uv sync --extra server --extra morph --no-dev --no-editable --frozen
 
 FROM python:3.13-slim-bookworm AS runtime
 
-RUN useradd --create-home --uid 1000 samplelibrary
+RUN useradd --create-home --uid 1000 sampleripper
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=frontend /build/frontend /app/frontend
 COPY docker/site.toml /app/config.toml
 ENV PATH="/app/.venv/bin:${PATH}" \
-    SAMPLELIBRARY_CONFIG=/app/config.toml \
-    SAMPLELIBRARY_FRONTEND_DIRECTORY=/app/frontend \
+    SAMPLERIPPER_CONFIG=/app/config.toml \
+    SAMPLERIPPER_FRONTEND_DIRECTORY=/app/frontend \
     WEB_CONCURRENCY=1 \
     NUMBA_CACHE_DIR=/tmp/numba \
     PYTHONUNBUFFERED=1
-USER samplelibrary
+USER sampleripper
 
 # A healthy site is one whose catalog answers, on the port the platform names.
 HEALTHCHECK CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ['PORT']}/api/health\", timeout=5)"]
-ENTRYPOINT ["samplelibrary"]
+ENTRYPOINT ["sampleripper"]
 CMD ["site", "--host", "0.0.0.0"]

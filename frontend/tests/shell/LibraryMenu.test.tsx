@@ -15,16 +15,16 @@ vi.mock("../../src/api/setup", async () => {
 
 const READY: SetupState = {
     status: "ready",
-    config_path: "/home/person/.config/SampleLibrary/config.toml",
+    config_path: "/home/person/.config/SampleRipper/config.toml",
     sources: {
-        library_root: "/home/person/Music/SampleLibrary",
+        library_root: "/home/person/Music/SampleRipper",
         module_source_directory: "/home/person/Modules",
         sample_directories: [],
         sample_exclusions: [],
     },
     options: { build_cloud: true, open_to_network: false },
     build_device: { card: null },
-    suggested_library_root: "/home/person/Music/SampleLibrary",
+    suggested_library_root: "/home/person/Music/SampleRipper",
     manages_database: true,
     problem: null,
     build: null,
@@ -60,7 +60,7 @@ describe("LibraryMenu", () => {
         renderWorkspace();
 
         fireEvent.click(await screen.findByText("Library"));
-        fireEvent.click(screen.getByRole("button", { name: "Quit SampleLibrary" }));
+        fireEvent.click(screen.getByRole("button", { name: "Quit SampleRipper" }));
 
         expect(await screen.findByText("The closed page")).toBeInTheDocument();
     });

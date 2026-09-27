@@ -11,8 +11,8 @@ from trackmod.core.samples.depth import BitDepth
 
 from samplecore.models.channels import ChannelLayout
 
-HASH_DOMAIN: Final[str] = "sample-library:sample:v1"
-EQUIVALENCE_CLASS_HASH_DOMAIN: Final[str] = "sample-library:equivalence-class:v1"
+HASH_DOMAIN: Final[str] = "sample-ripper:sample:v1"
+EQUIVALENCE_CLASS_HASH_DOMAIN: Final[str] = "sample-ripper:equivalence-class:v1"
 
 
 def compute_sample_hash(*, depth: BitDepth, channels: ChannelLayout, frames: int, pcm: NDArray[np.float64]) -> str:

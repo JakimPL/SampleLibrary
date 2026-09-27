@@ -14,7 +14,7 @@ from versions import project_version
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Wrap the SampleLibrary executable into this system's installer.")
+    parser = argparse.ArgumentParser(description="Wrap the SampleRipper executable into this system's installer.")
     return parser.parse_args(argv)
 
 

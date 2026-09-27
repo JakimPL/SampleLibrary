@@ -5,7 +5,7 @@ from typing import Final
 
 from platformdirs import user_config_path, user_music_path
 
-APPLICATION_NAME: Final[str] = "SampleLibrary"
+APPLICATION_NAME: Final[str] = "SampleRipper"
 CONFIG_FILE_NAME: Final[str] = "config.toml"
 # The folder holding every package of this project: `src` in a source checkout, `site-packages` in an
 # installation. The checkout's paths below name files only where `runs_from_checkout()` holds.

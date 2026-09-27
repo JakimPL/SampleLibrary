@@ -28,7 +28,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.tracking.store import TRACKING_DATABASE_NAME
 from tests.samplecloud.evaluation.conftest import SeededCatalog, label_catalog
 
-PROGRAM = "samplelibrary cloud evaluate"
+PROGRAM = "sampleripper cloud evaluate"
 SETTINGS = EvaluationSettings(random_seed=0, fold_count=4, neighbor_count=3)
 
 

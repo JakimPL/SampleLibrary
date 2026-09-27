@@ -1,6 +1,6 @@
 # Architecture & Ownership
 
-SampleLibrary turns a personal collection of tracker modules, and folders of plain audio files
+SampleRipper turns a personal collection of tracker modules, and folders of plain audio files
 beside it, into a browsable, deduplicated sample library: a Postgres catalog of modules, samples,
 their tracker-specific properties and the sample files they were found in; a content-addressable
 store of extracted audio; detected equivalence classes between near-duplicate samples; and a web
@@ -14,12 +14,12 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 | Package | Owns | Depends on |
 |---|---|---|
 | `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the reading of a hand label as tag paths and the agreement between two of them (`samplecore.labeling`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the pitch rule that turns an occurrence rate and a pressed key into the one rate a sample is really played at, the anchoring rule that keeps a hand label attached to its sample, the sample files read in place from configured sample directories (`samplecore.sample_files` decodes one into the sample it holds, and `samplecore.storage.sample_audio.SampleAudio` is the one reader of every sample's audio, from the store or from its files), the waveform hygiene every analysis shares (folding to mono, the subsonic high-pass), the auditory front end (`samplecore.auditory`: an ERB-spaced gammatone bank, subband envelopes and the two-lobe modulation spectrum a listener hears flutter and roughness on, designed once as data so a numpy reading and a torch loss apply the same kernels), and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `scipy`, `pydantic`, `soundfile` |
-| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, scanning the configured sample directories into the catalog in place (`sampleextract.files`, the `samplelibrary files` command), spreading either pass over worker processes (`sampleextract.parallel`), computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each) and folding those notes into the rate each sample is heard at, the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
+| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, scanning the configured sample directories into the catalog in place (`sampleextract.files`, the `sampleripper files` command), spreading either pass over worker processes (`sampleextract.parallel`), computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each) and folding those notes into the rate each sample is heard at, the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `sampledescriptor` trains, and through its text tower gives every sample a category from a vocabulary of prompts (`samplecloud.categories`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. The module layout (`samplecloud.modules`) places each module by the distance between its set of samples and every other module's, over those same vectors. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the note events say the library plays alike, and whether it groups what a person labeled alike. Depends on `samplecore`, and on `sampledescriptor` inside its `learned` backend's factory, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sampledescriptor` (the `learned` backend), `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn`, `mlflow` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
-| `samplemorph` | The morph renderer: the envelope route, which moves the spectral envelope from one sample's analysis to the other's and sounds an excitation under it. `samplemorph.transport` analyzes a sound into the Gaussian spectrogram the route reads and maps two sounds' courses through time onto each other; `samplemorph.envelope` splits each frame into its cepstral envelope and its excitation and blends the envelopes in decibels, while the excitation sounds as the first sound's, the second's or the two crossfaded with the weight, so a chord stays one chord at every point of the path while its timbre travels. `samplemorph.coordinates` reads a sound's pitch by Hermes's subharmonic summation over constant-Q frames, and the envelope route can glide the excitation from the first sound's pitch to the second's; `samplemorph.vocoders.pghi` makes the magnitude audible by phase gradient heap integration. Held to one sound's course through time, the route is a filter on that sound: its whole path is the cepstral coefficients of the ratio between the two envelopes, which `samplemorph.envelope.response` measures and `samplemorph.envelope.filtering` applies at any weight, so a caller reads a pair once and moves its own weight. `samplemorph.routes` builds the route a selection names (`morph.yaml`: the excitation, the timeline, the envelope drawing and the glide; `morph-filter.yaml` beside it, the drawing a filter is read under) and names it for a status. `samplemorph.service` is the morph inference process (`samplelibrary morph serve`), which renders any point between two cataloged samples on request, reading a sample found in a sample directory from the file the request names inside the directories its own configuration lists, and is what the web API dials for a morph; it also hands over the filter between two samples, which holds for every point between them, so a caller rendering its own audio asks once per pair. `morph response` writes that filter from the shell. Depends on `samplecore` only. | `samplecore`, `librosa`, `pghipy`, `fastapi`, `uvicorn`, `pyyaml` (the `morph` extra) |
+| `samplemorph` | The morph renderer: the envelope route, which moves the spectral envelope from one sample's analysis to the other's and sounds an excitation under it. `samplemorph.transport` analyzes a sound into the Gaussian spectrogram the route reads and maps two sounds' courses through time onto each other; `samplemorph.envelope` splits each frame into its cepstral envelope and its excitation and blends the envelopes in decibels, while the excitation sounds as the first sound's, the second's or the two crossfaded with the weight, so a chord stays one chord at every point of the path while its timbre travels. `samplemorph.coordinates` reads a sound's pitch by Hermes's subharmonic summation over constant-Q frames, and the envelope route can glide the excitation from the first sound's pitch to the second's; `samplemorph.vocoders.pghi` makes the magnitude audible by phase gradient heap integration. Held to one sound's course through time, the route is a filter on that sound: its whole path is the cepstral coefficients of the ratio between the two envelopes, which `samplemorph.envelope.response` measures and `samplemorph.envelope.filtering` applies at any weight, so a caller reads a pair once and moves its own weight. `samplemorph.routes` builds the route a selection names (`morph.yaml`: the excitation, the timeline, the envelope drawing and the glide; `morph-filter.yaml` beside it, the drawing a filter is read under) and names it for a status. `samplemorph.service` is the morph inference process (`sampleripper morph serve`), which renders any point between two cataloged samples on request, reading a sample found in a sample directory from the file the request names inside the directories its own configuration lists, and is what the web API dials for a morph; it also hands over the filter between two samples, which holds for every point between them, so a caller rendering its own audio asks once per pair. `morph response` writes that filter from the shell. Depends on `samplecore` only. | `samplecore`, `librosa`, `pghipy`, `fastapi`, `uvicorn`, `pyyaml` (the `morph` extra) |
 | `sampledescriptor` | The learned descriptor the cloud embeds with: a log-frequency canonicalizer (`sampledescriptor.geometry` lays the grid over the analysis `samplemorph` reads) that turns a sample into a fixed-size sound image on a frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a `Descriptor` (`sampledescriptor.descriptors`) that reads the grid as one vector: distilled from the pretrained listening model, taught by retuned views that a retuning changes nothing, and by the hand labels what the listener calls alike. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner. Training (`sampledescriptor.training`) runs under a run tracker and reads a grid cache canonicalized once under the library root; `sampledescriptor.commands` holds the three shell commands (`cache-grids`, `train`, `embed`), and the ones that train import the trainer only when they run. Depends on `samplecore` and on the analysis kernels of `samplemorph`. | `samplecore`, `samplemorph`, `torch`, `lightning`, `threadpoolctl`, `mlflow`, `scikit-learn`, `librosa` (the `descriptor` extra) |
-| `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples, and the morph routes, which relay renders from the inference process over HTTP. `create_app` takes a `ServiceRole`: a reader, what `samplelibrary serve` and a deployed site run, serves no route that writes, and a curator, what the SampleLibrary app runs, also serves the label write, to the person at the computer it runs on alone (`sampleserver.local_person`). `GET /api/curation/access` tells a page which of the two it talks to. Every route is served under `API_PREFIX` (`/api`), which keeps the whole API inside one path segment and leaves every other path to the single-page application's own routes. The app connects as a service role (see [The three databases](#the-three-databases)): a reader may write nothing at all, and a curator may write labels and nothing else, which Postgres itself enforces. Every catalog read also opens its connection read-only, so a route handler reading the catalog writes nothing under either role. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn`, `httpx` (the `server` extra) |
-| `samplelibrary` | The `samplelibrary` command line: one parser naming every operation on the library, which hands the rest of a command line to the module owning that command and imports that module as the command runs, so listing the commands stays instant and each command needs its own package's extras alone. A global `--config` sets `SAMPLELIBRARY_CONFIG` and drops any exported `SAMPLELIBRARY_DATABASE_URL`, so the file it names supplies the database too, and every process a command starts inherits both -- uvicorn's workers and a pipeline's worker processes included. The dispatcher accepts a command's own arguments only after its name. It also holds the commands that belong to no pipeline: `setup` (the config file and the databases), `reset`, and `tracking uri` / `tracking ui`, and the sandbox's synthetic modules and sample pack (`samplelibrary.sandbox`). Every command ends with one of the statuses `samplecore.exit_status.ExitStatus` names: 0 once its work is committed, per-item failures included as warnings, 1 when something broke, 2 for a malformed command line, 3 for a request it refuses, and 4 for a process that outgrew its memory ceiling. `--memory-cap 16G` holds the command and everything it starts to a memory ceiling before it loads anything of its own (`samplelibrary.limits`): on Linux the process starts again inside a systemd user scope with swap closed off and reads the ceiling back from its own control group, on Windows it assigns itself to a job object of that name, and a system offering neither refuses a ceiling rather than running uncapped. `--memory-scope` names the scope, which is what another process finds a running step by. When `SAMPLELIBRARY_STEP_LOCK` names a lock, the dispatcher holds that Postgres advisory lock for the life of the command, which is how a pipeline recognizes a step still running. It also holds `samplelibrary.app`, the application a person runs without a terminal (see [The application](#the-application)). It sits over every other package. | every package above |
+| `sampleserver` | The FastAPI API serving the catalog, cross-references, equivalence classes, spectral distances, stats, and cloud coordinates to the frontend, plus the curation routes recording a person's own decisions about samples, and the morph routes, which relay renders from the inference process over HTTP. `create_app` takes a `ServiceRole`: a reader, what `sampleripper serve` and a deployed site run, serves no route that writes, and a curator, what the SampleRipper app runs, also serves the label write, to the person at the computer it runs on alone (`sampleserver.local_person`). `GET /api/curation/access` tells a page which of the two it talks to. Every route is served under `API_PREFIX` (`/api`), which keeps the whole API inside one path segment and leaves every other path to the single-page application's own routes. The app connects as a service role (see [The three databases](#the-three-databases)): a reader may write nothing at all, and a curator may write labels and nothing else, which Postgres itself enforces. Every catalog read also opens its connection read-only, so a route handler reading the catalog writes nothing under either role. | `samplecore`, `sqlalchemy`, `fastapi`, `uvicorn`, `httpx` (the `server` extra) |
+| `sampleripper` | The `sampleripper` command line: one parser naming every operation on the library, which hands the rest of a command line to the module owning that command and imports that module as the command runs, so listing the commands stays instant and each command needs its own package's extras alone. A global `--config` sets `SAMPLERIPPER_CONFIG` and drops any exported `SAMPLERIPPER_DATABASE_URL`, so the file it names supplies the database too, and every process a command starts inherits both -- uvicorn's workers and a pipeline's worker processes included. The dispatcher accepts a command's own arguments only after its name. It also holds the commands that belong to no pipeline: `setup` (the config file and the databases), `reset`, and `tracking uri` / `tracking ui`, and the sandbox's synthetic modules and sample pack (`sampleripper.sandbox`). Every command ends with one of the statuses `samplecore.exit_status.ExitStatus` names: 0 once its work is committed, per-item failures included as warnings, 1 when something broke, 2 for a malformed command line, 3 for a request it refuses, and 4 for a process that outgrew its memory ceiling. `--memory-cap 16G` holds the command and everything it starts to a memory ceiling before it loads anything of its own (`sampleripper.limits`): on Linux the process starts again inside a systemd user scope with swap closed off and reads the ceiling back from its own control group, on Windows it assigns itself to a job object of that name, and a system offering neither refuses a ceiling rather than running uncapped. `--memory-scope` names the scope, which is what another process finds a running step by. When `SAMPLERIPPER_STEP_LOCK` names a lock, the dispatcher holds that Postgres advisory lock for the life of the command, which is how a pipeline recognizes a step still running. It also holds `sampleripper.app`, the application a person runs without a terminal (see [The application](#the-application)). It sits over every other package. | every package above |
 
 ## Boundaries the import-linter contracts enforce
 
@@ -45,9 +45,9 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
   package, and the shell and the service stay independent of each other, two skins over one pipeline. The
   web API reaches the service over HTTP, which is what keeps the analysis stack out of the API process while
   morphs play in the app.
-- `samplelibrary.app` never imports `samplecloud`, `sampledescriptor`, `samplemorph`, torch or librosa: the
+- `sampleripper.app` never imports `samplecloud`, `sampledescriptor`, `samplemorph`, torch or librosa: the
   application runs the pipeline and the renderer as programs of its own, and its own process stays light.
-- `samplelibrary` sits over every package, and none of them imports it. Each command keeps its
+- `sampleripper` sits over every package, and none of them imports it. Each command keeps its
   parser and its `main(argv, prog=...)` in the package that owns the work, so a test runs a command
   the way a shell does.
 
@@ -77,7 +77,7 @@ table: two experiments extracting concurrently write disjoint rows, keyed by
 whichever experiment has been deliberately *promoted* (`samplecloud.reduce.reduce_and_persist_coordinates`,
 given an explicit `experiment_id`), not per-experiment scratch space. `cloud_promotion` holds one row
 naming that experiment, written in the same transaction as the coordinates, which is how a later
-pass knows which experiment the cloud shows: `samplelibrary cloud embed --resume-promoted` resumes
+pass knows which experiment the cloud shows: `sampleripper cloud embed --resume-promoted` resumes
 it rather than opening a new one, and the pipeline's `cloud` step is satisfied once it names the
 learned experiment.
 
@@ -117,7 +117,7 @@ keys still reads as finished and a resumed pass spares it a second parse.
 whole application plays a sample back at -- a click in the cloud, a listing thumbnail and the
 waveform panel all sound the same sample identically because all three read this one number.
 Answering it means folding tens of millions of note events against the occurrences they reach, some
-fourteen seconds of work over this catalog, so `samplelibrary notes` takes it once at the end of its
+fourteen seconds of work over this catalog, so `sampleripper notes` takes it once at the end of its
 own pass and writes the whole answer down; a served request reads it per sample. A sample no pattern
 plays has no row, and a reader falls back to `choose_dominant_rate` over its occurrences' own rates
 -- what a module declares the waveform plays at, which is the closest reading left. Both rules break
@@ -138,7 +138,7 @@ what they think of it, as a rating from one to five; and whether it belongs in t
 and it is the one thing in this library no pass can rebuild. It therefore sits on a `MetaData` of its
 own, in a Postgres schema of its own (`samplecore.storage.curation`), apart from the single
 `MetaData` every other table belongs to. Both places this project empties a database —
-`samplelibrary reset` and the test suite's own teardown — iterate
+`sampleripper reset` and the test suite's own teardown — iterate
 `database.metadata.sorted_tables` (`samplecore.storage.reset` owns the first), so a table registered on the curation metadata is beyond their
 reach by construction rather than by an exemption list somebody has to keep current. For the same
 reason it carries no foreign key into the catalog: one would either delete these rows along with the
@@ -160,7 +160,7 @@ the overlap of those closed sets, from nothing shared to the same label, which g
 along the hierarchy -- a closed hi-hat beside an open one earns part of what a closed one would --
 and reads a specification as a refinement of an agreement. Tags are attributes a sample carries
 side by side, never classes it must pick one of, which is what lets a treatment such as `LO-FI` be
-judged apart from a source such as `SNARE`. `samplelibrary annotations vocabulary` lists the tags in
+judged apart from a source such as `SNARE`. `sampleripper annotations vocabulary` lists the tags in
 use as a tree with counts and names the wording worth a second look: a name standing both as a
 top level and as a specification under another, and tags carried by one sample. It reads and changes
 nothing; settling the wording stays with the person, in the interface.
@@ -188,7 +188,7 @@ alone would be lost the moment that changes. Every annotation therefore also rec
 instrument index, sample slot, and the occurrence's name — or, for a sample found only in sample
 directories, the sample file it was chosen from. `SampleAnnotation.anchor` is the union of the two,
 told apart by `kind` in the JSONL a transfer writes, and the table keeps both anchors' columns with a
-CHECK holding each row to exactly one of them. `samplelibrary annotations relink` reads each anchor
+CHECK holding each row to exactly one of them. `sampleripper annotations relink` reads each anchor
 back to recover whatever sample sits there now. The annotation is stored per sample even when it was
 applied to a whole equivalence class at once, since a class is identified by a content hash over its
 members and gains a different identity the moment its membership changes; `source` records which
@@ -201,8 +201,8 @@ sample hash, which is that table's primary key — so the join cannot fan out an
 consistent with the page it describes. `favorites_only` and `minimum_rating` therefore narrow the
 whole catalog rather than one loaded window, which is what makes a collection scattered across a
 hundred thousand samples browsable as a collection. Since every listing request now reaches that
-schema, the catalog's owner prepares it before any API serves the catalog -- `samplelibrary setup
-database`, any pipeline run, or the SampleLibrary app opening its library -- since the roles the API
+schema, the catalog's owner prepares it before any API serves the catalog -- `sampleripper setup
+database`, any pipeline run, or the SampleRipper app opening its library -- since the roles the API
 connects as may create nothing.
 
 Every one of these decisions is made where a sample is met: the samples listing edits the label
@@ -223,13 +223,13 @@ needs, and holds, no privilege on the history, and cannot edit or erase it. The 
 the moment its table is created, recorded in `curation.annotation_history_start`, with a baseline
 entry for every annotation standing then, so every moment from then on can be restored to, the
 moments before a library's first label included.
-`samplelibrary annotations history` lists the latest entries, and `annotations restore --at
+`sampleripper annotations history` lists the latest entries, and `annotations restore --at
 <moment>` brings every annotation back to how it stood at that moment, a dry run until `--confirm`:
 it writes whole rows back from the history, anchors included, through the table, so the history
 records the restore too and restoring to the moment before it undoes it. A moment before the
 history begins is refused.
 
-`samplelibrary annotations export` writes every annotation to JSONL as the copy that outlives the
+`sampleripper annotations export` writes every annotation to JSONL as the copy that outlives the
 database, and `import` merges a file back without clearing anything, in one transaction under the
 same lock; a file naming one sample on two lines is refused whole, naming the lines. `relink` leaves
 an annotation alone when the sample now in its slot carries a decision of its own, and names it.
@@ -239,11 +239,11 @@ already took in a given file is one lookup, wherever that file sits now.
 
 Local, machine-specific configuration (the module source directory, the library root, the catalog's
 connection URL) is read from a gitignored `config.toml` via `samplecore.config.load_config`, never
-hardcoded into source; the connection URL can also be supplied via the `SAMPLELIBRARY_DATABASE_URL`
+hardcoded into source; the connection URL can also be supplied via the `SAMPLERIPPER_DATABASE_URL`
 environment variable (taking precedence over the config file), so credentials need not live in a
 file at all. A command given `--config` reads the database from that file alone. `config.example.toml`
 documents the expected shape and names no password: it writes `<password>` in each database URL,
-`samplelibrary setup config` puts a new password of its own in each one as it writes `config.toml`,
+`sampleripper setup config` puts a new password of its own in each one as it writes `config.toml`,
 readable by its owner alone, and a config still carrying `<password>` is refused. No file this
 repository publishes names a password anything can log in with.
 
@@ -260,18 +260,18 @@ client and server share a filesystem the way a file-path-based `COPY` would.
 
 ## The three databases
 
-One Postgres server carries three: the real library, `samplelibrary_dev` for the disposable
-sandbox, and `samplelibrary_test` for the suite. `scripts/build_dev_library.py` builds the sandbox from
-`samplelibrary.sandbox`, which the suite reads the same modules and sample pack from,
-together with a config naming `samplelibrary_dev` on the server, role and password of the configured
+One Postgres server carries three: the real library, `sampleripper_dev` for the disposable
+sandbox, and `sampleripper_test` for the suite. `scripts/build_dev_library.py` builds the sandbox from
+`sampleripper.sandbox`, which the suite reads the same modules and sample pack from,
+together with a config naming `sampleripper_dev` on the server, role and password of the configured
 library (`provisioning.development_database_url`), and an inference address of its own, so the
 sandbox's API never dials the real library's renderer. One role, named by `config.toml`'s `database_url`, owns all
 three.
 
 Two more roles serve the catalog over HTTP (`samplecore.storage.service_roles`), each with no power
-over the server and owning nothing. The reader, named by `server_database_url`, is what `samplelibrary
+over the server and owning nothing. The reader, named by `server_database_url`, is what `sampleripper
 serve` and a deployed site connect as: it reads every catalog table and the labels, and writes
-nothing. The curator, named by `curation_database_url`, is what the SampleLibrary app's catalog
+nothing. The curator, named by `curation_database_url`, is what the SampleRipper app's catalog
 connects as: it also inserts, updates and deletes rows of `curation.sample_annotation` and adds tag
 ranks, and holds nothing on the label history, which its trigger writes with the owner's rights.
 `grant_service_role` grants exactly that, idempotently, and `check_service_role` logs in as a role and
@@ -280,7 +280,7 @@ as `pg_read_server_files`, included), no ownership, no `CREATE`, no temporary ta
 the API reads readable, and exactly its service's writes, naming each difference. Postgres lets every
 role connect to a new database and create temporary tables in it, so granting takes both from
 `PUBLIC` and grants each service role the connection alone. A library keeping its own
-server creates `samplelibrary_reader` and `samplelibrary_curator` itself on every start, with
+server creates `sampleripper_reader` and `sampleripper_curator` itself on every start, with
 passwords in `library_root/postgres/roles.json`; the cluster's folder, `roles.json` and `cluster.json`
 are readable by their owner alone from the moment they are written.
 
@@ -290,7 +290,7 @@ Postgres stores as it is: the role logs in with the password, while the statemen
 server log recording that statement, and the statement `setup database` prints for a person to run
 carry only what the server keeps.
 
-`samplelibrary setup database` (`just database`) creates whichever of the roles and the databases
+`sampleripper setup database` (`just database`) creates whichever of the roles and the databases
 are missing and adds any missing tables to the library and the sandbox, leaving every row in place,
 so it is safe against a populated library. It grants each service role its rights in both, then
 logs in as it to confirm its password and its rights. `samplecore.storage.cluster`
@@ -298,24 +298,24 @@ owns that work: `quoting` turns a name or a password into a fragment of SQL and 
 cannot carry (an empty identifier, or a NUL byte, which the driver would otherwise cut a name
 short at), `statements` holds every statement this project runs against the cluster rather than
 inside one database, and `provisioning` decides what to ask for. `CREATE ROLE` needs a superuser,
-which `SAMPLELIBRARY_ADMIN_DATABASE_URL` supplies where the library's own credentials cannot;
+which `SAMPLERIPPER_ADMIN_DATABASE_URL` supplies where the library's own credentials cannot;
 without it the command reports the statement to run by hand.
 
-Which database a run reaches is `database_url`, overridden by `SAMPLELIBRARY_DATABASE_URL`, which
+Which database a run reaches is `database_url`, overridden by `SAMPLERIPPER_DATABASE_URL`, which
 is how a deployment supplies credentials that never live in a file; the service roles' URLs follow
-`SAMPLELIBRARY_SERVER_DATABASE_URL` and `SAMPLELIBRARY_CURATION_DATABASE_URL` the same way. `--config` wins over both: the
+`SAMPLERIPPER_SERVER_DATABASE_URL` and `SAMPLERIPPER_CURATION_DATABASE_URL` the same way. `--config` wins over both: the
 `dev` recipes pass the sandbox's config, and the file's database is the one they reach whatever the
-environment holds. The suite reads `SAMPLELIBRARY_TEST_DATABASE_URL`, then the server the
-configuration names under the `samplelibrary_test` database, then `samplelibrary_test` on localhost,
+environment holds. The suite reads `SAMPLERIPPER_TEST_DATABASE_URL`, then the server the
+configuration names under the `sampleripper_test` database, then `sampleripper_test` on localhost,
 and gives each `pytest -n` worker a database of its own, created and dropped around the run: that is
-what the role's `CREATEDB` grant is for, and why `samplelibrary_test` itself stays empty. The tests of
+what the role's `CREATEDB` grant is for, and why `sampleripper_test` itself stays empty. The tests of
 the service roles create them in a library's own server, whose owner is a superuser, so the shared
 test server needs no right to create roles.
 
 ## Samples read in place
 
 `sample_directories` in `config.toml` names folders of plain audio files, and
-`samplelibrary files` catalogs every WAV, AIFF and FLAC file inside them without copying a byte:
+`sampleripper files` catalogs every WAV, AIFF and FLAC file inside them without copying a byte:
 `sample_file` holds one row per file, keyed by the configured directory and the file's forward-slash
 path inside it, naming the sample the file decodes to, the rate the file declares, and the file's
 size and write time. `sample_exclusions` lists shell patterns matched without regard to case against
@@ -356,8 +356,8 @@ the nominal header the way it does for every sample.
 
 ## Running extraction in parallel
 
-`samplelibrary extract --workers count` spends that many processes on one corpus, defaulting to one
-per core up to `MAXIMUM_AUTOMATIC_WORKERS`, and `samplelibrary files --workers count` does the same
+`sampleripper extract --workers count` spends that many processes on one corpus, defaulting to one
+per core up to `MAXIMUM_AUTOMATIC_WORKERS`, and `sampleripper files --workers count` does the same
 for the sample directories. `sampleextract.parallel` owns the arrangement for both: the caller walks
 the collection once and hands the supervisor the work list, the pass one share runs and the way
 summaries combine; `divide` splits the sorted discovery into one share per worker by taking every
@@ -397,7 +397,7 @@ no retry anywhere in this project to fall back on.
 ## Removing what the collection no longer holds
 
 Extraction adds and never removes, so a module deleted from the collection stays cataloged until
-`samplelibrary extract --prune` removes it. The pass decides what is gone from what the run itself
+`sampleripper extract --prune` removes it. The pass decides what is gone from what the run itself
 read (`sampleextract.prune`): every module file it opened, those it failed to parse included, stays.
 It refuses whenever that reading could be incomplete — a worker failed, a file or a folder could not
 be read, or the collection yielded no file while modules are cataloged, as an unmounted drive does —
@@ -407,7 +407,7 @@ sample neither a module occurrence nor a sample file holds (`SAMPLE_HOLDER_TABLE
 reaching either, and afterwards unlinks those samples' objects and sweeps any object the catalog does
 not name.
 
-`samplelibrary files --prune` does the same for sample files (`sampleextract.files.prune`). A file is
+`sampleripper files --prune` does the same for sample files (`sampleextract.files.prune`). A file is
 gone when the scan found it nowhere: deleted, named by an exclusion now, or under a directory the
 configuration no longer lists, since the configuration declares the collection. The prune refuses
 on the same incomplete readings, on a configured directory that is missing, and on a configured
@@ -417,7 +417,7 @@ point of an unplugged drive looks like. Hand annotations stay;
 
 ## Detecting near-duplicates
 
-`samplelibrary equivalence` finds pairs of samples that are one sound stored twice: at another bit
+`sampleripper equivalence` finds pairs of samples that are one sound stored twice: at another bit
 depth, at another level, or read at another rate. It trims each waveform's trailing silence and
 reduces it to two short fingerprints (`sampleextract.equivalence.fingerprint`): one over bands
 relative to the waveform's own length, which a change of depth or level leaves alone, and one over
@@ -453,7 +453,7 @@ them along with the rows they describe.
 
 ## Building the library in one command
 
-`samplelibrary pipeline run [TARGET…]` (`samplelibrary.pipeline`) builds the library through its
+`sampleripper pipeline run [TARGET…]` (`sampleripper.pipeline`) builds the library through its
 steps, one at a time and each in a process of its own: the catalog passes (`labels`, `modules`,
 `sample-files`, `notes`, `thumbnails`, `equivalence`, `relink`), the listening model's two readings
 and its categories (`teacher`, `hearing-teacher`, `categories`), the descriptor from its grid cache
@@ -509,7 +509,7 @@ moved since a step's last record under `pipeline/steps`.
 **Runs stop and resume.** The first step that fails, refuses, is interrupted or outgrows its ceiling
 ends the run, every later step is recorded as unreached, and the command exits with that step's
 status (1, 3, 130 or 4); a relaunch takes up there. A run holds a session advisory lock per library,
-and every step's process holds a lock named for its step (`SAMPLELIBRARY_STEP_LOCK`), so a second run,
+and every step's process holds a lock named for its step (`SAMPLERIPPER_STEP_LOCK`), so a second run,
 or a relaunch while an orphaned step still runs, is refused. A step runs in a session of its own
 under its memory scope; the run passes Ctrl+C on to it once, terminates it on the second and kills
 it on the third. Each run keeps `pipeline/runs/<time>-<id>/`: `events.jsonl`, `attempts.jsonl`, a
@@ -522,7 +522,7 @@ equal to one stopped at the same moment.
 removes the intent; a relaunch finding the intent finishes the removal first. `--redo STEP` drops a
 file step's artifact, sidecar and training run, keeping its sealed copy.
 
-**Scenarios prove it.** `tests/samplelibrary/pipeline/scenarios` runs the pipeline through its own
+**Scenarios prove it.** `tests/sampleripper/pipeline/scenarios` runs the pipeline through its own
 composition root (`run_pipeline_command`) in a process of its own over a small world of modules and
 sample files. A scenario states, act by act, the verdict of every step, how the run ended, and which
 parts of the catalog and the artifacts moved; every act is also held to the evidence the run left
@@ -538,7 +538,7 @@ shortest sequence showing it.
 
 ## The application
 
-`samplelibrary app` (`samplelibrary.app`) is what a person without a terminal runs. One uvicorn
+`sampleripper app` (`sampleripper.app`) is what a person without a terminal runs. One uvicorn
 process serves one ASGI app: the setup routes under `/api/setup`, the catalog API behind them, and
 the built frontend. The `Launcher` owns what the library needs:
 
@@ -562,10 +562,10 @@ the built frontend. The `Launcher` owns what the library needs:
   `/api` path outside the setup routes to it, and answers 503 while the library is closed.
 - **Renderer and builds.** `morph serve` runs as a child process, on the configured `[inference]`
   address or, when another program holds that port, on a free one of the same host
-  (`samplecore.ports`), which the catalog API then dials. A build runs `samplelibrary
-  pipeline run catalog|all` as a child process, and `samplelibrary.app.jobs` reads the run's
+  (`samplecore.ports`), which the catalog API then dials. A build runs `sampleripper
+  pipeline run catalog|all` as a child process, and `sampleripper.app.jobs` reads the run's
   `events.jsonl` and the progress file each step's pass writes (`samplecore.progress`, named by
-  `SAMPLELIBRARY_PROGRESS_FILE`). A step's times come from its attempt's events, and a pass's
+  `SAMPLERIPPER_PROGRESS_FILE`). A step's times come from its attempt's events, and a pass's
   report carries the moment the pass started, from which the setup page estimates the time it has
   left.
 - **The person at this computer.** The app lists folders, writes the config file and records
@@ -579,13 +579,13 @@ the built frontend. The `Launcher` owns what the library needs:
   refused. Rewriting the config file keeps it readable by its owner alone.
 - **Devices at home.** The setup page's **Open on my home network** switch writes `exposure =
   "network"` or `"local"` (`samplecore.config_editing.LibraryOptions`), which the application
-  reads as it starts (`samplelibrary.app.listener.starting_policy`); a config it cannot read, or
+  reads as it starts (`sampleripper.app.listener.starting_policy`); a config it cannot read, or
   one serving the library to anyone, starts it on this computer alone. Opened, it listens on every
   address, and the devices the policy admits reach every path but the setup routes; label writes
   still ask for the person at this computer (`require_local_person`), and at most two morphs render
   at once. The setup page shows the address a device opens, this computer's address on its home
   network with the port, and asks for a restart while the switch differs from the run.
-- **Starts.** One application runs under each config (`samplelibrary.app.instance`). Its place
+- **Starts.** One application runs under each config (`sampleripper.app.instance`). Its place
   is a folder in the user's state folder named by a hash of the config's path, holding a lock the
   process keeps for its whole life and a record of the port it listens on and of the process
   itself, its id and start time. The system lets a lock go however its process ends, so a free lock
@@ -614,11 +614,11 @@ the built frontend. The `Launcher` owns what the library needs:
   never stops the database under the other.
 
 The packaged application is a PyApp executable (`just package`, `just executable`): it embeds the
-samplelibrary wheel, which carries the built frontend, with the `app` extra pinned to the lock and
+sampleripper wheel, which carries the built frontend, with the `app` extra pinned to the lock and
 torch's processor build. The wheel, its pinned requirements and the frontend bundle are built into
 `build/`, the executable into `bin/`, and the installers into `dist/`. On first start it installs Python and that wheel with uv. PyApp runs it as
 a GUI, in a process of its own: on Windows through pythonw, windowless, with its output in
-`app-<config hash>.log` in the user's log folder (`samplelibrary.app.console`), and every console program it starts, such
+`app-<config hash>.log` in the user's log folder (`sampleripper.app.console`), and every console program it starts, such
 as `pg_ctl`, starts hidden (`samplecore.processes`). `just installer` (`scripts/installers`,
 `packaging/`) wraps the executable into an Inno Setup installer, a disk image holding an app bundle,
 or an AppImage. The
@@ -630,7 +630,7 @@ Application workflow builds all three, smoke-testing each executable on a fresh 
 
 | | `local` (the default) | `network` | `public` |
 |---|---|---|---|
-| Listens on | 127.0.0.1 alone | every address | every address, `samplelibrary site` alone |
+| Listens on | 127.0.0.1 alone | every address | every address, `sampleripper site` alone |
 | Answers | the loopback address, naming the server by a local name | also devices on the home network's own ranges (10/8, 172.16/12, 192.168/16, 169.254/16, fc00::/7, fe80::/10, an IPv4 address inside IPv6 unwrapped), naming it by an address or this computer's name | anyone |
 | Sample file folders | full path, and whether the file is there | full path, and whether the file is there | the folder's name, no file state |
 | Labels, ratings, favorites | shown | shown | not served: null fields, the routes reading them answer 404, a listing narrowed or ordered by them 422 |
@@ -651,16 +651,16 @@ browser names it in `Sec-Fetch-Site`; only a link followed from it opens a page.
 the server and its headers can only turn it away. The page asks `GET /api/curation/access`, which
 answers what it may show and change (`curation_shown`, `label_editing`), and shows no control for a
 decision the server holds back. A served app opens a sample's file only in the sample directories
-its own configuration lists, whatever folder the catalog it serves names. `samplelibrary serve` binds
-only where the exposure listens and refuses `public`, which `samplelibrary site` serves, and the
-SampleLibrary app refuses `public` before it opens a library.
+its own configuration lists, whatever folder the catalog it serves names. `sampleripper serve` binds
+only where the exposure listens and refuses `public`, which `sampleripper site` serves, and the
+SampleRipper app refuses `public` before it opens a library.
 
 ### Publishing a library
 
-`samplelibrary publish` (`samplelibrary.publish`) puts a library on a site: its catalog in the site's
+`sampleripper publish` (`sampleripper.publish`) puts a library on a site: its catalog in the site's
 database, and its audio in `library_root/publication/objects`, a folder laid out as the store is, to
-upload. The database comes from `SAMPLELIBRARY_PUBLISH_DATABASE_URL` and the reader's password from
-`SAMPLELIBRARY_PUBLISH_READER_PASSWORD`, the environment alone. A plain `postgresql://` URL is read
+upload. The database comes from `SAMPLERIPPER_PUBLISH_DATABASE_URL` and the reader's password from
+`SAMPLERIPPER_PUBLISH_READER_PASSWORD`, the environment alone. A plain `postgresql://` URL is read
 through psycopg, and a server other than this computer is reached with `sslmode=require` and
 `channel_binding=require`: SCRAM binds the password to the TLS handshake, so a platform's proxy
 presenting a certificate no authority signed cannot stand between the two unnoticed.
@@ -676,7 +676,7 @@ Everything is read from one `REPEATABLE READ` snapshot of the library's catalog:
    left out when none of its files still reads as scanned. Anything else in the folder goes.
 3. **The catalog.** One transaction on the target: the schema, the reader created or given the new
    password (as its verifier) and granted what it reads, every table emptied, then each table's
-   published rows streamed by `COPY` from the snapshot. `samplelibrary.publish.rules` gives every
+   published rows streamed by `COPY` from the snapshot. `sampleripper.publish.rules` gives every
    table of the catalog and the curation schema one rule, and a test holds the rules to exactly the
    tables there are, so a table added later is published only once someone decided which of its
    rows go:
@@ -706,9 +706,9 @@ A publication replaces the whole catalog while the site's reads wait at most 60 
 
 ### The site
 
-`samplelibrary site` (`samplelibrary.site`) serves a library to anyone: the catalog's API and pages
+`sampleripper site` (`sampleripper.site`) serves a library to anyone: the catalog's API and pages
 through the same app `serve` builds, and the morph renderer beside them in one container. Before
-anything starts it refuses, each in a sentence of its own (`samplelibrary.site.admission`):
+anything starts it refuses, each in a sentence of its own (`sampleripper.site.admission`):
 
 - an exposure other than `public`;
 - a missing or malformed `$PORT`, which a hosting platform names;
@@ -746,29 +746,29 @@ rests on it for 120 ms.
 
 | Process | Connects as | May write |
 |---|---|---|
-| `samplelibrary serve`, `samplelibrary site` and its image | the reader, `server_database_url` | nothing |
-| the SampleLibrary app's catalog API | the curator, `curation_database_url` | `curation.sample_annotation`, one sample or one group of near-duplicates per request, and new tag ranks |
+| `sampleripper serve`, `sampleripper site` and its image | the reader, `server_database_url` | nothing |
+| the SampleRipper app's catalog API | the curator, `curation_database_url` | `curation.sample_annotation`, one sample or one group of near-duplicates per request, and new tag ranks |
 | the pipeline, every other command, `setup`, the app preparing its own database | the owner, `database_url` | everything |
 
 - **Postgres enforces the table.** Each service role holds exactly its service's rights, and a
-  start whose role holds more is refused: `samplelibrary serve` before any worker runs, the
-  SampleLibrary app before it opens the library. No request clears or truncates a table: the API
+  start whose role holds more is refused: `sampleripper serve` before any worker runs, the
+  SampleRipper app before it opens the library. No request clears or truncates a table: the API
   offers no such route, and the curator holds no `TRUNCATE`.
-- **Label writes exist only in the SampleLibrary app,** which takes them from the person at its
+- **Label writes exist only in the SampleRipper app,** which takes them from the person at its
   computer alone: a label write comes from the loopback address, addresses the app by a local
   name, was sent by a page from a local name when a page sent it, and passed no proxy. The app
   listens on 127.0.0.1, or on every address once opened to the home network, where other devices
   look and change nothing, and reads no forwarding headers. A served reader, a deployed site among
   them, declares no route that writes, which a sweep of every path and writing method holds.
 - **Every label change can be undone.** The history's trigger records every change whichever role
-  makes it, and neither service role can read, edit or erase the history. `samplelibrary
+  makes it, and neither service role can read, edit or erase the history. `sampleripper
   annotations restore --at <moment>` brings the labels back to any moment since the history began.
 - **What this leaves open:**
-  - The SampleLibrary app's own process holds the owner's rights, since it prepares its database and
+  - The SampleRipper app's own process holds the owner's rights, since it prepares its database and
     runs its builds, so the curator role confines the app's HTTP routes, not code running in that
     process.
   - A reverse proxy on the same computer that adds no forwarding header looks like a browser there.
-    Publish `samplelibrary serve`, never the SampleLibrary app.
+    Publish `sampleripper serve`, never the SampleRipper app.
   - A page served from another port of the same computer passes the Origin check.
   - Any program or user on this computer counts as its person: the loopback address carries no
     user.
@@ -802,20 +802,20 @@ rests on it for 120 ms.
 Two packages run as long-lived services: `sampleserver`, the API, and `samplemorph.service`, the
 morph inference process. `sampleextract` and `samplecloud` are one-shot offline batch commands,
 run by hand or on a schedule, never by the served app itself. The root `Dockerfile` builds the image
-of a site (`samplelibrary site`, [The site](#the-site)): a Node stage builds the frontend, and the
+of a site (`sampleripper site`, [The site](#the-site)): a Node stage builds the frontend, and the
 Python stages install the `server` and `morph` extras from the lock, so the API and its renderer
 share one container while `sampleextract`/`samplecloud`'s heavier dependencies (`umap-learn`,
 `scikit-learn`, torch) never reach it. The image runs as an unprivileged user (uid 1000), with the
 site's config, `docker/site.toml`, at `/app/config.toml`: `library_root` is `/library`, where the
 platform mounts the volume holding the published audio, the renderer listens on the loopback
 address, the exposure is `public` and `[server.visitors]` sizes the limits. It holds no credential:
-the platform names the reader's connection in `SAMPLELIBRARY_SERVER_DATABASE_URL`. Its environment
+the platform names the reader's connection in `SAMPLERIPPER_SERVER_DATABASE_URL`. Its environment
 runs one process (`WEB_CONCURRENCY=1`), and its command is `site --host 0.0.0.0`, on the port
 `$PORT` names; the health check reads `/api/health` there. `railway.json` builds the `Dockerfile` on
 Railway, checks `/api/health` as a deployment starts, restarts a site that ends with a failure, and
 rebuilds only when something the image holds changes. `docs/deploying.md` walks a person through it.
 
-The inference process (`samplelibrary morph serve`) installs the `morph` extra alone, reads the library
+The inference process (`sampleripper morph serve`) installs the `morph` extra alone, reads the library
 root and the sample directories its configuration lists, renders under the settings `morph.yaml` in
 `samplemorph/routes/selections/` names, as committed the envelope morph whose excitation crossfades both ends and
 glides between their read pitches, reads `morph-filter.yaml` beside it for the filters it hands over, and opens no database: a
@@ -851,7 +851,7 @@ Every route the API serves sits under `/api` (`sampleserver.app.API_PREFIX`), so
 names one thing: the frontend reaches `/api/samples` while a person's browser holds `/samples/{hash}`
 as a client route of its own. That is what lets the Vite dev server forward a single prefix to the
 backend and answer everything else with the application itself, so reloading a sample's own URL
-brings back the dashboard. `samplelibrary serve --frontend build/frontend` does the same without Vite:
+brings back the dashboard. `sampleripper serve --frontend build/frontend` does the same without Vite:
 `sampleserver.frontend.SinglePageApplication` serves the built files and answers every other path
 outside `/api` with `index.html`, and the image serves its own build this way. It is mounted through
 `FrontendMount`, which takes no path under `/api`, so the API answers a wrong method with 405 and
@@ -867,7 +867,7 @@ embedding has yet to run is laid out from its own listing first, one cluster per
 names -- the hand label, else the category, else the first word of its name -- which keeps
 every point on a real hash. The plugin runs under `vite` serve alone.
 
-`samplelibrary serve` loads the configuration and logs in as the reader role `server_database_url`
+`sampleripper serve` loads the configuration and logs in as the reader role `server_database_url`
 names before uvicorn starts, checking it with `check_service_role`. A missing or incomplete config,
 a config naming no reader, a role that may change anything, and a catalog nobody has prepared each
 end the start with one message and exit status 3, and a database that cannot be reached within ten
@@ -917,11 +917,11 @@ cheap query rather than a fresh parse of the whole embedding.
 
 Postgres supports genuine concurrent readers *and* writers against the same database, unlike this
 project's previous engine (DuckDB), which excluded every other connection -- read-only included --
-while one process held a write transaction open. A batch job (`samplelibrary extract`,
+while one process held a write transaction open. A batch job (`sampleripper extract`,
 `equivalence`, `thumbnails`, `cloud embed`) can now run alongside `sampleserver` serving live
 traffic without that exclusion; the operational concern that remains is a batch job's own resource
 footprint on the host machine (CPU contention, not lock contention -- still worth timing a heavy
-local run accordingly). `samplelibrary cloud embed` in particular writes into its own experiment
+local run accordingly). `sampleripper cloud embed` in particular writes into its own experiment
 (`sample_feature_vector`, scoped by `experiment_id`) and never touches `sample_cloud_coordinates`
 until `reduce_and_persist_coordinates`'s own explicit promotion step, so an in-progress extraction
 run has no visible effect on what the server or other experiments see until that promotion happens.
@@ -932,7 +932,7 @@ Measured on the real catalog of 127,588 samples over localhost on 2026-09-12, on
 before and after each tier of the network work. The stages script
 (`runs/cloud-2026-09-12/measure_stages.py` under the library root) times the server's own work
 with no server running; `measure_routes.sh` beside it reads wire bytes and times off a running
-`samplelibrary serve`; the browser's parse time is `JSON.parse` over the fetched text in the
+`sampleripper serve`; the browser's parse time is `JSON.parse` over the fetched text in the
 console.
 
 | Route or event | Before | After the trims | After the cache |
@@ -977,10 +977,10 @@ persisted "spectral distance" both derive directly from this vector's length and
 changing it -- adding, removing, or reweighting a feature group -- changes what similarity means
 for the whole library. Because every extraction run is scoped to its own `Experiment`, this no
 longer risks mixing incompatible vector shapes the way a single shared cache once did: run the
-changed extractor as a new experiment (`samplelibrary cloud embed --backend <name>`), inspect and
+changed extractor as a new experiment (`sampleripper cloud embed --backend <name>`), inspect and
 compare its result, and only promote it (`reduce_and_persist_coordinates` against that experiment's
 id) once satisfied -- the previously promoted experiment's `sample_cloud_coordinates` stay exactly
-as they were until that deliberate step. `samplelibrary cloud embed --backend <name> --extract-only`
+as they were until that deliberate step. `sampleripper cloud embed --backend <name> --extract-only`
 runs the extraction alone, for an experiment made to be measured or to teach another descriptor;
 `cloud embed --experiment-id N` resumes experiment N and promotes it.
 
@@ -1025,7 +1025,7 @@ to play at another rate -- a new module playing it, or a sample file declaring a
 occurrences -- is pending again, its vector replaced in the checkpoint that stores the new one, and
 the reproducibility probe checks only samples still heard at their vectors' rates.
 
-`samplelibrary cloud categorize` turns a `clap` experiment's vectors into categories. The text tower
+`sampleripper cloud categorize` turns a `clap` experiment's vectors into categories. The text tower
 reads a vocabulary of prompts in the hand-label grammar -- the shipped instrument list, the tags
 people wrote, or a file with one label per line -- into the same space, one cosine per sample and
 label ranks them, and each sample keeps its closest few under a new experiment of the `zero_shot`
@@ -1070,7 +1070,7 @@ scope and a digest of the samples it scored, which the run store records beside 
 Each metric reports the share of the catalog it describes, so a reader sees which part of the
 library a score speaks for. Splits are grouped by equivalence class, which changes nothing while
 `sample_relation` is empty and becomes correct on its own once it is not. One seed fixes every split
-and every draw, so a second run reproduces every number. `samplelibrary cloud evaluate` records each
+and every draw, so a second run reproduces every number. `sampleripper cloud evaluate` records each
 pass as a run in the tracking store beside the library (`samplecore.tracking`), one metric per
 question under its own namespace and the whole report as an artifact, so two descriptors are
 compared from the store rather than from two terminals; `--no-tracking` keeps a quick look out of
@@ -1087,7 +1087,7 @@ direction.
 
 ## Module cloud
 
-`samplelibrary cloud modules` (`samplecloud.modules`) lays modules out by the sounds of their
+`sampleripper cloud modules` (`samplecloud.modules`) lays modules out by the sounds of their
 samples, read through the promoted experiment's standardized spectral vectors. A module stands for
 the set of distinct samples it holds that carry a vector (`samplecloud.modules.membership`); a
 module with none of them gets no coordinate. Two modules lie apart by the symmetric Chamfer distance

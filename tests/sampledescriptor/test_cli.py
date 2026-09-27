@@ -31,7 +31,7 @@ from sampledescriptor.model_paths import descriptor_path
 from sampledescriptor.training.descriptor.cache import grid_cache_directory, open_grid_cache
 from tests.samplemorph.conftest import harmonic_tone
 
-PROGRAM = "samplelibrary descriptor"
+PROGRAM = "sampleripper descriptor"
 SAMPLE_FRAME_COUNT = 4096
 CATALOG_SIZE = 12
 SAMPLE_RATE_HZ = 8_363

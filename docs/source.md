@@ -1,6 +1,6 @@
 # Running from source
 
-This guide is for running SampleLibrary from a checkout of its repository. It covers building your
+This guide is for running SampleRipper from a checkout of its repository. It covers building your
 library with commands, every setting, and each service the app runs on. The installed app does all
 of this for you; the [README](../README.md) shows how to get it.
 
@@ -20,8 +20,8 @@ of this for you; the [README](../README.md) shows how to get it.
 ## Setup
 
 ```sh
-git clone https://github.com/JakimPL/SampleLibrary.git
-cd SampleLibrary
+git clone https://github.com/JakimPL/SampleRipper.git
+cd SampleRipper
 just install
 ```
 
@@ -45,8 +45,8 @@ Then create the databases:
 just database
 ```
 
-It makes sure the server holds your library's database, `samplelibrary_dev` for the development
-sandbox and `samplelibrary_test` for the tests, all owned by one role. It also creates the two roles
+It makes sure the server holds your library's database, `sampleripper_dev` for the development
+sandbox and `sampleripper_test` for the tests, all owned by one role. It also creates the two roles
 the API connects as, one that reads and one that also records your labels, each allowed nothing
 more. It creates whatever is missing and keeps every row already there, so it is safe to run at any
 time. When a step needs a
@@ -65,15 +65,15 @@ The `[library]` table:
 - `module_source_directory`: your module collection, read with every folder inside it. A library of
   sample folders alone leaves it out.
 - `library_root`: where the library keeps its extracted audio, models and recorded runs.
-- `database_url`: the PostgreSQL connection. The `SAMPLELIBRARY_DATABASE_URL` environment variable
+- `database_url`: the PostgreSQL connection. The `SAMPLERIPPER_DATABASE_URL` environment variable
   takes its place, except for a command given `--config`, which reads everything from the file it
   names. Left out, the library runs its own server in `library_root/postgres`, listening on this
   machine alone.
 - `server_database_url` and `curation_database_url`: on a server of your own, the roles
-  `samplelibrary serve` and the SampleLibrary app connect as. The first reads the library, the second
+  `sampleripper serve` and the SampleRipper app connect as. The first reads the library, the second
   also records your labels, and neither may change anything else; `just database` creates both with
-  the names and passwords these URLs hold. `SAMPLELIBRARY_SERVER_DATABASE_URL` and
-  `SAMPLELIBRARY_CURATION_DATABASE_URL` take their places. A library running its own server creates
+  the names and passwords these URLs hold. `SAMPLERIPPER_SERVER_DATABASE_URL` and
+  `SAMPLERIPPER_CURATION_DATABASE_URL` take their places. A library running its own server creates
   its roles itself.
 - `minimum_sample_frames`: the shortest sample the library keeps, 512 frames by default.
 - `sample_directories`: folders of WAV, AIFF and FLAC files to add, such as
@@ -84,16 +84,16 @@ The `[library]` table:
   `*` also matches across folders.
 
 The `[inference]` table holds `url`: the address the morph renderer listens on and the API reaches
-it at, `http://127.0.0.1:8010` by default. The SampleLibrary app starts its own renderer on this
+it at, `http://127.0.0.1:8010` by default. The SampleRipper app starts its own renderer on this
 address, or on another port of the same host when a program already holds this one.
 
 The `[server]` table holds `exposure`: who a served library answers. `"local"`, the default, is you
 on this computer alone, seeing everything the library holds, folders and your labels included.
 `"network"` also answers the devices on your home network, which may look and change nothing. The
 setup page's **Open on my home network** switch writes one or the other.
-`"public"` is a site on the internet, started with `samplelibrary site`, which shows no folder of
-yours and none of your labels, ratings or favorites. `samplelibrary serve` listens on 127.0.0.1
-unless this says otherwise, and refuses `"public"`; the SampleLibrary app refuses it too.
+`"public"` is a site on the internet, started with `sampleripper site`, which shows no folder of
+yours and none of your labels, ratings or favorites. `sampleripper serve` listens on 127.0.0.1
+unless this says otherwise, and refuses `"public"`; the SampleRipper app refuses it too.
 
 A site names how much each visitor may ask in `[server.visitors]`: `address_header`, the header its
 hosting platform names a visitor's address in (`"X-Real-IP"` on Railway); `burst` and
@@ -136,19 +136,19 @@ from, and only the steps whose inputs changed run again.
 
 A run that fails or that you stop with Ctrl+C stops at that step, and the next `just rebuild` picks
 up there. Each run keeps its logs and a record of every step under `pipeline/runs` in your library
-root. `uv run samplelibrary pipeline run --from-scratch` empties the catalog and everything the
+root. `uv run sampleripper pipeline run --from-scratch` empties the catalog and everything the
 pipeline built, keeping your labels, and builds it all again; `--redo descriptor` teaches the
 descriptor again on its own.
 
-Every operation on the library is a `samplelibrary` command: `uv run samplelibrary --help` lists
+Every operation on the library is a `sampleripper` command: `uv run sampleripper --help` lists
 them, and each command's `--help` lists its options. A few you will reach for:
 
-- `uv run samplelibrary extract --prune` removes the modules whose files left your collection, with
+- `uv run sampleripper extract --prune` removes the modules whose files left your collection, with
   the samples only they held.
-- `uv run samplelibrary files` scans the sample folders again, reading only the files that changed.
+- `uv run sampleripper files` scans the sample folders again, reading only the files that changed.
   `files --prune` removes the files that are gone, the ones your exclusions now leave out, and every
   file of a folder you took out of `sample_directories`.
-- `uv run samplelibrary equivalence` finds near-duplicates on its own.
+- `uv run sampleripper equivalence` finds near-duplicates on its own.
 
 Both prunes go ahead only when every folder reads and every configured folder holds files, so a
 disconnected drive keeps its samples in the library. A sample whose file is missing stays in the library, marked
@@ -165,7 +165,7 @@ the library again.
 `just app` runs everything in one process: the library's database, the API with the built web app,
 and the morph renderer, opened in your browser. Build the web app once with `just frontend-build`.
 When no config file is there yet, it opens on the setup page, which writes one for you. It listens
-on the port it used last, or on a free one, and `--port` picks one. `uv run samplelibrary app
+on the port it used last, or on a free one, and `--port` picks one. `uv run sampleripper app
 --quit` ends it. The checkout's config and the installed app's config each run an app of their own.
 
 To work on the app, run its parts in terminals of their own:
@@ -181,15 +181,15 @@ just frontend-dev      # the web app; open http://localhost:5173
 
 | Service | Address | To change it |
 |---|---|---|
-| API | `127.0.0.1:8000` | `uv run samplelibrary serve --port <port>` |
+| API | `127.0.0.1:8000` | `uv run sampleripper serve --port <port>` |
 | Web app in development | `localhost:5173` | Vite picks the next free port |
 | Morph renderer | `127.0.0.1:8010` | `[inference] url` in `config.toml` |
-| MLflow | `127.0.0.1:5000` | `uv run samplelibrary tracking ui --port <port>` |
+| MLflow | `127.0.0.1:5000` | `uv run sampleripper tracking ui --port <port>` |
 
 To point the development web app at an API on another port, set `VITE_BACKEND_DEV_URL` before
 starting it: `VITE_BACKEND_DEV_URL=http://127.0.0.1:8001 just frontend-dev` in a POSIX shell, or
 `$env:VITE_BACKEND_DEV_URL = "http://127.0.0.1:8001"; just frontend-dev` in PowerShell.
-`uv run samplelibrary serve --frontend build/frontend` serves the built web app together with the
+`uv run sampleripper serve --frontend build/frontend` serves the built web app together with the
 API at `http://127.0.0.1:8000`. The API describes its routes at `http://127.0.0.1:8000/api/docs`.
 
 `just tracking-ui` opens MLflow over the runs every training and evaluation pass recorded.
@@ -203,7 +203,7 @@ just frontend-dev-lan
 This starts the development web app for every device on your network, passing their requests on to
 the API `just serve` runs; open the address it prints on your phone. The API answers devices on
 your network once your config serves the library to them, with `exposure = "network"` under
-`[server]`; left at `"local"`, it answers this computer alone. [Using SampleLibrary](using.md#phones-and-tablets)
+`[server]`; left at `"local"`, it answers this computer alone. [Using SampleRipper](using.md#phones-and-tablets)
 describes the app on a phone. The API `just serve` runs reads the library and changes nothing, so
 every device on the network sees your labels as they are; you change them in `just app` on the
 computer it runs on.
@@ -224,7 +224,7 @@ is a filter on it, and the whole path between two samples fits in a few numbers 
 caller applies at any weight:
 
 ```sh
-uv run samplelibrary morph response --first <hash> --second <hash> \
+uv run sampleripper morph response --first <hash> --second <hash> \
   --selection src/samplemorph/routes/selections/morph-filter.yaml --output pair.bin
 ```
 
@@ -254,6 +254,13 @@ without them. `just docker-publish` publishes the library into that database, re
 and the site serves it on http://127.0.0.1:8000. `just docker-build` builds the image alone. The
 architecture's [Deployment](architecture.md#deployment) section describes what the image holds.
 
+When your own PostgreSQL already listens on port 5432, put a free port in front of both the compose
+command and the publication, such as `POSTGRES_PORT=5439 docker compose up -d postgres` and
+`POSTGRES_PORT=5439 just docker-publish`. A database compose started before `just docker-secrets`
+keeps the password it was first started with, and refuses the new one: start the rehearsal under a
+name of its own, such as `docker compose -p rehearsal ...` on every compose command, or remove the
+old database with `docker compose down -v`, which deletes everything it holds.
+
 ## Recipes
 
 | Recipe | What it does |
@@ -267,7 +274,7 @@ architecture's [Deployment](architecture.md#deployment) section describes what t
 | `just frontend-build` | Builds the web app into `build/frontend` |
 | `just frontend-dev`, `just frontend-dev-lan` | Start the development web app, on this machine alone or for every device on the network |
 | `just tracking-ui` | Opens MLflow over the recorded runs |
-| `just capped <command>` | Runs a `samplelibrary` command under a 16 GB ceiling; `just MEMORY_CAP=24G capped …` raises it |
+| `just capped <command>` | Runs a `sampleripper` command under a 16 GB ceiling; `just MEMORY_CAP=24G capped …` raises it |
 | `just reset` | Empties the catalog and the stored audio once you confirm, keeping labels, ratings, favorites, models and runs |
 | `just docker-secrets`, `just docker-publish`, `just docker-build` | Write the rehearsal's passwords, publish a library into its database, build the site's image |
 

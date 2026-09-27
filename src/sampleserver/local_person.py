@@ -20,7 +20,7 @@ FORWARDING_HEADERS: Final[tuple[str, ...]] = (
     "x-forwarded-proto",
     "x-real-ip",
 )
-LOCAL_PERSON_DETAIL: Final[str] = "This is only available on the computer SampleLibrary runs on."
+LOCAL_PERSON_DETAIL: Final[str] = "This is only available on the computer SampleRipper runs on."
 POLICY_VIOLATION_CLOSE_CODE: Final[int] = 1008
 
 

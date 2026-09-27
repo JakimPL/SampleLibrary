@@ -6,12 +6,12 @@ from typing import Any, Final
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 BUILT_FRONTEND: Final[Path] = Path("build") / "frontend"
-PACKAGED_FRONTEND: Final[str] = "samplelibrary/app/frontend"
+PACKAGED_FRONTEND: Final[str] = "sampleripper/app/frontend"
 STANDARD_WHEEL: Final[str] = "standard"
 
 
 class FrontendBuildHook(BuildHookInterface):  # type: ignore[type-arg]
-    """Puts the built frontend inside every regular wheel, where `samplelibrary app` serves it from.
+    """Puts the built frontend inside every regular wheel, where `sampleripper app` serves it from.
 
     A checkout without a build, and an editable install, go without it; the application then serves
     a checkout's own `build/frontend`.
