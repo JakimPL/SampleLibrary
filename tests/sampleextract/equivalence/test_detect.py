@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Final
 
@@ -21,11 +22,15 @@ from samplecore.models.sample_pcm import SamplePCM
 from samplecore.process_pool import IN_PROCESS_WORKERS
 from samplecore.sample_files.decoding import decode_sample_file
 from samplecore.storage import audio_store
+from samplecore.storage.database import start_batch
+from samplecore.storage.repositories.fingerprint import PostgresSampleFingerprintRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.sample_audio import SampleAudio
-from sampleextract.equivalence.candidates import CandidateBlock, Fingerprints
 from sampleextract.equivalence.detect import EquivalenceSummary, detect_equivalences
+from sampleextract.equivalence.fingerprint import FINGERPRINT_VERSION
+from sampleextract.equivalence.fingerprinting import FingerprintedSamples
+from sampleextract.equivalence.pairs import WaveformCache
 from sampleextract.files.ingest import ingest_sample_file
 
 SAMPLE_RATE = 44100
@@ -172,40 +177,101 @@ def test_a_negative_sample_limit_is_refused(connection: Connection, tmp_path: Pa
         detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path), sample_limit=-1)
 
 
-def test_a_failure_in_a_later_block_keeps_the_relations_earlier_blocks_found(
+def _candidates(summary: EquivalenceSummary) -> int:
+    return summary.gain_candidates + summary.resampled_candidates
+
+
+def _relation_pairs(connection: Connection) -> set[tuple[str, str, RelationType]]:
+    return {
+        (relation.subject_hash, relation.reference_hash, relation.relation_type)
+        for relation in PostgresSampleRelationRepository(connection).list_all()
+    }
+
+
+def _compared_anew(connection: Connection, tmp_path: Path) -> EquivalenceSummary:
+    """A pass comparing every sample again, as `--force` asks for."""
+    with start_batch(connection):
+        PostgresSampleFingerprintRepository(connection).forget_comparisons()
+    return detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+
+
+def test_a_pass_stopped_partway_keeps_its_blocks_and_a_rerun_compares_only_the_rest(
     connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A long pass interrupted partway keeps what it found, and a rerun takes up the rest."""
     _seed_catalog(connection, tmp_path)
     monkeypatch.setattr(detect_module, "NEIGHBOR_BLOCK_ROWS", 1)
-    scored_blocks: list[CandidateBlock] = []
-    record_block = detect_module._record_block
+    record = detect_module._Comparison._record
 
-    def fail_after_the_first_block_with_relations(*arguments: Any, **keywords: Any) -> None:
-        if len(scored_blocks) == 1:
-            raise OSError("simulated failure")
-        record_block(*arguments, **keywords)
+    def fail_after_the_first_block_with_relations(comparison: Any, submitted: Any) -> None:
         if PostgresSampleRelationRepository(connection).list_all():
-            scored_blocks.append(arguments[1])
+            raise OSError("simulated failure")
+        record(comparison, submitted)
 
-    monkeypatch.setattr(detect_module, "_record_block", fail_after_the_first_block_with_relations)
-
+    monkeypatch.setattr(detect_module._Comparison, "_record", fail_after_the_first_block_with_relations)
     with pytest.raises(OSError):
         detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
-
     kept = PostgresSampleRelationRepository(connection).list_all()
+    monkeypatch.setattr(detect_module._Comparison, "_record", record)
+
+    rerun = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+
     assert 0 < len(kept) < 3
+    assert len(PostgresSampleRelationRepository(connection).list_all()) == 3
+    assert _candidates(rerun) < _candidates(_compared_anew(connection, tmp_path))
+
+
+def test_a_grown_catalog_compares_only_its_new_samples_and_ends_as_a_full_pass_would(
+    connection: Connection, tmp_path: Path
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+    tone = _tonal_waveform(3300) * 0.8
+    _store_sample(connection, tmp_path, hash_seed=51, depth=BitDepth.SIXTEEN, pcm=tone)
+    _store_sample(
+        connection,
+        tmp_path,
+        hash_seed=52,
+        depth=BitDepth.EIGHT,
+        pcm=dequantize(quantize(tone, BitDepth.EIGHT), BitDepth.EIGHT),
+    )
+
+    grown = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+    found = _relation_pairs(connection)
+    full = _compared_anew(connection, tmp_path)
+
+    assert grown.bit_depth_relations == 1
+    assert 0 < _candidates(grown) < _candidates(full)
+    assert _relation_pairs(connection) == found
+
+
+def test_a_new_comparison_rule_compares_every_sample_again(
+    connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed_catalog(connection, tmp_path)
+    first = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+    unchanged = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+    monkeypatch.setattr(detect_module, "COMPARISON_VERSION", detect_module.COMPARISON_VERSION + 1)
+
+    renewed = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+
+    assert _candidates(unchanged) == 0
+    assert _candidates(renewed) == _candidates(first)
 
 
 def test_silent_samples_are_counted_and_left_out_of_every_comparison(connection: Connection, tmp_path: Path) -> None:
-    """Silence of two different lengths holds no content a relation could be about."""
+    """Silence of two different lengths holds no content a relation could be about, pass after pass."""
     _store_sample(connection, tmp_path, hash_seed=21, depth=BitDepth.SIXTEEN, pcm=np.zeros((1024, 1)))
     _store_sample(connection, tmp_path, hash_seed=22, depth=BitDepth.EIGHT, pcm=np.zeros((2048, 1)))
 
-    summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+    first = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+    second = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
 
-    assert summary.silent_samples == 2
+    assert (first.silent_samples, second.silent_samples) == (2, 2)
     assert PostgresSampleRelationRepository(connection).list_all() == ()
+    assert all(
+        stored.fingerprint.silent
+        for stored in PostgresSampleFingerprintRepository(connection).at_version(FINGERPRINT_VERSION).values()
+    )
 
 
 def test_a_trimmed_tail_pair_is_recorded_once_as_the_gain_variant_it_is(connection: Connection, tmp_path: Path) -> None:
@@ -220,7 +286,7 @@ def test_a_trimmed_tail_pair_is_recorded_once_as_the_gain_variant_it_is(connecti
 
 def test_the_waveform_cache_lets_the_oldest_waveforms_go_once_its_budget_is_spent(tmp_path: Path) -> None:
     samples = [_store_sample_file(tmp_path, hash_seed=seed, pcm=_tonal_waveform(1000)) for seed in range(41, 44)]
-    cache = detect_module._WaveformCache(SampleAudio.of_files(tmp_path, ()), byte_budget=2 * 1000 * 8)
+    cache = WaveformCache(SampleAudio.of_files(tmp_path, ()), byte_budget=2 * 1000 * 8)
 
     for sample in samples:
         cache.get(sample)
@@ -283,16 +349,21 @@ def test_a_pair_whose_file_goes_missing_while_the_pass_runs_is_left_for_a_later_
             decoded=decode_sample_file(path),
             fingerprint=FileFingerprint.of(path.stat()),
         )
-    fingerprint_layouts = detect_module._fingerprints_by_layout
+    fingerprint_samples = detect_module.fingerprint_samples
+    content, written = quiet.read_bytes(), quiet.stat()
 
-    def unplug_once_fingerprinted(*arguments: Any, **keywords: Any) -> tuple[Fingerprints, ...]:
-        fingerprints = fingerprint_layouts(*arguments, **keywords)
+    def unplug_once_fingerprinted(*arguments: Any, **keywords: Any) -> FingerprintedSamples:
+        fingerprinted = fingerprint_samples(*arguments, **keywords)
         quiet.unlink()
-        return fingerprints
+        return fingerprinted
 
-    monkeypatch.setattr(detect_module, "_fingerprints_by_layout", unplug_once_fingerprinted)
+    monkeypatch.setattr(detect_module, "fingerprint_samples", unplug_once_fingerprinted)
 
     summary = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
+    monkeypatch.setattr(detect_module, "fingerprint_samples", fingerprint_samples)
+    quiet.write_bytes(content)
+    os.utime(quiet, ns=(written.st_atime_ns, written.st_mtime_ns))
+    later = detect_equivalences(connection, SampleAudio.from_catalog(connection, tmp_path))
 
     assert (summary.unavailable_samples, summary.unavailable_pairs) == (0, 1)
-    assert PostgresSampleRelationRepository(connection).list_all() == ()
+    assert later.amplification_relations == 1

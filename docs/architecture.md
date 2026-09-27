@@ -405,18 +405,26 @@ point of an unplugged drive looks like. Hand annotations stay;
 ## Detecting near-duplicates
 
 `samplelibrary equivalence` finds pairs of samples that are one sound stored twice: at another bit
-depth, at another level, or read at another rate. It reads the catalog once over `--workers`
-processes (`samplecore.process_pool`), trimming each waveform's trailing silence and reducing it to
-two short fingerprints (`sampleextract.equivalence.fingerprint`):
-one over bands relative to the waveform's own length, which a change of depth or level leaves alone,
-and one over cycle-count octave bands, which a resampling leaves alone. A blockwise dot product
-finds each fingerprint's close neighbors (`candidates.py`), the shape fingerprint proposing gain
-pairs of nearly equal trimmed length and the rate fingerprint proposing resampled pairs further
+depth, at another level, or read at another rate. It trims each waveform's trailing silence and
+reduces it to two short fingerprints (`sampleextract.equivalence.fingerprint`): one over bands
+relative to the waveform's own length, which a change of depth or level leaves alone, and one over
+cycle-count octave bands, which a resampling leaves alone. A fingerprint depends on the sample's
+audio alone, so it is read once, over `--workers` processes (`samplecore.process_pool`), and kept in
+`sample_fingerprint` under the version of the rule that read it (`FINGERPRINT_VERSION`); a pass reads
+only the fingerprints the catalog lacks, committing them a thousand at a time. A blockwise dot
+product finds each fingerprint's close neighbors (`candidates.py`), the shape fingerprint proposing
+gain pairs of nearly equal trimmed length and the rate fingerprint proposing resampled pairs further
 apart, and only those pairs are read again and scored on the waveforms themselves (`scoring.py`),
-through a cache that keeps the most recently read waveforms. Each block of pairs is scored and written in its own
-transaction, so an interrupted run keeps the blocks it finished and a rerun writes the same rows.
-Silent samples take no part. Over a catalog of 127,588 samples, a run fingerprinting in one process
-took two and a quarter hours, of which scoring took five minutes, in under three gigabytes of memory.
+by the same worker processes, each through a cache that keeps its most recently read waveforms,
+while the pass searches the next block. The search runs from the samples not yet compared under the
+current `COMPARISON_VERSION` against every sample before them, so a pair of two compared samples is
+never scored again; each block's relations are written in one transaction with its samples' mark of
+having been compared (`compared_version`). An interrupted run therefore keeps the blocks it finished
+and a rerun takes up the rest, a catalog that grew compares only its new samples, and `--force`
+compares every sample again from the kept fingerprints. A sample one of whose pairs could not be read
+stays unmarked for a later pass. Silent samples take no part. Scoring a resampled pair reuses the
+low-pass filter `resample_poly` would design, designed once per ratio. Over a catalog of 137,069
+samples, one process took two hours to score its 8.5 million candidate pairs.
 
 `pass_completion` holds one row per kind of whole-library pass that finished completely, naming a
 digest of what it had in front of it (`samplecore.digests`), so a pass finding the same digest again

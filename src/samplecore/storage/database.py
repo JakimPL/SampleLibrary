@@ -18,6 +18,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     MetaData,
     PrimaryKeyConstraint,
     Sequence,
@@ -306,6 +307,26 @@ sample_thumbnail = Table(
     Column("minimums", ARRAY(Double), nullable=False),
     Column("maximums", ARRAY(Double), nullable=False),
     CheckConstraint(column("bucket_count") > 0, name="sample_thumbnail_bucket_count_check"),
+)
+
+# A sample's equivalence fingerprint, the content-only reading candidates are searched through, kept
+# under the version of the rule that read it; `compared_version` names the comparison rule under
+# which the sample has been compared with every other fingerprinted sample. A silent sample holds
+# no fingerprint, since nothing in it is there to compare.
+sample_fingerprint = Table(
+    "sample_fingerprint",
+    metadata,
+    Column("sample_hash", String(64), ForeignKey("sample.hash"), primary_key=True),
+    Column("version", Integer, nullable=False),
+    Column("silent", Boolean, nullable=False),
+    Column("trimmed_frames", Integer, nullable=False),
+    Column("shape", LargeBinary, nullable=True),
+    Column("rate", LargeBinary, nullable=True),
+    Column("compared_version", Integer, nullable=True),
+    CheckConstraint(
+        column("silent") | (column("shape").is_not(None) & column("rate").is_not(None)),
+        name="sample_fingerprint_content_check",
+    ),
 )
 
 experiment = Table(

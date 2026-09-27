@@ -8,6 +8,7 @@ from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli, open_catalog_audio, positive_integer
 from samplecore.models.pass_completion import PassCompletion, PassKind
 from samplecore.storage.database import start_batch
+from samplecore.storage.repositories.fingerprint import PostgresSampleFingerprintRepository
 from samplecore.storage.repositories.pass_completion import PostgresPassCompletionRepository
 from samplecore.storage.sample_audio import readable_membership_digest
 from sampleextract.equivalence.detect import detect_equivalences
@@ -20,8 +21,10 @@ def main(argv: list[str], *, prog: str) -> None:
     """Run one equivalence-detection pass over the catalog and report the result.
 
     A pass over the whole catalog records the samples it could read, so a later pass finding the same
-    readable samples ends at once, its relations standing as they are; `--force` compares them again,
-    and a pass over the first `--limit` samples leaves no record.
+    readable samples ends at once, its relations standing as they are, and a pass finding others
+    compares only the samples no earlier pass compared. `--force` compares every sample again,
+    keeping the fingerprints, which depend on the audio alone, and a pass over the first `--limit`
+    samples leaves no record.
     """
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
@@ -35,6 +38,8 @@ def main(argv: list[str], *, prog: str) -> None:
             return
         with start_batch(connection):
             passes.forget(PassKind.EQUIVALENCE)
+            if arguments.force:
+                PostgresSampleFingerprintRepository(connection).forget_comparisons()
         summary = detect_equivalences(connection, audio, sample_limit=arguments.limit, workers=arguments.workers)
         after = readable_membership_digest(connection)
         if arguments.limit is None and after == readable:
@@ -69,10 +74,10 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
         default=None,
         help="Consider only the first N cataloged samples, for a quick run over a small slice.",
     )
-    add_workers_argument(parser, work="fingerprinting")
+    add_workers_argument(parser, work="fingerprinting and scoring")
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Compare every sample even when the readable samples are the ones the last complete pass compared.",
+        help="Compare every sample again, including the ones earlier passes compared.",
     )
     return parser.parse_args(argv)
