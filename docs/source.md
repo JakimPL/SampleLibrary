@@ -254,6 +254,13 @@ without them. `just docker-publish` publishes the library into that database, re
 and the site serves it on http://127.0.0.1:8000. `just docker-build` builds the image alone. The
 architecture's [Deployment](architecture.md#deployment) section describes what the image holds.
 
+When your own PostgreSQL already listens on port 5432, put a free port in front of both the compose
+command and the publication, such as `POSTGRES_PORT=5439 docker compose up -d postgres` and
+`POSTGRES_PORT=5439 just docker-publish`. A database compose started before `just docker-secrets`
+keeps the password it was first started with, and refuses the new one: start the rehearsal under a
+name of its own, such as `docker compose -p rehearsal ...` on every compose command, or remove the
+old database with `docker compose down -v`, which deletes everything it holds.
+
 ## Recipes
 
 | Recipe | What it does |
