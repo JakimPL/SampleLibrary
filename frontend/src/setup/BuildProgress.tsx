@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 
 import type { BuildStep, BuildView, StepState } from "../api/setup";
 import { Button } from "../shared/controls/Button";
+import { buttonClassName } from "../shared/controls/buttonClassName";
 import { SetupMessage } from "./SetupMessage";
 import { stepName } from "./stepNames";
 import { describeElapsed, describeEstimate, estimateRemainingSeconds, secondsBetween, useClock } from "./timing";
@@ -85,7 +86,7 @@ function StepRow({ step, now }: { readonly step: BuildStep; readonly now: number
     const progress = step.progress;
     const fraction = progress !== null && progress.total > 0 ? progress.done / progress.total : undefined;
     return (
-        <li className="build-step" data-state={step.state}>
+        <li className="listbox-row build-step" data-state={step.state}>
             <span className="build-step-mark" aria-hidden>
                 {STEP_MARKS[step.state]}
             </span>
@@ -93,7 +94,7 @@ function StepRow({ step, now }: { readonly step: BuildStep; readonly now: number
             <span className="build-step-note">{describeStep(step, now)}</span>
             {step.state === "running" && (
                 <progress
-                    className="build-step-bar"
+                    className="progress build-step-bar"
                     value={fraction}
                     max={1}
                     aria-label={progress?.label ?? stepName(step.name)}
@@ -104,44 +105,47 @@ function StepRow({ step, now }: { readonly step: BuildStep; readonly now: number
 }
 
 /**
- * The latest build as it runs: its heading, which step it is on and a way to cancel it on one row
- * of fixed height, how long it has taken, and every step with its time, the running one with its
- * count, estimate and bar. The end of the log opens under a build that stopped.
+ * The Progress group: the latest build as it runs, with its heading, which step it is on and a way
+ * to cancel it on one row of fixed height, how long it has taken, and every step with its time, the
+ * running one with its count, estimate and bar. The end of the log opens under a build that
+ * stopped, and the group says where builds show before any has started.
  */
 export function BuildProgress({ build, onCancel }: BuildProgressProps): ReactElement {
     const running = build?.status === "running";
     const now = useClock(running);
 
-    if (build === null) {
-        return <p className="build-placeholder setup-hint">Builds you start show their progress here.</p>;
-    }
     return (
-        <section className="build-progress" aria-labelledby="build-progress-title">
-            <div className="build-progress-heading">
-                <h3 id="build-progress-title" className="build-progress-title">
-                    {BUILD_HEADINGS[build.status]}
-                </h3>
-                <span className="build-progress-position">{running ? stepPosition(build.steps) : null}</span>
-                {running && (
-                    <Button variant="secondary" onClick={onCancel}>
-                        Cancel
-                    </Button>
-                )}
-            </div>
-            <p className="build-progress-times setup-hint">{describeBuildTimes(build, now)}</p>
-            <ol className="build-steps">
-                {build.steps.map((step) => (
-                    <StepRow key={step.name} step={step} now={now} />
-                ))}
-                {build.steps.length === 0 && <li className="setup-hint">Getting ready…</li>}
-            </ol>
-            {build.problem !== null && <SetupMessage message={{ text: build.problem, tone: "error" }} />}
-            {build.status === "failed" && build.log_tail.length > 0 && (
-                <details className="build-log">
-                    <summary>Show details</summary>
-                    <pre className="mono">{build.log_tail.join("\n")}</pre>
-                </details>
+        <fieldset className="group build-progress">
+            <legend>Progress</legend>
+            {build === null ? (
+                <p className="build-placeholder setup-hint">Builds you start show their progress here.</p>
+            ) : (
+                <>
+                    <div className="build-progress-heading">
+                        <h3 className="build-progress-title">{BUILD_HEADINGS[build.status]}</h3>
+                        <span className="build-progress-position">{running ? stepPosition(build.steps) : null}</span>
+                        {running && (
+                            <Button variant="secondary" onClick={onCancel}>
+                                Cancel
+                            </Button>
+                        )}
+                    </div>
+                    <p className="build-progress-times setup-hint">{describeBuildTimes(build, now)}</p>
+                    <ol className="listbox build-steps">
+                        {build.steps.map((step) => (
+                            <StepRow key={step.name} step={step} now={now} />
+                        ))}
+                        {build.steps.length === 0 && <li className="listbox-row listbox-empty">Getting ready…</li>}
+                    </ol>
+                    {build.problem !== null && <SetupMessage message={{ text: build.problem, tone: "error" }} />}
+                    {build.status === "failed" && build.log_tail.length > 0 && (
+                        <details className="build-log">
+                            <summary className={buttonClassName({ variant: "quiet" })}>Show details</summary>
+                            <pre className="mono">{build.log_tail.join("\n")}</pre>
+                        </details>
+                    )}
+                </>
             )}
-        </section>
+        </fieldset>
     );
 }

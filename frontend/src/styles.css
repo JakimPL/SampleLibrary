@@ -170,6 +170,14 @@
     --list-row-height: var(--control-height-compact);
     --list-row-hover: var(--surface-2);
     --list-row-selected: var(--accent-soft);
+    --pane-tab-strip-bg: var(--surface-2);
+    --pane-tab-bg: var(--surface-1);
+    --pane-tab-border: transparent;
+    --pane-tab-grow: 1;
+    --pane-tab-margin: 0 0 -1px;
+    --pane-tab-font-size: var(--font-size-small);
+    --pane-tab-font-weight: 600;
+    --pane-tab-letter-spacing: 0.01em;
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
 }
@@ -204,6 +212,7 @@
     --font-size-small: 12px;
     --font-size-caption: 11px;
     --font-size-label: 10.5px;
+    --font-size-setup: var(--font-size-body);
     --sample-transport-height: 80px;
 }
 
@@ -426,6 +435,14 @@
     --list-row-height: 20px;
     --list-row-hover: #e5f1fb;
     --list-row-selected: #cce8ff;
+    --pane-tab-strip-bg: #f0f0f0;
+    --pane-tab-bg: #fff;
+    --pane-tab-border: #d9d9d9;
+    --pane-tab-grow: 0;
+    --pane-tab-margin: var(--space-1) 0 -1px var(--space-1);
+    --pane-tab-font-size: var(--font-size-body);
+    --pane-tab-font-weight: 400;
+    --pane-tab-letter-spacing: normal;
     --font-body: "Segoe UI", "Open Sans", "Tahoma", sans-serif;
     --font-mono: var(--font-body);
 }
@@ -3322,50 +3339,43 @@ table.data td .annotation-editor-input {
     margin-left: 0;
 }
 
-/* The setup page: on a desktop it fills the window, the folders beside the library, each pane
-   scrolling its own body between a fixed header and footer, so no content moves a button. A phone
-   stacks the panes and scrolls the page. */
+/* The setup page: the workspace's bar, then the folders beside the library as two panels sharing
+   their tab and footer rows, each scrolling its own body between a fixed tab and footer, so no
+   content moves a button. A phone stacks the panels and scrolls the page. The page's controls take
+   its own size, which OpenMPT keeps at the program's. */
 .setup-page {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
-    gap: var(--space-7);
-    width: min(100%, 1200px);
     height: 100dvh;
-    margin: 0 auto;
-    padding: calc(var(--space-7) + var(--safe-top)) var(--space-7) calc(var(--space-7) + var(--safe-bottom));
-    box-sizing: border-box;
-    font-size: 14px;
+    font-size: var(--font-size-setup);
 
     --button-height: var(--setup-control-height);
     --field-height: var(--setup-control-height);
-    --button-font-size: 13px;
+    --button-font-size: var(--font-size-setup);
 }
 
-.setup-page-closed {
-    grid-template-rows: auto;
-    align-content: start;
-    max-width: 720px;
+.setup-page > .top-bar {
+    padding-top: var(--safe-top);
 }
 
-.setup-header {
+.setup-notice {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: center;
+}
+
+.setup-body {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--space-6);
-    min-height: var(--setup-control-height);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    width: min(100%, 1200px);
+    min-height: 0;
+    margin: 0 auto;
+    padding: var(--space-7) var(--space-7) calc(var(--space-7) + var(--safe-bottom));
+    box-sizing: border-box;
 }
 
-.setup-header h1 {
-    margin: 0;
-    font-size: 20px;
-}
-
-.setup-header-actions {
-    display: flex;
-    gap: var(--space-4);
-}
-
-/* The panes share their header and footer rows, so the lines dividing them run level across both. */
+/* The panels share their tab and footer rows, so the lines dividing them run level across both. */
 .setup-panes {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
@@ -3381,61 +3391,90 @@ table.data td .annotation-editor-input {
     min-height: 0;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: var(--radius-4);
+    border-radius: var(--group-radius);
     background: var(--surface-1);
 }
 
-.setup-pane-header {
-    display: grid;
-    gap: var(--space-3);
-    padding: var(--space-7) var(--space-7) var(--space-6);
+/* One tab naming the panel, drawn as the workspace draws its panel tabs: as wide as the strip in
+   the shell's own themes, and as the program's tab control under OpenMPT, where it stands alone on
+   the strip and merges into the body. */
+.setup-pane-tab {
+    display: flex;
+    align-items: stretch;
+    height: var(--tab-strip-height);
     border-bottom: 1px solid var(--border);
+    background: var(--pane-tab-strip-bg);
+}
+
+.setup-pane-tab h2 {
+    display: flex;
+    flex: var(--pane-tab-grow) 0 auto;
+    align-items: center;
+    margin: var(--pane-tab-margin);
+    padding: 0 var(--space-6);
+    border: 1px solid var(--pane-tab-border);
+    border-bottom-color: var(--pane-tab-bg);
+    background: var(--pane-tab-bg);
+    color: var(--text-primary);
+    font-size: var(--pane-tab-font-size);
+    font-weight: var(--pane-tab-font-weight);
+    letter-spacing: var(--pane-tab-letter-spacing);
 }
 
 .setup-pane-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-7);
+    gap: var(--space-6);
     align-content: start;
-    padding: var(--space-7);
+    padding: var(--space-6);
     overflow: auto;
     overscroll-behavior: contain;
 }
 
-.setup-pane-body-tall {
-    grid-row: span 2;
+.setup-pane-footer {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-height: calc(var(--button-height) + 2 * var(--space-4));
+    padding: var(--space-4) var(--space-6);
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
 }
 
-/* Anchored to the bottom edge, the button stays put while a longer message grows the footer upward. */
-.setup-pane-footer {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
-    gap: var(--space-6);
-    padding: var(--space-6) var(--space-7);
-    border-top: 1px solid var(--border);
+/* Build at the start and Open at the end, each in its place whatever the other does. */
+.setup-footer-actions {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
 }
 
 .setup-card {
     display: grid;
     gap: var(--space-6);
+    align-self: start;
+    max-width: 720px;
     padding: var(--space-7);
     border: 1px solid var(--border);
-    border-radius: var(--radius-4);
+    border-radius: var(--group-radius);
     background: var(--surface-1);
 }
 
-.setup-pane h2,
 .setup-card h1,
 .setup-card h2 {
     margin: 0;
-    font-size: 16px;
+    font-size: 1.25em;
+}
+
+.setup-lead {
+    margin: 0;
 }
 
 .setup-hint {
     margin: 0;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 0.93em;
 }
 
 /* A reserved line: empty, it keeps its height, so a message arriving moves nothing below it. */
@@ -3443,7 +3482,7 @@ table.data td .annotation-editor-input {
     min-height: 1.45em;
     margin: 0;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 0.93em;
     overflow-wrap: anywhere;
 }
 
@@ -3451,65 +3490,42 @@ table.data td .annotation-editor-input {
     color: var(--critical);
 }
 
+.setup-pane-footer .setup-message {
+    flex: 1 1 auto;
+}
+
 .setup-status {
     color: var(--text-primary);
-}
-
-.setup-notice {
-    text-align: center;
-}
-
-.setup-field {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-4);
-}
-
-.setup-field-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-6);
-}
-
-.setup-field-title {
-    margin: 0;
-    font-size: 14px;
+    font-size: 1em;
 }
 
 .setup-label {
     display: grid;
     gap: var(--space-2);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 0.93em;
 }
 
-.setup-input {
-    min-height: var(--setup-control-height);
-    padding: 0 var(--space-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
+.setup-label .field {
+    color: var(--text-primary);
+    font-size: 1em;
 }
 
-.setup-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-4);
-}
-
-.setup-folder {
+.path-row {
     display: flex;
     align-items: center;
-    gap: var(--space-4);
-    min-height: var(--setup-control-height);
+    gap: var(--space-3);
+    min-width: 0;
+}
+
+.path-row .field-static {
+    flex: 1 1 auto;
 }
 
 /* The line runs right to left, so a path too long for it loses its start and keeps the folder's
    name in view; the path inside reads left to right in its <bdi>. */
 .path-line {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     direction: rtl;
@@ -3524,162 +3540,64 @@ table.data td .annotation-editor-input {
 }
 
 .setup-folder-list {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-3);
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    max-height: calc(5 * var(--list-row-height) + 2px);
 }
 
 .folder-places {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-3);
-}
-
-.folder-place {
-    min-height: var(--tap-target);
-    padding: 0 var(--space-5);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
-    background: var(--surface-0);
-    cursor: pointer;
-}
-
-.folder-place[aria-pressed="true"] {
-    border-color: var(--accent);
-    background: var(--accent-soft);
+    gap: var(--space-1);
 }
 
 .folder-current {
     display: flex;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-3);
     min-width: 0;
 }
 
-.folder-up {
-    flex: none;
-    min-height: var(--tap-target);
-    padding: 0 var(--space-5);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
-    cursor: pointer;
-}
-
-.folder-up:disabled {
-    cursor: default;
-    opacity: 0.5;
+.folder-current .field-static {
+    flex: 1 1 auto;
 }
 
 /* One height whatever the folder holds, so the buttons under it keep their place. */
 .folder-list {
-    display: block;
     height: min(45dvh, 360px);
-    margin: 0;
-    padding: 0;
-    overflow: auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    list-style: none;
-}
-
-.folder-item + .folder-item {
-    border-top: 1px solid var(--border);
-}
-
-.folder-empty {
-    padding: var(--space-4);
-    color: var(--text-muted);
 }
 
 .folder-entry {
-    width: 100%;
-    min-height: var(--tap-target);
-    padding: var(--space-3) var(--space-4);
-    border: none;
-    background: none;
-    text-align: left;
-    cursor: pointer;
+    --button-height: var(--list-row-height);
+
+    gap: var(--space-3);
+    margin: 0 calc(-1 * var(--space-2)) 0 calc(-1 * var(--space-4));
+    padding: 0 var(--space-4);
 }
 
-.folder-entry:hover {
-    background: var(--surface-2);
-}
-
-.build-choices {
-    display: grid;
+.check-option {
+    display: flex;
+    align-items: flex-start;
     gap: var(--space-4);
 }
 
-.build-choice {
+.check-option .check {
+    margin-top: 0.15em;
+}
+
+.check-option-text {
     display: grid;
-    gap: var(--space-2);
-    padding: var(--space-6) var(--space-7);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-3);
-    background: var(--surface-0);
-    color: var(--text-primary);
-    text-align: left;
-    cursor: pointer;
-}
-
-.build-choice:disabled {
-    cursor: default;
-    opacity: 0.55;
-}
-
-.build-choice:hover:enabled {
-    border-color: var(--accent);
-}
-
-.build-choice[data-running="true"] {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    opacity: 1;
-}
-
-.build-choice-title {
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.build-choice-note {
-    color: var(--text-muted);
-    font-size: 13px;
-}
-
-.build-option {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-5);
-    padding: 0 var(--space-7);
-}
-
-.build-option-check {
-    flex: none;
-    width: 16px;
-    height: 16px;
-    margin: 2px 0 0;
-    accent-color: var(--accent);
-}
-
-.build-option-text {
-    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-1);
+    min-width: 0;
 }
 
-.build-option-title {
-    font-size: 14px;
-    font-weight: 600;
+.check-option-title {
+    font-weight: var(--emphasis-weight);
     cursor: pointer;
 }
 
-.build-device {
+.build-device,
+.network-reach {
     min-height: 1.45em;
-    padding: 0 var(--space-7);
 }
 
 .network-reach {
@@ -3688,33 +3606,27 @@ table.data td .annotation-editor-input {
 }
 
 .build-placeholder {
-    padding: var(--space-6) 0;
-}
-
-.build-progress {
-    display: grid;
-    gap: var(--space-4);
-    padding-top: var(--space-7);
-    border-top: 1px solid var(--border);
+    padding: var(--space-3) 0;
 }
 
 /* The heading row keeps a button's height, so Cancel appears and leaves without moving the steps. */
 .build-progress-heading {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    display: flex;
     align-items: center;
-    gap: var(--space-6);
-    min-height: var(--setup-control-height);
+    gap: var(--space-4);
+    min-height: var(--button-height);
 }
 
 .build-progress-title {
+    flex: 1 1 auto;
     margin: 0;
-    font-size: 15px;
+    font-size: 1em;
+    font-weight: var(--emphasis-weight);
 }
 
 .build-progress-position {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 0.93em;
     font-variant-numeric: tabular-nums;
 }
 
@@ -3723,19 +3635,12 @@ table.data td .annotation-editor-input {
     font-variant-numeric: tabular-nums;
 }
 
-.build-steps {
-    display: grid;
-    gap: var(--space-3);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
 .build-step {
     display: grid;
     grid-template-columns: 1.25em minmax(0, 1fr) auto;
-    gap: var(--space-2) var(--space-4);
+    gap: var(--space-1) var(--space-3);
     align-items: center;
+    padding: var(--space-1) var(--space-4);
 }
 
 .build-step-mark {
@@ -3762,16 +3667,18 @@ table.data td .annotation-editor-input {
 
 .build-step-note {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 0.93em;
     font-variant-numeric: tabular-nums;
     text-align: right;
 }
 
 .build-step-bar {
     grid-column: 2 / -1;
-    width: 100%;
-    height: 6px;
-    accent-color: var(--accent);
+    margin: var(--space-1) 0 var(--space-2);
+}
+
+.build-log summary {
+    display: inline-flex;
 }
 
 .build-log pre {
@@ -3779,26 +3686,32 @@ table.data td .annotation-editor-input {
     margin: var(--space-3) 0 0;
     padding: var(--space-4);
     overflow: auto;
-    border-radius: var(--radius-2);
+    border-radius: var(--field-radius);
     background: var(--surface-2);
-    font-size: 12px;
+    font-size: 0.9em;
     white-space: pre-wrap;
 }
 
+/* A phone: the bar wraps its notice under itself, the panels stack, and the page scrolls. */
 :root[data-layout="phone"] .setup-page {
     grid-template-rows: auto auto;
     height: auto;
     min-height: 100dvh;
 }
 
-:root[data-layout="phone"] .setup-header {
-    grid-template-columns: minmax(0, 1fr) auto;
+:root[data-layout="phone"] .setup-page > .top-bar {
+    flex-wrap: wrap;
+    padding-block: var(--space-2);
 }
 
 :root[data-layout="phone"] .setup-notice {
-    grid-row: 2;
-    grid-column: 1 / -1;
+    flex-basis: 100%;
+    order: 9;
     text-align: left;
+}
+
+:root[data-layout="phone"] .setup-notice:empty {
+    display: none;
 }
 
 :root[data-layout="phone"] .setup-panes {
@@ -3812,10 +3725,10 @@ table.data td .annotation-editor-input {
     grid-template-rows: auto auto auto;
 }
 
-:root[data-layout="phone"] .setup-pane-body-tall {
-    grid-row: auto;
-}
-
 :root[data-layout="phone"] .setup-pane-body {
     overflow: visible;
+}
+
+:root[data-layout="phone"] .setup-footer-actions {
+    flex-wrap: wrap;
 }

@@ -4,8 +4,10 @@ import { chooseSources, type LibrarySources, type SetupState } from "../api/setu
 import { Button } from "../shared/controls/Button";
 import { FolderPath } from "./FolderPath";
 import { FolderPicker } from "./FolderPicker";
+import { PathRow } from "./PathRow";
 import { describeRefusal } from "./refusal";
 import { SetupMessage, type SetupMessageText } from "./SetupMessage";
+import { SetupPane } from "./SetupPane";
 import type { SourcesDraft } from "./useSourcesDraft";
 
 interface SourcesFormProps {
@@ -21,6 +23,7 @@ const PICKER_TITLES: Readonly<Record<PickerTarget, string>> = {
     samples: "Add a sample folder",
     library: "Choose where to store the library",
 };
+const REMOVE_GLYPH = "×";
 
 function withChosenFolder(sources: LibrarySources, target: PickerTarget, path: string): LibrarySources {
     switch (target) {
@@ -100,65 +103,59 @@ export function SourcesForm({ state, draft, onSaved }: SourcesFormProps): ReactE
         }
     }
 
+    const footer = (
+        <>
+            <SetupMessage message={message} />
+            <Button
+                variant="primary"
+                disabled={!hasSources || saving || buildRunning || (configured && !draft.unsaved)}
+                onClick={() => {
+                    void handleSave();
+                }}
+            >
+                {configured ? "Save changes" : "Save and open the library"}
+            </Button>
+        </>
+    );
+
     return (
-        <section className="setup-pane" aria-labelledby="setup-sources-title">
-            <header className="setup-pane-header">
-                <h2 id="setup-sources-title">Your folders</h2>
-                <p className="setup-hint">
+        <>
+            <SetupPane title="Folders" titleId="setup-sources-title" footer={footer}>
+                <p className="setup-lead">
                     Choose where your tracker modules and sample packs are. You need at least one.
                 </p>
-            </header>
 
-            <div className="setup-pane-body">
-                <div className="setup-field">
-                    <h3 className="setup-field-title">Tracker modules</h3>
+                <fieldset className="group">
+                    <legend>Tracker modules</legend>
                     <p className="setup-hint">A folder with your XM, IT, MOD and S3M files. Subfolders are included.</p>
-                    <div className="setup-folder">
-                        <FolderPath path={sources.module_source_directory} placeholder="No folder chosen" />
-                        <Button
-                            variant="secondary"
-                            onClick={() => {
-                                setPicker("modules");
-                            }}
-                        >
-                            Choose…
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            disabled={sources.module_source_directory === null}
-                            onClick={() => {
-                                change((current) => ({ ...current, module_source_directory: null }));
-                            }}
-                        >
-                            Remove
-                        </Button>
-                    </div>
-                </div>
+                    <PathRow
+                        path={sources.module_source_directory}
+                        placeholder="No folder chosen"
+                        onBrowse={() => {
+                            setPicker("modules");
+                        }}
+                        onClear={() => {
+                            change((current) => ({ ...current, module_source_directory: null }));
+                        }}
+                    />
+                </fieldset>
 
-                <div className="setup-field">
-                    <div className="setup-field-heading">
-                        <h3 className="setup-field-title">Sample folders</h3>
-                        <Button
-                            variant="secondary"
-                            onClick={() => {
-                                setPicker("samples");
-                            }}
-                        >
-                            Add a folder…
-                        </Button>
-                    </div>
+                <fieldset className="group">
+                    <legend>Sample folders</legend>
                     <p className="setup-hint">Folders with WAV, AIFF or FLAC files. The files stay where they are.</p>
-                    <ul className="setup-folder-list">
+                    <ul className="listbox setup-folder-list">
                         {sources.sample_directories.length === 0 && (
-                            <li className="setup-folder">
+                            <li className="listbox-row listbox-empty">
                                 <FolderPath path={null} placeholder="No sample folders yet" />
                             </li>
                         )}
                         {sources.sample_directories.map((directory) => (
-                            <li key={directory} className="setup-folder">
+                            <li key={directory} className="listbox-row">
                                 <FolderPath path={directory} placeholder="" />
                                 <Button
-                                    variant="secondary"
+                                    variant="quiet"
+                                    icon
+                                    aria-label="Remove"
                                     onClick={() => {
                                         change((current) => ({
                                             ...current,
@@ -168,16 +165,26 @@ export function SourcesForm({ state, draft, onSaved }: SourcesFormProps): ReactE
                                         }));
                                     }}
                                 >
-                                    Remove
+                                    {REMOVE_GLYPH}
                                 </Button>
                             </li>
                         ))}
                     </ul>
+                    <div className="group-actions">
+                        <Button
+                            variant="secondary"
+                            onClick={() => {
+                                setPicker("samples");
+                            }}
+                        >
+                            Add a folder…
+                        </Button>
+                    </div>
                     <label className="setup-label">
-                        Skip files matching these patterns (separated by commas)
+                        Skip files matching
                         <input
                             type="text"
-                            className="setup-input"
+                            className="field"
                             placeholder="*loop*, *.aif"
                             value={draft.exclusionsText}
                             onChange={(event) => {
@@ -186,40 +193,25 @@ export function SourcesForm({ state, draft, onSaved }: SourcesFormProps): ReactE
                             }}
                         />
                     </label>
-                </div>
+                    <p className="setup-hint">Separate patterns with commas.</p>
+                </fieldset>
 
-                <div className="setup-field">
-                    <h3 className="setup-field-title">Library location</h3>
+                <fieldset className="group">
+                    <legend>Library location</legend>
                     <p className="setup-hint">
-                        Where SampleRipper stores its database and everything it creates. Choose a drive with plenty of
+                        Where SampleRipper keeps its database and everything it creates. Choose a drive with plenty of
                         free space.
                     </p>
-                    <div className="setup-folder">
-                        <FolderPath path={sources.library_root} placeholder="" />
-                        <Button
-                            variant="secondary"
-                            onClick={() => {
-                                setPicker("library");
-                            }}
-                        >
-                            Change…
-                        </Button>
-                    </div>
-                </div>
-            </div>
-
-            <footer className="setup-pane-footer">
-                <SetupMessage message={message} />
-                <Button
-                    variant="primary"
-                    disabled={!hasSources || saving || buildRunning || (configured && !draft.unsaved)}
-                    onClick={() => {
-                        void handleSave();
-                    }}
-                >
-                    {configured ? "Save changes" : "Save and open the library"}
-                </Button>
-            </footer>
+                    <PathRow
+                        path={sources.library_root}
+                        placeholder=""
+                        onBrowse={() => {
+                            setPicker("library");
+                        }}
+                        onClear={null}
+                    />
+                </fieldset>
+            </SetupPane>
 
             {picker !== null && (
                 <FolderPicker
@@ -234,6 +226,6 @@ export function SourcesForm({ state, draft, onSaved }: SourcesFormProps): ReactE
                     }}
                 />
             )}
-        </section>
+        </>
     );
 }

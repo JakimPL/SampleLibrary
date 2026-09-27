@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type * as SetupApi from "../../src/api/setup";
@@ -106,7 +107,11 @@ function renderPanel(state: SetupState, unsavedChanges = false): void {
     getStats.mockResolvedValue(LIBRARY_STATS);
     startBuild.mockResolvedValue(state);
     chooseOptions.mockResolvedValue(state);
-    render(<LibraryPanel state={state} unsavedChanges={unsavedChanges} onChanged={() => undefined} />);
+    render(
+        <MemoryRouter>
+            <LibraryPanel state={state} unsavedChanges={unsavedChanges} onChanged={() => undefined} />
+        </MemoryRouter>,
+    );
 }
 
 describe("LibraryPanel", () => {

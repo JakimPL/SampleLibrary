@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import type { HomeNetworkReach } from "../api/setup";
+import { CheckOption } from "./CheckOption";
 
 interface NetworkOptionProps {
     /** Whether the config opens the library to the home network, which the next start follows. */
@@ -30,32 +31,13 @@ function describeReach(chosen: boolean, reach: HomeNetworkReach): string | null 
 /**
  * The switch opening the library to the devices on the home network, to browse and play. The
  * application follows it from its next start, so the switch says when a restart is due, and names
- * the address a device opens while the library is open to them.
+ * the address a device opens while the library is open to them, on a line kept whether or not it
+ * has something to say.
  */
 export function NetworkOption({ chosen, reach, disabled, onChoose }: NetworkOptionProps): ReactElement {
-    const reachNote = describeReach(chosen, reach);
     return (
-        <div className="build-option">
-            <input
-                id="open-to-network"
-                className="build-option-check"
-                type="checkbox"
-                aria-describedby="open-to-network-note"
-                checked={chosen}
-                disabled={disabled}
-                onChange={(event) => {
-                    onChoose(event.target.checked);
-                }}
-            />
-            <span className="build-option-text">
-                <label htmlFor="open-to-network" className="build-option-title">
-                    {NETWORK_TITLE}
-                </label>
-                <span id="open-to-network-note" className="setup-hint">
-                    {NETWORK_NOTE}
-                </span>
-                {reachNote !== null && <span className="setup-hint network-reach">{reachNote}</span>}
-            </span>
-        </div>
+        <CheckOption title={NETWORK_TITLE} note={NETWORK_NOTE} checked={chosen} disabled={disabled} onChange={onChoose}>
+            <span className="setup-hint network-reach">{describeReach(chosen, reach)}</span>
+        </CheckOption>
     );
 }
