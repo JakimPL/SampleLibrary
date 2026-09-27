@@ -4,6 +4,7 @@ import { useLayoutMode } from "../layout/useLayoutMode";
 import { samplePreview, useAudioPreview } from "../samples/useAudioPreview";
 import { useSamplePreview } from "../samples/useSamplePreview";
 import { classNames } from "../shared/classNames";
+import { Button } from "../shared/controls/Button";
 import { shortHash } from "../shared/format";
 import { hintFor } from "../shared/hints";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
@@ -104,8 +105,9 @@ function ChosenEnd({ end, hash }: ChosenEndProps): ReactElement {
                     )}
                 </span>
             </button>
-            <button
-                type="button"
+            <Button
+                variant="quiet"
+                icon
                 className="morph-slot-clear"
                 aria-label={`Clear ${letter}`}
                 onClick={() => {
@@ -113,7 +115,7 @@ function ChosenEnd({ end, hash }: ChosenEndProps): ReactElement {
                 }}
             >
                 ×
-            </button>
+            </Button>
         </div>
     );
 }

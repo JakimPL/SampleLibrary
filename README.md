@@ -26,13 +26,13 @@ takes several minutes. On Windows and Linux with an NVIDIA graphics card, it tak
 let the card do the heavy listening instead, several gigabytes more. Later starts take a few
 seconds. SampleRipper then opens in your browser on its setup page:
 
-1. Under **Your folders**, choose your module folder, your sample folders, or both.
+1. Under **Folders**, choose your module folder, your sample folders, or both.
 2. Choose where the library keeps its files. Pick a drive with free space: a large collection takes
    several gigabytes.
 3. Click **Save and open the library**.
-4. Under **Your library**, click **Build my library**. The build lists its steps with the time
-   each took, and a long step shows the time it has left. Once it finishes, click **Open the
-   library** at the top.
+4. Under **Library**, click **Build my library**. The build lists its steps with the time each
+   took, and a long step shows the time it has left. Once it finishes, click **Open the library**
+   beside it.
 
 **Build the cloud**, on until you switch it off, has the build listen to every sample and lay out
 the cloud. The first time, it downloads a listening model of about 1 GB. An NVIDIA graphics card

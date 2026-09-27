@@ -7,7 +7,7 @@ function renderMenu(): HTMLElement {
     render(
         <div>
             <p>outside</p>
-            <DisclosureMenu label="View" className="test-menu">
+            <DisclosureMenu label="View" className="test-menu" variant="quiet">
                 <p>inside</p>
             </DisclosureMenu>
         </div>,

@@ -1,6 +1,7 @@
 import { type ReactElement, useEffect, useState } from "react";
 
 import { type FolderListing, getFolder, getPlaces, type Place } from "../api/setup";
+import { Button } from "../shared/controls/Button";
 import { describeError } from "../shared/fetchState";
 import { BottomSheet } from "../shared/overlay/BottomSheet";
 import { FolderPath } from "./FolderPath";
@@ -13,6 +14,9 @@ interface FolderPickerProps {
     readonly onChoose: (path: string) => void;
     readonly onClose: () => void;
 }
+
+const UP_GLYPH = "↑";
+const FOLDER_GLYPH = "📁";
 
 type ListingState =
     | { readonly status: "loading" }
@@ -98,23 +102,23 @@ export function FolderPicker({ title, initialPath, onChoose, onClose }: FolderPi
         <BottomSheet title={title} onClose={onClose}>
             <nav className="folder-places" aria-label="Places">
                 {places.map((place) => (
-                    <button
+                    <Button
                         key={place.path}
-                        type="button"
-                        className="folder-place"
+                        variant="quiet"
                         aria-pressed={place.path === path}
                         onClick={() => {
                             setPath(place.path);
                         }}
                     >
                         {place.name}
-                    </button>
+                    </Button>
                 ))}
             </nav>
             <div className="folder-current">
-                <button
-                    type="button"
-                    className="folder-up"
+                <Button
+                    variant="secondary"
+                    icon
+                    aria-label="Up"
                     disabled={parent === null}
                     onClick={() => {
                         if (parent !== null) {
@@ -122,31 +126,36 @@ export function FolderPicker({ title, initialPath, onChoose, onClose }: FolderPi
                         }
                     }}
                 >
-                    ↑ Up
-                </button>
-                <FolderPath path={ready?.path ?? path} placeholder="" />
+                    {UP_GLYPH}
+                </Button>
+                <div className="field field-static">
+                    <FolderPath path={ready?.path ?? path} placeholder="" />
+                </div>
             </div>
             <SetupMessage message={describeListing(listing)} />
-            <ul className="folder-list">
+            <ul className="listbox is-interactive folder-list">
                 {ready?.folders.map((folder) => (
-                    <li key={folder.path} className="folder-item">
-                        <button
-                            type="button"
+                    <li key={folder.path} className="listbox-row">
+                        <Button
+                            variant="quiet"
+                            wide
                             className="folder-entry"
                             onClick={() => {
                                 setPath(folder.path);
                             }}
                         >
-                            <span aria-hidden>📁</span> {folder.name}
-                        </button>
+                            <span aria-hidden>{FOLDER_GLYPH}</span> {folder.name}
+                        </Button>
                     </li>
                 ))}
-                {ready?.folders.length === 0 && <li className="folder-item folder-empty">No subfolders.</li>}
+                {ready?.folders.length === 0 && <li className="listbox-row listbox-empty">No subfolders.</li>}
             </ul>
-            <div className="setup-actions">
-                <button
-                    type="button"
-                    className="setup-button setup-button-primary"
+            <div className="sheet-buttons">
+                <Button variant="secondary" onClick={onClose}>
+                    Cancel
+                </Button>
+                <Button
+                    variant="primary"
                     disabled={ready === null}
                     onClick={() => {
                         if (ready !== null) {
@@ -155,10 +164,7 @@ export function FolderPicker({ title, initialPath, onChoose, onClose }: FolderPi
                     }}
                 >
                     Choose this folder
-                </button>
-                <button type="button" className="setup-button" onClick={onClose}>
-                    Cancel
-                </button>
+                </Button>
             </div>
         </BottomSheet>
     );

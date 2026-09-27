@@ -2,6 +2,7 @@ import type { KeyboardEvent, ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { getLabelVocabulary } from "../api/curation";
+import { Button } from "../shared/controls/Button";
 import { BottomSheet } from "../shared/overlay/BottomSheet";
 import { useFetch } from "../shared/useFetch";
 import { VOCABULARY_CACHE_KEY } from "./useAnnotationWriter";
@@ -61,7 +62,7 @@ export function LabelSheet({ label, onCommit, onClose }: LabelSheetProps): React
         <BottomSheet title="Label" onClose={onClose}>
             <input
                 ref={inputRef}
-                className="label-sheet-input"
+                className="label-sheet-input field"
                 type="text"
                 value={text}
                 placeholder="Label, e.g. HI-HAT: CLOSED"
@@ -90,19 +91,19 @@ export function LabelSheet({ label, onCommit, onClose }: LabelSheetProps): React
                     ))}
                 </div>
             )}
-            <div className="label-sheet-buttons">
-                <button
-                    type="button"
+            <div className="sheet-buttons">
+                <Button
+                    variant="secondary"
                     disabled={label === null}
                     onClick={() => {
                         commit(null);
                     }}
                 >
                     Clear
-                </button>
-                <button type="button" onClick={commitText}>
+                </Button>
+                <Button variant="primary" onClick={commitText}>
                     Done
-                </button>
+                </Button>
             </div>
         </BottomSheet>
     );

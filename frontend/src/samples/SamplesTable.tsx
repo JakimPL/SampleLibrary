@@ -14,6 +14,7 @@ import type { SampleSelection, SampleSummary } from "../api/samples";
 import { useContainerWidth } from "../layout/useContainerWidth";
 import { useLayoutMode } from "../layout/useLayoutMode";
 import { fitColumns } from "../shared/columnFit";
+import { Button } from "../shared/controls/Button";
 import { PanelToolbar } from "../shared/panel/PanelToolbar";
 import { TableColgroup } from "../shared/TableColgroup";
 import {
@@ -138,6 +139,7 @@ export function SamplesTable({
                 primary={
                     <input
                         type="text"
+                        className="field"
                         placeholder="Filter samples…"
                         value={globalFilter}
                         onChange={(event) => {
@@ -150,6 +152,7 @@ export function SamplesTable({
                         <label>
                             <input
                                 type="checkbox"
+                                className="check"
                                 checked={groupByEquivalence}
                                 onChange={(event) => {
                                     onGroupByEquivalenceChange(event.target.checked);
@@ -159,16 +162,17 @@ export function SamplesTable({
                         </label>
                         {curationShown && (
                             <>
-                                <button
-                                    type="button"
+                                <Button
+                                    variant="secondary"
                                     aria-pressed={selection.favoritesOnly}
                                     onClick={() => {
                                         onSelectionChange({ ...selection, favoritesOnly: !selection.favoritesOnly });
                                     }}
                                 >
                                     Favorites
-                                </button>
+                                </Button>
                                 <select
+                                    className="field"
                                     aria-label="Order"
                                     value={selection.sort}
                                     onChange={(event) => {
@@ -193,9 +197,9 @@ export function SamplesTable({
                             {isLoadingMore && hasMore ? " · loading…" : ""}
                         </span>
                         {isNarrowed && hasMore && (
-                            <button type="button" onClick={onLoadMore} disabled={isLoadingMore}>
+                            <Button variant="secondary" onClick={onLoadMore} disabled={isLoadingMore}>
                                 Load more
-                            </button>
+                            </Button>
                         )}
                         {loadMoreError !== null && <span className="error-notice">{loadMoreError}</span>}
                     </>

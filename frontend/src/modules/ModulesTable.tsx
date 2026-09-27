@@ -98,6 +98,7 @@ export function ModulesTable({ modules }: ModulesTableProps): ReactElement {
                 primary={
                     <input
                         type="text"
+                        className="field"
                         placeholder="Filter modules…"
                         value={globalFilter}
                         onChange={(event) => {
@@ -108,7 +109,7 @@ export function ModulesTable({ modules }: ModulesTableProps): ReactElement {
                 secondary={
                     <label>
                         Tracker
-                        <select value={tracker ?? ""} onChange={handleTrackerChange}>
+                        <select className="field" value={tracker ?? ""} onChange={handleTrackerChange}>
                             <option value="">All</option>
                             <option value="xm">XM</option>
                             <option value="it">IT</option>

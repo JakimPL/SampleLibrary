@@ -1,6 +1,7 @@
 import type { DockviewApi } from "dockview-react";
 import { type ReactElement, useEffect, useState } from "react";
 
+import { Button } from "../shared/controls/Button";
 import { DisclosureMenu } from "../shared/overlay/DisclosureMenu";
 import { addRegisteredPanel } from "../workspace/addPanel";
 import { resetLayout } from "../workspace/dockviewPersistence";
@@ -67,13 +68,14 @@ export function ViewMenu({ api }: ViewMenuProps): ReactElement {
     }
 
     return (
-        <DisclosureMenu label="View" className="view-menu">
+        <DisclosureMenu label="View" className="view-menu" variant="quiet">
             <ul className="view-menu-list">
                 {Object.values(PANEL_REGISTRY).map((definition) => (
                     <li key={definition.id}>
                         <label>
                             <input
                                 type="checkbox"
+                                className="check"
                                 checked={openIds.has(definition.id)}
                                 disabled={api === null}
                                 onChange={() => {
@@ -85,9 +87,9 @@ export function ViewMenu({ api }: ViewMenuProps): ReactElement {
                     </li>
                 ))}
             </ul>
-            <button type="button" className="menu-action" disabled={api === null} onClick={handleReset}>
+            <Button variant="quiet" wide className="menu-action" disabled={api === null} onClick={handleReset}>
                 Reset layout
-            </button>
+            </Button>
         </DisclosureMenu>
     );
 }

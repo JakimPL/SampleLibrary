@@ -63,7 +63,7 @@ export function LabelField({ label, onCommit, onLeave, takesFocus }: LabelFieldP
         <>
             <input
                 ref={inputRef}
-                className="annotation-editor-input"
+                className="annotation-editor-input field"
                 type="text"
                 list={vocabularyListId}
                 placeholder="Label (e.g. BASS)"

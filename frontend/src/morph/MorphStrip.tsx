@@ -3,6 +3,7 @@ import { useEffect, useId, useRef } from "react";
 
 import { useLayoutMode } from "../layout/useLayoutMode";
 import { FocusedSampleTransport } from "../samples/SampleTransport";
+import { Button } from "../shared/controls/Button";
 import { Icon } from "../shared/icons/Icon";
 import { MorphDistance } from "./MorphDistance";
 import { MorphSlot } from "./MorphSlot";
@@ -36,9 +37,9 @@ function OfflineNotice({ status }: OfflineNoticeProps): ReactElement | null {
     return (
         <p className="panel-status morph-offline" role="status">
             <span>{OFFLINE_NOTICE}</span>
-            <button type="button" onClick={status.refresh}>
+            <Button variant="secondary" onClick={status.refresh}>
                 Check again
-            </button>
+            </Button>
         </p>
     );
 }
@@ -151,19 +152,19 @@ export function MorphStrip(): ReactElement {
         <section className="morph-strip" aria-label="Morph">
             <div className="morph-strip-row">
                 <MorphSlot end="first" hash={first} />
-                <button
-                    type="button"
-                    className="morph-strip-tool"
+                <Button
+                    variant="secondary"
+                    icon
                     aria-label="Swap the two ends"
                     disabled={first === null && second === null}
                     onClick={swap}
                 >
                     ⇄
-                </button>
+                </Button>
                 <MorphSlot end="second" hash={second} />
-                <button
-                    type="button"
-                    className="morph-strip-tool morph-strip-toggle"
+                <Button
+                    variant="secondary"
+                    icon
                     aria-label="Waveform"
                     aria-expanded={shown}
                     aria-controls={bodyId}
@@ -171,7 +172,7 @@ export function MorphStrip(): ReactElement {
                     onClick={toggleExpanded}
                 >
                     <Icon name="waveform" label={null} />
-                </button>
+                </Button>
             </div>
             {pair !== null && <MorphSlider first={pair.first} second={pair.second} playback={playback} />}
             {shown && pair !== null && (

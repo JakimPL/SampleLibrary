@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import type { SampleDetail, SampleRelation, SimilarSample } from "../api/samples";
+import { Button } from "../shared/controls/Button";
 import { DetailHeader } from "../shared/DetailHeader";
 import { formatBytes, formatDuration } from "../shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
@@ -194,16 +195,16 @@ export function SampleDetailView({
             <DetailHeader name={sample.display_name} placeholder={UNNAMED_SAMPLE_LABEL} hash={sample.hash} />
             <div className="detail-tabs">
                 {choices.map((choice) => (
-                    <button
+                    <Button
                         key={choice.id}
-                        type="button"
+                        variant="secondary"
                         aria-pressed={tab === choice.id}
                         onClick={() => {
                             onTabChange(choice.id);
                         }}
                     >
                         {choice.label}
-                    </button>
+                    </Button>
                 ))}
             </div>
             <div className="detail-section">{section()}</div>

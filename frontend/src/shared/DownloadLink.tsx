@@ -1,5 +1,7 @@
 import type { ReactElement } from "react";
 
+import { buttonClassName } from "./controls/buttonClassName";
+
 const SAVE_GLYPH = "⤓";
 
 interface DownloadLinkProps {
@@ -18,7 +20,13 @@ interface DownloadLinkProps {
  */
 export function DownloadLink({ href, fileName, label }: DownloadLinkProps): ReactElement {
     return (
-        <a className="download-link" href={href} download={fileName} aria-label={label} title={label}>
+        <a
+            className={buttonClassName({ variant: "secondary", icon: true, className: "download-link" })}
+            href={href}
+            download={fileName}
+            aria-label={label}
+            title={label}
+        >
             {SAVE_GLYPH}
         </a>
     );

@@ -30,7 +30,7 @@ export function PanelToolbar({ primary, secondary, status }: PanelToolbarProps):
         <div className="panel-filter panel-toolbar" ref={rootRef}>
             <div className="panel-toolbar-primary">{primary}</div>
             {collapsed ? (
-                <DisclosureMenu label="Filters" className="panel-toolbar-menu">
+                <DisclosureMenu label="Filters" className="panel-toolbar-menu" variant="secondary">
                     {secondary}
                 </DisclosureMenu>
             ) : (

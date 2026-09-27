@@ -2,6 +2,7 @@ import { type ReactElement, useState } from "react";
 
 import { floatRenderingSupport } from "../cloud/floatRendering";
 import { useLayoutMode } from "../layout/useLayoutMode";
+import { Button } from "../shared/controls/Button";
 import { DisclosureMenu } from "../shared/overlay/DisclosureMenu";
 import { DIAGNOSTICS_TITLE, DiagnosticsSheet } from "./DiagnosticsSheet";
 import { GUIDE_TITLES, GuideSheet } from "./GuideSheet";
@@ -14,25 +15,27 @@ export function HelpMenu(): ReactElement {
 
     return (
         <>
-            <DisclosureMenu label="Help" className="help-menu">
-                <button
-                    type="button"
+            <DisclosureMenu label="Help" className="help-menu" variant="quiet">
+                <Button
+                    variant="quiet"
+                    wide
                     className="menu-action"
                     onClick={() => {
                         setGuideOpen(true);
                     }}
                 >
                     {GUIDE_TITLES[input]}
-                </button>
-                <button
-                    type="button"
+                </Button>
+                <Button
+                    variant="quiet"
+                    wide
                     className="menu-action"
                     onClick={() => {
                         setDiagnosticsOpen(true);
                     }}
                 >
                     {DIAGNOSTICS_TITLE}
-                </button>
+                </Button>
             </DisclosureMenu>
             {guideOpen && (
                 <GuideSheet

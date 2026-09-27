@@ -1,4 +1,5 @@
 import { type ReactElement, useState } from "react";
+import { Link } from "react-router-dom";
 
 import {
     type BuildDevice,
@@ -9,11 +10,15 @@ import {
     startBuild,
 } from "../api/setup";
 import type { LibraryStats } from "../api/stats";
+import { Button } from "../shared/controls/Button";
+import { buttonClassName } from "../shared/controls/buttonClassName";
 import { ActionSheet } from "../shared/overlay/ActionSheet";
 import { BuildProgress } from "./BuildProgress";
+import { CheckOption } from "./CheckOption";
 import { NetworkOption } from "./NetworkOption";
 import { describeRefusal } from "./refusal";
 import { SetupMessage, type SetupMessageText } from "./SetupMessage";
+import { SetupPane } from "./SetupPane";
 import { useLibraryStats } from "./useLibraryStats";
 
 interface LibraryPanelProps {
@@ -26,6 +31,7 @@ interface LibraryPanelProps {
 const BUILD_TITLE = "Build my library";
 const BUILD_NOTE =
     "Reads your modules and samples and finds duplicates. Run it again after adding files; only new files are read.";
+const CLOUD_TITLE = "Build the cloud";
 const CLOUD_NOTE = "Analyzes every sample, suggests categories and lays out the cloud.";
 const CONFIRMATION_TITLE = "Build the cloud without an NVIDIA graphics card?";
 const CONFIRMATION_NOTE =
@@ -73,10 +79,33 @@ function describeDevice(device: BuildDevice | null): string {
         : `Builds use your ${device.card}.`;
 }
 
+interface OpenLibraryButtonProps {
+    readonly ready: boolean;
+    /** Whether opening is the next step, once the library holds samples. */
+    readonly primary: boolean;
+}
+
+function OpenLibraryButton({ ready, primary }: OpenLibraryButtonProps): ReactElement {
+    if (!ready) {
+        return (
+            <Button variant="secondary" disabled>
+                Open the library
+            </Button>
+        );
+    }
+    return (
+        <Link className={buttonClassName({ variant: primary ? "primary" : "secondary" })} to="/">
+            Open the library
+        </Link>
+    );
+}
+
 /**
- * Where a person builds the open library and watches it happen: the library's status and size, one
- * build whose cloud a switch includes, the device builds compute on, the switch opening the library
- * to the home network, and the latest build's progress. A build going on to the cloud without an NVIDIA card asks first, since the processor
+ * Where a person builds the open library, watches it happen and goes on to it: the library's status
+ * and size, the build with its cloud switch and the device it computes on, the switch opening the
+ * library to the home network, the latest build's progress, and a footer holding Build and Open,
+ * the primary one being the next step: Build while the library is empty, Open once it holds
+ * samples. A build going on to the cloud without an NVIDIA card asks first, since the processor
  * takes many hours over a large collection.
  */
 export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelProps): ReactElement {
@@ -84,11 +113,13 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
     const [confirming, setConfirming] = useState(false);
     const build = state.build;
     const running = build?.status === "running";
+    const ready = state.status === "ready";
     const device = state.build_device;
     const buildCloud = state.options?.build_cloud ?? DEFAULT_BUILD_CLOUD;
     const openToNetwork = state.options?.open_to_network ?? DEFAULT_OPEN_TO_NETWORK;
-    const canStart = state.status === "ready" && !running && !unsavedChanges && device !== null;
-    const stats = useLibraryStats(state.status === "ready", `${build?.started_at ?? ""} ${build?.status ?? ""}`);
+    const canStart = ready && !running && !unsavedChanges && device !== null;
+    const stats = useLibraryStats(ready, `${build?.started_at ?? ""} ${build?.status ?? ""}`);
+    const empty = stats === null || stats.sample_count === 0;
     const status =
         refusal !== null ? { text: refusal, tone: "error" as const } : libraryStatus(state, unsavedChanges, stats);
 
@@ -115,52 +146,37 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
         }
     }
 
-    return (
-        <section className="setup-pane" aria-labelledby="setup-library-title">
-            <header className="setup-pane-header">
-                <h2 id="setup-library-title">Your library</h2>
-                <SetupMessage message={status} className="setup-status" />
-            </header>
+    const footer = (
+        <div className="setup-footer-actions">
+            <Button variant={canStart && empty ? "primary" : "secondary"} disabled={!canStart} onClick={handleBuild}>
+                {BUILD_TITLE}
+            </Button>
+            <OpenLibraryButton ready={ready} primary={ready && !empty} />
+        </div>
+    );
 
-            <div className="setup-pane-body setup-pane-body-tall">
-                <div className="build-choices">
-                    <button
-                        type="button"
-                        className="build-choice"
-                        disabled={!canStart}
-                        data-running={running}
-                        aria-label={BUILD_TITLE}
-                        aria-describedby="build-choice-note"
-                        onClick={handleBuild}
-                    >
-                        <span className="build-choice-title">{BUILD_TITLE}</span>
-                        <span id="build-choice-note" className="build-choice-note">
-                            {BUILD_NOTE}
-                        </span>
-                    </button>
-                    <div className="build-option">
-                        <input
-                            id="build-cloud"
-                            className="build-option-check"
-                            type="checkbox"
-                            aria-describedby="build-cloud-note"
-                            checked={buildCloud}
-                            disabled={state.options === null || running}
-                            onChange={(event) => {
-                                const chosen = event.target.checked;
-                                void act(() => chooseOptions({ build_cloud: chosen, open_to_network: openToNetwork }));
-                            }}
-                        />
-                        <span className="build-option-text">
-                            <label htmlFor="build-cloud" className="build-option-title">
-                                Build the cloud
-                            </label>
-                            <span id="build-cloud-note" className="setup-hint">
-                                {CLOUD_NOTE}
-                            </span>
-                        </span>
-                    </div>
+    return (
+        <>
+            <SetupPane title="Library" titleId="setup-library-title" footer={footer}>
+                <SetupMessage message={status} className="setup-status" />
+
+                <fieldset className="group">
+                    <legend>Build</legend>
+                    <p className="setup-hint">{BUILD_NOTE}</p>
+                    <CheckOption
+                        title={CLOUD_TITLE}
+                        note={CLOUD_NOTE}
+                        checked={buildCloud}
+                        disabled={state.options === null || running}
+                        onChange={(chosen) => {
+                            void act(() => chooseOptions({ build_cloud: chosen, open_to_network: openToNetwork }));
+                        }}
+                    />
                     <p className="setup-hint build-device">{describeDevice(device)}</p>
+                </fieldset>
+
+                <fieldset className="group">
+                    <legend>Sharing</legend>
                     <NetworkOption
                         chosen={openToNetwork}
                         reach={state.home_network}
@@ -169,14 +185,15 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
                             void act(() => chooseOptions({ build_cloud: buildCloud, open_to_network: chosen }));
                         }}
                     />
-                </div>
+                </fieldset>
+
                 <BuildProgress
                     build={build}
                     onCancel={() => {
                         void act(cancelBuild);
                     }}
                 />
-            </div>
+            </SetupPane>
             {confirming && (
                 <ActionSheet
                     title={CONFIRMATION_TITLE}
@@ -206,6 +223,6 @@ export function LibraryPanel({ state, unsavedChanges, onChanged }: LibraryPanelP
                     <p className="setup-hint">{CONFIRMATION_NOTE}</p>
                 </ActionSheet>
             )}
-        </section>
+        </>
     );
 }

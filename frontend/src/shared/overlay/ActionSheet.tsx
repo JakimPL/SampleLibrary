@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
+import { Button } from "../controls/Button";
 import { BottomSheet } from "./BottomSheet";
 
 export interface SheetAction {
@@ -24,9 +25,10 @@ export function ActionSheet({ title, children, actions, onClose }: ActionSheetPr
             {children}
             <div className="sheet-actions">
                 {actions.map((action) => (
-                    <button
+                    <Button
                         key={action.id}
-                        type="button"
+                        variant="secondary"
+                        wide
                         disabled={action.disabled}
                         onClick={() => {
                             action.run();
@@ -34,7 +36,7 @@ export function ActionSheet({ title, children, actions, onClose }: ActionSheetPr
                         }}
                     >
                         {action.label}
-                    </button>
+                    </Button>
                 ))}
             </div>
         </BottomSheet>

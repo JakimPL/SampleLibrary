@@ -6,10 +6,12 @@ export const CLOSED_PATH = "/closed";
 export function ClosedView(): ReactElement {
     return (
         <main className="setup-page setup-page-closed">
-            <section className="setup-card">
-                <h1>SampleRipper has closed</h1>
-                <p className="setup-hint">You can close this tab.</p>
-            </section>
+            <div className="setup-body">
+                <section className="setup-card">
+                    <h1>SampleRipper has closed</h1>
+                    <p className="setup-hint">You can close this tab.</p>
+                </section>
+            </div>
         </main>
     );
 }

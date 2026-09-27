@@ -101,7 +101,7 @@ export function WaveformPlayer({
                 rateOptions.length > 1 && (
                     <label>
                         Rate
-                        <select value={rateHz} onChange={handleRateChange}>
+                        <select className="field" value={rateHz} onChange={handleRateChange}>
                             {rateOptions.map((option) => (
                                 <option key={option.rateHz} value={option.rateHz}>
                                     {describeRateOption(option)}

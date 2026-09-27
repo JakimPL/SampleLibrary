@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 
 import type { AnnotationScope } from "../api/curation";
 import type { SampleDetail } from "../api/samples";
+import { Button } from "../shared/controls/Button";
 import { decisionsOf, useSampleAnnotation } from "./annotationStore";
 import { FavoriteToggle } from "./FavoriteToggle";
 import { LabelField } from "./LabelField";
@@ -67,15 +68,15 @@ export function AnnotationEditor({ sample, scope, onScopeChange }: AnnotationEdi
                     onLeave={() => undefined}
                     takesFocus={false}
                 />
-                <button
-                    type="button"
+                <Button
+                    variant="secondary"
                     disabled={label === null}
                     onClick={() => {
                         change({ label: null });
                     }}
                 >
                     Clear
-                </button>
+                </Button>
             </div>
             <div className="annotation-editor-row">
                 <RatingStars
@@ -94,6 +95,7 @@ export function AnnotationEditor({ sample, scope, onScopeChange }: AnnotationEdi
                     <label className="annotation-editor-scope">
                         <input
                             type="checkbox"
+                            className="check"
                             checked={scope === "equivalence_class"}
                             onChange={(event) => {
                                 onScopeChange(event.target.checked ? "equivalence_class" : "sample");

@@ -2,10 +2,13 @@ import type { MouseEvent, ReactElement, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { classNames } from "../classNames";
+import { buttonClassName, type ButtonVariant } from "../controls/buttonClassName";
 
 interface DisclosureMenuProps {
     readonly label: string;
     readonly className: string;
+    /** How the summary is drawn: quiet in a bar of menus, a plain button in a toolbar. */
+    readonly variant: ButtonVariant;
     readonly children: ReactNode;
 }
 
@@ -14,7 +17,7 @@ interface DisclosureMenuProps {
  * Escape, or on a press anywhere outside. Built on `<details>`, so the open state is the
  * element's own and a screen reader hears a disclosure.
  */
-export function DisclosureMenu({ label, className, children }: DisclosureMenuProps): ReactElement {
+export function DisclosureMenu({ label, className, variant, children }: DisclosureMenuProps): ReactElement {
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDetailsElement | null>(null);
 
@@ -48,7 +51,7 @@ export function DisclosureMenu({ label, className, children }: DisclosureMenuPro
 
     return (
         <details ref={rootRef} className={classNames("disclosure-menu", className)} open={open}>
-            <summary className="disclosure-menu-summary" onClick={handleSummaryClick}>
+            <summary className={buttonClassName({ variant })} onClick={handleSummaryClick}>
                 {label}
             </summary>
             <div className="disclosure-menu-panel">{children}</div>

@@ -1,12 +1,12 @@
 import { type ReactElement, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { quitApplication, type SetupState } from "../api/setup";
 import { Loading } from "../shared/Loading";
 import { CLOSED_PATH } from "./ClosedView";
 import { LibraryPanel } from "./LibraryPanel";
 import { describeRefusal } from "./refusal";
-import { SetupMessage } from "./SetupMessage";
+import { SetupTopBar } from "./SetupTopBar";
 import { SourcesForm } from "./SourcesForm";
 import { lastKnownState, type SetupSource, useSetupState } from "./useSetupState";
 import { useSourcesDraft } from "./useSourcesDraft";
@@ -24,24 +24,6 @@ function SetupPanes({ state, onChanged }: SetupPanesProps): ReactElement {
             <SourcesForm state={state} draft={draft} onSaved={onChanged} />
             <LibraryPanel state={state} unsavedChanges={draft.unsaved} onChanged={onChanged} />
         </div>
-    );
-}
-
-function OpenLibraryButton({ state }: { readonly state: SetupState | null }): ReactElement {
-    if (state?.status !== "ready") {
-        return (
-            <button type="button" className="setup-button" disabled>
-                Open the library
-            </button>
-        );
-    }
-    return (
-        <Link
-            className={state.build?.status === "completed" ? "setup-button setup-button-primary" : "setup-button"}
-            to="/"
-        >
-            Open the library
-        </Link>
     );
 }
 
@@ -67,8 +49,9 @@ function SetupPlaceholder({ source }: { readonly source: SetupSource }): ReactEl
 
 /**
  * The application's own page: where a person names their folders, opens the library, builds it and
- * closes the application, all without a terminal or a config file. On a desktop the folders and the
- * library sit side by side and fill the window; every control keeps its place in every state.
+ * closes the application, all without a terminal or a config file. It wears the workspace's bar,
+ * and on a desktop the folders and the library stand side by side as two panels filling the
+ * window; every control keeps its place in every state.
  */
 export function SetupView(): ReactElement {
     const { source, accept } = useSetupState();
@@ -90,31 +73,20 @@ export function SetupView(): ReactElement {
 
     return (
         <main className="setup-page">
-            <header className="setup-header">
-                <h1>SampleRipper</h1>
-                <SetupMessage
-                    message={notice === null ? null : { text: notice, tone: "error" }}
-                    className="setup-notice"
-                />
-                <div className="setup-header-actions">
-                    <OpenLibraryButton state={state} />
-                    <button
-                        type="button"
-                        className="setup-button"
-                        disabled={state === null}
-                        onClick={() => {
-                            void handleQuit();
-                        }}
-                    >
-                        Quit
-                    </button>
-                </div>
-            </header>
-            {state === null ? (
-                <SetupPlaceholder source={source} />
-            ) : (
-                <SetupPanes key={state.config_path} state={state} onChanged={accept} />
-            )}
+            <SetupTopBar
+                notice={notice}
+                quitEnabled={state !== null}
+                onQuit={() => {
+                    void handleQuit();
+                }}
+            />
+            <div className="setup-body">
+                {state === null ? (
+                    <SetupPlaceholder source={source} />
+                ) : (
+                    <SetupPanes key={state.config_path} state={state} onChanged={accept} />
+                )}
+            </div>
         </main>
     );
 }

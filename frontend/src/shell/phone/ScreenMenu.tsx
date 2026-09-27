@@ -24,7 +24,7 @@ export function ScreenMenu(): ReactElement {
 
     return (
         <>
-            <DisclosureMenu label="More" className="screen-menu">
+            <DisclosureMenu label="More" className="screen-menu" variant="quiet">
                 <ul className="screen-menu-list">
                     {overflowPanels().map((panel) => (
                         <li key={panel.id}>
