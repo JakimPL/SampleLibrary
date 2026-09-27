@@ -1,6 +1,6 @@
 # Building and releasing
 
-This guide is for building the SampleLibrary executables and their installers, and for publishing a
+This guide is for building the SampleRipper executables and their installers, and for publishing a
 release. Running the app from a checkout takes [Running from source](source.md) alone.
 
 ## What gets built
@@ -10,12 +10,12 @@ build/
   frontend/               the built web app
   package/                the sampleripper wheel, which carries the web app, and each launcher's requirements
 bin/
-  SampleLibrary           the processor launcher (SampleLibrary.exe on Windows)
-  SampleLibrary-nvidia    the NVIDIA launcher, on Windows and Linux
+  SampleRipper           the processor launcher (SampleRipper.exe on Windows)
+  SampleRipper-nvidia    the NVIDIA launcher, on Windows and Linux
 dist/                     what a release publishes
-  SampleLibrary-<version>-windows-x64-setup.exe
-  SampleLibrary-<version>-macos-arm64.dmg
-  SampleLibrary-<version>-linux-x64.AppImage
+  SampleRipper-<version>-windows-x64-setup.exe
+  SampleRipper-<version>-macos-arm64.dmg
+  SampleRipper-<version>-linux-x64.AppImage
   descriptor/             the pretrained descriptor, when you publish a new one
 ```
 
@@ -48,7 +48,7 @@ just installer    # dist/: the installer for this system
   machine, and with its CUDA build and NVIDIA libraries, several gigabytes more, for a machine with
   an NVIDIA card.
 - `just executable` compiles a [PyApp](https://ofek.dev/pyapp/) launcher around a copy of the wheel
-  carrying each set of versions: `SampleLibrary` everywhere, and `SampleLibrary-nvidia` on Windows
+  carrying each set of versions: `SampleRipper` everywhere, and `SampleRipper-nvidia` on Windows
   and Linux, where PyTorch publishes CUDA builds. The NVIDIA wheel's version carries the label
   `+cu128`, which gives its installation a folder of its own. On its first start, a launcher
   downloads Python and installs the app with uv, which takes several minutes; later starts take
@@ -69,10 +69,10 @@ just installer    # dist/: the installer for this system
 
 ## Trying a build
 
-Run `bin/SampleLibrary`, or `bin/SampleLibrary-nvidia` on a machine with an NVIDIA card: it
+Run `bin/SampleRipper`, or `bin/SampleRipper-nvidia` on a machine with an NVIDIA card: it
 installs itself, starts, and opens your browser, as an installed copy does. A launcher installs its
 packages once per version, and a new build of the same version starts on the packages the first one
-installed. `self remove`, such as `bin/SampleLibrary self remove`, deletes that launcher's
+installed. `self remove`, such as `bin/SampleRipper self remove`, deletes that launcher's
 installation, so the next start installs afresh. The installations live in PyApp's data folder:
 `~/.local/share/pyapp` on Linux, `~/Library/Application Support/pyapp` on macOS and
 `%LOCALAPPDATA%\pyapp\data` on Windows.

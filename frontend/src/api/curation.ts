@@ -9,7 +9,7 @@ export type AnnotationScope = components["schemas"]["AnnotationSource"];
 /**
  * What the person asking may see and do of a person's decisions: whether labels, ratings and favorites
  * are shown at all, and whether they may change them, which only the person at the computer the
- * SampleLibrary app runs on may.
+ * SampleRipper app runs on may.
  */
 export type CurationAccess = components["schemas"]["CurationAccess"];
 /** One tag in use: its path, how many samples carry it, and the rank that stays with it. */

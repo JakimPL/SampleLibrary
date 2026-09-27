@@ -117,7 +117,7 @@ def _report(summary: ProvisioningSummary) -> None:
     if not summary.service_roles:
         _logger.warning(
             "The config names no server_database_url or curation_database_url, so `sampleripper serve` and the "
-            "SampleLibrary app have no role to connect as. Name them in the [library] table, then run this again."
+            "SampleRipper app have no role to connect as. Name them in the [library] table, then run this again."
         )
     if not summary.role_creates_databases:
         _logger.warning(

@@ -49,7 +49,7 @@ export function LibraryMenu(): ReactElement | null {
                     void handleQuit();
                 }}
             >
-                Quit SampleLibrary
+                Quit SampleRipper
             </button>
             {refusal !== null && (
                 <p className="menu-note" role="alert">

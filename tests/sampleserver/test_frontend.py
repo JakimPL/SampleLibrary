@@ -12,7 +12,7 @@ from sampleserver.app import API_PREFIX, create_app
 from sampleserver.frontend import INDEX_DOCUMENT
 from tests.sampleserver.conftest import INFERENCE_URL, LOCAL_CLIENT, LOCAL_ORIGIN, LOCAL_SERVER
 
-INDEX_MARKUP = "<!doctype html><title>SampleLibrary</title>"
+INDEX_MARKUP = "<!doctype html><title>SampleRipper</title>"
 SCRIPT_BODY = "console.log('sample library');"
 
 

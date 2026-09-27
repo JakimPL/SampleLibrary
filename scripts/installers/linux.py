@@ -15,7 +15,7 @@ from torch_builds import MINIMUM_DRIVER_CUDA_MAJOR
 
 PLATFORM: Final[str] = "linux-x64"
 ARCHITECTURE: Final[str] = "x86_64"
-DESKTOP_ICON_NAME: Final[str] = "samplelibrary.png"
+DESKTOP_ICON_NAME: Final[str] = "sampleripper.png"
 APPIMAGETOOL_URL: Final[str] = (
     "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
 )

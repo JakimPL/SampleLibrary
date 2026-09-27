@@ -43,7 +43,7 @@ The tests run against the `samplelibrary_test` database on the server `config.to
 `just dev-build` writes a sandbox of 30 modules, 300 one-shots and ten labels into `dev-library/`
 and builds it, in the `samplelibrary_dev` database on your configured server. `just dev <command>`
 runs a `sampleripper` command on it, `just serve-dev` serves it read-only on port 8001, `just
-app-dev` runs the SampleLibrary app on it, which records labels, and `just dev-reset` empties its
+app-dev` runs the SampleRipper app on it, which records labels, and `just dev-reset` empties its
 database and deletes its files. Both serve through the roles `config.toml` names in
 `server_database_url` and `curation_database_url`, on the sandbox's database; run `just database`
 once after naming them.

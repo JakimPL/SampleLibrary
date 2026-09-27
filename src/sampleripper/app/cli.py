@@ -74,12 +74,12 @@ def main(argv: list[str], *, prog: str) -> None:
             _logger.error("%s", reason)
             sys.exit(ExitStatus.REFUSED)
         case Running(address=address):
-            _logger.info("SampleLibrary is already running at %s. Opening it.", address)
+            _logger.info("SampleRipper is already running at %s. Opening it.", address)
             _open_browser(address, enabled=arguments.open_browser)
         case Claimed(lock=lock):
             with lock:
                 if arguments.quit:
-                    _logger.info("SampleLibrary is closed.")
+                    _logger.info("SampleRipper is closed.")
                     return
                 _serve(
                     place,
@@ -108,7 +108,7 @@ def _serve(
         try:
             listener = listen_on_first_free(policy.bind_host, port_choices(requested_port, read_record(place.record)))
         except PortUnavailableError as error:
-            _logger.error("%s Leave --port out to let SampleLibrary choose a port.", error)
+            _logger.error("%s Leave --port out to let SampleRipper choose a port.", error)
             sys.exit(ExitStatus.REFUSED)
         port: int = listener.getsockname()[1]
         write_record(place.record, InstanceRecord(host=LOOPBACK_HOST, port=port, process=current_process()))
@@ -131,7 +131,7 @@ def _serve(
         )
         server = uvicorn.Server(uvicorn.Config(application, proxy_headers=False))
         application.state.request_quit = lambda: setattr(server, "should_exit", True)
-        _logger.info("SampleLibrary is running at %s. Press Ctrl+C or click Quit to stop it.", address)
+        _logger.info("SampleRipper is running at %s. Press Ctrl+C or click Quit to stop it.", address)
         server.run(sockets=[listener])
 
 
@@ -141,12 +141,12 @@ def _open_browser(address: str, enabled: bool) -> None:
 
 
 def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
-    parser = command_parser(prog=prog, description="Run SampleLibrary with its setup pages, opened in a browser.")
+    parser = command_parser(prog=prog, description="Run SampleRipper with its setup pages, opened in a browser.")
     parser.add_argument(
         "--port",
         type=port_number,
         default=None,
-        help="The port to listen on. Left out, SampleLibrary keeps the port it listened on last, or finds a free one.",
+        help="The port to listen on. Left out, SampleRipper keeps the port it listened on last, or finds a free one.",
     )
     parser.add_argument(
         "--frontend",
@@ -164,7 +164,7 @@ def _parse_arguments(argv: list[str], *, prog: str) -> argparse.Namespace:
     parser.add_argument(
         "--quit",
         action="store_true",
-        help="Quit the SampleLibrary running under this config, and wait until it has ended.",
+        help="Quit the SampleRipper running under this config, and wait until it has ended.",
     )
     return parser.parse_args(argv)
 

@@ -18,7 +18,7 @@ from sampleripper.pipeline.layout import PipelineLayout
 from sampleripper.pipeline.steps.descriptor import DESCRIPTOR
 
 SEALED_OUTPUT: Final[str] = "sealed"
-RELEASE_DOWNLOAD_URL: Final[str] = "https://github.com/JakimPL/SampleLibrary/releases/download/{tag}/{name}"
+RELEASE_DOWNLOAD_URL: Final[str] = "https://github.com/JakimPL/SampleRipper/releases/download/{tag}/{name}"
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:

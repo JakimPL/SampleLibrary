@@ -82,7 +82,7 @@ def create_application(
         openapi_url=f"{SETUP_PREFIX}/openapi.json",
         docs_url=None,
         redoc_url=None,
-        title="SampleLibrary setup",
+        title="SampleRipper setup",
         lifespan=lifespan,
     )
     application.add_middleware(LocalPersonOrHomeDevices, policy=policy, personal_prefix=SETUP_PREFIX)

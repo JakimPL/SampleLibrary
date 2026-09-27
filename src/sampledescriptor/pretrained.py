@@ -20,7 +20,7 @@ SHA256_PATTERN: Final[str] = r"^[0-9a-f]{64}$"
 DOWNLOAD_CHUNK_BYTES: Final[int] = 1 << 20
 DOWNLOAD_TIMEOUT_SECONDS: Final[float] = 60.0
 DOWNLOAD_LABEL: Final[str] = "Downloading the descriptor"
-MISSING_RELEASE_MESSAGE: Final[str] = "This version of SampleLibrary carries no descriptor to download."
+MISSING_RELEASE_MESSAGE: Final[str] = "This version of SampleRipper carries no descriptor to download."
 
 
 class PretrainedDescriptorMissingError(Exception):

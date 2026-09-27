@@ -88,7 +88,7 @@ def read_cluster_state(library_root: Path) -> ClusterState:
     if not path.is_file():
         raise ManagedClusterMissingError(
             f"The library at {library_root} has no database yet. "
-            "Start the SampleLibrary app or run `sampleripper setup database` to create one."
+            "Start the SampleRipper app or run `sampleripper setup database` to create one."
         )
     return ClusterState.model_validate_json(path.read_text(encoding="utf-8"))
 
@@ -128,7 +128,7 @@ def managed_service_url(library_root: Path, service: ServiceRole) -> str:
     if not path.is_file():
         raise ManagedClusterMissingError(
             f"The database of the library at {library_root} has no service roles yet. "
-            "Start the SampleLibrary app or run `sampleripper setup database` to create them."
+            "Start the SampleRipper app or run `sampleripper setup database` to create them."
         )
     roles = ServiceRoleState.model_validate_json(path.read_text(encoding="utf-8"))
     return (

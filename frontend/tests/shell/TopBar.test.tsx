@@ -12,7 +12,7 @@ describe("TopBar", () => {
             </MemoryRouter>,
         );
 
-        expect(screen.getByRole("link", { name: "SampleLibrary" })).toHaveAttribute("href", "/");
+        expect(screen.getByRole("link", { name: "SampleRipper" })).toHaveAttribute("href", "/");
         expect(screen.getByText("View")).toBeInTheDocument();
         expect(screen.getByText("Help")).toBeInTheDocument();
         expect(screen.getByLabelText("Theme")).toBeInTheDocument();

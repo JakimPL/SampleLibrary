@@ -141,7 +141,7 @@ dev *arguments:
 serve-dev:
     uv run sampleripper --config {{ DEV_CONFIG }} serve --reload --port {{ DEV_PORT }}
 
-# The SampleLibrary app on the sandbox, which records labels where `serve-dev` only reads.
+# The SampleRipper app on the sandbox, which records labels where `serve-dev` only reads.
 [group("dev")]
 app-dev:
     uv run sampleripper --config {{ DEV_CONFIG }} app --port {{ DEV_PORT }}

@@ -16,8 +16,8 @@ if [ ! -f "$launcher_choice" ]; then
     printf '%s\n' "$choice" >"$launcher_choice"
 fi
 case "$(cat "$launcher_choice")" in
-    nvidia) application="$here/usr/bin/SampleLibrary-nvidia" ;;
-    *) application="$here/usr/bin/SampleLibrary" ;;
+    nvidia) application="$here/usr/bin/SampleRipper-nvidia" ;;
+    *) application="$here/usr/bin/SampleRipper" ;;
 esac
 
 if [ -t 1 ]; then
@@ -30,7 +30,7 @@ log_limit_bytes=10000000
 
 notify() {
     if command -v notify-send >/dev/null 2>&1; then
-        notify-send --app-name=SampleLibrary "$@"
+        notify-send --app-name=SampleRipper "$@"
     fi
 }
 
@@ -39,9 +39,9 @@ if [ -f "$log" ] && [ "$(wc -c <"$log")" -gt "$log_limit_bytes" ]; then
     mv "$log" "$log_directory/app.previous.log"
 fi
 if [ -z "$("$application" self metadata)" ]; then
-    notify "Preparing SampleLibrary" "The first start takes a few minutes. SampleLibrary opens in your browser when it is ready."
+    notify "Preparing SampleRipper" "The first start takes a few minutes. SampleRipper opens in your browser when it is ready."
 fi
 if ! "$application" "$@" >>"$log" 2>&1; then
-    notify --urgency=critical "SampleLibrary couldn't start" "Details are in $log."
+    notify --urgency=critical "SampleRipper couldn't start" "Details are in $log."
     exit 1
 fi

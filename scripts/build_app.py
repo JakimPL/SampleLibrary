@@ -25,7 +25,7 @@ PYAPP_VERSION: Final[str] = "0.29.0"
 PYTHON_VERSION: Final[str] = "3.13"
 APP_EXTRA: Final[str] = "app"
 APP_MODULE: Final[str] = "sampleripper.app"
-APP_NAME: Final[str] = "SampleLibrary"
+APP_NAME: Final[str] = "SampleRipper"
 NVIDIA_APP_NAME: Final[str] = f"{APP_NAME}-nvidia"
 EXECUTABLE_SUFFIX: Final[str] = ".exe" if sys.platform == "win32" else ""
 WHEEL_PATTERN: Final[str] = "sampleripper-*.whl"
@@ -70,7 +70,7 @@ def launcher_builds() -> tuple[LauncherBuild, ...]:
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build the SampleLibrary executables for this system with PyApp.")
+    parser = argparse.ArgumentParser(description="Build the SampleRipper executables for this system with PyApp.")
     return parser.parse_args(argv)
 
 

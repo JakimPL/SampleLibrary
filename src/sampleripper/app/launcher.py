@@ -336,7 +336,7 @@ class Launcher:
             return None
         lock = try_lock(library_lock_path(root))
         if lock is None:
-            raise LibraryInUseError("Another SampleLibrary has this library open. Quit that one, then try again.")
+            raise LibraryInUseError("Another SampleRipper has this library open. Quit that one, then try again.")
         previous, self._held_library = self._held_library, HeldLibrary(root=root, lock=lock)
         return previous
 

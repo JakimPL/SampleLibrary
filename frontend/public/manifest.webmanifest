@@ -1,5 +1,5 @@
 {
-    "name": "SampleLibrary",
+    "name": "SampleRipper",
     "short_name": "Samples",
     "description": "Browse, audition, label and morph the samples of a tracker module library.",
     "start_url": "/",

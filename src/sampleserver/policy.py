@@ -81,7 +81,7 @@ class ServingPolicy:
 
     @property
     def permits_desktop_app(self) -> bool:
-        """Whether the SampleLibrary app, which edits labels and writes its config, may serve the library."""
+        """Whether the SampleRipper app, which edits labels and writes its config, may serve the library."""
         return not self.is_public
 
     @property

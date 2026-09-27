@@ -194,7 +194,7 @@ export function SourcesForm({ state, draft, onSaved }: SourcesFormProps): ReactE
                 <div className="setup-field">
                     <h3 className="setup-field-title">Library location</h3>
                     <p className="setup-hint">
-                        Where SampleLibrary stores its database and everything it creates. Choose a drive with plenty of
+                        Where SampleRipper stores its database and everything it creates. Choose a drive with plenty of
                         free space.
                     </p>
                     <div className="setup-folder">

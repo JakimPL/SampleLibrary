@@ -1,6 +1,6 @@
 ; scripts/build_installer.py defines Version, Executable, NvidiaExecutable, MinimumCudaMajor, Icon,
 ; QuitScript, OutputDirectory and OutputName.
-#define AppName "SampleLibrary"
+#define AppName "SampleRipper"
 
 [Setup]
 AppId={{63299140-3BC8-420F-A6EB-5D1E6126E58C}
@@ -8,7 +8,7 @@ AppName={#AppName}
 AppVersion={#Version}
 AppVerName={#AppName} {#Version}
 AppPublisher=Jakim
-AppPublisherURL=https://github.com/JakimPL/SampleLibrary
+AppPublisherURL=https://github.com/JakimPL/SampleRipper
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest

@@ -131,7 +131,7 @@ class Takeover:
                 unidentified_since = now if unidentified_since is None else unidentified_since
                 if now - unidentified_since > self._patience.record:
                     return Refused(
-                        f"Another start of SampleLibrary holds {self._place.lock} without saying where it runs."
+                        f"Another start of SampleRipper holds {self._place.lock} without saying where it runs."
                     )
                 self._clock.sleep(self._patience.poll)
                 continue
@@ -170,5 +170,5 @@ class Takeover:
             if lock is not None:
                 return Claimed(lock)
             if self._clock.now() > deadline:
-                return Refused("SampleLibrary kept running after it was closed. Restart the computer, then try again.")
+                return Refused("SampleRipper kept running after it was closed. Restart the computer, then try again.")
             self._clock.sleep(self._patience.poll)

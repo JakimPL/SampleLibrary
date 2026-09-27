@@ -60,7 +60,7 @@ describe("LibraryMenu", () => {
         renderWorkspace();
 
         fireEvent.click(await screen.findByText("Library"));
-        fireEvent.click(screen.getByRole("button", { name: "Quit SampleLibrary" }));
+        fireEvent.click(screen.getByRole("button", { name: "Quit SampleRipper" }));
 
         expect(await screen.findByText("The closed page")).toBeInTheDocument();
     });

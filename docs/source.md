@@ -1,6 +1,6 @@
 # Running from source
 
-This guide is for running SampleLibrary from a checkout of its repository. It covers building your
+This guide is for running SampleRipper from a checkout of its repository. It covers building your
 library with commands, every setting, and each service the app runs on. The installed app does all
 of this for you; the [README](../README.md) shows how to get it.
 
@@ -20,8 +20,8 @@ of this for you; the [README](../README.md) shows how to get it.
 ## Setup
 
 ```sh
-git clone https://github.com/JakimPL/SampleLibrary.git
-cd SampleLibrary
+git clone https://github.com/JakimPL/SampleRipper.git
+cd SampleRipper
 just install
 ```
 
@@ -70,7 +70,7 @@ The `[library]` table:
   names. Left out, the library runs its own server in `library_root/postgres`, listening on this
   machine alone.
 - `server_database_url` and `curation_database_url`: on a server of your own, the roles
-  `sampleripper serve` and the SampleLibrary app connect as. The first reads the library, the second
+  `sampleripper serve` and the SampleRipper app connect as. The first reads the library, the second
   also records your labels, and neither may change anything else; `just database` creates both with
   the names and passwords these URLs hold. `SAMPLERIPPER_SERVER_DATABASE_URL` and
   `SAMPLERIPPER_CURATION_DATABASE_URL` take their places. A library running its own server creates
@@ -84,7 +84,7 @@ The `[library]` table:
   `*` also matches across folders.
 
 The `[inference]` table holds `url`: the address the morph renderer listens on and the API reaches
-it at, `http://127.0.0.1:8010` by default. The SampleLibrary app starts its own renderer on this
+it at, `http://127.0.0.1:8010` by default. The SampleRipper app starts its own renderer on this
 address, or on another port of the same host when a program already holds this one.
 
 The `[server]` table holds `exposure`: who a served library answers. `"local"`, the default, is you
@@ -93,7 +93,7 @@ on this computer alone, seeing everything the library holds, folders and your la
 setup page's **Open on my home network** switch writes one or the other.
 `"public"` is a site on the internet, started with `sampleripper site`, which shows no folder of
 yours and none of your labels, ratings or favorites. `sampleripper serve` listens on 127.0.0.1
-unless this says otherwise, and refuses `"public"`; the SampleLibrary app refuses it too.
+unless this says otherwise, and refuses `"public"`; the SampleRipper app refuses it too.
 
 A site names how much each visitor may ask in `[server.visitors]`: `address_header`, the header its
 hosting platform names a visitor's address in (`"X-Real-IP"` on Railway); `burst` and
@@ -203,7 +203,7 @@ just frontend-dev-lan
 This starts the development web app for every device on your network, passing their requests on to
 the API `just serve` runs; open the address it prints on your phone. The API answers devices on
 your network once your config serves the library to them, with `exposure = "network"` under
-`[server]`; left at `"local"`, it answers this computer alone. [Using SampleLibrary](using.md#phones-and-tablets)
+`[server]`; left at `"local"`, it answers this computer alone. [Using SampleRipper](using.md#phones-and-tablets)
 describes the app on a phone. The API `just serve` runs reads the library and changes nothing, so
 every device on the network sees your labels as they are; you change them in `just app` on the
 computer it runs on.

@@ -203,7 +203,7 @@ def provision(database_url: str, *, service_urls: Mapping[ServiceRole, str]) -> 
     then have their tables brought into existence, which leaves each ready to serve or extract into.
     The test database stays empty, being the one the suite connects to only in order to create and
     drop a database per worker. Each service role the config names, the one a deployed site reads
-    as and the one the SampleLibrary app records labels as, is created with no power over the
+    as and the one the SampleRipper app records labels as, is created with no power over the
     server, granted exactly what its service needs in both prepared databases, and then logged in
     as, which confirms its password and its rights.
 

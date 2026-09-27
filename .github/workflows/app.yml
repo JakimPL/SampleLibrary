@@ -68,8 +68,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
-      EXECUTABLE: bin/SampleLibrary${{ matrix.extension }}
-      NVIDIA_EXECUTABLE: bin/SampleLibrary-nvidia${{ matrix.extension }}
+      EXECUTABLE: bin/SampleRipper${{ matrix.extension }}
+      NVIDIA_EXECUTABLE: bin/SampleRipper-nvidia${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -83,7 +83,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: executable-${{ matrix.platform }}
-          path: bin/SampleLibrary*
+          path: bin/SampleRipper*
           if-no-files-found: error
       - name: Install and run the executable
         run: uv run --no-project python scripts/smoke_test_app.py --executable "$EXECUTABLE" --work "$RUNNER_TEMP/smoke"
@@ -106,7 +106,7 @@ jobs:
         run: just installer
       - uses: actions/upload-artifact@v7
         with:
-          path: dist/SampleLibrary-*-${{ matrix.platform }}*
+          path: dist/SampleRipper-*-${{ matrix.platform }}*
           archive: false
           if-no-files-found: error
 
@@ -121,12 +121,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          pattern: SampleLibrary-*
+          pattern: SampleRipper-*
           path: release
           merge-multiple: true
       - uses: softprops/action-gh-release@v3
         with:
-          name: SampleLibrary ${{ needs.package.outputs.version }}
+          name: SampleRipper ${{ needs.package.outputs.version }}
           draft: true
           files: release/*
           fail_on_unmatched_files: true

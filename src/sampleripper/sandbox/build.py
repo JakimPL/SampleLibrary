@@ -99,7 +99,7 @@ def build_sandbox(
 
     The config names ``database_url``, the service roles' URLs on the sandbox's database, and an
     inference address of the sandbox's own, so passing it with `--config` points every command, the
-    served API and the SampleLibrary app included, at the sandbox alone.
+    served API and the SampleRipper app included, at the sandbox alone.
 
     The sample pack holds a few hundred one-shots, a labels file names one of every kind, and the
     pipeline table keeps the models small, so `sampleripper pipeline run` builds the whole sandbox.

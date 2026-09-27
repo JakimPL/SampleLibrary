@@ -51,5 +51,5 @@ def try_lock(path: Path) -> HeldLock | None:
     except Timeout:
         return None
     except OSError as error:
-        raise LockUnavailableError(f"{path.parent} can't hold SampleLibrary's lock: {error}") from error
+        raise LockUnavailableError(f"{path.parent} can't hold SampleRipper's lock: {error}") from error
     return HeldLock(lock)

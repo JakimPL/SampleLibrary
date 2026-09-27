@@ -178,7 +178,7 @@ def _tracking_ui(argv: list[str], *, prog: str) -> None:
 
 
 COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
-    Command(name="app", summary="Run SampleLibrary with its setup pages, opened in a browser.", run=_app),
+    Command(name="app", summary="Run SampleRipper with its setup pages, opened in a browser.", run=_app),
     Command(name="setup", summary="Put a config file in place, or prepare the databases it names.", run=_setup),
     Command(name="reset", summary="Empty the configured library's catalog and content store.", run=_reset),
     Command(name="extract", summary="Catalog every module under the configured source directory.", run=_extract),

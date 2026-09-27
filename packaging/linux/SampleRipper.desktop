@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=SampleLibrary
+Name=SampleRipper
 Comment=Browse, audition, label and morph the samples of your tracker modules
-Exec=SampleLibrary
-Icon=samplelibrary
+Exec=SampleRipper
+Icon=sampleripper
 Categories=AudioVideo;Audio;
 Terminal=false

@@ -38,7 +38,7 @@ NETWORK_SERVER_TABLE: Final[str] = '[server]\nexposure = "network"\n'
 
 @pytest.fixture
 def config_path(tmp_path: Path, worker_cluster_port: None) -> Path:
-    """A config naming a library that keeps its own database, the way the SampleLibrary app creates one."""
+    """A config naming a library that keeps its own database, the way the SampleRipper app creates one."""
     path = tmp_path / "settings" / "config.toml"
     path.parent.mkdir()
     path.write_text(f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\n', encoding="utf-8")
@@ -164,7 +164,7 @@ def test_a_library_another_application_holds_open_stays_with_it(config_path: Pat
             state = _wait_until_settled(second)
 
             assert state["status"] == LibraryStatus.FAILED
-            assert state["problem"] == "Another SampleLibrary has this library open. Quit that one, then try again."
+            assert state["problem"] == "Another SampleRipper has this library open. Quit that one, then try again."
         assert first.get("/api/stats").status_code == 200
 
 
