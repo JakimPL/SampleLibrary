@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { useCloudDotsStore } from "../src/cloud/cloudDotsStore";
@@ -12,6 +12,11 @@ import { DEFAULT_THEME_PREFERENCE } from "../src/theme/themeOptions";
 import { useThemeStore } from "../src/theme/themeStore";
 import { INITIAL_LISTING_ORDER_STATE, useListingOrderStore } from "../src/workspace/listingOrderStore";
 import { INITIAL_SELECTION_STATE, useSelectionStore } from "../src/workspace/selectionStore";
+
+// The tests run on every core at once, which can hold a render past the one second a wait allows by default.
+const ASYNC_WAIT_MS = 4000;
+
+configure({ asyncUtilTimeout: ASYNC_WAIT_MS });
 
 afterEach(() => {
     cleanup();

@@ -131,8 +131,6 @@ vi.mock("../../../src/api/modules", async () => {
 });
 
 const RIGHT_BUTTON = 2;
-/** Room for the legend's two requests to land while the whole suite runs at once. */
-const LEGEND_WAIT_MS = 4000;
 const NARROW_PANEL_WIDTH_PX = 300;
 const NARROW_PANEL_HEIGHT_PX = 600;
 const NARROW_RECT: DOMRect = {
@@ -338,10 +336,7 @@ describe("CloudPanel", () => {
 
         expect(screen.getByRole("button", { name: "Category" })).toHaveAttribute("aria-pressed", "true");
         expect(screen.queryByRole("button", { name: "Legend" })).not.toBeInTheDocument();
-        expect(await screen.findByRole("button", { name: /BASS DRUM/ }, { timeout: LEGEND_WAIT_MS })).toHaveAttribute(
-            "aria-pressed",
-            "true",
-        );
+        expect(await screen.findByRole("button", { name: /BASS DRUM/ })).toHaveAttribute("aria-pressed", "true");
         await waitFor(() => {
             expect(latestInstance().draw).toHaveBeenCalledWith([[expect.any(Number), expect.any(Number), 1]], {
                 zDataType: "categorical",
