@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
+from numpy.typing import NDArray
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
 
@@ -10,10 +12,12 @@ from samplecore.models.channels import ChannelLayout
 from samplecore.models.sample import Sample
 from samplecore.models.sample_file import SampleFile
 from samplecore.models.sample_pcm import SamplePCM
+from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository
 from samplecore.storage.sample_audio import SampleAudio
+from sampleextract import thumbnail as thumbnail_module
 from sampleextract.thumbnail import ThumbnailBackfillSummary, compute_missing_thumbnails
 
 FRAMES = 64
@@ -73,3 +77,32 @@ def test_a_sample_whose_file_is_gone_is_counted_and_left_for_a_later_pass(
 
     assert (summary.computed, summary.unavailable) == (1, 1)
     assert PostgresSampleThumbnailRepository(connection).get(sample.hash) is not None
+
+
+class ThumbnailStopped(RuntimeError):
+    pass
+
+
+def test_a_pass_stopped_partway_keeps_the_thumbnails_it_committed(
+    connection: Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for sample_hash in ("a" * 64, "b" * 64, "c" * 64):
+        _store_sample(connection, tmp_path, sample_hash)
+    monkeypatch.setattr(thumbnail_module, "THUMBNAIL_COMMIT_ROWS", 1)
+    compute = thumbnail_module.compute_thumbnail
+    computed: list[str] = []
+
+    def stop_at_the_second(sample_hash: str, pcm: NDArray[np.float64]) -> SampleThumbnail:
+        if computed:
+            raise ThumbnailStopped("stopped partway")
+        computed.append(sample_hash)
+        return compute(sample_hash, pcm)
+
+    monkeypatch.setattr(thumbnail_module, "compute_thumbnail", stop_at_the_second)
+    with pytest.raises(ThumbnailStopped):
+        compute_missing_thumbnails(connection, SampleAudio.from_catalog(connection, tmp_path), force=False)
+    monkeypatch.setattr(thumbnail_module, "compute_thumbnail", compute)
+
+    summary = compute_missing_thumbnails(connection, SampleAudio.from_catalog(connection, tmp_path), force=False)
+
+    assert summary == ThumbnailBackfillSummary(cataloged=3, already_thumbnailed=1, computed=2, unavailable=0)

@@ -46,6 +46,7 @@ def test_every_metric_a_report_holds_reaches_the_run(
         experiment_id=separable_catalog.experiment_id,
         describer=None,
         settings=SETTINGS,
+        report_path=tmp_path / "report.json",
     )
     run = RecordingRun()
 
@@ -73,6 +74,7 @@ def test_a_retuning_is_named_by_its_direction_and_size(
         experiment_id=separable_catalog.experiment_id,
         describer=None,
         settings=SETTINGS,
+        report_path=tmp_path / "report.json",
     )
     offsets = tuple(
         OffsetRetrieval(

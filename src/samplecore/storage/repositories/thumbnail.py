@@ -19,6 +19,8 @@ class SampleThumbnailRepository(Protocol):
 
     def get_many(self, sample_hashes: list[str]) -> dict[str, SampleThumbnail]: ...
 
+    def sample_hashes(self) -> frozenset[str]: ...
+
 
 class PostgresSampleThumbnailRepository:
     """A SampleThumbnailRepository backed by the catalog's ``sample_thumbnail`` table.
@@ -61,6 +63,12 @@ class PostgresSampleThumbnailRepository:
         statement = select(sample_thumbnail).where(sample_thumbnail.c.sample_hash.in_(sample_hashes))
         rows = self._connection.execute(statement).fetchall()
         return {row.sample_hash: _row_to_thumbnail(row) for row in rows}
+
+    def sample_hashes(self) -> frozenset[str]:
+        """The samples a thumbnail is cached for, read without the thumbnails themselves."""
+        return frozenset(
+            str(row.sample_hash) for row in self._connection.execute(select(sample_thumbnail.c.sample_hash))
+        )
 
 
 def _row_to_thumbnail(row: Row[tuple[str, int, list[float], list[float]]]) -> SampleThumbnail:

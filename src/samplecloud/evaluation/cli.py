@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import Final
 
 from sqlalchemy import Connection
 
@@ -20,6 +24,7 @@ from samplecloud.evaluation.settings import (
     EvaluationScope,
     EvaluationSettings,
 )
+from samplecloud.evaluation.stages import clear_stages
 from samplecloud.evaluation.transposition import ProbeDescriber, TranspositionRetrieval
 from samplecloud.experiments import ExperimentRefused, experiment_named, extractor_for, recipe_of
 from samplecloud.hearing import hearing_for
@@ -30,6 +35,9 @@ from samplecore.models.experiment import Experiment
 from samplecore.storage.atomic import write_bytes_atomically
 from samplecore.storage.sample_audio import SampleAudio
 from samplecore.tracking.session import open_run
+
+UNWRITTEN_REPORT_PREFIX: Final[str] = "samplelibrary-evaluation-"
+UNWRITTEN_REPORT_NAME: Final[str] = "report.json"
 
 _logger = logging.getLogger(__name__)
 
@@ -43,14 +51,17 @@ def main(argv: list[str], *, prog: str) -> None:
             experiment = experiment_named(connection, arguments.experiment_id)
             describer = _describer(connection, experiment, config=config, arguments=arguments)
 
-        with open_run(
-            config.library_root,
-            recorded=not arguments.no_tracking,
-            experiment_name=EVALUATION_EXPERIMENT_NAME,
-            run_name=run_name_for(
-                backend_name=experiment.backend_name, experiment_id=experiment.id, scope=arguments.scope
-            ),
-        ) as tracker:
+        with (
+            open_run(
+                config.library_root,
+                recorded=not arguments.no_tracking,
+                experiment_name=EVALUATION_EXPERIMENT_NAME,
+                run_name=run_name_for(
+                    backend_name=experiment.backend_name, experiment_id=experiment.id, scope=arguments.scope
+                ),
+            ) as tracker,
+            _report_place(arguments.output) as report_path,
+        ):
             report = evaluate_experiment(
                 connection,
                 experiment_id=experiment.id,
@@ -61,15 +72,27 @@ def main(argv: list[str], *, prog: str) -> None:
                     label_depth=arguments.label_depth,
                     scope=arguments.scope,
                 ),
+                report_path=report_path,
             )
             record_report(report, tracker)
 
     if arguments.output is not None:
         output = Path(arguments.output)
         write_bytes_atomically(output, report_json(report).encode("utf-8"))
+        clear_stages(output)
         _logger.info("Wrote the report to %s.", output)
 
     _report(report)
+
+
+@contextmanager
+def _report_place(output: str | None) -> Iterator[Path]:
+    """Where the pass keeps its finished stages: beside the report it writes, or in a folder of its own for the run."""
+    if output is not None:
+        yield Path(output)
+        return
+    with TemporaryDirectory(prefix=UNWRITTEN_REPORT_PREFIX) as scratch:
+        yield Path(scratch) / UNWRITTEN_REPORT_NAME
 
 
 def _describer(

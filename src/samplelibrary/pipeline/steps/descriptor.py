@@ -44,6 +44,7 @@ from sampledescriptor.training.descriptor.settings import (
 from sampledescriptor.training.run.paths import RunFamily, finished_record_path, resume_path, run_directory
 from sampledescriptor.training.run.settings import DEFAULT_RANDOM_SEED
 from samplelibrary.pipeline.context import PipelineContext
+from samplelibrary.pipeline.layout import EVALUATIONS_DIRECTORY_NAME, PIPELINE_DIRECTORY_NAME
 from samplelibrary.pipeline.results import input_digest
 from samplelibrary.pipeline.settings import DescriptorSource, StepSettings
 from samplelibrary.pipeline.steps.catalog import EQUIVALENCE, MODULES, NOTES, RELINK, SAMPLE_FILES
@@ -82,6 +83,7 @@ DESCRIPTOR_RUN_PREFIX: Final[str] = "descriptor-run"
 SEALED_DESCRIPTOR_PREFIX: Final[str] = "descriptor"
 LEARNED_KEY_PREFIX: Final[str] = "learned"
 SEALED_CHARACTERS: Final[int] = 16
+REPORT_SUFFIX: Final[str] = ".json"
 GRID_CACHE_INPUT: Final[str] = "grid cache"
 TEACHER_VECTORS: Final[str] = "teacher vectors"
 PRETRAINED_INPUT: Final[str] = "pretrained descriptor"
@@ -428,7 +430,7 @@ def _evaluation(name: str, scope: EvaluationScope) -> FileArtifactStep:
         )
 
     report: Callable[[PipelineContext, str], Path] = lambda context, digest: context.layout.evaluations / (
-        f"{scope.value}-{digest}.json"
+        f"{scope.value}-{digest}{REPORT_SUFFIX}"
     )
     return FileArtifactStep(
         name=name,
@@ -437,4 +439,5 @@ def _evaluation(name: str, scope: EvaluationScope) -> FileArtifactStep:
         artifact=report,
         command=command,
         complete=local_artifact_is_complete,
+        partials=f"{PIPELINE_DIRECTORY_NAME}/{EVALUATIONS_DIRECTORY_NAME}/.{scope.value}-*{REPORT_SUFFIX}{PARTIAL_SUFFIX}",
     )

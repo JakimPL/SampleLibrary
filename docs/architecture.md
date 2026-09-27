@@ -58,8 +58,8 @@ Postgres is the single authoritative store for all catalog metadata (`Module`, `
 `s3m_sample_properties` tables (MOD carries no properties beyond the shared base, so it has no
 table of its own), `sample_file`, `SampleRelation`, `Experiment`, `sample_feature_vector`,
 `sample_cloud_coordinates`, `module_cloud_coordinates`, `sample_spectral_feature`,
-`sample_thumbnail`, `module_instrument`, `note_event`, `module_note_extraction`, `sample_playback_rate`,
-`sample_category`, and `cloud_promotion`). Equivalence classes are not a stored table: `samplecore.equivalence_classes`
+`sample_thumbnail`, `sample_fingerprint`, `module_instrument`, `note_event`, `module_note_extraction`,
+`sample_playback_rate`, `sample_category`, and `cloud_promotion`). Equivalence classes are not a stored table: `samplecore.equivalence_classes`
 derives them on request from `SampleRelation` rows, since the relation graph stays small even at
 real-catalog scale. The filesystem content-addressable store —
 `{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file per unique `Sample` extracted from a
@@ -905,8 +905,12 @@ and every draw, so a second run reproduces every number. `samplelibrary cloud ev
 pass as a run in the tracking store beside the library (`samplecore.tracking`), one metric per
 question under its own namespace and the whole report as an artifact, so two descriptors are
 compared from the store rather than from two terminals; `--no-tracking` keeps a quick look out of
-it. The harness itself returns the report and writes nothing, and `samplecloud.evaluation.recording`
-is the one place that reads the report into a run.
+it. The harness itself returns the report, and `samplecloud.evaluation.recording` is the one place
+that reads the report into a run. A pass keeps its finished stages in the partial beside the report
+it writes (`samplecloud.evaluation.stages`), named by the experiment, the corpus and every setting:
+each metric's result once computed, and the retuned probes' vectors as they are described, so a pass
+stopped partway takes up after them, and the stages go once the report stands. A probe's retunings
+are described together (`extract_many`).
 
 This lives in `samplecloud` because it judges embeddings, which is what `samplecloud` owns. A learned
 descriptor's vectors reach it as an ordinary experiment through the database, with no import in either
