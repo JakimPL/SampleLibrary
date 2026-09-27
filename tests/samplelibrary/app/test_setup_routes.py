@@ -374,6 +374,15 @@ def test_setup_answers_a_page_on_this_machine_alone(
         assert client.get("/api/stats", headers=headers).status_code == 403
 
 
+def test_a_name_rebound_to_this_computer_reaches_nothing(unconfigured: TestClient, tmp_path: Path) -> None:
+    """A page whose name a URL parser rejects, pointed at this computer, still names itself in its Host header."""
+    rebound = {"host": "a_b.attacker.example:27440"}
+
+    assert unconfigured.get("/api/setup/folders", params={"path": str(tmp_path)}, headers=rebound).status_code == 403
+    assert unconfigured.get("/api/setup/state", headers=rebound).status_code == 403
+    assert unconfigured.get("/api/stats", headers=rebound).status_code == 403
+
+
 def test_the_application_refuses_a_request_a_proxy_forwarded(unconfigured: TestClient) -> None:
     assert unconfigured.get("/api/setup/state", headers={"x-forwarded-for": "203.0.113.9"}).status_code == 403
 

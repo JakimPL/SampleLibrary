@@ -570,9 +570,13 @@ the built frontend. The `Launcher` owns what the library needs:
   left.
 - **The person at this computer.** The app lists folders, writes the config file and records
   labels, so it answers the person at this computer on every path: a request from the loopback
-  address, addressed to a local name, sent by a page from a local name when a page sent it, and
-  forwarded by no proxy (`sampleserver.local_person.LocalPersonOrHomeDevices`). A page elsewhere
-  that renames its own host to reach this one still names that host, and is refused.
+  address, addressed to a local name, sent by a page from a local name when a page sent it, sent by
+  no page on another site but as a followed link, and forwarded by no proxy
+  (`sampleserver.local_person.LocalPersonOrHomeDevices`). The name is read from the `Host` header
+  exactly as sent (`samplecore.host_header`), since Starlette's own reading of a name it cannot
+  parse falls back to the address the server listens on: a page elsewhere that renames its own
+  host to reach this one, whatever characters its name holds, still names that host, and is
+  refused. Rewriting the config file keeps it readable by its owner alone.
 - **Devices at home.** The setup page's **Open on my home network** switch writes `exposure =
   "network"` or `"local"` (`samplecore.config_editing.LibraryOptions`), which the application
   reads as it starts (`samplelibrary.app.listener.starting_policy`); a config it cannot read, or
@@ -641,7 +645,9 @@ middleware and command that behaves differently reads one of its properties; a t
 other source file to naming no exposure. `AdmittedRequestsOnly` answers each request `admits`
 accepts, which is how a page elsewhere that points its own name at the loopback address is turned
 away under `local`, and a request a page sent passes `admits_page` too: at home, the page comes
-from the server itself or from a local name, so a site open in the same browser is turned away. Nothing a request carries selects the exposure: its address, the name it gives
+from the server itself or from a local name, and a page on another site open in the same browser
+is turned away, also where it sends no `Origin`, as an image or audio element does, since the
+browser names it in `Sec-Fetch-Site`; only a link followed from it opens a page. Nothing a request carries selects the exposure: its address, the name it gives
 the server and its headers can only turn it away. The page asks `GET /api/curation/access`, which
 answers what it may show and change (`curation_shown`, `label_editing`), and shows no control for a
 decision the server holds back. A served app opens a sample's file only in the sample directories
@@ -722,10 +728,13 @@ ends the site with status 1, so the platform starts both again.
 address counting by its /64, and the socket's peer where the header names none. Each visitor holds
 a token budget of `burst` requests refilled at `refill_per_second`, a whole-catalog answer costing
 `whole_catalog_weight` and the health check nothing; a request past it is answered 429 with
-`Retry-After`. A morph also spends one of the visitor's `morphs_per_minute` and one of everyone's
-`morphs_per_minute_overall` before the renderer is asked, or, for a request naming the render it
-holds, once the renderer answers with new audio, and at most `concurrent_morphs` reach the renderer
-at once, one past them answered 503. The budgets live in the server's process, bounded to the most
+`Retry-After`. At most `concurrent_morphs` morphs reach the renderer at once, one past them
+answered 503 before any budget is spent. A new render spends one of the visitor's
+`morphs_per_minute` and one of everyone's `morphs_per_minute_overall` before the renderer is asked.
+A request naming a render the browser holds, which the renderer confirms with a 304 at no cost, is
+asked while neither budget is in debt, and spends one once the renderer answers with new audio, so
+a validator the renderer never issued buys a visitor one render past the budget at most, one per
+render in flight. The budgets live in the server's process, bounded to the most
 recently active visitors, so a site runs one process (`WEB_CONCURRENCY=1`), which also keeps one
 copy of the spectral matrix and matches the renderer's one render at a time. The cached answers
 over the whole catalog carry an ETag, named apart per process, so a returning visitor is answered
@@ -745,11 +754,12 @@ rests on it for 120 ms.
   start whose role holds more is refused: `samplelibrary serve` before any worker runs, the
   SampleLibrary app before it opens the library. No request clears or truncates a table: the API
   offers no such route, and the curator holds no `TRUNCATE`.
-- **Label writes exist only in the SampleLibrary app,** which answers the person at its computer
-  alone: a request on any path comes from the loopback address, addresses the app by a local name,
-  was sent by a page from a local name when a page sent it, and passed no proxy. The app listens on
-  127.0.0.1 alone and reads no forwarding headers. A deployed site offers no route that writes, and
-  its pages show every label, rating and favorite as it is.
+- **Label writes exist only in the SampleLibrary app,** which takes them from the person at its
+  computer alone: a label write comes from the loopback address, addresses the app by a local
+  name, was sent by a page from a local name when a page sent it, and passed no proxy. The app
+  listens on 127.0.0.1, or on every address once opened to the home network, where other devices
+  look and change nothing, and reads no forwarding headers. A served reader, a deployed site among
+  them, declares no route that writes, which a sweep of every path and writing method holds.
 - **Every label change can be undone.** The history's trigger records every change whichever role
   makes it, and neither service role can read, edit or erase the history. `samplelibrary
   annotations restore --at <moment>` brings the labels back to any moment since the history began.
@@ -760,10 +770,32 @@ rests on it for 120 ms.
   - A reverse proxy on the same computer that adds no forwarding header looks like a browser there.
     Publish `samplelibrary serve`, never the SampleLibrary app.
   - A page served from another port of the same computer passes the Origin check.
+  - Any program or user on this computer counts as its person: the loopback address carries no
+    user.
   - The morph renderer opens no database. It listens on the loopback address unless told otherwise,
     and renders whatever a program calling its address asks; it answers no web page
-    (`samplemorph.service.callers`), since a page sends an `Origin` with every request it makes
-    elsewhere, and a page that points its own name at the renderer's address still names itself.
+    (`samplemorph.service.callers`), since a browser sends `Sec-Fetch-Site` with every request and
+    an `Origin` with a page's requests elsewhere, and a page that points its own name at the
+    renderer's address still names itself in its `Host` header. A browser too old to send
+    `Sec-Fetch-Site` can still start a render from another site's audio element, and reads nothing
+    back.
+  - A library opened to the home network shows everything to any device on a network whose
+    addresses are private, a café's or an office's as much as a home's; the switch says to use it
+    on a trusted network alone, and it stays on as the computer moves between networks. Its pages
+    travel unencrypted over that network.
+  - A site's request budget counts requests, not the work each asks for: a listing reads every
+    relation to group near-duplicates, and a caching of that per catalog revision is still to
+    come. One IPv6 /48, which some providers hand out free, holds 65,536 visitors. The site's
+    pages and scripts outside the API are served without a budget. The spending limit bounds the
+    cost of a flood, which then shows as the site stopping, not as a bill.
+  - The visitor a budget belongs to is the address Railway's edge writes into `X-Real-IP`, which a
+    deployment is checked for once: a forged `X-Real-IP` splits no budget.
+  - On the site's database server, the reader may connect to the databases a publication leaves
+    alone, such as `postgres`, and create temporary tables there; this matters only while the
+    database is open to the internet to publish and the reader's password is known.
+  - The image's base images and uv are pinned by tag, not by digest.
+  - Old example passwords stay in the repository's history. A config holding one is still
+    accepted by a library at home; a site refuses a reader password shorter than 24 characters.
 
 ## Deployment
 

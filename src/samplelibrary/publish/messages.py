@@ -11,6 +11,10 @@ NO_TARGET: Final[str] = (
 UNKNOWN_DRIVER: Final[str] = (
     "SAMPLELIBRARY_PUBLISH_DATABASE_URL names a database this project does not connect to: {name}."
 )
+SERVER_IN_SETTINGS: Final[str] = (
+    "SAMPLELIBRARY_PUBLISH_DATABASE_URL names its server in a {name}= setting. Name the server in the "
+    "address itself, before the database's name."
+)
 WEAK_TRANSPORT: Final[str] = (
     "A publication reaches {host} over the internet, which needs sslmode=require or stricter, not {mode}."
 )

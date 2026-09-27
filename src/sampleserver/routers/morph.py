@@ -124,10 +124,10 @@ async def get_morph_audio(
     caching headers pass through untouched, and so does a caller's conditional request, so a
     browser that holds the render is answered with a 304 by the process that made it.
 
-    Where the policy limits visitors, a new render spends one morph of the visitor's budget and of
-    everyone's before the renderer is asked, and a request naming the render it holds spends one
-    only once the renderer answers with new audio; at most the configured number reach the renderer
-    at once (`sampleserver.visitors.MorphGate`).
+    At most the configured number of morphs reach the renderer at once. Where the policy limits
+    visitors, a new render spends one morph of the visitor's budget and of everyone's before the
+    renderer is asked, and a request naming the render it holds is asked while neither budget is in
+    debt, spending one once the renderer answers with new audio (`sampleserver.visitors.MorphGate`).
 
     Raises:
         HTTPException: 429 once a morph budget is spent, 503 while the renderer is busy with as many
@@ -139,10 +139,10 @@ async def get_morph_audio(
     """
     headers = {CONDITIONAL_HEADER: request.headers[CONDITIONAL_HEADER]} if CONDITIONAL_HEADER in request.headers else {}
     visitor = gate.visitor(request) if gate is not None else None
-    if gate is not None and visitor is not None and not headers:
-        gate.admit(visitor)
     try:
         with gate.slot() if gate is not None else nullcontext():
+            if gate is not None and visitor is not None:
+                gate.admit(visitor, names_a_render=bool(headers))
             upstream = await client.get(
                 AUDIO_PATH, params=point.model_dump(mode="json", exclude_none=True), headers=headers
             )

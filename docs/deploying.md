@@ -79,6 +79,22 @@ your library, `publication`. Repeat it whenever you want the site to show your l
    To free its space, delete `/library/objects` with `railway volume browse` before uploading.
 6. **Restart the site** from its Deployments tab, so it reads the new catalog.
 
+## Check it once it runs
+
+1. **Open the site** at its address, play a few samples and a morph. A sample that won't play
+   means the site can't read its volume.
+2. **Check that each visitor has limits of their own.** This asks for the whole-catalog summary 30
+   times, each time claiming to be someone else:
+
+   ```sh
+   for i in $(seq 30); do curl -s -o /dev/null -w "%{http_code} " -H "X-Real-IP: 203.0.113.$i" https://<your site>/api/stats; done; echo
+   ```
+
+   Some of the last answers should be `429`. If every answer is `200`, the site believes the claim,
+   and one visitor could ask without limit: stop the site and don't open it again until this
+   check passes.
+3. **Check that the database is closed:** the PostgreSQL service's public networking is off.
+
 ## Try it on this computer first
 
 `docker compose` runs the same site against a database of its own, which shows what visitors will

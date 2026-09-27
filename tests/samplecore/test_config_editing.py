@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 
 import pytest
 
 from samplecore.config import DATABASE_URL_ENVIRONMENT_VARIABLE, ConfigurationError, load_config
 from samplecore.config_editing import LibraryOptions, LibrarySources, write_library_options, write_library_sources
+from samplecore.storage.atomic import PRIVATE_FILE_MODE
 
 
 @pytest.fixture
@@ -30,6 +32,19 @@ def test_sources_written_into_a_new_file_read_back_as_chosen(
     assert LibrarySources.of(load_config(path)) == sources
     assert written.manages_database
     assert 'exposure = "local"' in path.read_text(encoding="utf-8")
+
+
+def test_a_rewritten_config_stays_readable_by_its_owner_alone(tmp_path: Path, sources: LibrarySources) -> None:
+    """Its database URLs hold passwords."""
+    path = tmp_path / "config.toml"
+    path.write_text(f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\n', encoding="utf-8")
+    path.chmod(0o644)
+
+    write_library_sources(path, sources)
+    after_sources = stat.S_IMODE(path.stat().st_mode)
+    write_library_options(path, LibraryOptions(build_cloud=True, open_to_network=False))
+
+    assert after_sources == stat.S_IMODE(path.stat().st_mode) == PRIVATE_FILE_MODE
 
 
 def test_writing_sources_keeps_every_other_setting_and_comment(tmp_path: Path, sources: LibrarySources) -> None:

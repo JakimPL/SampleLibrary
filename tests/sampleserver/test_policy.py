@@ -104,19 +104,21 @@ def test_renders_are_capped_wherever_anyone_but_this_computer_asks() -> None:
 
 
 @pytest.mark.parametrize(
-    ("exposure", "origin", "host", "admitted"),
+    ("exposure", "origin", "host", "from_another_site", "admitted"),
     [
-        (Exposure.LOCAL, None, "localhost", True),
-        (Exposure.LOCAL, "http://localhost:5173", "127.0.0.1", True),
-        (Exposure.LOCAL, "http://attacker.example", "localhost", False),
-        (Exposure.LOCAL, "null", "localhost", False),
-        (Exposure.NETWORK, "http://192.168.1.10:27440", "192.168.1.10", True),
-        (Exposure.NETWORK, "http://attacker.example", "192.168.1.10", False),
-        (Exposure.NETWORK, "http://192.168.1.10", None, False),
-        (Exposure.PUBLIC, "http://attacker.example", "site.example", True),
+        (Exposure.LOCAL, None, "localhost", False, True),
+        (Exposure.LOCAL, "http://localhost:5173", "127.0.0.1", False, True),
+        (Exposure.LOCAL, "http://attacker.example", "localhost", False, False),
+        (Exposure.LOCAL, "null", "localhost", False, False),
+        (Exposure.LOCAL, None, "localhost", True, False),
+        (Exposure.NETWORK, "http://192.168.1.10:27440", "192.168.1.10", False, True),
+        (Exposure.NETWORK, "http://attacker.example", "192.168.1.10", False, False),
+        (Exposure.NETWORK, "http://192.168.1.10", None, False, False),
+        (Exposure.NETWORK, None, "192.168.1.10", True, False),
+        (Exposure.PUBLIC, "http://attacker.example", "site.example", True, True),
     ],
 )
 def test_a_page_elsewhere_is_turned_away_from_a_library_at_home(
-    exposure: Exposure, origin: str | None, host: str | None, admitted: bool
+    exposure: Exposure, origin: str | None, host: str | None, from_another_site: bool, admitted: bool
 ) -> None:
-    assert _policy(exposure).admits_page(origin, host) is admitted
+    assert _policy(exposure).admits_page(origin, host, from_another_site=from_another_site) is admitted

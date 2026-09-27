@@ -74,6 +74,25 @@ REVIEWER: Final[str] = "a curator's own name"
 OWN_SCORING_LABEL: Final[str] = "my own note on this scoring"
 PUBLISHED_PACK: Final[str] = "Free Pack"
 UNPUBLISHED_PACK: Final[str] = "Vengeance"
+# What a site's reader, a role anyone who took the site over would hold, must not do.
+REFUSED_TO_THE_READER: Final[tuple[str, ...]] = (
+    "CREATE TEMPORARY TABLE intruder (id integer)",
+    "CREATE TABLE public.intruder (id integer)",
+    "CREATE SCHEMA intruder",
+    "DELETE FROM sample",
+    "UPDATE module SET title = 'defaced'",
+    "TRUNCATE sample_file",
+    "INSERT INTO category_promotion (experiment_id, promoted_at) VALUES (1, now())",
+    "COPY (SELECT 1) TO PROGRAM 'true'",
+    "COPY sample FROM PROGRAM 'true'",
+    "SELECT pg_read_file('/etc/hostname')",
+    "SELECT pg_ls_dir('.')",
+    "SELECT lo_import('/etc/hostname')",
+    f"ALTER ROLE {READER_ROLE} SUPERUSER",
+    f"ALTER ROLE {READER_ROLE} CREATEROLE",
+    "CREATE ROLE intruder LOGIN PASSWORD 'intruder'",
+    "ALTER SYSTEM SET log_statement = 'none'",
+)
 
 pytestmark = pytest.mark.usefixtures("worker_cluster_port")
 
@@ -301,11 +320,19 @@ def test_the_sites_reader_reads_the_publication_and_creates_nothing(
     _publish(target, monkeypatch)
     reader = make_url(target).set(username=READER_ROLE, password=READER_PASSWORD).render_as_string(hide_password=False)
 
-    with closing(create_engine(reader, poolclass=NullPool).connect()) as connection:
+    allowed = []
+    with closing(create_engine(reader, poolclass=NullPool, isolation_level="AUTOCOMMIT").connect()) as connection:
         assert connection.execute(text("SELECT count(*) FROM sample")).scalar_one() == 3
-        with pytest.raises(ProgrammingError) as refusal:
-            connection.execute(text("CREATE TEMPORARY TABLE intruder (id integer)"))
-    assert isinstance(refusal.value.orig, postgres_errors.InsufficientPrivilege)
+        for statement in (*REFUSED_TO_THE_READER, f'SET ROLE "{make_url(target).username}"'):
+            try:
+                connection.execute(text(statement))
+            except ProgrammingError as refusal:
+                if not isinstance(refusal.orig, postgres_errors.InsufficientPrivilege):
+                    raise
+            else:
+                allowed.append(statement)
+
+    assert allowed == []
 
 
 def test_a_site_serves_its_publication_to_anyone(
@@ -416,6 +443,9 @@ def test_categories_scored_with_a_vocabulary_of_ones_own_are_refused(
         ("postgresql://postgres:x@proxy.example:5432/railway?sslmode=disable", True),
         ("postgresql://postgres:x@proxy.example:5432/railway?sslmode=prefer", True),
         ("mysql://root:x@proxy.example/railway", True),
+        ("postgresql://postgres:x@/railway?host=proxy.example", True),
+        ("postgresql://postgres:x@127.0.0.1/railway?hostaddr=203.0.113.9", True),
+        ("postgresql://postgres:x@127.0.0.1/railway?service=site", True),
     ],
 )
 def test_a_target_reached_without_tls_or_through_another_database_is_refused(given: str, refused: bool) -> None:

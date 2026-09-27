@@ -99,5 +99,7 @@ controls sized for a finger. Your browser's "Add to Home Screen" installs the ap
 SampleLibrary answers on its own computer. To open your library on a phone or another computer on
 the same network, turn on **Open on my home network** on the setup page and restart SampleLibrary.
 The setup page then shows the address to open on the other device. Other devices can browse and play
-your library, and see your labels, ratings and favorites as they are; you change them, and the
-setup, on the computer SampleLibrary runs on. Turn the switch off and restart to close it again.
+your library, and see your folders, labels, ratings and favorites as they are; you change them, and
+the setup, on the computer SampleLibrary runs on. Anyone on the same network can do the same, so use
+it only on a network you trust, such as your home Wi-Fi. Turn the switch off and restart to close
+it again.

@@ -91,6 +91,7 @@ def test_every_response_is_read_as_its_type_framed_by_no_page_and_named_to_no_ot
 
 def test_a_page_of_the_application_carries_its_content_security_policy(served_pages: TestClient) -> None:
     assert served_pages.get("/samples/0123abcd").headers["content-security-policy"] == PAGE_CONTENT_SECURITY_POLICY
+    assert served_pages.get(f"{API_PREFIX}x").headers["content-security-policy"] == PAGE_CONTENT_SECURITY_POLICY
     assert "content-security-policy" not in served_pages.get(f"{API_PREFIX}/stats").headers
 
 

@@ -32,6 +32,7 @@ from samplelibrary.publish.messages import (
     NO_READER_PASSWORD,
     NO_TARGET,
     NOT_A_PUBLICATION,
+    SERVER_IN_SETTINGS,
     UNKNOWN_DRIVER,
     WEAK_READER_PASSWORD,
     WEAK_TRANSPORT,
@@ -46,6 +47,7 @@ REQUIRED_SSL_MODE: Final[str] = "require"
 SECURE_SSL_MODES: Final[frozenset[str]] = frozenset({"require", "verify-ca", "verify-full"})
 CHANNEL_BINDING: Final[str] = "channel_binding"
 REQUIRED_CHANNEL_BINDING: Final[str] = "require"
+SERVER_SETTINGS: Final[tuple[str, ...]] = ("host", "hostaddr", "service")
 PUBLICATION_SCHEMA: Final[str] = "publication"
 # How long a publication waits for a site's reads to let the tables go before it gives up.
 LOCK_TIMEOUT: Final[str] = "60s"
@@ -76,8 +78,12 @@ def target_url(environment: Mapping[str, str]) -> URL:
     (``channel_binding=require``), so a server presenting a certificate no authority signed, as a
     platform's proxy does, cannot stand between the two unnoticed.
 
+    The server is named where the URL's host goes, and nowhere else, so the TLS requirement follows
+    the server the connection reaches.
+
     Raises:
-        PublishRefusedError: the variable is missing or names another database, or TLS weaker than required.
+        PublishRefusedError: the variable is missing, names another database, names its server in a
+            setting, or asks for TLS weaker than required.
     """
     raw = environment.get(PUBLISH_DATABASE_URL_ENVIRONMENT_VARIABLE)
     if not raw:
@@ -90,6 +96,9 @@ def target_url(environment: Mapping[str, str]) -> URL:
         url = url.set(drivername=DRIVER_NAME)
     if url.drivername != DRIVER_NAME:
         raise PublishRefusedError((UNKNOWN_DRIVER.format(name=url.drivername),))
+    for setting in SERVER_SETTINGS:
+        if setting in url.query:
+            raise PublishRefusedError((SERVER_IN_SETTINGS.format(name=setting),))
     if url.host is None or names_loopback(url.host):
         return url
     mode = url.query.get(SSL_MODE)

@@ -26,6 +26,9 @@ CALLER_CASES: Final[tuple[CallerCase, ...]] = (
     CallerCase("http://127.0.0.1:8010", {"origin": "https://elsewhere.example"}, answered=False),
     CallerCase("http://127.0.0.1:8010", {"origin": "http://127.0.0.1:8010"}, answered=False),
     CallerCase("http://rebound.example:8010", {}, answered=False),
+    CallerCase("http://127.0.0.1:8010", {"host": "a_b.rebound.example:8010"}, answered=False),
+    CallerCase("http://127.0.0.1:8010", {"sec-fetch-site": "cross-site"}, answered=False),
+    CallerCase("http://127.0.0.1:8010", {"sec-fetch-site": "none"}, answered=False),
 )
 
 
@@ -42,7 +45,7 @@ def _guarded() -> FastAPI:
 
 @pytest.mark.parametrize("case", CALLER_CASES, ids=lambda case: f"{case.base_url} {case.headers}")
 def test_the_renderer_answers_programs_calling_its_address_and_no_web_page(case: CallerCase) -> None:
-    """A page sends an Origin with every request it makes elsewhere, a plain post among them; a program sends none."""
+    """A browser names the page asking with every request, and a rebound name stays in the Host header as sent."""
     with TestClient(_guarded(), base_url=case.base_url) as client:
         response = client.post("/morph/response", headers=case.headers)
 

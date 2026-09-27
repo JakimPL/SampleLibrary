@@ -152,14 +152,19 @@ class ServingPolicy:
         from_home = address.is_loopback or is_home_address(address)
         return from_home and _names_this_computer(host)
 
-    def admits_page(self, origin: str | None, host: str | None) -> bool:
+    def admits_page(self, origin: str | None, host: str | None, *, from_another_site: bool) -> bool:
         """Whether a request a page sent, from ``origin``, is one this exposure answers, the server named as ``host``.
 
         A request no page sent names no origin. At home, a page answers only from the server itself
-        or from a local name, as a development server serves it, so a page on another site open in the
-        same browser is turned away. A site answers pages anywhere.
+        or from a local name, as a development server serves it, and a page on another site open in
+        the same browser is turned away, also where it names no origin (``from_another_site``). A
+        site answers pages anywhere.
         """
-        if self.is_public or origin is None:
+        if self.is_public:
+            return True
+        if from_another_site:
+            return False
+        if origin is None:
             return True
         page_host = urlsplit(origin).hostname
         if page_host is None or host is None:

@@ -11,7 +11,7 @@ from tomlkit.items import Table
 
 from samplecore.config import LIBRARY_TABLE, SERVER_TABLE, LibraryConfig, home_exposure, parse_config
 from samplecore.models.base import FROZEN
-from samplecore.storage.atomic import write_bytes_atomically
+from samplecore.storage.atomic import PRIVATE_FILE_MODE, write_bytes_atomically
 
 MODULE_SOURCE_DIRECTORY_KEY: Final[str] = "module_source_directory"
 LIBRARY_ROOT_KEY: Final[str] = "library_root"
@@ -88,7 +88,8 @@ def _rewrite(path: Path, change: Callable[[TOMLDocument], None]) -> LibraryConfi
     """Apply ``change`` to the config file, validating the whole file before it replaces the old one.
 
     A file the application creates says whom the library is served to, this computer alone, so a
-    person opening it finds the setting beside the others.
+    person opening it finds the setting beside the others. The file is readable by its owner alone,
+    since its database URLs hold passwords.
 
     Raises:
         ConfigurationError: the changed file fails validation; the file then stays as it was.
@@ -102,7 +103,7 @@ def _rewrite(path: Path, change: Callable[[TOMLDocument], None]) -> LibraryConfi
     content = tomlkit.dumps(document)
     config = parse_config(content, path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    write_bytes_atomically(path, content.encode("utf-8"))
+    write_bytes_atomically(path, content.encode("utf-8"), mode=PRIVATE_FILE_MODE)
     return config
 
 

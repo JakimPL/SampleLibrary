@@ -7,18 +7,23 @@ from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from samplecore.host_header import requested_host
+
 LOOPBACK_NAMES: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"})
 PAGE_REFUSED_DETAIL: Final[str] = "The morph renderer answers programs calling it by its own address, and no web page."
-ORIGIN_HEADER: Final[str] = "origin"
+HOST_HEADER: Final[str] = "host"
+BROWSER_HEADERS: Final[tuple[str, ...]] = ("origin", "sec-fetch-site")
 
 
 class ProgramsCallingItsAddressOnly:
     """Middleware answering the programs that call the renderer by the address it listens on, and no web page.
 
-    The catalog API and a sampler plugin call the renderer by its address and send no ``Origin``;
-    a browser sends one with every request a page makes elsewhere, so a page on another site that
-    posts to the renderer is turned away, and so is one that points its own name at the renderer's
-    address, which names that site rather than the renderer.
+    The catalog API and a sampler plugin call the renderer by its address and send none of
+    `BROWSER_HEADERS`: a browser sends `Sec-Fetch-Site` with every request and `Origin` with a
+    page's requests elsewhere, so a page on another site that asks the renderer for anything is
+    turned away. So is a page that points its own name at
+    the renderer's address, whose `Host` header, read as sent, names that site rather than the
+    renderer (`samplecore.host_header.requested_host`).
     """
 
     def __init__(self, app: ASGIApp, *, host: str) -> None:
@@ -33,5 +38,8 @@ class ProgramsCallingItsAddressOnly:
         await self._app(scope, receive, send)
 
     def _admitted(self, connection: HTTPConnection) -> bool:
-        hostname = connection.url.hostname
-        return ORIGIN_HEADER not in connection.headers and hostname is not None and hostname.lower() in self._names
+        headers = connection.headers
+        return (
+            not any(header in headers for header in BROWSER_HEADERS)
+            and requested_host(headers.getlist(HOST_HEADER)) in self._names
+        )

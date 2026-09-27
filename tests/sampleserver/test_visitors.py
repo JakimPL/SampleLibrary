@@ -154,19 +154,31 @@ def test_the_gate_spends_one_morph_of_the_visitors_budget_and_everyones() -> Non
     limits = SITE_VISITORS.model_copy(update={"morphs_per_minute": 1, "morphs_per_minute_overall": 2})
     gate = MorphGate(concurrent=limits.concurrent_morphs, limits=limits, clock=clock)
 
-    gate.admit("first")
+    gate.admit("first", names_a_render=False)
     with pytest.raises(HTTPException, match=TOO_MANY_MORPHS):
-        gate.admit("first")
-    gate.admit("second")
+        gate.admit("first", names_a_render=False)
+    gate.admit("second", names_a_render=False)
     with pytest.raises(HTTPException, match=TOO_MANY_MORPHS):
-        gate.admit("third")
+        gate.admit("third", names_a_render=False)
+
+
+def test_a_request_naming_a_render_passes_until_the_visitor_is_in_debt() -> None:
+    limits = SITE_VISITORS.model_copy(update={"morphs_per_minute": 1})
+    gate = MorphGate(concurrent=limits.concurrent_morphs, limits=limits, clock=Clock())
+
+    gate.admit("visitor", names_a_render=False)
+    gate.admit("visitor", names_a_render=True)
+    gate.charge("visitor")
+
+    with pytest.raises(HTTPException, match=TOO_MANY_MORPHS):
+        gate.admit("visitor", names_a_render=True)
 
 
 def test_a_gate_without_visitor_limits_charges_no_budget() -> None:
     gate = MorphGate(concurrent=1, limits=None, clock=Clock())
 
     for _ in range(SITE_VISITORS.morphs_per_minute_overall + 1):
-        gate.admit("192.168.1.20")
+        gate.admit("192.168.1.20", names_a_render=False)
 
 
 def test_the_gate_holds_as_many_renders_as_it_may_and_turns_the_next_away() -> None:
@@ -213,6 +225,21 @@ def test_a_site_charges_a_visitor_for_new_renders_alone(public_client: TestClien
     assert set(confirmed) == {304}
     assert rendered == [200, 200, 200, 429]
     assert len(renderer.rendered) == SITE_VISITORS.morphs_per_minute
+
+
+def test_a_request_naming_a_render_it_lacks_runs_no_further_than_its_budget(public_client: TestClient) -> None:
+    """A validator the renderer never issued makes it render anew; the visitor pays, with one render of debt at most."""
+    renderer = Renderer()
+    mock_client = httpx.AsyncClient(base_url=INFERENCE_URL, transport=httpx.MockTransport(renderer))
+    public_client.app.dependency_overrides[get_inference_client] = lambda: mock_client
+    point = {"first": FIRST, "second": SECOND, "weight": 0.5}
+    forged = {ADDRESS_HEADER: "203.0.113.9", "if-none-match": '"forged"'}
+
+    answers = [public_client.get("/morph/audio", params=point, headers=forged).status_code for _ in range(10)]
+    another = public_client.get("/morph/audio", params=point, headers={ADDRESS_HEADER: "198.51.100.7"})
+
+    assert answers == [200] * (SITE_VISITORS.morphs_per_minute + 1) + [429] * (9 - SITE_VISITORS.morphs_per_minute)
+    assert another.status_code == 200
 
 
 def test_a_cloud_answer_a_browser_holds_is_confirmed_with_no_body(client: TestClient) -> None:

@@ -9,6 +9,7 @@ from typing import Final
 import numpy as np
 import pytest
 import soundfile
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 from trackmod.core.samples.depth import BitDepth
@@ -31,6 +32,7 @@ from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
+from sampleserver.app import API_PREFIX
 from sampleserver.messages import CURATION_WITHHELD
 from tests.sampleserver.conftest import INFERENCE_URL, SAMPLE_DIRECTORY_NAMES
 
@@ -40,6 +42,17 @@ MODULE_SAMPLE_HASH: Final[str] = "a" * 64
 UNCATALOGED_HASH: Final[str] = "e" * 64
 SECRET_LABEL: Final[str] = "CONFIDENTIAL LABEL"
 REVIEWER: Final[str] = "a curator's own name"
+WRITING_METHODS: Final[tuple[str, ...]] = ("POST", "PUT", "PATCH", "DELETE")
+REFUSED_WRITES: Final[frozenset[int]] = frozenset({403, 404, 405})
+# Paths that try to climb out of the API or out of the store, raw and percent-encoded.
+CLIMBING_PATHS: Final[tuple[str, ...]] = (
+    "/../setup/state",
+    "/%2e%2e/setup/state",
+    "/samples/..%2F..%2Fconfig.toml/audio",
+    "/samples/%2e%2e%2f%2e%2e%2fconfig.toml/audio",
+    "/samples/..%5C..%5Cconfig.toml/audio",
+    f"/samples/{MODULE_SAMPLE_HASH}%00/audio",
+)
 # The modules allowed to name an exposure: the configuration that reads it and the one policy applying it.
 EXPOSURE_READERS: Final[frozenset[Path]] = frozenset(
     {PACKAGES_DIRECTORY / "samplecore" / "config.py", PACKAGES_DIRECTORY / "sampleserver" / "policy.py"}
@@ -265,6 +278,60 @@ def test_a_library_on_this_computer_alone_answers_no_one_else(
         response = elsewhere.get("/stats")
 
     assert response.status_code == 403
+
+
+def _declared_paths(client: TestClient, seeded: SeededLibrary) -> tuple[str, ...]:
+    """Every path the app behind ``client`` declares, relative to the API, naming the seeded samples and module."""
+    values = {
+        "sample_hash": seeded.file_sample.sample_hash,
+        "other_hash": MODULE_SAMPLE_HASH,
+        "module_hash": MODULE_HASH,
+    }
+    return tuple(sorted(path.removeprefix(API_PREFIX).format(**values) for path in _schema_paths(client)))
+
+
+def _schema_paths(client: TestClient) -> dict[str, dict[str, object]]:
+    application = client.app
+    assert isinstance(application, FastAPI)
+    paths: dict[str, dict[str, object]] = application.openapi()["paths"]
+    return paths
+
+
+def _declared_methods(client: TestClient) -> set[str]:
+    return {method for operations in _schema_paths(client).values() for method in operations}
+
+
+def _answered_writes(client: TestClient, paths: tuple[str, ...]) -> dict[tuple[str, str], int]:
+    """The writing requests over ``paths`` that are answered with anything but a refusal, by their status."""
+    answers = {
+        (method, path): client.request(method, path, json={}).status_code
+        for path in paths
+        for method in WRITING_METHODS
+    }
+    return {request: status for request, status in answers.items() if status not in REFUSED_WRITES}
+
+
+def test_a_reader_declares_no_route_that_writes(
+    client: TestClient, public_client: TestClient, curating_client: TestClient
+) -> None:
+    assert _declared_methods(client) == _declared_methods(public_client) == {"get"}
+    assert "patch" in _declared_methods(curating_client)
+
+
+def test_every_write_a_curator_is_offered_is_refused_by_a_reader(
+    client: TestClient, public_client: TestClient, curating_client: TestClient, seeded: SeededLibrary
+) -> None:
+    """The label writes answer the curator at this computer; the same requests reach nothing on a reader's app."""
+    paths = (*_declared_paths(curating_client, seeded), "/no-such-route")
+
+    assert _answered_writes(curating_client, paths)
+    assert _answered_writes(client, paths) == {}
+    assert _answered_writes(public_client, paths) == {}
+
+
+@pytest.mark.parametrize("path", CLIMBING_PATHS)
+def test_a_path_climbing_out_of_the_api_or_the_store_serves_nothing(public_client: TestClient, path: str) -> None:
+    assert public_client.get(path).status_code in (404, 422)
 
 
 def test_no_module_but_the_configuration_and_the_policy_names_an_exposure() -> None:

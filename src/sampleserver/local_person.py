@@ -10,6 +10,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from sampleserver.addresses import is_loopback
 from sampleserver.policy import ServingPolicy
+from sampleserver.request_source import host_of, sent_by_another_site
 
 LOCAL_HOST_NAMES: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"})
 FORWARDING_HEADERS: Final[tuple[str, ...]] = (
@@ -26,18 +27,20 @@ POLICY_VIOLATION_CLOSE_CODE: Final[int] = 1008
 def is_local_person(connection: HTTPConnection) -> bool:
     """Whether a request comes from a browser on this machine, addressing the server by a local name.
 
-    The connection comes from the loopback address, it names the server by a local name, a page
-    that sent it was loaded from a local name, and no proxy forwarded it. A web page from elsewhere
-    cannot claim a local origin, a page that renamed its own host to reach this one still names
-    that host, and a proxy on this machine announces the address it forwards for.
+    The connection comes from the loopback address, its `Host` header names the server by a local
+    name, a page that sent it was loaded from a local name, and no proxy forwarded it. A web page
+    from elsewhere cannot claim a local origin, sends no request here but a followed link
+    (`sampleserver.request_source.sent_by_another_site`), and, having renamed its own host to reach
+    this one, still names that host; a proxy on this machine announces the address it forwards for.
     """
     client = connection.client
     origin = connection.headers.get("origin")
     return (
         client is not None
         and is_loopback(client.host)
-        and connection.url.hostname in LOCAL_HOST_NAMES
+        and host_of(connection) in LOCAL_HOST_NAMES
         and (origin is None or urlsplit(origin).hostname in LOCAL_HOST_NAMES)
+        and not sent_by_another_site(connection)
         and not any(header in connection.headers for header in FORWARDING_HEADERS)
     )
 
@@ -83,9 +86,11 @@ class LocalPersonOrHomeDevices:
         if path == self._personal_prefix or path.startswith(f"{self._personal_prefix}/"):
             return False
         client = connection.client
-        host = connection.url.hostname
+        host = host_of(connection)
         return (
             self._policy.listens_beyond_this_computer
             and self._policy.admits(client.host if client is not None else None, host)
-            and self._policy.admits_page(connection.headers.get("origin"), host)
+            and self._policy.admits_page(
+                connection.headers.get("origin"), host, from_another_site=sent_by_another_site(connection)
+            )
         )

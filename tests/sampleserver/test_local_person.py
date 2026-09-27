@@ -39,6 +39,17 @@ REQUEST_CASES: Final[tuple[RequestCase, ...]] = (
     RequestCase("a proxy forwarding for another machine", admitted=False, headers={"x-forwarded-for": "203.0.113.9"}),
     RequestCase("a proxy naming the forwarded request", admitted=False, headers={"forwarded": "for=203.0.113.9"}),
     RequestCase("a proxy passing the real address", admitted=False, headers={"x-real-ip": "203.0.113.9"}),
+    RequestCase("a rebound name a URL parser rejects", admitted=False, headers={"host": "a_b.attacker.example:27440"}),
+    RequestCase(
+        "an element on another site's page",
+        admitted=False,
+        headers={"sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors"},
+    ),
+    RequestCase(
+        "a link followed from another site",
+        admitted=True,
+        headers={"sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate"},
+    ),
 )
 
 
@@ -85,6 +96,20 @@ HOME_CASES: Final[tuple[RequestCase, ...]] = (
         "a name another site points here", admitted=False, client=HOME_DEVICE, base_url="http://rebound.example"
     ),
     RequestCase("an address beyond the home", admitted=False, client=("203.0.113.9", 50000), base_url=HOME_BASE_URL),
+    RequestCase(
+        "a rebound name a URL parser rejects",
+        admitted=False,
+        client=HOME_DEVICE,
+        base_url=HOME_BASE_URL,
+        headers={"host": "a_b.attacker.example:27440"},
+    ),
+    RequestCase(
+        "an element on another site's page",
+        admitted=False,
+        client=HOME_DEVICE,
+        base_url=HOME_BASE_URL,
+        headers={"sec-fetch-site": "cross-site", "sec-fetch-mode": "no-cors"},
+    ),
 )
 
 

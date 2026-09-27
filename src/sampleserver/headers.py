@@ -54,7 +54,8 @@ class SecurityHeaders:
         if scope["type"] != "http":
             await self._app(scope, receive, send)
             return
-        is_application_page = not str(scope["path"]).startswith(self._api_prefix)
+        path = str(scope["path"])
+        is_application_page = path != self._api_prefix and not path.startswith(f"{self._api_prefix}/")
 
         async def send_stated(message: Message) -> None:
             if message["type"] == "http.response.start":

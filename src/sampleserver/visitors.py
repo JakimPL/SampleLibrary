@@ -84,11 +84,15 @@ class TokenBudget:
 
     def take(self, key: str, cost: float) -> float | None:
         """Spend ``cost`` tokens of ``key``'s budget; ``None`` once spent, or the seconds until the budget holds them."""
+        wait = self.wait_for(key, cost)
+        if wait is None:
+            self.charge(key, cost)
+        return wait
+
+    def wait_for(self, key: str, balance: float) -> float | None:
+        """The seconds until ``key``'s budget holds ``balance`` tokens, or ``None`` while it does."""
         bucket = self._refilled(key)
-        if bucket.tokens >= cost:
-            bucket.tokens -= cost
-            return None
-        return (cost - bucket.tokens) / self._refill_per_second
+        return None if bucket.tokens >= balance else (balance - bucket.tokens) / self._refill_per_second
 
     def charge(self, key: str, cost: float) -> None:
         """Spend ``cost`` tokens of ``key``'s budget after the fact, into debt where the budget holds fewer."""
@@ -175,9 +179,11 @@ class MorphGate:
 
     At most ``concurrent`` requests reach the renderer at once, which renders one at a time; one
     past them is turned away at once, since waiting would only hold a connection while the renderer
-    works through the others. Where ``limits`` are given, a morph a browser already holds is
-    answered 304 by the renderer at no cost, so a request naming the render it holds is charged only
-    once the renderer answers with new audio; any other is charged before the renderer is asked.
+    works through the others. Where ``limits`` are given, a new render is paid for before the
+    renderer is asked. A render a browser holds is confirmed by the renderer with a 304 at no cost,
+    so a request naming a render is asked only while neither budget is in debt, and paid for once
+    the renderer answers with new audio; the debt a visitor runs up that way stays within the
+    renders in flight.
     """
 
     def __init__(self, *, concurrent: int, limits: VisitorLimits | None, clock: Clock = monotonic_seconds) -> None:
@@ -189,25 +195,38 @@ class MorphGate:
     def visitor(self, connection: HTTPConnection) -> str:
         return visitor_of(connection, address_header=self._address_header)
 
-    def admit(self, visitor: str) -> None:
-        """Spend one morph of the visitor's budget and everyone's before the renderer is asked, where there are budgets.
+    def admit(self, visitor: str, *, names_a_render: bool) -> None:
+        """Let a morph ask the renderer, where there are budgets.
+
+        A new render spends one morph of the visitor's budget and of everyone's. A request that
+        ``names_a_render`` the browser holds spends none yet, and is let through while neither budget
+        is in debt; `charge` pays for it once the renderer answers with new audio.
 
         Raises:
-            HTTPException: 429 with the seconds to wait, once either budget is spent.
+            HTTPException: 429 with the seconds to wait, while either budget lacks what the morph needs.
         """
         if self._budgets is None:
             return
-        for key, budget in ((visitor, self._budgets.visitors), (UNKNOWN_VISITOR, self._budgets.everyone)):
-            wait = budget.take(key, 1.0)
-            if wait is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=TOO_MANY_MORPHS,
-                    headers={RETRY_AFTER_HEADER: str(math.ceil(wait))},
-                )
+        needed = 0.0 if names_a_render else 1.0
+        waits = [
+            wait
+            for wait in (
+                self._budgets.visitors.wait_for(visitor, needed),
+                self._budgets.everyone.wait_for(UNKNOWN_VISITOR, needed),
+            )
+            if wait is not None
+        ]
+        if waits:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=TOO_MANY_MORPHS,
+                headers={RETRY_AFTER_HEADER: str(math.ceil(max(waits)))},
+            )
+        if not names_a_render:
+            self.charge(visitor)
 
     def charge(self, visitor: str) -> None:
-        """Spend one morph of both budgets after the renderer answered with new audio, where there are budgets."""
+        """Spend one morph of both budgets, where there are budgets."""
         if self._budgets is None:
             return
         self._budgets.visitors.charge(visitor, 1.0)

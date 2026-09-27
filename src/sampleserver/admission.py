@@ -9,6 +9,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from sampleserver.messages import NOT_ADMITTED
 from sampleserver.policy import ServingPolicy
+from sampleserver.request_source import host_of, sent_by_another_site
 
 POLICY_VIOLATION_CLOSE_CODE: Final[int] = 1008
 
@@ -37,7 +38,7 @@ class AdmittedRequestsOnly:
 
     def _admitted(self, connection: HTTPConnection) -> bool:
         client = connection.client
-        host = connection.url.hostname
+        host = host_of(connection)
         return self._policy.admits(client.host if client is not None else None, host) and self._policy.admits_page(
-            connection.headers.get("origin"), host
+            connection.headers.get("origin"), host, from_another_site=sent_by_another_site(connection)
         )
