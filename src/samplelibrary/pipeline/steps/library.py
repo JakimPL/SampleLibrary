@@ -6,7 +6,7 @@ from typing import Final
 from sampledescriptor.pretrained import MISSING_RELEASE_MESSAGE, publishes_pretrained
 from samplelibrary.pipeline.graph import ALL_TARGET, StepGraph
 from samplelibrary.pipeline.settings import DESCRIPTOR_SOURCE_SETTING, DescriptorSource, StepSettings
-from samplelibrary.pipeline.steps import descriptor
+from samplelibrary.pipeline.steps import cloud, descriptor
 from samplelibrary.pipeline.steps.catalog import (
     EQUIVALENCE,
     LABELS,
@@ -85,7 +85,7 @@ def library_graph(source: DescriptorSource) -> StepGraph:
             CLOUD_TARGET: tuple(name for name in CLOUD_STEPS if name in names),
             ALL_TARGET: tuple(step.name for step in steps),
         },
-        owned_outputs=descriptor.OWNED_OUTPUTS,
+        owned_outputs=descriptor.OWNED_OUTPUTS + cloud.OWNED_OUTPUTS,
         unavailable=_unavailable_steps(source),
     )
 

@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 from sqlalchemy import Connection
 
@@ -11,6 +12,7 @@ from samplecloud.backends import FeatureExtractor
 from samplecloud.experiments import EmbeddingRecipe, ExperimentRefused, require_reproducible
 from samplecloud.features import FeatureExtractionSummary, FeaturePass, extract_features, pending_samples
 from samplecloud.hearing import hearing_for
+from samplecloud.paths import sample_layout_directory
 from samplecloud.reduce import CloudSummary, reduce_and_persist_coordinates
 from samplecloud.registries import DEFAULT_BACKEND_NAME
 from samplecore.config import LibraryConfig
@@ -135,12 +137,16 @@ def run_embedding(
     return EmbeddingSummary(
         experiment_id=experiment_id,
         extraction=extraction,
-        reduction=_laid_out(connection, experiment_id, extraction=extraction) if options.promote else None,
+        reduction=(
+            _laid_out(connection, experiment_id, extraction=extraction, library_root=config.library_root)
+            if options.promote
+            else None
+        ),
     )
 
 
 def _laid_out(
-    connection: Connection, experiment_id: int, *, extraction: FeatureExtractionSummary
+    connection: Connection, experiment_id: int, *, extraction: FeatureExtractionSummary, library_root: Path
 ) -> CloudSummary | None:
     promotion = PostgresCloudPromotionRepository(connection).current()
     shown = promotion is not None and promotion.experiment_id == experiment_id
@@ -149,4 +155,6 @@ def _laid_out(
             "The cloud already shows experiment %d with every sample it holds, so its layout stays.", experiment_id
         )
         return None
-    return reduce_and_persist_coordinates(connection, experiment_id)
+    return reduce_and_persist_coordinates(
+        connection, experiment_id, stages_directory=sample_layout_directory(library_root)
+    )

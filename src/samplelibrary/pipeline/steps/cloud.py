@@ -2,6 +2,13 @@ from __future__ import annotations
 
 from typing import Final
 
+from samplecloud.paths import (
+    CACHE_DIRECTORY_NAME,
+    LAYOUT_RECORD_FILE_NAME,
+    MODULE_LAYOUT_DIRECTORY_NAME,
+    SAMPLE_LAYOUT_DIRECTORY_NAME,
+)
+from samplecore.storage.atomic import PARTIAL_SUFFIX
 from samplecore.storage.repositories.cloud import PostgresCloudCoordinateRepository, PostgresCloudPromotionRepository
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
@@ -13,6 +20,12 @@ from samplelibrary.pipeline.steps.shared import operational_flags, vectors_diges
 
 CLOUD: Final[str] = "cloud"
 MODULE_CLOUD: Final[str] = "module-cloud"
+# The stages the two layouts keep while they are fitted, and the record of the module layout standing.
+OWNED_OUTPUTS: Final[tuple[str, ...]] = (
+    f"{CACHE_DIRECTORY_NAME}/{SAMPLE_LAYOUT_DIRECTORY_NAME}/.*{PARTIAL_SUFFIX}",
+    f"{CACHE_DIRECTORY_NAME}/{MODULE_LAYOUT_DIRECTORY_NAME}/.*{PARTIAL_SUFFIX}",
+    f"{CACHE_DIRECTORY_NAME}/{MODULE_LAYOUT_DIRECTORY_NAME}/{LAYOUT_RECORD_FILE_NAME}",
+)
 
 
 def cloud_steps() -> tuple[Step, ...]:

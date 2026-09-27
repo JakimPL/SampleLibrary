@@ -82,7 +82,8 @@ class WordedTeacher:
         )
 
 
-def lay_out_on_a_plane(standardized: NDArray[np.float64], *, n_neighbors: int) -> NDArray[np.float64]:
+# pylint: disable-next=unused-argument
+def lay_out_on_a_plane(standardized: NDArray[np.float64], *, n_neighbors: int, stages: object) -> NDArray[np.float64]:
     """A sample's first two standardized features as its place on the cloud, standing in for a fitted layout.
 
     The same vectors give the same places in any process and a changed vector moves its point, which

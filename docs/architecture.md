@@ -831,7 +831,12 @@ point where their stored vectors do (`require_reproducible`), so a descriptor re
 same name is refused rather than mixed in. `--resume-promoted` resumes the experiment `cloud_promotion`
 names, opening and recording the default `librosa` experiment on a library with no cloud yet; a
 promoting run that adds no vector to the experiment already shown keeps its layout as it is. A layout
-needs at least four vectors, the fewest UMAP lays out.
+needs at least four vectors, the fewest UMAP lays out. A layout keeps its finished stages under
+`cache/cloud` in the library root (`samplecloud.stages`), named by the digest of the experiment,
+the samples it describes, UMAP's settings and the versions of UMAP and its neighbor search: from
+4,096 vectors on, where UMAP searches for neighbors approximately anyway, the neighbor graph is
+searched first and kept, then the coordinates are kept once fitted, so a run stopped partway takes
+up after the last stage it finished, and the stages go once the layout is written.
 
 The `clap` backend reads a pretrained audio-text model (`samplecloud.backends.teacher_backend`,
 behind the `teacher` extra), which knows sound from what people wrote about recordings and, on the
@@ -923,9 +928,13 @@ time, and each pair's distance averages those rows.
 UMAP lays the pairwise distances out directly (`samplecloud.modules.layout`, the `precomputed`
 metric, with the seed and neighbor count the sample cloud uses), and each run reports how faithful
 the plane is: the rank correlation between module distances and plane distances for the global
-arrangement, and trustworthiness for the local one. Every run replaces every module coordinate in
-one transaction. The pipeline's `module-cloud` step runs after `cloud`, since the vectors it reads
-are the ones `cloud` promotes.
+arrangement, and trustworthiness for the local one. A run replaces every module coordinate in one
+transaction and records, under `cache/module-cloud` in the library root, the digest of the modules,
+their samples and those samples' vectors it laid out, so a run finding the same ones ends with the
+layout standing. While a layout is fitted, its directed distances are checkpointed batch by batch
+(`samplecore.storage.staged_rows`) and its coordinates kept once fitted, so a run stopped partway
+takes up after its last checkpoint. The pipeline's `module-cloud` step runs after `cloud`, since
+the vectors it reads are the ones `cloud` promotes.
 
 ## Labels on a sample
 
