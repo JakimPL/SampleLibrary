@@ -18,7 +18,7 @@ dependencies = [
     "threadpoolctl>=3.6",
     "tomlkit>=0.13",
     "tqdm>=4.67",
-    "trackmod",
+    "trackmod>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -58,7 +58,6 @@ url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [tool.uv.sources]
-trackmod = { path = "trackmod", editable = true }
 # macOS takes torch from PyPI, since the CUDA index publishes no macOS wheels.
 torch = [{ index = "pytorch-cu128", marker = "sys_platform != 'darwin'" }]
 
@@ -111,7 +110,6 @@ packages = [
 [tool.black]
 line-length = 120
 target-version = ["py312"]
-extend-exclude = "trackmod"
 
 [tool.isort]
 profile = "black"
@@ -125,8 +123,6 @@ known_first_party = [
     "sampledescriptor",
     "samplelibrary",
 ]
-known_third_party = ["trackmod"]
-skip = ["trackmod"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -170,7 +166,7 @@ warn_required_dynamic_aliases = true
 
 [tool.pylint.main]
 load-plugins = ["pylint_pydantic"]
-ignore-paths = ['(.*/)?notebooks/[^/]+\.py$', '^trackmod/.*$']
+ignore-paths = ['(.*/)?notebooks/[^/]+\.py$']
 
 [tool.pylint."messages control"]
 disable = [

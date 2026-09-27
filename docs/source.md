@@ -20,7 +20,7 @@ of this for you; the [README](../README.md) shows how to get it.
 ## Setup
 
 ```sh
-git clone --recurse-submodules https://github.com/JakimPL/SampleLibrary.git
+git clone https://github.com/JakimPL/SampleLibrary.git
 cd SampleLibrary
 just install
 ```

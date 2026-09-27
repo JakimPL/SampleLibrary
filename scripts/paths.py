@@ -5,7 +5,6 @@ from typing import Final
 
 REPOSITORY_DIRECTORY: Final[Path] = Path(__file__).resolve().parents[1]
 PROJECT_FILE: Final[Path] = REPOSITORY_DIRECTORY / "pyproject.toml"
-TRACKMOD_PROJECT_FILE: Final[Path] = REPOSITORY_DIRECTORY / "trackmod" / "pyproject.toml"
 FRONTEND_DIRECTORY: Final[Path] = REPOSITORY_DIRECTORY / "frontend"
 APP_ICON: Final[Path] = FRONTEND_DIRECTORY / "public" / "icons" / "icon-512.png"
 PACKAGING_DIRECTORY: Final[Path] = REPOSITORY_DIRECTORY / "packaging"

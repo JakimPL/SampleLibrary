@@ -15,9 +15,6 @@ ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-# trackmod is a git submodule, which a platform building from the repository checks out no copy of,
-# so it comes from its own repository at the very commit the submodule names.
-ADD https://github.com/JakimPL/TrackMod.git#e46e9702c2b8624d2acb2ffd532c792d24335984 trackmod
 RUN uv sync --extra server --extra morph --no-dev --no-editable --frozen --no-install-project
 COPY README.md hatch_build.py ./
 COPY src ./src

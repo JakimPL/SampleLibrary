@@ -773,9 +773,7 @@ run by hand or on a schedule, never by the served app itself. The root `Dockerfi
 of a site (`samplelibrary site`, [The site](#the-site)): a Node stage builds the frontend, and the
 Python stages install the `server` and `morph` extras from the lock, so the API and its renderer
 share one container while `sampleextract`/`samplecloud`'s heavier dependencies (`umap-learn`,
-`scikit-learn`, torch) never reach it. trackmod, a git submodule a platform building from the
-repository checks out no copy of, comes from its own repository at the commit the submodule names,
-which a test holds the `Dockerfile` to. The image runs as an unprivileged user (uid 1000), with the
+`scikit-learn`, torch) never reach it. The image runs as an unprivileged user (uid 1000), with the
 site's config, `docker/site.toml`, at `/app/config.toml`: `library_root` is `/library`, where the
 platform mounts the volume holding the published audio, the renderer listens on the loopback
 address, the exposure is `public` and `[server.visitors]` sizes the limits. It holds no credential:

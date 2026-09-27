@@ -14,16 +14,12 @@ from paths import (
     NVIDIA_REQUIREMENTS_FILE,
     PACKAGE_BUILD_DIRECTORY,
     REPOSITORY_DIRECTORY,
-    TRACKMOD_PROJECT_FILE,
 )
 from torch_builds import CPU_TORCH_INDEX, CUDA_TORCH_INDEX
-from versions import project_version
 
 APP_EXTRA: Final[str] = "app"
-TRACKMOD_PACKAGE: Final[str] = "trackmod"
 CUDA_BUILD: Final[re.Pattern[str]] = re.compile(r"^(torch==[^+\s;]+)\+cu\d+")
 CUDA_ONLY_PACKAGES: Final[tuple[str, ...]] = ("nvidia-", "triton==")
-LOCAL_SOURCE_PREFIXES: Final[tuple[str, ...]] = ("-e ", "./", "../")
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
@@ -72,8 +68,7 @@ def _write_requirements(uv: str) -> tuple[int, int]:
 
     The lock pins the CUDA build of torch, which carries gigabytes of NVIDIA libraries. The processor
     launcher takes the processor build of the same version from PyTorch's own index, which runs on
-    every machine; the NVIDIA launcher keeps the CUDA build and its libraries. trackmod is a local
-    path in a checkout, so an installation takes the submodule's version from PyPI.
+    every machine; the NVIDIA launcher keeps the CUDA build and its libraries.
     """
     exported = subprocess.run(
         [
@@ -92,21 +87,20 @@ def _write_requirements(uv: str) -> tuple[int, int]:
         text=True,
         cwd=REPOSITORY_DIRECTORY,
     ).stdout
-    trackmod = f"{TRACKMOD_PACKAGE}=={project_version(TRACKMOD_PROJECT_FILE)}"
     locked = _locked_requirements(exported)
-    processor = [trackmod, *_processor_requirements(locked)]
-    nvidia = [trackmod, *locked]
+    processor = _processor_requirements(locked)
+    nvidia = locked
     _write_requirement_file(APP_REQUIREMENTS_FILE, CPU_TORCH_INDEX, processor)
     _write_requirement_file(NVIDIA_REQUIREMENTS_FILE, CUDA_TORCH_INDEX, nvidia)
     return len(processor), len(nvidia)
 
 
 def _locked_requirements(exported: str) -> list[str]:
-    """The exported pins, leaving out comments and the packages a checkout takes from a local path."""
+    """The exported pins, leaving out the comments."""
     return [
         stripped
         for stripped in (line.strip() for line in exported.splitlines())
-        if stripped and not stripped.startswith("#") and not stripped.startswith(LOCAL_SOURCE_PREFIXES)
+        if stripped and not stripped.startswith("#")
     ]
 
 

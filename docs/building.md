@@ -46,7 +46,7 @@ just installer    # dist/: the installer for this system
 - `just package` builds the web app and the samplelibrary wheel. It also writes the exact versions
   the app installs, taken from `uv.lock`, twice: with torch's processor build, which runs on every
   machine, and with its CUDA build and NVIDIA libraries, several gigabytes more, for a machine with
-  an NVIDIA card. trackmod is pinned to the submodule's version, which installations take from PyPI.
+  an NVIDIA card.
 - `just executable` compiles a [PyApp](https://ofek.dev/pyapp/) launcher around a copy of the wheel
   carrying each set of versions: `SampleLibrary` everywhere, and `SampleLibrary-nvidia` on Windows
   and Linux, where PyTorch publishes CUDA builds. The NVIDIA wheel's version carries the label
@@ -98,18 +98,15 @@ appears once the workflow is on the default branch.
 
 1. **Set the version** in `pyproject.toml`. Every release takes a new version, since an executable
    reuses the packages it installed for a version it has seen.
-2. **Check trackmod.** Installations take the submodule's trackmod version from PyPI; TrackMod
-   publishes a version when its own `v<version>` tag is pushed. The workflow stops while PyPI lacks
-   it.
-3. **Publish the pretrained descriptor**, when it changed. After training it on your library, run
+2. **Publish the pretrained descriptor**, when it changed. After training it on your library, run
    `just release-descriptor <tag>`, such as `just release-descriptor descriptor-1`. It writes the file
    to upload into `dist/descriptor/`, and the record new libraries download it by into
    `src/sampledescriptor/pretrained.toml`. Create a GitHub release with that tag, upload the file to
    it, and commit the record. The workflow downloads the file and checks it against the record.
    A version carrying no record builds each library's cloud by training a descriptor on it.
-4. **Tag the release** and push the tag, such as `git tag v0.1.0` and `git push origin v0.1.0`. The
+3. **Tag the release** and push the tag, such as `git tag v0.1.0` and `git push origin v0.1.0`. The
    tag must name the version from step 1.
-5. **Publish the draft.** The workflow drafts a GitHub release carrying the three installers.
+4. **Publish the draft.** The workflow drafts a GitHub release carrying the three installers.
    Review it, add notes, and publish it.
 
 ## Signing
