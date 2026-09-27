@@ -6,6 +6,7 @@ import { CLOSED_PATH } from "../setup/ClosedView";
 import { describeRefusal } from "../setup/refusal";
 import { SETUP_PATH } from "../setup/SetupGate";
 import { useSetupProbe } from "../setup/useSetupProbe";
+import { Button } from "../shared/controls/Button";
 import { DisclosureMenu } from "../shared/overlay/DisclosureMenu";
 
 /**
@@ -32,25 +33,27 @@ export function LibraryMenu(): ReactElement | null {
         return null;
     }
     return (
-        <DisclosureMenu label="Library" className="library-menu">
-            <button
-                type="button"
+        <DisclosureMenu label="Library" className="library-menu" variant="quiet">
+            <Button
+                variant="quiet"
+                wide
                 className="menu-action"
                 onClick={() => {
                     void navigate(SETUP_PATH);
                 }}
             >
                 Setup
-            </button>
-            <button
-                type="button"
+            </Button>
+            <Button
+                variant="quiet"
+                wide
                 className="menu-action"
                 onClick={() => {
                     void handleQuit();
                 }}
             >
                 Quit SampleRipper
-            </button>
+            </Button>
             {refusal !== null && (
                 <p className="menu-note" role="alert">
                     {refusal}

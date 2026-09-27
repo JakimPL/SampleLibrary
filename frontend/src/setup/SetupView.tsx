@@ -2,6 +2,8 @@ import { type ReactElement, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { quitApplication, type SetupState } from "../api/setup";
+import { Button } from "../shared/controls/Button";
+import { buttonClassName } from "../shared/controls/buttonClassName";
 import { Loading } from "../shared/Loading";
 import { CLOSED_PATH } from "./ClosedView";
 import { LibraryPanel } from "./LibraryPanel";
@@ -30,14 +32,14 @@ function SetupPanes({ state, onChanged }: SetupPanesProps): ReactElement {
 function OpenLibraryButton({ state }: { readonly state: SetupState | null }): ReactElement {
     if (state?.status !== "ready") {
         return (
-            <button type="button" className="setup-button" disabled>
+            <Button variant="secondary" disabled>
                 Open the library
-            </button>
+            </Button>
         );
     }
     return (
         <Link
-            className={state.build?.status === "completed" ? "setup-button setup-button-primary" : "setup-button"}
+            className={buttonClassName({ variant: state.build?.status === "completed" ? "primary" : "secondary" })}
             to="/"
         >
             Open the library
@@ -98,16 +100,15 @@ export function SetupView(): ReactElement {
                 />
                 <div className="setup-header-actions">
                     <OpenLibraryButton state={state} />
-                    <button
-                        type="button"
-                        className="setup-button"
+                    <Button
+                        variant="secondary"
                         disabled={state === null}
                         onClick={() => {
                             void handleQuit();
                         }}
                     >
                         Quit
-                    </button>
+                    </Button>
                 </div>
             </header>
             {state === null ? (

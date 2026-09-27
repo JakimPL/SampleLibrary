@@ -21,7 +21,7 @@
     --font-size-label: 9.5px;
     --control-height: 24px;
     --control-height-compact: 22px;
-    --setup-control-height: 32px;
+    --setup-control-height: 28px;
     --tap-target: 24px;
     --row-height: 40px;
     --toolbar-height: 32px;
@@ -105,6 +105,71 @@
     --label-lightness: 0.63;
     --label-chroma: 0.17;
     --mini-waveform-color: var(--text-faint);
+
+    /* Controls: every button, field, check, bar, group and list takes its look from these, and a
+       theme changes the look by changing them alone. `--button-height` and `--field-height`
+       resolve here against `--control-height`, so a page wanting larger controls sets them, and
+       only them, on itself. */
+    --font-size-setup: 13px;
+    --emphasis-weight: 600;
+    --button-height: var(--control-height);
+    --button-min-width: 64px;
+    --button-padding-x: var(--space-5);
+    --button-radius: var(--radius-2);
+    --button-font-size: var(--font-size-small);
+    --button-font-weight: 500;
+    --button-icon-size: 16px;
+    --button-bg: var(--surface-0);
+    --button-border: var(--border);
+    --button-text: var(--text-primary);
+    --button-hover-bg: var(--surface-2);
+    --button-hover-border: var(--border-strong);
+    --button-hover-text: var(--text-primary);
+    --button-active-bg: var(--surface-3);
+    --button-active-border: var(--border-strong);
+    --button-pressed-bg: var(--accent-soft);
+    --button-pressed-border: var(--accent);
+    --button-pressed-text: var(--accent);
+    --button-disabled-bg: var(--surface-0);
+    --button-disabled-border: var(--border);
+    --button-disabled-text: var(--text-faint);
+    --button-primary-bg: var(--accent);
+    --button-primary-border: var(--accent-strong);
+    --button-primary-text: var(--accent-ink);
+    --button-primary-hover-bg: var(--accent-strong);
+    --button-primary-ring: transparent;
+    --button-primary-weight: 600;
+    --button-quiet-text: var(--text-muted);
+    --button-quiet-hover-bg: var(--surface-2);
+    --button-quiet-hover-border: transparent;
+    --focus-ring: 2px solid var(--accent);
+    --focus-offset: 1px;
+    --field-height: var(--control-height);
+    --field-bg: var(--surface-1);
+    --field-border: var(--border);
+    --field-hover-border: var(--border-strong);
+    --field-focus-border: var(--accent);
+    --field-radius: var(--radius-2);
+    --check-size: 16px;
+    --check-radius: 3px;
+    --check-bg: var(--surface-1);
+    --check-border: var(--border-strong);
+    --check-checked-bg: var(--accent);
+    --check-checked-border: var(--accent);
+    --check-mark: var(--accent-ink);
+    --check-disabled-border: var(--border);
+    --progress-height: 6px;
+    --progress-radius: 3px;
+    --progress-track: var(--surface-3);
+    --progress-track-border: transparent;
+    --progress-fill: var(--accent);
+    --group-border: var(--border);
+    --group-radius: var(--radius-3);
+    --list-bg: var(--surface-1);
+    --list-border: var(--border);
+    --list-row-height: var(--control-height-compact);
+    --list-row-hover: var(--surface-2);
+    --list-row-selected: var(--accent-soft);
     --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", ui-monospace, "Menlo", monospace;
 }
@@ -121,6 +186,8 @@
         --tab-strip-height: 36px;
         --row-height: 52px;
         --font-size-input: 16px;
+        --button-min-width: 44px;
+        --setup-control-height: var(--control-height);
     }
 
     input,
@@ -298,7 +365,68 @@
     --label-lightness: 0.74;
     --label-chroma: 0.15;
     --mini-waveform-color: var(--wave-fill);
-    --font-body: "Segoe UI", "Tahoma", sans-serif;
+
+    /* Windows 10 common controls, as the program draws them: 75px buttons with square corners,
+       the default button's blue ring, gray disabled text, sunken white fields, a green bar. */
+    --font-size-setup: var(--font-size-body);
+    --emphasis-weight: 400;
+    --setup-control-height: var(--control-height);
+    --button-min-width: 75px;
+    --button-padding-x: var(--space-4);
+    --button-radius: 0;
+    --button-font-size: var(--font-size-body);
+    --button-font-weight: 400;
+    --button-bg: #e1e1e1;
+    --button-border: #adadad;
+    --button-text: #000;
+    --button-hover-bg: #e5f1fb;
+    --button-hover-border: #0078d7;
+    --button-hover-text: #000;
+    --button-active-bg: #cce4f7;
+    --button-active-border: #005499;
+    --button-pressed-bg: #cce4f7;
+    --button-pressed-border: #005499;
+    --button-pressed-text: #000;
+    --button-disabled-bg: #ccc;
+    --button-disabled-border: #bfbfbf;
+    --button-disabled-text: #838383;
+    --button-primary-bg: #e1e1e1;
+    --button-primary-border: #0078d7;
+    --button-primary-text: #000;
+    --button-primary-hover-bg: #e5f1fb;
+    --button-primary-ring: #0078d7;
+    --button-primary-weight: 400;
+    --button-quiet-text: #000;
+    --button-quiet-hover-bg: #e5f1fb;
+    --button-quiet-hover-border: #0078d7;
+    --focus-ring: 1px dotted #000;
+    --focus-offset: -3px;
+    --field-bg: #fff;
+    --field-border: #7a7a7a;
+    --field-hover-border: #171717;
+    --field-focus-border: #0078d7;
+    --field-radius: 0;
+    --check-size: 13px;
+    --check-radius: 0;
+    --check-bg: #fff;
+    --check-border: #333;
+    --check-checked-bg: #fff;
+    --check-checked-border: #333;
+    --check-mark: #000;
+    --check-disabled-border: #bfbfbf;
+    --progress-height: 15px;
+    --progress-radius: 0;
+    --progress-track: #e6e6e6;
+    --progress-track-border: #bcbcbc;
+    --progress-fill: #06b025;
+    --group-border: #dcdcdc;
+    --group-radius: 0;
+    --list-bg: #fff;
+    --list-border: #828790;
+    --list-row-height: 20px;
+    --list-row-hover: #e5f1fb;
+    --list-row-selected: #cce8ff;
+    --font-body: "Segoe UI", "Open Sans", "Tahoma", sans-serif;
     --font-mono: var(--font-body);
 }
 
@@ -352,6 +480,341 @@ select:focus-visible,
     font-variant-numeric: tabular-nums;
 }
 
+/* Buttons: one family for every push button, a link standing among buttons, and a menu's summary.
+   The variant names the intent, the attributes carry the state, the theme's tokens draw it. */
+.button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    box-sizing: border-box;
+    min-width: var(--button-min-width);
+    height: var(--button-height);
+    margin: 0;
+    padding: 0 var(--button-padding-x);
+    border: 1px solid var(--button-border);
+    border-radius: var(--button-radius);
+    background: var(--button-bg);
+    color: var(--button-text);
+    font-family: inherit;
+    font-size: var(--button-font-size);
+    font-weight: var(--button-font-weight);
+    line-height: 1;
+    text-decoration: none;
+    white-space: nowrap;
+    list-style: none;
+    user-select: none;
+    cursor: pointer;
+}
+
+.button::-webkit-details-marker {
+    display: none;
+}
+
+.button-primary {
+    border-color: var(--button-primary-border);
+    background: var(--button-primary-bg);
+    color: var(--button-primary-text);
+    font-weight: var(--button-primary-weight);
+    box-shadow: inset 0 0 0 1px var(--button-primary-ring);
+}
+
+.button-quiet {
+    min-width: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--button-quiet-text);
+}
+
+.button-icon {
+    width: var(--button-height);
+    min-width: 0;
+    padding: 0;
+    font-size: var(--button-icon-size);
+}
+
+.button-wide {
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.button:hover {
+    border-color: var(--button-hover-border);
+    background: var(--button-hover-bg);
+    color: var(--button-hover-text);
+}
+
+.button-primary:hover {
+    border-color: var(--button-primary-border);
+    background: var(--button-primary-hover-bg);
+    color: var(--button-primary-text);
+}
+
+.button-quiet:hover {
+    border-color: var(--button-quiet-hover-border);
+    background: var(--button-quiet-hover-bg);
+}
+
+.button:active {
+    border-color: var(--button-active-border);
+    background: var(--button-active-bg);
+}
+
+.button[aria-pressed="true"],
+.button[aria-expanded="true"] {
+    border-color: var(--button-pressed-border);
+    background: var(--button-pressed-bg);
+    color: var(--button-pressed-text);
+}
+
+.button:disabled,
+.button[aria-disabled="true"] {
+    border-color: var(--button-disabled-border);
+    background: var(--button-disabled-bg);
+    color: var(--button-disabled-text);
+    box-shadow: none;
+    cursor: default;
+    pointer-events: none;
+}
+
+.button-quiet:disabled {
+    border-color: transparent;
+    background: transparent;
+}
+
+.button:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+}
+
+/* Fields: text inputs and selects. The size rules for inputs under touch stay in charge of the type. */
+.field {
+    box-sizing: border-box;
+    height: var(--field-height);
+    margin: 0;
+    padding: 0 var(--space-4);
+    border: 1px solid var(--field-border);
+    border-radius: var(--field-radius);
+    background: var(--field-bg);
+    color: var(--text-primary);
+}
+
+.field::placeholder {
+    color: var(--text-faint);
+}
+
+.field:hover {
+    border-color: var(--field-hover-border);
+}
+
+.field:focus-visible {
+    outline: none;
+    border-color: var(--field-focus-border);
+    box-shadow: 0 0 0 1px var(--field-focus-border);
+}
+
+.field:disabled {
+    color: var(--text-faint);
+}
+
+select.field {
+    padding-right: var(--space-3);
+}
+
+/* A field that shows a value it does not edit, such as a folder's path beside its Browse button. */
+.field-static {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    padding-right: var(--space-1);
+}
+
+.field-static .button-icon {
+    --button-height: calc(var(--field-height) - 6px);
+}
+
+/* Checks: drawn by hand, so a theme decides the box and the mark. */
+.check {
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    flex: 0 0 auto;
+    width: var(--check-size);
+    height: var(--check-size);
+    margin: 0;
+    border: 1px solid var(--check-border);
+    border-radius: var(--check-radius);
+    background: var(--check-bg);
+    cursor: pointer;
+}
+
+.check::before {
+    content: "";
+    width: 28%;
+    height: 58%;
+    margin-top: -12%;
+    border: solid var(--check-mark);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    opacity: 0;
+}
+
+.check:hover {
+    border-color: var(--field-hover-border);
+}
+
+.check:checked {
+    border-color: var(--check-checked-border);
+    background: var(--check-checked-bg);
+}
+
+.check:checked::before {
+    opacity: 1;
+}
+
+.check:disabled {
+    border-color: var(--check-disabled-border);
+    cursor: default;
+}
+
+.check:disabled::before {
+    border-color: var(--text-faint);
+}
+
+/* Bars: a `progress` with a value fills to it; one without slides. */
+.progress {
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: var(--progress-height);
+    border: 1px solid var(--progress-track-border);
+    border-radius: var(--progress-radius);
+    background: var(--progress-track);
+    overflow: hidden;
+}
+
+.progress::-webkit-progress-bar {
+    background: transparent;
+}
+
+.progress::-webkit-progress-value {
+    background: var(--progress-fill);
+}
+
+.progress::-moz-progress-bar {
+    background: var(--progress-fill);
+}
+
+.progress:indeterminate {
+    background-image: linear-gradient(90deg, transparent 40%, var(--progress-fill) 40% 60%, transparent 60%);
+    background-size: 250% 100%;
+    animation: progress-slide 1.6s linear infinite;
+}
+
+.progress:indeterminate::-moz-progress-bar {
+    background: transparent;
+}
+
+@keyframes progress-slide {
+    from {
+        background-position: 100% 0;
+    }
+
+    to {
+        background-position: -100% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .progress:indeterminate {
+        animation: none;
+    }
+}
+
+/* Groups: a fieldset whose legend names what it holds. */
+.group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+    min-width: 0;
+    margin: 0;
+    padding: var(--space-4) var(--space-6) var(--space-6);
+    border: 1px solid var(--group-border);
+    border-radius: var(--group-radius);
+}
+
+.group > legend {
+    margin-left: calc(-1 * var(--space-2));
+    padding: 0 var(--space-2);
+    font-weight: var(--emphasis-weight);
+}
+
+.group-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+}
+
+/* Lists: rows in a sunken box, the ones that answer a click tinted under the pointer. */
+.listbox {
+    display: block;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    border: 1px solid var(--list-border);
+    border-radius: var(--field-radius);
+    background: var(--list-bg);
+    list-style: none;
+}
+
+.listbox-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+    min-height: var(--list-row-height);
+    padding: 0 var(--space-2) 0 var(--space-4);
+}
+
+.listbox.is-interactive .listbox-row:hover {
+    background: var(--list-row-hover);
+}
+
+.listbox-row[aria-selected="true"] {
+    background: var(--list-row-selected);
+}
+
+.listbox-empty {
+    color: var(--text-faint);
+    font-style: italic;
+}
+
+.listbox .button-icon {
+    --button-height: calc(var(--list-row-height) - 4px);
+}
+
+/* A sheet is finger-first: its buttons and fields keep the tap target whatever the pointer. */
+.sheet-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+}
+
+.sheet .button,
+.sheet .field {
+    min-height: var(--tap-target);
+    height: auto;
+}
+
+/* An open menu's summary holds the pressed look while its panel is out. */
+.disclosure-menu[open] > .button {
+    border-color: var(--button-active-border);
+    background: var(--button-active-bg);
+}
+
 .workspace-root {
     height: 100%;
     display: flex;
@@ -360,11 +823,6 @@ select:focus-visible,
 
 .theme-menu {
     margin-left: auto;
-    border: 1px solid var(--border);
-    background: var(--surface-0);
-    border-radius: var(--radius-2);
-    height: var(--control-height);
-    padding: 0 var(--space-4);
     font-size: var(--font-size-small);
     color: var(--text-muted);
 }
@@ -395,30 +853,6 @@ select:focus-visible,
 
 .disclosure-menu {
     position: relative;
-}
-
-.disclosure-menu-summary {
-    display: inline-flex;
-    align-items: center;
-    height: var(--control-height-compact);
-    padding: 0 var(--space-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
-    color: var(--text-muted);
-    font-size: var(--font-size-small);
-    list-style: none;
-    cursor: pointer;
-    user-select: none;
-}
-
-.disclosure-menu-summary::-webkit-details-marker {
-    display: none;
-}
-
-.disclosure-menu[open] > .disclosure-menu-summary {
-    color: var(--text-primary);
-    border-color: var(--border-strong);
 }
 
 .disclosure-menu-panel {
@@ -453,17 +887,7 @@ select:focus-visible,
 }
 
 .menu-action {
-    display: block;
-    width: 100%;
     margin-top: var(--space-3);
-    border: 1px solid var(--border);
-    background: var(--surface-0);
-    border-radius: var(--radius-2);
-    height: var(--control-height-compact);
-    padding: 0 var(--space-4);
-    font-size: var(--font-size-small);
-    cursor: pointer;
-    color: var(--text-muted);
 }
 
 .menu-action:first-child {
@@ -846,12 +1270,7 @@ tr:focus-within .row-open,
 .annotation-editor-input {
     flex: 1 1 140px;
     min-width: 120px;
-    padding: 3px var(--space-3);
     text-transform: uppercase;
-    background: var(--surface-1);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-1);
 }
 
 .annotation-editor-scope {
@@ -1012,15 +1431,6 @@ table.data td .annotation-editor-input {
 .panel-filter input {
     flex: 1 1 auto;
     min-width: 0;
-    border: 1px solid var(--border);
-    background: var(--surface-0);
-    border-radius: var(--radius-2);
-    height: var(--control-height);
-    padding: 0 var(--space-4);
-}
-
-.panel-filter input:focus {
-    outline: 1.5px solid var(--accent);
 }
 
 .panel-filter label {
@@ -1029,14 +1439,6 @@ table.data td .annotation-editor-input {
     gap: var(--space-3);
     font-size: var(--font-size-small);
     color: var(--text-muted);
-}
-
-.panel-filter select {
-    border: 1px solid var(--border);
-    background: var(--surface-0);
-    border-radius: var(--radius-2);
-    height: var(--control-height);
-    padding: 0 var(--space-3);
 }
 
 /* A sheet rises over everything from the bottom edge; the scrim behind it is the way out. */
@@ -1101,18 +1503,6 @@ table.data td .annotation-editor-input {
     gap: var(--space-2);
 }
 
-.sheet-actions button {
-    min-height: var(--tap-target);
-    padding: 0 var(--space-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
-    color: var(--text-primary);
-    font-size: var(--font-size-body);
-    text-align: left;
-    cursor: pointer;
-}
-
 .sheet-verdict {
     display: flex;
     align-items: center;
@@ -1128,12 +1518,6 @@ table.data td .annotation-editor-input {
 
 .label-sheet-input {
     width: 100%;
-    min-height: var(--tap-target);
-    padding: 0 var(--space-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
-    color: var(--text-primary);
     text-transform: uppercase;
 }
 
@@ -1157,23 +1541,6 @@ table.data td .annotation-editor-input {
     background: var(--surface-0);
     color: var(--text-primary);
     font-size: var(--font-size-small);
-    cursor: pointer;
-}
-
-.label-sheet-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3);
-}
-
-.label-sheet-buttons button {
-    min-height: var(--tap-target);
-    padding: 0 var(--space-6);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
-    color: var(--text-primary);
-    font-size: var(--font-size-body);
     cursor: pointer;
 }
 
@@ -1221,46 +1588,6 @@ table.data td .annotation-editor-input {
     min-width: 36px;
     min-height: var(--tap-target);
     font-size: 20px;
-}
-
-/* `:where` keeps the star and heart exception out of this selector's specificity. */
-.panel-filter button,
-.detail-tabs button,
-.legend-sheet-mode button,
-.annotation-editor button:not(:where(.rating-star, .favorite-toggle)),
-.morph-offline button {
-    border: 1px solid var(--border);
-    background: var(--surface-0);
-    border-radius: var(--radius-2);
-    height: var(--control-height);
-    padding: 0 var(--space-5);
-    font-size: var(--font-size-small);
-    cursor: pointer;
-    color: var(--text-muted);
-}
-
-.panel-filter button:disabled,
-.sheet-actions button:disabled,
-.label-sheet-buttons button:disabled,
-.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):disabled {
-    color: var(--text-faint);
-    cursor: default;
-}
-
-.panel-filter button:hover:enabled,
-.detail-tabs button:hover:enabled,
-.legend-sheet-mode button:hover:enabled,
-.annotation-editor button:not(:where(.rating-star, .favorite-toggle)):hover:enabled {
-    color: var(--text-primary);
-    border-color: var(--border-strong);
-}
-
-.panel-filter button[aria-pressed="true"],
-.detail-tabs button[aria-pressed="true"],
-.legend-sheet-mode button[aria-pressed="true"] {
-    background: var(--accent-soft);
-    color: var(--accent);
-    border-color: var(--accent);
 }
 
 /* One row over a listing that wraps its status beneath the controls when the room runs out. */
@@ -1382,26 +1709,7 @@ table.data td .annotation-editor-input {
 }
 
 .cloud-tool {
-    width: var(--control-height);
-    height: var(--control-height);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-1);
-    color: var(--text-muted);
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
     box-shadow: var(--shadow);
-}
-
-.cloud-tool:disabled {
-    color: var(--text-faint);
-    cursor: default;
-}
-
-.cloud-tool:hover:enabled {
-    color: var(--text-primary);
-    border-color: var(--border-strong);
 }
 
 /* The tapped point's card rests along the bottom edge, clear of the tools. */
@@ -1940,35 +2248,11 @@ table.data td .annotation-editor-input {
     --play-button-size: max(26px, var(--control-height));
 }
 
-.download-link {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    width: max(26px, var(--tap-target));
-    height: max(26px, var(--tap-target));
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
-    color: var(--text-muted);
-    font-size: 14px;
-    line-height: 1;
-    text-decoration: none;
-}
-
-.transport .download-link {
-    margin-left: auto;
-}
-
 /* In the row form the file matches the play button, so the frame stands between two controls of one size. */
-.wave-panel-compact .download-link {
-    width: var(--control-height);
-    height: var(--control-height);
-}
+.transport .download-link {
+    --button-height: max(26px, var(--tap-target));
 
-.download-link:hover {
-    color: var(--text-primary);
-    border-color: var(--border-strong);
+    margin-left: auto;
 }
 
 .time {
@@ -1991,11 +2275,6 @@ table.data td .annotation-editor-input {
 }
 
 .transport select {
-    border: 1px solid var(--border);
-    background: var(--surface-1);
-    border-radius: var(--radius-2);
-    height: var(--control-height);
-    padding: 0 var(--space-3);
     font-family: var(--font-mono);
     font-size: var(--font-size-small);
 }
@@ -2237,32 +2516,6 @@ table.data td .annotation-editor-input {
     border-bottom: none;
 }
 
-/* Marks with a shape of their own (play button, thumbnail, stars, heart, category badge) keep that shape. */
-:root[data-theme="openmpt"]
-    button:not(.play-btn, .thumbnail-button, .rating-star, .favorite-toggle, .category-cell-button),
-:root[data-theme="openmpt"] input,
-:root[data-theme="openmpt"] select {
-    border-radius: 2px;
-    border: 1px solid var(--border);
-}
-
-:root[data-theme="openmpt"] input,
-:root[data-theme="openmpt"] select {
-    background: var(--surface-1);
-}
-
-:root[data-theme="openmpt"]
-    button:not(.play-btn, .thumbnail-button, .rating-star, .favorite-toggle, .category-cell-button):active {
-    background-color: var(--surface-3);
-}
-
-:root[data-theme="openmpt"] input:hover,
-:root[data-theme="openmpt"] select:hover,
-:root[data-theme="openmpt"] input:focus,
-:root[data-theme="openmpt"] select:focus {
-    border-color: var(--accent);
-}
-
 :root[data-theme="openmpt"] table.data th,
 :root[data-theme="openmpt"] table.mini th,
 :root[data-theme="openmpt"] .detail-section h3,
@@ -2424,62 +2677,15 @@ table.data td .annotation-editor-input {
 
 /* Centered as a box rather than by line height, which a glyph's own metrics sit off-center within. */
 .morph-slot-clear {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
+    --button-height: 20px;
+    --button-icon-size: 13px;
+
     margin-right: var(--space-2);
-    padding: 0;
-    border: none;
-    background: transparent;
-    font-size: 13px;
-    line-height: 1;
-    color: var(--text-muted);
-    cursor: pointer;
 }
 
 :root[data-input="touch"] .morph-slot-clear {
-    width: 28px;
-    height: 28px;
-    font-size: 16px;
-}
-
-.morph-strip-tool {
-    flex: 0 0 auto;
-    width: var(--control-height);
-    height: var(--control-height);
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
-    color: var(--text-muted);
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.morph-strip-tool:disabled {
-    color: var(--text-faint);
-    cursor: default;
-}
-
-.morph-strip-tool:hover:enabled {
-    color: var(--text-primary);
-    border-color: var(--border-strong);
-}
-
-.morph-strip-tool[aria-expanded="true"] {
-    color: var(--accent);
-    border-color: var(--accent);
-}
-
-.morph-strip-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
+    --button-height: 28px;
+    --button-icon-size: 16px;
 }
 
 .morph-strip-body {
@@ -2706,17 +2912,6 @@ table.data td .annotation-editor-input {
     padding: var(--space-6);
 }
 
-.error-boundary-retry {
-    border: 1px solid var(--border);
-    background: var(--surface-0);
-    border-radius: var(--radius-2);
-    height: var(--control-height-compact);
-    padding: 0 var(--space-4);
-    font-size: var(--font-size-small);
-    cursor: pointer;
-    color: var(--text-muted);
-}
-
 /* A held finger opens a row's actions, so the row itself offers no text to select and no callout. */
 :root[data-input="touch"] table.data tbody tr {
     user-select: none;
@@ -2758,24 +2953,12 @@ table.data td .annotation-editor-input {
 
 .phone-page-back,
 .phone-page-step {
-    flex: 0 0 auto;
-    min-width: var(--tap-target);
-    min-height: var(--tap-target);
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 20px;
-    line-height: 1;
-    cursor: pointer;
+    --button-height: var(--tap-target);
+    --button-icon-size: 20px;
 }
 
 .phone-page-back {
     margin-left: calc(-1 * var(--space-4));
-}
-
-.phone-page-step:disabled {
-    color: var(--text-faint);
-    cursor: default;
 }
 
 .phone-page-steps {
@@ -3152,6 +3335,10 @@ table.data td .annotation-editor-input {
     padding: calc(var(--space-7) + var(--safe-top)) var(--space-7) calc(var(--space-7) + var(--safe-bottom));
     box-sizing: border-box;
     font-size: 14px;
+
+    --button-height: var(--setup-control-height);
+    --field-height: var(--setup-control-height);
+    --button-font-size: 13px;
 }
 
 .setup-page-closed {
@@ -3303,35 +3490,6 @@ table.data td .annotation-editor-input {
     border: 1px solid var(--border);
     border-radius: var(--radius-2);
     background: var(--surface-0);
-}
-
-.setup-button {
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    min-height: var(--setup-control-height);
-    padding: 0 var(--space-6);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-2);
-    background: var(--surface-0);
-    color: var(--text-primary);
-    font-size: 13px;
-    text-decoration: none;
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.setup-button:disabled {
-    cursor: default;
-    opacity: 0.5;
-}
-
-.setup-button-primary {
-    border-color: var(--accent-strong);
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 600;
 }
 
 .setup-actions {

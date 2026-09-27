@@ -1,6 +1,7 @@
 import { type ReactElement, useState } from "react";
 
 import { chooseSources, type LibrarySources, type SetupState } from "../api/setup";
+import { Button } from "../shared/controls/Button";
 import { FolderPath } from "./FolderPath";
 import { FolderPicker } from "./FolderPicker";
 import { describeRefusal } from "./refusal";
@@ -114,40 +115,37 @@ export function SourcesForm({ state, draft, onSaved }: SourcesFormProps): ReactE
                     <p className="setup-hint">A folder with your XM, IT, MOD and S3M files. Subfolders are included.</p>
                     <div className="setup-folder">
                         <FolderPath path={sources.module_source_directory} placeholder="No folder chosen" />
-                        <button
-                            type="button"
-                            className="setup-button"
+                        <Button
+                            variant="secondary"
                             onClick={() => {
                                 setPicker("modules");
                             }}
                         >
                             Choose…
-                        </button>
-                        <button
-                            type="button"
-                            className="setup-button"
+                        </Button>
+                        <Button
+                            variant="secondary"
                             disabled={sources.module_source_directory === null}
                             onClick={() => {
                                 change((current) => ({ ...current, module_source_directory: null }));
                             }}
                         >
                             Remove
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
                 <div className="setup-field">
                     <div className="setup-field-heading">
                         <h3 className="setup-field-title">Sample folders</h3>
-                        <button
-                            type="button"
-                            className="setup-button"
+                        <Button
+                            variant="secondary"
                             onClick={() => {
                                 setPicker("samples");
                             }}
                         >
                             Add a folder…
-                        </button>
+                        </Button>
                     </div>
                     <p className="setup-hint">Folders with WAV, AIFF or FLAC files. The files stay where they are.</p>
                     <ul className="setup-folder-list">
@@ -159,9 +157,8 @@ export function SourcesForm({ state, draft, onSaved }: SourcesFormProps): ReactE
                         {sources.sample_directories.map((directory) => (
                             <li key={directory} className="setup-folder">
                                 <FolderPath path={directory} placeholder="" />
-                                <button
-                                    type="button"
-                                    className="setup-button"
+                                <Button
+                                    variant="secondary"
                                     onClick={() => {
                                         change((current) => ({
                                             ...current,
@@ -172,7 +169,7 @@ export function SourcesForm({ state, draft, onSaved }: SourcesFormProps): ReactE
                                     }}
                                 >
                                     Remove
-                                </button>
+                                </Button>
                             </li>
                         ))}
                     </ul>
@@ -199,31 +196,29 @@ export function SourcesForm({ state, draft, onSaved }: SourcesFormProps): ReactE
                     </p>
                     <div className="setup-folder">
                         <FolderPath path={sources.library_root} placeholder="" />
-                        <button
-                            type="button"
-                            className="setup-button"
+                        <Button
+                            variant="secondary"
                             onClick={() => {
                                 setPicker("library");
                             }}
                         >
                             Change…
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
 
             <footer className="setup-pane-footer">
                 <SetupMessage message={message} />
-                <button
-                    type="button"
-                    className="setup-button setup-button-primary"
+                <Button
+                    variant="primary"
                     disabled={!hasSources || saving || buildRunning || (configured && !draft.unsaved)}
                     onClick={() => {
                         void handleSave();
                     }}
                 >
                     {configured ? "Save changes" : "Save and open the library"}
-                </button>
+                </Button>
             </footer>
 
             {picker !== null && (

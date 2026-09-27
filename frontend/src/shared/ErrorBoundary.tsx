@@ -1,5 +1,6 @@
 import { Component, type ReactElement, type ReactNode } from "react";
 
+import { Button } from "./controls/Button";
 import { ErrorNotice } from "./ErrorNotice";
 import { describeError } from "./fetchState";
 
@@ -37,15 +38,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         return (
             <div className="error-boundary">
                 <ErrorNotice message={message} />
-                <button
-                    type="button"
-                    className="error-boundary-retry"
+                <Button
+                    variant="secondary"
                     onClick={() => {
                         this.setState({ message: null });
                     }}
                 >
                     Try again
-                </button>
+                </Button>
             </div>
         );
     }

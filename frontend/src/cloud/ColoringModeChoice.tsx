@@ -1,5 +1,7 @@
 import type { ReactElement } from "react";
 
+import { Button } from "../shared/controls/Button";
+
 /** What the cloud paints its samples by: the listening model's category, or the hand labels. */
 export type ColoringMode = "category" | "label";
 
@@ -27,16 +29,16 @@ export function ColoringModeChoice({ mode, onModeChange }: ColoringModeChoicePro
     return (
         <>
             {CHOICES.map((choice) => (
-                <button
+                <Button
                     key={choice.mode}
-                    type="button"
+                    variant="secondary"
                     aria-pressed={mode === choice.mode}
                     onClick={() => {
                         onModeChange(choice.mode);
                     }}
                 >
                     {choice.label}
-                </button>
+                </Button>
             ))}
         </>
     );

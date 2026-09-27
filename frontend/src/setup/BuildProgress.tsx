@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import type { BuildStep, BuildView, StepState } from "../api/setup";
+import { Button } from "../shared/controls/Button";
 import { SetupMessage } from "./SetupMessage";
 import { stepName } from "./stepNames";
 import { describeElapsed, describeEstimate, estimateRemainingSeconds, secondsBetween, useClock } from "./timing";
@@ -122,9 +123,9 @@ export function BuildProgress({ build, onCancel }: BuildProgressProps): ReactEle
                 </h3>
                 <span className="build-progress-position">{running ? stepPosition(build.steps) : null}</span>
                 {running && (
-                    <button type="button" className="setup-button" onClick={onCancel}>
+                    <Button variant="secondary" onClick={onCancel}>
                         Cancel
-                    </button>
+                    </Button>
                 )}
             </div>
             <p className="build-progress-times setup-hint">{describeBuildTimes(build, now)}</p>

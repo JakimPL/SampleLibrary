@@ -28,6 +28,7 @@ import { useMorphPlayback } from "../../morph/useMorphPlayback";
 import { samplePreview, useAudioPreview } from "../../samples/useAudioPreview";
 import { useCurationAccess } from "../../samples/useCurationAccess";
 import { useLabelTags } from "../../samples/useLabelTags";
+import { Button } from "../../shared/controls/Button";
 import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
 import { Icon } from "../../shared/icons/Icon";
@@ -275,37 +276,37 @@ export function CloudPanel(): ReactElement {
     return (
         <div className="panel-stack" ref={panelRef}>
             <div className="panel-filter cloud-toolbar">
-                <button
-                    type="button"
+                <Button
+                    variant="secondary"
                     aria-pressed={tab === "samples"}
                     onClick={() => {
                         setTab("samples");
                     }}
                 >
                     Samples
-                </button>
-                <button
-                    type="button"
+                </Button>
+                <Button
+                    variant="secondary"
                     aria-pressed={tab === "modules"}
                     onClick={() => {
                         setTab("modules");
                     }}
                 >
                     Modules
-                </button>
+                </Button>
                 {tab === "samples" && (
                     <>
                         <span className="panel-filter-separator" aria-hidden />
                         {legendAsSheet ? (
-                            <button
-                                type="button"
+                            <Button
+                                variant="secondary"
                                 aria-expanded={legendOpen}
                                 onClick={() => {
                                     setLegendOpen(true);
                                 }}
                             >
                                 Legend
-                            </button>
+                            </Button>
                         ) : (
                             curationShown && (
                                 <>
@@ -346,8 +347,9 @@ export function CloudPanel(): ReactElement {
                         {hovered !== null && <CloudHoverTooltip entity={hovered.entity} x={hovered.x} y={hovered.y} />}
                         {tapCardShown && <CloudTapCard entity={inHandHere} />}
                         <div className="cloud-tools">
-                            <button
-                                type="button"
+                            <Button
+                                variant="secondary"
+                                icon
                                 className="cloud-tool"
                                 aria-label="Center on the selection"
                                 disabled={inHandHere === null}
@@ -358,9 +360,10 @@ export function CloudPanel(): ReactElement {
                                 }}
                             >
                                 ⌖
-                            </button>
-                            <button
-                                type="button"
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                icon
                                 className="cloud-tool"
                                 aria-label="Frame the pair"
                                 disabled={link === null}
@@ -371,9 +374,10 @@ export function CloudPanel(): ReactElement {
                                 }}
                             >
                                 <Icon name="morph" label={null} />
-                            </button>
-                            <button
-                                type="button"
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                icon
                                 className="cloud-tool"
                                 aria-label="Zoom in"
                                 onClick={() => {
@@ -381,9 +385,10 @@ export function CloudPanel(): ReactElement {
                                 }}
                             >
                                 +
-                            </button>
-                            <button
-                                type="button"
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                icon
                                 className="cloud-tool"
                                 aria-label="Zoom out"
                                 onClick={() => {
@@ -391,7 +396,7 @@ export function CloudPanel(): ReactElement {
                                 }}
                             >
                                 −
-                            </button>
+                            </Button>
                         </div>
                     </>
                 )}

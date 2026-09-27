@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useModule } from "../../modules/useModule";
 import { useSampleDetail } from "../../samples/useSampleDetail";
+import { Button } from "../../shared/controls/Button";
 import { withBoundary } from "../../shared/ErrorBoundary";
 import { shortHash } from "../../shared/format";
 import { UNNAMED_SAMPLE_LABEL, UNTITLED_MODULE_LABEL } from "../../shared/labels";
@@ -46,14 +47,15 @@ function PageHeader({ title, entity }: PageHeaderProps): ReactElement {
 
     return (
         <>
-            <button type="button" className="phone-page-back" aria-label="Back" onClick={back}>
+            <Button variant="quiet" icon className="phone-page-back" aria-label="Back" onClick={back}>
                 ←
-            </button>
+            </Button>
             <h1 className="phone-header-title">{title}</h1>
             {entity !== null && neighbors.position !== null && (
                 <div className="phone-page-steps">
-                    <button
-                        type="button"
+                    <Button
+                        variant="quiet"
+                        icon
                         className="phone-page-step"
                         aria-label={`Previous ${entity.kind}`}
                         disabled={neighbors.previous === null}
@@ -62,12 +64,13 @@ function PageHeader({ title, entity }: PageHeaderProps): ReactElement {
                         }}
                     >
                         ‹
-                    </button>
+                    </Button>
                     <span className="phone-page-position mono">
                         {neighbors.position} / {neighbors.count}
                     </span>
-                    <button
-                        type="button"
+                    <Button
+                        variant="quiet"
+                        icon
                         className="phone-page-step"
                         aria-label={`Next ${entity.kind}`}
                         disabled={neighbors.next === null}
@@ -76,7 +79,7 @@ function PageHeader({ title, entity }: PageHeaderProps): ReactElement {
                         }}
                     >
                         ›
-                    </button>
+                    </Button>
                 </div>
             )}
         </>

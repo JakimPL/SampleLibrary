@@ -1,6 +1,7 @@
 import { type ReactElement, useEffect, useState } from "react";
 
 import { type FolderListing, getFolder, getPlaces, type Place } from "../api/setup";
+import { Button } from "../shared/controls/Button";
 import { describeError } from "../shared/fetchState";
 import { BottomSheet } from "../shared/overlay/BottomSheet";
 import { FolderPath } from "./FolderPath";
@@ -144,9 +145,8 @@ export function FolderPicker({ title, initialPath, onChoose, onClose }: FolderPi
                 {ready?.folders.length === 0 && <li className="folder-item folder-empty">No subfolders.</li>}
             </ul>
             <div className="setup-actions">
-                <button
-                    type="button"
-                    className="setup-button setup-button-primary"
+                <Button
+                    variant="primary"
                     disabled={ready === null}
                     onClick={() => {
                         if (ready !== null) {
@@ -155,10 +155,10 @@ export function FolderPicker({ title, initialPath, onChoose, onClose }: FolderPi
                     }}
                 >
                     Choose this folder
-                </button>
-                <button type="button" className="setup-button" onClick={onClose}>
+                </Button>
+                <Button variant="secondary" onClick={onClose}>
                     Cancel
-                </button>
+                </Button>
             </div>
         </BottomSheet>
     );

@@ -16,7 +16,7 @@ export function ThemeMenu(): ReactElement {
     }
 
     return (
-        <select className="theme-menu" aria-label="Theme" value={preference} onChange={handleChange}>
+        <select className="theme-menu field" aria-label="Theme" value={preference} onChange={handleChange}>
             {THEME_OPTIONS.map((option) => (
                 <option key={option.id} value={option.id}>
                     {option.label}
