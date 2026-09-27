@@ -15,10 +15,10 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import DBAPIError
 
 from samplecore.models.service_role import ServiceRole
+from samplecore.storage.atomic import PRIVATE_FILE_MODE
 from samplecore.storage.cluster.embedded import binaries
 from samplecore.storage.cluster.embedded.server import EmbeddedCluster
 from samplecore.storage.cluster.embedded.state import (
-    PRIVATE_FILE_MODE,
     ClusterState,
     ManagedClusterMissingError,
     claim_port,

@@ -242,7 +242,10 @@ connection URL) is read from a gitignored `config.toml` via `samplecore.config.l
 hardcoded into source; the connection URL can also be supplied via the `SAMPLELIBRARY_DATABASE_URL`
 environment variable (taking precedence over the config file), so credentials need not live in a
 file at all. A command given `--config` reads the database from that file alone. `config.example.toml`
-documents the expected shape.
+documents the expected shape and names no password: it writes `<password>` in each database URL,
+`samplelibrary setup config` puts a new password of its own in each one as it writes `config.toml`,
+readable by its owner alone, and a config still carrying `<password>` is refused. No file this
+repository publishes names a password anything can log in with.
 
 A repository that recomputes a whole table's contents from scratch every run -- the cloud
 coordinate, module coordinate, and spectral feature repositories, whenever a fresh embedding pass
@@ -272,10 +275,20 @@ nothing. The curator, named by `curation_database_url`, is what the SampleLibrar
 connects as: it also inserts, updates and deletes rows of `curation.sample_annotation` and adds tag
 ranks, and holds nothing on the label history, which its trigger writes with the owner's rights.
 `grant_service_role` grants exactly that, idempotently, and `check_service_role` logs in as a role and
-insists on it: no superuser or other power, no ownership, no `CREATE`, every table the API reads
-readable, and exactly its service's writes, naming each difference. A library keeping its own
+insists on it: no superuser or other power, no membership in another role (the predefined ones, such
+as `pg_read_server_files`, included), no ownership, no `CREATE`, no temporary tables, every table
+the API reads readable, and exactly its service's writes, naming each difference. Postgres lets every
+role connect to a new database and create temporary tables in it, so granting takes both from
+`PUBLIC` and grants each service role the connection alone. A library keeping its own
 server creates `samplelibrary_reader` and `samplelibrary_curator` itself on every start, with
-passwords in `library_root/postgres/roles.json`, readable by its owner alone.
+passwords in `library_root/postgres/roles.json`; the cluster's folder, `roles.json` and `cluster.json`
+are readable by their owner alone from the moment they are written.
+
+Every password this project gives a role travels as its SCRAM-SHA-256 verifier
+(`samplecore.storage.cluster.scram`, prepared with SASLprep the way libpq prepares it), which
+Postgres stores as it is: the role logs in with the password, while the statement setting it, a
+server log recording that statement, and the statement `setup database` prints for a person to run
+carry only what the server keeps.
 
 `samplelibrary setup database` (`just database`) creates whichever of the roles and the databases
 are missing and adds any missing tables to the library and the sandbox, leaving every row in place,
@@ -711,8 +724,11 @@ nothing.
 worked example of the two running together. Its `sampleserver` mounts `LIBRARY_ROOT` (default
 `./library`) at `/library` and `CONFIG_PATH` (default `docker/config.toml`, whose paths are the
 container's own) at `/app/config.toml`, both read-only, connects as the reader through
-`SAMPLELIBRARY_SERVER_DATABASE_URL`, whose password it reads from `SAMPLELIBRARY_READER_PASSWORD` in
-`.env`, and publishes the app on `127.0.0.1:8000`. `samplelibrary setup database`, run once from the
+`SAMPLELIBRARY_SERVER_DATABASE_URL`, read from `docker/site.env`, and publishes the app on
+`127.0.0.1:8000`. The server's own superuser password comes from `docker/postgres.env`. `just
+docker-secrets` writes both files once, with passwords of their own and readable by their owner
+alone, and compose refuses to start without them, so no password is written into the compose file
+or falls back to a known or empty one. `samplelibrary setup database`, run once from the
 host with a config naming that role, creates it. A path either names that is
 not there fails the start rather than mounting an empty directory. Its `extra_hosts` entry lets the
 container reach a renderer running on the host at `http://host.docker.internal:8010`, the commented

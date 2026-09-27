@@ -23,7 +23,7 @@ PROGRAM = "samplelibrary serve"
 PUBLIC_HOST = "0.0.0.0"
 OTHER_PORT = 8001
 WORKER_COUNT = 4
-UNREACHABLE_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:1/samplelibrary"
+UNREACHABLE_DATABASE_URL = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:1/samplelibrary"
 
 
 @dataclass

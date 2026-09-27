@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import tomllib
 from pathlib import Path
 from typing import Final
@@ -11,7 +10,9 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from pydantic_core import ErrorDetails
 
 from samplecore.models.service_role import ServiceRole
+from samplecore.passwords import new_password
 from samplecore.paths import CHECKOUT_CONFIG_PATH, EXAMPLE_CONFIG_PATH, runs_from_checkout, user_config_file
+from samplecore.storage.atomic import PRIVATE_FILE_MODE, write_bytes_atomically
 from samplecore.storage.cluster.embedded.state import managed_catalog_url, managed_service_url
 
 CONFIG_PATH_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLELIBRARY_CONFIG"
@@ -46,6 +47,12 @@ CONFIG_RELATIVE_PATH_LIST_SETTINGS: Final[tuple[str, ...]] = ("sample_directorie
 # filled in, and saying so is far more use than whatever the first pipeline to walk that path would
 # report instead.
 PLACEHOLDER_PATH_PREFIX: Final[str] = "/path/to/your"
+# The example file's stand-in for every password, which `create_config_file` replaces with a
+# password of its own each time it appears, and which no config may connect with.
+PASSWORD_PLACEHOLDER: Final[str] = "<password>"
+EXAMPLE_DATABASE_URL: Final[str] = (
+    f"postgresql+psycopg://samplelibrary:{PASSWORD_PLACEHOLDER}@localhost:5432/samplelibrary"
+)
 
 
 class ConfigurationError(Exception):
@@ -174,9 +181,7 @@ class LibraryConfig(BaseModel):
         try:
             make_url(database_url)
         except ArgumentError as error:
-            raise ValueError(
-                "must be a URL such as postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"
-            ) from error
+            raise ValueError(f"must be a URL such as {EXAMPLE_DATABASE_URL}") from error
         return database_url
 
     @property
@@ -212,6 +217,15 @@ class LibraryConfig(BaseModel):
             f"The config names no {setting}, the role a served {service.value} connects as. Set it in the "
             f"[{LIBRARY_TABLE}] table, then run `samplelibrary setup database` to create the role."
         )
+
+    def database_urls(self) -> dict[str, str]:
+        """Every database URL the config names, by the setting naming it."""
+        named = {
+            "database_url": self.database_url,
+            "server_database_url": self.server_database_url,
+            "curation_database_url": self.curation_database_url,
+        }
+        return {setting: url for setting, url in named.items() if url is not None}
 
     def service_urls(self) -> dict[ServiceRole, str]:
         """The service role URLs the config names, for creating those roles on a server of a person's own."""
@@ -269,6 +283,7 @@ def parse_config(content: str, config_path: Path) -> LibraryConfig:
             problems=tuple(_problem(detail) for detail in error.errors()),
         ) from error
     _reject_placeholder_paths(config, config_path)
+    _reject_placeholder_passwords(config, config_path)
     return config
 
 
@@ -291,8 +306,11 @@ def default_config_path() -> Path:
 def create_config_file(path: Path) -> bool:
     """Put a config file at ``path`` from the committed example, reporting whether it wrote one.
 
-    A file already there is left exactly as it is, which is what lets this run on every install
-    without a person's own paths ever being overwritten.
+    Every password the example stands in for becomes a password of its own, chosen here, so no two
+    installations share one and none is ever a password a published file names. The file holds
+    those passwords, so it is readable by its owner alone. A file already there is left exactly as
+    it is, which is what lets this run on every install without a person's own paths ever being
+    overwritten.
 
     Raises:
         ConfigurationError: the example this copies from is absent, or the directory ``path`` names is.
@@ -305,7 +323,10 @@ def create_config_file(path: Path) -> bool:
     if not path.parent.is_dir():
         raise ConfigurationError(f"No directory {path.parent} to put a config file in; create it first.")
 
-    shutil.copyfile(EXAMPLE_CONFIG_PATH, path)
+    example = EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
+    pieces = example.split(PASSWORD_PLACEHOLDER)
+    filled = pieces[0] + "".join(new_password() + piece for piece in pieces[1:])
+    write_bytes_atomically(path, filled.encode("utf-8"), mode=PRIVATE_FILE_MODE)
     return True
 
 
@@ -411,6 +432,25 @@ def _reject_placeholder_paths(config: LibraryConfig, resolved_path: Path) -> Non
         raise ConfigurationError(
             f"{resolved_path} still carries the example's stand-in path for {', '.join(placeholders)}. "
             "Open it and name your own module collection and library directories."
+        )
+
+
+def _reject_placeholder_passwords(config: LibraryConfig, resolved_path: Path) -> None:
+    """Insist on a config whose passwords a person or `create_config_file` has chosen.
+
+    Raises:
+        ConfigurationError: a database URL still carries the example's stand-in password.
+    """
+    # pylint: disable=import-outside-toplevel
+    from sqlalchemy.engine import make_url
+
+    placeholders = [
+        setting for setting, url in config.database_urls().items() if make_url(url).password == PASSWORD_PLACEHOLDER
+    ]
+    if placeholders:
+        raise ConfigurationError(
+            f"{resolved_path} still carries the example's stand-in password for {', '.join(placeholders)}. "
+            "Put a password of your own in its place."
         )
 
 

@@ -26,16 +26,17 @@ just install
 ```
 
 `just install` installs the Python and web dependencies and the git hooks, and creates
-`config.toml`. Open it and set where your modules are and where the library keeps its files
-(see [Configuration](#configuration)).
+`config.toml`, with a new password in each database URL. Open it and set where your modules are and
+where the library keeps its files (see [Configuration](#configuration)).
 
 For the database, pick one of three:
 
 - **The library's own server.** Delete the `database_url` line from `config.toml`, and
   `just database` creates a server inside `library_root` and starts it.
-- **A server in Docker.** `docker compose up -d postgres` starts one on port 5432. For another
-  port, put it in a file named `.env` beside `docker-compose.yml`, such as `POSTGRES_PORT=5433`,
-  and set the same port in `database_url`.
+- **A server in Docker.** `just docker-secrets` writes the server's password into
+  `docker/postgres.env`, then `docker compose up -d postgres` starts it on port 5432. Put that
+  password in `database_url`. For another port, put it in a file named `.env` beside
+  `docker-compose.yml`, such as `POSTGRES_PORT=5433`, and set the same port in `database_url`.
 - **A server you already run.** Set `database_url` to it.
 
 Then create the databases:
@@ -217,9 +218,11 @@ it at another file, as `--filter-selection` does for the filter. The renderer ne
 `just docker-run <library> <config>` runs it over a library folder and a config written for the
 container, both read from where you run the recipe. `docker compose up` runs the image beside a
 PostgreSQL container, with `LIBRARY_ROOT` and `CONFIG_PATH` naming the library folder and the config
-it mounts. The image serves the library read-only, connecting as the reader role: run `just
-database` once with a config naming `server_database_url` on that server, and put the role's
-password in `.env` as `SAMPLELIBRARY_READER_PASSWORD`. The architecture's [Deployment](architecture.md#deployment) section describes what
+it mounts. `just docker-secrets` writes the two files it reads passwords from, each once and
+readable by you alone: `docker/postgres.env` for the server, and `docker/site.env` with the reader's
+connection for the image, which serves the library read-only as that role. Run `just database` once
+with a config whose `server_database_url` is the URL in `docker/site.env`, with `localhost` in place
+of `postgres`. The architecture's [Deployment](architecture.md#deployment) section describes what
 the image holds and what to mount.
 
 ## Recipes

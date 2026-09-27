@@ -17,11 +17,17 @@ from sqlalchemy.pool import NullPool
 from samplecore.models.annotation import AnnotationSource, SampleAnnotation, SampleFileAnchor
 from samplecore.models.sample_file import SampleFileLocation
 from samplecore.models.service_role import ServiceRole
-from samplecore.storage.cluster.embedded.state import managed_catalog_url, managed_role_name, managed_service_url
+from samplecore.storage.cluster.embedded.state import (
+    MANAGED_DATABASE,
+    managed_catalog_url,
+    managed_role_name,
+    managed_service_url,
+)
+from samplecore.storage.cluster.statements import create_service_role
 from samplecore.storage.curation import annotation_history
 from samplecore.storage.database import connect
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
-from samplecore.storage.service_roles import ServiceRoleRefusedError, check_service_role
+from samplecore.storage.service_roles import ServiceRoleRefusedError, check_service_role, grant_service_role
 
 EMPTY_DATABASE: Final[str] = "not_a_catalog"
 
@@ -43,6 +49,9 @@ REFUSED_STATEMENTS: Final[tuple[RefusedStatement, ...]] = (
     RefusedStatement(ServiceRole.READER, "INSERT INTO curation.tag_rank VALUES ('KICK', 0)"),
     RefusedStatement(ServiceRole.READER, "SELECT * FROM curation.annotation_history"),
     RefusedStatement(ServiceRole.READER, "SELECT nextval('public.module_id_seq')"),
+    RefusedStatement(ServiceRole.READER, "CREATE TEMPORARY TABLE intruder (id integer)"),
+    RefusedStatement(ServiceRole.READER, "SELECT pg_catalog.pg_read_file('postgresql.conf')"),
+    RefusedStatement(ServiceRole.READER, "SET ROLE samplelibrary"),
     RefusedStatement(ServiceRole.CURATOR, "TRUNCATE curation.sample_annotation"),
     RefusedStatement(ServiceRole.CURATOR, "UPDATE public.sample SET frames = 0"),
     RefusedStatement(ServiceRole.CURATOR, "DELETE FROM public.module"),
@@ -59,7 +68,11 @@ REFUSED_STATEMENTS: Final[tuple[RefusedStatement, ...]] = (
     RefusedStatement(ServiceRole.CURATOR, "SET session_replication_role = replica"),
     RefusedStatement(ServiceRole.CURATOR, "CREATE TABLE curation.intruder (id integer)"),
     RefusedStatement(ServiceRole.CURATOR, "SELECT nextval('public.module_id_seq')"),
+    RefusedStatement(ServiceRole.CURATOR, "CREATE TEMPORARY TABLE intruder (id integer)"),
 )
+PROBE_ROLE: Final[str] = "membership_probe"
+PROBE_PASSWORD: Final[str] = "a-password-for-the-probe-role-alone"
+GRANTED_GROUP: Final[str] = "pg_read_server_files"
 
 
 @pytest.fixture
@@ -138,3 +151,38 @@ def test_a_database_holding_no_catalog_is_named_unprepared(module_cluster_root: 
     with closing(create_engine(url, poolclass=NullPool).connect()) as connection:
         with pytest.raises(ServiceRoleRefusedError, match="the catalog isn't prepared"):
             check_service_role(connection, ServiceRole.READER)
+
+
+def test_a_role_belonging_to_another_role_is_refused_naming_it(module_cluster_root: Path, owner: Connection) -> None:
+    """Membership hands over the group's rights, reading the server's files among them for this group."""
+    administrator = create_engine(managed_catalog_url(module_cluster_root), isolation_level="AUTOCOMMIT")
+    with administrator.connect() as connection:
+        create_service_role(connection, role=PROBE_ROLE, password=PROBE_PASSWORD)
+        connection.execute(text(f"GRANT {GRANTED_GROUP} TO {PROBE_ROLE}"))
+    grant_service_role(owner, service=ServiceRole.READER, role=PROBE_ROLE)
+    owner.commit()
+    url = make_url(managed_catalog_url(module_cluster_root)).set(username=PROBE_ROLE, password=PROBE_PASSWORD)
+    try:
+        with closing(create_engine(url, poolclass=NullPool).connect()) as connection:
+            with pytest.raises(ServiceRoleRefusedError, match=f"it belongs to role {GRANTED_GROUP}"):
+                check_service_role(connection, ServiceRole.READER)
+    finally:
+        with administrator.connect() as connection:
+            connection.execute(text(f"DROP OWNED BY {PROBE_ROLE}"))
+            connection.execute(text(f"DROP ROLE {PROBE_ROLE}"))
+        administrator.dispose()
+
+
+def test_a_database_left_open_to_everyone_is_refused_for_its_temporary_tables(
+    module_cluster_root: Path, owner: Connection
+) -> None:
+    """Postgres lets every role create temporary tables in a new database until that right is taken away."""
+    owner.execute(text(f"GRANT TEMPORARY ON DATABASE {MANAGED_DATABASE} TO PUBLIC"))
+    owner.commit()
+    try:
+        with _connected_as(module_cluster_root, ServiceRole.READER) as connection:
+            with pytest.raises(ServiceRoleRefusedError, match="it may create temporary tables"):
+                check_service_role(connection, ServiceRole.READER)
+    finally:
+        owner.execute(text(f"REVOKE TEMPORARY ON DATABASE {MANAGED_DATABASE} FROM PUBLIC"))
+        owner.commit()

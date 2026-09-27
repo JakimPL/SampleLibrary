@@ -58,11 +58,17 @@ def grant_service_role(connection: Connection, *, service: ServiceRole, role: st
 
     Every catalog table is readable, and so are the tables later created by the owner, and a curator
     may write labels and new tag ranks. Nothing else is granted: no other table, no sequence, and
-    nothing on the label history, which its trigger writes with the owner's rights. Granting runs
-    under the schema lock, which keeps several processes preparing one catalog from colliding.
+    nothing on the label history, which its trigger writes with the owner's rights. Postgres lets
+    every role connect to a new database and create temporary tables in it, so both go from
+    ``PUBLIC``, and the role is granted the connection alone. Granting runs under the schema lock,
+    which keeps several processes preparing one catalog from colliding.
     """
-    quoted = connection.dialect.identifier_preparer.quote(role)
+    preparer = connection.dialect.identifier_preparer
+    quoted = preparer.quote(role)
+    database = preparer.quote(str(connection.execute(text("SELECT current_database()")).scalar_one()))
     statements = [
+        f"REVOKE TEMPORARY, CONNECT ON DATABASE {database} FROM PUBLIC",
+        f"GRANT CONNECT ON DATABASE {database} TO {quoted}",
         f"GRANT USAGE ON SCHEMA {', '.join(SERVED_SCHEMAS)} TO {quoted}",
         f"GRANT SELECT ON ALL TABLES IN SCHEMA {PUBLIC_SCHEMA} TO {quoted}",
         f"ALTER DEFAULT PRIVILEGES IN SCHEMA {PUBLIC_SCHEMA} GRANT SELECT ON TABLES TO {quoted}",
@@ -78,8 +84,9 @@ def grant_service_role(connection: Connection, *, service: ServiceRole, role: st
 def check_service_role(connection: Connection, service: ServiceRole) -> None:
     """Insist that the role this connection logs in as holds exactly what ``service`` needs, and nothing more.
 
-    The role has no power over the server, owns nothing, may create nothing, reads every table the
-    catalog API reads, and writes exactly the tables and privileges its service permits.
+    The role has no power over the server, belongs to no other role, owns nothing, may create
+    nothing, temporary tables included, reads every table the catalog API reads, and writes exactly
+    the tables and privileges its service permits.
 
     Raises:
         ServiceRoleRefusedError: the role differs from that, naming each difference.
@@ -87,6 +94,7 @@ def check_service_role(connection: Connection, service: ServiceRole) -> None:
     role = str(connection.execute(text("SELECT current_user")).scalar_one())
     problems = (
         *_powers(connection),
+        *_memberships(connection),
         *_ownership(connection),
         *_creation(connection),
         *_writes(connection, service),
@@ -101,6 +109,19 @@ def _powers(connection: Connection) -> tuple[str, ...]:
         text(f"SELECT {', '.join(ROLE_POWERS)} FROM pg_catalog.pg_roles WHERE rolname = current_user")
     ).one()
     return tuple(f"it {description}" for description, held in zip(ROLE_POWERS.values(), row, strict=True) if held)
+
+
+def _memberships(connection: Connection) -> tuple[str, ...]:
+    """The roles this one belongs to, whose rights it holds too, the predefined ones included."""
+    groups = connection.execute(
+        text(
+            "SELECT granted.rolname FROM pg_catalog.pg_auth_members AS membership "
+            "JOIN pg_catalog.pg_roles AS granted ON granted.oid = membership.roleid "
+            "JOIN pg_catalog.pg_roles AS member ON member.oid = membership.member "
+            "WHERE member.rolname = current_user ORDER BY granted.rolname"
+        )
+    ).scalars()
+    return tuple(f"it belongs to role {name}" for name in groups)
 
 
 def _ownership(connection: Connection) -> tuple[str, ...]:
@@ -122,13 +143,16 @@ def _ownership(connection: Connection) -> tuple[str, ...]:
 def _creation(connection: Connection) -> tuple[str, ...]:
     places = connection.execute(
         text(
-            "SELECT 'database ' || current_database() WHERE has_database_privilege(current_database(), 'CREATE') "
-            "UNION ALL SELECT 'schema ' || nspname FROM pg_catalog.pg_namespace "
+            "SELECT 'objects in database ' || current_database() "
+            "WHERE has_database_privilege(current_database(), 'CREATE') "
+            "UNION ALL SELECT 'temporary tables in database ' || current_database() "
+            "WHERE has_database_privilege(current_database(), 'TEMPORARY') "
+            "UNION ALL SELECT 'objects in schema ' || nspname FROM pg_catalog.pg_namespace "
             "WHERE nspname = ANY(:schemas) AND has_schema_privilege(nspname, 'CREATE')"
         ),
         {"schemas": list(SERVED_SCHEMAS)},
     ).scalars()
-    return tuple(f"it may create objects in {place}" for place in places)
+    return tuple(f"it may create {place}" for place in places)
 
 
 def _writes(connection: Connection, service: ServiceRole) -> tuple[str, ...]:

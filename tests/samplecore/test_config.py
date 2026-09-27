@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import re
+import stat
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 import pydantic
 import pytest
+from sqlalchemy.engine import make_url
 
 from samplecore.config import (
     CONFIG_PATH_ENVIRONMENT_VARIABLE,
     DATABASE_URL_ENVIRONMENT_VARIABLE,
+    EXAMPLE_DATABASE_URL,
+    PASSWORD_PLACEHOLDER,
     SERVER_DATABASE_URL_ENVIRONMENT_VARIABLE,
     ConfigurationError,
     InferenceConfig,
@@ -23,11 +29,14 @@ from samplecore.config import (
 )
 from samplecore.models.service_role import ServiceRole
 from samplecore.paths import EXAMPLE_CONFIG_PATH
+from samplecore.storage.atomic import PRIVATE_FILE_MODE
 from samplecore.storage.cluster.embedded.state import (
     ManagedClusterMissingError,
     claim_service_roles,
     create_cluster_state,
 )
+
+URL_SETTING_PREFIXES: Final[tuple[str, ...]] = ("database_url", "server_database_url", "curation_database_url")
 
 
 def test_a_source_checkout_reads_the_config_beside_the_committed_example_template() -> None:
@@ -193,13 +202,41 @@ def test_database_url_environment_variable_overrides_the_config_file(
     assert config.database_url == "postgresql+psycopg://from-environment/db"
 
 
-def test_create_config_file_copies_the_example_where_no_config_is_there(tmp_path: Path) -> None:
+def test_create_config_file_fills_every_stand_in_password_with_one_of_its_own(tmp_path: Path) -> None:
+    """No two installations share a password, and none is a password the example names."""
     config_path = tmp_path / "config.toml"
 
     created = create_config_file(config_path)
 
+    written = config_path.read_text(encoding="utf-8")
+    example = EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
+    passwords = [
+        make_url(line.split('"')[1]).password for line in written.splitlines() if line.startswith(URL_SETTING_PREFIXES)
+    ]
     assert created
-    assert config_path.read_text(encoding="utf-8") == EXAMPLE_CONFIG_PATH.read_text(encoding="utf-8")
+    assert PASSWORD_PLACEHOLDER not in written
+    assert len(passwords) == example.count(PASSWORD_PLACEHOLDER) == len(set(passwords))
+    assert written.split("\n")[:3] == example.split("\n")[:3]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows keeps no POSIX file modes")
+def test_a_created_config_holding_passwords_is_readable_by_its_owner_alone(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    create_config_file(config_path)
+
+    assert stat.S_IMODE(config_path.stat().st_mode) == PRIVATE_FILE_MODE
+
+
+def test_a_config_still_carrying_the_stand_in_password_is_refused(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        f'[library]\nlibrary_root = "{(tmp_path / "library").as_posix()}"\ndatabase_url = "{EXAMPLE_DATABASE_URL}"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="stand-in password for database_url"):
+        load_config(config_path)
 
 
 def test_create_config_file_keeps_a_config_already_there(tmp_path: Path) -> None:
@@ -227,7 +264,7 @@ def test_a_config_naming_one_stand_in_path_is_rejected(tmp_path: Path) -> None:
         "[library]\n"
         'module_source_directory = "/path/to/your/module/collection"\n'
         f'library_root = "{(tmp_path / "library").as_posix()}"\n'
-        'database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"\n',
+        'database_url = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/samplelibrary"\n',
         encoding="utf-8",
     )
 

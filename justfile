@@ -195,6 +195,11 @@ _directory path:
 _directory path:
     New-Item -ItemType Directory -Force -Path "{{ path }}" | Out-Null
 
+# The passwords docker-compose.yml reads, each written once into docker/ and readable by you alone.
+[group("docker")]
+docker-secrets:
+    uv run python scripts/docker_secrets.py
+
 [group("docker")]
 docker-build:
     docker build -t samplelibrary-server .

@@ -25,6 +25,10 @@ wheels/
 
 /config.toml
 .env
+.env.*
+/docker/*.env
+roles.json
+cluster.json
 
 dev-library/
 /library/

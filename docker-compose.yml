@@ -1,9 +1,13 @@
 services:
   postgres:
     image: postgres:17-alpine
+    # `just docker-secrets` writes the superuser's password into this file, which the server's
+    # container alone reads; compose refuses to start without it.
+    env_file:
+      - path: docker/postgres.env
+        required: true
     environment:
       POSTGRES_USER: samplelibrary
-      POSTGRES_PASSWORD: samplelibrary
       POSTGRES_DB: samplelibrary
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
@@ -42,11 +46,12 @@ services:
       #   source: /home/you/Samples/Packs
       #   target: /home/you/Samples/Packs
       #   read_only: true
-    # The server connects as the role that reads alone, which `samplelibrary setup database` creates
-    # from server_database_url in your config.toml; put the same password in a file named `.env`
-    # beside this one, as SAMPLELIBRARY_READER_PASSWORD=... An empty password fails the start.
-    environment:
-      SAMPLELIBRARY_SERVER_DATABASE_URL: postgresql+psycopg://samplelibrary_reader:${SAMPLELIBRARY_READER_PASSWORD:-}@postgres:5432/samplelibrary
+    # The server connects as the role that reads alone. `just docker-secrets` writes its connection,
+    # SAMPLELIBRARY_SERVER_DATABASE_URL, into this file with a password of its own; compose refuses
+    # to start without it. `samplelibrary setup database` creates the role from the same URL.
+    env_file:
+      - path: docker/site.env
+        required: true
     # Lets `[inference] url = "http://host.docker.internal:8010"` reach a renderer on the host.
     extra_hosts:
       - "host.docker.internal:host-gateway"

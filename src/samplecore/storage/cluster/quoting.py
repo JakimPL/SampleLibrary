@@ -48,7 +48,17 @@ def literal(value: str) -> sql.Literal:
     Raises:
         UnsafeValueError: the value holds a NUL byte, which Postgres keeps in no text field.
     """
+    return sql.Literal(text_value(value))
+
+
+def text_value(value: str) -> str:
+    """A value Postgres can keep as text, and a client can send whole, returned as it is.
+
+    Raises:
+        UnsafeValueError: the value holds a NUL byte, which Postgres keeps in no text field and a
+            client cuts a password short at.
+    """
     if _NUL in value:
         raise UnsafeValueError("A Postgres text value holds no NUL byte.")
 
-    return sql.Literal(value)
+    return value

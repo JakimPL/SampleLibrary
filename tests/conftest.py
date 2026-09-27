@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -24,10 +25,13 @@ from samplecore.storage.curation import ANNOTATION_HISTORY_START_TABLE, CURATION
 from samplecore.storage.database import connect, metadata
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_file import PostgresSampleFileRepository
+from tests.paths import REPOSITORY_DIRECTORY
 
 SERVER_URL_VARIABLE: Final[str] = "SAMPLELIBRARY_TEST_DATABASE_URL"
 TEST_DATABASE_NAME: Final[str] = "samplelibrary_test"
-DEFAULT_SERVER_URL: Final[str] = f"postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/{TEST_DATABASE_NAME}"
+NO_SERVER_MESSAGE: Final[str] = (
+    f"The suite needs a Postgres server: name it in {SERVER_URL_VARIABLE}, or in the database_url of your config."
+)
 VANISHED_SAMPLE_FRAMES: Final[int] = 2048
 VANISHED_SAMPLE_RATE: Final[int] = 44100
 WORKER_ENVIRONMENT_VARIABLE: Final[str] = "PYTEST_XDIST_WORKER"
@@ -55,9 +59,16 @@ def pytest_configure() -> None:
     from these variables when they first load, which covers torch and numba in each worker and every
     library in the processes a scenario starts, since those inherit the environment. numpy is loaded
     by the time this hook runs, so its pool is resized in place.
+
+    The repository joins the import path too. A worker process a test starts imports the work it is
+    handed, which a test often defines, from the path its parent holds, and the suite imports its
+    modules without adding their folder to that path; otherwise a started worker would find no
+    ``tests`` and its pool would wait for it forever.
     """
     os.environ.update(SINGLE_THREAD_ENVIRONMENT)
     threadpool_limits(limits=SINGLE_THREAD)
+    if str(REPOSITORY_DIRECTORY) not in sys.path:
+        sys.path.insert(0, str(REPOSITORY_DIRECTORY))
 
 
 @pytest.fixture(scope="session")
@@ -66,10 +77,10 @@ def _server_url() -> str:
 
     ``SAMPLELIBRARY_TEST_DATABASE_URL`` names it outright; otherwise the server the configuration
     names is used, under the ``samplelibrary_test`` database `just database` creates, so a library
-    set up on another port is tested on that port; with no configuration to read, a local server
-    on the default port. The database this URL names is only ever connected to in order to create
-    and drop the per-worker databases below, so it needs to exist but stays empty. The role it
-    authenticates as needs ``CREATEDB``.
+    set up on another port is tested on that port. With neither, the session ends with one message,
+    since every credential the suite logs in with is a person's own. The database this URL names is
+    only ever connected to in order to create and drop the per-worker databases below, so it needs
+    to exist but stays empty. The role it authenticates as needs ``CREATEDB``.
     """
     named = os.environ.get(SERVER_URL_VARIABLE)
     if named:
@@ -77,9 +88,9 @@ def _server_url() -> str:
     try:
         configured = load_config().database_url
     except ConfigurationError:
-        return DEFAULT_SERVER_URL
+        pytest.exit(NO_SERVER_MESSAGE)
     if configured is None:
-        return DEFAULT_SERVER_URL
+        pytest.exit(NO_SERVER_MESSAGE)
     return make_url(configured).set(database=TEST_DATABASE_NAME).render_as_string(hide_password=False)
 
 

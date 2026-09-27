@@ -13,6 +13,7 @@ from sqlalchemy.pool import NullPool
 
 from samplecore.models.service_role import ServiceRole
 from samplecore.processes import HIDDEN_CONSOLE_FLAGS
+from samplecore.storage.atomic import PRIVATE_FILE_MODE, write_bytes_atomically
 from samplecore.storage.cluster.embedded.binaries import PostgresProgram, program_path
 from samplecore.storage.cluster.embedded.state import (
     DATA_DIRECTORY_NAME,
@@ -42,6 +43,7 @@ from samplecore.storage.service_roles import grant_service_role
 VERSION_FILE_NAME: Final[str] = "PG_VERSION"
 CONFIGURATION_FILE_NAME: Final[str] = "postgresql.conf"
 PASSWORD_FILE_NAME: Final[str] = "password.partial"
+PRIVATE_DIRECTORY_MODE: Final[int] = 0o700
 MAINTENANCE_DATABASE: Final[str] = "postgres"
 SERVER_WAIT_SECONDS: Final[int] = 300
 AUTHENTICATION_METHOD: Final[str] = "scram-sha-256"
@@ -139,10 +141,10 @@ class EmbeddedCluster:
         which lets the next start create the cluster afresh.
         """
         _logger.info("Creating the library's database in %s.", self.directory)
-        self.directory.mkdir(parents=True, exist_ok=True)
+        self._claim_directory()
         state = create_cluster_state(self._library_root)
         password_file = self.directory / PASSWORD_FILE_NAME
-        password_file.write_text(state.password, encoding="utf-8")
+        write_bytes_atomically(password_file, state.password.encode("utf-8"), mode=PRIVATE_FILE_MODE)
         try:
             self._run(
                 PostgresProgram.INITDB,
@@ -184,13 +186,18 @@ class EmbeddedCluster:
             str(SERVER_WAIT_SECONDS),
         )
 
+    def _claim_directory(self) -> None:
+        """Hold the cluster's folder, with its passwords and its server log, to its owner alone."""
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self.directory.chmod(PRIVATE_DIRECTORY_MODE)
+
     def _run(self, program: PostgresProgram, *arguments: str | Path) -> None:
         """Run one Postgres program to its end, its output joining the server log.
 
         Raises:
             EmbeddedClusterError: the program ended with a failure.
         """
-        self.directory.mkdir(parents=True, exist_ok=True)
+        self._claim_directory()
         with self.log_path.open("ab") as log:
             completed = subprocess.run(
                 [program_path(program), *arguments],

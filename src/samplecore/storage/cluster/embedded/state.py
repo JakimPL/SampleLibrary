@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import secrets
-import sys
 from pathlib import Path
 from typing import Final
 
@@ -9,8 +7,9 @@ from pydantic import BaseModel, Field
 
 from samplecore.models.base import FROZEN
 from samplecore.models.service_role import ServiceRole
+from samplecore.passwords import new_password
 from samplecore.ports import MAXIMUM_PORT, MINIMUM_PORT, free_port, port_is_free
-from samplecore.storage.atomic import write_bytes_atomically
+from samplecore.storage.atomic import PRIVATE_FILE_MODE, write_bytes_atomically
 
 CLUSTER_DIRECTORY_NAME: Final[str] = "postgres"
 DATA_DIRECTORY_NAME: Final[str] = "data"
@@ -21,8 +20,6 @@ MANAGED_ROLE: Final[str] = "samplelibrary"
 MANAGED_DATABASE: Final[str] = "samplelibrary"
 MANAGED_HOST: Final[str] = "127.0.0.1"
 PREFERRED_MANAGED_PORT: Final[int] = 54329
-PASSWORD_BYTES: Final[int] = 24
-PRIVATE_FILE_MODE: Final[int] = 0o600
 
 
 class ManagedClusterMissingError(Exception):
@@ -114,9 +111,7 @@ def claim_service_roles(library_root: Path) -> ServiceRoleState:
     path = roles_path(library_root)
     if path.is_file():
         return ServiceRoleState.model_validate_json(path.read_text(encoding="utf-8"))
-    roles = ServiceRoleState(
-        reader_password=secrets.token_urlsafe(PASSWORD_BYTES), curator_password=secrets.token_urlsafe(PASSWORD_BYTES)
-    )
+    roles = ServiceRoleState(reader_password=new_password(), curator_password=new_password())
     _write_private(path, roles.model_dump_json().encode("utf-8"))
     return roles
 
@@ -148,7 +143,7 @@ def create_cluster_state(library_root: Path) -> ClusterState:
     The preferred port keeps a library's address stable from one machine to the next, and a free one
     the system hands out takes its place when another program already listens there.
     """
-    state = ClusterState(port=_managed_port(), password=secrets.token_urlsafe(PASSWORD_BYTES))
+    state = ClusterState(port=_managed_port(), password=new_password())
     _write_cluster_state(library_root, state)
     return state
 
@@ -167,9 +162,7 @@ def _write_cluster_state(library_root: Path, state: ClusterState) -> None:
 
 
 def _write_private(path: Path, content: bytes) -> None:
-    write_bytes_atomically(path, content)
-    if sys.platform != "win32":
-        path.chmod(PRIVATE_FILE_MODE)
+    write_bytes_atomically(path, content, mode=PRIVATE_FILE_MODE)
 
 
 def _managed_port() -> int:

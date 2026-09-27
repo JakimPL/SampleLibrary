@@ -13,14 +13,15 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.pool import NullPool
 
-from samplecore.config import DATABASE_URL_ENVIRONMENT_VARIABLE, resolve_config_path
+from samplecore.config import DATABASE_URL_ENVIRONMENT_VARIABLE, EXAMPLE_DATABASE_URL, resolve_config_path
 from samplecore.models.service_role import ServiceRole
-from samplecore.storage.cluster.quoting import UnsafeValueError, identifier, literal
+from samplecore.storage.cluster.quoting import UnsafeValueError, identifier
 from samplecore.storage.cluster.statements import (
     create_database,
     create_role,
     create_service_role,
     database_owner,
+    password_literal,
     role_attributes,
 )
 from samplecore.storage.database import CONNECT_TIMEOUT_SECONDS, connect
@@ -117,7 +118,7 @@ def library_databases(database_url: str) -> tuple[str, ...]:
     if library is None:
         raise ProvisioningError(
             f"Your database_url names no database: {make_url(database_url).render_as_string()}",
-            remedy=("Name one, as in postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary",),
+            remedy=(f"Name one, as in {EXAMPLE_DATABASE_URL}",),
         )
 
     return tuple(dict.fromkeys((library, DEVELOPMENT_DATABASE, TEST_DATABASE)))
@@ -138,7 +139,7 @@ def login_role(database_url: str) -> str:
     if role is None:
         raise ProvisioningError(
             f"Your database_url names no role to log in as: {make_url(database_url).render_as_string()}",
-            remedy=("Name one, as in postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary",),
+            remedy=(f"Name one, as in {EXAMPLE_DATABASE_URL}",),
         )
 
     return role
@@ -339,7 +340,7 @@ def _password_route(role: str, password: str) -> tuple[str, ...]:
     return (
         f"If role {role!r} exists with another password, give it this one at a superuser prompt, such as",
         "`sudo -u postgres psql`, then run `samplelibrary setup database` again:",
-        f"        ALTER ROLE {statement_value(role)} WITH PASSWORD {statement_value(password, quoted=False)};",
+        f"        ALTER ROLE {statement_value(role)} WITH PASSWORD {password_value(password)};",
         "",
     )
 
@@ -356,8 +357,7 @@ def role_creation_remedy(url: URL, role: str, password: str) -> tuple[str, ...]:
         "Creating a role needs a PostgreSQL superuser. Any of these will do:",
         "",
         "  * Run this at a superuser prompt, such as `sudo -u postgres psql`:",
-        f"        CREATE ROLE {statement_value(role)} WITH LOGIN CREATEDB "
-        f"PASSWORD {statement_value(password, quoted=False)};",
+        f"        CREATE ROLE {statement_value(role)} WITH LOGIN CREATEDB " f"PASSWORD {password_value(password)};",
         "",
         "  * If you know the password of a superuser on this server, usually the `postgres`",
         f"    account, set {ADMIN_URL_ENVIRONMENT_VARIABLE} to this URL, then run `samplelibrary setup database`",
@@ -378,14 +378,22 @@ def container_route() -> tuple[str, ...]:
     )
 
 
-def statement_value(value: str, *, quoted: bool = True) -> str:
-    """One name or password, spelled as it would be spelled in a statement a person types.
+def statement_value(value: str) -> str:
+    """One name, spelled as it would be spelled in a statement a person types.
 
     Composed through the same quoting the command's own statements go through, so an advice line
-    and the statement it stands for agree on how a value is spelled.
+    and the statement it stands for agree on how a name is spelled.
     """
-    fragment = identifier(value) if quoted else literal(value)
-    return fragment.as_string(None).strip()
+    return identifier(value).as_string(None).strip()
+
+
+def password_value(password: str) -> str:
+    """A password as a statement a person pastes carries it: its SCRAM verifier, quoted.
+
+    Postgres stores a verifier as it is, so the pasted statement gives the role this very password
+    while the advice, the terminal it prints to and any server log keep only what the server keeps.
+    """
+    return password_literal(password).as_string(None).strip()
 
 
 def _open_admin(database_url: str) -> tuple[Engine, Connection]:
@@ -496,7 +504,7 @@ def _claim_service_role(connection: Connection, *, url: URL, role: str) -> bool:
                 "Create it at a superuser prompt, such as `sudo -u postgres psql`, "
                 "then run `samplelibrary setup database` again:",
                 "",
-                f"    CREATE ROLE {statement_value(role)} WITH LOGIN PASSWORD {statement_value(password, quoted=False)};",
+                f"    CREATE ROLE {statement_value(role)} WITH LOGIN PASSWORD {password_value(password)};",
             ),
         ) from error
 

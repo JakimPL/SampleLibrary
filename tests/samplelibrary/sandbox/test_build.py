@@ -23,7 +23,7 @@ from samplelibrary.sandbox.build import build_sandbox
 from samplelibrary.sandbox.modules import sandbox_modules
 from samplelibrary.sandbox.one_shots import ONE_SHOT_COUNT, ONE_SHOTS_DIRECTORY_NAME, SOUND_KINDS
 
-SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary_dev"
+SANDBOX_DATABASE_URL = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/samplelibrary_dev"
 LIBRARY_ON_ANOTHER_PORT = "postgresql+psycopg://someone:secret@localhost:5433/my_library"
 
 

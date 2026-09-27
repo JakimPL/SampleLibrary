@@ -17,6 +17,13 @@ scripts
 .pre-commit-config.yaml
 .gitignore
 config.toml
+.env
+.env.*
+**/.env
+**/.env.*
+docker/*.env
+**/roles.json
+**/cluster.json
 frontend/node_modules
 build
 bin

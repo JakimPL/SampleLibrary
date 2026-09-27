@@ -8,14 +8,15 @@ module_source_directory = "/path/to/your/module/collection"
 library_root = "/path/to/your/sample/library"
 
 # A PostgreSQL server of your own holding the catalog. `just database` creates it with this user and password.
+# `samplelibrary setup config` writes a new password in place of each stand-in; copied by hand, choose your own.
 # Left out, the library keeps its own server inside library_root, which `just database` creates and starts.
-database_url = "postgresql+psycopg://samplelibrary:samplelibrary@localhost:5432/samplelibrary"
+database_url = "postgresql+psycopg://samplelibrary:<password>@localhost:5432/samplelibrary"
 
 # The roles the served API and the SampleLibrary app connect to that server as: one reads the catalog,
 # the other also records your labels, and neither may change anything else. `just database` creates
 # both with these names and passwords. A library keeping its own server creates its roles itself.
-server_database_url = "postgresql+psycopg://samplelibrary_reader:change-me@localhost:5432/samplelibrary"
-curation_database_url = "postgresql+psycopg://samplelibrary_curator:change-me-too@localhost:5432/samplelibrary"
+server_database_url = "postgresql+psycopg://samplelibrary_reader:<password>@localhost:5432/samplelibrary"
+curation_database_url = "postgresql+psycopg://samplelibrary_curator:<password>@localhost:5432/samplelibrary"
 
 # The library keeps samples at least this many frames long.
 # minimum_sample_frames = 512
