@@ -5,9 +5,9 @@ import { buildDefaultLayout } from "./defaultLayout";
 import { PANEL_REGISTRY } from "./panelRegistry";
 
 export const LAYOUT_VERSION = 4;
-export const LAYOUT_STORAGE_KEY = "samplelibrary-workspace-layout";
+export const LAYOUT_STORAGE_KEY = "sampleripper-workspace-layout";
 /** Held the registry's panel ids beside the arrangement before the record carried them itself. */
-const RETIRED_KNOWN_PANELS_STORAGE_KEY = "samplelibrary-workspace-panels";
+const RETIRED_KNOWN_PANELS_STORAGE_KEY = "sampleripper-workspace-panels";
 
 export interface StoredLayout {
     readonly version: number;

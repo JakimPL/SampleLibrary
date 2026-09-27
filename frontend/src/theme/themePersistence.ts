@@ -1,6 +1,6 @@
 import { DEFAULT_THEME_PREFERENCE, isThemePreference, type ThemePreference } from "./themeOptions";
 
-export const THEME_STORAGE_KEY = "samplelibrary-theme-preference";
+export const THEME_STORAGE_KEY = "sampleripper-theme-preference";
 
 export function readSavedThemePreference(): ThemePreference {
     try {

@@ -16,8 +16,8 @@ POSTGRES_PORT_VARIABLE: Final[str] = "POSTGRES_PORT"
 READER_URL_VARIABLE: Final[str] = "SAMPLERIPPER_SERVER_DATABASE_URL"
 DEFAULT_POSTGRES_PORT: Final[int] = 5432
 LOOPBACK: Final[str] = "127.0.0.1"
-OWNER: Final[str] = "samplelibrary"
-DATABASE: Final[str] = "samplelibrary"
+OWNER: Final[str] = "sampleripper"
+DATABASE: Final[str] = "sampleripper"
 
 
 def main(argv: list[str]) -> None:

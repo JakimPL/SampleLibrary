@@ -30,7 +30,7 @@ the connection to GitHub open while the hook runs. Commit, run `just check`, the
 
 ## Tests
 
-The tests run against the `samplelibrary_test` database on the server `config.toml` names;
+The tests run against the `sampleripper_test` database on the server `config.toml` names;
 `SAMPLERIPPER_TEST_DATABASE_URL` names another one. Two slower suites run on their own:
 
 - `just test-pipeline` builds a tiny library with every real program, the listening model and
@@ -41,7 +41,7 @@ The tests run against the `samplelibrary_test` database on the server `config.to
 ## The sandbox library
 
 `just dev-build` writes a sandbox of 30 modules, 300 one-shots and ten labels into `dev-library/`
-and builds it, in the `samplelibrary_dev` database on your configured server. `just dev <command>`
+and builds it, in the `sampleripper_dev` database on your configured server. `just dev <command>`
 runs a `sampleripper` command on it, `just serve-dev` serves it read-only on port 8001, `just
 app-dev` runs the SampleRipper app on it, which records labels, and `just dev-reset` empties its
 database and deletes its files. Both serve through the roles `config.toml` names in

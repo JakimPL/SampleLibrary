@@ -8,8 +8,8 @@ from samplecore.storage.cluster.quoting import UnsafeValueError, identifier, lit
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ("samplelibrary", '"samplelibrary"'),
-        ("samplelibrary_dev", '"samplelibrary_dev"'),
+        ("sampleripper", '"sampleripper"'),
+        ("sampleripper_dev", '"sampleripper_dev"'),
         ('weird"name', '"weird""name"'),
         ("Mixed Case", '"Mixed Case"'),
         ("drop database postgres; --", '"drop database postgres; --"'),
@@ -26,7 +26,7 @@ def test_a_name_quoting_cannot_carry_is_rejected(value: str) -> None:
         identifier(value)
 
 
-@pytest.mark.parametrize("value", ["samplelibrary", "pa'ss", "back\\slash", "'; DROP DATABASE postgres; --"])
+@pytest.mark.parametrize("value", ["sampleripper", "pa'ss", "back\\slash", "'; DROP DATABASE postgres; --"])
 def test_a_literal_stands_for_itself_however_it_is_spelled(value: str) -> None:
     """Whatever the value carries, what comes back is one quoted literal and nothing more.
 

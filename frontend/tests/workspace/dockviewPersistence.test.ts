@@ -11,7 +11,7 @@ import {
 import { PANEL_REGISTRY, type PanelId } from "../../src/workspace/panelRegistry";
 import { FakeDockviewApi, serializedLayoutOf } from "../support/fakeDockviewApi";
 
-const RETIRED_KNOWN_PANELS_STORAGE_KEY = "samplelibrary-workspace-panels";
+const RETIRED_KNOWN_PANELS_STORAGE_KEY = "sampleripper-workspace-panels";
 const ALL_PANEL_IDS = Object.keys(PANEL_REGISTRY) as PanelId[];
 
 function storeRecord(record: StoredLayout): void {

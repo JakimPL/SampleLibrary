@@ -266,7 +266,7 @@ def test_a_config_naming_one_stand_in_path_is_rejected(tmp_path: Path) -> None:
         "[library]\n"
         'module_source_directory = "/path/to/your/module/collection"\n'
         f'library_root = "{(tmp_path / "library").as_posix()}"\n'
-        'database_url = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:5432/samplelibrary"\n',
+        'database_url = "postgresql+psycopg://sampleripper:not-a-real-password@localhost:5432/sampleripper"\n',
         encoding="utf-8",
     )
 
@@ -493,7 +493,7 @@ def test_a_managed_library_connects_its_service_roles_to_its_own_cluster(tmp_pat
     roles = claim_service_roles(config.library_root)
 
     assert config.service_url(ServiceRole.READER) == (
-        f"postgresql+psycopg://samplelibrary_reader:{roles.reader_password}@127.0.0.1:{state.port}/samplelibrary"
+        f"postgresql+psycopg://sampleripper_reader:{roles.reader_password}@127.0.0.1:{state.port}/sampleripper"
     )
 
 

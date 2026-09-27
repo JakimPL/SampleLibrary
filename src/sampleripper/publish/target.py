@@ -39,7 +39,7 @@ from sampleripper.publish.messages import (
 )
 from sampleserver.addresses import names_loopback
 
-READER_ROLE: Final[str] = "samplelibrary_reader"
+READER_ROLE: Final[str] = "sampleripper_reader"
 DRIVER_NAME: Final[str] = "postgresql+psycopg"
 PLAIN_DRIVER_NAMES: Final[frozenset[str]] = frozenset({"postgresql", "postgres"})
 SSL_MODE: Final[str] = "sslmode"

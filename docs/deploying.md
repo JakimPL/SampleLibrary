@@ -31,7 +31,7 @@ several gigabytes, which needs Railway's Pro plan.
    `SAMPLERIPPER_SERVER_DATABASE_URL` with this value, putting the password in:
 
    ```
-   postgresql+psycopg://samplelibrary_reader:<the password>@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
+   postgresql+psycopg://sampleripper_reader:<the password>@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
    ```
 
    Then seal the variable, so Railway never shows it again. Add no other database variable: the

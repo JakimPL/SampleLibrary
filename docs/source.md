@@ -45,8 +45,8 @@ Then create the databases:
 just database
 ```
 
-It makes sure the server holds your library's database, `samplelibrary_dev` for the development
-sandbox and `samplelibrary_test` for the tests, all owned by one role. It also creates the two roles
+It makes sure the server holds your library's database, `sampleripper_dev` for the development
+sandbox and `sampleripper_test` for the tests, all owned by one role. It also creates the two roles
 the API connects as, one that reads and one that also records your labels, each allowed nothing
 more. It creates whatever is missing and keeps every row already there, so it is safe to run at any
 time. When a step needs a

@@ -3,7 +3,7 @@ import { create } from "zustand";
 /** How the cloud's points draw: as the scatterplot draws them where the browser can, or as plain dots by the node layer. */
 export type CloudDots = "auto" | "plain";
 
-export const CLOUD_DOTS_STORAGE_KEY = "samplelibrary-cloud-dots";
+export const CLOUD_DOTS_STORAGE_KEY = "sampleripper-cloud-dots";
 const DEFAULT_CLOUD_DOTS: CloudDots = "auto";
 
 export function isCloudDots(value: string): value is CloudDots {

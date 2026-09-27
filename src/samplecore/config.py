@@ -67,7 +67,7 @@ PLACEHOLDER_PATH_PREFIX: Final[str] = "/path/to/your"
 # password of its own each time it appears, and which no config may connect with.
 PASSWORD_PLACEHOLDER: Final[str] = "<password>"
 EXAMPLE_DATABASE_URL: Final[str] = (
-    f"postgresql+psycopg://samplelibrary:{PASSWORD_PLACEHOLDER}@localhost:5432/samplelibrary"
+    f"postgresql+psycopg://sampleripper:{PASSWORD_PLACEHOLDER}@localhost:5432/sampleripper"
 )
 
 

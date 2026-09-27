@@ -1,6 +1,6 @@
 #!/bin/sh
 here="$(dirname "$(readlink -f "$0")")"
-settings_directory="${XDG_CONFIG_HOME:-$HOME/.config}/SampleLibrary"
+settings_directory="${XDG_CONFIG_HOME:-$HOME/.config}/SampleRipper"
 launcher_choice="$settings_directory/launcher"
 minimum_cuda_major=@MINIMUM_DRIVER_CUDA_MAJOR@
 
@@ -24,7 +24,7 @@ if [ -t 1 ]; then
     exec "$application" "$@"
 fi
 
-log_directory="${XDG_STATE_HOME:-$HOME/.local/state}/SampleLibrary/log"
+log_directory="${XDG_STATE_HOME:-$HOME/.local/state}/SampleRipper/log"
 log="$log_directory/app.log"
 log_limit_bytes=10000000
 

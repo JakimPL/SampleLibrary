@@ -32,8 +32,8 @@ from samplecore.storage.service_roles import ServiceRoleRefusedError, check_serv
 # here rather than deriving them from the configured library keeps all three in agreement whatever a
 # person calls their own library, and keeps a URL that already names the sandbox from growing a
 # second suffix when the database setup runs with the sandbox's config.
-DEVELOPMENT_DATABASE: Final[str] = "samplelibrary_dev"
-TEST_DATABASE: Final[str] = "samplelibrary_test"
+DEVELOPMENT_DATABASE: Final[str] = "sampleripper_dev"
+TEST_DATABASE: Final[str] = "sampleripper_test"
 
 ADMIN_URL_ENVIRONMENT_VARIABLE: Final[str] = "SAMPLERIPPER_ADMIN_DATABASE_URL"
 DEFAULT_POSTGRES_PORT: Final[int] = 5432

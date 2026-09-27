@@ -21,7 +21,7 @@ def library_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "[library]\n"
         f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
         f'library_root = "{root.as_posix()}"\n'
-        f'database_url = "postgresql+psycopg://samplelibrary:{CONFIG_PASSWORD}@localhost:5432/{TARGET_DATABASE}"\n',
+        f'database_url = "postgresql+psycopg://sampleripper:{CONFIG_PASSWORD}@localhost:5432/{TARGET_DATABASE}"\n',
         encoding="utf-8",
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))

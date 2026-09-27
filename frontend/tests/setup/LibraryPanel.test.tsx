@@ -85,16 +85,16 @@ function stateWith(
 ): SetupState {
     return {
         status: "ready",
-        config_path: "/home/person/.config/SampleLibrary/config.toml",
+        config_path: "/home/person/.config/SampleRipper/config.toml",
         sources: {
-            library_root: "/home/person/Music/SampleLibrary",
+            library_root: "/home/person/Music/SampleRipper",
             module_source_directory: "/home/person/Modules",
             sample_directories: [],
             sample_exclusions: [],
         },
         options: { build_cloud: buildCloud, open_to_network: openToNetwork },
         build_device: device,
-        suggested_library_root: "/home/person/Music/SampleLibrary",
+        suggested_library_root: "/home/person/Music/SampleRipper",
         manages_database: true,
         problem: null,
         build,

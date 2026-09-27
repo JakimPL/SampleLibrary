@@ -1,6 +1,6 @@
 #!/bin/sh
 application="$(dirname "$0")/SampleRipper"
-log_directory="$HOME/Library/Logs/SampleLibrary"
+log_directory="$HOME/Library/Logs/SampleRipper"
 log="$log_directory/app.log"
 log_limit_bytes=10000000
 

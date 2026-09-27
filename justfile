@@ -223,7 +223,7 @@ docker-secrets:
 
 [group("docker")]
 docker-build:
-    docker build -t samplelibrary-site .
+    docker build -t sampleripper-site .
 
 # Publish a library into the database docker-compose.yml runs, such as `just docker-publish --config dev-library/config.toml`.
 [group("docker")]

@@ -16,8 +16,8 @@ DATA_DIRECTORY_NAME: Final[str] = "data"
 STATE_FILE_NAME: Final[str] = "cluster.json"
 ROLES_FILE_NAME: Final[str] = "roles.json"
 LOG_FILE_NAME: Final[str] = "server.log"
-MANAGED_ROLE: Final[str] = "samplelibrary"
-MANAGED_DATABASE: Final[str] = "samplelibrary"
+MANAGED_ROLE: Final[str] = "sampleripper"
+MANAGED_DATABASE: Final[str] = "sampleripper"
 MANAGED_HOST: Final[str] = "127.0.0.1"
 PREFERRED_MANAGED_PORT: Final[int] = 54329
 

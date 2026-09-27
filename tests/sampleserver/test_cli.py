@@ -24,7 +24,7 @@ PROGRAM = "sampleripper serve"
 PUBLIC_HOST = "0.0.0.0"
 OTHER_PORT = 8001
 WORKER_COUNT = 4
-UNREACHABLE_DATABASE_URL = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:1/samplelibrary"
+UNREACHABLE_DATABASE_URL = "postgresql+psycopg://sampleripper:not-a-real-password@localhost:1/sampleripper"
 
 
 @dataclass
@@ -213,7 +213,7 @@ def test_a_reader_that_may_change_the_catalog_ends_the_start_before_uvicorn(
     monkeypatch.setattr(cli, "open_catalog_reader", lambda database_url: nullcontext())
 
     def refuse(connection: object, service: ServiceRole) -> None:
-        raise ServiceRoleRefusedError(service, "samplelibrary", ("it owns table public.sample",))
+        raise ServiceRoleRefusedError(service, "sampleripper", ("it owns table public.sample",))
 
     monkeypatch.setattr(cli, "check_service_role", refuse)
     starts: list[str] = []

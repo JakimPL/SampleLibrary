@@ -11,7 +11,7 @@ from installers.icons import macos_icon
 from paths import MACOS_LAUNCHER
 
 PLATFORM: Final[str] = "macos-arm64"
-BUNDLE_IDENTIFIER: Final[str] = "io.github.jakimpl.samplelibrary"
+BUNDLE_IDENTIFIER: Final[str] = "io.github.jakimpl.sampleripper"
 MINIMUM_SYSTEM_VERSION: Final[str] = "11.0"
 APPLICATIONS_FOLDER: Final[Path] = Path("/Applications")
 AD_HOC_IDENTITY: Final[str] = "-"

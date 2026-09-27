@@ -260,10 +260,10 @@ client and server share a filesystem the way a file-path-based `COPY` would.
 
 ## The three databases
 
-One Postgres server carries three: the real library, `samplelibrary_dev` for the disposable
-sandbox, and `samplelibrary_test` for the suite. `scripts/build_dev_library.py` builds the sandbox from
+One Postgres server carries three: the real library, `sampleripper_dev` for the disposable
+sandbox, and `sampleripper_test` for the suite. `scripts/build_dev_library.py` builds the sandbox from
 `sampleripper.sandbox`, which the suite reads the same modules and sample pack from,
-together with a config naming `samplelibrary_dev` on the server, role and password of the configured
+together with a config naming `sampleripper_dev` on the server, role and password of the configured
 library (`provisioning.development_database_url`), and an inference address of its own, so the
 sandbox's API never dials the real library's renderer. One role, named by `config.toml`'s `database_url`, owns all
 three.
@@ -280,7 +280,7 @@ as `pg_read_server_files`, included), no ownership, no `CREATE`, no temporary ta
 the API reads readable, and exactly its service's writes, naming each difference. Postgres lets every
 role connect to a new database and create temporary tables in it, so granting takes both from
 `PUBLIC` and grants each service role the connection alone. A library keeping its own
-server creates `samplelibrary_reader` and `samplelibrary_curator` itself on every start, with
+server creates `sampleripper_reader` and `sampleripper_curator` itself on every start, with
 passwords in `library_root/postgres/roles.json`; the cluster's folder, `roles.json` and `cluster.json`
 are readable by their owner alone from the moment they are written.
 
@@ -306,9 +306,9 @@ is how a deployment supplies credentials that never live in a file; the service 
 `SAMPLERIPPER_SERVER_DATABASE_URL` and `SAMPLERIPPER_CURATION_DATABASE_URL` the same way. `--config` wins over both: the
 `dev` recipes pass the sandbox's config, and the file's database is the one they reach whatever the
 environment holds. The suite reads `SAMPLERIPPER_TEST_DATABASE_URL`, then the server the
-configuration names under the `samplelibrary_test` database, then `samplelibrary_test` on localhost,
+configuration names under the `sampleripper_test` database, then `sampleripper_test` on localhost,
 and gives each `pytest -n` worker a database of its own, created and dropped around the run: that is
-what the role's `CREATEDB` grant is for, and why `samplelibrary_test` itself stays empty. The tests of
+what the role's `CREATEDB` grant is for, and why `sampleripper_test` itself stays empty. The tests of
 the service roles create them in a library's own server, whose owner is a superuser, so the shared
 test server needs no right to create roles.
 

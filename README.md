@@ -60,9 +60,9 @@ SampleRipper keeps a log you can read or attach to a report:
 
 | System | Log folder |
 |---|---|
-| Windows | `%LOCALAPPDATA%\SampleLibrary\Logs` |
-| macOS | `~/Library/Logs/SampleLibrary` |
-| Linux | `~/.local/state/SampleLibrary/log` |
+| Windows | `%LOCALAPPDATA%\SampleRipper\Logs` |
+| macOS | `~/Library/Logs/SampleRipper` |
+| Linux | `~/.local/state/SampleRipper/log` |
 
 Report a problem on the [issue tracker](https://github.com/JakimPL/SampleRipper/issues), with the
 log attached.

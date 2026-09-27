@@ -43,4 +43,4 @@ def test_the_sandbox_shares_the_configured_server_under_a_database_of_its_own(
 
     with (tmp_path / "sandbox" / "config.toml").open("rb") as config_file:
         sandbox_url = tomllib.load(config_file)["library"]["database_url"]
-    assert sandbox_url == "postgresql+psycopg://someone:secret@localhost:5433/samplelibrary_dev"
+    assert sandbox_url == "postgresql+psycopg://someone:secret@localhost:5433/sampleripper_dev"

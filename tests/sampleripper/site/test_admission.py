@@ -28,9 +28,7 @@ from tests.sampleserver.conftest import SITE_VISITORS_TABLE
 
 SITE_PORT: Final[int] = 8000
 GENERATED_PASSWORD: Final[str] = "q" * 32
-READER_URL: Final[str] = (
-    f"postgresql+psycopg://samplelibrary_reader:{GENERATED_PASSWORD}@postgres.internal:5432/railway"
-)
+READER_URL: Final[str] = f"postgresql+psycopg://sampleripper_reader:{GENERATED_PASSWORD}@postgres.internal:5432/railway"
 
 
 @dataclass(frozen=True)
@@ -80,8 +78,8 @@ def test_a_library_at_home_is_no_site(tmp_path: Path, monkeypatch: pytest.Monkey
 @pytest.mark.parametrize(
     "setting",
     [
-        ("database_url", "postgresql+psycopg://samplelibrary:owner-secret@postgres.internal/railway"),
-        ("curation_database_url", "postgresql+psycopg://samplelibrary_curator:curator@postgres.internal/railway"),
+        ("database_url", "postgresql+psycopg://sampleripper:owner-secret@postgres.internal/railway"),
+        ("curation_database_url", "postgresql+psycopg://sampleripper_curator:curator@postgres.internal/railway"),
     ],
     ids=("the owner", "the curator"),
 )

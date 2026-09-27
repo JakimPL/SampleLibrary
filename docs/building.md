@@ -63,7 +63,7 @@ just installer    # dist/: the installer for this system
   - The macOS disk image holds an app bundle whose launcher sends the app's output to the log
     folder and announces the first start. The bundle carries an ad hoc signature.
   - The Linux AppImage carries both launchers too. Its AppRun picks one on the first start by the
-    same `nvidia-smi` check, and records the choice in `~/.config/SampleLibrary/launcher`, which
+    same `nvidia-smi` check, and records the choice in `~/.config/SampleRipper/launcher`, which
     every later start follows. It sends the app's output to the log folder and announces the first
     start with a desktop notification.
 

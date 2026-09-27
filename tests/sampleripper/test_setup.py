@@ -13,7 +13,7 @@ from sampleripper.cli import dispatch
 
 PROGRAM = "sampleripper setup"
 
-_UNREACHABLE_SERVER_URL = "postgresql+psycopg://samplelibrary:not-a-real-password@localhost:1/samplelibrary"
+_UNREACHABLE_SERVER_URL = "postgresql+psycopg://sampleripper:not-a-real-password@localhost:1/sampleripper"
 
 
 def test_config_writes_a_file_where_none_is_there(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

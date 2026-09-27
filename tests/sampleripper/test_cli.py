@@ -197,7 +197,7 @@ def test_an_unreachable_catalog_ends_the_command_with_what_to_check(
         "[library]\n"
         f'module_source_directory = "{(tmp_path / "modules").as_posix()}"\n'
         f'library_root = "{(tmp_path / "library").as_posix()}"\n'
-        f'database_url = "postgresql+psycopg://samplelibrary:hidden-password@{server}/samplelibrary"\n',
+        f'database_url = "postgresql+psycopg://sampleripper:hidden-password@{server}/sampleripper"\n',
         encoding="utf-8",
     )
     monkeypatch.setenv(CONFIG_PATH_ENVIRONMENT_VARIABLE, str(config_path))
