@@ -44,4 +44,6 @@ def test_a_run_that_cannot_go_ahead_ends_with_one_message(caplog: pytest.LogCapt
         train_and_report(refused)
 
     assert raised.value.code == ExitStatus.REFUSED
-    assert "Trained nothing: 3 training samples fill no batch of 8." in caplog.text
+    errors = [record for record in caplog.records if record.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert "3 training samples fill no batch of 8" in errors[0].getMessage()

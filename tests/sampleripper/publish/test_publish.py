@@ -33,6 +33,7 @@ from samplecore.models.annotation import AnnotationSource, SampleAnnotation, Sam
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.experiment import SampleFeatureVector
 from samplecore.models.module import Module
+from samplecore.models.module_link import ModuleLink
 from samplecore.models.relation import RelationReview, RelationType, SampleRelation
 from samplecore.models.sample import Sample
 from samplecore.models.sample_category import CategoryPromotion, SampleCategory
@@ -48,6 +49,7 @@ from samplecore.storage.database import connect
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.module_link import PostgresModuleLinkRepository
 from samplecore.storage.repositories.relation import PostgresSampleRelationRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_annotation import PostgresSampleAnnotationRepository
@@ -67,6 +69,7 @@ from tests.sampleserver.conftest import INFERENCE_URL, PUBLIC_SERVER
 
 PROGRAM: Final[str] = "sampleripper publish"
 MODULE_HASH: Final[str] = "c" * 64
+MODULE_PAGE_URL: Final[str] = "https://www.modules.pl/?id=module&mod=9752"
 MODULE_SAMPLES: Final[tuple[str, ...]] = ("a" * 64, "b" * 64)
 READER_PASSWORD: Final[str] = "p" * 32
 SECRET_LABEL: Final[str] = "CONFIDENTIAL LABEL"
@@ -169,6 +172,7 @@ def _seed(connection: Connection, root: Path, *, published_file: SampleFile, unp
             ingested_at=datetime.now(UTC),
         )
     )
+    PostgresModuleLinkRepository(connection).upsert_many((ModuleLink(module_hash=MODULE_HASH, url=MODULE_PAGE_URL),))
     for slot, sample_hash in enumerate(MODULE_SAMPLES):
         PostgresSamplePropertiesRepository(connection).upsert(
             XMSampleProperties(
@@ -302,6 +306,7 @@ def test_a_publication_carries_the_catalog_and_nothing_that_stays_home(
     assert _rows(target, "SELECT directory, relative_path FROM sample_file") == [(f"/{PUBLISHED_PACK}", "Kick 01.wav")]
     assert _rows(target, "SELECT reviewed_confirmed, reviewed_by FROM sample_relation") == [(None, None)]
     assert _rows(target, "SELECT label, key FROM experiment") == [(None, None)]
+    assert _rows(target, "SELECT module_hash, url FROM module_link") == [(MODULE_HASH, MODULE_PAGE_URL)]
     assert [json.loads(str(row[0])) for row in _rows(target, "SELECT params FROM experiment")] == [
         {"vocabulary": list(INSTRUMENT_VOCABULARY)}
     ]
@@ -355,8 +360,10 @@ def test_a_site_serves_its_publication_to_anyone(
         heard = client.get(f"/samples/{publishing.published_file.sample_hash}/audio")
         withheld = client.get(f"/samples/{publishing.unpublished_file.sample_hash}")
         stats = client.get("/stats")
+        module_detail = client.get(f"/modules/{MODULE_HASH}").json()
 
     assert listing["total"] == 3
+    assert module_detail["link"] == MODULE_PAGE_URL
     assert heard.status_code == 200
     assert heard.content == audio_store.encode_wav(
         decode_sample_file(publishing.published_file.location.path).sample_pcm

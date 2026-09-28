@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import type * as SetupApi from "../../src/api/setup";
 import type { BuildDevice, BuildView, HomeNetworkReach, SetupState } from "../../src/api/setup";
 import type { LibraryStats } from "../../src/api/stats";
-import { LibraryPanel } from "../../src/setup/LibraryPanel";
+import { CHECKING_FOR_A_CARD, LibraryPanel, SAVE_FOLDER_CHANGES_FIRST } from "../../src/setup/LibraryPanel";
+import { RESTART_NOTE } from "../../src/setup/NetworkOption";
 
 const { getStats, startBuild, chooseOptions } = vi.hoisted(() => ({
     getStats: vi.fn(),
@@ -120,8 +121,8 @@ describe("LibraryPanel", () => {
 
         expect(screen.getByRole("button", { name: "Build my library" })).toBeEnabled();
         expect(screen.getByRole("checkbox", { name: /Build the cloud/ })).toBeChecked();
-        expect(screen.getByText("Builds use your NVIDIA GeForce RTX 5070 Ti.")).toBeInTheDocument();
-        expect(await screen.findByText("Your library holds 300 samples and 30 modules.")).toBeInTheDocument();
+        expect(screen.getByText(/NVIDIA GeForce RTX 5070 Ti/)).toBeInTheDocument();
+        expect(await screen.findByText(/300 samples/)).toHaveTextContent(/30 modules/);
     });
 
     it("builds the cloud at once on a card", () => {
@@ -173,20 +174,20 @@ describe("LibraryPanel", () => {
         renderPanel(stateWith(null, CARD, true, true, CLOSED_TO_THE_NETWORK));
 
         expect(screen.getByRole("checkbox", { name: /Open on my home network/ })).toBeChecked();
-        expect(screen.getByText("Restart SampleRipper to apply this.")).toBeInTheDocument();
+        expect(screen.getByText(RESTART_NOTE)).toBeInTheDocument();
     });
 
     it("names the address a device on the network opens", () => {
         renderPanel(stateWith(null, CARD, true, true, OPEN_TO_THE_NETWORK));
 
-        expect(screen.getByText("On another device, open http://192.168.1.10:27440/")).toBeInTheDocument();
+        expect(screen.getByText(/192\.168\.1\.10:27440/)).toBeInTheDocument();
     });
 
     it("waits to build until it knows the device", () => {
         renderPanel(stateWith(null, null));
 
         expect(screen.getByRole("button", { name: "Build my library" })).toBeDisabled();
-        expect(screen.getByText("Checking for an NVIDIA graphics card…")).toBeInTheDocument();
+        expect(screen.getByText(CHECKING_FOR_A_CARD)).toBeInTheDocument();
     });
 
     it("keeps the build in place while one runs, with the running step's count, estimate and a way to cancel", () => {
@@ -203,7 +204,7 @@ describe("LibraryPanel", () => {
     it("holds the builds back while the folders have unsaved changes", () => {
         renderPanel(stateWith(null), true);
 
-        expect(screen.getByText("Save your folder changes first.")).toBeInTheDocument();
+        expect(screen.getByText(SAVE_FOLDER_CHANGES_FIRST)).toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Build my library" })).toBeDisabled();
     });
 

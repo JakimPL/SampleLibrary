@@ -15,7 +15,9 @@ projects it thanks.
 A sample opens in **Sample Detail**, which plays it and offers its file to save. Its tabs show the
 sample's details (**Info**), the samples that sound like it (**Similar**), every module and file it
 appears in (**Occurrences**), its near-duplicates (**Relations**) and the samples it shares modules
-with (**Co-occurs**). A module opens in **Module Detail** with the samples it holds.
+with (**Co-occurs**). A module opens in **Module Detail** with the samples it holds and, when the
+page it came from is known, a link to that page, which opens in a new tab; the **Modules** panel
+shows the same page as a small icon at the end of the row.
 
 ## Labels, ratings and categories
 

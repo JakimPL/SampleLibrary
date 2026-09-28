@@ -38,6 +38,7 @@ RULES: Final[dict[str, Rule]] = {
     "category_promotion": Rule.WHOLE,
     "cloud_promotion": Rule.EMPTY,
     "module_cloud_coordinates": Rule.WHOLE,
+    "module_link": Rule.WHOLE,
     "module_instrument": Rule.EMPTY,
     "module_note_extraction": Rule.EMPTY,
     "sample_category": Rule.CATEGORIES_ON_SHOW,

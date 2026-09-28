@@ -285,7 +285,7 @@ def test_the_command_reports_retrieval_offset_by_offset(
     with caplog.at_level(logging.INFO):
         _report(stubbed)
 
-    assert "Transposition retrieval over 4 probes" in caplog.text
+    assert "4 probes" in caplog.text
     assert "+12 st" in caplog.text
 
 

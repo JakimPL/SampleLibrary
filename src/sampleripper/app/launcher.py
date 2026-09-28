@@ -39,6 +39,7 @@ RENDERER_LOG_NAME: Final[str] = "renderer.log"
 RENDERER_NAME: Final[str] = "morph renderer"
 RENDERER_HOST_OPTION: Final[str] = "--host"
 RENDERER_PORT_OPTION: Final[str] = "--port"
+LIBRARY_IN_USE: Final[str] = "Another SampleRipper has this library open. Quit that one, then try again."
 PUBLIC_LIBRARY_REFUSED: Final[str] = (
     'This library is set up to be served to anyone on the internet. Set exposure = "local" '
     "under [server] in its config to open it here."
@@ -336,7 +337,7 @@ class Launcher:
             return None
         lock = try_lock(library_lock_path(root))
         if lock is None:
-            raise LibraryInUseError("Another SampleRipper has this library open. Quit that one, then try again.")
+            raise LibraryInUseError(LIBRARY_IN_USE)
         previous, self._held_library = self._held_library, HeldLibrary(root=root, lock=lock)
         return previous
 

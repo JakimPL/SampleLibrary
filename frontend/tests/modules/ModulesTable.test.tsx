@@ -1,12 +1,18 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Module } from "../../src/api/modules";
 import { ModulesTable } from "../../src/modules/ModulesTable";
 import { useListingOrderStore } from "../../src/workspace/listingOrderStore";
+import { ROW_LINK_ATTRIBUTE } from "../../src/workspace/rowLinks";
+import { useSelectionStore } from "../../src/workspace/selectionStore";
 
-function buildModule(overrides: Pick<Module, "hash" | "id" | "title" | "tracker" | "file_size">): Module {
+const PAGE_URL = "https://www.modules.pl/?id=module&mod=9752";
+
+function buildModule(
+    overrides: Pick<Module, "hash" | "id" | "title" | "tracker" | "file_size"> & Partial<Pick<Module, "link">>,
+): Module {
     return {
         filename: `${overrides.title}.${overrides.tracker}`,
         channel_count: 4,
@@ -14,13 +20,14 @@ function buildModule(overrides: Pick<Module, "hash" | "id" | "title" | "tracker"
         instrument_count: 1,
         sample_count: 1,
         ingested_at: "2026-01-01T00:00:00Z",
+        link: null,
         ...overrides,
     };
 }
 
 const MODULES: readonly Module[] = [
     buildModule({ hash: "a", id: 1, title: "Zeta", tracker: "xm", file_size: 3000 }),
-    buildModule({ hash: "b", id: 2, title: "Alpha", tracker: "it", file_size: 1000 }),
+    buildModule({ hash: "b", id: 2, title: "Alpha", tracker: "it", file_size: 1000, link: PAGE_URL }),
     buildModule({ hash: "c", id: 3, title: "Mid", tracker: "xm", file_size: 2000 }),
 ];
 
@@ -95,9 +102,36 @@ describe("ModulesTable", () => {
 
         const { container } = renderTable();
 
-        const headers = Array.from(container.querySelectorAll("thead th")).map((header) => header.textContent);
-        expect(headers).toEqual(["Title"]);
+        expect(container.querySelectorAll("thead th")).toHaveLength(2);
         expect(screen.getAllByText("xm")).toHaveLength(2);
+    });
+
+    it("offers a module's page at the end of its row, as a link the row's own click rule lets through", () => {
+        renderTable();
+
+        const link = screen.getByRole("link", { name: /modules\.pl/ });
+
+        expect(link).toHaveAttribute("href", PAGE_URL);
+        expect(link).toHaveAttribute("target", "_blank");
+        expect(link.getAttribute("rel")).toContain("noreferrer");
+        expect(link).toHaveAttribute(ROW_LINK_ATTRIBUTE);
+        expect(document.querySelectorAll("td.cell-link a")).toHaveLength(1);
+    });
+
+    it("keeps a double click on the page link from opening the module", () => {
+        render(
+            <MemoryRouter initialEntries={["/"]}>
+                <Routes>
+                    <Route path="/" element={<ModulesTable modules={MODULES} />} />
+                    <Route path="/modules/:moduleHash" element={<p>module route</p>} />
+                </Routes>
+            </MemoryRouter>,
+        );
+
+        fireEvent.doubleClick(screen.getByRole("link", { name: /modules\.pl/ }));
+
+        expect(screen.queryByText("module route")).toBeNull();
+        expect(useSelectionStore.getState().highlighted).toBeNull();
     });
 
     it("narrows rows to the selected tracker", () => {

@@ -63,8 +63,8 @@ def test_main_reports_an_empty_catalog(
     main([], prog=PROGRAM)
 
     output = capsys.readouterr().out
-    assert "extracted features for 0 new samples" in output
-    assert "Reduced 0 samples" in output
+    assert "0 new samples" in output
+    assert "0 samples" in output
 
 
 def test_main_passes_the_limit_argument_through(

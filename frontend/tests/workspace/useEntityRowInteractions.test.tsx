@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 import { useMorphStore } from "../../src/morph/morphStore";
-import { OPENS_ENTITY_ATTRIBUTE } from "../../src/workspace/RowOpenLink";
+import { ROW_LINK_ATTRIBUTE } from "../../src/workspace/rowLinks";
 import { INITIAL_SELECTION_STATE, useSelectionStore } from "../../src/workspace/selectionStore";
 import { useEntityRowInteractions } from "../../src/workspace/useEntityRowInteractions";
 
@@ -167,7 +167,7 @@ describe("useEntityRowInteractions", () => {
     it("a click on a control that opens the entity is left to that control", () => {
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
         const control = document.createElement("a");
-        control.setAttribute(OPENS_ENTITY_ATTRIBUTE, "");
+        control.setAttribute(ROW_LINK_ATTRIBUTE, "");
         const { event, preventDefault } = fakeMouseEvent({}, control);
 
         act(() => {

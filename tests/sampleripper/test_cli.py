@@ -72,6 +72,12 @@ ROUTE_CASES = (
         "sampleripper annotations",
     ),
     RouteCase(
+        ["links", "import", "links.csv"],
+        "sampleextract.links.cli.main",
+        ["links.csv"],
+        "sampleripper links import",
+    ),
+    RouteCase(
         ["cloud", "embed", "--backend", "clap", "--label", "heard at the playback rate"],
         "samplecloud.cli.main",
         ["--backend", "clap", "--label", "heard at the playback rate"],

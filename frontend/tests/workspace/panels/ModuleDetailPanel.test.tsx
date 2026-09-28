@@ -24,6 +24,8 @@ function renderPanel(): ReturnType<typeof render> {
     );
 }
 
+const PAGE_URL = "https://www.modules.pl/?id=module&mod=9752";
+
 const MODULE_DETAIL = {
     hash: "abc",
     id: 1,
@@ -36,6 +38,7 @@ const MODULE_DETAIL = {
     sample_count: 1,
     file_size: 4096,
     ingested_at: "2026-01-01T00:00:00Z",
+    link: PAGE_URL,
     occurrences: [
         {
             properties: {
@@ -71,6 +74,30 @@ describe("ModuleDetailPanel", () => {
         });
         expect(screen.getByText("abc")).toBeInTheDocument();
         expect(screen.getByRole("link", { name: "lead" })).toHaveAttribute("href", "/samples/sample-1");
+    });
+
+    it("links the page the module came from, opening it in a new tab", async () => {
+        getModule.mockResolvedValue(MODULE_DETAIL);
+        useSelectionStore.getState().focusModule("abc");
+
+        renderPanel();
+
+        const link = await waitFor(() => screen.getByRole("link", { name: /modules\.pl/ }));
+        expect(link).toHaveAttribute("href", PAGE_URL);
+        expect(link).toHaveAttribute("target", "_blank");
+        expect(link.getAttribute("rel")).toContain("noreferrer");
+    });
+
+    it("shows no page link while none is recorded", async () => {
+        getModule.mockResolvedValue({ ...MODULE_DETAIL, link: null });
+        useSelectionStore.getState().focusModule("abc");
+
+        renderPanel();
+
+        await waitFor(() => {
+            expect(screen.getByRole("heading", { name: "A Song" })).toBeInTheDocument();
+        });
+        expect(screen.queryByRole("link", { name: /modules\.pl/ })).toBeNull();
     });
 
     it("shows an error notice when the module cannot be found", async () => {

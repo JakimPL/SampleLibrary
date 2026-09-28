@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useMorphStore } from "../morph/morphStore";
 import { KEYBOARD_CLICK_DETAIL } from "../shared/gestures/gestureThresholds";
-import { OPENS_ENTITY_ATTRIBUTE } from "./RowOpenLink";
+import { ROW_LINK_ATTRIBUTE } from "./rowLinks";
 import { type EntityRef, morphAnchorOf, useSelectionStore } from "./selectionStore";
 import { useIsHighlighted } from "./useIsHighlighted";
 
@@ -27,8 +27,8 @@ export function entityRoute(entity: EntityRef): string {
     return `${ENTITY_ROUTE_PREFIX[entity.kind]}${entity.hash}`;
 }
 
-function opensEntity(target: EventTarget | null): boolean {
-    return target instanceof Element && target.closest(`[${OPENS_ENTITY_ATTRIBUTE}]`) !== null;
+function isRowLink(target: EventTarget | null): boolean {
+    return target instanceof Element && target.closest(`[${ROW_LINK_ATTRIBUTE}]`) !== null;
 }
 
 /** Moves the focus to the same link in the row before or after the one holding it. */
@@ -50,7 +50,8 @@ function focusSiblingRowLink(element: HTMLElement, direction: "previous" | "next
  * own route, which is what actually focuses it -- the shell's route effect is the one place
  * that dispatches a focus action, so a pasted URL and a double-click both focus an entity through
  * the identical mechanism. Two clicks reach the route the same way: one a key press raised on the
- * row's link, which Enter is, and one on a control marked as opening the entity.
+ * row's link, which Enter is, and one on a control marked as a row link, which opens the entity or
+ * leaves the app for the page it came from.
  *
  * The keys on the link: the arrows move the focus down or up the rows, and M joins a sample to the
  * one in hand, as a Shift-click does.
@@ -82,7 +83,7 @@ export function useEntityRowInteractions(entity: EntityRef): EntityRowInteractio
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey) {
             return;
         }
-        if (event.detail === KEYBOARD_CLICK_DETAIL || opensEntity(event.target)) {
+        if (event.detail === KEYBOARD_CLICK_DETAIL || isRowLink(event.target)) {
             return;
         }
         if (event.shiftKey) {

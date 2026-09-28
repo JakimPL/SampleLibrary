@@ -9,6 +9,7 @@ from sqlalchemy import Connection, select
 from samplecore.hashing import compute_module_hash
 from samplecore.models.cloud import CloudPromotion, ModuleCloudCoordinate, SampleCloudCoordinate
 from samplecore.models.experiment import Experiment, SampleFeatureVector
+from samplecore.models.module_link import ModuleLink
 from samplecore.models.pass_completion import PassCompletion, PassKind
 from samplecore.models.sample_category import CategoryPromotion, SampleCategory
 from samplecore.models.sample_file import FileFingerprint
@@ -24,6 +25,7 @@ from samplecore.storage.repositories.cloud import (
 from samplecore.storage.repositories.experiment import PostgresExperimentRepository
 from samplecore.storage.repositories.feature_vector import PostgresSampleFeatureVectorRepository
 from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.module_link import PostgresModuleLinkRepository
 from samplecore.storage.repositories.pass_completion import PostgresPassCompletionRepository
 from samplecore.storage.repositories.sample_category import (
     PostgresCategoryPromotionRepository,
@@ -98,6 +100,9 @@ def populated_library(connection: Connection, tmp_path: Path) -> Path:
     )
     PostgresModuleCloudCoordinateRepository(connection).upsert(
         ModuleCloudCoordinate(module_hash=first_module.hash, x=0.3, y=0.4, computed_at=now)
+    )
+    PostgresModuleLinkRepository(connection).upsert_many(
+        (ModuleLink(module_hash=first_module.hash, url="https://www.modules.pl/?id=module&mod=1"),)
     )
     PostgresSampleSpectralFeatureRepository(connection).upsert(
         SampleSpectralFeature(sample_hash=first_sample_hash, vector=(0.1, 0.2, 0.3), computed_at=now)

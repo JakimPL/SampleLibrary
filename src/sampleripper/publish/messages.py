@@ -43,6 +43,6 @@ READER_REFUSED: Final[str] = "The site's reader can't log in as a site needs: {p
 PUBLISHED: Final[str] = "Published {samples} samples to {server}, {unreadable} left out whose files could not be read."
 AUDIO_READY: Final[str] = "The site's audio store is {path}: {files} files, {size}."
 NEXT_STEPS: Final[str] = (
-    "Next: replace the site volume's objects folder with that folder, then restart the site so it reads the "
-    "new publication. docs/deploying.md shows the commands."
+    "Next: turn off the database's TCP Proxy, redeploy the site, and upload that folder's objects to the "
+    "site's volume if your samples changed. docs/deploying.md shows the commands."
 )

@@ -38,6 +38,8 @@ const CONFIRMATION_NOTE =
     "On the processor, analyzing a large collection can take a day or more. You can build the cloud later.";
 const DEFAULT_BUILD_CLOUD = true;
 const DEFAULT_OPEN_TO_NETWORK = false;
+export const SAVE_FOLDER_CHANGES_FIRST = "Save your folder changes first.";
+export const CHECKING_FOR_A_CARD = "Checking for an NVIDIA graphics card…";
 
 function countOf(count: number, noun: string): string {
     return `${count.toLocaleString()} ${noun}${count === 1 ? "" : "s"}`;
@@ -65,14 +67,14 @@ function libraryStatus(state: SetupState, unsavedChanges: boolean, stats: Librar
             return { text: state.problem ?? "The library couldn't open.", tone: "error" };
         case "ready":
             return unsavedChanges
-                ? { text: "Save your folder changes first.", tone: "normal" }
+                ? { text: SAVE_FOLDER_CHANGES_FIRST, tone: "normal" }
                 : { text: describeStats(stats, building), tone: "normal" };
     }
 }
 
 function describeDevice(device: BuildDevice | null): string {
     if (device === null) {
-        return "Checking for an NVIDIA graphics card…";
+        return CHECKING_FOR_A_CARD;
     }
     return device.card === null
         ? "Builds use the processor, so building the cloud takes a long time."

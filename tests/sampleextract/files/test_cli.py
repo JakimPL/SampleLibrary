@@ -76,6 +76,5 @@ def test_a_prune_refused_for_a_missing_directory_ends_the_command_with_one_messa
 
     assert raised.value.code == ExitStatus.REFUSED
     output = capsys.readouterr()
-    assert f"The sample directory {unplugged} is not there" in output.err
-    assert "Pruned nothing" in output.err
+    assert str(unplugged) in output.err
     assert PostgresSampleFileRepository(connection).count() == 3

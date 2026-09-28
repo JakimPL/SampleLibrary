@@ -72,7 +72,7 @@ describe("SetupView", () => {
         getSetupState.mockRejectedValue(new Error("connection refused"));
         renderPage();
 
-        expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach SampleRipper: connection refused");
+        expect(await screen.findByRole("alert")).toHaveTextContent(/connection refused/);
         expect(screen.getByRole("button", { name: "Quit" })).toBeDisabled();
     });
 

@@ -20,6 +20,7 @@ describe("ModuleGlance", () => {
                     sample_count: 0,
                     file_size: 4096,
                     ingested_at: "2026-01-01T00:00:00Z",
+                    link: null,
                 }}
             />,
         );
