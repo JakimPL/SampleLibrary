@@ -1,14 +1,12 @@
 import type { ReactElement } from "react";
 
 import { useLayoutMode } from "../layout/useLayoutMode";
+import { SampleName } from "../samples/SampleName";
 import { samplePreview, useAudioPreview } from "../samples/useAudioPreview";
-import { useSamplePreview } from "../samples/useSamplePreview";
+import { spokenNameOf, useSampleName } from "../samples/useSampleName";
 import { classNames } from "../shared/classNames";
 import { Button } from "../shared/controls/Button";
-import { shortHash } from "../shared/format";
 import { hintFor } from "../shared/hints";
-import { UNNAMED_SAMPLE_LABEL } from "../shared/labels";
-import { OptionalLabel } from "../shared/OptionalLabel";
 import { morphAnchorOf, useSelectionStore } from "../workspace/selectionStore";
 import { END_LETTERS, type MorphEnd, otherEndOf, useMorphStore } from "./morphStore";
 import { useEndpoint } from "./useEndpoint";
@@ -45,20 +43,6 @@ interface EmptySlotProps {
     readonly reading: string;
     readonly selected: boolean;
     readonly onClick: () => void;
-}
-
-/** A sample's name as the catalog states it, or `null` until it has answered. */
-function useSampleName(hash: string): string | null {
-    const preview = useSamplePreview(hash);
-    return preview.status === "success" ? preview.data.display_name : null;
-}
-
-/** The sample as a screen reader hears it: its name, the unnamed label, or the short hash until the catalog answers. */
-function spokenNameOf(hash: string, name: string | null): string {
-    if (name === null) {
-        return shortHash(hash);
-    }
-    return name === "" ? UNNAMED_SAMPLE_LABEL : name;
 }
 
 /** What an empty end reads while a sample is in hand: an offer to take it, by name. */
@@ -98,11 +82,7 @@ function ChosenEnd({ end, hash }: ChosenEndProps): ReactElement {
             >
                 <Letter end={end} />
                 <span className="morph-slot-name">
-                    {name === null ? (
-                        <span className="mono">{shortHash(hash)}</span>
-                    ) : (
-                        <OptionalLabel value={name} placeholder={UNNAMED_SAMPLE_LABEL} />
-                    )}
+                    <SampleName hash={hash} name={name} />
                 </span>
             </button>
             <Button
