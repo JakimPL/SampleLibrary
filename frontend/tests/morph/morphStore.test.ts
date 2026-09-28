@@ -65,24 +65,33 @@ describe("morphStore", () => {
 });
 
 describe("naming an end outright", () => {
-    it("makes a sample the first end and keeps the second unless it is the same sample", () => {
+    it("makes a sample the first end, and trades places with the second when it holds that sample", () => {
         useMorphStore.getState().join("a", "b");
 
         useMorphStore.getState().setEnd("first", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "c", second: "b" });
 
         useMorphStore.getState().setEnd("first", "b");
-        expect(useMorphStore.getState()).toMatchObject({ first: "b", second: null });
+        expect(useMorphStore.getState()).toMatchObject({ first: "b", second: "c" });
     });
 
-    it("makes a sample the second end and keeps the first unless it is the same sample", () => {
+    it("makes a sample the second end, and trades places with the first when it holds that sample", () => {
         useMorphStore.getState().join("a", "b");
 
         useMorphStore.getState().setEnd("second", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "a", second: "c" });
 
         useMorphStore.getState().setEnd("second", "a");
-        expect(useMorphStore.getState()).toMatchObject({ first: null, second: "a" });
+        expect(useMorphStore.getState()).toMatchObject({ first: "c", second: "a" });
+    });
+
+    it("mirrors the weight when naming an end trades the two", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().setWeight(0.25);
+
+        useMorphStore.getState().setEnd("first", B);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: B, second: A, weight: 0.75 });
     });
 
     it("names an end with the selection left where it was", () => {

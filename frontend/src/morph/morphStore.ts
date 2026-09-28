@@ -37,7 +37,7 @@ interface MorphState extends MorphPair {
 
 interface MorphActions {
     readonly join: (anchor: string | null, hash: string) => void;
-    /** Makes `hash` the sample at `end` by name, letting go of the other end when it holds the same sample. */
+    /** Makes `hash` the sample at `end`; a sample already at the other end trades places with it, the weight mirrored. */
     readonly setEnd: (end: MorphEnd, hash: string) => void;
     /** Lets one end go and keeps the other. */
     readonly clearEnd: (end: MorphEnd) => void;
@@ -114,8 +114,15 @@ export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
     },
     setEnd: (end, hash) => {
         const state = get();
-        const other = otherEndOf(state, end) === hash ? null : otherEndOf(state, end);
-        set(end === "first" ? pairOf(state, hash, other, state.weight) : pairOf(state, other, hash, state.weight));
+        if (otherEndOf(state, end) === hash) {
+            state.swap();
+            return;
+        }
+        set(
+            end === "first"
+                ? pairOf(state, hash, state.second, state.weight)
+                : pairOf(state, state.first, hash, state.weight),
+        );
     },
     clearEnd: (end) => {
         const state = get();
@@ -147,13 +154,8 @@ export const useMorphStore = create<MorphState & MorphActions>((set, get) => ({
     },
     takeSample: (hash) => {
         const state = get();
-        if (state.selectedEnd === null) {
-            return;
+        if (state.selectedEnd !== null) {
+            state.setEnd(state.selectedEnd, hash);
         }
-        if (otherEndOf(state, state.selectedEnd) === hash) {
-            state.swap();
-            return;
-        }
-        state.setEnd(state.selectedEnd, hash);
     },
 }));
