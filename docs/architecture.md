@@ -715,9 +715,12 @@ anything starts it refuses, each in a sentence of its own (`sampleripper.site.ad
 - an owner, curator, administrator or publishing connection, from the config or the environment;
 - a reader named nowhere, or with a password shorter than 24 characters;
 - a renderer listening beyond the loopback address, or on the site's own port;
-- a missing audio store.
+- an audio store it cannot read.
 
-It then checks the reader's role the way `serve` does. The renderer starts as a child with no
+It then checks the reader's role the way `serve` does. A store that is missing or empty is a
+warning as the site starts, since a platform's volume is filled through the running site: the
+site serves its catalog, every sample answers "not found" and `GET /api/health` reports
+`audio_present` false until the objects arrive, which the site reads with no restart. The renderer starts as a child with no
 database connection in its environment and one thread per numerical library, its output joining the
 site's, and the site serves once the renderer answers. A renderer that ends while the site serves
 ends the site with status 1, so the platform starts both again.

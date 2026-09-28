@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
@@ -13,15 +15,16 @@ from samplecore.config import (
     parse_config,
 )
 from samplecore.storage.cluster.provisioning import ADMIN_URL_ENVIRONMENT_VARIABLE
-from sampleripper.site.admission import SiteRefusedError, admit_site, site_port
+from sampleripper.site.admission import SiteRefusedError, admit_site, site_port, site_warnings
 from sampleripper.site.messages import (
     CREDENTIAL_BEYOND_READER,
-    NO_AUDIO_STORE,
+    NO_AUDIO,
     NO_PORT,
     NO_READER,
     NOT_PUBLIC,
     PORT_TAKEN_BY_RENDERER,
     RENDERER_BEYOND_THIS_COMPUTER,
+    UNREADABLE_AUDIO_STORE,
     WEAK_READER_PASSWORD,
 )
 from tests.sampleserver.conftest import SITE_VISITORS_TABLE
@@ -140,11 +143,37 @@ def test_a_site_listening_on_the_renderers_port_is_refused(tmp_path: Path, monke
     assert PORT_TAKEN_BY_RENDERER in _problems(_site_config(tmp_path, SiteConfig(), monkeypatch), port=8010)
 
 
-def test_a_site_without_its_audio_store_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("store", ["missing", "empty"])
+def test_a_site_without_its_audio_starts_with_a_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, store: str
+) -> None:
+    """A platform's volume is filled through the running site, so the site starts and says what it lacks."""
     config = _site_config(tmp_path, SiteConfig(), monkeypatch)
-    (config.library_root / "objects").rmdir()
+    if store == "missing":
+        (config.library_root / "objects").rmdir()
 
-    assert NO_AUDIO_STORE.format(path=config.library_root / "objects") in _problems(config)
+    assert _problems(config) == ()
+    assert site_warnings(config) == (NO_AUDIO.format(path=config.library_root / "objects"),)
+
+
+def test_a_site_with_its_audio_warns_of_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _site_config(tmp_path, SiteConfig(), monkeypatch)
+    stored = config.library_root / "objects" / "ab" / ("ab" + "c" * 62 + ".wav")
+    stored.parent.mkdir()
+    stored.write_bytes(b"RIFF")
+
+    assert site_warnings(config) == ()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every folder")
+def test_a_site_whose_audio_store_it_cannot_read_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _site_config(tmp_path, SiteConfig(), monkeypatch)
+    store = config.library_root / "objects"
+    store.chmod(0)
+    try:
+        assert UNREADABLE_AUDIO_STORE.format(path=store) in _problems(config)
+    finally:
+        store.chmod(stat.S_IRWXU)
 
 
 @pytest.mark.parametrize(("environment", "port"), [({"PORT": "8080"}, 8080)])

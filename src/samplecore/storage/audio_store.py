@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +34,21 @@ class _StoredFrames:
 def object_path(library_root: Path, sample_hash: str) -> Path:
     """Where a Sample's audio lives under the content-addressable store, sharded by hash prefix."""
     return library_root / OBJECTS_DIRECTORY_NAME / sample_hash[:2] / f"{sample_hash}.wav"
+
+
+def store_is_readable(library_root: Path) -> bool:
+    """Whether the store under ``library_root`` is a folder this process may read and enter; False while it is absent."""
+    store = library_root / OBJECTS_DIRECTORY_NAME
+    return store.is_dir() and os.access(store, os.R_OK | os.X_OK)
+
+
+def store_holds_audio(library_root: Path) -> bool:
+    """Whether the store under ``library_root`` is readable and holds anything at all.
+
+    An empty store is what a platform's volume looks like before the publication's objects are
+    uploaded to it, or after they were deleted to make room for the next publication.
+    """
+    return store_is_readable(library_root) and any((library_root / OBJECTS_DIRECTORY_NAME).iterdir())
 
 
 def write(library_root: Path, sample_pcm: SamplePCM) -> Path:

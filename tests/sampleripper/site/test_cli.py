@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 from pathlib import Path
@@ -13,6 +14,7 @@ from samplecore.ports import free_port
 from sampleripper.children import ChildProcess
 from sampleripper.site import cli as site_cli
 from sampleripper.site import renderer as site_renderer
+from sampleripper.site.messages import NO_AUDIO
 from tests.sampleripper.site.test_admission import SiteConfig, _site_config
 
 PROGRAM: Final[str] = "sampleripper site"
@@ -90,6 +92,21 @@ def test_a_site_stopping_on_its_own_stops_its_renderer_and_ends_cleanly(
     site_cli.main([], prog=PROGRAM)
 
     assert not started[0].is_running
+
+
+def test_a_site_without_its_audio_starts_and_says_so(
+    config: LibraryConfig, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    (config.library_root / "objects").rmdir()
+    served: list[object] = []
+    monkeypatch.setattr(site_cli, "site_renderer", _stand_in_renderer(lifetime_seconds=SERVING_SECONDS))
+    monkeypatch.setattr(site_cli, "run_server", lambda **options: served.append(options))
+
+    with caplog.at_level(logging.WARNING, logger=site_cli.__name__):
+        site_cli.main([], prog=PROGRAM)
+
+    assert len(served) == 1
+    assert NO_AUDIO.format(path=config.library_root / "objects") in caplog.messages
 
 
 def test_a_renderer_ending_as_it_starts_fails_the_site_before_it_serves(

@@ -14,7 +14,7 @@ from samplecore.cli_support import bootstrap_cli
 from samplecore.config import resolve_config_path
 from samplecore.exit_status import ExitStatus
 from sampleripper.children import ChildProcess
-from sampleripper.site.admission import SiteRefusedError, admit_site, site_port
+from sampleripper.site.admission import SiteRefusedError, admit_site, site_port, site_warnings
 from sampleripper.site.messages import RENDERER_ENDED
 from sampleripper.site.renderer import RendererDidNotStartError, site_renderer, wait_until_answering
 from sampleserver.cli import WORKER_COUNT_ENVIRONMENT_VARIABLE, admit_reader, names_a_process_count, run_server
@@ -40,8 +40,9 @@ def main(argv: list[str], *, prog: str) -> None:
     """Serve the library to anyone, as a site: the catalog's API and pages, and the morph renderer beside them.
 
     Everything a site may not do is refused before anything starts (`sampleripper.site.admission`),
-    and the reader's role is checked the way `sampleripper serve` checks it. The renderer runs as a
-    child on the loopback address, and the site serves once it answers. A renderer that ends while
+    and the reader's role is checked the way `sampleripper serve` checks it. A site without its audio
+    yet starts and says so, since a platform's volume is filled through the running site
+    (`site_warnings`). The renderer runs as a child on the loopback address, and the site serves once it answers. A renderer that ends while
     the site serves ends the site with status 1, so the platform running it starts both again; a site
     stopping stops its renderer.
 
@@ -58,6 +59,8 @@ def main(argv: list[str], *, prog: str) -> None:
             _logger.error("%s", problem)
         sys.exit(ExitStatus.REFUSED)
     admit_reader(config)
+    for warning in site_warnings(config):
+        _logger.warning("%s", warning)
 
     renderer = site_renderer(config.inference, environment=os.environ, config_path=resolve_config_path())
     renderer.start()

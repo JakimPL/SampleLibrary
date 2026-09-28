@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from typing import Final
 
@@ -9,17 +8,18 @@ from sqlalchemy.engine import make_url
 from samplecore.config import PUBLISH_DATABASE_URL_ENVIRONMENT_VARIABLE, LibraryConfig
 from samplecore.passwords import MINIMUM_SERVICE_PASSWORD_LENGTH
 from samplecore.ports import MAXIMUM_PORT, MINIMUM_PORT
-from samplecore.storage.audio_store import OBJECTS_DIRECTORY_NAME
+from samplecore.storage.audio_store import OBJECTS_DIRECTORY_NAME, store_holds_audio, store_is_readable
 from samplecore.storage.cluster.provisioning import ADMIN_URL_ENVIRONMENT_VARIABLE
 from sampleripper.site.messages import (
     BAD_PORT,
     CREDENTIAL_BEYOND_READER,
-    NO_AUDIO_STORE,
+    NO_AUDIO,
     NO_PORT,
     NO_READER,
     NOT_PUBLIC,
     PORT_TAKEN_BY_RENDERER,
     RENDERER_BEYOND_THIS_COMPUTER,
+    UNREADABLE_AUDIO_STORE,
     WEAK_READER_PASSWORD,
 )
 from sampleserver.addresses import names_loopback
@@ -65,7 +65,7 @@ def admit_site(config: LibraryConfig, *, port: int, environment: Mapping[str, st
     A site answers anyone on the internet, so it holds nothing that could change the catalog: no
     owner, curator, administrator or publishing connection, from the file or the environment, and a
     reader whose password was generated rather than chosen. Its renderer listens on this computer
-    alone, on a port apart from the site's, and its audio store is in place.
+    alone, on a port apart from the site's, and an audio store that is there is one it can read.
 
     Raises:
         SiteRefusedError: naming every way the configuration falls short of that.
@@ -106,7 +106,20 @@ def _renderer(config: LibraryConfig, *, port: int) -> tuple[str, ...]:
     return tuple(problems)
 
 
+def site_warnings(config: LibraryConfig) -> tuple[str, ...]:
+    """What a site says as it starts about the audio it is missing, one sentence apiece.
+
+    A platform's volume is filled through the site running on it, so a site whose store is missing
+    or empty starts and serves its catalog, every sample answering "not found" until the objects
+    arrive; it says so once, as it starts.
+    """
+    if store_holds_audio(config.library_root):
+        return ()
+    return (NO_AUDIO.format(path=config.library_root / OBJECTS_DIRECTORY_NAME),)
+
+
 def _audio_store(config: LibraryConfig) -> tuple[str, ...]:
     store = config.library_root / OBJECTS_DIRECTORY_NAME
-    readable = store.is_dir() and os.access(store, os.R_OK | os.X_OK)
-    return () if readable else (NO_AUDIO_STORE.format(path=store),)
+    if store.is_dir() and not store_is_readable(config.library_root):
+        return (UNREADABLE_AUDIO_STORE.format(path=store),)
+    return ()
