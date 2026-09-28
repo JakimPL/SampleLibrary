@@ -1,2 +1,2 @@
-/** The version of SampleRipper this web app was built with, read from pyproject.toml as it was built. */
-export const APP_VERSION: string = __APP_VERSION__;
+/** The build of SampleRipper this web app is: the project's version, the commit and the minute it was built. */
+export const BUILD_VERSION: string = __BUILD_VERSION__;

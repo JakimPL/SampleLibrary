@@ -1,25 +1,17 @@
-import { readFileSync } from "node:fs";
-
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import { buildVersion } from "./dev/buildVersion";
 import { densifyCloudPlugin } from "./dev/densifyCloudPlugin";
 
 const BACKEND_DEV_URL = process.env.VITE_BACKEND_DEV_URL ?? "http://127.0.0.1:8000";
 const PROJECT_FILE = new URL("../pyproject.toml", import.meta.url);
 
-/** The version pyproject.toml gives the project, which the web app shows as its own. */
-function projectVersion(): string {
-    const match = /^version = "([^"]+)"$/m.exec(readFileSync(PROJECT_FILE, "utf8"));
-    if (match?.[1] === undefined) {
-        throw new Error("pyproject.toml names no version");
-    }
-    return match[1];
-}
-
 export default defineConfig({
     define: {
-        __APP_VERSION__: JSON.stringify(projectVersion()),
+        __BUILD_VERSION__: JSON.stringify(
+            buildVersion(PROJECT_FILE, process.env.SAMPLERIPPER_BUILD_COMMIT, new Date()),
+        ),
     },
     plugins: [
         react(),

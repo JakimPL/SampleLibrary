@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import { buttonClassName } from "../shared/controls/buttonClassName";
 import { Icon } from "../shared/icons/Icon";
 import { BottomSheet } from "../shared/overlay/BottomSheet";
-import { APP_VERSION } from "../version";
+import { BUILD_VERSION } from "../version";
 
 interface AboutSheetProps {
     readonly onClose: () => void;
@@ -47,7 +47,7 @@ export function AboutSheet({ onClose }: AboutSheetProps): ReactElement {
             <div className="about">
                 <img className="about-logo" src={LOGO_PATH} alt="" width={LOGO_SIZE_PX} height={LOGO_SIZE_PX} />
                 <h3 className="about-name">{APP_NAME}</h3>
-                <p className="about-version">Version {APP_VERSION}</p>
+                <p className="about-version">Version {BUILD_VERSION}</p>
                 <p className="about-description">{DESCRIPTION}</p>
                 <p className="about-author">{AUTHOR_LINE}</p>
                 <p className="about-thanks">

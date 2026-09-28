@@ -1185,8 +1185,12 @@ a versioned record; a record of another version is discarded once and the defaul
 which is how a new arrangement reaches a browser that saved an older one. The top bar's View menu
 opens and closes panels at their registered placement and resets the arrangement. Its Library menu
 opens the setup page and quits the application, and appears where the setup routes answer, on the
-machine the application runs on; its Help menu holds the guide, the diagnostics and About, whose
-version Vite's `define` reads from `pyproject.toml` as the web app is built (`frontend/src/version.ts`).
+machine the application runs on; its Help menu holds the guide, the diagnostics and About, which
+shows the build version Vite's `define` writes in as the web app is built (`frontend/src/version.ts`):
+the version in `pyproject.toml`, the commit and the minute in UTC, as `0.1.1.abcdef0.202609281825`
+(`frontend/dev/buildVersion.ts`). The commit is the checkout's HEAD, or `SAMPLERIPPER_BUILD_COMMIT`
+where the build has no git history: the site's image takes it as a build argument, which Railway
+fills from `RAILWAY_GIT_COMMIT_SHA` and `just docker-build` from the checkout.
 The theme select sits beside them. Each panel renders inside a `PanelHost`, the scroll container that is also the
 container its stylesheet rules query, so a panel fits the width it was given rather than the window's.
 The Sample Detail panel stands the focused sample's transport

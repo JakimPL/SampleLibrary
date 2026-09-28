@@ -252,14 +252,17 @@ site on this computer first, beside a PostgreSQL of its own:
 just docker-secrets                                  # the two passwords, each written once into docker/
 docker compose up -d postgres
 just docker-publish                                  # or: just docker-publish --config dev-library/config.toml
+just docker-build
 PUBLICATION=<your library>/publication docker compose up site
 ```
 
 `just docker-secrets` writes `docker/postgres.env`, the database's own password, and
 `docker/site.env`, the reader's connection, each readable by you alone; compose refuses to start
 without them. `just docker-publish` publishes the library into that database, reading both files,
-and the site serves it on http://127.0.0.1:8000. `just docker-build` builds the image alone. The
-architecture's [Deployment](architecture.md#deployment) section describes what the image holds.
+and the site serves it on http://127.0.0.1:8000. `just docker-build` builds the image and hands it
+the checkout's commit, which About names in the site's version; build it again after pulling new
+commits. The architecture's [Deployment](architecture.md#deployment) section describes what the
+image holds.
 
 When your own PostgreSQL already listens on port 5432, put a free port in front of both the compose
 command and the publication, such as `POSTGRES_PORT=5439 docker compose up -d postgres` and

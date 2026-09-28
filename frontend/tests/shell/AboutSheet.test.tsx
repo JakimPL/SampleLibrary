@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { AboutSheet } from "../../src/shell/AboutSheet";
-import { APP_VERSION } from "../../src/version";
+import { BUILD_VERSION } from "../../src/version";
 
 describe("AboutSheet", () => {
     it("names the app and the version it was built with, under a decorative logo", () => {
@@ -10,7 +10,7 @@ describe("AboutSheet", () => {
 
         expect(screen.getByRole("dialog")).toBeInTheDocument();
         expect(screen.getByRole("heading", { level: 3 })).toBeInTheDocument();
-        expect(screen.getByText(APP_VERSION, { exact: false })).toBeInTheDocument();
+        expect(screen.getByText(BUILD_VERSION, { exact: false })).toBeInTheDocument();
         expect(document.querySelector("img.about-logo")).toHaveAttribute("alt", "");
     });
 

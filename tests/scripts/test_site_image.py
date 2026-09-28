@@ -25,3 +25,10 @@ def test_the_images_web_app_is_built_beside_the_project_file_it_reads_its_versio
     frontend_stage = DOCKERFILE.read_text(encoding="utf-8").split("FROM ")[1]
 
     assert frontend_stage.index("COPY pyproject.toml /pyproject.toml") < frontend_stage.index("RUN npm run build")
+
+
+def test_the_images_web_app_is_handed_the_commit_it_is_built_from() -> None:
+    """The frontend stage builds from a copy of the folder, so the commit comes in as a build argument."""
+    frontend_stage = DOCKERFILE.read_text(encoding="utf-8").split("FROM ")[1]
+
+    assert frontend_stage.index("ARG SAMPLERIPPER_BUILD_COMMIT") < frontend_stage.index("RUN npm run build")
