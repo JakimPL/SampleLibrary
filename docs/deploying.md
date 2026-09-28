@@ -34,8 +34,12 @@ several gigabytes, which needs Railway's Pro plan.
    postgresql+psycopg://sampleripper_reader:<the password>@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
    ```
 
-   Then seal the variable, so Railway never shows it again. Add no other database variable: the
-   site refuses to start holding any connection that could change the catalog.
+   `sampleripper_reader` is the user the site logs in as, which publishing creates; the database
+   keeps Railway's name. `Postgres` in the two references is the database service's name as the
+   canvas shows it, so use yours. Railway shows the value with the references filled in under the
+   field: check the host and the database are there before you save. Then seal the variable, so
+   Railway never shows it again. Add no other database variable: the site refuses to start holding
+   any connection that could change the catalog.
 6. **Set a spending limit** in the project's usage settings, so a flood of visitors costs no more
    than you chose.
 7. **Give the site an address** in its Networking settings.
