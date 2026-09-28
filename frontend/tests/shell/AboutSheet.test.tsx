@@ -15,14 +15,26 @@ describe("AboutSheet", () => {
         expect(document.querySelector("img.about-logo")).toHaveAttribute("alt", "");
     });
 
-    it("opens the source in a new tab that learns nothing of this page", () => {
+    it.each([
+        ["Source on GitHub", "https://github.com/JakimPL/SampleRipper"],
+        ["modules.pl", "https://modules.pl/"],
+        [".mod Sample Master", "https://modsamplemaster.org/"],
+    ])("opens %s in a new tab that learns nothing of this page", (label, href) => {
         render(<AboutSheet onClose={() => undefined} />);
 
-        const link = screen.getByRole("link", { name: "Source on GitHub" });
+        const link = screen.getByRole("link", { name: label });
 
-        expect(link).toHaveAttribute("href", "https://github.com/JakimPL/SampleRipper");
+        expect(link).toHaveAttribute("href", href);
         expect(link).toHaveAttribute("target", "_blank");
         expect(link.getAttribute("rel")).toContain("noreferrer");
+    });
+
+    it("thanks the projects it stands on", () => {
+        render(<AboutSheet onClose={() => undefined} />);
+
+        expect(screen.getByText(/Thanks to/)).toHaveTextContent(
+            "Thanks to modules.pl, home of the module database, and to Fred / The Gang for the .mod Sample Master idea.",
+        );
     });
 
     it("closes from the scrim", () => {

@@ -9,7 +9,8 @@ On a computer the app is a set of panels you arrange by dragging their tabs: **S
 **Modules**, **Cloud**, **Sample Detail**, **Module Detail** and **Stats**. The **View** menu opens
 and closes each panel, and **Reset layout** puts them back where they started. The **Help** menu
 holds **Keyboard and mouse**, the list of every click and key, **Diagnostics**, which says what your
-browser's graphics support, and **About**, which names the version and where the source lives.
+browser's graphics support, and **About**, which names the version, where the source lives and the
+projects it thanks.
 
 A sample opens in **Sample Detail**, which plays it and offers its file to save. Its tabs show the
 sample's details (**Info**), the samples that sound like it (**Similar**), every module and file it

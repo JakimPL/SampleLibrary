@@ -15,13 +15,31 @@ const DESCRIPTION = "Browse, audition, label and morph the samples of a tracker 
 const AUTHOR_LINE = "Made by Jakim / Stage Magician";
 const REPOSITORY_URL = "https://github.com/JakimPL/SampleRipper";
 const REPOSITORY_LABEL = "Source on GitHub";
+const MODULES_URL = "https://modules.pl/";
+const MODULES_LABEL = "modules.pl";
+const SAMPLE_MASTER_URL = "https://modsamplemaster.org/";
+const SAMPLE_MASTER_LABEL = ".mod Sample Master";
 const LOGO_PATH = "/favicon.svg";
 const LOGO_SIZE_PX = 96;
 
+interface ThanksLinkProps {
+    readonly href: string;
+    readonly label: string;
+}
+
+function ThanksLink({ href, label }: ThanksLinkProps): ReactElement {
+    return (
+        <a href={href} target="_blank" rel="noreferrer">
+            {label}
+            <Icon name="external" label={null} />
+        </a>
+    );
+}
+
 /**
  * What the app is, in one sheet: its logo, name and version, a line on what it does, who made it,
- * and the way to its source. The version is the one the web app was built with, so a person can
- * copy it into a bug report; the link opens in a new tab and says so with its glyph.
+ * whom it thanks, and the way to its source. The version is the one the web app was built with, so
+ * a person can copy it into a bug report; every link opens in a new tab and says so with its glyph.
  */
 export function AboutSheet({ onClose }: AboutSheetProps): ReactElement {
     return (
@@ -32,6 +50,10 @@ export function AboutSheet({ onClose }: AboutSheetProps): ReactElement {
                 <p className="about-version">Version {APP_VERSION}</p>
                 <p className="about-description">{DESCRIPTION}</p>
                 <p className="about-author">{AUTHOR_LINE}</p>
+                <p className="about-thanks">
+                    Thanks to <ThanksLink href={MODULES_URL} label={MODULES_LABEL} />, home of the module database, and
+                    to Fred / The Gang for the <ThanksLink href={SAMPLE_MASTER_URL} label={SAMPLE_MASTER_LABEL} /> idea.
+                </p>
                 <a
                     className={buttonClassName({ variant: "secondary", className: "about-link" })}
                     href={REPOSITORY_URL}
