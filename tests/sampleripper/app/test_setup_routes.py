@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from samplecore.config import DEFAULT_SERVER_CONFIG, PIPELINE_TABLE, load_config
 from sampleripper.app.asgi import create_application
 from sampleripper.app.installation import Installation, this_installation
-from sampleripper.app.launcher import PUBLIC_LIBRARY_REFUSED, Launcher, LibraryStatus
+from sampleripper.app.launcher import LIBRARY_IN_USE, PUBLIC_LIBRARY_REFUSED, Launcher, LibraryStatus
 from sampleripper.app.listener import CLOSED_TO_THE_NETWORK, HomeNetworkReach, starting_policy
 from sampleripper.pipeline.settings import DescriptorSource, read_pipeline_settings
 from sampleserver.policy import ServingPolicy
@@ -164,7 +164,7 @@ def test_a_library_another_application_holds_open_stays_with_it(config_path: Pat
             state = _wait_until_settled(second)
 
             assert state["status"] == LibraryStatus.FAILED
-            assert state["problem"] == "Another SampleRipper has this library open. Quit that one, then try again."
+            assert state["problem"] == LIBRARY_IN_USE
         assert first.get("/api/stats").status_code == 200
 
 

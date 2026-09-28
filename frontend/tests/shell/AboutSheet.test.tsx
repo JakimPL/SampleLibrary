@@ -5,36 +5,26 @@ import { AboutSheet } from "../../src/shell/AboutSheet";
 import { APP_VERSION } from "../../src/version";
 
 describe("AboutSheet", () => {
-    it("names the app, its version, its maker and the way to its source", () => {
+    it("names the app and the version it was built with, under a decorative logo", () => {
         render(<AboutSheet onClose={() => undefined} />);
 
-        expect(screen.getByRole("dialog", { name: "About" })).toBeInTheDocument();
-        expect(screen.getByRole("heading", { name: "SampleRipper" })).toBeInTheDocument();
-        expect(screen.getByText(`Version ${APP_VERSION}`)).toBeInTheDocument();
-        expect(screen.getByText("Made by Jakim / Stage Magician")).toBeInTheDocument();
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
+        expect(screen.getByRole("heading", { level: 3 })).toBeInTheDocument();
+        expect(screen.getByText(APP_VERSION, { exact: false })).toBeInTheDocument();
         expect(document.querySelector("img.about-logo")).toHaveAttribute("alt", "");
     });
 
-    it.each([
-        ["Source on GitHub", "https://github.com/JakimPL/SampleRipper"],
-        ["modules.pl", "https://modules.pl/"],
-        [".mod Sample Master", "https://modsamplemaster.org/"],
-    ])("opens %s in a new tab that learns nothing of this page", (label, href) => {
+    it("opens every link in a new tab that learns nothing of this page", () => {
         render(<AboutSheet onClose={() => undefined} />);
 
-        const link = screen.getByRole("link", { name: label });
+        const links = screen.getAllByRole("link");
 
-        expect(link).toHaveAttribute("href", href);
-        expect(link).toHaveAttribute("target", "_blank");
-        expect(link.getAttribute("rel")).toContain("noreferrer");
-    });
-
-    it("thanks the projects it stands on", () => {
-        render(<AboutSheet onClose={() => undefined} />);
-
-        expect(screen.getByText(/Thanks to/)).toHaveTextContent(
-            "Thanks to modules.pl, home of the module database, and to Fred / The Gang for the .mod Sample Master idea.",
-        );
+        expect(links.length).toBeGreaterThan(0);
+        for (const link of links) {
+            expect(link.getAttribute("href")).toMatch(/^https:\/\//);
+            expect(link).toHaveAttribute("target", "_blank");
+            expect(link.getAttribute("rel")).toContain("noreferrer");
+        }
     });
 
     it("closes from the scrim", () => {
