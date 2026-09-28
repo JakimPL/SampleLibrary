@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, type Mock, onTestFinished, vi } from "vitest";
 
 import type * as MorphApi from "../../src/api/morph";
@@ -539,5 +539,42 @@ describe("MorphStrip opened out", () => {
         fireEvent.keyUp(screen.getByRole("slider", { name: "Point along the morph" }), { key: "Tab" });
 
         expect(playAnswered).not.toHaveBeenCalled();
+    });
+});
+
+describe("MorphStrip's history", () => {
+    it("opens the columns under the strip from the history button, and closes them again", () => {
+        showEmpty();
+        const button = screen.getByRole("button", { name: "History" });
+        expect(button).toBeEnabled();
+        expect(button).toHaveAttribute("aria-expanded", "false");
+
+        fireEvent.click(button);
+
+        const box = screen.getByRole("region", { name: "History" });
+        expect(button).toHaveAttribute("aria-expanded", "true");
+        expect(button).toHaveAttribute("aria-controls", box.id);
+        expect(within(box).getByRole("button", { name: "Undo" })).toBeDisabled();
+
+        fireEvent.click(button);
+
+        expect(screen.queryByRole("region", { name: "History" })).not.toBeInTheDocument();
+        expect(button).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("opens the history as a sheet on a phone, which Escape closes", () => {
+        stubMatchMedia(new Set([PHONE_MEDIA_QUERY]));
+        showEmpty();
+
+        fireEvent.click(screen.getByRole("button", { name: "History" }));
+
+        const sheet = screen.getByRole("dialog", { name: "History" });
+        expect(within(sheet).getByRole("button", { name: "Redo" })).toBeDisabled();
+        expect(screen.queryByRole("region", { name: "History" })).not.toBeInTheDocument();
+
+        fireEvent.keyDown(document, { key: "Escape" });
+
+        expect(screen.queryByRole("dialog", { name: "History" })).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "History" })).toHaveAttribute("aria-expanded", "false");
     });
 });

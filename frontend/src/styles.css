@@ -2804,6 +2804,138 @@ table.data td .annotation-editor-input {
     border: 1px solid var(--border);
 }
 
+/* The history under the strip: undo, redo and forgetting over a column per end, in the box a waveform takes. */
+.morph-strip-history {
+    flex: 0 0 auto;
+    height: var(--sample-transport-height);
+}
+
+.morph-history {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    height: 100%;
+    min-height: 0;
+}
+
+.morph-history-tools {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.morph-history-tools > :last-child {
+    margin-left: auto;
+}
+
+.morph-history-columns {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr);
+    gap: var(--space-3);
+}
+
+.morph-history-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    overflow: hidden;
+}
+
+.morph-history-caption {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-1) var(--space-4);
+    border-bottom: 1px solid var(--border);
+    font-size: var(--font-size-caption);
+}
+
+.morph-history-letter {
+    color: var(--text-muted);
+}
+
+.morph-history-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+}
+
+.morph-history-empty {
+    margin: 0;
+    padding: var(--space-4);
+    font-size: var(--font-size-small);
+    color: var(--text-muted);
+}
+
+/* A row is the one button that gives its sample back; the pressed row is the end right now. */
+.morph-history-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    width: 100%;
+    min-height: var(--control-height);
+    padding: 0 var(--space-4) 0 var(--space-3);
+    border: none;
+    border-left: 2px solid transparent;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--font-size-small);
+    text-align: left;
+    cursor: pointer;
+}
+
+.morph-history-row:hover {
+    background: var(--surface-2);
+}
+
+.morph-history-row[aria-pressed="true"] {
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.morph-history-row .mini-waveform {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 14px;
+}
+
+.morph-history-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.morph-history-hash {
+    flex: 0 0 auto;
+    font-size: var(--font-size-label);
+    color: var(--text-faint);
+}
+
+:root[data-layout="phone"] .morph-history-hash {
+    display: none;
+}
+
+/* In a sheet a column hugs its rows up to half the screen, then scrolls inside, as the box does under the strip. */
+.sheet .morph-history-column {
+    max-height: 50vh;
+}
+
 /* The wrapper passes pointers through to the points; the marker alone takes them. */
 .morph-link {
     position: absolute;
@@ -3050,6 +3182,7 @@ table.data td .annotation-editor-input {
     .morph-strip-toggle,
     .morph-strip-body,
     .morph-strip-wave,
+    .morph-strip-history,
     .phone-shell[data-tab="cloud"] .tray {
         display: none;
     }
