@@ -40,6 +40,7 @@ from trackmod.spec.levels import MAX_INSTRUMENT_VOLUME, MAX_PANNING, MIN_INSTRUM
 from trackmod.spec.pitch import NOTE_COUNT
 
 from samplecore.models.channels import ChannelLayout
+from samplecore.models.module_link import MAXIMUM_URL_LENGTH
 from samplecore.models.pass_completion import PassKind
 from samplecore.models.relation import RelationType
 from samplecore.models.tracker import TrackerFormat
@@ -292,6 +293,16 @@ module_cloud_coordinates = Table(
     Column("x", Double, nullable=False),
     Column("y", Double, nullable=False),
     Column("computed_at", DateTime(timezone=True), nullable=False),
+)
+
+# The web page a module came from, as a person recorded it from a file of locations and links.
+# It follows the module's content hash, so a byte-identical copy under another name shares it.
+module_link = Table(
+    "module_link",
+    metadata,
+    Column("module_hash", String(64), ForeignKey("module.hash"), primary_key=True),
+    Column("url", String(MAXIMUM_URL_LENGTH), nullable=False),
+    CheckConstraint(column("url").like("http://%") | column("url").like("https://%"), name="module_link_url_check"),
 )
 
 sample_spectral_feature = Table(

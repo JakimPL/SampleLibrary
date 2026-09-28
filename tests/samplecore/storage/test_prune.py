@@ -13,12 +13,12 @@ from samplecore.storage.atomic import PARTIAL_SUFFIX
 from samplecore.storage.database import (
     metadata,
     module,
-    module_cloud_coordinates,
     sample,
     sample_properties,
     sample_relation,
 )
 from samplecore.storage.prune import (
+    MODULE_HASH_TABLES,
     MODULE_ROW_TABLES,
     SAMPLE_HOLDER_TABLES,
     SAMPLE_ROW_TABLES,
@@ -64,7 +64,7 @@ def test_every_table_referring_to_a_module_or_a_sample_is_pruned_through() -> No
         *SAMPLE_ROW_TABLES,
         *SAMPLE_HOLDER_TABLES,
         sample_relation,
-        module_cloud_coordinates,
+        *MODULE_HASH_TABLES,
     }
     referring = {
         table
@@ -107,6 +107,13 @@ def test_pruning_a_module_removes_it_and_the_samples_no_other_module_holds(
     for table in MODULE_ROW_TABLES:
         assert (
             connection.execute(select(func.count()).select_from(table).where(table.c.module_id == gone.id)).scalar_one()
+            == 0
+        )
+    for table in MODULE_HASH_TABLES:
+        assert (
+            connection.execute(
+                select(func.count()).select_from(table).where(table.c.module_hash == gone.hash)
+            ).scalar_one()
             == 0
         )
 
