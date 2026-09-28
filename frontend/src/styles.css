@@ -2931,9 +2931,9 @@ table.data td .annotation-editor-input {
     display: none;
 }
 
-/* In a sheet the columns take a share of the screen and scroll inside it, as the box does under the strip. */
-.sheet .morph-history-columns {
-    height: 50vh;
+/* In a sheet a column hugs its rows up to half the screen, then scrolls inside, as the box does under the strip. */
+.sheet .morph-history-column {
+    max-height: 50vh;
 }
 
 /* The wrapper passes pointers through to the points; the marker alone takes them. */
