@@ -360,8 +360,10 @@ def test_a_site_serves_its_publication_to_anyone(
         heard = client.get(f"/samples/{publishing.published_file.sample_hash}/audio")
         withheld = client.get(f"/samples/{publishing.unpublished_file.sample_hash}")
         stats = client.get("/stats")
+        module_detail = client.get(f"/modules/{MODULE_HASH}").json()
 
     assert listing["total"] == 3
+    assert module_detail["link"] == MODULE_PAGE_URL
     assert heard.status_code == 200
     assert heard.content == audio_store.encode_wav(
         decode_sample_file(publishing.published_file.location.path).sample_pcm
