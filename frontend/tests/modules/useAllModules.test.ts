@@ -25,6 +25,7 @@ function buildModule(id: number): Module {
         sample_count: 1,
         file_size: 1024,
         ingested_at: "2026-01-01T00:00:00Z",
+        link: null,
     };
 }
 

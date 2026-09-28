@@ -1130,6 +1130,29 @@ tr:focus-within .row-open,
     opacity: 1;
 }
 
+/* The page a module came from, as a glyph at the end of its row: a tap target wide, in the row's height. */
+.cell-link {
+    padding: 0;
+    text-align: center;
+}
+
+.row-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    border-radius: var(--radius-2);
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.row-link:hover,
+.row-link:focus-visible {
+    color: var(--accent);
+    background: var(--surface-2);
+}
+
 /* Set tight so a name, a hash and a near-duplicate badge fit the listing row height. */
 .cell-name-stack {
     display: flex;
@@ -3333,13 +3356,14 @@ table.data td .annotation-editor-input {
     font-size: var(--font-size-small);
 }
 
-.about-thanks a {
+/* A link that leaves the app, its glyph at its side. */
+.external-link {
     color: var(--accent);
     text-decoration: underline;
     white-space: nowrap;
 }
 
-.about-thanks .icon {
+.external-link .icon {
     width: 0.85em;
     height: 0.85em;
     margin-left: 0.15em;

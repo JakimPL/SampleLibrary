@@ -3,7 +3,9 @@ import type { ReactElement } from "react";
 import type { ModuleDetail } from "../api/modules";
 import { DetailHeader } from "../shared/DetailHeader";
 import { formatBytes } from "../shared/format";
+import { Icon } from "../shared/icons/Icon";
 import { UNTITLED_MODULE_LABEL } from "../shared/labels";
+import { linkHost } from "../shared/linkHost";
 import { MODULE_SAMPLE_COLUMN_LABELS, ModuleSampleRow } from "./ModuleSampleRow";
 
 interface ModuleDetailViewProps {
@@ -17,6 +19,17 @@ export function ModuleDetailView({ module }: ModuleDetailViewProps): ReactElemen
             <dl className="kv">
                 <dt>Filename</dt>
                 <dd>{module.filename}</dd>
+                {module.link !== null && (
+                    <>
+                        <dt>Link</dt>
+                        <dd>
+                            <a className="external-link" href={module.link} target="_blank" rel="noreferrer">
+                                {linkHost(module.link)}
+                                <Icon name="external" label={null} />
+                            </a>
+                        </dd>
+                    </>
+                )}
                 <dt>Tracker</dt>
                 <dd>
                     <span className={`badge badge-${module.tracker}`}>{module.tracker}</span>

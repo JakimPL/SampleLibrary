@@ -10,7 +10,7 @@ import { densifyPoints, parseDensifyTarget, type PlanarPoint } from "./densifyCl
 type CloudPoint = components["schemas"]["SampleCloudPoint"];
 type ModuleCloudPoint = components["schemas"]["ModuleCloudPoint"];
 type SampleSummary = components["schemas"]["SampleSummary"];
-type ModuleSummary = components["schemas"]["Module"];
+type ModuleSummary = components["schemas"]["ModuleSummary"];
 
 interface Page<Item> {
     readonly items: readonly Item[];

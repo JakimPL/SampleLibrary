@@ -29,7 +29,7 @@ interface ThanksLinkProps {
 
 function ThanksLink({ href, label }: ThanksLinkProps): ReactElement {
     return (
-        <a href={href} target="_blank" rel="noreferrer">
+        <a className="external-link" href={href} target="_blank" rel="noreferrer">
             {label}
             <Icon name="external" label={null} />
         </a>

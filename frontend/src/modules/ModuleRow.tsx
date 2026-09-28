@@ -1,11 +1,14 @@
-import type { ReactElement } from "react";
+import type { MouseEvent, ReactElement } from "react";
 import { Link } from "react-router-dom";
 
 import type { Module } from "../api/modules";
 import { classNames } from "../shared/classNames";
 import { formatBytes, shortHash } from "../shared/format";
+import { Icon } from "../shared/icons/Icon";
 import { UNTITLED_MODULE_LABEL } from "../shared/labels";
+import { linkHost } from "../shared/linkHost";
 import { OptionalLabel } from "../shared/OptionalLabel";
+import { ROW_LINK_PROPS } from "../workspace/rowLinks";
 import { RowOpenLink } from "../workspace/RowOpenLink";
 import { useEntityRowInteractions } from "../workspace/useEntityRowInteractions";
 import type { ModuleColumnId } from "./moduleColumns";
@@ -14,6 +17,11 @@ interface ModuleRowProps {
     readonly module: Module;
     /** The columns the listing shows at its width; the title is always among them. */
     readonly visibleColumns: ReadonlySet<ModuleColumnId>;
+}
+
+/** A double click on the page link stays with the link, so the row opens no module for it. */
+function keepToTheLink(event: MouseEvent): void {
+    event.stopPropagation();
 }
 
 export function ModuleRow({ module, visibleColumns }: ModuleRowProps): ReactElement {
@@ -53,6 +61,24 @@ export function ModuleRow({ module, visibleColumns }: ModuleRowProps): ReactElem
             )}
             {visibleColumns.has("file_size") && (
                 <td className="cell-muted mono cell-numeric">{formatBytes(module.file_size)}</td>
+            )}
+            {visibleColumns.has("link") && (
+                <td className="cell-link">
+                    {module.link !== null && (
+                        <a
+                            href={module.link}
+                            className="row-link"
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`Open on ${linkHost(module.link)}`}
+                            title={`Open on ${linkHost(module.link)}`}
+                            onDoubleClick={keepToTheLink}
+                            {...ROW_LINK_PROPS}
+                        >
+                            <Icon name="external" label={null} />
+                        </a>
+                    )}
+                </td>
             )}
         </tr>
     );
