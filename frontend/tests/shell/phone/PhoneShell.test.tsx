@@ -166,6 +166,15 @@ describe("PhoneShell", () => {
         expect(screen.getByRole("dialog", { name: "Diagnostics" })).toBeInTheDocument();
     });
 
+    it("opens About from the screen menu", () => {
+        renderShellAt("/");
+
+        fireEvent.click(screen.getByText("More"));
+        fireEvent.click(screen.getByRole("button", { name: "About" }));
+
+        expect(screen.getByRole("dialog", { name: "About" })).toBeInTheDocument();
+    });
+
     it("shows a panel with no tab as a page from the screen menu", async () => {
         renderShellAt("/");
 

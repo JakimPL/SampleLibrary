@@ -1177,8 +1177,9 @@ a versioned record; a record of another version is discarded once and the defaul
 which is how a new arrangement reaches a browser that saved an older one. The top bar's View menu
 opens and closes panels at their registered placement and resets the arrangement. Its Library menu
 opens the setup page and quits the application, and appears where the setup routes answer, on the
-machine the application runs on; its Help menu holds the guide and the diagnostics. The theme select
-sits beside them. Each panel renders inside a `PanelHost`, the scroll container that is also the
+machine the application runs on; its Help menu holds the guide, the diagnostics and About, whose
+version Vite's `define` reads from `pyproject.toml` as the web app is built (`frontend/src/version.ts`).
+The theme select sits beside them. Each panel renders inside a `PanelHost`, the scroll container that is also the
 container its stylesheet rules query, so a panel fits the width it was given rather than the window's.
 The Sample Detail panel stands the focused sample's transport
 (`frontend/src/samples/SampleTransport.tsx`, the wavesurfer player over the one detail request

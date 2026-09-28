@@ -7,9 +7,9 @@ the morph, every click, key and gesture, and phones and tablets.
 
 On a computer the app is a set of panels you arrange by dragging their tabs: **Samples**,
 **Modules**, **Cloud**, **Sample Detail**, **Module Detail** and **Stats**. The **View** menu opens
-and closes each panel, and **Reset layout** puts them back where they started. The same menu holds
-**Keyboard and mouse**, the list of every click and key, and **Diagnostics**, which says what your
-browser's graphics support.
+and closes each panel, and **Reset layout** puts them back where they started. The **Help** menu
+holds **Keyboard and mouse**, the list of every click and key, **Diagnostics**, which says what your
+browser's graphics support, and **About**, which names the version and where the source lives.
 
 A sample opens in **Sample Detail**, which plays it and offers its file to save. Its tabs show the
 sample's details (**Info**), the samples that sound like it (**Similar**), every module and file it
@@ -78,7 +78,7 @@ Below 768 pixels of width the app shows three tabs along the bottom, **Samples**
 **Modules**. The tray above them names the sample or module in hand, with its stars, its heart and
 the › that opens it. A sample or module opens as a page of its own, and its ‹ and › walk the listing,
 so going through a run of samples is one page after another. The **More** menu on each tab holds the
-statistics, the theme, **Gestures** and **Diagnostics**. A tablet keeps the computer's panels, with
+statistics, the theme, **Gestures**, **Diagnostics** and **About**. A tablet keeps the computer's panels, with
 controls sized for a finger. Your browser's "Add to Home Screen" installs the app with its own icon.
 
 | Where | Gesture | What it does |
