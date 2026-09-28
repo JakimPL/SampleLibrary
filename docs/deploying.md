@@ -34,11 +34,18 @@ several gigabytes, which needs Railway's Pro plan.
    postgresql+psycopg://sampleripper_reader:<the password>@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}
    ```
 
-   Then seal the variable, so Railway never shows it again. Add no other database variable: the
-   site refuses to start holding any connection that could change the catalog.
+   `sampleripper_reader` is the user the site logs in as, which publishing creates; the database
+   keeps Railway's name. `Postgres` in the two references is the database service's name as the
+   canvas shows it, so use yours. Railway shows the value with the references filled in under the
+   field: check the host and the database are there before you save. Then seal the variable, so
+   Railway never shows it again. Add no other database variable: the site refuses to start holding
+   any connection that could change the catalog.
 6. **Set a spending limit** in the project's usage settings, so a flood of visitors costs no more
    than you chose.
 7. **Give the site an address** in its Networking settings.
+
+The site keeps restarting until the first publication creates the reader it connects as. From then
+on it starts, and says in its log that it has no audio yet until you upload it.
 
 ## Publish
 
@@ -69,22 +76,25 @@ your library, `publication`. Repeat it whenever you want the site to show your l
    carrying a label, a rating, a favorite or a path of your computer, and changes nothing when it
    refuses.
 4. **Close the database again:** turn its public networking off.
-5. **Upload the audio** it names to the site's volume. Railway names a volume's files from the
+5. **Redeploy the site** from its Deployments tab, so it reads the new catalog. It starts without
+   the audio, and says so in its log.
+6. **Upload the audio** it names to the site's volume. Railway names a volume's files from the
    volume's own root, which the site sees as `/library`:
 
    ```sh
    railway volume files upload <your library>/publication/objects /objects
    ```
 
-   When you publish again, first run `railway volume files delete /objects`, so the volume holds
-   the samples published now and no others.
-6. **Restart the site** from its Deployments tab, so it reads the new catalog.
+   The upload goes through the running site, and samples play as soon as their files arrive. When
+   you publish again, first run `railway volume files delete /objects`, so the volume holds the
+   samples published now and no others.
 
 ## Check it once it runs
 
-1. **Open the site** at its address, play a few samples and a morph. A sample that won't play
-   means the site can't read its volume: Railway's answer is the variable `RAILWAY_RUN_UID=0` on the
-   site's service, which runs it as the volume's owner.
+1. **Open `/api/health`** at the site's address: `audio_present` is true once the upload landed.
+   Then play a few samples and a morph. A site that refuses to start naming its audio store can't
+   read its volume: Railway's answer is the variable `RAILWAY_RUN_UID=0` on the site's service,
+   which runs it as the volume's owner.
 2. **Check that each visitor has limits of their own.** This asks for the whole-catalog summary 30
    times, each time claiming to be someone else:
 

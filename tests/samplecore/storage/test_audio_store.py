@@ -203,3 +203,35 @@ def test_encoding_a_sample_gives_the_bytes_the_store_holds_for_it(tmp_path: Path
     stored = audio_store.write(tmp_path, sample_pcm)
 
     assert audio_store.encode_wav(sample_pcm) == stored.read_bytes()
+
+
+def test_an_absent_store_is_neither_readable_nor_holding_audio(tmp_path: Path) -> None:
+    assert not audio_store.store_is_readable(tmp_path)
+    assert not audio_store.store_holds_audio(tmp_path)
+
+
+def test_an_empty_store_is_readable_and_holds_no_audio(tmp_path: Path) -> None:
+    (tmp_path / audio_store.OBJECTS_DIRECTORY_NAME).mkdir()
+
+    assert audio_store.store_is_readable(tmp_path)
+    assert not audio_store.store_holds_audio(tmp_path)
+
+
+def test_a_store_with_one_object_holds_audio(tmp_path: Path) -> None:
+    path = audio_store.object_path(tmp_path, "ab" + "c" * 62)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"RIFF")
+
+    assert audio_store.store_holds_audio(tmp_path)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every folder")
+def test_a_store_this_process_may_not_enter_is_unreadable(tmp_path: Path) -> None:
+    store = tmp_path / audio_store.OBJECTS_DIRECTORY_NAME
+    store.mkdir()
+    store.chmod(0)
+    try:
+        assert not audio_store.store_is_readable(tmp_path)
+        assert not audio_store.store_holds_audio(tmp_path)
+    finally:
+        store.chmod(stat.S_IRWXU)

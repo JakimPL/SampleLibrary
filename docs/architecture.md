@@ -715,9 +715,12 @@ anything starts it refuses, each in a sentence of its own (`sampleripper.site.ad
 - an owner, curator, administrator or publishing connection, from the config or the environment;
 - a reader named nowhere, or with a password shorter than 24 characters;
 - a renderer listening beyond the loopback address, or on the site's own port;
-- a missing audio store.
+- an audio store it cannot read.
 
-It then checks the reader's role the way `serve` does. The renderer starts as a child with no
+It then checks the reader's role the way `serve` does. A store that is missing or empty is a
+warning as the site starts, since a platform's volume is filled through the running site: the
+site serves its catalog, every sample answers "not found" and `GET /api/health` reports
+`audio_present` false until the objects arrive, which the site reads with no restart. The renderer starts as a child with no
 database connection in its environment and one thread per numerical library, its output joining the
 site's, and the site serves once the renderer answers. A renderer that ends while the site serves
 ends the site with status 1, so the platform starts both again.
@@ -1174,8 +1177,9 @@ a versioned record; a record of another version is discarded once and the defaul
 which is how a new arrangement reaches a browser that saved an older one. The top bar's View menu
 opens and closes panels at their registered placement and resets the arrangement. Its Library menu
 opens the setup page and quits the application, and appears where the setup routes answer, on the
-machine the application runs on; its Help menu holds the guide and the diagnostics. The theme select
-sits beside them. Each panel renders inside a `PanelHost`, the scroll container that is also the
+machine the application runs on; its Help menu holds the guide, the diagnostics and About, whose
+version Vite's `define` reads from `pyproject.toml` as the web app is built (`frontend/src/version.ts`).
+The theme select sits beside them. Each panel renders inside a `PanelHost`, the scroll container that is also the
 container its stylesheet rules query, so a panel fits the width it was given rather than the window's.
 The Sample Detail panel stands the focused sample's transport
 (`frontend/src/samples/SampleTransport.tsx`, the wavesurfer player over the one detail request

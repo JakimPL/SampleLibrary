@@ -8,19 +8,22 @@ import { SETUP_PATH } from "../../setup/SetupGate";
 import { useSetupProbe } from "../../setup/useSetupProbe";
 import { DisclosureMenu } from "../../shared/overlay/DisclosureMenu";
 import { ThemeMenu } from "../../theme/ThemeMenu";
+import { ABOUT_TITLE, AboutSheet } from "../AboutSheet";
 import { DIAGNOSTICS_TITLE, DiagnosticsSheet } from "../DiagnosticsSheet";
 import { GUIDE_TITLES, GuideSheet } from "../GuideSheet";
 import { overflowPanels } from "./phoneView";
 
 /**
  * The menu at a tab's far end: the panels with no tab of their own, the library's setup where the
- * setup routes answer this browser, the guide to the gestures, the diagnostics, and the theme.
+ * setup routes answer this browser, the guide to the gestures, the diagnostics, what the app is,
+ * and the theme.
  */
 export function ScreenMenu(): ReactElement {
     const { input } = useLayoutMode();
     const setup = useSetupProbe();
     const [guideOpen, setGuideOpen] = useState(false);
     const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+    const [aboutOpen, setAboutOpen] = useState(false);
 
     return (
         <>
@@ -62,6 +65,17 @@ export function ScreenMenu(): ReactElement {
                             {DIAGNOSTICS_TITLE}
                         </button>
                     </li>
+                    <li>
+                        <button
+                            type="button"
+                            className="screen-menu-button"
+                            onClick={() => {
+                                setAboutOpen(true);
+                            }}
+                        >
+                            {ABOUT_TITLE}
+                        </button>
+                    </li>
                 </ul>
                 <ThemeMenu />
             </DisclosureMenu>
@@ -78,6 +92,13 @@ export function ScreenMenu(): ReactElement {
                     support={floatRenderingSupport()}
                     onClose={() => {
                         setDiagnosticsOpen(false);
+                    }}
+                />
+            )}
+            {aboutOpen && (
+                <AboutSheet
+                    onClose={() => {
+                        setAboutOpen(false);
                     }}
                 />
             )}

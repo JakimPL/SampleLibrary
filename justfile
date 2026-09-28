@@ -175,6 +175,11 @@ frontend-dev-lan:
 frontend-build:
     npm run build
 
+# The web app's PNG icons, drawn from favicon.svg; the installers cut theirs from the largest.
+[group("frontend")]
+icons:
+    uv run --no-project python scripts/render_icons.py
+
 [group("frontend")]
 [working-directory("frontend")]
 frontend-check:

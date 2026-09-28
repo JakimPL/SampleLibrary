@@ -9,13 +9,16 @@ import threading
 from dataclasses import dataclass, field
 from typing import Final
 
+from sqlalchemy.exc import OperationalError
+
 from samplecore.cli_parsing import command_parser
 from samplecore.cli_support import bootstrap_cli
-from samplecore.config import resolve_config_path
+from samplecore.config import LibraryConfig, resolve_config_path
 from samplecore.exit_status import ExitStatus
+from samplecore.storage.cluster.provisioning import headline, is_connection_failure, server_message
 from sampleripper.children import ChildProcess
-from sampleripper.site.admission import SiteRefusedError, admit_site, site_port
-from sampleripper.site.messages import RENDERER_ENDED
+from sampleripper.site.admission import SiteRefusedError, admit_site, site_port, site_warnings
+from sampleripper.site.messages import CATALOG_UNREACHABLE, RENDERER_ENDED
 from sampleripper.site.renderer import RendererDidNotStartError, site_renderer, wait_until_answering
 from sampleserver.cli import WORKER_COUNT_ENVIRONMENT_VARIABLE, admit_reader, names_a_process_count, run_server
 
@@ -40,13 +43,15 @@ def main(argv: list[str], *, prog: str) -> None:
     """Serve the library to anyone, as a site: the catalog's API and pages, and the morph renderer beside them.
 
     Everything a site may not do is refused before anything starts (`sampleripper.site.admission`),
-    and the reader's role is checked the way `sampleripper serve` checks it. The renderer runs as a
-    child on the loopback address, and the site serves once it answers. A renderer that ends while
+    and the reader's role is checked the way `sampleripper serve` checks it. A site without its audio
+    yet starts and says so, since a platform's volume is filled through the running site
+    (`site_warnings`). The renderer runs as a child on the loopback address, and the site serves once it answers. A renderer that ends while
     the site serves ends the site with status 1, so the platform running it starts both again; a site
     stopping stops its renderer.
 
     Raises:
-        SystemExit: the site may not start as configured (3), the renderer failed (1).
+        SystemExit: the site may not start as configured (3), the catalog cannot be reached at the
+            address the site was given or the renderer failed (1).
     """
     arguments = _parse_arguments(argv, prog=prog)
     config = bootstrap_cli()
@@ -57,7 +62,9 @@ def main(argv: list[str], *, prog: str) -> None:
         for problem in refusal.problems:
             _logger.error("%s", problem)
         sys.exit(ExitStatus.REFUSED)
-    admit_reader(config)
+    _admit_reader_naming_the_address(config)
+    for warning in site_warnings(config):
+        _logger.warning("%s", warning)
 
     renderer = site_renderer(config.inference, environment=os.environ, config_path=resolve_config_path())
     renderer.start()
@@ -73,6 +80,21 @@ def main(argv: list[str], *, prog: str) -> None:
         watch.stopping.set()
         renderer.stop()
     if watch.ended_with:
+        sys.exit(ExitStatus.FAILED)
+
+
+def _admit_reader_naming_the_address(config: LibraryConfig) -> None:
+    """Check the reader's role, saying which setting holds its address when the catalog cannot be reached.
+
+    Raises:
+        SystemExit: the catalog cannot be reached (1), or the reader is refused, as `admit_reader` ends.
+    """
+    try:
+        admit_reader(config)
+    except OperationalError as error:
+        if not is_connection_failure(error):
+            raise
+        _logger.error("%s", CATALOG_UNREACHABLE.format(reason=headline(server_message(error))))
         sys.exit(ExitStatus.FAILED)
 
 

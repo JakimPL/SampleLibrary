@@ -5,6 +5,8 @@ FROM node:26-bookworm-slim AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci
+# The web app reads its version from the project file beside the frontend folder, as in a checkout.
+COPY pyproject.toml /pyproject.toml
 COPY frontend ./
 RUN npm run build
 

@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Get Health
-         * @description Whether the catalog answers, at the cost of one trivial query, for a platform checking the server's health.
+         * @description Whether the catalog answers, at the cost of one trivial query, and whether the audio store holds anything.
          */
         readonly get: operations["get_health_api_health_get"];
         readonly put?: never;
@@ -479,10 +479,10 @@ export interface paths {
          *     caching headers pass through untouched, and so does a caller's conditional request, so a
          *     browser that holds the render is answered with a 304 by the process that made it.
          *
-         *     Where the policy limits visitors, a new render spends one morph of the visitor's budget and of
-         *     everyone's before the renderer is asked, and a request naming the render it holds spends one
-         *     only once the renderer answers with new audio; at most the configured number reach the renderer
-         *     at once (`sampleserver.visitors.MorphGate`).
+         *     At most the configured number of morphs reach the renderer at once. Where the policy limits
+         *     visitors, a new render spends one morph of the visitor's budget and of everyone's before the
+         *     renderer is asked, and a request naming the render it holds is asked while neither budget is in
+         *     debt, spending one once the renderer answers with new audio (`sampleserver.visitors.MorphGate`).
          *
          *     Raises:
          *         HTTPException: 429 once a morph budget is spent, 503 while the renderer is busy with as many
@@ -700,11 +700,16 @@ export interface components {
         };
         /**
          * Health
-         * @description What a health check reads: that the server answers and its catalog does too.
+         * @description What a health check reads: that the server answers, its catalog does too, and whether its audio is in place.
+         *
+         *     ``audio_present`` is False while the store holds nothing, as a site's volume does before the
+         *     publication's objects are uploaded; the server answers all the same.
          */
         readonly Health: {
             /** Catalog Answers */
             readonly catalog_answers: boolean;
+            /** Audio Present */
+            readonly audio_present: boolean;
         };
         /**
          * ITSampleProperties
