@@ -51,8 +51,9 @@ export function AboutSheet({ onClose }: AboutSheetProps): ReactElement {
                 <p className="about-description">{DESCRIPTION}</p>
                 <p className="about-author">{AUTHOR_LINE}</p>
                 <p className="about-thanks">
-                    Thanks to <ThanksLink href={MODULES_URL} label={MODULES_LABEL} />, home of the module database, and
-                    to Fred / The Gang for the <ThanksLink href={SAMPLE_MASTER_URL} label={SAMPLE_MASTER_LABEL} /> idea.
+                    Thanks to <i>AceMan</i> for <ThanksLink href={MODULES_URL} label={MODULES_LABEL} />, home of the
+                    module database, and to <i>Fred / The Gang</i> for the{" "}
+                    <ThanksLink href={SAMPLE_MASTER_URL} label={SAMPLE_MASTER_LABEL} /> idea.
                 </p>
                 <a
                     className={buttonClassName({ variant: "secondary", className: "about-link" })}
