@@ -1,6 +1,6 @@
 [project]
 name = "sampleripper"
-version = "0.0.1"
+version = "0.1.0"
 description = "Personal library and web application for tracker music samples"
 readme = "README.md"
 requires-python = ">=3.12"
