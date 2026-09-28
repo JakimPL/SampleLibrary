@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Get Health
-         * @description Whether the catalog answers, at the cost of one trivial query, for a platform checking the server's health.
+         * @description Whether the catalog answers, at the cost of one trivial query, and whether the audio store holds anything.
          */
         readonly get: operations["get_health_api_health_get"];
         readonly put?: never;
@@ -33,7 +33,7 @@ export interface paths {
         };
         /**
          * List Modules
-         * @description A page of cataloged modules, optionally filtered by tracker format.
+         * @description A page of cataloged modules, optionally filtered by tracker format, each with its page link.
          */
         readonly get: operations["list_modules_api_modules_get"];
         readonly put?: never;
@@ -479,10 +479,10 @@ export interface paths {
          *     caching headers pass through untouched, and so does a caller's conditional request, so a
          *     browser that holds the render is answered with a 304 by the process that made it.
          *
-         *     Where the policy limits visitors, a new render spends one morph of the visitor's budget and of
-         *     everyone's before the renderer is asked, and a request naming the render it holds spends one
-         *     only once the renderer answers with new audio; at most the configured number reach the renderer
-         *     at once (`sampleserver.visitors.MorphGate`).
+         *     At most the configured number of morphs reach the renderer at once. Where the policy limits
+         *     visitors, a new render spends one morph of the visitor's budget and of everyone's before the
+         *     renderer is asked, and a request naming the render it holds is asked while neither budget is in
+         *     debt, spending one once the renderer answers with new audio (`sampleserver.visitors.MorphGate`).
          *
          *     Raises:
          *         HTTPException: 429 once a morph budget is spent, 503 while the renderer is busy with as many
@@ -700,11 +700,16 @@ export interface components {
         };
         /**
          * Health
-         * @description What a health check reads: that the server answers and its catalog does too.
+         * @description What a health check reads: that the server answers, its catalog does too, and whether its audio is in place.
+         *
+         *     ``audio_present`` is False while the store holds nothing, as a site's volume does before the
+         *     publication's objects are uploaded; the server answers all the same.
          */
         readonly Health: {
             /** Catalog Answers */
             readonly catalog_answers: boolean;
+            /** Audio Present */
+            readonly audio_present: boolean;
         };
         /**
          * ITSampleProperties
@@ -829,41 +834,6 @@ export interface components {
             readonly tracker: "mod";
         };
         /**
-         * Module
-         * @description A tracker module file's identity and the shape of the song it stores.
-         *
-         *     ``hash`` content-addresses the exact file bytes; ``id`` is the library's own sequential handle
-         *     for it, the pair mirroring how modsamplemaster.org identifies a module by both a hash and an
-         *     id. ``filename`` is the module's own filename at ingestion time with no directory component --
-         *     the local path it was ingested from is never recorded, only the name the file itself carried.
-         */
-        readonly Module: {
-            /** Hash */
-            readonly hash: string;
-            /** Id */
-            readonly id: number;
-            /** Filename */
-            readonly filename: string;
-            readonly tracker: components["schemas"]["TrackerFormat"];
-            /** Title */
-            readonly title: string;
-            /** Channel Count */
-            readonly channel_count: number;
-            /** Pattern Count */
-            readonly pattern_count: number;
-            /** Instrument Count */
-            readonly instrument_count: number;
-            /** Sample Count */
-            readonly sample_count: number;
-            /** File Size */
-            readonly file_size: number;
-            /**
-             * Ingested At
-             * Format: date-time
-             */
-            readonly ingested_at: string;
-        };
-        /**
          * ModuleCloudPoint
          * @description One module's place in the embedding: the coordinate alone, for the same reason a sample's point is.
          */
@@ -904,6 +874,8 @@ export interface components {
              * Format: date-time
              */
             readonly ingested_at: string;
+            /** Link */
+            readonly link: string | null;
             /** Occurrences */
             readonly occurrences: readonly components["schemas"]["ModuleOccurrenceDetail"][];
         };
@@ -937,6 +909,38 @@ export interface components {
             readonly thumbnail: readonly components["schemas"]["WaveformPeak"][] | null;
         };
         /**
+         * ModuleSummary
+         * @description A module as the listing shows it: its own fields, and the page it came from where one is recorded.
+         */
+        readonly ModuleSummary: {
+            /** Hash */
+            readonly hash: string;
+            /** Id */
+            readonly id: number;
+            /** Filename */
+            readonly filename: string;
+            readonly tracker: components["schemas"]["TrackerFormat"];
+            /** Title */
+            readonly title: string;
+            /** Channel Count */
+            readonly channel_count: number;
+            /** Pattern Count */
+            readonly pattern_count: number;
+            /** Instrument Count */
+            readonly instrument_count: number;
+            /** Sample Count */
+            readonly sample_count: number;
+            /** File Size */
+            readonly file_size: number;
+            /**
+             * Ingested At
+             * Format: date-time
+             */
+            readonly ingested_at: string;
+            /** Link */
+            readonly link: string | null;
+        };
+        /**
          * MorphAvailability
          * @description Whether morphs can be rendered right now, and through which route when they can.
          */
@@ -965,10 +969,10 @@ export interface components {
                 readonly [key: string]: components["schemas"]["JsonValue"];
             };
         };
-        /** Page[Module] */
-        readonly Page_Module_: {
+        /** Page[ModuleSummary] */
+        readonly Page_ModuleSummary_: {
             /** Items */
-            readonly items: readonly components["schemas"]["Module"][];
+            readonly items: readonly components["schemas"]["ModuleSummary"][];
             /** Total */
             readonly total: number;
             /** Limit */
@@ -1501,7 +1505,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": components["schemas"]["Page_Module_"];
+                    readonly "application/json": components["schemas"]["Page_ModuleSummary_"];
                 };
             };
             /** @description Validation Error */

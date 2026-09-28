@@ -36,6 +36,7 @@ const SAMPLE_MODULE = {
     sample_count: 3,
     file_size: 4096,
     ingested_at: "2026-01-01T00:00:00Z",
+    link: null,
 };
 
 describe("ModulesListPanel", () => {

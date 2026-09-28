@@ -1130,6 +1130,29 @@ tr:focus-within .row-open,
     opacity: 1;
 }
 
+/* The page a module came from, as a glyph at the end of its row: a tap target wide, in the row's height. */
+.cell-link {
+    padding: 0;
+    text-align: center;
+}
+
+.row-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    border-radius: var(--radius-2);
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.row-link:hover,
+.row-link:focus-visible {
+    color: var(--accent);
+    background: var(--surface-2);
+}
+
 /* Set tight so a name, a hash and a near-duplicate badge fit the listing row height. */
 .cell-name-stack {
     display: flex;
@@ -2804,6 +2827,138 @@ table.data td .annotation-editor-input {
     border: 1px solid var(--border);
 }
 
+/* The history under the strip: undo, redo and forgetting over a column per end, in the box a waveform takes. */
+.morph-strip-history {
+    flex: 0 0 auto;
+    height: var(--sample-transport-height);
+}
+
+.morph-history {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    height: 100%;
+    min-height: 0;
+}
+
+.morph-history-tools {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.morph-history-tools > :last-child {
+    margin-left: auto;
+}
+
+.morph-history-columns {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr);
+    gap: var(--space-3);
+}
+
+.morph-history-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2);
+    background: var(--surface-0);
+    overflow: hidden;
+}
+
+.morph-history-caption {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-1) var(--space-4);
+    border-bottom: 1px solid var(--border);
+    font-size: var(--font-size-caption);
+}
+
+.morph-history-letter {
+    color: var(--text-muted);
+}
+
+.morph-history-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    list-style: none;
+}
+
+.morph-history-empty {
+    margin: 0;
+    padding: var(--space-4);
+    font-size: var(--font-size-small);
+    color: var(--text-muted);
+}
+
+/* A row is the one button that gives its sample back; the pressed row is the end right now. */
+.morph-history-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    width: 100%;
+    min-height: var(--control-height);
+    padding: 0 var(--space-4) 0 var(--space-3);
+    border: none;
+    border-left: 2px solid transparent;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--font-size-small);
+    text-align: left;
+    cursor: pointer;
+}
+
+.morph-history-row:hover {
+    background: var(--surface-2);
+}
+
+.morph-history-row[aria-pressed="true"] {
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.morph-history-row .mini-waveform {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 14px;
+}
+
+.morph-history-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.morph-history-hash {
+    flex: 0 0 auto;
+    font-size: var(--font-size-label);
+    color: var(--text-faint);
+}
+
+:root[data-layout="phone"] .morph-history-hash {
+    display: none;
+}
+
+/* In a sheet a column hugs its rows up to half the screen, then scrolls inside, as the box does under the strip. */
+.sheet .morph-history-column {
+    max-height: 50vh;
+}
+
 /* The wrapper passes pointers through to the points; the marker alone takes them. */
 .morph-link {
     position: absolute;
@@ -3050,6 +3205,7 @@ table.data td .annotation-editor-input {
     .morph-strip-toggle,
     .morph-strip-body,
     .morph-strip-wave,
+    .morph-strip-history,
     .phone-shell[data-tab="cloud"] .tray {
         display: none;
     }
@@ -3290,6 +3446,68 @@ table.data td .annotation-editor-input {
 .guide-meaning {
     margin: 0;
     color: var(--text-muted);
+}
+
+/* About: the logo over the name, the version, a line on the app, its maker and the way to its source. */
+.about {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) 0 var(--space-5);
+    text-align: center;
+}
+
+.about-logo {
+    width: 96px;
+    height: 96px;
+    margin-bottom: var(--space-2);
+    border-radius: 21px;
+}
+
+.about-name {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+}
+
+.about-version,
+.about-author {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-small);
+}
+
+.about-description {
+    max-width: 36ch;
+    margin: 0;
+}
+
+.about-thanks {
+    max-width: 40ch;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: var(--font-size-small);
+}
+
+/* A link that leaves the app, its glyph at its side. */
+.external-link {
+    color: var(--accent);
+    text-decoration: underline;
+    white-space: nowrap;
+}
+
+.external-link .icon {
+    width: 0.85em;
+    height: 0.85em;
+    margin-left: 0.15em;
+    vertical-align: -0.05em;
+}
+
+.about-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
 }
 
 /* The diagnostics: a list of facts, and the choice of how the cloud's points draw. */

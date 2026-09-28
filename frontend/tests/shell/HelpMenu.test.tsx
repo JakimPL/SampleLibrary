@@ -26,4 +26,13 @@ describe("HelpMenu", () => {
         expect(screen.getByRole("dialog", { name: "Diagnostics" })).toBeInTheDocument();
         expect(screen.getByRole("radio", { name: "Plain dots" })).toBeInTheDocument();
     });
+
+    it("opens About", () => {
+        openMenu();
+
+        fireEvent.click(screen.getByRole("button", { name: "About" }));
+
+        expect(screen.getByRole("dialog", { name: "About" })).toBeInTheDocument();
+        expect(screen.getByRole("link", { name: "Source on GitHub" })).toBeInTheDocument();
+    });
 });

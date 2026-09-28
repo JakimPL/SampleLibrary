@@ -1,8 +1,7 @@
 import type { ReactElement } from "react";
 import { Link } from "react-router-dom";
 
-/** Marks a control inside an entity row that opens the entity, which the row's own click rule lets through. */
-export const OPENS_ENTITY_ATTRIBUTE = "data-opens-entity";
+import { ROW_LINK_PROPS } from "./rowLinks";
 
 interface RowOpenLinkProps {
     readonly href: string;
@@ -15,7 +14,7 @@ interface RowOpenLinkProps {
  */
 export function RowOpenLink({ href, label }: RowOpenLinkProps): ReactElement {
     return (
-        <Link to={href} className="row-open" aria-label={label} {...{ [OPENS_ENTITY_ATTRIBUTE]: "" }}>
+        <Link to={href} className="row-open" aria-label={label} {...ROW_LINK_PROPS}>
             ›
         </Link>
     );

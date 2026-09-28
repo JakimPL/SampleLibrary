@@ -11,16 +11,19 @@ from trackmod.trackers.xm.tuning import Tuning
 
 from samplecore.models.channels import ChannelLayout
 from samplecore.models.module import Module
+from samplecore.models.module_link import ModuleLink
 from samplecore.models.sample import Sample
 from samplecore.models.sample_pcm import SamplePCM
 from samplecore.models.sample_properties import SampleOccurrence, XMSampleProperties
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage import audio_store
 from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.module_link import PostgresModuleLinkRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 
 _LISTED_SAMPLE_HASH = "e" * 64
+_PAGE_URL = "https://www.modules.pl/?id=module&mod=9752"
 
 
 def _insert_module_without_samples(connection: Connection, seed: int, *, tracker: TrackerFormat) -> Module:
@@ -157,3 +160,43 @@ def test_get_module_404s_for_an_unknown_hash(client: TestClient) -> None:
     response = client.get(f"/modules/{'f' * 64}")
 
     assert response.status_code == 404
+
+
+def _link_module(connection: Connection, module_hash: str, url: str) -> str:
+    PostgresModuleLinkRepository(connection).upsert_many((ModuleLink(module_hash=module_hash, url=url),))
+    connection.commit()
+    return url
+
+
+def test_list_modules_carries_each_module_s_page_link_or_none(client: TestClient, connection: Connection) -> None:
+    linked = _insert_module(connection, 1, tracker=TrackerFormat.XM)
+    unlinked = _insert_module(connection, 2, tracker=TrackerFormat.IT)
+    url = _link_module(connection, linked.hash, _PAGE_URL)
+
+    body = client.get("/modules").json()
+
+    assert {item["hash"]: item["link"] for item in body["items"]} == {linked.hash: url, unlinked.hash: None}
+
+
+def test_get_module_carries_its_page_link(client: TestClient, connection: Connection) -> None:
+    module = _insert_module_without_samples(connection, 1, tracker=TrackerFormat.XM)
+    url = _link_module(connection, module.hash, _PAGE_URL)
+
+    assert client.get(f"/modules/{module.hash}").json()["link"] == url
+
+
+def test_get_module_carries_no_link_while_none_is_recorded(client: TestClient, connection: Connection) -> None:
+    module = _insert_module_without_samples(connection, 1, tracker=TrackerFormat.XM)
+
+    assert client.get(f"/modules/{module.hash}").json()["link"] is None
+
+
+def test_a_site_shows_a_module_s_page_link(public_client: TestClient, connection: Connection) -> None:
+    module = _insert_module(connection, 1, tracker=TrackerFormat.XM)
+    url = _link_module(connection, module.hash, _PAGE_URL)
+
+    listing = public_client.get("/modules").json()
+    detail = public_client.get(f"/modules/{module.hash}").json()
+
+    assert [item["link"] for item in listing["items"]] == [url]
+    assert detail["link"] == url

@@ -176,6 +176,10 @@ frontend-build:
     npm run build
 
 [group("frontend")]
+icons:
+    uv run --no-project python scripts/render_icons.py
+
+[group("frontend")]
 [working-directory("frontend")]
 frontend-check:
     npm run typecheck
@@ -222,7 +226,7 @@ docker-secrets:
 
 [group("docker")]
 docker-build:
-    docker build -t sampleripper-site .
+    docker build --build-arg SAMPLERIPPER_BUILD_COMMIT=$(git rev-parse HEAD) -t sampleripper-site .
 
 [group("docker")]
 docker-publish *arguments:

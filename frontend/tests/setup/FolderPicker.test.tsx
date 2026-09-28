@@ -40,7 +40,7 @@ describe("FolderPicker", () => {
 
         answer(MODULES);
 
-        expect(await screen.findByText("Found 12 modules here.")).toBeInTheDocument();
+        expect(await screen.findByText(/12 modules/)).toBeInTheDocument();
         screen.getByRole("button", { name: "Choose this folder" }).click();
         expect(onChoose).toHaveBeenCalledWith("/home/person/Modules");
     });

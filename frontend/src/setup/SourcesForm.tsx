@@ -46,6 +46,9 @@ interface FooterConditions {
     readonly saved: boolean;
 }
 
+export const WAIT_FOR_THE_BUILD = "Wait for the build to finish or cancel it.";
+export const CHOOSE_A_FOLDER_FIRST = "Choose at least one folder first.";
+
 function footerMessage(conditions: FooterConditions): SetupMessageText | null {
     if (conditions.saving) {
         return { text: "Saving…", tone: "normal" };
@@ -54,10 +57,10 @@ function footerMessage(conditions: FooterConditions): SetupMessageText | null {
         return { text: conditions.refusal, tone: "error" };
     }
     if (conditions.buildRunning) {
-        return { text: "Wait for the build to finish or cancel it.", tone: "normal" };
+        return { text: WAIT_FOR_THE_BUILD, tone: "normal" };
     }
     if (!conditions.hasSources) {
-        return { text: "Choose at least one folder first.", tone: "normal" };
+        return { text: CHOOSE_A_FOLDER_FIRST, tone: "normal" };
     }
     return conditions.saved ? { text: "Saved.", tone: "normal" } : null;
 }

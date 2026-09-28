@@ -1,7 +1,7 @@
 # The site as a hosting platform runs it, beside a database of its own, on this computer alone: a
 # rehearsal of what visitors will see. `just docker-secrets` writes the two files the passwords come
-# from, `just docker-publish` publishes a library into the database, and `docker compose up site`
-# serves it on http://127.0.0.1:8000.
+# from, `just docker-publish` publishes a library into the database, `just docker-build` builds the
+# image with the checkout's commit, and `docker compose up site` serves it on http://127.0.0.1:8000.
 services:
   postgres:
     image: postgres:17-alpine

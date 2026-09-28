@@ -81,6 +81,12 @@ def _annotations(argv: list[str], *, prog: str) -> None:
     main(argv, prog=prog)
 
 
+def _links_import(argv: list[str], *, prog: str) -> None:
+    from sampleextract.links.cli import main
+
+    main(argv, prog=prog)
+
+
 def _cloud_embed(argv: list[str], *, prog: str) -> None:
     from samplecloud.cli import main
 
@@ -196,6 +202,17 @@ COMMANDS: Final[tuple[Command | CommandGroup, ...]] = (
         name="annotations",
         summary="Move hand-made sample annotations in and out of the catalog, list their history, restore them.",
         run=_annotations,
+    ),
+    CommandGroup(
+        name="links",
+        summary="Record the web pages the cataloged modules came from.",
+        commands=(
+            Command(
+                name="import",
+                summary="Read a CSV of module locations and page links, recording each cataloged module's link.",
+                run=_links_import,
+            ),
+        ),
     ),
     CommandGroup(
         name="cloud",

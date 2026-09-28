@@ -1,11 +1,18 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import { buildVersion } from "./dev/buildVersion";
 import { densifyCloudPlugin } from "./dev/densifyCloudPlugin";
 
 const BACKEND_DEV_URL = process.env.VITE_BACKEND_DEV_URL ?? "http://127.0.0.1:8000";
+const PROJECT_FILE = new URL("../pyproject.toml", import.meta.url);
 
 export default defineConfig({
+    define: {
+        __BUILD_VERSION__: JSON.stringify(
+            buildVersion(PROJECT_FILE, process.env.SAMPLERIPPER_BUILD_COMMIT, new Date()),
+        ),
+    },
     plugins: [
         react(),
         densifyCloudPlugin({

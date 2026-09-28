@@ -11,6 +11,7 @@ from sqlalchemy import Connection, event, text
 from starlette.types import Message, Receive, Scope, Send
 
 from samplecore.models.service_role import ServiceRole
+from samplecore.storage import audio_store
 from samplecore.storage.database import (
     SERVED_IDLE_TRANSACTION_MILLISECONDS,
     SERVED_STATEMENT_TIMEOUT_MILLISECONDS,
@@ -100,8 +101,16 @@ def test_browsers_are_told_to_reach_a_site_over_https_alone(public_client: TestC
     assert "strict-transport-security" not in client.get("/stats").headers
 
 
-def test_the_health_check_reads_that_the_catalog_answers(client: TestClient) -> None:
-    assert client.get("/health").json() == {"catalog_answers": True}
+def test_the_health_check_reads_that_the_catalog_answers_and_whether_audio_is_in_place(
+    client: TestClient, tmp_path: Path
+) -> None:
+    before = client.get("/health").json()
+    stored = audio_store.object_path(tmp_path, "ab" + "c" * 62)
+    stored.parent.mkdir(parents=True)
+    stored.write_bytes(b"RIFF")
+
+    assert before == {"catalog_answers": True, "audio_present": False}
+    assert client.get("/health").json() == {"catalog_answers": True, "audio_present": True}
 
 
 def test_the_pool_has_its_connection_back_before_an_answer_goes_out(served_app: FastAPI) -> None:

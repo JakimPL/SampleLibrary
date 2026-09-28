@@ -18,6 +18,7 @@ from samplecore.storage.database import (
     module,
     module_cloud_coordinates,
     module_instrument,
+    module_link,
     module_note_extraction,
     note_event,
     s3m_sample_properties,
@@ -46,6 +47,8 @@ MODULE_ROW_TABLES: Final[tuple[Table, ...]] = (
     sample_properties,
     module_instrument,
 )
+# Every table holding rows of a module by its `module_hash`.
+MODULE_HASH_TABLES: Final[tuple[Table, ...]] = (module_cloud_coordinates, module_link)
 # Every table holding rows of a sample by its `sample_hash`, beside the relations that name it twice.
 SAMPLE_ROW_TABLES: Final[tuple[Table, ...]] = (
     sample_cloud_coordinates,
@@ -84,8 +87,8 @@ class SampleFilePruneSummary:
 def prune_modules(connection: Connection, library_root: Path, *, module_hashes: frozenset[str]) -> PruneSummary:
     """Remove the named modules from the catalog, with every sample neither a module nor a file holds.
 
-    A module leaves together with its occurrences, instruments, notes and cloud placement, in one
-    transaction; a sample leaves when no occurrence of it is left in any module and no sample file
+    A module leaves together with its occurrences, instruments, notes, cloud placement and page link,
+    in one transaction; a sample leaves when no occurrence of it is left in any module and no sample file
     holds it, together with its relations, coordinates, vectors, thumbnail, categories and playback
     rate. Hand annotations stay where they are, in a schema of their own, for `annotations relink` to
     reattach or a person to decide about. Once the transaction commits, the content store lets go of
@@ -99,11 +102,10 @@ def prune_modules(connection: Connection, library_root: Path, *, module_hashes: 
         for chunk in chunks(module_ids, HASH_CHUNK_SIZE):
             for table in MODULE_ROW_TABLES:
                 connection.execute(delete(table).where(table.c.module_id.in_(chunk)))
-            connection.execute(
-                delete(module_cloud_coordinates).where(
-                    module_cloud_coordinates.c.module_hash.in_(select(module.c.hash).where(module.c.id.in_(chunk)))
+            for table in MODULE_HASH_TABLES:
+                connection.execute(
+                    delete(table).where(table.c.module_hash.in_(select(module.c.hash).where(module.c.id.in_(chunk))))
                 )
-            )
             connection.execute(delete(module).where(module.c.id.in_(chunk)))
         samples_removed = _remove_orphaned_samples(connection)
 

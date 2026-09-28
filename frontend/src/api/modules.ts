@@ -1,9 +1,9 @@
 import { requestJson } from "./client";
 import type { components } from "./schema";
 
-export type Module = components["schemas"]["Module"];
+export type Module = components["schemas"]["ModuleSummary"];
 export type ModuleDetail = components["schemas"]["ModuleDetail"];
-export type ModulePage = components["schemas"]["Page_Module_"];
+export type ModulePage = components["schemas"]["Page_ModuleSummary_"];
 export type TrackerFormat = components["schemas"]["TrackerFormat"];
 
 export interface ListModulesParams {

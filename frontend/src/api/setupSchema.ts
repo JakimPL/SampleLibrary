@@ -72,7 +72,7 @@ export interface paths {
         readonly get?: never;
         /**
          * Choose Options
-         * @description Write how the library is built into the config file, which the next build reads.
+         * @description Write how the library is built and whom it opens to into the config file, which the next build and start read.
          *
          *     Raises:
          *         HTTPException: 409 before any folders are saved, and 422 when the config file fails validation.

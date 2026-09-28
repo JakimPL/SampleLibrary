@@ -68,6 +68,9 @@ just installer    # dist/: the installer for this system
     same `nvidia-smi` check, and records the choice in `~/.config/SampleRipper/launcher`, which
     every later start follows. It sends the app's output to the log folder and announces the first
     start with a desktop notification.
+  - Every installer's icon is cut from the web app's `icon-512.png`, which `just icons` renders,
+    with the other PNG icons, from the logo's source, `frontend/public/favicon.svg`. Run it after
+    changing the logo.
 
 ## Trying a build
 

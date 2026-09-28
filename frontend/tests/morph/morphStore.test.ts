@@ -1,5 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import {
+    type Held,
+    HELD_CAPACITY,
+    MORPH_ENDS,
+    type MorphSnapshot,
+    sameSnapshot,
+    snapshotOf,
+    UNDO_DEPTH,
+} from "../../src/morph/morphHistory";
+import { MORPH_HISTORY_STORAGE_KEY } from "../../src/morph/morphHistoryPersistence";
 import { DEFAULT_WEIGHT, snapWeight, useMorphStore, WEIGHT_STEP } from "../../src/morph/morphStore";
 
 const A = "a".repeat(64);
@@ -65,24 +75,33 @@ describe("morphStore", () => {
 });
 
 describe("naming an end outright", () => {
-    it("makes a sample the first end and keeps the second unless it is the same sample", () => {
+    it("makes a sample the first end, and trades places with the second when it holds that sample", () => {
         useMorphStore.getState().join("a", "b");
 
         useMorphStore.getState().setEnd("first", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "c", second: "b" });
 
         useMorphStore.getState().setEnd("first", "b");
-        expect(useMorphStore.getState()).toMatchObject({ first: "b", second: null });
+        expect(useMorphStore.getState()).toMatchObject({ first: "b", second: "c" });
     });
 
-    it("makes a sample the second end and keeps the first unless it is the same sample", () => {
+    it("makes a sample the second end, and trades places with the first when it holds that sample", () => {
         useMorphStore.getState().join("a", "b");
 
         useMorphStore.getState().setEnd("second", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "a", second: "c" });
 
         useMorphStore.getState().setEnd("second", "a");
-        expect(useMorphStore.getState()).toMatchObject({ first: null, second: "a" });
+        expect(useMorphStore.getState()).toMatchObject({ first: "c", second: "a" });
+    });
+
+    it("mirrors the weight when naming an end trades the two", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().setWeight(0.25);
+
+        useMorphStore.getState().setEnd("first", B);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: B, second: A, weight: 0.75 });
     });
 
     it("names an end with the selection left where it was", () => {
@@ -258,5 +277,461 @@ describe("the selected end", () => {
 
         useMorphStore.getState().clear();
         expect(useMorphStore.getState().selectedEnd).toBeNull();
+    });
+});
+
+describe("undo and redo", () => {
+    const D = "d".repeat(64);
+    const MOVED_WEIGHT = 0.25;
+    const MIRRORED_WEIGHT = 0.75;
+    const BEFORE = { first: A, second: B, weight: MOVED_WEIGHT };
+
+    /** One change to the pair, and how the pair stands once it has happened. */
+    interface UndoCase {
+        readonly name: string;
+        readonly change: () => void;
+        readonly after: Partial<MorphSnapshot>;
+    }
+
+    const UNDO_CASES: readonly UndoCase[] = [
+        {
+            name: "another end is named",
+            change: () => {
+                useMorphStore.getState().setEnd("second", C);
+            },
+            after: { first: A, second: C, weight: MOVED_WEIGHT },
+        },
+        {
+            name: "the anchor joins a new sample",
+            change: () => {
+                useMorphStore.getState().join(A, C);
+            },
+            after: { first: A, second: C },
+        },
+        {
+            name: "the ends swap",
+            change: () => {
+                useMorphStore.getState().swap();
+            },
+            after: { first: B, second: A, weight: MIRRORED_WEIGHT },
+        },
+        {
+            name: "an end is let go",
+            change: () => {
+                useMorphStore.getState().clearEnd("first");
+            },
+            after: { first: null, second: B, renderedWeight: null },
+        },
+        {
+            name: "the pair clears",
+            change: () => {
+                useMorphStore.getState().clear();
+            },
+            after: { first: null, second: null, weight: DEFAULT_WEIGHT },
+        },
+        {
+            name: "the selected end takes a sample",
+            change: () => {
+                useMorphStore.getState().toggleSelectedEnd("second");
+                useMorphStore.getState().takeSample(C);
+            },
+            after: { first: A, second: C },
+        },
+        {
+            name: "the selected end takes the other end's sample",
+            change: () => {
+                useMorphStore.getState().toggleSelectedEnd("first");
+                useMorphStore.getState().takeSample(B);
+            },
+            after: { first: B, second: A, weight: MIRRORED_WEIGHT },
+        },
+    ];
+
+    it.each(UNDO_CASES)(
+        "returns to how the pair stood before $name, and forward again",
+        ({ change, after }: UndoCase) => {
+            useMorphStore.getState().join(A, B);
+            useMorphStore.getState().setWeight(MOVED_WEIGHT);
+
+            change();
+            expect(useMorphStore.getState()).toMatchObject(after);
+
+            useMorphStore.getState().undo();
+            expect(useMorphStore.getState()).toMatchObject(BEFORE);
+
+            useMorphStore.getState().redo();
+            expect(useMorphStore.getState()).toMatchObject(after);
+        },
+    );
+
+    it("lets the changes undone go once a new one is made", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().setEnd("second", C);
+        useMorphStore.getState().undo();
+
+        useMorphStore.getState().setEnd("second", D);
+        expect(useMorphStore.getState().future).toHaveLength(0);
+
+        useMorphStore.getState().redo();
+        expect(useMorphStore.getState()).toMatchObject({ first: A, second: D });
+    });
+
+    /** One action that moves nothing, and so records nothing. */
+    interface NoOpCase {
+        readonly name: string;
+        readonly prepare: () => void;
+        readonly change: () => void;
+    }
+
+    const NO_OP_CASES: readonly NoOpCase[] = [
+        {
+            name: "an end named with the sample it holds",
+            prepare: () => {
+                useMorphStore.getState().join(A, B);
+            },
+            change: () => {
+                useMorphStore.getState().setEnd("first", A);
+            },
+        },
+        {
+            name: "a sample joined to itself",
+            prepare: () => {
+                useMorphStore.getState().join(A, B);
+            },
+            change: () => {
+                useMorphStore.getState().join(C, C);
+            },
+        },
+        {
+            name: "an empty pair swapped at the default weight",
+            prepare: () => undefined,
+            change: () => {
+                useMorphStore.getState().swap();
+            },
+        },
+        {
+            name: "an empty pair cleared",
+            prepare: () => undefined,
+            change: () => {
+                useMorphStore.getState().clear();
+            },
+        },
+        {
+            name: "a sample taken with no end selected",
+            prepare: () => {
+                useMorphStore.getState().join(A, B);
+            },
+            change: () => {
+                useMorphStore.getState().takeSample(C);
+            },
+        },
+    ];
+
+    it.each(NO_OP_CASES)("records nothing for $name", ({ prepare, change }: NoOpCase) => {
+        prepare();
+        const { past, future, held } = useMorphStore.getState();
+
+        change();
+
+        expect(useMorphStore.getState().past).toBe(past);
+        expect(useMorphStore.getState().future).toBe(future);
+        expect(useMorphStore.getState().held).toBe(held);
+    });
+
+    it("leaves everything as it is with nothing to undo or redo", () => {
+        const state = useMorphStore.getState();
+
+        useMorphStore.getState().undo();
+        expect(useMorphStore.getState()).toBe(state);
+
+        useMorphStore.getState().redo();
+        expect(useMorphStore.getState()).toBe(state);
+    });
+
+    it("keeps the selected end through undo and redo", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().toggleSelectedEnd("second");
+        useMorphStore.getState().setEnd("first", C);
+
+        useMorphStore.getState().undo();
+        expect(useMorphStore.getState().selectedEnd).toBe("second");
+
+        useMorphStore.getState().redo();
+        expect(useMorphStore.getState().selectedEnd).toBe("second");
+    });
+
+    it("brings the drawn point back as it was, under the slider where it was", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().setWeight(0.1);
+        useMorphStore.getState().markRendered();
+        useMorphStore.getState().setWeight(MIRRORED_WEIGHT);
+        useMorphStore.getState().setEnd("first", C);
+        expect(useMorphStore.getState().renderedWeight).toBe(MIRRORED_WEIGHT);
+
+        useMorphStore.getState().undo();
+
+        expect(useMorphStore.getState()).toMatchObject({ first: A, weight: MIRRORED_WEIGHT, renderedWeight: 0.1 });
+    });
+
+    it("keeps the line to its depth behind the present", () => {
+        for (let step = 0; step <= UNDO_DEPTH; step += 1) {
+            useMorphStore.getState().setEnd("first", step % 2 === 0 ? A : B);
+        }
+
+        expect(useMorphStore.getState().past).toHaveLength(UNDO_DEPTH);
+    });
+});
+
+describe("the samples each end has held", () => {
+    function savedHeld(): unknown {
+        return JSON.parse(localStorage.getItem(MORPH_HISTORY_STORAGE_KEY) ?? "null");
+    }
+
+    it("remembers each end's samples, the newest arrival first", () => {
+        useMorphStore.getState().join(A, B);
+        expect(useMorphStore.getState().held).toEqual({ first: [A], second: [B] });
+
+        useMorphStore.getState().setEnd("first", C);
+
+        expect(useMorphStore.getState().held).toEqual({ first: [C, A], second: [B] });
+    });
+
+    it("leaves a column as it is when its end takes a sample it knows", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().setEnd("first", C);
+        const { held } = useMorphStore.getState();
+
+        useMorphStore.getState().setEnd("first", A);
+
+        expect(useMorphStore.getState()).toMatchObject({ first: A, held });
+        expect(useMorphStore.getState().held).toBe(held);
+    });
+
+    it("remembers a swap as an arrival at both ends", () => {
+        useMorphStore.getState().join(A, B);
+
+        useMorphStore.getState().swap();
+
+        expect(useMorphStore.getState().held).toEqual({ first: [B, A], second: [A, B] });
+    });
+
+    it("keeps the columns through letting an end go, clearing the pair and undoing", () => {
+        useMorphStore.getState().join(A, B);
+        const { held } = useMorphStore.getState();
+
+        useMorphStore.getState().clearEnd("first");
+        useMorphStore.getState().clear();
+        useMorphStore.getState().undo();
+        useMorphStore.getState().undo();
+
+        expect(useMorphStore.getState().held).toBe(held);
+    });
+
+    it("keeps the columns in the browser's storage as they change", () => {
+        useMorphStore.getState().join(A, B);
+        expect(savedHeld()).toEqual({ first: [A], second: [B] });
+
+        useMorphStore.getState().setEnd("second", C);
+
+        expect(savedHeld()).toEqual({ first: [A], second: [C, B] });
+    });
+
+    it("forgets every sample but the ones the ends hold now", () => {
+        useMorphStore.getState().join(A, B);
+        useMorphStore.getState().setEnd("first", C);
+        useMorphStore.getState().clearEnd("second");
+
+        useMorphStore.getState().forgetHeld();
+
+        expect(useMorphStore.getState().held).toEqual({ first: [C], second: [] });
+        expect(savedHeld()).toEqual({ first: [C], second: [] });
+        expect(useMorphStore.getState().past).toHaveLength(3);
+    });
+
+    it("reads the columns an earlier visit saved", async () => {
+        localStorage.setItem(MORPH_HISTORY_STORAGE_KEY, JSON.stringify({ first: [A], second: [] }));
+        vi.resetModules();
+
+        const fresh = await import("../../src/morph/morphStore");
+
+        expect(fresh.useMorphStore.getState().held).toEqual({ first: [A], second: [] });
+    });
+});
+
+describe("the history under a random walk of every action", () => {
+    const HASH_COUNT = 60;
+    const STEPS = 1500;
+    const SEED = 20260928;
+    const MODULUS = 2147483648;
+    const MULTIPLIER = 1103515245;
+    const INCREMENT = 12345;
+    const HASHES: readonly string[] = Array.from({ length: HASH_COUNT }, (_, index) =>
+        index.toString(16).padStart(64, "0"),
+    );
+
+    /** A linear congruential draw in [0, 1), so a failing walk can be run again. */
+    function drawsFrom(seed: number): () => number {
+        let value = seed;
+        return (): number => {
+            value = (value * MULTIPLIER + INCREMENT) % MODULUS;
+            return value / MODULUS;
+        };
+    }
+
+    function pick<T>(draw: () => number, items: readonly T[]): T {
+        const item = items[Math.floor(draw() * items.length)];
+        if (item === undefined) {
+            throw new Error("nothing to pick from");
+        }
+        return item;
+    }
+
+    interface Step {
+        readonly name: string;
+        readonly run: (draw: () => number) => void;
+    }
+
+    /** The actions that change the ends and so record a snapshot; the rest move the slider, the mark or the selection alone. */
+    const RECORDING_KINDS: ReadonlySet<string> = new Set(["join", "setEnd", "clearEnd", "swap", "clear", "takeSample"]);
+
+    const STEP_KINDS: readonly Step[] = [
+        {
+            name: "join",
+            run: (draw) => {
+                useMorphStore.getState().join(pick(draw, [null, ...HASHES]), pick(draw, HASHES));
+            },
+        },
+        {
+            name: "setEnd",
+            run: (draw) => {
+                useMorphStore.getState().setEnd(pick(draw, MORPH_ENDS), pick(draw, HASHES));
+            },
+        },
+        {
+            name: "clearEnd",
+            run: (draw) => {
+                useMorphStore.getState().clearEnd(pick(draw, MORPH_ENDS));
+            },
+        },
+        {
+            name: "swap",
+            run: () => {
+                useMorphStore.getState().swap();
+            },
+        },
+        {
+            name: "clear",
+            run: () => {
+                useMorphStore.getState().clear();
+            },
+        },
+        {
+            name: "takeSample",
+            run: (draw) => {
+                useMorphStore.getState().takeSample(pick(draw, HASHES));
+            },
+        },
+        {
+            name: "toggleSelectedEnd",
+            run: (draw) => {
+                useMorphStore.getState().toggleSelectedEnd(pick(draw, MORPH_ENDS));
+            },
+        },
+        {
+            name: "setWeight",
+            run: (draw) => {
+                useMorphStore.getState().setWeight(draw());
+            },
+        },
+        {
+            name: "markRendered",
+            run: () => {
+                useMorphStore.getState().markRendered();
+            },
+        },
+        {
+            name: "undo",
+            run: () => {
+                useMorphStore.getState().undo();
+            },
+        },
+        {
+            name: "redo",
+            run: () => {
+                useMorphStore.getState().redo();
+            },
+        },
+        {
+            name: "forgetHeld",
+            run: () => {
+                useMorphStore.getState().forgetHeld();
+            },
+        },
+    ];
+
+    /** The column grew at the top alone: its new rows lead, and the rows it had follow in their order, the tail let go at most. */
+    function expectGrownAtTop(before: readonly string[], after: readonly string[]): void {
+        if (before === after) {
+            return;
+        }
+        const arrivals = after.findIndex((hash) => before.includes(hash));
+        const kept = arrivals === -1 ? 0 : after.length - arrivals;
+        expect(arrivals === -1 ? after.length : arrivals).toBeGreaterThanOrEqual(1);
+        expect(after.slice(after.length - kept)).toEqual(before.slice(0, kept));
+        expect(after.length).toBeLessThanOrEqual(HELD_CAPACITY);
+    }
+
+    function expectColumnsSound(held: Held, pair: MorphSnapshot): void {
+        for (const end of MORPH_ENDS) {
+            const column = held[end];
+            expect(new Set(column).size).toBe(column.length);
+            expect(column.length).toBeLessThanOrEqual(HELD_CAPACITY);
+            const sample = pair[end];
+            if (sample !== null) {
+                expect(column).toContain(sample);
+            }
+        }
+    }
+
+    it("keeps every column, the line and the marks sound after each step", () => {
+        const draw = drawsFrom(SEED);
+
+        for (let step = 0; step < STEPS; step += 1) {
+            const kind = pick(draw, STEP_KINDS);
+            const before = useMorphStore.getState();
+
+            kind.run(draw);
+            const after = useMorphStore.getState();
+
+            expectColumnsSound(after.held, after);
+            if (kind.name !== "forgetHeld") {
+                for (const end of MORPH_ENDS) {
+                    expectGrownAtTop(before.held[end], after.held[end]);
+                }
+            }
+            expect(after.past.length).toBeLessThanOrEqual(UNDO_DEPTH);
+            expect(after.past.length + after.future.length).toBeLessThanOrEqual(UNDO_DEPTH);
+            if (RECORDING_KINDS.has(kind.name) && !sameSnapshot(before, after)) {
+                expect(after.future).toHaveLength(0);
+                expect(after.past.at(-1)).toEqual(snapshotOf(before));
+            } else if (kind.name !== "undo" && kind.name !== "redo") {
+                expect(after.past).toBe(before.past);
+                expect(after.future).toBe(before.future);
+            }
+            if (kind.name === "undo" || kind.name === "redo" || kind.name === "forgetHeld") {
+                expect(after.selectedEnd).toBe(before.selectedEnd);
+            }
+
+            if (after.past.length > 0) {
+                useMorphStore.getState().undo();
+                useMorphStore.getState().redo();
+                const back = useMorphStore.getState();
+                expect(snapshotOf(back)).toEqual(snapshotOf(after));
+                expect(back.past).toEqual(after.past);
+                expect(back.future).toEqual(after.future);
+                expect(back.selectedEnd).toBe(after.selectedEnd);
+                expectColumnsSound(back.held, back);
+            }
+        }
     });
 });

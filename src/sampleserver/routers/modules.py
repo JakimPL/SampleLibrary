@@ -8,12 +8,14 @@ from sqlalchemy import Connection
 
 from samplecore.models.base import FROZEN
 from samplecore.models.module import Module
+from samplecore.models.module_link import ModuleLink
 from samplecore.models.sample import Sample
 from samplecore.models.sample_properties import TrackerSampleProperties
 from samplecore.models.scalars import Count
 from samplecore.models.thumbnail import SampleThumbnail
 from samplecore.models.tracker import TrackerFormat
 from samplecore.storage.repositories.module import PostgresModuleRepository
+from samplecore.storage.repositories.module_link import PostgresModuleLinkRepository
 from samplecore.storage.repositories.sample import PostgresSampleRepository
 from samplecore.storage.repositories.sample_properties import PostgresSamplePropertiesRepository
 from samplecore.storage.repositories.thumbnail import PostgresSampleThumbnailRepository, peaks_from_thumbnail
@@ -46,7 +48,13 @@ class ModuleOccurrenceDetail(BaseModel):
     sample: ModuleOccurrenceSample
 
 
-class ModuleDetail(Module):
+class ModuleSummary(Module):
+    """A module as the listing shows it: its own fields, and the page it came from where one is recorded."""
+
+    link: str | None
+
+
+class ModuleDetail(ModuleSummary):
     """A module together with every sample occurrence it declares."""
 
     occurrences: tuple[ModuleOccurrenceDetail, ...]
@@ -58,11 +66,13 @@ def list_modules(
     offset: Annotated[int, Query(ge=0, le=MAX_PAGE_OFFSET)] = 0,
     tracker: TrackerFormat | None = None,
     connection: Connection = READ_CONNECTION,
-) -> Page[Module]:
-    """A page of cataloged modules, optionally filtered by tracker format."""
+) -> Page[ModuleSummary]:
+    """A page of cataloged modules, optionally filtered by tracker format, each with its page link."""
     repository = PostgresModuleRepository(connection)
-    items = repository.list_page(limit=limit, offset=offset, tracker=tracker)
+    modules = repository.list_page(limit=limit, offset=offset, tracker=tracker)
     total = repository.count(tracker=tracker)
+    links = PostgresModuleLinkRepository(connection).get_many([module.hash for module in modules])
+    items = tuple(_summary(module, links.get(module.hash)) for module in modules)
     return Page(items=items, total=total, limit=limit, offset=offset)
 
 
@@ -82,7 +92,12 @@ def get_module(module_hash: ModuleHashPath, connection: Connection = READ_CONNEC
     occurrences = tuple(
         ModuleOccurrenceDetail(properties=item, sample=samples_by_hash[item.sample_hash]) for item in properties
     )
-    return ModuleDetail(**module.model_dump(), occurrences=occurrences)
+    link = PostgresModuleLinkRepository(connection).get_many([module_hash]).get(module_hash)
+    return ModuleDetail(**_summary(module, link).model_dump(), occurrences=occurrences)
+
+
+def _summary(module_: Module, link: ModuleLink | None) -> ModuleSummary:
+    return ModuleSummary(**module_.model_dump(), link=link.url if link is not None else None)
 
 
 def _samples_by_hash(

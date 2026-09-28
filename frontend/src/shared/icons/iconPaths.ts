@@ -1,4 +1,5 @@
-export type IconName = "samples" | "cloud" | "modules" | "waveform" | "morph" | "detail" | "stats";
+export type IconName =
+    "samples" | "cloud" | "modules" | "waveform" | "morph" | "history" | "detail" | "stats" | "external";
 
 /** Stroke paths on a 24-unit grid, drawn by `Icon` with a round two-unit stroke. */
 export const ICON_PATHS: Readonly<Record<IconName, string>> = {
@@ -7,6 +8,8 @@ export const ICON_PATHS: Readonly<Record<IconName, string>> = {
     modules: "M9 18V6l10-2v12M9 18a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0M19 16a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0",
     waveform: "M3 12h2l2-6 3 12 3-9 2 6 2-3h4",
     morph: "M10 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0M20 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0M10 12h4",
+    history: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M12 7v5l4 2",
     detail: "M12 8h.01M11 12h1v4h1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0",
     stats: "M5 20v-9M12 20V4M19 20v-6",
+    external: "M14 4h6v6M20 4l-9 9M18 13v6H5V6h6",
 };

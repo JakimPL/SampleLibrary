@@ -14,7 +14,7 @@ its own write/read boundary, enforced by the `[tool.importlinter]` contracts in 
 | Package | Owns | Depends on |
 |---|---|---|
 | `samplecore` | The domain models (`Module`, `Sample`, `SampleProperties` and its tracker-specific subtypes, `SampleRelation`, `Experiment`, `SampleFeatureVector`, `EquivalenceClass`, `SampleSpectralFeature`, `NoteEvent`, `ModuleInstrument`, `SampleAnnotation`), the reading of a hand label as tag paths and the agreement between two of them (`samplecore.labeling`), the Postgres schema and connection helpers, the content-addressable audio store, sample hashing, equivalence-class grouping, spectral-distance computation, the pitch rule that turns an occurrence rate and a pressed key into the one rate a sample is really played at, the anchoring rule that keeps a hand label attached to its sample, the sample files read in place from configured sample directories (`samplecore.sample_files` decodes one into the sample it holds, and `samplecore.storage.sample_audio.SampleAudio` is the one reader of every sample's audio, from the store or from its files), the waveform hygiene every analysis shares (folding to mono, the subsonic high-pass), the auditory front end (`samplecore.auditory`: an ERB-spaced gammatone bank, subband envelopes and the two-lobe modulation spectrum a listener hears flutter and roughness on, designed once as data so a numpy reading and a torch loss apply the same kernels), and the local `LibraryConfig` loader. A leaf: nothing else in this repository. | `psycopg`, `sqlalchemy`, `numpy`, `scipy`, `pydantic`, `soundfile` |
-| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, scanning the configured sample directories into the catalog in place (`sampleextract.files`, the `sampleripper files` command), spreading either pass over worker processes (`sampleextract.parallel`), computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each) and folding those notes into the rate each sample is heard at, the equivalence-class detection pass, and moving hand labels in and out of the catalog. | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
+| `sampleextract` | The offline extraction pipeline: walking the module source directory, parsing modules via `trackmod`, rendering sample audio to the content store, populating the Postgres catalog, scanning the configured sample directories into the catalog in place (`sampleextract.files`, the `sampleripper files` command), spreading either pass over worker processes (`sampleextract.parallel`), computing cached waveform-preview thumbnails, reading each module's patterns for the notes they play (both inline at ingest, and via a standalone backfill pass each) and folding those notes into the rate each sample is heard at, the equivalence-class detection pass, moving hand labels in and out of the catalog, and recording the web pages modules came from (`sampleextract.links`, the `sampleripper links import` command). | `samplecore`, `sqlalchemy`, `trackmod`, `tqdm` |
 | `samplecloud` | The offline embedding pipeline for the sample-cloud visualization: pluggable feature extraction (`FeatureExtractor` protocol) scoped to a named `Experiment` so more than one backend or parameter set can extract concurrently without clobbering another's vectors -- two hand-built descriptors, and a pretrained audio-text model behind the `clap` backend (the `teacher` extra) that hears what people would call alike, teaches the descriptor `sampledescriptor` trains, and through its text tower gives every sample a category from a vocabulary of prompts (`samplecloud.categories`, each scoring an `Experiment` of its own), UMAP dimensionality reduction (explicit Euclidean metric) over one chosen experiment, and persistence of each sample's standardized vector and 2D coordinate -- the standardized vector is `samplecore`'s own named spectral-distance metric, reused by `sampleserver`'s distance endpoints. The module layout (`samplecloud.modules`) places each module by the distance between its set of samples and every other module's, over those same vectors. It also owns the evaluation harness (`samplecloud.evaluation`) that scores any experiment's descriptor against the targets the catalog already carries: whether a retuning moves the descriptor, whether it groups what the note events say the library plays alike, and whether it groups what a person labeled alike. Depends on `samplecore`, and on `sampledescriptor` inside its `learned` backend's factory, never on `sampleextract`, so a future heavy embedding backend's dependencies never reach the extraction pipeline or the web server. | `samplecore`, `sampledescriptor` (the `learned` backend), `sqlalchemy`, `librosa`, `umap-learn`, `scikit-learn`, `mlflow` (the `cloud` extra); `torch`, `transformers` (the `teacher` extra) |
 | `samplemorph` | The morph renderer: the envelope route, which moves the spectral envelope from one sample's analysis to the other's and sounds an excitation under it. `samplemorph.transport` analyzes a sound into the Gaussian spectrogram the route reads and maps two sounds' courses through time onto each other; `samplemorph.envelope` splits each frame into its cepstral envelope and its excitation and blends the envelopes in decibels, while the excitation sounds as the first sound's, the second's or the two crossfaded with the weight, so a chord stays one chord at every point of the path while its timbre travels. `samplemorph.coordinates` reads a sound's pitch by Hermes's subharmonic summation over constant-Q frames, and the envelope route can glide the excitation from the first sound's pitch to the second's; `samplemorph.vocoders.pghi` makes the magnitude audible by phase gradient heap integration. Held to one sound's course through time, the route is a filter on that sound: its whole path is the cepstral coefficients of the ratio between the two envelopes, which `samplemorph.envelope.response` measures and `samplemorph.envelope.filtering` applies at any weight, so a caller reads a pair once and moves its own weight. `samplemorph.routes` builds the route a selection names (`morph.yaml`: the excitation, the timeline, the envelope drawing and the glide; `morph-filter.yaml` beside it, the drawing a filter is read under) and names it for a status. `samplemorph.service` is the morph inference process (`sampleripper morph serve`), which renders any point between two cataloged samples on request, reading a sample found in a sample directory from the file the request names inside the directories its own configuration lists, and is what the web API dials for a morph; it also hands over the filter between two samples, which holds for every point between them, so a caller rendering its own audio asks once per pair. `morph response` writes that filter from the shell. Depends on `samplecore` only. | `samplecore`, `librosa`, `pghipy`, `fastapi`, `uvicorn`, `pyyaml` (the `morph` extra) |
 | `sampledescriptor` | The learned descriptor the cloud embeds with: a log-frequency canonicalizer (`sampledescriptor.geometry` lays the grid over the analysis `samplemorph` reads) that turns a sample into a fixed-size sound image on a frequency by duration-fraction grid together with the three conditioners that image was normalized by (where its content sits in pitch, how long it sounds, and how loud it was), and a `Descriptor` (`sampledescriptor.descriptors`) that reads the grid as one vector: distilled from the pretrained listening model, taught by retuned views that a retuning changes nothing, and by the hand labels what the listener calls alike. The frequency axis is logarithmic, which turns a change of playback rate into a translation along it, so the translation is measured, moved out of the grid, and carried as a conditioner. Training (`sampledescriptor.training`) runs under a run tracker and reads a grid cache canonicalized once under the library root; `sampledescriptor.commands` holds the three shell commands (`cache-grids`, `train`, `embed`), and the ones that train import the trainer only when they run. Depends on `samplecore` and on the analysis kernels of `samplemorph`. | `samplecore`, `samplemorph`, `torch`, `lightning`, `threadpoolctl`, `mlflow`, `scikit-learn`, `librosa` (the `descriptor` extra) |
@@ -59,7 +59,7 @@ Postgres is the single authoritative store for all catalog metadata (`Module`, `
 table of its own), `sample_file`, `SampleRelation`, `Experiment`, `sample_feature_vector`,
 `sample_cloud_coordinates`, `module_cloud_coordinates`, `sample_spectral_feature`,
 `sample_thumbnail`, `sample_fingerprint`, `module_instrument`, `note_event`, `module_note_extraction`,
-`sample_playback_rate`, `sample_category`, and `cloud_promotion`). Equivalence classes are not a stored table: `samplecore.equivalence_classes`
+`sample_playback_rate`, `sample_category`, `module_link`, and `cloud_promotion`). Equivalence classes are not a stored table: `samplecore.equivalence_classes`
 derives them on request from `SampleRelation` rows, since the relation graph stays small even at
 real-catalog scale. The filesystem content-addressable store —
 `{library_root}/objects/{hash[0:2]}/{hash}.wav`, one file per unique `Sample` extracted from a
@@ -68,6 +68,14 @@ directory keeps its bytes in its own file (see [Samples read in place](#samples-
 Neither is a cache of the other, except that `Sample` rows could in principle be rebuilt by
 rehashing the store and the sample directories; that is a recoverability property, not a substitute
 for backing up the catalog itself.
+
+`module_link` holds the web page a module came from, keyed by the module's content hash, as
+`sampleripper links import` records it from a CSV of module locations and page links: each
+location is read under `module_source_directory` and hashed the way extraction hashes it, which
+is what names the module, so a byte-identical copy under another name takes the same link. The
+table sits on the main metadata beside the module it describes, so a reset empties it with the
+rest of the catalog and the file is imported again, and the served listing and detail carry the
+link under every exposure.
 
 `sample_feature_vector` holds one `FeatureExtractor` backend's raw output per sample, scoped to an
 `Experiment` row (its backend name, parameters, and a human label) rather than a single global
@@ -681,7 +689,7 @@ Everything is read from one `REPEATABLE READ` snapshot of the library's catalog:
    tables there are, so a table added later is published only once someone decided which of its
    rows go:
    - whole: the module collection (`module`, the sample properties, `note_event`,
-     `module_cloud_coordinates`) and `category_promotion`;
+     `module_cloud_coordinates`, `module_link`) and `category_promotion`;
    - the published samples' rows: `sample`, their coordinates, spectral features, thumbnails and
      playback rates;
    - `sample_file`: the published directories' files, each directory written as `/` and its
@@ -715,9 +723,12 @@ anything starts it refuses, each in a sentence of its own (`sampleripper.site.ad
 - an owner, curator, administrator or publishing connection, from the config or the environment;
 - a reader named nowhere, or with a password shorter than 24 characters;
 - a renderer listening beyond the loopback address, or on the site's own port;
-- a missing audio store.
+- an audio store it cannot read.
 
-It then checks the reader's role the way `serve` does. The renderer starts as a child with no
+It then checks the reader's role the way `serve` does. A store that is missing or empty is a
+warning as the site starts, since a platform's volume is filled through the running site: the
+site serves its catalog, every sample answers "not found" and `GET /api/health` reports
+`audio_present` false until the objects arrive, which the site reads with no restart. The renderer starts as a child with no
 database connection in its environment and one thread per numerical library, its output joining the
 site's, and the site serves once the renderer answers. A renderer that ends while the site serves
 ends the site with status 1, so the platform starts both again.
@@ -1174,8 +1185,13 @@ a versioned record; a record of another version is discarded once and the defaul
 which is how a new arrangement reaches a browser that saved an older one. The top bar's View menu
 opens and closes panels at their registered placement and resets the arrangement. Its Library menu
 opens the setup page and quits the application, and appears where the setup routes answer, on the
-machine the application runs on; its Help menu holds the guide and the diagnostics. The theme select
-sits beside them. Each panel renders inside a `PanelHost`, the scroll container that is also the
+machine the application runs on; its Help menu holds the guide, the diagnostics and About, which
+shows the build version Vite's `define` writes in as the web app is built (`frontend/src/version.ts`):
+the version in `pyproject.toml`, the commit and the minute in UTC, as `0.1.1.abcdef0.202609281825`
+(`frontend/dev/buildVersion.ts`). The commit is the checkout's HEAD, or `SAMPLERIPPER_BUILD_COMMIT`
+where the build has no git history: the site's image takes it as a build argument, which Railway
+fills from `RAILWAY_GIT_COMMIT_SHA` and `just docker-build` from the checkout.
+The theme select sits beside them. Each panel renders inside a `PanelHost`, the scroll container that is also the
 container its stylesheet rules query, so a panel fits the width it was given rather than the window's.
 The Sample Detail panel stands the focused sample's transport
 (`frontend/src/samples/SampleTransport.tsx`, the wavesurfer player over the one detail request
@@ -1338,7 +1354,16 @@ traces, or with one end chosen that sample's own player. Every point is heard th
 every sample plays through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is
 keyed by its own render's address) and records the weight in `morphStore`, so the waveform draws
 whichever control let go last; a pair just completed is drawn at the slider's point by the store's
-`pairOf` before any point of it is heard, so the ends are heard first. The opened strip states how far apart the two ends sit
+`pairOf` before any point of it is heard, so the ends are heard first. Every change to the ends
+passes through the store's one `commit`, which keeps the history `frontend/src/morph/morphHistory.ts`
+defines: a column per end of the samples it has held (`held`, newest arrival first, each once, kept
+across visits under one localStorage key by `morphHistoryPersistence.ts`) and a line of snapshots
+behind the present (`past` and `future`, the ends with the weight and the drawn point) that `undo`
+and `redo` walk, so a row keeps its place and the pair marks its rows by holding their samples.
+`frontend/src/morph/useMorphUndoKeys.ts`, mounted in `AppShell`, hands Ctrl+Z and Ctrl+Y to the
+store from anywhere but a text field, whose own undo the browser keeps; the history button on the
+strip opens `MorphHistory.tsx` under it on the workspace, or as a sheet on a phone, and a click on
+a row names its end through `setEnd`. The opened strip states how far apart the two ends sit
 (`frontend/src/morph/MorphDistance.tsx`, over `GET /samples/{hash}/distance/{other}`), so the length
 of the path is read where the path is traveled. Both ends are carried into one frame before they blend: the API resolves the
 rate each is heard at by the one rule every reader of the catalog applies and hands both to the

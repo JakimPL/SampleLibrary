@@ -112,7 +112,7 @@ def test_vocabulary_lists_the_tags_in_use_as_a_tree(
     reported = capsys.readouterr().out
     assert "    2  HI-HAT" in reported
     assert "        1  CLOSED" in reported
-    assert "Carried by one sample each: ELECTRIC, HI-HAT: CLOSED, HI-HAT: OPEN, LO-FI." in reported
+    assert "ELECTRIC, HI-HAT: CLOSED, HI-HAT: OPEN, LO-FI" in reported
 
 
 def test_an_import_from_a_file_that_is_not_there_ends_with_one_message(

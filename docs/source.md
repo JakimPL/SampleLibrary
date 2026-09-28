@@ -149,6 +149,13 @@ them, and each command's `--help` lists its options. A few you will reach for:
   `files --prune` removes the files that are gone, the ones your exclusions now leave out, and every
   file of a folder you took out of `sample_directories`.
 - `uv run sampleripper equivalence` finds near-duplicates on its own.
+- `uv run sampleripper links import links.csv` records the web page each module came from. The
+  file has a `location,link` header: `location` is the file's path under `module_source_directory`
+  with forward slashes, `link` the page's http or https address. Each file is read to know the
+  module, so a copy under another name takes the same link. A row whose file is missing, or whose
+  file no module was cataloged from, is counted and passed over, and the rest land together;
+  every module the file names takes its link, and the others keep theirs. `just reset` and a
+  build from scratch empty the links, so import the file again afterward.
 
 Both prunes go ahead only when every folder reads and every configured folder holds files, so a
 disconnected drive keeps its samples in the library. A sample whose file is missing stays in the library, marked
@@ -245,14 +252,17 @@ site on this computer first, beside a PostgreSQL of its own:
 just docker-secrets                                  # the two passwords, each written once into docker/
 docker compose up -d postgres
 just docker-publish                                  # or: just docker-publish --config dev-library/config.toml
+just docker-build
 PUBLICATION=<your library>/publication docker compose up site
 ```
 
 `just docker-secrets` writes `docker/postgres.env`, the database's own password, and
 `docker/site.env`, the reader's connection, each readable by you alone; compose refuses to start
 without them. `just docker-publish` publishes the library into that database, reading both files,
-and the site serves it on http://127.0.0.1:8000. `just docker-build` builds the image alone. The
-architecture's [Deployment](architecture.md#deployment) section describes what the image holds.
+and the site serves it on http://127.0.0.1:8000. `just docker-build` builds the image and hands it
+the checkout's commit, which About names in the site's version; build it again after pulling new
+commits. The architecture's [Deployment](architecture.md#deployment) section describes what the
+image holds.
 
 When your own PostgreSQL already listens on port 5432, put a free port in front of both the compose
 command and the publication, such as `POSTGRES_PORT=5439 docker compose up -d postgres` and

@@ -5,7 +5,12 @@ FROM node:26-bookworm-slim AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci
+# The web app reads its version from the project file beside the frontend folder, as in a checkout.
+COPY pyproject.toml /pyproject.toml
 COPY frontend ./
+# The web app names the commit it is built from: Railway's own, or the one `just docker-build` hands in.
+ARG RAILWAY_GIT_COMMIT_SHA
+ARG SAMPLERIPPER_BUILD_COMMIT=${RAILWAY_GIT_COMMIT_SHA}
 RUN npm run build
 
 FROM python:3.13-slim-bookworm AS builder
