@@ -38,10 +38,7 @@ def discover_modules(module_source_directory: Path | None) -> Discovery:
     """
     if module_source_directory is None:
         return Discovery(paths=(), unreadable_directories=())
-    if not module_source_directory.exists():
-        raise FileNotFoundError(f"the module source directory {module_source_directory} does not exist")
-    if not module_source_directory.is_dir():
-        raise NotADirectoryError(f"the module source directory {module_source_directory} is a file")
+    require_module_source_directory(module_source_directory)
 
     paths: list[Path] = []
     unreadable: list[Path] = []
@@ -62,3 +59,17 @@ def discover_modules(module_source_directory: Path | None) -> Discovery:
         )
 
     return Discovery(paths=tuple(sorted(paths)), unreadable_directories=tuple(sorted(unreadable)))
+
+
+def require_module_source_directory(module_source_directory: Path) -> Path:
+    """The module collection's folder, once it is there to read.
+
+    Raises:
+        FileNotFoundError: the source directory does not exist.
+        NotADirectoryError: the source directory names a file.
+    """
+    if not module_source_directory.exists():
+        raise FileNotFoundError(f"the module source directory {module_source_directory} does not exist")
+    if not module_source_directory.is_dir():
+        raise NotADirectoryError(f"the module source directory {module_source_directory} is a file")
+    return module_source_directory

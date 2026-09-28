@@ -37,15 +37,7 @@ class SampleFileLocation(BaseModel):
     @field_validator("relative_path")
     @classmethod
     def _below_the_directory(cls, relative_path: str) -> str:
-        posix_path = PurePosixPath(relative_path)
-        if (
-            not posix_path.parts
-            or posix_path.is_absolute()
-            or posix_path.as_posix() != relative_path
-            or _TRAVERSING_PARTS & set(posix_path.parts)
-        ):
-            raise ValueError(f"{relative_path!r} must be a forward-slash path below its directory")
-        return relative_path
+        return below_the_directory(relative_path)
 
     @classmethod
     def inside(cls, path: Path, directories: Iterable[Path]) -> SampleFileLocation | None:
@@ -109,6 +101,24 @@ class SampleFile(BaseModel):
     location: SampleFileLocation
     rate: Rate
     fingerprint: FileFingerprint
+
+
+def below_the_directory(relative_path: str) -> str:
+    """``relative_path`` as a forward-slash path naming a file below a directory.
+
+    Raises:
+        ValueError: the path is empty, absolute, spelled otherwise than its forward-slash form, or
+            climbs through ``.`` or ``..``.
+    """
+    posix_path = PurePosixPath(relative_path)
+    if (
+        not posix_path.parts
+        or posix_path.is_absolute()
+        or posix_path.as_posix() != relative_path
+        or _TRAVERSING_PARTS & set(posix_path.parts)
+    ):
+        raise ValueError(f"{relative_path!r} must be a forward-slash path below its directory")
+    return relative_path
 
 
 def stem_of(relative_path: str) -> str:
