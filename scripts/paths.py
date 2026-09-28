@@ -6,7 +6,9 @@ from typing import Final
 REPOSITORY_DIRECTORY: Final[Path] = Path(__file__).resolve().parents[1]
 PROJECT_FILE: Final[Path] = REPOSITORY_DIRECTORY / "pyproject.toml"
 FRONTEND_DIRECTORY: Final[Path] = REPOSITORY_DIRECTORY / "frontend"
-APP_ICON: Final[Path] = FRONTEND_DIRECTORY / "public" / "icons" / "icon-512.png"
+FAVICON: Final[Path] = FRONTEND_DIRECTORY / "public" / "favicon.svg"
+ICONS_DIRECTORY: Final[Path] = FRONTEND_DIRECTORY / "public" / "icons"
+APP_ICON: Final[Path] = ICONS_DIRECTORY / "icon-512.png"
 PACKAGING_DIRECTORY: Final[Path] = REPOSITORY_DIRECTORY / "packaging"
 WINDOWS_INSTALLER_SCRIPT: Final[Path] = PACKAGING_DIRECTORY / "windows" / "SampleRipper.iss"
 WINDOWS_QUIT_SCRIPT: Final[Path] = PACKAGING_DIRECTORY / "windows" / "quit.ps1"
