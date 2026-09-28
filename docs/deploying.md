@@ -60,7 +60,8 @@ your library, `publication`. Repeat it whenever you want the site to show your l
    ```
 
    Your module collection is always published; a sample folder is published only when it is named
-   here.
+   here. The page links `sampleripper links import` recorded travel with the collection: after
+   importing them, publish again and redeploy the site.
 2. **Open the database for a moment:** turn on the PostgreSQL service's public networking (its TCP
    proxy), and copy its `DATABASE_PUBLIC_URL` variable.
 3. **Publish**, typing the two secrets where nothing records them:
