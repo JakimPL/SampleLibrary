@@ -71,6 +71,7 @@ way and glide from the first sample's pitch to the second's; drums and noise kee
 | Cloud | Right-click a point | Joins it to the sample in hand as a morph pair |
 | Cloud | Right-drag between two points | Makes them a morph pair |
 | Cloud | Escape | Lets go of the point in hand |
+| Anywhere | Ctrl+Z, Ctrl+Y (⌘Z, ⇧⌘Z on a Mac) | Undo and redo the morph's ends |
 
 ## Phones and tablets
 

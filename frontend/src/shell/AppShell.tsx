@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 
 import { useLayoutMode } from "../layout/useLayoutMode";
+import { useMorphUndoKeys } from "../morph/useMorphUndoKeys";
 import { type RouteView, shellViewOf } from "../navigation/shellView";
 import { useListingStepKeys } from "../navigation/useListingStepKeys";
 import { useRouteFocus } from "../navigation/useRouteFocus";
@@ -17,7 +18,8 @@ interface AppShellProps {
  * What every address renders: the view the address names, focused through the selection store,
  * and the shell that shows it, the phone shell or the workspace as the viewport asks. Every route
  * mounts this one component, so moving between addresses keeps the shell and everything drawn
- * inside it, and Alt with an arrow steps the shown entity through its listing in either shell.
+ * inside it; Alt with an arrow steps the shown entity through its listing in either shell, and
+ * Ctrl+Z and Ctrl+Y undo and redo the morph's ends.
  */
 export function AppShell({ routeView }: AppShellProps): ReactElement {
     const { sampleHash, moduleHash } = useParams<{ sampleHash?: string; moduleHash?: string }>();
@@ -25,5 +27,6 @@ export function AppShell({ routeView }: AppShellProps): ReactElement {
     const { layout } = useLayoutMode();
     useRouteFocus(view);
     useListingStepKeys(view);
+    useMorphUndoKeys();
     return layout === "phone" ? <PhoneShell view={view} /> : <WorkspaceShell view={view} />;
 }

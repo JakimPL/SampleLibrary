@@ -108,6 +108,10 @@ const POINTER_GUIDE: readonly GuideSection[] = [
                 gesture: "The waveform button",
                 meaning: "opens a waveform under the slider: the morph's, or a lone chosen end's own",
             },
+            {
+                gesture: "Ctrl+Z, Ctrl+Y",
+                meaning: "undo and redo the ends, from anywhere in the app; ⌘Z and ⇧⌘Z on a Mac",
+            },
             { gesture: "Escape", meaning: "lets go of the point in hand" },
         ],
     },
