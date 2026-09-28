@@ -21,6 +21,7 @@ from sampleripper.site.messages import (
     NO_AUDIO,
     NO_PORT,
     NO_READER,
+    NO_READER_HOST,
     NOT_PUBLIC,
     PORT_TAKEN_BY_RENDERER,
     RENDERER_BEYOND_THIS_COMPUTER,
@@ -131,6 +132,14 @@ def test_a_reader_with_a_chosen_password_is_refused(tmp_path: Path, monkeypatch:
     config = _site_config(tmp_path, SiteConfig(library={"server_database_url": weak}), monkeypatch)
 
     assert WEAK_READER_PASSWORD.format(length=24) in _problems(config)
+
+
+def test_a_reader_address_naming_no_host_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A reference to another service that a platform leaves empty gives an address with nothing between @ and the port."""
+    hostless = f"postgresql+psycopg://sampleripper_reader:{GENERATED_PASSWORD}@:5432/railway"
+    config = _site_config(tmp_path, SiteConfig(library={"server_database_url": hostless}), monkeypatch)
+
+    assert NO_READER_HOST in _problems(config)
 
 
 def test_a_renderer_listening_beyond_this_computer_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

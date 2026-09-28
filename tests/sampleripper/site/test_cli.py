@@ -14,8 +14,8 @@ from samplecore.ports import free_port
 from sampleripper.children import ChildProcess
 from sampleripper.site import cli as site_cli
 from sampleripper.site import renderer as site_renderer
-from sampleripper.site.messages import NO_AUDIO
-from tests.sampleripper.site.test_admission import SiteConfig, _site_config
+from sampleripper.site.messages import CATALOG_UNREACHABLE, NO_AUDIO
+from tests.sampleripper.site.test_admission import GENERATED_PASSWORD, SiteConfig, _site_config
 
 PROGRAM: Final[str] = "sampleripper site"
 LOOPBACK: Final[str] = "127.0.0.1"
@@ -122,6 +122,23 @@ def test_a_renderer_ending_as_it_starts_fails_the_site_before_it_serves(
 
     assert raised.value.code == ExitStatus.FAILED
     assert served == []
+
+
+def test_a_site_whose_catalog_is_out_of_reach_names_the_address_it_was_given(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Port 1 is closed on every computer, so the connection is refused at once."""
+    unreachable = f"postgresql+psycopg://sampleripper_reader:{GENERATED_PASSWORD}@{LOOPBACK}:1/railway"
+    site_config = _site_config(tmp_path, SiteConfig(library={"server_database_url": unreachable}), monkeypatch)
+    monkeypatch.setattr(site_cli, "bootstrap_cli", lambda: site_config)
+    monkeypatch.setenv("PORT", "8000")
+    monkeypatch.setattr(site_cli, "site_renderer", lambda *arguments, **options: pytest.fail("a renderer started"))
+
+    with caplog.at_level(logging.ERROR, logger=site_cli.__name__), pytest.raises(SystemExit) as raised:
+        site_cli.main([], prog=PROGRAM)
+
+    assert raised.value.code == ExitStatus.FAILED
+    assert any(message.startswith(CATALOG_UNREACHABLE.split("{", 1)[0]) for message in caplog.messages)
 
 
 def test_a_refused_site_starts_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

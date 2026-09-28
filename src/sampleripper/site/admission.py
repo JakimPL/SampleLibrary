@@ -16,6 +16,7 @@ from sampleripper.site.messages import (
     NO_AUDIO,
     NO_PORT,
     NO_READER,
+    NO_READER_HOST,
     NOT_PUBLIC,
     PORT_TAKEN_BY_RENDERER,
     RENDERER_BEYOND_THIS_COMPUTER,
@@ -64,7 +65,8 @@ def admit_site(config: LibraryConfig, *, port: int, environment: Mapping[str, st
 
     A site answers anyone on the internet, so it holds nothing that could change the catalog: no
     owner, curator, administrator or publishing connection, from the file or the environment, and a
-    reader whose password was generated rather than chosen. Its renderer listens on this computer
+    reader whose password was generated rather than chosen, at an address naming the database's
+    host. Its renderer listens on this computer
     alone, on a port apart from the site's, and an audio store that is there is one it can read.
 
     Raises:
@@ -91,9 +93,12 @@ def _credentials(config: LibraryConfig, *, environment: Mapping[str, str]) -> tu
     ]
     problems = [CREDENTIAL_BEYOND_READER.format(name=name) for name in beyond]
     if config.server_database_url is None:
-        problems.append(NO_READER)
-    elif len(make_url(config.server_database_url).password or "") < MINIMUM_SERVICE_PASSWORD_LENGTH:
+        return (*problems, NO_READER)
+    reader = make_url(config.server_database_url)
+    if len(reader.password or "") < MINIMUM_SERVICE_PASSWORD_LENGTH:
         problems.append(WEAK_READER_PASSWORD.format(length=MINIMUM_SERVICE_PASSWORD_LENGTH))
+    if reader.host is None:
+        problems.append(NO_READER_HOST)
     return tuple(problems)
 
 

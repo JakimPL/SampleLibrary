@@ -13,6 +13,14 @@ NO_READER: Final[str] = (
     "Name the role the site reads the catalog as in SAMPLERIPPER_SERVER_DATABASE_URL, the reader a publication creates."
 )
 WEAK_READER_PASSWORD: Final[str] = "The reader's password is shorter than {length} characters. Give it a generated one."
+NO_READER_HOST: Final[str] = (
+    "SAMPLERIPPER_SERVER_DATABASE_URL names no database host. Put the database's private host between the @ and "
+    "the port; a reference to another service fills in only under that service's own name."
+)
+CATALOG_UNREACHABLE: Final[str] = (
+    "Could not reach the catalog at the address SAMPLERIPPER_SERVER_DATABASE_URL names: {reason}. Check the host and "
+    "the database's name in it, and that the database runs."
+)
 CREDENTIAL_BEYOND_READER: Final[str] = (
     "{name} names a connection that may change the catalog, which a site holds none of. Remove it from the "
     "site's configuration."
