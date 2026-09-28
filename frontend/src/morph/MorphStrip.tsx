@@ -5,7 +5,9 @@ import { useLayoutMode } from "../layout/useLayoutMode";
 import { FocusedSampleTransport } from "../samples/SampleTransport";
 import { Button } from "../shared/controls/Button";
 import { Icon } from "../shared/icons/Icon";
+import { BottomSheet } from "../shared/overlay/BottomSheet";
 import { MorphDistance } from "./MorphDistance";
+import { MorphHistory } from "./MorphHistory";
 import { MorphSlot } from "./MorphSlot";
 import { END_LETTERS, useMorphStore, WEIGHT_STEP } from "./morphStore";
 import { useMorphStripStore } from "./morphStripStore";
@@ -18,6 +20,7 @@ const WEIGHT_DECIMAL_PLACES = 2;
 const PERCENT_OF_A_SHARE = 100;
 const THUMB_CENTER_SHARE = 0.5;
 const OFFLINE_NOTICE = "Morphing is offline.";
+const HISTORY_TITLE = "History";
 
 /** Where the readout stands over the track: on the thumb's own center, whose travel the thumb's width shortens at either end. */
 function readoutOffset(weight: number): string {
@@ -125,8 +128,9 @@ function MorphPairWaveform({ first, second, playback }: PairProps): ReactElement
  * drawn over both ends, or a lone chosen end's own player. The morph is drawn at the slider's
  * point as soon as both ends are chosen, unheard, so the ends themselves are heard first; letting
  * the slider go sounds a point through the shared preview element, the way the marker on the
- * cloud does, and the waveform draws whichever point was let go last. The selection lets go when
- * the strip leaves the screen.
+ * cloud does, and the waveform draws whichever point was let go last. The history button opens,
+ * under everything else, a column per end of the samples it has held, or a sheet of them on a
+ * phone. The selection lets go when the strip leaves the screen.
  */
 export function MorphStrip(): ReactElement {
     const first = useMorphStore((state) => state.first);
@@ -135,8 +139,14 @@ export function MorphStrip(): ReactElement {
     const deselectEnd = useMorphStore((state) => state.deselectEnd);
     const expanded = useMorphStripStore((state) => state.expanded);
     const toggleExpanded = useMorphStripStore((state) => state.toggleExpanded);
+    const historyShown = useMorphStripStore((state) => state.historyShown);
+    const toggleHistoryShown = useMorphStripStore((state) => state.toggleHistoryShown);
+    const hideHistory = useMorphStripStore((state) => state.hideHistory);
+    const { layout } = useLayoutMode();
     const playback = useMorphPlayback();
     const bodyId = useId();
+    const historyId = useId();
+    const historyInline = layout === "workspace";
     const pair = first !== null && second !== null ? { first, second } : null;
     const lone = pair === null ? (first ?? second) : null;
     const shown = expanded && (pair !== null || lone !== null);
@@ -173,6 +183,16 @@ export function MorphStrip(): ReactElement {
                 >
                     <Icon name="waveform" label={null} />
                 </Button>
+                <Button
+                    variant="secondary"
+                    icon
+                    aria-label={HISTORY_TITLE}
+                    aria-expanded={historyShown}
+                    aria-controls={historyInline ? historyId : undefined}
+                    onClick={toggleHistoryShown}
+                >
+                    <Icon name="history" label={null} />
+                </Button>
             </div>
             {pair !== null && <MorphSlider first={pair.first} second={pair.second} playback={playback} />}
             {shown && pair !== null && (
@@ -184,6 +204,16 @@ export function MorphStrip(): ReactElement {
                 <div className="morph-strip-wave" id={bodyId}>
                     <FocusedSampleTransport sampleHash={lone} />
                 </div>
+            )}
+            {historyShown && historyInline && (
+                <section className="morph-strip-history" id={historyId} aria-label={HISTORY_TITLE}>
+                    <MorphHistory />
+                </section>
+            )}
+            {historyShown && !historyInline && (
+                <BottomSheet title={HISTORY_TITLE} onClose={hideHistory}>
+                    <MorphHistory />
+                </BottomSheet>
             )}
             {pair !== null && <OfflineNotice status={playback.status} />}
         </section>

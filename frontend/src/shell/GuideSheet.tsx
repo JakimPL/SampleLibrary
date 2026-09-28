@@ -65,6 +65,11 @@ const TOUCH_GUIDE: readonly GuideSection[] = [
                 gesture: "The waveform button",
                 meaning: "opens a waveform under the slider: the morph's, or a lone chosen end's own",
             },
+            {
+                gesture: "The history button",
+                meaning: "opens the samples each end has held, newest first; a tap on one makes it that end again",
+            },
+            { gesture: "↶ ↷ in the history", meaning: "undo and redo the ends" },
             { gesture: "⌖", meaning: "centers the cloud on the point in hand" },
         ],
     },
@@ -107,6 +112,10 @@ const POINTER_GUIDE: readonly GuideSection[] = [
             {
                 gesture: "The waveform button",
                 meaning: "opens a waveform under the slider: the morph's, or a lone chosen end's own",
+            },
+            {
+                gesture: "The history button",
+                meaning: "opens the samples each end has held, newest first; a click on one makes it that end again",
             },
             {
                 gesture: "Ctrl+Z, Ctrl+Y",

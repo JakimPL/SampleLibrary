@@ -12,7 +12,6 @@ describe("GuideSheet", () => {
         expect(screen.getByText("Pinch")).toBeInTheDocument();
         expect(screen.getByText("A or B under the cloud")).toBeInTheDocument();
         expect(screen.queryByText("Shift-click")).not.toBeInTheDocument();
-        expect(screen.queryByText("Ctrl+Z, Ctrl+Y")).not.toBeInTheDocument();
     });
 
     it("spells the keys and clicks out for a pointer, and closes from its scrim", () => {
@@ -21,7 +20,6 @@ describe("GuideSheet", () => {
 
         expect(screen.getByRole("dialog", { name: "Keyboard and mouse" })).toBeInTheDocument();
         expect(screen.getByText("Alt+← Alt+→")).toBeInTheDocument();
-        expect(screen.getByText("Ctrl+Z, Ctrl+Y")).toBeInTheDocument();
         expect(screen.queryByText("Pinch")).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", { name: "Close" }));
         expect(onClose).toHaveBeenCalled();

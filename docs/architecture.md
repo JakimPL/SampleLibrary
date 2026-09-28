@@ -1338,7 +1338,16 @@ traces, or with one end chosen that sample's own player. Every point is heard th
 every sample plays through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is
 keyed by its own render's address) and records the weight in `morphStore`, so the waveform draws
 whichever control let go last; a pair just completed is drawn at the slider's point by the store's
-`pairOf` before any point of it is heard, so the ends are heard first. The opened strip states how far apart the two ends sit
+`pairOf` before any point of it is heard, so the ends are heard first. Every change to the ends
+passes through the store's one `commit`, which keeps the history `frontend/src/morph/morphHistory.ts`
+defines: a column per end of the samples it has held (`held`, newest arrival first, each once, kept
+across visits under one localStorage key by `morphHistoryPersistence.ts`) and a line of snapshots
+behind the present (`past` and `future`, the ends with the weight and the drawn point) that `undo`
+and `redo` walk, so a row keeps its place and the pair marks its rows by holding their samples.
+`frontend/src/morph/useMorphUndoKeys.ts`, mounted in `AppShell`, hands Ctrl+Z and Ctrl+Y to the
+store from anywhere but a text field, whose own undo the browser keeps; the history button on the
+strip opens `MorphHistory.tsx` under it on the workspace, or as a sheet on a phone, and a click on
+a row names its end through `setEnd`. The opened strip states how far apart the two ends sit
 (`frontend/src/morph/MorphDistance.tsx`, over `GET /samples/{hash}/distance/{other}`), so the length
 of the path is read where the path is traveled. Both ends are carried into one frame before they blend: the API resolves the
 rate each is heard at by the one rule every reader of the catalog applies and hands both to the
