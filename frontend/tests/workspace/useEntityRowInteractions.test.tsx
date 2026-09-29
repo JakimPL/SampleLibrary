@@ -67,37 +67,26 @@ describe("useEntityRowInteractions", () => {
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "abc" });
     });
 
-    it("a plain click on a sample gives it to the selected end of the morph, which stays selected", () => {
-        useMorphStore.getState().toggleSelectedEnd("second");
+    it("a plain click on a sample gives it to the selected end of the morph", () => {
+        useMorphStore.getState().selectEnd("second");
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
 
         act(() => {
             result.current.onClick(fakeMouseEvent().event);
         });
 
-        expect(useMorphStore.getState()).toMatchObject({ first: null, second: "abc", selectedEnd: "second" });
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: "abc" });
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "abc" });
     });
 
-    it("a plain click leaves the pair alone while no end is selected", () => {
-        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
-
-        act(() => {
-            result.current.onClick(fakeMouseEvent().event);
-        });
-
-        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
-    });
-
-    it("a plain click on a module fills nothing, even with an end selected", () => {
-        useMorphStore.getState().toggleSelectedEnd("first");
+    it("a plain click on a module leaves the pair empty", () => {
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
 
         act(() => {
             result.current.onClick(fakeMouseEvent().event);
         });
 
-        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null, selectedEnd: "first" });
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
     });
 
     it("a modified click is left alone, neither highlighting nor preventing the default navigation", () => {
@@ -128,7 +117,6 @@ describe("useEntityRowInteractions", () => {
 
     it("a Shift-click with nothing in hand opens a pair on the clicked sample", () => {
         useSelectionStore.setState(INITIAL_SELECTION_STATE);
-        useMorphStore.getState().clear();
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
         const { event } = fakeMouseEvent({ shiftKey: true });
 
@@ -140,7 +128,6 @@ describe("useEntityRowInteractions", () => {
     });
 
     it("a Shift-click on a module does nothing, since a module has no pair to join", () => {
-        useMorphStore.getState().clear();
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
         const { event, preventDefault } = fakeMouseEvent({ shiftKey: true });
 

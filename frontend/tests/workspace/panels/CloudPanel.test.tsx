@@ -563,31 +563,18 @@ describe("CloudPanel on touch", () => {
         fireEvent.pointerUp(latestCanvas(), { ...FINGER, clientX: x, clientY: y });
     }
 
-    it("gives every tapped point to the selected end, playing each, until the end is tapped again", async () => {
+    it("gives every tapped point to the selected end, playing each, the first to A and the next to B", async () => {
         await renderedPanel();
 
-        fireEvent.click(screen.getByRole("button", { name: /^A: / }));
         tap(5, 595);
-        expect(useMorphStore.getState()).toMatchObject({ first: FIRST_HASH, second: null, selectedEnd: "first" });
+        expect(useMorphStore.getState()).toMatchObject({ first: FIRST_HASH, second: null, selectedEnd: "second" });
         tap(595, 5);
-        expect(useMorphStore.getState()).toMatchObject({ first: SECOND_HASH, second: null, selectedEnd: "first" });
+        expect(useMorphStore.getState()).toMatchObject({
+            first: FIRST_HASH,
+            second: SECOND_HASH,
+            selectedEnd: "second",
+        });
         expect(play).toHaveBeenCalledTimes(2);
-
-        fireEvent.click(screen.getByRole("button", { name: /^A: / }));
-        expect(useMorphStore.getState().selectedEnd).toBeNull();
-        tap(5, 595);
-
-        expect(useMorphStore.getState()).toMatchObject({ first: SECOND_HASH, second: null });
-    });
-
-    it("lets the selection go once the Modules tab takes the strip away", async () => {
-        await renderedPanel();
-        fireEvent.click(screen.getByRole("button", { name: /^B: / }));
-        expect(useMorphStore.getState().selectedEnd).toBe("second");
-
-        fireEvent.click(screen.getByRole("button", { name: "Modules" }));
-
-        expect(useMorphStore.getState().selectedEnd).toBeNull();
     });
 
     it("shows a tap card for the point in hand under touch, playing it as the tap lands", async () => {

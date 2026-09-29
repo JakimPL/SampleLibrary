@@ -42,7 +42,7 @@ function focusSiblingRowLink(element: HTMLElement, direction: "previous" | "next
  * Wires the shell's click-to-highlight / double-click-to-focus convention for one row or point.
  *
  * A plain, unmodified click highlights `entity`, staying on the current view, and gives a sample to
- * the morph end selected under the cloud while one is; a Shift-click
+ * the morph's selected end; a Shift-click
  * on a sample instead joins it to the sample in hand as a morph pair, the gesture a right-click on
  * a cloud point makes, leaving the highlight untouched -- a Shift-click on a module has no pair to
  * join, so it is left alone. Any other modified click (ctrl/cmd/alt, or a non-primary button) is left alone too,

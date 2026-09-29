@@ -159,7 +159,6 @@ describe("MorphHistory with samples held", () => {
         serveNames();
         useMorphStore.getState().join(A, B);
         useMorphStore.getState().setEnd("first", C);
-        useMorphStore.getState().clearEnd("second");
         render(<MorphHistory />);
         await row("first", NAMES[A] ?? "");
 
@@ -167,7 +166,7 @@ describe("MorphHistory with samples held", () => {
 
         expect(rowsOf("first")).toHaveLength(1);
         expect(rowsOf("first")[0]).toHaveAttribute("aria-pressed", "true");
-        expect(rowsOf("second")).toHaveLength(0);
+        expect(rowsOf("second")).toHaveLength(1);
         expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
     });
 });
