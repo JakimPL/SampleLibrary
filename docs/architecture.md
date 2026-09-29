@@ -1237,7 +1237,7 @@ paints the theme's ground. From the bottom:
 | `canvas.cloud-dots` | `regl-scatterplot` | every point as a dot; the pointer target for panning, zooming, hit-testing and selection |
 | `canvas.cloud-nodes` | `useNodeLayer` and `hollowPointRenderer.ts`, on WebGL through `regl` | every point as a hollow square or ring of one size at every zoom |
 | `svg.cloud-markers` | `CloudMarkers` | the hovered and the selected point, each in the theme's point shape |
-| overlays | `CloudView`, `MorphBand`, `MorphLink` | the ping locating a highlighted point, the pairing band and the morph link |
+| overlays | `CloudView`, `MorphLink` | the ping locating a highlighted point and the morph link |
 
 regl-scatterplot draws every point into a 32-bit float framebuffer before the screen, which needs
 `OES_texture_float`, `WEBGL_color_buffer_float` and `EXT_float_blend`; `frontend/src/cloud/floatRendering.ts`
@@ -1303,7 +1303,7 @@ the logarithm of its count. The underlay stretches that image over the screen bo
 
 Every visual value above is a CSS custom property in `styles.css` (`--cloud-point-*`,
 `--cloud-substrate-*`, `--cloud-marker-*`, `--cloud-node-*`, `--cloud-grid-*`, `--cloud-glow-opacity`,
-`--cloud-link-*`, `--cloud-band-dash`, `--cloud-ping-*`, `--cloud-hover-color`), so the themes differ
+`--cloud-link-*`, `--cloud-ping-*`, `--cloud-hover-color`), so the themes differ
 in tokens alone: `cloudRenderSettings.ts` reads the ones the canvases use into one
 `CloudRenderSettings` whenever the theme changes, and the SVG overlays take theirs through CSS. The
 dark and light themes draw round dots over their substrate, rings in detail, cased markers and a
@@ -1327,29 +1327,21 @@ controls, as the setup page does, sets `--button-height` and `--field-height` on
 ## Morphs in the application
 
 A morph is a pair of samples and a weight between them, held in `frontend/src/morph/morphStore.ts`
-apart from the shell's focus and highlight: the slots under the cloud and the pairing gestures fill
-it, so it stays where it was put while a person goes on browsing. The cloud fills the pair with the right
-mouse button, which regl-scatterplot leaves alone (it pans and selects on the left button only), so
-the browser's menu is the one thing `CloudView` keeps off the canvas: a right-drag from one point to
-another joins the two, and a right-click on a point joins it to the sample in hand. A Shift-click on
-a sample row makes the same join from a listing, both reading the anchor through `morphAnchorOf` in
-`frontend/src/workspace/selectionStore.ts`: the highlighted sample, or the focused one.
-While the button is held, a band runs from the point the drag started at, or from that sample when
-the press landed on empty space, to the cursor, snapping to the point under it
-(`frontend/src/cloud/MorphBand.tsx`), so the pair a release would join is visible before it lands;
-the join then draws a line between the two ends' markers with a knob on it that is the weight
-(`frontend/src/cloud/MorphLink.tsx`), moving with the points through pan and zoom like every overlay
-on the cloud. The strip along the bottom of the Cloud panel (`frontend/src/morph/MorphStrip.tsx`)
-shows the same pair as two slots, A and B. Tapping a slot selects it (`selectedEnd` in the store):
-a chosen end plays and is taken in hand, and the selected end takes every sample tapped next
-through `takeSample`, called from the two places a tap takes a sample in hand, the plain click of
-`frontend/src/workspace/useEntityRowInteractions.ts` and `CloudPanel.handleSelect`, until the
-slot is tapped again; a sample already at the other end trades places. An empty slot at rest
-offers the sample in hand by name, read through the same `morphAnchorOf`, and one tap makes it that
-end through `setEnd`, the slot staying at rest. Once both ends are chosen a
-slider mirroring the knob's weight stands under the row, with the distance between the ends on a
-desktop, and the waveform button opens a waveform beneath it: the render drawn over both ends'
-traces, or with one end chosen that sample's own player. Every point is heard through
+apart from the shell's focus and highlight: the samples a person picks fill it, so it stays where it
+was put while a person goes on browsing. One end is always selected (`selectedEnd` in the store), A
+at the start of a visit, and it takes every sample picked through `takeSample`, called from the two
+places a tap takes a sample in hand, the plain click of
+`frontend/src/workspace/useEntityRowInteractions.ts` and `CloudPanel.handleSelect`. While the other
+end is empty the selection moves there once the selected end takes a sample, so the first two picks
+make a pair; a sample the pair already holds leaves the pair and the selection as they stand, so
+the second click of a double click, or a tap to hear an end again, holds the pair in place. The
+strip along the bottom of the Cloud panel (`frontend/src/morph/MorphStrip.tsx`) shows the pair as
+two slots, A and B; tapping a slot selects its end, and a chosen end plays and is taken in hand. A
+whole pair draws a line between the two ends' markers on the cloud with a knob on it that is the
+weight (`frontend/src/cloud/MorphLink.tsx`), moving with the points through pan and zoom like every
+overlay on the cloud. Once both ends are chosen a slider mirroring the knob's weight stands under
+the row, with the distance between the ends on a desktop, and the waveform button opens the render
+drawn over both ends' traces beneath it. Every point is heard through
 `frontend/src/morph/useMorphPlayback.ts`, which plays the render through the one preview element
 every sample plays through (`useAudioPreview`, whose sources carry a URL and a key, so a morph is
 keyed by its own render's address) and records the weight in `morphStore`, so the waveform draws

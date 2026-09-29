@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { HelpMenu } from "../../src/shell/HelpMenu";
@@ -14,8 +14,8 @@ describe("HelpMenu", () => {
 
         fireEvent.click(screen.getByRole("button", { name: "Keyboard and mouse" }));
 
-        expect(screen.getByRole("dialog", { name: "Keyboard and mouse" })).toBeInTheDocument();
-        expect(screen.getByText("Shift-click")).toBeInTheDocument();
+        const guide = screen.getByRole("dialog", { name: "Keyboard and mouse" });
+        expect(within(guide).getAllByRole("term").length).toBeGreaterThan(0);
     });
 
     it("opens the diagnostics", () => {
