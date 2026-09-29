@@ -11,6 +11,7 @@ import {
 } from "../../src/morph/morphHistory";
 import { MORPH_HISTORY_STORAGE_KEY } from "../../src/morph/morphHistoryPersistence";
 import { DEFAULT_WEIGHT, snapWeight, useMorphStore, WEIGHT_STEP } from "../../src/morph/morphStore";
+import { choosePair } from "../support/morphPair";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -27,30 +28,8 @@ describe("snapWeight", () => {
 });
 
 describe("morphStore", () => {
-    it("joins the anchor as the first end and the chosen sample as the second", () => {
-        useMorphStore.getState().join(A, B);
-
-        expect(useMorphStore.getState()).toMatchObject({ first: A, second: B });
-    });
-
-    it("opens a pair with the chosen sample when nothing anchors it, and closes it on the next", () => {
-        useMorphStore.getState().join(null, A);
-        expect(useMorphStore.getState()).toMatchObject({ first: A, second: null });
-
-        useMorphStore.getState().join(null, B);
-        expect(useMorphStore.getState()).toMatchObject({ first: A, second: B });
-    });
-
-    it("leaves a pair alone when the anchor and the chosen sample are one", () => {
-        useMorphStore.getState().join(A, B);
-
-        useMorphStore.getState().join(C, C);
-
-        expect(useMorphStore.getState()).toMatchObject({ first: A, second: B });
-    });
-
     it("swaps the ends and mirrors the weight, so the audible point stays put", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setWeight(0.25);
 
         useMorphStore.getState().swap();
@@ -67,7 +46,7 @@ describe("morphStore", () => {
 
 describe("naming an end outright", () => {
     it("makes a sample the first end, and trades places with the second when it holds that sample", () => {
-        useMorphStore.getState().join("a", "b");
+        choosePair("a", "b");
 
         useMorphStore.getState().setEnd("first", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "c", second: "b" });
@@ -77,7 +56,7 @@ describe("naming an end outright", () => {
     });
 
     it("makes a sample the second end, and trades places with the first when it holds that sample", () => {
-        useMorphStore.getState().join("a", "b");
+        choosePair("a", "b");
 
         useMorphStore.getState().setEnd("second", "c");
         expect(useMorphStore.getState()).toMatchObject({ first: "a", second: "c" });
@@ -87,7 +66,7 @@ describe("naming an end outright", () => {
     });
 
     it("mirrors the weight when naming an end trades the two", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setWeight(0.25);
 
         useMorphStore.getState().setEnd("first", B);
@@ -110,16 +89,16 @@ describe("the render on screen", () => {
     const MIRRORED_SLIDER_WEIGHT = 0.25;
 
     it("draws the slider's point as soon as the second end is chosen", () => {
-        useMorphStore.getState().join(null, A);
+        useMorphStore.getState().setEnd("first", A);
         expect(useMorphStore.getState().renderedWeight).toBeNull();
 
-        useMorphStore.getState().join(null, B);
+        useMorphStore.getState().setEnd("second", B);
 
         expect(useMorphStore.getState().renderedWeight).toBe(DEFAULT_WEIGHT);
     });
 
     it("records the weight a point was heard at, and keeps it while the pair stays", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setWeight(0.25);
 
         useMorphStore.getState().markRendered();
@@ -146,13 +125,6 @@ describe("the render on screen", () => {
             drawnAt: SLIDER_WEIGHT,
         },
         {
-            name: "the anchor joins a new sample",
-            change: () => {
-                useMorphStore.getState().join(A, C);
-            },
-            drawnAt: SLIDER_WEIGHT,
-        },
-        {
             name: "the ends swap",
             change: () => {
                 useMorphStore.getState().swap();
@@ -170,7 +142,7 @@ describe("the render on screen", () => {
     ];
 
     it.each(PAIR_CHANGES)("draws the slider's point afresh once $name", ({ change, drawnAt }: PairChange) => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setWeight(HEARD_WEIGHT);
         useMorphStore.getState().markRendered();
         useMorphStore.getState().setWeight(SLIDER_WEIGHT);
@@ -208,7 +180,7 @@ describe("the selected end", () => {
     });
 
     it("gives every sample taken to the selected end once the pair is whole, and stays selected", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().selectEnd("first");
 
         useMorphStore.getState().takeSample(C);
@@ -227,7 +199,7 @@ describe("the selected end", () => {
         {
             name: "the selected end's own sample",
             prepare: () => {
-                useMorphStore.getState().join(A, B);
+                choosePair(A, B);
                 useMorphStore.getState().selectEnd("first");
             },
             hash: A,
@@ -235,7 +207,7 @@ describe("the selected end", () => {
         {
             name: "the other end's sample",
             prepare: () => {
-                useMorphStore.getState().join(A, B);
+                choosePair(A, B);
                 useMorphStore.getState().selectEnd("first");
             },
             hash: B,
@@ -260,7 +232,7 @@ describe("the selected end", () => {
     });
 
     it("keeps the selected letter through a swap", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().selectEnd("second");
 
         useMorphStore.getState().swap();
@@ -291,13 +263,6 @@ describe("undo and redo", () => {
             after: { first: A, second: C, weight: MOVED_WEIGHT },
         },
         {
-            name: "the anchor joins a new sample",
-            change: () => {
-                useMorphStore.getState().join(A, C);
-            },
-            after: { first: A, second: C },
-        },
-        {
             name: "the ends swap",
             change: () => {
                 useMorphStore.getState().swap();
@@ -324,7 +289,7 @@ describe("undo and redo", () => {
     it.each(UNDO_CASES)(
         "returns to how the pair stood before $name, and forward again",
         ({ change, after }: UndoCase) => {
-            useMorphStore.getState().join(A, B);
+            choosePair(A, B);
             useMorphStore.getState().setWeight(MOVED_WEIGHT);
 
             change();
@@ -339,7 +304,7 @@ describe("undo and redo", () => {
     );
 
     it("lets the changes undone go once a new one is made", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setEnd("second", C);
         useMorphStore.getState().undo();
 
@@ -361,19 +326,10 @@ describe("undo and redo", () => {
         {
             name: "an end named with the sample it holds",
             prepare: () => {
-                useMorphStore.getState().join(A, B);
+                choosePair(A, B);
             },
             change: () => {
                 useMorphStore.getState().setEnd("first", A);
-            },
-        },
-        {
-            name: "a sample joined to itself",
-            prepare: () => {
-                useMorphStore.getState().join(A, B);
-            },
-            change: () => {
-                useMorphStore.getState().join(C, C);
             },
         },
         {
@@ -386,7 +342,7 @@ describe("undo and redo", () => {
         {
             name: "a sample taken that the pair already holds",
             prepare: () => {
-                useMorphStore.getState().join(A, B);
+                choosePair(A, B);
             },
             change: () => {
                 useMorphStore.getState().takeSample(B);
@@ -416,7 +372,7 @@ describe("undo and redo", () => {
     });
 
     it("keeps the selected end through undo and redo", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().selectEnd("second");
         useMorphStore.getState().setEnd("first", C);
 
@@ -428,7 +384,7 @@ describe("undo and redo", () => {
     });
 
     it("brings the drawn point back as it was, under the slider where it was", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setWeight(0.1);
         useMorphStore.getState().markRendered();
         useMorphStore.getState().setWeight(MIRRORED_WEIGHT);
@@ -455,7 +411,7 @@ describe("the samples each end has held", () => {
     }
 
     it("remembers each end's samples, the newest arrival first", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         expect(useMorphStore.getState().held).toEqual({ first: [A], second: [B] });
 
         useMorphStore.getState().setEnd("first", C);
@@ -464,7 +420,7 @@ describe("the samples each end has held", () => {
     });
 
     it("leaves a column as it is when its end takes a sample it knows", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setEnd("first", C);
         const { held } = useMorphStore.getState();
 
@@ -475,7 +431,7 @@ describe("the samples each end has held", () => {
     });
 
     it("remembers a swap as an arrival at both ends", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
 
         useMorphStore.getState().swap();
 
@@ -483,7 +439,7 @@ describe("the samples each end has held", () => {
     });
 
     it("keeps the columns through undoing", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setEnd("first", C);
         const { held } = useMorphStore.getState();
 
@@ -494,7 +450,7 @@ describe("the samples each end has held", () => {
     });
 
     it("keeps the columns in the browser's storage as they change", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         expect(savedHeld()).toEqual({ first: [A], second: [B] });
 
         useMorphStore.getState().setEnd("second", C);
@@ -503,14 +459,15 @@ describe("the samples each end has held", () => {
     });
 
     it("forgets every sample but the ones the ends hold now", () => {
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setEnd("first", C);
+        const { past } = useMorphStore.getState();
 
         useMorphStore.getState().forgetHeld();
 
         expect(useMorphStore.getState().held).toEqual({ first: [C], second: [B] });
         expect(savedHeld()).toEqual({ first: [C], second: [B] });
-        expect(useMorphStore.getState().past).toHaveLength(2);
+        expect(useMorphStore.getState().past).toBe(past);
     });
 
     it("reads the columns an earlier visit saved", async () => {
@@ -557,15 +514,9 @@ describe("the history under a random walk of every action", () => {
     }
 
     /** The actions that change the ends and so record a snapshot; the rest move the slider, the mark or the selection alone. */
-    const RECORDING_KINDS: ReadonlySet<string> = new Set(["join", "setEnd", "swap", "takeSample"]);
+    const RECORDING_KINDS: ReadonlySet<string> = new Set(["setEnd", "swap", "takeSample"]);
 
     const STEP_KINDS: readonly Step[] = [
-        {
-            name: "join",
-            run: (draw) => {
-                useMorphStore.getState().join(pick(draw, [null, ...HASHES]), pick(draw, HASHES));
-            },
-        },
         {
             name: "setEnd",
             run: (draw) => {

@@ -33,7 +33,7 @@ import { ErrorNotice } from "../../shared/ErrorNotice";
 import type { FetchState } from "../../shared/fetchState";
 import { Icon } from "../../shared/icons/Icon";
 import { Loading } from "../../shared/Loading";
-import { type EntityRef, morphAnchorOf, useSelectionStore } from "../selectionStore";
+import { type EntityRef, useSelectionStore } from "../selectionStore";
 import { entityRoute } from "../useEntityRowInteractions";
 import { CloudHoverTooltip } from "./CloudHoverTooltip";
 import { CloudPointMenu } from "./CloudPointMenu";
@@ -187,13 +187,11 @@ export function CloudPanel(): ReactElement {
     const { coloring, tags, painted, togglePainted } = useSampleColoring(mode);
     const navigate = useNavigate();
     const highlighted = useSelectionStore((selection) => selection.highlighted);
-    const morphAnchor = useSelectionStore(morphAnchorOf);
     const highlightEntity = useSelectionStore((selection) => selection.highlightEntity);
     const clearHighlight = useSelectionStore((selection) => selection.clearHighlight);
     const morphFirst = useMorphStore((morph) => morph.first);
     const morphSecond = useMorphStore((morph) => morph.second);
     const weight = useMorphStore((morph) => morph.weight);
-    const join = useMorphStore((morph) => morph.join);
     const takeSample = useMorphStore((morph) => morph.takeSample);
     const setWeight = useMorphStore((morph) => morph.setWeight);
     const { play } = useAudioPreview();
@@ -253,18 +251,6 @@ export function CloudPanel(): ReactElement {
 
     function handleFocus(entity: EntityRef): void {
         void navigate(entityRoute(entity));
-    }
-
-    function handleJoinToAnchor(entity: EntityRef): void {
-        if (entity.kind === "sample") {
-            join(morphAnchor, entity.hash);
-        }
-    }
-
-    function handleJoin(first: EntityRef, second: EntityRef): void {
-        if (first.kind === "sample" && second.kind === "sample") {
-            join(first.hash, second.hash);
-        }
     }
 
     function handleHover(entity: EntityRef | null, screenPosition: readonly [number, number] | null): void {
@@ -334,15 +320,12 @@ export function CloudPanel(): ReactElement {
                             onFocus={handleFocus}
                             onClear={clearHighlight}
                             onHover={handleHover}
-                            onJoinToAnchor={handleJoinToAnchor}
-                            onJoin={handleJoin}
                             onActivate={handleActivate}
                             onContextMenu={handleContextMenu}
                             command={command}
                             link={tab === "samples" ? link : null}
                             onWeightChange={setWeight}
                             onWeightCommit={playback.hearCurrentPoint}
-                            anchor={tab === "samples" ? morphAnchor : null}
                         />
                         {hovered !== null && <CloudHoverTooltip entity={hovered.entity} x={hovered.x} y={hovered.y} />}
                         {tapCardShown && <CloudTapCard entity={inHandHere} />}

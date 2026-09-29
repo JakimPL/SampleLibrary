@@ -11,6 +11,7 @@ import { shortHash } from "../../src/shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../../src/shared/labels";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 import { stubMatchMedia } from "../support/matchMedia";
+import { choosePair } from "../support/morphPair";
 
 const FIRST = "a".repeat(64);
 const SECOND = "b".repeat(64);
@@ -94,7 +95,7 @@ function showEmpty(): ReturnType<typeof render> {
 async function showPair(available: boolean): Promise<ReturnType<typeof render>> {
     serveMorph(available);
     serveSamples();
-    useMorphStore.getState().join(FIRST, SECOND);
+    choosePair(FIRST, SECOND);
     const result = render(<MorphStrip />);
     await screen.findByText("kick_808");
     if (!available) {

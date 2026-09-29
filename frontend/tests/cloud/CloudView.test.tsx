@@ -94,13 +94,10 @@ interface RenderOverrides {
     readonly onFocus?: (entity: EntityRef) => void;
     readonly onClear?: () => void;
     readonly onHover?: (entity: EntityRef | null, screenPosition: readonly [number, number] | null) => void;
-    readonly onJoinToAnchor?: (entity: EntityRef) => void;
-    readonly onJoin?: (first: EntityRef, second: EntityRef) => void;
     readonly onActivate?: (entity: EntityRef) => void;
     readonly onContextMenu?: (entity: EntityRef, position: readonly [number, number]) => void;
     readonly command?: CloudCommand | null;
     readonly link?: CloudLink | null;
-    readonly anchor?: string | null;
 }
 
 /** Lets the fake scatterplot's `draw` promise settle, which CloudView awaits before selecting or deselecting. */
@@ -128,15 +125,12 @@ function viewProps(overrides: RenderOverrides = {}): Parameters<typeof CloudView
         onFocus: overrides.onFocus ?? vi.fn(),
         onClear: overrides.onClear ?? vi.fn(),
         onHover: overrides.onHover ?? vi.fn(),
-        onJoinToAnchor: overrides.onJoinToAnchor ?? vi.fn(),
-        onJoin: overrides.onJoin ?? vi.fn(),
         onActivate: overrides.onActivate ?? vi.fn(),
         onContextMenu: overrides.onContextMenu ?? vi.fn(),
         command: overrides.command ?? null,
         link: overrides.link ?? null,
         onWeightChange: vi.fn(),
         onWeightCommit: vi.fn(),
-        anchor: overrides.anchor ?? null,
     };
 }
 
@@ -150,22 +144,18 @@ async function renderCloudView(overrides: RenderOverrides = {}): Promise<ReturnT
             onFocus={overrides.onFocus ?? vi.fn()}
             onClear={overrides.onClear ?? vi.fn()}
             onHover={overrides.onHover ?? vi.fn()}
-            onJoinToAnchor={overrides.onJoinToAnchor ?? vi.fn()}
-            onJoin={overrides.onJoin ?? vi.fn()}
             onActivate={overrides.onActivate ?? vi.fn()}
             onContextMenu={overrides.onContextMenu ?? vi.fn()}
             command={overrides.command ?? null}
             link={overrides.link ?? null}
             onWeightChange={vi.fn()}
             onWeightCommit={vi.fn()}
-            anchor={overrides.anchor ?? null}
         />,
     );
     await flushDraw();
     return result;
 }
 
-const RIGHT_BUTTON = 2;
 const SAMPLE_REF: EntityRef = { kind: "sample", hash: "a".repeat(64) };
 const OTHER_SAMPLE_REF: EntityRef = { kind: "sample", hash: "c".repeat(64) };
 const MODULE_REF: EntityRef = { kind: "module", hash: "b".repeat(64) };
@@ -221,15 +211,12 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onJoinToAnchor={vi.fn()}
-                onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
-                anchor={null}
             />,
         );
         await flushDraw();
@@ -265,33 +252,10 @@ describe("CloudView", () => {
         expect(onClear).toHaveBeenCalled();
     });
 
-    it("reports a point right-clicked in place as a comparison target", async () => {
-        const onJoinToAnchor = vi.fn();
-        const onJoin = vi.fn();
-        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onJoinToAnchor, onJoin });
-        latestInstance().emit("pointOver", 0);
-
-        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON });
-        fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
-
-        expect(onJoinToAnchor).toHaveBeenCalledWith(SAMPLE_REF);
-        expect(onJoin).not.toHaveBeenCalled();
-    });
-
     it("keeps the browser's menu off the canvas", async () => {
         await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)] });
 
         expect(fireEvent.contextMenu(latestCanvas())).toBe(false);
-    });
-
-    it("does not report a comparison target on a plain click", async () => {
-        const onJoinToAnchor = vi.fn();
-        await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], onJoinToAnchor });
-        latestInstance().emit("pointOver", 0);
-
-        fireEvent.click(latestCanvas());
-
-        expect(onJoinToAnchor).not.toHaveBeenCalled();
     });
 
     it("does not clear the highlight on a click over a point", async () => {
@@ -338,15 +302,12 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onJoinToAnchor={vi.fn()}
-                onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
-                anchor={null}
             />,
         );
         await flushDraw();
@@ -371,15 +332,12 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onJoinToAnchor={vi.fn()}
-                onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
-                anchor={null}
             />,
         );
 
@@ -416,15 +374,12 @@ describe("CloudView", () => {
                     onFocus={vi.fn()}
                     onClear={vi.fn()}
                     onHover={vi.fn()}
-                    onJoinToAnchor={vi.fn()}
-                    onJoin={vi.fn()}
                     onActivate={vi.fn()}
                     onContextMenu={vi.fn()}
                     command={null}
                     link={null}
                     onWeightChange={vi.fn()}
                     onWeightCommit={vi.fn()}
-                    anchor={null}
                 />,
             );
         }
@@ -496,15 +451,12 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onJoinToAnchor={vi.fn()}
-                onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
-                anchor={null}
             />,
         );
         await flushDraw();
@@ -528,15 +480,12 @@ describe("CloudView", () => {
                 onFocus={vi.fn()}
                 onClear={vi.fn()}
                 onHover={vi.fn()}
-                onJoinToAnchor={vi.fn()}
-                onJoin={vi.fn()}
                 onActivate={vi.fn()}
                 onContextMenu={vi.fn()}
                 command={null}
                 link={null}
                 onWeightChange={vi.fn()}
                 onWeightCommit={vi.fn()}
-                anchor={null}
             />,
         );
         await flushDraw();
@@ -671,145 +620,6 @@ describe("CloudView morph link", () => {
         await renderCloudView({ points: [point(SAMPLE_REF, 0, 0)], link: LINK });
 
         expect(screen.queryByRole("slider", { name: "Morph weight" })).not.toBeInTheDocument();
-    });
-});
-
-describe("CloudView right-button pairing", () => {
-    const TWO_POINTS: readonly CloudEntityPoint[] = [point(SAMPLE_REF, 0, 0), point(MODULE_REF, 1, 1)];
-
-    function bandLine(container: HTMLElement): SVGLineElement | null {
-        return container.querySelector<SVGLineElement>(".morph-band-line");
-    }
-
-    interface Segment {
-        readonly x1: number;
-        readonly y1: number;
-        readonly x2: number;
-        readonly y2: number;
-    }
-
-    function segmentOf(line: SVGLineElement | null): Segment {
-        if (line === null) {
-            throw new Error("band line not found");
-        }
-        const read = (name: string): number => Number(line.getAttribute(name));
-        return { x1: read("x1"), y1: read("y1"), x2: read("x2"), y2: read("y2") };
-    }
-
-    /** Whether `point` lies on the ray from `from` toward `toward`, strictly past `from`. */
-    function liesAhead(
-        from: readonly [number, number],
-        toward: readonly [number, number],
-        point: readonly [number, number],
-    ): boolean {
-        const alongX = toward[0] - from[0];
-        const alongY = toward[1] - from[1];
-        const offsetX = point[0] - from[0];
-        const offsetY = point[1] - from[1];
-        return Math.abs(alongX * offsetY - alongY * offsetX) < 1e-6 && alongX * offsetX + alongY * offsetY > 0;
-    }
-
-    /** Spreads the fake's points far enough apart that a band between two of them outreaches their markers. */
-    function spreadPoints(): void {
-        latestInstance().getScreenPosition.mockImplementation((index: number) => [10 + index * 100, 20 + index * 100]);
-    }
-
-    it("stretches a band from the pressed point's marker to the cursor while the right button is held", async () => {
-        const { container } = await renderCloudView({ points: TWO_POINTS });
-        latestInstance().emit("pointOver", 0);
-
-        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 10, clientY: 20 });
-        fireEvent.mouseMove(latestCanvas(), { clientX: 50, clientY: 60 });
-
-        const segment = segmentOf(bandLine(container));
-        expect(liesAhead([10, 20], [50, 60], [segment.x1, segment.y1])).toBe(true);
-        expect(container.querySelector(".morph-band-origin .cloud-marker-stroke")).toHaveAttribute("cx", "10");
-        expect(segment.x2).toBe(50);
-        expect(segment.y2).toBe(60);
-    });
-
-    it("snaps the band's far end to the point under the cursor, stopping at its marker", async () => {
-        const { container } = await renderCloudView({ points: TWO_POINTS });
-        spreadPoints();
-        latestInstance().emit("pointOver", 0);
-        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 10, clientY: 20 });
-        fireEvent.mouseMove(latestCanvas(), { clientX: 50, clientY: 60 });
-
-        act(() => {
-            latestInstance().emit("pointOver", 1);
-        });
-
-        const segment = segmentOf(bandLine(container));
-        expect(liesAhead([110, 120], [10, 20], [segment.x2, segment.y2])).toBe(true);
-        expect(container.querySelector(".cloud-marker-hover .cloud-marker-stroke")).toHaveAttribute("cx", "110");
-    });
-
-    it("joins the pressed point to the one the button is released over, and drops the band", async () => {
-        const onJoin = vi.fn();
-        const onJoinToAnchor = vi.fn();
-        const { container } = await renderCloudView({ points: TWO_POINTS, onJoin, onJoinToAnchor });
-        latestInstance().emit("pointOver", 0);
-        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 10, clientY: 20 });
-        latestInstance().emit("pointOver", 1);
-
-        fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
-
-        expect(onJoin).toHaveBeenCalledWith(SAMPLE_REF, MODULE_REF);
-        expect(onJoinToAnchor).not.toHaveBeenCalled();
-        expect(bandLine(container)).not.toBeInTheDocument();
-    });
-
-    it("starts the band from the anchor when the press lands on empty space", async () => {
-        const onJoin = vi.fn();
-        const { container } = await renderCloudView({ points: TWO_POINTS, anchor: SAMPLE_REF.hash, onJoin });
-
-        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 50, clientY: 60 });
-        fireEvent.mouseMove(latestCanvas(), { clientX: 70, clientY: 80 });
-
-        const segment = segmentOf(bandLine(container));
-        expect(container.querySelector(".morph-band-origin .cloud-marker-stroke")).toHaveAttribute("cx", "10");
-        expect(liesAhead([10, 20], [70, 80], [segment.x1, segment.y1])).toBe(true);
-        expect(segment.x2).toBe(70);
-
-        act(() => {
-            latestInstance().emit("pointOver", 1);
-        });
-        fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
-
-        expect(onJoin).toHaveBeenCalledWith(SAMPLE_REF, MODULE_REF);
-    });
-
-    it("joins nothing when the button is released over empty space", async () => {
-        const onJoin = vi.fn();
-        const onJoinToAnchor = vi.fn();
-        await renderCloudView({ points: TWO_POINTS, onJoin, onJoinToAnchor });
-        latestInstance().emit("pointOver", 0);
-        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 10, clientY: 20 });
-        latestInstance().emit("pointOut");
-
-        fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
-
-        expect(onJoin).not.toHaveBeenCalled();
-        expect(onJoinToAnchor).not.toHaveBeenCalled();
-    });
-
-    it("draws no band for the left button", async () => {
-        const { container } = await renderCloudView({ points: TWO_POINTS, anchor: SAMPLE_REF.hash });
-        latestInstance().emit("pointOver", 0);
-
-        fireEvent.mouseDown(latestCanvas(), { button: 0, clientX: 10, clientY: 20 });
-        fireEvent.mouseMove(latestCanvas(), { clientX: 50, clientY: 60 });
-
-        expect(bandLine(container)).not.toBeInTheDocument();
-    });
-
-    it("draws no band from empty space while no sample anchors the next morph", async () => {
-        const { container } = await renderCloudView({ points: TWO_POINTS });
-
-        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON, clientX: 50, clientY: 60 });
-        fireEvent.mouseMove(latestCanvas(), { clientX: 70, clientY: 80 });
-
-        expect(bandLine(container)).not.toBeInTheDocument();
     });
 });
 

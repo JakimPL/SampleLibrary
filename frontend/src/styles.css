@@ -68,7 +68,6 @@
     --cloud-link-node-color: var(--cloud-link-color);
     --cloud-link-width: 1.5px;
     --cloud-link-casing-width: 4px;
-    --cloud-band-dash: 2 4;
     --cloud-ping-radius: 50%;
     --cloud-ping-border-width: 3px;
     --cloud-hover-color: var(--text-primary);
@@ -345,7 +344,6 @@
     --cloud-link-node-color: #fff;
     --cloud-link-width: 1px;
     --cloud-link-casing-width: 0;
-    --cloud-band-dash: 1 2;
     --cloud-ping-radius: 0;
     --cloud-ping-border-width: 1px;
     --cloud-hover-color: #fff;
@@ -3017,29 +3015,6 @@ table.data td .annotation-editor-input {
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-}
-
-.morph-band {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-    pointer-events: none;
-}
-
-.morph-band-line {
-    fill: none;
-    stroke: var(--cloud-link-color);
-    stroke-width: var(--cloud-link-width);
-    stroke-dasharray: var(--cloud-band-dash);
-    opacity: 0.75;
-}
-
-.morph-band-origin {
-    stroke: var(--cloud-link-end-color);
-    opacity: 0.75;
 }
 
 :root[data-theme="openmpt"] .morph-weight input[type="range"] {

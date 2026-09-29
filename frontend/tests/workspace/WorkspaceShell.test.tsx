@@ -4,11 +4,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as ModulesApi from "../../src/api/modules";
 import type * as SamplesApi from "../../src/api/samples";
-import { useMorphStore } from "../../src/morph/morphStore";
 import { routes } from "../../src/navigation/router";
 import { LAYOUT_STORAGE_KEY, type StoredLayout } from "../../src/workspace/dockviewPersistence";
 import type * as ModulesListPanelModule from "../../src/workspace/panels/ModulesListPanel";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
+import { choosePair } from "../support/morphPair";
 
 const MODULES_FAILURE = "the modules panel read a page that was not there";
 
@@ -209,7 +209,7 @@ describe("WorkspaceShell", () => {
         expect(panelTabTitles()).not.toContain("Cloud");
 
         act(() => {
-            useMorphStore.getState().join("a".repeat(64), "b".repeat(64));
+            choosePair("a".repeat(64), "b".repeat(64));
         });
 
         await waitFor(() => {

@@ -49,7 +49,6 @@ interface MorphState extends MorphSnapshot, MorphHistory {
 }
 
 interface MorphActions {
-    readonly join: (anchor: string | null, hash: string) => void;
     /** Makes `hash` the sample at `end`; a sample already at the other end trades places with it, the weight mirrored. */
     readonly setEnd: (end: MorphEnd, hash: string) => void;
     readonly swap: () => void;
@@ -122,13 +121,11 @@ function swappedOf(state: MorphSnapshot): MorphSnapshot {
  * once the selected end takes a sample while the other end is empty, the selection moves there,
  * so the first two picks make a pair; after that the selection stays where a slot's tap put it.
  * Taking a sample the pair already holds keeps the pair and the selection as they stand, so a
- * double click's second click, or a tap to hear an end again, holds the pair in place. `join` is
- * the gestures' way: the anchor, the sample already in view, becomes the first end and the newly
- * chosen one the second; with no anchor the chosen sample opens a pair, or closes one that has a
- * first end waiting. `setEnd` names one end outright, which is how a row of the history gives its
- * sample back, trading places when the sample sits at the other end. `swap` mirrors the weight
- * along with the ends, so the audible point stays where it was, and keeps the selected letter. A
- * render belongs to the pair it was drawn for, so any change of the ends drops it.
+ * double click's second click, or a tap to hear an end again, holds the pair in place. `setEnd`
+ * names one end outright, which is how a row of the history gives its sample back, trading places
+ * when the sample sits at the other end. `swap` mirrors the weight along with the ends, so the
+ * audible point stays where it was, and keeps the selected letter. A render belongs to the pair it
+ * was drawn for, so any change of the ends drops it.
  *
  * Every change to the ends passes through one `commit`, which keeps two records. The columns
  * (`held`) hold the samples each end has held, newest arrival first and each once, kept across
@@ -165,21 +162,6 @@ export const useMorphStore = create<MorphState & MorphActions>((set, get) => {
     return {
         ...INITIAL_MORPH_STATE,
         held: readSavedHeld(),
-        join: (anchor, hash) => {
-            if (anchor === hash) {
-                return;
-            }
-            const state = get();
-            if (anchor !== null) {
-                commit(pairOf(state, anchor, hash, state.weight));
-                return;
-            }
-            commit(
-                state.first === null || state.first === hash
-                    ? pairOf(state, hash, null, state.weight)
-                    : pairOf(state, state.first, hash, state.weight),
-            );
-        },
         setEnd: (end, hash) => {
             const state = get();
             commit(otherEndOf(state, end) === hash ? swappedOf(state) : withSampleAt(state, end, hash));

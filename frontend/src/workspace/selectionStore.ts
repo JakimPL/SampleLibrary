@@ -27,15 +27,6 @@ export const INITIAL_SELECTION_STATE: SelectionState = {
 };
 
 /**
- * The sample a pairing gesture runs from: the one in hand if that is a sample, and the one the
- * Sample Detail is showing otherwise. A row and a cloud point read the same rule, so joining a
- * morph pair means the same thing wherever the gesture is made.
- */
-export function morphAnchorOf(state: SelectionState): string | null {
-    return state.highlighted?.kind === "sample" ? state.highlighted.hash : state.focusedSampleHash;
-}
-
-/**
  * The one cross-panel identity every panel reads from and writes to.
  *
  * `focusedSampleHash` and `focusedModuleHash` are independent slots rather than a single tagged

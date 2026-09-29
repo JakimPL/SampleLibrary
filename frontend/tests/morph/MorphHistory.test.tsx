@@ -6,6 +6,7 @@ import { MorphHistory } from "../../src/morph/MorphHistory";
 import { END_LETTERS, type MorphEnd, useMorphStore } from "../../src/morph/morphStore";
 import { shortHash } from "../../src/shared/format";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
+import { choosePair } from "../support/morphPair";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -57,7 +58,7 @@ describe("MorphHistory with nothing held", () => {
 describe("MorphHistory with samples held", () => {
     it("lists each end's samples newest first, the one held now pressed", async () => {
         serveNames();
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setEnd("first", C);
         render(<MorphHistory />);
 
@@ -70,7 +71,7 @@ describe("MorphHistory with samples held", () => {
 
     it("names a row by its short hash until the catalog answers", () => {
         getSamplePreview.mockReturnValue(new Promise(() => undefined));
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         render(<MorphHistory />);
 
         expect(within(column("first")).getByRole("button", { name: shortHash(A) })).toBeInTheDocument();
@@ -89,7 +90,7 @@ describe("MorphHistory with samples held", () => {
         {
             name: "gives a sample back to A from A's column",
             prepare: () => {
-                useMorphStore.getState().join(A, B);
+                choosePair(A, B);
                 useMorphStore.getState().setEnd("first", C);
             },
             end: "first",
@@ -99,7 +100,7 @@ describe("MorphHistory with samples held", () => {
         {
             name: "gives a sample back to B from B's column",
             prepare: () => {
-                useMorphStore.getState().join(A, B);
+                choosePair(A, B);
                 useMorphStore.getState().setEnd("second", C);
             },
             end: "second",
@@ -109,7 +110,7 @@ describe("MorphHistory with samples held", () => {
         {
             name: "trades the ends when the sample sits at the other end",
             prepare: () => {
-                useMorphStore.getState().join(A, B);
+                choosePair(A, B);
                 useMorphStore.getState().swap();
             },
             end: "first",
@@ -119,7 +120,7 @@ describe("MorphHistory with samples held", () => {
         {
             name: "leaves the pair as it is from the pressed row",
             prepare: () => {
-                useMorphStore.getState().join(A, B);
+                choosePair(A, B);
             },
             end: "first",
             hash: A,
@@ -141,7 +142,7 @@ describe("MorphHistory with samples held", () => {
 
     it("moves the pressed rows with undo and redo, the rows staying", async () => {
         serveNames();
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setEnd("first", C);
         render(<MorphHistory />);
         await row("first", NAMES[A] ?? "");
@@ -157,7 +158,7 @@ describe("MorphHistory with samples held", () => {
 
     it("forgets every row but the ones held now", async () => {
         serveNames();
-        useMorphStore.getState().join(A, B);
+        choosePair(A, B);
         useMorphStore.getState().setEnd("first", C);
         render(<MorphHistory />);
         await row("first", NAMES[A] ?? "");
