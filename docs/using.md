@@ -39,20 +39,18 @@ which **Diagnostics** also offers outright.
 
 ## The morph
 
-The morph plays a sound between two samples. The strip under the cloud holds its two ends, A and B:
+The morph plays a sound between two samples. The strip under the cloud holds its two ends, A and B,
+and one of them is always selected:
 
-1. Click or tap a slot to select it. A selected slot plays its sample and takes it in hand, and
-   every sample you choose next, in a list or on the cloud, becomes that end, until you click the
-   slot again or select the other one. A sample already at the other end trades places.
-2. A slot at rest with nothing in it reads "take" and the name of the sample in hand; one click
-   makes that sample the end.
-3. × lets an end go; ⇄ swaps the ends and mirrors the weight.
+1. Every sample you choose, in a list or on the cloud, becomes the selected end. A is selected
+   first, and B as soon as A has a sample, so the first two samples you choose make a pair.
+2. Click or tap a slot to hear its sample and select it. The samples you choose next replace that
+   end, and the other end stays. A sample that is already A or B stays where it is.
+3. ⇄ swaps the ends and mirrors the weight.
 4. Once both ends are chosen, a slider stands under them. The morph is drawn at the slider's point
    right away and plays when you let the slider or the cloud's marker go. The waveform button opens
    the morph's waveform drawn over both ends.
-5. On a computer, a right-click on a point, a right-drag from one point to another, a Shift-click
-   on a row or the M key also make a pair, with the sample in hand as A.
-6. The history button opens a column for A and one for B: the samples each end has held, the
+5. The history button opens a column for A and one for B: the samples each end has held, the
    newest at the top, the one it holds now marked. A click on a row makes it that end again. ↶ and
    ↷ undo and redo the last change, as Ctrl+Z and Ctrl+Y do anywhere in the app; they move the
    marks and leave the rows where they are. Forget all empties both columns but for the samples
@@ -71,13 +69,10 @@ way and glide from the first sample's pitch to the second's; drums and noise kee
 | Lists | Space | Plays the sample |
 | Lists | F | Keeps the sample close |
 | Lists | 1 to 5 | Rate the sample |
-| Lists | Shift-click, or M | Joins the sample to the one in hand as a morph pair |
 | Open sample | Alt+← Alt+→ | Step through the listing |
 | Cloud | Click a point | Takes it in hand and plays it |
 | Cloud | Double-click a point | Opens it |
 | Cloud | Drag, scroll | Move and zoom the cloud |
-| Cloud | Right-click a point | Joins it to the sample in hand as a morph pair |
-| Cloud | Right-drag between two points | Makes them a morph pair |
 | Cloud | Escape | Lets go of the point in hand |
 | Anywhere | Ctrl+Z, Ctrl+Y (⌘Z, ⇧⌘Z on a Mac) | Undo and redo the morph's ends |
 

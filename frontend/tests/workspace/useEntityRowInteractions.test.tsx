@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { useMorphStore } from "../../src/morph/morphStore";
 import { ROW_LINK_ATTRIBUTE } from "../../src/workspace/rowLinks";
-import { INITIAL_SELECTION_STATE, useSelectionStore } from "../../src/workspace/selectionStore";
+import { useSelectionStore } from "../../src/workspace/selectionStore";
 import { useEntityRowInteractions } from "../../src/workspace/useEntityRowInteractions";
 
 function wrapper({ children }: { children: ReactNode }): ReactElement {
@@ -67,20 +67,20 @@ describe("useEntityRowInteractions", () => {
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "abc" });
     });
 
-    it("a plain click on a sample gives it to the selected end of the morph, which stays selected", () => {
-        useMorphStore.getState().toggleSelectedEnd("second");
+    it("a plain click on a sample gives it to the selected end of the morph", () => {
+        useMorphStore.getState().selectEnd("second");
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
 
         act(() => {
             result.current.onClick(fakeMouseEvent().event);
         });
 
-        expect(useMorphStore.getState()).toMatchObject({ first: null, second: "abc", selectedEnd: "second" });
+        expect(useMorphStore.getState()).toMatchObject({ first: null, second: "abc" });
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "abc" });
     });
 
-    it("a plain click leaves the pair alone while no end is selected", () => {
-        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
+    it("a plain click on a module leaves the pair empty", () => {
+        const { result } = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
 
         act(() => {
             result.current.onClick(fakeMouseEvent().event);
@@ -89,68 +89,21 @@ describe("useEntityRowInteractions", () => {
         expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
     });
 
-    it("a plain click on a module fills nothing, even with an end selected", () => {
-        useMorphStore.getState().toggleSelectedEnd("first");
-        const { result } = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
+    it.each(["ctrlKey", "shiftKey"] as const)(
+        "a click with %s is left alone, neither highlighting, filling the pair nor preventing the default navigation",
+        (modifier) => {
+            const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
+            const { event, preventDefault } = fakeMouseEvent({ [modifier]: true });
 
-        act(() => {
-            result.current.onClick(fakeMouseEvent().event);
-        });
+            act(() => {
+                result.current.onClick(event);
+            });
 
-        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null, selectedEnd: "first" });
-    });
-
-    it("a modified click is left alone, neither highlighting nor preventing the default navigation", () => {
-        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
-        const { event, preventDefault } = fakeMouseEvent({ ctrlKey: true });
-
-        act(() => {
-            result.current.onClick(event);
-        });
-
-        expect(preventDefault).not.toHaveBeenCalled();
-        expect(useSelectionStore.getState().highlighted).toBeNull();
-    });
-
-    it("a Shift-click on a sample joins it to the sample in hand and prevents the default navigation", () => {
-        useSelectionStore.getState().focusSample("anchor");
-        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
-        const { event, preventDefault } = fakeMouseEvent({ shiftKey: true });
-
-        act(() => {
-            result.current.onClick(event);
-        });
-
-        expect(preventDefault).toHaveBeenCalled();
-        expect(useMorphStore.getState()).toMatchObject({ first: "anchor", second: "abc" });
-        expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: "anchor" });
-    });
-
-    it("a Shift-click with nothing in hand opens a pair on the clicked sample", () => {
-        useSelectionStore.setState(INITIAL_SELECTION_STATE);
-        useMorphStore.getState().clear();
-        const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
-        const { event } = fakeMouseEvent({ shiftKey: true });
-
-        act(() => {
-            result.current.onClick(event);
-        });
-
-        expect(useMorphStore.getState()).toMatchObject({ first: "abc", second: null });
-    });
-
-    it("a Shift-click on a module does nothing, since a module has no pair to join", () => {
-        useMorphStore.getState().clear();
-        const { result } = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
-        const { event, preventDefault } = fakeMouseEvent({ shiftKey: true });
-
-        act(() => {
-            result.current.onClick(event);
-        });
-
-        expect(preventDefault).not.toHaveBeenCalled();
-        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
-    });
+            expect(preventDefault).not.toHaveBeenCalled();
+            expect(useSelectionStore.getState().highlighted).toBeNull();
+            expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
+        },
+    );
 
     it("a click a key press raised is left to the link, so Enter opens the entity", () => {
         const { result } = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
@@ -208,23 +161,6 @@ describe("useEntityRowInteractions", () => {
             result.current.onKeyDown(fakeKeyEvent("ArrowUp", second));
         });
         expect(first).toHaveFocus();
-    });
-
-    it("M joins a sample to the one in hand, and does nothing for a module", () => {
-        useSelectionStore.getState().focusSample("anchor");
-        const sample = renderHook(() => useEntityRowInteractions({ kind: "sample", hash: "abc" }), { wrapper });
-        const module = renderHook(() => useEntityRowInteractions({ kind: "module", hash: "def" }), { wrapper });
-        const element = document.createElement("a");
-
-        act(() => {
-            module.result.current.onKeyDown(fakeKeyEvent("m", element));
-        });
-        expect(useMorphStore.getState()).toMatchObject({ first: null, second: null });
-
-        act(() => {
-            sample.result.current.onKeyDown(fakeKeyEvent("m", element));
-        });
-        expect(useMorphStore.getState()).toMatchObject({ first: "anchor", second: "abc" });
     });
 
     it("a double-click navigates to the entity's own route", async () => {

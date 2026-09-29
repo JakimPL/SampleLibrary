@@ -14,6 +14,7 @@ import { LONG_PRESS_HOLD_MS } from "../../../src/shared/gestures/gestureThreshol
 import { CloudPanel } from "../../../src/workspace/panels/CloudPanel";
 import { useSelectionStore } from "../../../src/workspace/selectionStore";
 import { stubMatchMedia } from "../../support/matchMedia";
+import { choosePair } from "../../support/morphPair";
 
 const {
     instances,
@@ -130,7 +131,6 @@ vi.mock("../../../src/api/modules", async () => {
     return { ...actual, getModule };
 });
 
-const RIGHT_BUTTON = 2;
 const NARROW_PANEL_WIDTH_PX = 300;
 const NARROW_PANEL_HEIGHT_PX = 600;
 const NARROW_RECT: DOMRect = {
@@ -368,53 +368,6 @@ describe("CloudPanel", () => {
         });
     });
 
-    it("joins the highlighted sample and a right-clicked one into the morph pair", async () => {
-        const anchor = "4".repeat(64);
-        const other = "5".repeat(64);
-        getCloud.mockResolvedValue([
-            { sample_hash: anchor, x: 0, y: 0, playback_rate_hz: 8363 },
-            { sample_hash: other, x: 1, y: 1, playback_rate_hz: 16726 },
-        ]);
-        getModuleCloud.mockResolvedValue([]);
-        renderPanel();
-        await waitFor(() => {
-            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
-        });
-        act(() => {
-            useSelectionStore.getState().highlightEntity({ kind: "sample", hash: anchor });
-        });
-        latestInstance().emit("pointOver", 1);
-
-        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON });
-        fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
-
-        expect(useMorphStore.getState()).toMatchObject({ first: anchor, second: other });
-        expect(play).not.toHaveBeenCalled();
-        expect(playAnswered).not.toHaveBeenCalled();
-    });
-
-    it("joins two samples dragged from one to the other with the right button", async () => {
-        const first = "9".repeat(64);
-        const second = "0".repeat(64);
-        getCloud.mockResolvedValue([
-            { sample_hash: first, x: 0, y: 0, playback_rate_hz: 8363 },
-            { sample_hash: second, x: 1, y: 1, playback_rate_hz: 16726 },
-        ]);
-        getModuleCloud.mockResolvedValue([]);
-        renderPanel();
-        await waitFor(() => {
-            expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
-        });
-        latestInstance().emit("pointOver", 0);
-
-        fireEvent.mouseDown(latestCanvas(), { button: RIGHT_BUTTON });
-        latestInstance().emit("pointOver", 1);
-        fireEvent.mouseUp(latestCanvas(), { button: RIGHT_BUTTON });
-
-        expect(useMorphStore.getState()).toMatchObject({ first, second });
-        expect(useSelectionStore.getState().highlighted).toBeNull();
-    });
-
     it("plays the morph as its file states when the marker is released", async () => {
         const first = "6".repeat(64);
         const second = "7".repeat(64);
@@ -428,7 +381,7 @@ describe("CloudPanel", () => {
             expect(document.querySelector("canvas.cloud-dots")).toBeInTheDocument();
         });
         act(() => {
-            useMorphStore.getState().join(first, second);
+            choosePair(first, second);
         });
         const marker = await screen.findByRole("slider", { name: "Morph weight" });
 
@@ -459,7 +412,7 @@ describe("CloudPanel", () => {
             expect(getMorphStatus).toHaveBeenCalled();
         });
         act(() => {
-            useMorphStore.getState().join(first, second);
+            choosePair(first, second);
         });
         const marker = await screen.findByRole("slider", { name: "Morph weight" });
 
@@ -498,7 +451,7 @@ describe("CloudPanel", () => {
         });
         expect(screen.getByRole("button", { name: "Frame the pair" })).toBeDisabled();
         act(() => {
-            useMorphStore.getState().join(first, second);
+            choosePair(first, second);
         });
         await screen.findByRole("slider", { name: "Morph weight" });
 
@@ -563,31 +516,18 @@ describe("CloudPanel on touch", () => {
         fireEvent.pointerUp(latestCanvas(), { ...FINGER, clientX: x, clientY: y });
     }
 
-    it("gives every tapped point to the selected end, playing each, until the end is tapped again", async () => {
+    it("gives every tapped point to the selected end, playing each, the first to A and the next to B", async () => {
         await renderedPanel();
 
-        fireEvent.click(screen.getByRole("button", { name: /^A: / }));
         tap(5, 595);
-        expect(useMorphStore.getState()).toMatchObject({ first: FIRST_HASH, second: null, selectedEnd: "first" });
+        expect(useMorphStore.getState()).toMatchObject({ first: FIRST_HASH, second: null, selectedEnd: "second" });
         tap(595, 5);
-        expect(useMorphStore.getState()).toMatchObject({ first: SECOND_HASH, second: null, selectedEnd: "first" });
+        expect(useMorphStore.getState()).toMatchObject({
+            first: FIRST_HASH,
+            second: SECOND_HASH,
+            selectedEnd: "second",
+        });
         expect(play).toHaveBeenCalledTimes(2);
-
-        fireEvent.click(screen.getByRole("button", { name: /^A: / }));
-        expect(useMorphStore.getState().selectedEnd).toBeNull();
-        tap(5, 595);
-
-        expect(useMorphStore.getState()).toMatchObject({ first: SECOND_HASH, second: null });
-    });
-
-    it("lets the selection go once the Modules tab takes the strip away", async () => {
-        await renderedPanel();
-        fireEvent.click(screen.getByRole("button", { name: /^B: / }));
-        expect(useMorphStore.getState().selectedEnd).toBe("second");
-
-        fireEvent.click(screen.getByRole("button", { name: "Modules" }));
-
-        expect(useMorphStore.getState().selectedEnd).toBeNull();
     });
 
     it("shows a tap card for the point in hand under touch, playing it as the tap lands", async () => {

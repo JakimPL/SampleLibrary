@@ -11,6 +11,7 @@ import { shortHash } from "../../src/shared/format";
 import { UNNAMED_SAMPLE_LABEL } from "../../src/shared/labels";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 import { stubMatchMedia } from "../support/matchMedia";
+import { choosePair } from "../support/morphPair";
 
 const FIRST = "a".repeat(64);
 const SECOND = "b".repeat(64);
@@ -56,10 +57,6 @@ vi.mock("../../src/samples/useAudioPreview", async () => {
     return { ...actual, useAudioPreview: () => ({ play, playAnswered, playingKey: null, failure: null }) };
 });
 
-vi.mock("../../src/samples/SampleTransport", () => ({
-    FocusedSampleTransport: ({ sampleHash }: { readonly sampleHash: string }) => <p>player {sampleHash}</p>,
-}));
-
 const SERVICE = {
     name: "envelope-first",
     fingerprint: "f".repeat(64),
@@ -98,7 +95,7 @@ function showEmpty(): ReturnType<typeof render> {
 async function showPair(available: boolean): Promise<ReturnType<typeof render>> {
     serveMorph(available);
     serveSamples();
-    useMorphStore.getState().join(FIRST, SECOND);
+    choosePair(FIRST, SECOND);
     const result = render(<MorphStrip />);
     await screen.findByText("kick_808");
     if (!available) {
@@ -229,60 +226,22 @@ const WAVEFORM_CASES: readonly WaveformCase[] = [
 ];
 
 describe("MorphStrip while the pair is open", () => {
-    it("asks for a sample in each slot, with the swap and the waveform button at rest", () => {
+    it("starts with both slots empty and the first selected, the swap and the waveform button at rest", () => {
         showEmpty();
 
-        expect(screen.getByRole("button", { name: "A: click, then a sample" })).toHaveAttribute(
-            "aria-pressed",
-            "false",
-        );
-        expect(screen.getByRole("button", { name: "B: click, then a sample" })).toBeInTheDocument();
+        expect(slot("A")).toHaveClass("morph-slot-empty");
+        expect(slot("A")).toHaveAttribute("aria-pressed", "true");
+        expect(slot("B")).toHaveClass("morph-slot-empty");
+        expect(slot("B")).toHaveAttribute("aria-pressed", "false");
         expect(screen.getByRole("button", { name: "Swap the two ends" })).toBeDisabled();
         expect(screen.getByRole("button", { name: "Waveform" })).toBeDisabled();
         expect(screen.getByRole("button", { name: "Waveform" })).toHaveAttribute("aria-expanded", "false");
     });
 
-    it("opens a lone chosen end's own player from the waveform button, and the morph's once both are chosen", async () => {
-        serveMorph(true);
-        serveSamples();
-        useMorphStore.getState().setEnd("first", FIRST);
-        render(<MorphStrip />);
-        await screen.findByText("kick_808");
-        expect(screen.getByRole("button", { name: "Waveform" })).toBeEnabled();
-
-        openWaveform();
-
-        expect(screen.getByText(`player ${FIRST}`).closest(".morph-strip-wave")).toBeInTheDocument();
-        expect(slider()).not.toBeInTheDocument();
-
-        act(() => {
-            useMorphStore.getState().setEnd("second", SECOND);
-        });
-
-        expect(screen.queryByText(`player ${FIRST}`)).not.toBeInTheDocument();
-        expect(slider()).toBeInTheDocument();
-        expect(morphPlay()).toBeInTheDocument();
-    });
-
-    it("selects a slot on a click, which then waits for a sample, and lets go on the next click", () => {
+    it("selects a slot on a click, and keeps it selected on the next", () => {
         showEmpty();
 
-        fireEvent.click(slot("A"));
-        expect(screen.getByRole("button", { name: "A: now click a sample" })).toHaveAttribute("aria-pressed", "true");
-        expect(useMorphStore.getState().selectedEnd).toBe("first");
-
-        fireEvent.click(slot("A"));
-        expect(screen.getByRole("button", { name: "A: click, then a sample" })).toHaveAttribute(
-            "aria-pressed",
-            "false",
-        );
-        expect(useMorphStore.getState().selectedEnd).toBeNull();
-    });
-
-    it("moves the selection from one slot to the other", () => {
-        showEmpty();
-
-        fireEvent.click(slot("A"));
+        fireEvent.click(slot("B"));
         fireEvent.click(slot("B"));
 
         expect(useMorphStore.getState().selectedEnd).toBe("second");
@@ -290,54 +249,32 @@ describe("MorphStrip while the pair is open", () => {
         expect(slot("B")).toHaveAttribute("aria-pressed", "true");
     });
 
-    it("offers the sample in hand to an empty slot, which takes it and rests", async () => {
+    it("fills the first slot and then the second from samples taken in turn, the selection following", async () => {
         showEmpty();
-        act(() => {
-            useSelectionStore.getState().highlightEntity({ kind: "sample", hash: FIRST });
-        });
-
-        fireEvent.click(await screen.findByRole("button", { name: "A: take kick_808" }));
-
-        expect(useMorphStore.getState()).toMatchObject({ first: FIRST, second: null, selectedEnd: null });
-        expect(await screen.findByRole("button", { name: "A: kick_808" })).toHaveAttribute("aria-pressed", "false");
-        expect(screen.getByRole("button", { name: "B: click, then a sample" })).toBeInTheDocument();
-    });
-
-    it("offers the sample in hand by its short hash until the catalog names it", () => {
-        useSelectionStore.getState().highlightEntity({ kind: "sample", hash: FIRST });
-
-        showEmpty();
-
-        expect(slot("A")).toHaveAccessibleName(`A: take ${shortHash(FIRST)}`);
-    });
-
-    it("keeps a selected empty slot waiting whatever is in hand, and lets go on the tap", async () => {
-        showEmpty();
-        fireEvent.click(slot("A"));
-        act(() => {
-            useSelectionStore.getState().highlightEntity({ kind: "sample", hash: FIRST });
-        });
-        expect(screen.getByRole("button", { name: "A: now click a sample" })).toHaveAttribute("aria-pressed", "true");
-
-        fireEvent.click(slot("A"));
-
-        expect(await screen.findByRole("button", { name: "A: take kick_808" })).toHaveAttribute(
-            "aria-pressed",
-            "false",
-        );
-        expect(useMorphStore.getState().selectedEnd).toBeNull();
-    });
-
-    it("shows the sample the selected end took, still waiting for the next", async () => {
-        showEmpty();
-        fireEvent.click(slot("A"));
 
         act(() => {
             useMorphStore.getState().takeSample(FIRST);
         });
+        expect(await screen.findByRole("button", { name: "A: kick_808" })).toHaveAttribute("aria-pressed", "false");
+        expect(slot("B")).toHaveAttribute("aria-pressed", "true");
+        expect(screen.getByRole("button", { name: "Waveform" })).toBeDisabled();
+        expect(slider()).not.toBeInTheDocument();
 
-        expect(await screen.findByRole("button", { name: "A: kick_808" })).toHaveAttribute("aria-pressed", "true");
-        expect(screen.getByRole("button", { name: "Clear A" })).toBeInTheDocument();
+        act(() => {
+            useMorphStore.getState().takeSample(SECOND);
+        });
+        expect(slot("B")).toHaveAttribute("aria-pressed", "true");
+        expect(slider()).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Waveform" })).toBeEnabled();
+    });
+
+    it("names a chosen end by its short hash until the catalog names it", async () => {
+        useMorphStore.getState().setEnd("first", FIRST);
+
+        showEmpty();
+
+        expect(slot("A")).toHaveAccessibleName(`A: ${shortHash(FIRST)}`);
+        expect(await screen.findByRole("button", { name: "A: kick_808" })).toBeInTheDocument();
     });
 });
 
@@ -357,7 +294,7 @@ describe("MorphStrip with a whole pair", () => {
         expect(screen.getByRole("button", { name: "Waveform" })).toHaveAttribute("aria-expanded", "true");
     });
 
-    it("plays a chosen end at its own rate, takes it in hand and selects its slot on a click", async () => {
+    it("plays a chosen end at its own rate, takes it in hand and selects its slot on every click", async () => {
         await showPair(true);
         await settleDetails();
 
@@ -366,22 +303,11 @@ describe("MorphStrip with a whole pair", () => {
         expect(play).toHaveBeenCalledWith(expect.objectContaining({ key: FIRST, playbackRateHz: FIRST_RATE_HZ }));
         expect(useSelectionStore.getState().highlighted).toEqual({ kind: "sample", hash: FIRST });
         expect(useMorphStore.getState().selectedEnd).toBe("first");
-    });
 
-    it("lets an end go from its ×, and the open waveform shows the end that stays", async () => {
-        await showPairOpened(true);
+        fireEvent.click(slot("A"));
 
-        fireEvent.click(screen.getByRole("button", { name: "Clear B" }));
-
-        expect(useMorphStore.getState()).toMatchObject({ first: FIRST, second: null });
-        expect(slider()).not.toBeInTheDocument();
-        expect(morphPlay()).not.toBeInTheDocument();
-        expect(screen.getByText(`player ${FIRST}`)).toBeInTheDocument();
-
-        fireEvent.click(screen.getByRole("button", { name: "Clear A" }));
-
-        expect(screen.queryByText(`player ${FIRST}`)).not.toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Waveform" })).toBeDisabled();
+        expect(play).toHaveBeenCalledTimes(2);
+        expect(useMorphStore.getState().selectedEnd).toBe("first");
     });
 
     it("swaps the ends with the weight mirrored", async () => {
@@ -434,16 +360,6 @@ describe("MorphStrip with a whole pair", () => {
         expect(slider()).toBeInTheDocument();
         expect(screen.queryByText(/distance/)).not.toBeInTheDocument();
         expect(getSampleDistance).not.toHaveBeenCalled();
-    });
-
-    it("lets the selection go as it leaves", async () => {
-        const { unmount } = await showPair(true);
-        fireEvent.click(slot("B"));
-        expect(useMorphStore.getState().selectedEnd).toBe("second");
-
-        unmount();
-
-        expect(useMorphStore.getState().selectedEnd).toBeNull();
     });
 
     it("says so while no inference process answers, and looks again on request", async () => {

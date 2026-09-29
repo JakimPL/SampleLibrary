@@ -56,15 +56,10 @@ const TOUCH_GUIDE: readonly GuideSection[] = [
             { gesture: "Hold a point", meaning: "opens its actions" },
             {
                 gesture: "A or B under the cloud",
-                meaning: "plays that end and selects it: every sample tapped next becomes it, until it is tapped again",
+                meaning: "plays that end and selects it: every sample you tap next becomes that end",
             },
-            { gesture: "A or B while empty, with a sample in hand", meaning: "takes that sample as that end" },
-            { gesture: "× beside A or B", meaning: "lets that end go" },
             { gesture: "⇄", meaning: "swaps the ends and mirrors the weight" },
-            {
-                gesture: "The waveform button",
-                meaning: "opens a waveform under the slider: the morph's, or a lone chosen end's own",
-            },
+            { gesture: "The waveform button", meaning: "opens the morph's waveform under the slider" },
             {
                 gesture: "The history button",
                 meaning: "opens the samples each end has held, newest first; a tap on one makes it that end again",
@@ -81,12 +76,10 @@ const POINTER_GUIDE: readonly GuideSection[] = [
         entries: [
             { gesture: "Click a row", meaning: "takes the sample in hand" },
             { gesture: "Double-click, or Enter on the name", meaning: "opens the sample or module" },
-            { gesture: "Shift-click", meaning: "joins the sample to the one in hand as a morph pair" },
             { gesture: "↑ ↓", meaning: "move between rows" },
             { gesture: "Space", meaning: "plays the sample" },
             { gesture: "F", meaning: "keeps the sample close", whenEditing: true },
             { gesture: "1 to 5", meaning: "rate the sample", whenEditing: true },
-            { gesture: "M", meaning: "joins the sample to the one in hand as a morph pair" },
         ],
     },
     {
@@ -99,20 +92,12 @@ const POINTER_GUIDE: readonly GuideSection[] = [
             { gesture: "Click a point", meaning: "takes it in hand and plays it" },
             { gesture: "Double-click a point", meaning: "opens it" },
             { gesture: "Drag, scroll", meaning: "move and zoom the cloud" },
-            { gesture: "Right-click a point", meaning: "joins it to the sample in hand as a morph pair" },
-            { gesture: "Right-drag between two points", meaning: "makes them a morph pair" },
             {
                 gesture: "A or B under the cloud",
-                meaning:
-                    "plays that end and selects it: every sample clicked next becomes it, until it is clicked again",
+                meaning: "plays that end and selects it: every sample you click next becomes that end",
             },
-            { gesture: "A or B while empty, with a sample in hand", meaning: "takes that sample as that end" },
-            { gesture: "× beside A or B", meaning: "lets that end go" },
             { gesture: "⇄", meaning: "swaps the ends and mirrors the weight" },
-            {
-                gesture: "The waveform button",
-                meaning: "opens a waveform under the slider: the morph's, or a lone chosen end's own",
-            },
+            { gesture: "The waveform button", meaning: "opens the morph's waveform under the slider" },
             {
                 gesture: "The history button",
                 meaning: "opens the samples each end has held, newest first; a click on one makes it that end again",

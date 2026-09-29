@@ -1,8 +1,7 @@
 import type { ChangeEvent, ReactElement } from "react";
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 
 import { useLayoutMode } from "../layout/useLayoutMode";
-import { FocusedSampleTransport } from "../samples/SampleTransport";
 import { Button } from "../shared/controls/Button";
 import { Icon } from "../shared/icons/Icon";
 import { BottomSheet } from "../shared/overlay/BottomSheet";
@@ -121,22 +120,19 @@ function MorphPairWaveform({ first, second, playback }: PairProps): ReactElement
 
 /**
  * The morph along the bottom of the cloud: a slot for each end of the pair, the swap between them
- * and the waveform button, always that one row. Tapping a slot selects it, and the selected end
- * takes every sample tapped next until the slot is tapped again; an empty slot at rest takes the
- * sample in hand outright; × lets an end go and ⇄ swaps the ends. Once both ends are chosen the
- * slider stands under the row, and the waveform button opens a waveform beneath it: the morph
- * drawn over both ends, or a lone chosen end's own player. The morph is drawn at the slider's
- * point as soon as both ends are chosen, unheard, so the ends themselves are heard first; letting
- * the slider go sounds a point through the shared preview element, the way the marker on the
- * cloud does, and the waveform draws whichever point was let go last. The history button opens,
- * under everything else, a column per end of the samples it has held, or a sheet of them on a
- * phone. The selection lets go when the strip leaves the screen.
+ * and the waveform button, always that one row. The selected slot takes every sample picked next,
+ * and tapping a slot selects it; ⇄ swaps the ends. Once both ends are chosen the slider stands
+ * under the row, and the waveform button opens the morph drawn over both ends beneath it. The
+ * morph is drawn at the slider's point as soon as both ends are chosen, unheard, so the ends
+ * themselves are heard first; letting the slider go sounds a point through the shared preview
+ * element, the way the marker on the cloud does, and the waveform draws whichever point was let
+ * go last. The history button opens, under everything else, a column per end of the samples it
+ * has held, or a sheet of them on a phone.
  */
 export function MorphStrip(): ReactElement {
     const first = useMorphStore((state) => state.first);
     const second = useMorphStore((state) => state.second);
     const swap = useMorphStore((state) => state.swap);
-    const deselectEnd = useMorphStore((state) => state.deselectEnd);
     const expanded = useMorphStripStore((state) => state.expanded);
     const toggleExpanded = useMorphStripStore((state) => state.toggleExpanded);
     const historyShown = useMorphStripStore((state) => state.historyShown);
@@ -148,27 +144,13 @@ export function MorphStrip(): ReactElement {
     const historyId = useId();
     const historyInline = layout === "workspace";
     const pair = first !== null && second !== null ? { first, second } : null;
-    const lone = pair === null ? (first ?? second) : null;
-    const shown = expanded && (pair !== null || lone !== null);
-
-    useEffect(
-        () => (): void => {
-            deselectEnd();
-        },
-        [deselectEnd],
-    );
+    const shown = expanded && pair !== null;
 
     return (
         <section className="morph-strip" aria-label="Morph">
             <div className="morph-strip-row">
                 <MorphSlot end="first" hash={first} />
-                <Button
-                    variant="secondary"
-                    icon
-                    aria-label="Swap the two ends"
-                    disabled={first === null && second === null}
-                    onClick={swap}
-                >
+                <Button variant="secondary" icon aria-label="Swap the two ends" disabled={pair === null} onClick={swap}>
                     ⇄
                 </Button>
                 <MorphSlot end="second" hash={second} />
@@ -178,7 +160,7 @@ export function MorphStrip(): ReactElement {
                     aria-label="Waveform"
                     aria-expanded={shown}
                     aria-controls={bodyId}
-                    disabled={pair === null && lone === null}
+                    disabled={pair === null}
                     onClick={toggleExpanded}
                 >
                     <Icon name="waveform" label={null} />
@@ -195,14 +177,9 @@ export function MorphStrip(): ReactElement {
                 </Button>
             </div>
             {pair !== null && <MorphSlider first={pair.first} second={pair.second} playback={playback} />}
-            {shown && pair !== null && (
+            {shown && (
                 <div className="morph-strip-wave" id={bodyId}>
                     <MorphPairWaveform first={pair.first} second={pair.second} playback={playback} />
-                </div>
-            )}
-            {shown && lone !== null && (
-                <div className="morph-strip-wave" id={bodyId}>
-                    <FocusedSampleTransport sampleHash={lone} />
                 </div>
             )}
             {historyShown && historyInline && (

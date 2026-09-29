@@ -65,26 +65,4 @@ describe("TabBar", () => {
         expect(screen.getByTestId("morph-pair-dot")).not.toHaveClass("is-half");
         expect(screen.getByRole("link", { name: "Cloud" })).toContainElement(screen.getByTestId("morph-pair-dot"));
     });
-
-    it("names the end selected to take the next sample on the Cloud tab, in the dot's place", () => {
-        render(
-            <MemoryRouter>
-                <TabBar tabs={TABS} activeTabId="samples-list" />
-            </MemoryRouter>,
-        );
-
-        act(() => {
-            useMorphStore.getState().setEnd("first", "a");
-            useMorphStore.getState().toggleSelectedEnd("second");
-        });
-        expect(screen.getByTestId("morph-selected-end")).toHaveTextContent("B");
-        expect(screen.queryByTestId("morph-pair-dot")).not.toBeInTheDocument();
-        expect(screen.getByRole("link", { name: "Cloud" })).toContainElement(screen.getByTestId("morph-selected-end"));
-
-        act(() => {
-            useMorphStore.getState().toggleSelectedEnd("second");
-        });
-        expect(screen.queryByTestId("morph-selected-end")).not.toBeInTheDocument();
-        expect(screen.getByTestId("morph-pair-dot")).toHaveClass("is-half");
-    });
 });

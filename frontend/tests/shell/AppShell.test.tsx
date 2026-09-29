@@ -8,6 +8,7 @@ import type { ShellView } from "../../src/navigation/shellView";
 import { AppShell } from "../../src/shell/AppShell";
 import { useSelectionStore } from "../../src/workspace/selectionStore";
 import { stubMatchMedia } from "../support/matchMedia";
+import { choosePair } from "../support/morphPair";
 
 vi.mock("../../src/workspace/WorkspaceShell", () => ({
     WorkspaceShell: ({ view }: { view: ShellView }) => <p>{JSON.stringify(view)}</p>,
@@ -58,7 +59,7 @@ describe("AppShell", () => {
     });
 
     it("undoes the morph's last change from a key on any address", () => {
-        useMorphStore.getState().join("a", "b");
+        choosePair("a", "b");
         useMorphStore.getState().setEnd("second", "c");
         render(
             <MemoryRouter initialEntries={["/modules"]}>

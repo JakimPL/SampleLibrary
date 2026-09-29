@@ -1,10 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type * as SamplesApi from "../../src/api/samples";
-import { FocusedSampleTransport } from "../../src/samples/SampleTransport";
+import type { SampleDetail } from "../../src/api/samples";
+import { SampleTransport } from "../../src/samples/SampleTransport";
 
-const { instances, createMock, getSample, getSampleRelations, getSimilarSamples } = vi.hoisted(() => {
+const { instances, createMock } = vi.hoisted(() => {
     class FakeWaveSurfer {
         private readonly listeners = new Map<string, ((...args: unknown[]) => void)[]>();
         readonly play = vi.fn().mockResolvedValue(undefined);
@@ -33,17 +33,12 @@ const { instances, createMock, getSample, getSampleRelations, getSimilarSamples 
         instances.push(instance);
         return instance;
     });
-    return { instances, createMock, getSample: vi.fn(), getSampleRelations: vi.fn(), getSimilarSamples: vi.fn() };
+    return { instances, createMock };
 });
 
 vi.mock("wavesurfer.js", () => ({
     default: { create: createMock },
 }));
-
-vi.mock("../../src/api/samples", async () => {
-    const actual = await vi.importActual<typeof SamplesApi>("../../src/api/samples");
-    return { ...actual, getSample, getSampleRelations, getSimilarSamples };
-});
 
 function latestInstance(): (typeof instances)[number] {
     const instance = instances[instances.length - 1];
@@ -63,13 +58,18 @@ interface SampleDetailOverrides {
     readonly playbackRates?: readonly PlaybackRateFixture[];
 }
 
-function catalogAnswers(overrides: SampleDetailOverrides): void {
-    getSample.mockResolvedValue({
+function sampleOf(overrides: SampleDetailOverrides): SampleDetail {
+    return {
         hash: "abc",
         depth: 16,
         channels: 1,
         frames: 4096,
         display_name: "kick",
+        category: null,
+        hand_label: null,
+        rating: null,
+        favorite: false,
+        equivalence_member_count: 1,
         size_bytes: 8192,
         duration_seconds: 0.09,
         playback_rate_hz: overrides.playbackRateHz,
@@ -77,9 +77,7 @@ function catalogAnswers(overrides: SampleDetailOverrides): void {
         categories: [],
         occurrences: [],
         files: [],
-    });
-    getSampleRelations.mockResolvedValue([]);
-    getSimilarSamples.mockResolvedValue([]);
+    };
 }
 
 const TWO_RATES: readonly PlaybackRateFixture[] = [
@@ -87,11 +85,9 @@ const TWO_RATES: readonly PlaybackRateFixture[] = [
     { rate_hz: 8363, event_count: 2 },
 ];
 
-describe("FocusedSampleTransport", () => {
+describe("SampleTransport", () => {
     it("plays the sample at the rate the library really sounds it at", async () => {
-        catalogAnswers({ playbackRateHz: 22050, playbackRates: TWO_RATES });
-
-        render(<FocusedSampleTransport sampleHash="abc" />);
+        render(<SampleTransport sample={sampleOf({ playbackRateHz: 22050, playbackRates: TWO_RATES })} />);
 
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
@@ -108,8 +104,7 @@ describe("FocusedSampleTransport", () => {
     });
 
     it("lets the person hear another rate the library plays the sample at", async () => {
-        catalogAnswers({ playbackRateHz: 22050, playbackRates: TWO_RATES });
-        render(<FocusedSampleTransport sampleHash="abc" />);
+        render(<SampleTransport sample={sampleOf({ playbackRateHz: 22050, playbackRates: TWO_RATES })} />);
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
@@ -123,8 +118,7 @@ describe("FocusedSampleTransport", () => {
     });
 
     it("plays a rate chosen while the waveform loads once it is ready", async () => {
-        catalogAnswers({ playbackRateHz: 22050, playbackRates: TWO_RATES });
-        render(<FocusedSampleTransport sampleHash="abc" />);
+        render(<SampleTransport sample={sampleOf({ playbackRateHz: 22050, playbackRates: TWO_RATES })} />);
         await waitFor(() => {
             expect(screen.getByLabelText("Rate")).toHaveValue("22050");
         });
@@ -140,22 +134,10 @@ describe("FocusedSampleTransport", () => {
         expect(latestInstance().setPlaybackRate).toHaveBeenLastCalledWith(8363 / 44100, false);
     });
 
-    it("says so for a sample the catalog knows no rate for", async () => {
-        catalogAnswers({ playbackRateHz: null });
+    it("says so for a sample the catalog knows no rate for", () => {
+        render(<SampleTransport sample={sampleOf({ playbackRateHz: null })} />);
 
-        render(<FocusedSampleTransport sampleHash="abc" />);
-
-        expect(await screen.findByText(/no rate the library is known to play it at/)).toBeInTheDocument();
+        expect(screen.getByText(/no rate the library is known to play it at/)).toBeInTheDocument();
         expect(createMock).not.toHaveBeenCalled();
-    });
-
-    it("says what went wrong when the catalog has no such sample", async () => {
-        getSample.mockRejectedValue(new Error("no sample cataloged with hash 'abc'"));
-        getSampleRelations.mockResolvedValue([]);
-        getSimilarSamples.mockResolvedValue([]);
-
-        render(<FocusedSampleTransport sampleHash="abc" />);
-
-        expect(await screen.findByRole("alert")).toHaveTextContent("no sample cataloged with hash 'abc'");
     });
 });

@@ -27,7 +27,6 @@ import { type CloudEntityPoint, normalizePoints } from "./geometry";
 import type { NodeFrameStyle } from "./hollowPointRenderer";
 import type { PointColoring } from "./labelColoring";
 import type { MarkerAppearance } from "./markerGeometry";
-import { MorphBand } from "./MorphBand";
 import { MorphLink } from "./MorphLink";
 import { type NodeGeometry, nodeGeometryOf, nodePaletteOf } from "./nodeGeometry";
 import { plainDotStyle, usePlainDots } from "./plainDots";
@@ -89,7 +88,6 @@ function frameArea(first: CloudEntityPoint | null, second: CloudEntityPoint | nu
     return { x: centerX - span * HALF, y: centerY - span * HALF, width: span, height: span };
 }
 const LEFT_BUTTON = 0;
-const RIGHT_BUTTON = 2;
 // How far a press may travel and still read as a click rather than the end of a pan.
 const CLICK_DRAG_TOLERANCE_PX = 4;
 
@@ -204,8 +202,6 @@ interface CloudViewProps {
     readonly onFocus: (entity: EntityRef) => void;
     readonly onClear: () => void;
     readonly onHover: (entity: EntityRef | null, screenPosition: ScreenPosition | null) => void;
-    readonly onJoinToAnchor: (entity: EntityRef) => void;
-    readonly onJoin: (first: EntityRef, second: EntityRef) => void;
     readonly onActivate: (entity: EntityRef) => void;
     /** A point a finger held, with its screen position, for a caller's menu. */
     readonly onContextMenu: (entity: EntityRef, position: ScreenPosition) => void;
@@ -213,8 +209,6 @@ interface CloudViewProps {
     readonly link: CloudLink | null;
     readonly onWeightChange: (weight: number) => void;
     readonly onWeightCommit: () => void;
-    /** The sample, by hash, a right-drag runs from when the press lands on empty space. */
-    readonly anchor: string | null;
 }
 
 interface Ping {
@@ -228,26 +222,12 @@ interface ScreenSegment {
     readonly second: ScreenPosition;
 }
 
-interface BandSegment extends ScreenSegment {
-    /** Whether the far end snapped to the point under the cursor. */
-    readonly endsOnPoint: boolean;
-}
-
-interface DragOrigin {
-    readonly index: number;
-    readonly pressedOnPoint: boolean;
-}
-
 function samePosition(a: ScreenPosition, b: ScreenPosition): boolean {
     return a[0] === b[0] && a[1] === b[1];
 }
 
 function sameSegment(a: ScreenSegment | null, b: ScreenSegment | null): boolean {
     return a === null || b === null ? a === b : samePosition(a.first, b.first) && samePosition(a.second, b.second);
-}
-
-function sameBand(a: BandSegment | null, b: BandSegment | null): boolean {
-    return a === null || b === null ? a === b : a.endsOnPoint === b.endsOnPoint && sameSegment(a, b);
 }
 
 function sameEntity(a: EntityRef, b: EntityRef): boolean {
@@ -411,15 +391,9 @@ function selectHighlighted(
  * this way also reports it through `onActivate` (a sample tab's caller uses this to start playback),
  * but skips its own ping for that one transition: the click that just selected it is already looking
  * straight at it, so the locate cue is reserved for a highlight arriving from somewhere else in the
- * shell. The right button is the pairing gesture, which the library leaves alone (it pans, selects
- * and lassos on the left button only), so the browser's menu is the one thing kept off the canvas:
- * a right-drag from one point to another reports both through `onJoin`, and a right-click on a
- * point, pressed and released in place, reports that point through `onJoinToAnchor` for the caller
- * to join from its own anchor. While the button is held, a band runs from the point pressed, or from
- * `anchor` when the press landed on empty space, to the cursor, snapping to the point under it,
- * so the pair a release would join is visible before it lands. When
- * `link` names two points in view, a line joins them and its marker is the weight; the hover
- * tracking pauses while the marker is dragged, since the library keeps hit-testing beneath it.
+ * shell. The browser's own menu stays off the canvas. When `link` names two points in view, a line
+ * joins them and its marker is the weight; the hover tracking pauses while the marker is dragged,
+ * since the library keeps hit-testing beneath it.
  *
  * A finger works through its own layer (`touch/`), since the library and its camera know only the
  * mouse: a tap selects and activates the point under it within a finger's reach, synchronously,
@@ -429,7 +403,7 @@ function selectHighlighted(
  * the view on a point, frames a pair or steps the zoom, once per sequence number.
  *
  * The selected and the hovered point each carry a marker in the theme's point shape. Every overlay
- * -- the markers, the ping, the band and the link -- follows the library's `drawing` event, which
+ * -- the markers, the ping and the link -- follows the library's `drawing` event, which
  * arrives within the frame that drew a moved view, and a resize of the container, and commits
  * before that frame paints, so the overlays move in step with the points.
  *
@@ -466,15 +440,12 @@ export function CloudView({
     onFocus,
     onClear,
     onHover,
-    onJoinToAnchor,
-    onJoin,
     onActivate,
     onContextMenu,
     command,
     link,
     onWeightChange,
     onWeightCommit,
-    anchor,
 }: CloudViewProps): ReactElement {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const scatterplotRef = useRef<Scatterplot | null>(null);
@@ -497,8 +468,6 @@ export function CloudView({
     const onFocusRef = useRef(onFocus);
     const onClearRef = useRef(onClear);
     const onHoverRef = useRef(onHover);
-    const onJoinToAnchorRef = useRef(onJoinToAnchor);
-    const onJoinRef = useRef(onJoin);
     const onActivateRef = useRef(onActivate);
     const onContextMenuRef = useRef(onContextMenu);
     onContextMenuRef.current = onContextMenu;
@@ -506,8 +475,6 @@ export function CloudView({
     onFocusRef.current = onFocus;
     onClearRef.current = onClear;
     onHoverRef.current = onHover;
-    onJoinToAnchorRef.current = onJoinToAnchor;
-    onJoinRef.current = onJoin;
     onActivateRef.current = onActivate;
     const linkRef = useRef<CloudLink | null>(link);
     linkRef.current = link;
@@ -516,15 +483,10 @@ export function CloudView({
     onWeightChangeRef.current = onWeightChange;
     onWeightCommitRef.current = onWeightCommit;
     const linkDraggingRef = useRef(false);
-    const anchorRef = useRef<string | null>(anchor);
-    anchorRef.current = anchor;
-    const dragOriginRef = useRef<DragOrigin | null>(null);
-    const cursorRef = useRef<ScreenPosition | null>(null);
 
     const [ping, setPing] = useState<Ping | null>(null);
     pingRef.current = ping;
     const [linkScreen, setLinkScreen] = useState<ScreenSegment | null>(null);
-    const [band, setBand] = useState<BandSegment | null>(null);
     const [markers, setMarkers] = useState<MarkerPositions>(NO_MARKERS);
     const [nodesShown, setNodesShown] = useState(false);
     const nodeCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -616,32 +578,6 @@ export function CloudView({
         setLinkScreen((current) => (sameSegment(current, next) ? current : next));
     }, []);
 
-    const repinBand = useCallback((): void => {
-        const scatterplot = scatterplotRef.current;
-        const origin = dragOriginRef.current;
-        const cursor = cursorRef.current;
-        if (scatterplot === null || origin === null || cursor === null || !pointsDrawnRef.current) {
-            setBand(null);
-            return;
-        }
-        const originPosition = scatterplot.getScreenPosition(origin.index);
-        if (originPosition === undefined) {
-            setBand(null);
-            return;
-        }
-        const hoveredIndex = hoveredIndexRef.current;
-        const hoveredPosition =
-            hoveredIndex === null || hoveredIndex === origin.index
-                ? undefined
-                : scatterplot.getScreenPosition(hoveredIndex);
-        const next: BandSegment = {
-            first: originPosition,
-            second: hoveredPosition ?? cursor,
-            endsOnPoint: hoveredPosition !== undefined,
-        };
-        setBand((current) => (sameBand(current, next) ? current : next));
-    }, []);
-
     /** Pins the selected and hovered markers to their points, marking the hovered one only while it is another point. */
     const repinMarkers = useCallback((): void => {
         const scatterplot = scatterplotRef.current;
@@ -702,7 +638,6 @@ export function CloudView({
             const commit = (): void => {
                 setNodesShown(shown);
                 repinLink();
-                repinBand();
                 repinPing();
                 repinMarkers();
             };
@@ -712,7 +647,7 @@ export function CloudView({
                 commit();
             }
         },
-        [underlay, nodeLayer, repinLink, repinBand, repinPing, repinMarkers],
+        [underlay, nodeLayer, repinLink, repinPing, repinMarkers],
     );
 
     const viewportOf = useCallback((): Viewport | null => {
@@ -817,13 +752,11 @@ export function CloudView({
             if (entity !== undefined && position !== undefined) {
                 onHoverRef.current(entity, position);
             }
-            repinBand();
             repinMarkers();
         });
         const pointOutSubscription = scatterplot.subscribe("pointOut", () => {
             hoveredIndexRef.current = null;
             onHoverRef.current(null, null);
-            repinBand();
             repinMarkers();
         });
         const deselectSubscription = scatterplot.subscribe("deselect", () => {
@@ -847,47 +780,6 @@ export function CloudView({
             if (event.button === LEFT_BUTTON) {
                 pressPositionRef.current = cursorOf(event);
             }
-            handleRightPress(event);
-        }
-
-        function handleRightPress(event: MouseEvent): void {
-            if (event.button !== RIGHT_BUTTON) {
-                return;
-            }
-            const hoveredIndex = hoveredIndexRef.current;
-            const anchorHash = anchorRef.current;
-            const anchorIndex = anchorHash === null ? undefined : indexByHashRef.current.get(anchorHash);
-            const index = hoveredIndex ?? anchorIndex;
-            if (index === undefined) {
-                return;
-            }
-            dragOriginRef.current = { index, pressedOnPoint: hoveredIndex !== null };
-            cursorRef.current = cursorOf(event);
-            repinBand();
-        }
-
-        /** Joins the point a drag began at to the one it ended over, or the one it ended on to the anchor. */
-        function pairFrom(origin: DragOrigin, targetIndex: number | null): void {
-            const first = pointsRef.current[origin.index]?.ref;
-            const second = targetIndex === null ? undefined : pointsRef.current[targetIndex]?.ref;
-            if (first === undefined || second === undefined) {
-                return;
-            }
-            if (targetIndex !== origin.index) {
-                onJoinRef.current(first, second);
-            } else if (origin.pressedOnPoint) {
-                onJoinToAnchorRef.current(second);
-            }
-        }
-
-        function handleRightRelease(event: MouseEvent): void {
-            const origin = dragOriginRef.current;
-            if (event.button !== RIGHT_BUTTON || origin === null) {
-                return;
-            }
-            dragOriginRef.current = null;
-            repinBand();
-            pairFrom(origin, hoveredIndexRef.current);
         }
 
         function handleTap(x: number, y: number): void {
@@ -969,23 +861,10 @@ export function CloudView({
             }
         }
 
-        function handleMouseMove(event: MouseEvent): void {
-            cursorRef.current = cursorOf(event);
-            repinBand();
-        }
-
-        function handleMouseLeave(): void {
-            cursorRef.current = null;
-            repinBand();
-        }
-
         canvas.addEventListener("mousedown", handlePress);
         canvas.addEventListener("contextmenu", handleContextMenu);
         canvas.addEventListener("click", handleClick);
         canvas.addEventListener("dblclick", handleDoubleClick);
-        canvas.addEventListener("mousemove", handleMouseMove);
-        canvas.addEventListener("mouseleave", handleMouseLeave);
-        window.addEventListener("mouseup", handleRightRelease);
 
         return (): void => {
             canceled = true;
@@ -995,9 +874,6 @@ export function CloudView({
             canvas.removeEventListener("contextmenu", handleContextMenu);
             canvas.removeEventListener("click", handleClick);
             canvas.removeEventListener("dblclick", handleDoubleClick);
-            canvas.removeEventListener("mousemove", handleMouseMove);
-            canvas.removeEventListener("mouseleave", handleMouseLeave);
-            window.removeEventListener("mouseup", handleRightRelease);
             scatterplot.unsubscribe(selectSubscription);
             scatterplot.unsubscribe(pointOverSubscription);
             scatterplot.unsubscribe(pointOutSubscription);
@@ -1170,14 +1046,6 @@ export function CloudView({
                     <span className="cloud-ping-ring" />
                     <span className="cloud-ping-ring cloud-ping-ring-delayed" />
                 </span>
-            )}
-            {band !== null && (
-                <MorphBand
-                    origin={band.first}
-                    cursor={band.second}
-                    endsOnPoint={band.endsOnPoint}
-                    appearance={markerAppearance}
-                />
             )}
             {link !== null && linkScreen !== null && (
                 <MorphLink

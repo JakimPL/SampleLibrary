@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { useMorphStore } from "../../src/morph/morphStore";
 import { editsText, type UndoCommand, undoCommandOf, useMorphUndoKeys } from "../../src/morph/useMorphUndoKeys";
+import { choosePair } from "../support/morphPair";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -82,7 +83,7 @@ function UndoKeys(): ReactElement {
 
 /** A pair with one change behind it: A and C, where A and B stood before. */
 function changeOnce(): void {
-    useMorphStore.getState().join(A, B);
+    choosePair(A, B);
     useMorphStore.getState().setEnd("second", C);
 }
 

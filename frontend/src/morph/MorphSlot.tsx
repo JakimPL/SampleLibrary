@@ -1,19 +1,18 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 
-import { useLayoutMode } from "../layout/useLayoutMode";
 import { SampleName } from "../samples/SampleName";
 import { samplePreview, useAudioPreview } from "../samples/useAudioPreview";
 import { spokenNameOf, useSampleName } from "../samples/useSampleName";
 import { classNames } from "../shared/classNames";
-import { Button } from "../shared/controls/Button";
-import { hintFor } from "../shared/hints";
-import { morphAnchorOf, useSelectionStore } from "../workspace/selectionStore";
-import { END_LETTERS, type MorphEnd, otherEndOf, useMorphStore } from "./morphStore";
+import { useSelectionStore } from "../workspace/selectionStore";
+import { END_LETTERS, type MorphEnd, useMorphStore } from "./morphStore";
 import { useEndpoint } from "./useEndpoint";
+
+const EMPTY_READING = "empty";
 
 interface MorphSlotProps {
     readonly end: MorphEnd;
-    /** The sample this end holds, or `null` while it waits for one. */
+    /** The sample this end holds, or `null` before its first. */
     readonly hash: string | null;
 }
 
@@ -26,154 +25,75 @@ interface EmptyEndProps {
     readonly end: MorphEnd;
 }
 
-interface OfferedEndProps {
+interface SlotButtonProps {
     readonly end: MorphEnd;
-    /** The sample in hand, which the end offers to take. */
-    readonly hash: string;
-}
-
-interface WaitingEndProps {
-    readonly end: MorphEnd;
-    readonly selected: boolean;
-}
-
-interface EmptySlotProps {
-    readonly end: MorphEnd;
-    /** What the end says, on its button and to a screen reader. */
-    readonly reading: string;
-    readonly selected: boolean;
+    /** What the end says to a screen reader after its letter. */
+    readonly spoken: string;
+    readonly empty: boolean;
     readonly onClick: () => void;
+    readonly children: ReactNode;
 }
 
-/** What an empty end reads while a sample is in hand: an offer to take it, by name. */
-function offerOf(hash: string, name: string | null): string {
-    return `take ${spokenNameOf(hash, name)}`;
+/** The button every slot is: the end's letter and what it holds, pressed while the end is selected. */
+function SlotButton({ end, spoken, empty, onClick, children }: SlotButtonProps): ReactElement {
+    const selected = useMorphStore((state) => state.selectedEnd === end);
+    const letter = END_LETTERS[end];
+
+    return (
+        <button
+            type="button"
+            className={classNames("morph-slot", empty && "morph-slot-empty", selected && "is-selected")}
+            aria-label={`${letter}: ${spoken}`}
+            aria-pressed={selected}
+            onClick={onClick}
+        >
+            <span className="morph-slot-letter mono">{letter}</span>
+            <span className="morph-slot-name">{children}</span>
+        </button>
+    );
 }
 
-function Letter({ end }: EmptyEndProps): ReactElement {
-    return <span className="morph-slot-letter mono">{END_LETTERS[end]}</span>;
-}
-
-/** The end as chosen: its name on the button that plays it and selects the slot, and the × that lets it go. */
+/** The end as chosen: a tap plays its sample at the sample's own rate, takes it in hand and selects the end. */
 function ChosenEnd({ end, hash }: ChosenEndProps): ReactElement {
     const name = useSampleName(hash);
     const reading = useEndpoint(hash);
-    const selected = useMorphStore((state) => state.selectedEnd === end);
-    const toggleSelectedEnd = useMorphStore((state) => state.toggleSelectedEnd);
-    const clearEnd = useMorphStore((state) => state.clearEnd);
+    const selectEnd = useMorphStore((state) => state.selectEnd);
     const highlightEntity = useSelectionStore((state) => state.highlightEntity);
     const { play } = useAudioPreview();
-    const letter = END_LETTERS[end];
 
     function handleClick(): void {
         play(samplePreview(hash, reading.rateHz));
         highlightEntity({ kind: "sample", hash });
-        toggleSelectedEnd(end);
+        selectEnd(end);
     }
 
     return (
-        <div className={classNames("morph-slot", selected && "is-selected")} data-end={end}>
-            <button
-                type="button"
-                className="morph-slot-main"
-                aria-label={`${letter}: ${spokenNameOf(hash, name)}`}
-                aria-pressed={selected}
-                onClick={handleClick}
-            >
-                <Letter end={end} />
-                <span className="morph-slot-name">
-                    <SampleName hash={hash} name={name} />
-                </span>
-            </button>
-            <Button
-                variant="quiet"
-                icon
-                className="morph-slot-clear"
-                aria-label={`Clear ${letter}`}
-                onClick={() => {
-                    clearEnd(end);
-                }}
-            >
-                ×
-            </Button>
-        </div>
+        <SlotButton end={end} spoken={spokenNameOf(hash, name)} empty={false} onClick={handleClick}>
+            <SampleName hash={hash} name={name} />
+        </SlotButton>
     );
 }
 
-/** The markup every empty end shares: the letter and what the end reads, on the one button that answers the tap. */
-function EmptySlot({ end, reading, selected, onClick }: EmptySlotProps): ReactElement {
-    return (
-        <div className={classNames("morph-slot morph-slot-empty", selected && "is-selected")} data-end={end}>
-            <button
-                type="button"
-                className="morph-slot-main"
-                aria-label={`${END_LETTERS[end]}: ${reading}`}
-                aria-pressed={selected}
-                onClick={onClick}
-            >
-                <Letter end={end} />
-                <span className="morph-slot-name">{reading}</span>
-            </button>
-        </div>
-    );
-}
-
-/** An empty end at rest with a sample in hand: it offers that sample by name, and one tap makes it this end. */
-function OfferedEnd({ end, hash }: OfferedEndProps): ReactElement {
-    const name = useSampleName(hash);
-    const setEnd = useMorphStore((state) => state.setEnd);
-
-    return (
-        <EmptySlot
-            end={end}
-            reading={offerOf(hash, name)}
-            selected={false}
-            onClick={() => {
-                setEnd(end, hash);
-            }}
-        />
-    );
-}
-
-/** An empty end with nothing to take: it says what to do next, and a tap selects it or lets the selection go. */
-function WaitingEnd({ end, selected }: WaitingEndProps): ReactElement {
-    const { input } = useLayoutMode();
-    const toggleSelectedEnd = useMorphStore((state) => state.toggleSelectedEnd);
-    const hint = hintFor(selected ? "morphSlotSelected" : "morphSlotIdle", input);
-
-    return (
-        <EmptySlot
-            end={end}
-            reading={hint}
-            selected={selected}
-            onClick={() => {
-                toggleSelectedEnd(end);
-            }}
-        />
-    );
-}
-
-/**
- * An end still waiting for a sample: at rest with a sample in hand that the other end does not
- * hold, it offers that sample; otherwise it says what to do next once it is selected.
- */
 function EmptyEnd({ end }: EmptyEndProps): ReactElement {
-    const selected = useMorphStore((state) => state.selectedEnd === end);
-    const other = useMorphStore((state) => otherEndOf(state, end));
-    const anchor = useSelectionStore(morphAnchorOf);
+    const selectEnd = useMorphStore((state) => state.selectEnd);
 
-    return !selected && anchor !== null && anchor !== other ? (
-        <OfferedEnd end={end} hash={anchor} />
-    ) : (
-        <WaitingEnd end={end} selected={selected} />
+    return (
+        <SlotButton
+            end={end}
+            spoken={EMPTY_READING}
+            empty
+            onClick={() => {
+                selectEnd(end);
+            }}
+        >
+            {EMPTY_READING}
+        </SlotButton>
     );
 }
 
 /**
- * One end of the morph pair as the strip shows it. Tapping an empty slot at rest while a sample is
- * in hand makes that sample this end, the slot staying at rest. Otherwise tapping the slot selects
- * it: a chosen end plays and is taken in hand, and every sample tapped next, in a list or on the
- * cloud, becomes this end until the slot is tapped again or the other one is selected.
+ * One end of the morph pair as the strip shows it. The selected end takes every sample picked
+ * next, in a list or on the cloud; a tap on a slot selects its end.
  */
 export function MorphSlot({ end, hash }: MorphSlotProps): ReactElement {
     return hash === null ? <EmptyEnd end={end} /> : <ChosenEnd end={end} hash={hash} />;

@@ -68,7 +68,6 @@
     --cloud-link-node-color: var(--cloud-link-color);
     --cloud-link-width: 1.5px;
     --cloud-link-casing-width: 4px;
-    --cloud-band-dash: 2 4;
     --cloud-ping-radius: 50%;
     --cloud-ping-border-width: 3px;
     --cloud-hover-color: var(--text-primary);
@@ -345,7 +344,6 @@
     --cloud-link-node-color: #fff;
     --cloud-link-width: 1px;
     --cloud-link-casing-width: 0;
-    --cloud-band-dash: 1 2;
     --cloud-ping-radius: 0;
     --cloud-ping-border-width: 1px;
     --cloud-hover-color: #fff;
@@ -2663,13 +2661,17 @@ table.data td .annotation-editor-input {
     flex: 1 1 0;
     display: flex;
     align-items: center;
+    gap: var(--space-3);
     min-width: 0;
     height: var(--control-height);
+    padding: 0 var(--space-4);
     border: 1px solid var(--border);
     border-radius: var(--radius-2);
     background: var(--surface-0);
     font-size: var(--font-size-small);
     color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
 }
 
 .morph-slot-empty {
@@ -2677,27 +2679,10 @@ table.data td .annotation-editor-input {
     color: var(--text-muted);
 }
 
-/* The selected slot is the one taking taps: its frame and its letter take the accent. */
+/* The selected slot is the one taking picks: its frame and its letter take the accent. */
 .morph-slot.is-selected {
     border-style: solid;
     border-color: var(--accent);
-}
-
-.morph-slot-main {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    min-width: 0;
-    height: 100%;
-    padding: 0 var(--space-4);
-    border: none;
-    border-radius: inherit;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
 }
 
 .morph-slot-letter {
@@ -2718,19 +2703,6 @@ table.data td .annotation-editor-input {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-/* Centered as a box rather than by line height, which a glyph's own metrics sit off-center within. */
-.morph-slot-clear {
-    --button-height: 20px;
-    --button-icon-size: 13px;
-
-    margin-right: var(--space-2);
-}
-
-:root[data-input="touch"] .morph-slot-clear {
-    --button-height: 28px;
-    --button-icon-size: 16px;
 }
 
 .morph-strip-body {
@@ -3045,29 +3017,6 @@ table.data td .annotation-editor-input {
     box-shadow: none;
 }
 
-.morph-band {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-    pointer-events: none;
-}
-
-.morph-band-line {
-    fill: none;
-    stroke: var(--cloud-link-color);
-    stroke-width: var(--cloud-link-width);
-    stroke-dasharray: var(--cloud-band-dash);
-    opacity: 0.75;
-}
-
-.morph-band-origin {
-    stroke: var(--cloud-link-end-color);
-    opacity: 0.75;
-}
-
 :root[data-theme="openmpt"] .morph-weight input[type="range"] {
     border: none;
     background: transparent;
@@ -3358,23 +3307,6 @@ table.data td .annotation-editor-input {
 .tab-bar-dot.is-half {
     background: transparent;
     border: 1.5px solid var(--accent);
-}
-
-/* The letter of the end selected to take the next sample, in the dot's place. */
-.tab-bar-end {
-    position: absolute;
-    top: var(--space-2);
-    left: calc(50% + var(--space-4));
-    min-width: 14px;
-    height: 14px;
-    padding: 0 var(--space-1);
-    border-radius: 7px;
-    background: var(--accent);
-    color: var(--surface-2);
-    font-size: 9px;
-    font-weight: 600;
-    line-height: 14px;
-    text-align: center;
 }
 
 /* The screen menu opens toward the left, from the header's far end. */
